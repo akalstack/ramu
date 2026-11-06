@@ -14,6 +14,7 @@ Use the host's LAN or VPN address, never `localhost`. The host must stay awake a
 ## What you can do
 
 - **Threads:** one card per project, standalone threads last. Swipe a thread to mark it done or archive it, with **Undo**.
+- **New thread:** pick a project, **Auto**, **Standalone**, or **New project** (**Start something new** on a host with no projects), where the agent asks what to build, creates the project and moves the thread into it. See [Home](../../docs/guide/inbox.md#home).
 - **Chat:** live transcripts, models and access, queue and steer, stop, approvals, questions and forms, goals and teammates. Ability rows show the image or answer with **Make another** and **Use another provider**; **Settings → Models** shows each ability's choice read-only.
 - **Inbox:** the Brief of what needs you across every host, plus Running, Recaps, Learned and Completed. The tab and app icon badges count what needs you.
 - **Schedules:** see, run, pause and edit schedules, on any host.

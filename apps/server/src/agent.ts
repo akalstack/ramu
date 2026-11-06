@@ -1260,6 +1260,43 @@ export class AgentService {
     })
   }
 
+  /**
+   * Moves a thread's main session into another working folder, as when a No project thread becomes the new project's
+   * thread. A provider's saved session belongs to the folder it ran in, so none is resumed: the next message starts a
+   * fresh provider session that is handed the conversation, as after a rewind, which works the same for every provider.
+   */
+  async relocate(id: string, scope: AgentScope, reason: string): Promise<void> {
+    const s = this.get(id)
+    if (s.parentId) throw new Error('Helper threads work in their parent thread’s folder.')
+    if (['starting', 'running', 'needs-input'].includes(s.state))
+      throw new Error('Wait for the current turn to finish before moving this thread.')
+    const paused = this.queuePaused(id)
+    await this.stopAndWait(id)
+    this.db.exec('BEGIN')
+    try {
+      this.db
+        .prepare(
+          'UPDATE agent_sessions SET cwd = ?, additional_dirs = ?, covers = ?, provider_session_id = NULL WHERE id = ?',
+        )
+        .run(scope.cwd, JSON.stringify(scope.additionalDirs), JSON.stringify(scope.covers), id)
+      this.db.prepare('DELETE FROM session_provider_sessions WHERE session_id = ?').run(id)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+    this.record(id, {
+      kind: 'settings',
+      settings: s.settings,
+      reason,
+      handoff: true,
+      previous: s.settings,
+      handoffInfo: { cause: 'move', mode: 'full', from: s.provider, fromSeq: 1 },
+    })
+    // Stopping holds queued messages; a move is not a stop, so they go on to the new folder.
+    if (!paused && this.queuePaused(id)) this.resumeQueue(id)
+  }
+
   stopAndWait(...args: Parameters<SessionProcess['stopAndWait']>) {
     return this.parts.process.stopAndWait(...args)
   }

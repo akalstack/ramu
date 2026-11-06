@@ -16,6 +16,9 @@ export const STACK_IDS = [
 ] as const
 export type StackId = (typeof STACK_IDS)[number]
 
+/** A new project's folder name: letters, digits, dots, dashes and underscores, starting with a letter or digit. */
+export const PROJECT_NAME = /^[A-Za-z0-9][\w.-]{0,99}$/
+
 /** Hosting platforms a stack can name as its default; adapters are matched by these ids. */
 export type DeployTargetId = 'vercel' | 'netlify' | 'cloudflare' | 'github-pages' | 'fly' | 'railway' | 'expo'
 

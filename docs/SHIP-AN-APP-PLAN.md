@@ -39,12 +39,6 @@ Per-call `model`, `isolation` and `role` on `ramu_agent`, `agent_models`, `ramu_
 
 ### 2. New project from scratch
 
-`project_create`, the stack table (`packages/shared/src/stacks.ts`), stack facts in `ramu.json` read by new threads, and **New project** and **Start something new** on Home are built ([Agents](guide/agents.md#threads-started-by-agents), [Home](guide/inbox.md#home)). Remaining:
-
-- **projects.create** for the desktop and the phone, so the deploy sheet and the phone can start a project without an agent turn.
-- **Start something new** on the phone's no-projects state (the phone reaches **New project** through Auto's choices today).
-- The thread moving from No project into the new checkout in place; today a linked thread in the new project carries the conversation, and the No project thread stays.
-
 A request that needs no backend, shared data or domain becomes an artifact instead of a project ([Artifacts](ARTIFACTS-PLAN.md), today's [Apps](guide/artifacts.md)): the stack choice sends "a page that adds up my monthly costs" to an App artifact and "a pitch deck" to Slides, so the smallest thing that works is made first, and a Design artifact can be the starting point of a new project. A page that outgrows itself arrives here through **Make it a project**, which already writes its sources, record fields and records to a new project and starts a thread; **Publish to the web** (today a thread deploying the page's HTML) moves onto the hosting adapters below once they exist.
 
 ### 3. Deploy targets

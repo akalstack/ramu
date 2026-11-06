@@ -88,7 +88,7 @@ export type AgentSessionState =
   | 'restored'
 
 /** Why a conversation is carried to a provider session that has not seen it. */
-export type HandoffCause = 'limit' | 'switch' | 'account' | 'resume-unavailable' | 'rewind'
+export type HandoffCause = 'limit' | 'switch' | 'account' | 'resume-unavailable' | 'rewind' | 'move'
 /**
  * The handoff recorded on a `settings` event. The cause and (for a delta) `fromSeq` are set when the switch is made; the
  * coverage fields (`toSeq`, `chars`, `omitted`, `shortened`) are filled in place when the next launch builds the prompt.

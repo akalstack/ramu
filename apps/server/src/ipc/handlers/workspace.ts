@@ -5,6 +5,8 @@ import { currentBranch } from '../../workspace/git'
 import { projectActionSchema } from '../../workspace/projectConfig'
 import { ProjectActions } from '../../workspace/projectActions'
 import { projectAgentDefaults } from '../../workspace/projectAgentDefaults'
+import { createProjectFolder, runCommand } from '../../workspace/projectCreate'
+import { PROJECT_NAME, STACK_IDS, type StackId } from '@ramu/shared/stacks'
 import { z } from 'zod'
 import {
   DEFAULT_AGENT_SETTINGS,
@@ -215,7 +217,20 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       ]),
       run: (taskId: string, event: ContinuedEvent) => agents.recordContinued(taskId, event),
     },
-    'projects.create': { args: z.tuple([z.string().max(200)]), run: (name: string) => workspace.createProject(name) },
+    'projects.create': {
+      // The folder always goes where project_create puts it, so a client cannot choose a place outside it.
+      args: z.tuple([
+        z.object({ name: z.string().max(100).regex(PROJECT_NAME), stack: z.enum(STACK_IDS).optional() }).strict(),
+      ]),
+      run: async (input: { name: string; stack?: StackId }) => {
+        const folder = await createProjectFolder(
+          { parent: workspace.newProjectParent(), ...input },
+          { create: (parent, name) => hostFolders.create(parent, name), run: runCommand },
+        )
+        const { project } = await workspace.addProjectFromFolder(await hostFolders.inspect(folder.path))
+        return { project, path: folder.path }
+      },
+    },
     'folders.roots': { args: z.tuple([]), run: () => hostFolders.roots() },
     'folders.list': { args: z.tuple([z.string().max(4096)]), run: (path: string) => hostFolders.list(path) },
     'folders.create': {

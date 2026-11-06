@@ -305,7 +305,7 @@ export class SessionProcess {
     if (!delta && !(!resume && (marked || hasHistory))) return null
     const cause = undelivered ? info.cause : 'resume-unavailable'
     const saved = this.sessions.get(id, s.provider, s.settings.accountId)
-    const sameProvider = cause === 'rewind' || cause === 'resume-unavailable'
+    const sameProvider = cause === 'rewind' || cause === 'resume-unavailable' || cause === 'move'
     const contextTokens =
       (undelivered ? info?.contextWindow : null) ??
       this.host.modelContextWindow(s.settings) ??

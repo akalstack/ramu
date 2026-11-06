@@ -7,6 +7,7 @@ import { cleanLabel } from '@ramu/shared/text'
 import { existsSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
 import { mkdir, readdir, realpath } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path'
+import { homedir } from 'node:os'
 import type { Db } from '../db'
 import type { SettingsStore } from '../settings/settingsStore'
 import { loadProjectConfig } from './projectConfig'
@@ -148,6 +149,27 @@ export class Workspace {
       .prepare('INSERT INTO projects (id, name, root, created_at) VALUES (?, ?, ?, ?)')
       .run(project.id, project.name, project.root, project.createdAt)
     return project
+  }
+
+  /** Where a new or cloned project goes: beside the person's other repositories in their home folder, or the home folder itself. */
+  newProjectParent(): string {
+    const known = this.listProjects()
+      .flatMap((project) => this.listRepositories(project.id))
+      .find((entry) => dirname(entry.root).startsWith(homedir()))
+    return known ? dirname(known.root) : homedir()
+  }
+
+  /**
+   * A No project thread joins a project at its current checkout. Current-checkout threads keep no bindings of their
+   * own, so changing the project is the whole move; the caller moves the agent's session.
+   */
+  moveTaskToProject(taskId: string, projectId: string): Task {
+    const task = this.getTask(taskId)
+    if (task.projectId !== NO_PROJECT) throw new Error('Only a thread with no project can move into a project.')
+    this.getProject(projectId)
+    if (!this.listRepositories(projectId).length) throw new Error('This project has no repositories')
+    this.db.prepare('UPDATE tasks SET project_id = ? WHERE id = ?').run(projectId, taskId)
+    return this.getTask(taskId)
   }
 
   /**

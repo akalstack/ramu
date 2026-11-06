@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto'
-import { STACKS, STACK_IDS, commandLine, stackCheck, type StackId } from '@ramu/shared/stacks'
-import { PROJECT_NAME, createProjectFolder, runCommand } from '../workspace/projectCreate'
+import { PROJECT_NAME, STACKS, STACK_IDS, commandLine, stackCheck, type StackId } from '@ramu/shared/stacks'
+import { createProjectFolder, runCommand } from '../workspace/projectCreate'
 import { RequestReplay } from '../agent/requestReplay'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import { readdirSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { clipText } from '@ramu/shared/text'
 import {
   continuationGroup,
@@ -67,6 +68,17 @@ const OFF =
   'Starting threads from agents is turned off on this host. The person can turn on Let agents start threads in Settings → Threads.'
 
 type Invoke = (method: string, args: unknown[]) => Promise<unknown>
+
+/** Kept in app state so a No project thread still moves into the project it created after a restart. */
+const THREAD_MOVES = 'thread-moves'
+
+/** A No project thread waiting to move into the project its agent created, and what it does there. */
+interface ThreadMove {
+  projectId: string
+  brief: string
+  goal: string
+  verify?: string
+}
 
 interface LinkRow {
   id: string
@@ -253,7 +265,7 @@ export class AgentThreadService {
               sessionId,
               'adding a project',
               input.url
-                ? `Clone ${input.url} into ${this.cloneParent()} and add it as a project.`
+                ? `Clone ${input.url} into ${this.workspace.newProjectParent()} and add it as a project.`
                 : `Add ${input.path} as a project.`,
               extra.signal,
             )
@@ -266,7 +278,7 @@ export class AgentThreadService {
     server.registerTool(
       'project_create',
       {
-        description: `Create a new project from scratch when the person wants to build something that needs its own folder and repository: a folder beside their other repositories, the stack's official generator (${STACK_IDS.join(', ')}; leave stack out to write the files yourself), a .gitignore, ramu.json with the stack's commands, and a first commit. Ask at most three questions first and say the stack in one line. With continue (the default) a thread starts in the new project with this conversation and brief as its start and a goal checked by the stack's build and tests; the work continues there, so end your turn after telling the person. Outside Full access the person approves first; if they decline, do not retry.`,
+        description: `Create a new project from scratch when the person wants to build something that needs its own folder and repository: a folder beside their other repositories, the stack's official generator (${STACK_IDS.join(', ')}; leave stack out to write the files yourself), a .gitignore, ramu.json with the stack's commands, and a first commit. Ask at most three questions first and say the stack in one line. With continue (the default) the work goes on in the new project toward a goal checked by the stack's build and tests: a thread with no project moves into it when this turn ends, and from another project a new thread starts there with the brief; either way end your turn after telling the person. Outside Full access the person approves first; if they decline, do not retry.`,
         inputSchema: {
           name: z.string().regex(PROJECT_NAME).describe('Folder and project name, such as barbershop-booking.'),
           stack: z.enum(STACK_IDS).optional(),
@@ -747,7 +759,7 @@ export class AgentThreadService {
     return {
       match: matchProject(repo, await this.projectRemotes()),
       settings: await this.settingsForHost(requested, 'edits', 'edits'),
-      parent: this.cloneParent(),
+      parent: this.workspace.newProjectParent(),
     }
   }
 
@@ -773,15 +785,6 @@ export class AgentThreadService {
     )
   }
 
-  /** Where a clone goes: beside the person's other repositories in their home folder, or the home folder itself. */
-  private cloneParent(): string {
-    const known = this.workspace
-      .listProjects()
-      .flatMap((project) => this.workspace.listRepositories(project.id))
-      .find((entry) => dirname(entry.root).startsWith(homedir()))
-    return known ? dirname(known.root) : homedir()
-  }
-
   /** Clones a repository, or registers a folder already on this host, as a project; an existing match is reused. */
   async addProject(input: { url?: string; path?: string; name?: string }): Promise<{
     projectId: string
@@ -793,7 +796,11 @@ export class AgentThreadService {
       const repoName = input.name ?? repoNameOf(input.url)
       const match = matchProject({ remoteUrl: input.url, repoName }, await this.projectRemotes())
       if (match?.by === 'remote') return { projectId: match.projectId, name: match.name, added: false }
-      const path = (await this.invoke('folders.clone', [this.cloneParent(), repoName, input.url])) as string
+      const path = (await this.invoke('folders.clone', [
+        this.workspace.newProjectParent(),
+        repoName,
+        input.url,
+      ])) as string
       const { project } = (await this.invoke('folders.addProject', [path])) as { project: { id: string; name: string } }
       return { projectId: project.id, name: project.name, added: true }
     }
@@ -807,7 +814,8 @@ export class AgentThreadService {
 
   /**
    * project_create: a new folder with the stack's generator and a first commit, added as a project, then (by default)
-   * a thread there that carries this conversation and works toward a goal checked by the stack's build and tests.
+   * work there toward a goal checked by the stack's build and tests: a No project thread moves in itself, a thread in
+   * another project starts a linked thread with the brief.
    */
   private async createProject(
     sessionId: string,
@@ -815,7 +823,7 @@ export class AgentThreadService {
     signal?: AbortSignal,
   ) {
     const caller = this.agents.get(sessionId)
-    const parent = this.cloneParent()
+    const parent = this.workspace.newProjectParent()
     const stack = input.stack ? STACKS[input.stack] : null
     if (caller.settings.access !== 'full') {
       const commands = stack?.generator.map(commandLine) ?? []
@@ -863,21 +871,19 @@ export class AgentThreadService {
     ]
       .filter(Boolean)
       .join('\n\n')
+    const goal = clipText(input.brief.trim(), 8000)
     const callerTask = this.workspace.getTask(caller.taskId)
-    const conversation =
-      callerTask.projectId === NO_PROJECT
-        ? clipText(this.agents.continuationPrompt(sessionId), CONTINUATION_PROMPT_LIMIT)
-        : ''
+    if (callerTask.projectId === NO_PROJECT) {
+      // The tool runs inside this thread's turn, so the thread moves once the turn has ended (see moveThreads).
+      this.saveMove(sessionId, { projectId: project.id, brief, goal, ...(check ? { verify: check } : {}) })
+      return {
+        ...created,
+        thread: { threadId: callerTask.id, movesHere: true },
+        next: 'When this turn ends, this thread moves into the new project and continues there with the brief and a goal. Tell the person in one line, then end your turn.',
+      }
+    }
     const [started] = await this.start(
-      [
-        {
-          prompt: conversation ? `${conversation}\n\nNext: ${brief}` : brief,
-          title: callerTask.projectId === NO_PROJECT ? callerTask.title : project.name,
-          projectId: project.id,
-          projectName: project.name,
-          mode: 'current',
-        },
-      ],
+      [{ prompt: brief, title: project.name, projectId: project.id, projectName: project.name, mode: 'current' }],
       {
         source: { taskId: caller.taskId, sessionId },
         settings: caller.settings,
@@ -893,7 +899,7 @@ export class AgentThreadService {
     // The goal is Ramu's, from the stack's own commands, so it may carry a verification command.
     if (target?.target_session_id)
       try {
-        this.agents.setGoal(target.target_session_id, clipText(input.brief.trim(), 8000), true, check ?? undefined)
+        this.agents.setGoal(target.target_session_id, goal, true, check ?? undefined)
       } catch {
         // A thread whose goal could not be set still works on the brief.
       }
@@ -902,6 +908,77 @@ export class AgentThreadService {
       thread: { threadId: started.taskId, ...started },
       next: 'The work continues in the new thread. Tell the person in one line where it is, then end your turn.',
     }
+  }
+
+  private moves(): Record<string, ThreadMove> {
+    return this.workspace.getAppState<Record<string, ThreadMove>>(THREAD_MOVES, {})
+  }
+
+  private saveMove(sessionId: string, move: ThreadMove | null) {
+    const { [sessionId]: _done, ...rest } = this.moves()
+    this.workspace.setAppState(THREAD_MOVES, move ? { ...rest, [sessionId]: move } : rest)
+  }
+
+  /**
+   * Moves each No project thread that created a project into it once the turn that asked has ended, then continues
+   * there. A thread the person stopped still moves, and waits for them.
+   */
+  private async moveThreads(): Promise<void> {
+    for (const [sessionId, move] of Object.entries(this.moves())) {
+      if (this.stopping) return
+      let session: AgentSessionInfo
+      try {
+        session = this.agents.get(sessionId)
+      } catch {
+        this.saveMove(sessionId, null)
+        continue
+      }
+      if (['starting', 'running', 'needs-input'].includes(session.state) || this.agents.isRecoveryPending(sessionId))
+        continue
+      // Forgotten first, so a move that fails is reported once instead of retried every tick.
+      this.saveMove(sessionId, null)
+      try {
+        await this.moveThread(session, move)
+      } catch (error) {
+        console.error('Moving a thread into its new project:', error)
+      }
+    }
+  }
+
+  private async moveThread(session: AgentSessionInfo, move: ThreadMove): Promise<void> {
+    const project = this.workspace.listProjects().find((entry) => entry.id === move.projectId)
+    if (!project || this.workspace.getTask(session.taskId).projectId !== NO_PROJECT) return
+    const before = session.cwd
+    // A current-checkout thread works where its project does, so the project's scope is the thread's after the move.
+    await this.agents.relocate(
+      session.id,
+      this.workspace.agentScope(`project:${project.id}`),
+      `Moved into the new project ${project.name}`,
+    )
+    this.workspace.moveTaskToProject(session.taskId, project.id)
+    this.changed()
+    if (session.state !== 'idle') return
+    try {
+      this.agents.setGoal(session.id, move.goal, true, move.verify)
+    } catch {
+      // A thread whose goal could not be set still works on the brief.
+    }
+    const earlier = (() => {
+      try {
+        return readdirSync(before).length
+          ? `Files this thread wrote before the move are still in ${before}; copy what the project needs.`
+          : ''
+      } catch {
+        return ''
+      }
+    })()
+    await this.agents.submit(
+      session.id,
+      [`This thread now works in the new project ${project.name} at ${project.root}.`, earlier, move.brief]
+        .filter(Boolean)
+        .join('\n\n'),
+      'queue',
+    )
   }
 
   /** Starts a thread a person sent here from another host. The start carries a key, so a lost reply finds the same one. */
@@ -1239,9 +1316,11 @@ export class AgentThreadService {
           this.remoteRunning = null
         })
     if (this.stopping || this.running) return this.running ?? Promise.resolve()
-    this.running = this.report().finally(() => {
-      this.running = null
-    })
+    this.running = this.moveThreads()
+      .then(() => this.report())
+      .finally(() => {
+        this.running = null
+      })
     return this.running
   }
 

@@ -544,6 +544,28 @@ describe('a returning provider', () => {
   })
 })
 
+describe('moving a thread into another folder', () => {
+  it('works in the new folder with a fresh provider session that is handed the conversation', async () => {
+    const svc = make()
+    const s = svc.start('t', scopeOf(cwd), 'ALPHA plan the work', codex)
+    await until(() => idle(svc, s.id))
+    const moved = realpathSync(mkdtempSync(join(tmp, 'project-')))
+    await svc.relocate(s.id, scopeOf(moved), 'Moved into the new project shop')
+    expect(svc.get(s.id)).toMatchObject({ cwd: moved, covers: [moved], state: 'idle' })
+    expect(db.prepare('SELECT COUNT(*) AS n FROM session_provider_sessions WHERE session_id = ?').get(s.id)).toEqual({
+      n: 0,
+    })
+    expect(settingsEvents(svc, s.id).at(-1)).toMatchObject({
+      reason: 'Moved into the new project shop',
+      handoffInfo: { cause: 'move' },
+    })
+    const sent = await say(svc, s.id, 'DELTA build it here')
+    expect(sent.resume).toBeNull()
+    expect(sent.prompt).toContain('ALPHA plan the work')
+    expect(sent.prompt).toContain('moved into a new project folder')
+  })
+})
+
 describe('the checkpoint is sent once', () => {
   it('goes out in the handoff and is left out of the session guidance for that launch only', async () => {
     const svc = make()

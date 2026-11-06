@@ -864,7 +864,11 @@ export interface RamuMethods extends ArtifactMethods {
     options?: { others?: RoutingCandidate[]; localHost?: string },
   ): RoutingOutcome
   'projects.setup'(projectId: string | null): ProjectSetup
-  'projects.create'(name: string): Project
+  /**
+   * A new project folder beside the person's other repositories, as `project_create` makes it: the stack's generator
+   * (none writes an empty project), `ramu.json`, a first commit, then added as a project.
+   */
+  'projects.create'(input: { name: string; stack?: import('./stacks').StackId }): { project: Project; path: string }
   'projects.inspect'(dir: string): FolderInspection
   'projects.addFolder'(dir: string, repos?: string[]): { project: Project; repositories: Repository[] }
   'repos.list'(projectId: string): Repository[]

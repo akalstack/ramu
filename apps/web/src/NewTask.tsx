@@ -72,6 +72,8 @@ import { useAppSettings } from './settings/AppSettings'
 import { routingLabels, type RoutingOutcome } from '@ramu/shared/workspace/projectRouting'
 import { useOtherHostTargets } from './workspace/otherHostTargets'
 import { routedAgentSettings } from '@ramu/shared/workspace/agentDefaults'
+import { PROJECT_NAME } from '@ramu/shared/stacks'
+import { NewProjectFields, type NewProjectDraft } from './composer/NewProjectFields'
 
 /** A task's title is the first line of what you asked for. */
 
@@ -275,6 +277,10 @@ export function NewTask({
   const [suggestNew, setSuggestNew] = useState(false)
   // Start something new: the next message starts in No project and asks the agent to create the project.
   const [startingNew, setStartingNew] = useState(false)
+  // With a name, Ramu creates the project itself and the thread starts in it; without one the agent creates it.
+  const [newProject, setNewProject] = useState<NewProjectDraft>({ name: '', stack: '' })
+  // A project made for a send that then failed is reused by the retry instead of colliding with its own folder.
+  const madeProject = useRef<{ name: string; projectId: string } | null>(null)
   const [routeNote, setRouteNote] = useState<string | null>(null)
   const routeRevision = useRef(0)
   // Auto also weighs projects on the other connected hosts; a request that belongs to one of them starts there.
@@ -429,13 +435,18 @@ export function NewTask({
     if (sending.current) throw new Error(t('A message is already being sent.'))
     const startsProject = picked === NEW_PROJECT || startingNew
     const chosen = startsProject ? NO_PROJECT : picked
+    const newName = startingNew ? newProject.name.trim() : ''
+    if (newName && !PROJECT_NAME.test(newName))
+      throw new Error(t('Use a folder name of letters, digits, dots, dashes or underscores.'))
     // The agent reads this as the request to make a project; the person sees the same words in the thread.
-    const agentPrompt = startsProject ? t('Start a new project: {0}', { '0': prompt.trim() }) : prompt
+    const agentPrompt = startsProject && !newName ? t('Start a new project: {0}', { '0': prompt.trim() }) : prompt
     if (!general && !repos.length) throw new Error(t('Add a repository to this project first'))
     const messageTitle =
       title ||
       (context[0] ? titleFrom(t('Discuss {0}', { '0': context[0].path.split(/[\\/]/).pop() ?? context[0].path })) : '')
     if (!messageTitle) throw new Error(t('Add a message or file before starting.'))
+    if (newName && host.status !== 'connected')
+      throw new Error(t('Creating a project needs the host. Send once it is back.'))
     // The host is away: the thread waits on this computer under an id made here, and starts there once it is back.
     if (host.status !== 'connected') {
       if (attachments.length) throw new Error(t('Attachments need the host. Remove them, or send once it is back.'))
@@ -595,6 +606,26 @@ export function NewTask({
         }
         setChoices(null)
       }
+      if (newName) {
+        setPending((current) => current && { ...current, status: t('Creating {0}…', { '0': newName }) })
+        let made = madeProject.current?.name === newName ? madeProject.current : null
+        if (!made) {
+          const { project: createdProject } = await host.invoke('projects.create', {
+            name: newName,
+            ...(newProject.stack ? { stack: newProject.stack } : {}),
+          })
+          made = madeProject.current = { name: newName, projectId: createdProject.id }
+          await ws.refresh()
+        }
+        target = {
+          projectId: made.projectId,
+          mode: 'current',
+          workspaceId: undefined,
+          branchPrefix: undefined,
+          naming: namingIntent,
+          branch: undefined,
+        }
+      }
       const fingerprint = JSON.stringify([
         host.id,
         target.projectId,
@@ -640,6 +671,8 @@ export function NewTask({
       created = null
       creationRequest.current = null
       setStartingNew(false)
+      setNewProject({ name: '', stack: '' })
+      madeProject.current = null
       if (!auto) rememberStartProject(projectId, hostStorageFor(host.id))
       clearDraftDestination(hostStorageFor(host.id))
       // The link lets this chat's pull request close the issue; losing it only loses that line.
@@ -827,6 +860,7 @@ export function NewTask({
             )}
           </NewWorktreeSummary>
         )}
+        {startingNew && !pending && <NewProjectFields value={newProject} onChange={setNewProject} disabled={busy} />}
         {pending && (
           <div className="flex flex-col items-end gap-1.5 px-2" role="status" aria-live="polite">
             {pending.text && (

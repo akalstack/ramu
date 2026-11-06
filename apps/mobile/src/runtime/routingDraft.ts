@@ -11,6 +11,8 @@ export const routingSnapshot = (drafts: Record<string, string>, key: string) =>
 export interface RoutingSelection {
   auto: boolean
   projectId: string | null
+  /** Start something new: the thread starts with no project and asks the agent to create one. */
+  startsNew: boolean
 }
 /**
  * Whether the new-thread screen opens on the composer instead of the project picker. With Auto the first message picks
@@ -36,9 +38,10 @@ export function readRoutingSelection(
           (value.projectId === 'no-project' || eligible.includes(value.projectId))
             ? value.projectId
             : null,
+        startsNew: !value.auto && value.projectId === 'no-project' && value.startsNew === true,
       }
   } catch {}
-  return { auto: defaultAuto, projectId: null }
+  return { auto: defaultAuto, projectId: null, startsNew: false }
 }
 
 export interface PendingRouteChoice {

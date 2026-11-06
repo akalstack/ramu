@@ -141,6 +141,8 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
   const [projectId, setProjectId] = useState<string | null>(params.project ?? initialSelection().projectId)
   // Auto picks the project from the first message; an explicit choice always wins for this draft.
   const [auto, setAuto] = useState(!params.project && initialSelection().auto)
+  // Start something new: the thread starts with no project and asks the agent to create one, as on the desktop.
+  const [startingNew, setStartingNew] = useState(!params.project && initialSelection().startsNew)
   const [choices, setChoices] = useState<{ projectId: string; reason: string }[] | null>(null)
   // The router thought the request starts something new, so No project is the suggestion.
   const [suggestNew, setSuggestNew] = useState(false)
@@ -311,6 +313,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
     })
   const project = list.find((p) => p.id === projectId)
   const rawId = (id: string) => id.slice(id.indexOf(':') + 1)
+  const hasProjects = list.some((p) => rawId(p.id) !== STANDALONE)
   type Send = Parameters<NonNullable<React.ComponentProps<typeof Composer>['onSend']>>
   /** A project on another online host: the thread starts there, as it would here, and opens. Text only. */
   const startElsewhere = async (id: string, text: string, settings: AgentSettings) => {
@@ -500,6 +503,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
           onPress={() => {
             setProjectId(null)
             setAuto(true)
+            setStartingNew(false)
             store.setDraft(routingSelectionKey(selected), JSON.stringify({ version: 1, auto: true, projectId: null }))
             setPicker(null)
           }}
@@ -521,6 +525,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
           onPress={() => {
             setProjectId(p.id)
             setAuto(false)
+            setStartingNew(false)
             store.setDraft(routingSelectionKey(selected), JSON.stringify({ version: 1, auto: false, projectId: p.id }))
             setPicker(null)
           }}
@@ -539,6 +544,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
         onPress={() => {
           setProjectId(STANDALONE)
           setAuto(false)
+          setStartingNew(false)
           store.setDraft(
             routingSelectionKey(selected),
             JSON.stringify({ version: 1, auto: false, projectId: STANDALONE }),
@@ -553,7 +559,28 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
             No project folder
           </T>
         </View>
-        {projectId === STANDALONE ? <Check size={16} color={c.accent} /> : null}
+        {projectId === STANDALONE && !startingNew ? <Check size={16} color={c.accent} /> : null}
+      </Row>
+      <Row
+        onPress={() => {
+          setProjectId(STANDALONE)
+          setAuto(false)
+          setStartingNew(true)
+          store.setDraft(
+            routingSelectionKey(selected),
+            JSON.stringify({ version: 1, auto: false, projectId: STANDALONE, startsNew: true }),
+          )
+          setPicker(null)
+        }}
+      >
+        <Sparkles size={17} color={c.soft} />
+        <View style={{ flex: 1 }}>
+          <T weight="500">{say(hasProjects ? 'New project' : 'Start something new')}</T>
+          <T size={font.caption} tone="muted">
+            {say('Create a project for it and continue there')}
+          </T>
+        </View>
+        {startingNew ? <Check size={16} color={c.accent} /> : null}
       </Row>
       <Row
         onPress={() => {
@@ -671,12 +698,21 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
                       ? project.kind === 'workspace'
                         ? Folder
                         : FolderGit2
-                      : projectId === STANDALONE
-                        ? MessageCircle
-                        : Folder
+                      : startingNew
+                        ? Sparkles
+                        : projectId === STANDALONE
+                          ? MessageCircle
+                          : Folder
                   }
                   label={
-                    project?.name ?? (projectId === STANDALONE ? 'Standalone' : auto ? 'Auto' : 'Choose a project')
+                    project?.name ??
+                    (startingNew
+                      ? say('New project')
+                      : projectId === STANDALONE
+                        ? 'Standalone'
+                        : auto
+                          ? 'Auto'
+                          : 'Choose a project')
                   }
                   onPress={() => setPicker(choices?.length ? 'choice' : 'project')}
                 />
@@ -706,7 +742,11 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
             }
             offline={offline}
             placeholder={
-              offline ? `What should the agent do? Sends when ${pc?.name ?? 'it'} is back` : t.newPlaceholder
+              offline
+                ? `What should the agent do? Sends when ${pc?.name ?? 'it'} is back`
+                : startingNew
+                  ? say('Describe what to build')
+                  : t.newPlaceholder
             }
             model={model}
             onModel={chooseModel}
@@ -738,7 +778,8 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
               const id = await createChat({
                 computerId: selected,
                 projectId,
-                text,
+                // The agent reads this as the request to make a project; the person sees the same words in the thread.
+                text: startingNew ? say('Start a new project: {0}', { 0: text.trim() }) : text,
                 mode,
                 workspaceId,
                 branchNaming: sendIntent,
@@ -761,6 +802,13 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
                 ...sendModel,
               })
               if (storeRef.current.drafts[composerKey] === text) agentDraft.consume()
+              if (startingNew) {
+                setStartingNew(false)
+                store.setDraft(
+                  routingSelectionKey(selected),
+                  JSON.stringify({ version: 1, auto: false, projectId: STANDALONE }),
+                )
+              }
               if (asTab) router.push({ pathname: '/chat/[id]', params: { id } })
               else router.replace({ pathname: '/chat/[id]', params: { id } })
             }}
@@ -789,6 +837,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
                   setHost(computer.id)
                   setProjectId(choice.projectId)
                   setAuto(choice.auto)
+                  setStartingNew(choice.startsNew)
                 }
                 setPicker('project')
               }}

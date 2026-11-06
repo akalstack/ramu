@@ -11,11 +11,27 @@ import {
 
 test('keeps explicit project and Auto choices scoped to their host without falling back from a removed project', () => {
   const drafts = { [routingSelectionKey('a')]: JSON.stringify({ version: 1, auto: false, projectId: 'a:p' }) }
-  assert.deepEqual(readRoutingSelection(drafts, 'a', ['a:p'], true), { auto: false, projectId: 'a:p' })
-  assert.deepEqual(readRoutingSelection(drafts, 'b', ['b:p'], true), { auto: true, projectId: null })
-  assert.deepEqual(readRoutingSelection(drafts, 'a', [], true), { auto: false, projectId: null })
+  assert.deepEqual(readRoutingSelection(drafts, 'a', ['a:p'], true), {
+    auto: false,
+    projectId: 'a:p',
+    startsNew: false,
+  })
+  assert.deepEqual(readRoutingSelection(drafts, 'b', ['b:p'], true), { auto: true, projectId: null, startsNew: false })
+  assert.deepEqual(readRoutingSelection(drafts, 'a', [], true), { auto: false, projectId: null, startsNew: false })
   drafts[routingSelectionKey('a')] = JSON.stringify({ version: 1, auto: true, projectId: null })
   assert.equal(readRoutingSelection(drafts, 'a', [], false).auto, true)
+})
+test('keeps Start something new with its draft, only as a thread with no project', () => {
+  const key = routingSelectionKey('a')
+  const read = (value) => readRoutingSelection({ [key]: JSON.stringify({ version: 1, ...value }) }, 'a', ['a:p'], true)
+  assert.deepEqual(read({ auto: false, projectId: 'no-project', startsNew: true }), {
+    auto: false,
+    projectId: 'no-project',
+    startsNew: true,
+  })
+  assert.equal(read({ auto: false, projectId: 'no-project' }).startsNew, false)
+  assert.equal(read({ auto: false, projectId: 'a:p', startsNew: true }).startsNew, false)
+  assert.equal(read({ auto: true, projectId: null, startsNew: true }).startsNew, false)
 })
 test('restores candidates only for the intact draft and current catalog, including attachments and file context', () => {
   const key = 'a:new:none'

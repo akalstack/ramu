@@ -2,12 +2,9 @@ import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { STACKS, commandLine, type StackId } from '@ramu/shared/stacks'
+import { PROJECT_NAME, STACKS, commandLine, type StackId } from '@ramu/shared/stacks'
 import { git } from './git'
 import type { ProjectConfig } from './projectConfig'
-
-/** A folder name a person would type: letters, digits, dots, dashes and underscores, starting with a letter or digit. */
-export const PROJECT_NAME = /^[A-Za-z0-9][\w.-]{0,99}$/
 
 const GENERATOR_TIMEOUT_MS = 10 * 60_000
 const OUTPUT_TAIL = 2000

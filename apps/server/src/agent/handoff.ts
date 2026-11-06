@@ -83,6 +83,7 @@ const CAUSES: Record<HandoffCause, string> = {
   'resume-unavailable':
     'The host could not resume your saved session, so the conversation is replayed from its record.',
   rewind: 'The thread was rewound to before an edited message; later turns no longer exist.',
+  move: 'The thread moved into a new project folder, which is now your working directory. Paths in earlier turns may point to the folder it worked in before.',
 }
 
 type Kind = 'keep' | 'assistant' | 'tool-use' | 'tool-result'
@@ -289,7 +290,7 @@ export function buildHandoff(events: AgentEvent[], options: HandoffOptions = {})
     delta
       ? `You are continuing your own earlier session on this thread. Only events from ${fromSeq} on are included below; everything before that is already in your session.`
       : '',
-    cause === 'rewind'
+    cause === 'rewind' || cause === 'move'
       ? 'Continue from the conversation above and answer the next request.'
       : 'Continue the unfinished request. First inspect the current files and tool results to avoid repeating completed changes.',
   ]

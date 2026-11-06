@@ -118,6 +118,9 @@ beforeEach(async () => {
     getGoal: () => null,
     queued: () => [],
     continuationPrompt: (id: string) => `Transcript of ${id}`,
+    relocate: vi.fn(async (id: string, scope: { cwd: string }) => {
+      sessions.set(id, { ...sessions.get(id)!, cwd: scope.cwd })
+    }),
     setGoal: vi.fn((id: string, objective: string, _fromUser: boolean, verify?: string) =>
       goals.push({ id, objective, verify }),
     ),
@@ -356,21 +359,65 @@ describe('project_add', () => {
 })
 
 describe('project_create', () => {
-  it('creates a project from No project and continues there with this conversation and a goal', async () => {
-    await callerIn({ id: NO_PROJECT } as Project)
+  const noProjectCaller = async () => {
+    const { task } = await callerIn({ id: NO_PROJECT } as Project)
+    const folder = mkdtempSync(join(tmpdir(), 'ramu-chat-'))
+    writeFileSync(join(folder, 'notes.md'), 'draft\n')
+    sessions.set('caller', { ...sessions.get('caller')!, cwd: folder })
+    return { task, folder }
+  }
+  const state = (value: AgentSessionInfo['state']) =>
+    sessions.set('caller', { ...sessions.get('caller')!, state: value })
+
+  it('moves the No project thread into the new project once its turn ends, and continues there with a goal', async () => {
+    const { task, folder } = await noProjectCaller()
     const { call } = tools('caller')
     const input = { name: 'barbershop', brief: 'A booking page for a barbershop.', requestId: 'r1' }
     const created = await call('project_create', input)
-    expect(created).toMatchObject({ name: 'barbershop', stack: null, thread: { projectName: 'barbershop' } })
+    expect(created).toMatchObject({ name: 'barbershop', stack: null, thread: { threadId: task.id, movesHere: true } })
     expect(created.next).toMatch(/end your turn/)
-    expect(ws.listProjects().some((project) => project.id === created.projectId)).toBe(true)
     expect(execFileSync('git', ['log', '--format=%s'], { cwd: created.path }).toString()).toContain('Start barbershop')
-    const startedPrompt = events.get('started-1')![0] as { text: string }
-    expect(startedPrompt.text).toContain('Transcript of caller')
-    expect(startedPrompt.text).toContain('A booking page for a barbershop.')
-    expect(goals).toEqual([{ id: 'started-1', objective: 'A booking page for a barbershop.', verify: undefined }])
     // A resent call returns the first result instead of failing on the folder it already made.
     expect(await call('project_create', input)).toEqual(created)
+    expect(calls).not.toContain('agent.start')
+
+    // Not while the turn that asked is still running.
+    await service.tick()
+    expect(ws.getTask(task.id).projectId).toBe(NO_PROJECT)
+
+    state('idle')
+    await service.tick()
+    expect(ws.getTask(task.id).projectId).toBe(created.projectId)
+    expect(sessions.get('caller')!.cwd).toBe(ws.agentScope(task.id).cwd)
+    expect(goals).toEqual([{ id: 'caller', objective: 'A booking page for a barbershop.', verify: undefined }])
+    expect(submitted).toHaveLength(1)
+    expect(submitted[0]!.id).toBe('caller')
+    expect(submitted[0]!.text).toContain('A booking page for a barbershop.')
+    expect(submitted[0]!.text).toContain(folder)
+    // Only once.
+    await service.tick()
+    expect(submitted).toHaveLength(1)
+  })
+
+  it('still moves a thread the person stopped, without continuing the work', async () => {
+    const { task } = await noProjectCaller()
+    const created = await tools('caller').call('project_create', { name: 'notes', brief: 'A notes app.' })
+    state('stopped')
+    await service.tick()
+    expect(ws.getTask(task.id).projectId).toBe(created.projectId)
+    expect(goals).toEqual([])
+    expect(submitted).toEqual([])
+  })
+
+  it('starts a linked thread with the brief when created from another project', async () => {
+    const { task } = await callerIn(api)
+    const created = await tools('caller').call('project_create', { name: 'admin', brief: 'An admin panel.' })
+    expect(created.thread).toMatchObject({ projectName: 'admin' })
+    expect(ws.getTask(task.id).projectId).toBe(api.id)
+    const startedPrompt = events.get('started-1')![0] as { text: string }
+    expect(startedPrompt.text).toContain('An admin panel.')
+    expect(startedPrompt.text).not.toContain('Transcript of caller')
+    expect(goals).toEqual([{ id: 'started-1', objective: 'An admin panel.', verify: undefined }])
   })
 
   it('asks first outside Full access, naming the folder and the generator', async () => {
