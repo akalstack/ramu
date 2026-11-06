@@ -4385,14 +4385,11 @@ test('mobile answered questions keep the bold answer outside the collapsed origi
 
 test('mobile grouped tool rows expand with the same disclosure and preserve every tool', () => {
   const view = chatView()
-  const item = {
-    kind: 'tools',
-    id: 'first',
-    tools: [
-      { kind: 'tool', id: 'first', tool: 'read', verb: 'Read', subject: 'a.ts', status: 'completed' },
-      { kind: 'tool', id: 'second', tool: 'execute', verb: 'Bash', subject: 'tests', status: 'in_progress' },
-    ],
-  }
+  const tools = [
+    { kind: 'tool', id: 'first', tool: 'read', verb: 'Read', subject: 'a.ts', status: 'completed' },
+    { kind: 'tool', id: 'second', tool: 'execute', verb: 'Bash', subject: 'tests', status: 'in_progress' },
+  ]
+  const item = { kind: 'tools', id: 'first', tools, entries: tools }
   let tree = view.block(item)
   assert.equal(find(tree, 'Collapse').props.open, false)
   assert.equal(nodes(tree).filter((node) => node.type?.name === 'ToolRow').length, 2)

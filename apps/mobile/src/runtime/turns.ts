@@ -79,19 +79,35 @@ export function foldTurns(items: TranscriptItem[], live: boolean, waiting: boole
   )
 }
 
-/** Consecutive tools share one disclosure, keeping status and every call's details. */
-export function groupTools(items: TranscriptItem[]): TranscriptItem[] {
+type Step = Extract<TranscriptItem, { kind: 'tool' | 'thinking' }>
+
+/**
+ * Consecutive tools share one disclosure with the reasoning between them, in arrival order, as on the desktop.
+ * A lone tool keeps its own row. Reasoning at the very end of the thread stays out, since it may still be streaming.
+ */
+export function groupTools(items: TranscriptItem[], liveTail = true): TranscriptItem[] {
   const grouped: TranscriptItem[] = []
+  let run: Step[] = []
+  const flush = (atEnd: boolean) => {
+    let end = run.length
+    if (atEnd && liveTail) while (end > 0 && run[end - 1]!.kind === 'thinking') end--
+    const entries = run.slice(0, end)
+    const tools = entries.filter((step) => step.kind === 'tool')
+    if (tools.length && entries.length > 1) {
+      const first = entries[0]!
+      grouped.push({ kind: 'tools', id: first.id, at: first.at, tools, entries })
+    } else grouped.push(...entries)
+    grouped.push(...run.slice(end))
+    run = []
+  }
   for (const item of items) {
-    if (item.kind === 'summary') {
-      grouped.push({ ...item, items: groupTools(item.items) })
+    if (item.kind === 'tool' || item.kind === 'thinking') {
+      run.push(item)
       continue
     }
-    const last = grouped.at(-1)
-    if (item.kind === 'tool' && last?.kind === 'tool') {
-      grouped[grouped.length - 1] = { kind: 'tools', id: last.id, at: last.at, tools: [last, item] }
-    } else if (item.kind === 'tool' && last?.kind === 'tools') last.tools.push(item)
-    else grouped.push(item)
+    flush(false)
+    grouped.push(item.kind === 'summary' ? { ...item, items: groupTools(item.items, false) } : item)
   }
+  flush(true)
   return grouped
 }

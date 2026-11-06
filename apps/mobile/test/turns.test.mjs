@@ -261,6 +261,43 @@ test('mobile groups consecutive tools inside live turns and finished work, prese
   assert.equal(finished.at(-1).text, 'Summary')
 })
 
+test('mobile folds reasoning between tools into their group, leaving a still-streaming thought on its own', () => {
+  const events = [
+    { kind: 'user', text: 'ship', at: 1000 },
+    { kind: 'thinking', text: 'look first', at: 1500 },
+    ...tool('first', 2000),
+    { kind: 'thinking', text: 'then deploy', at: 2500 },
+    ...tool('second', 3000),
+    { kind: 'thinking', text: 'checking', at: 3500 },
+  ]
+  const live = foldTurns(transcript(events), true, false)
+  const group = live.find((row) => row.kind === 'tools')
+  assert.deepEqual(
+    group.entries.map((entry) => entry.kind),
+    ['thinking', 'tool', 'thinking', 'tool'],
+  )
+  assert.deepEqual(
+    group.tools.map((entry) => entry.id),
+    ['first', 'second'],
+  )
+  assert.equal(live.at(-1).kind, 'thinking')
+  const finished = foldTurns(
+    transcript([
+      ...events,
+      { kind: 'text', text: 'Live', at: 4000 },
+      { kind: 'result', text: '', isError: false, at: 5000 },
+    ]),
+    false,
+    false,
+  )
+  const summary = finished.find((row) => row.kind === 'summary')
+  assert.deepEqual(
+    summary.items.map((row) => row.kind),
+    ['tools'],
+  )
+  assert.equal(summary.items[0].entries.length, 5)
+})
+
 test('mobile preserves plan states and keeps unfinished steps visible after the turn', () => {
   const entries = [
     { content: 'Inspect', status: 'completed' },

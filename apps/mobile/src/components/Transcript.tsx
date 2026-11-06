@@ -952,9 +952,7 @@ function TurnSummary({ label, children }: { label: string; children: ReactNode }
         <Disclosure open={open} color={c.muted} />
       </Pressable>
       <Collapse open={open}>
-        <View style={{ gap: space.m, paddingLeft: space.s, borderLeftWidth: 1, borderLeftColor: c.line }}>
-          {children}
-        </View>
+        <View style={{ gap: space.m }}>{children}</View>
       </Collapse>
     </View>
   )
@@ -1143,12 +1141,16 @@ function ToolGroup({ item }: { item: Extract<TranscriptItem, { kind: 'tools' }> 
         <Disclosure open={open} color={c.muted} />
       </Pressable>
       <Collapse open={open}>
-        <View style={{ paddingLeft: space.s, borderLeftWidth: 1, borderLeftColor: c.line, gap: space.xs }}>
-          {item.tools.map((tool) => (
-            <Arrive key={tool.id} animate={!initial.has(tool.id)}>
-              <ToolRow item={tool} />
-            </Arrive>
-          ))}
+        <View style={{ gap: space.xs }}>
+          {item.entries.map((entry) =>
+            entry.kind === 'thinking' ? (
+              <ThinkingRow key={entry.id} text={entry.text} live={false} />
+            ) : (
+              <Arrive key={entry.id} animate={!initial.has(entry.id)}>
+                <ToolRow item={entry} />
+              </Arrive>
+            ),
+          )}
         </View>
       </Collapse>
     </View>
@@ -1285,7 +1287,7 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
               references.openFile(filePath)
             }}
             hitSlop={6}
-            style={{ marginLeft: 22, marginTop: 2, flexDirection: 'row', gap: space.s, alignItems: 'center' }}
+            style={{ marginTop: 2, flexDirection: 'row', gap: space.s, alignItems: 'center' }}
           >
             <T size={font.caption} mono tone="muted" numberOfLines={1} ellipsizeMode="head" style={{ flexShrink: 1 }}>
               {filePath}
@@ -1296,7 +1298,7 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
           </Pressable>
         ) : null}
         {facts.length ? (
-          <View style={{ marginLeft: 22, marginTop: 4, gap: 4 }}>
+          <View style={{ marginTop: 4, gap: 4 }}>
             {facts.map((fact) => (
               <View key={fact.label} style={{ flexDirection: 'row', gap: space.m }}>
                 <T size={font.caption} tone="muted" style={{ width: 64 }}>
@@ -1310,14 +1312,13 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
           </View>
         ) : null}
         {diffs.map((diff, index) => (
-          <View key={index} style={{ marginLeft: 22, marginTop: 4 }}>
+          <View key={index} style={{ marginTop: 4 }}>
             <DiffLines file={changedFile(diff.path, '', diff.oldText ?? '', diff.newText)} />
           </View>
         ))}
         {(!diffs.length && !facts.length) || failed ? (
           <View
             style={{
-              marginLeft: 22,
               marginTop: 4,
               padding: space.s + 2,
               backgroundColor: c.code,
@@ -2186,7 +2187,7 @@ function ThinkingRow({ text, live }: { text: string; live: boolean }) {
         <Disclosure open={open} color={c.muted} />
       </Pressable>
       <Collapse open={open}>
-        <View style={{ paddingTop: space.xs, paddingLeft: space.s, borderLeftWidth: 1, borderLeftColor: c.line }}>
+        <View style={{ paddingTop: space.xs }}>
           <T size={font.caption} tone="muted" style={{ lineHeight: 18 }}>
             {text}
           </T>

@@ -83,7 +83,13 @@ export type TranscriptItem = (
   /** Reasoning the provider shared: live while it streams, then folded to "Thought" as on the desktop. */
   | { kind: 'thinking'; id: string; text: string }
   | TranscriptTool
-  | { kind: 'tools'; id: string; tools: TranscriptTool[] }
+  /** Consecutive tools and the reasoning between them; `entries` keeps arrival order, `tools` only the calls. */
+  | {
+      kind: 'tools'
+      id: string
+      tools: TranscriptTool[]
+      entries: (TranscriptTool | { kind: 'thinking'; id: string; text: string; at?: number })[]
+    }
   | { kind: 'plan'; id: string; entries: { content: string; status: 'pending' | 'in_progress' | 'completed' }[] }
   | {
       kind: 'agents'
