@@ -78,6 +78,10 @@ A quote, a tagged file or another reference in the message box opens when you pr
 
 With **Auto** as the destination, Home also weighs the projects on your other connected hosts. A request that belongs to one of them starts there, in that project's default checkout, and the thread opens. When more than one project could fit, Home asks. For work that spans several repositories, add them to one project: a folder that holds them all gives one thread every repository.
 
+## Continue in a new worktree
+
+**Continue in new thread** (thread menu) offers **In a new worktree, with the uncommitted changes** for a thread on the project's own checkout; on the phone it is **Continue in a new worktree**. The new thread starts on a new branch in its own worktree with this conversation and a copy of every uncommitted change, new files included, so your checkout is free for other work. The original thread and its checkout stay as they are, and the two threads are linked. An agent can do the same when you ask it to move the work off your checkout; outside Full access it asks first.
+
 ## Continue on another host
 
 **Continue on ‹host›** (thread menu) copies a stopped thread to another connected host, or up to four with **Also on**. The sheet shows the branch it starts from, what stays behind (uncommitted files, unpushed commits), the project there and the model. It matches the project by Git remote, or clones it there. The conversation travels with secrets removed; files never do. Both threads stay linked, and **Bring back result** queues the other thread's latest reply in the original.

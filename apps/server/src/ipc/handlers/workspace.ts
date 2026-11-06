@@ -198,6 +198,10 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       ]),
       run: (start: ContinuationStart) => continuations().continueHere(start),
     },
+    'threads.continueInWorktree': {
+      args: z.tuple([id, agentSettings.optional()]),
+      run: (sessionId: string, settings?: AgentSettings) => continuations().continueInWorktree(sessionId, settings),
+    },
     'threads.noteContinued': {
       args: z.tuple([
         id,

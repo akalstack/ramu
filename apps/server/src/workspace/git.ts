@@ -38,7 +38,12 @@ const MAX_BUFFER = 64 * 1024 * 1024
 const LOCKED = /Unable to create '[^']*\.lock': File exists|Another git process seems to be running/
 
 /** Retries a briefly locked repository with quadratic backoff, like VS Code, instead of failing the action. */
-export async function git(cwd: string, args: string[], opts: { input?: string } = {}): Promise<string> {
+/** `env` adds variables for this one command, such as a throwaway GIT_INDEX_FILE. */
+export async function git(
+  cwd: string,
+  args: string[],
+  opts: { input?: string; env?: Record<string, string> } = {},
+): Promise<string> {
   for (let attempt = 1; ; attempt++) {
     try {
       return await gitOnce(cwd, args, opts)
@@ -49,7 +54,7 @@ export async function git(cwd: string, args: string[], opts: { input?: string } 
   }
 }
 
-function gitOnce(cwd: string, args: string[], opts: { input?: string }): Promise<string> {
+function gitOnce(cwd: string, args: string[], opts: { input?: string; env?: Record<string, string> }): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = execFile(
       'git',
@@ -59,7 +64,7 @@ function gitOnce(cwd: string, args: string[], opts: { input?: string }): Promise
         maxBuffer: MAX_BUFFER,
         encoding: 'utf8',
         // Never let Git block on an interactive prompt or open an editor.
-        env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_EDITOR: 'true', LC_ALL: 'C' },
+        env: { ...process.env, ...opts.env, GIT_TERMINAL_PROMPT: '0', GIT_EDITOR: 'true', LC_ALL: 'C' },
       },
       (err, stdout, stderr) => {
         if (err) {

@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { dirname } from 'node:path'
-import { homedir } from 'node:os'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { homedir, tmpdir } from 'node:os'
 import { clipText } from '@ramu/shared/text'
 import {
   continuationGroup,
@@ -272,6 +273,31 @@ export class AgentThreadService {
             started: started.map((entry) => ({ threadId: entry.taskId, ...entry })),
             note: 'Each thread reports back here when it finishes or needs input. Use thread_status to check on them.',
           }
+        }),
+    )
+    server.registerTool(
+      'thread_continue_in_worktree',
+      {
+        description:
+          "When the person asks to move this work into its own worktree or off their checkout: starts a linked thread on a new branch that opens with this conversation and this checkout's uncommitted changes, new files included. This thread and its checkout are left as they are. Call it last, then tell the person the work continues there and stop.",
+        inputSchema: {},
+      },
+      (_input, extra) =>
+        result(async () => {
+          const caller = this.agents.get(sessionId)
+          const task = this.workspace.getTask(caller.taskId)
+          if (caller.settings.access !== 'full') {
+            const allowed = await this.agents.requestPermission(
+              sessionId,
+              'continuing in a new worktree',
+              `Start a thread on a new branch of this project with this conversation and a copy of the uncommitted changes in "${task.title}".`,
+              extra.signal,
+            )
+            if (!allowed) return { started: false, message: 'The person chose to stay in this checkout. Do not retry.' }
+          }
+          const started = await this.continueInWorktree(sessionId)
+          this.agents.threadsStarted(sessionId, [started])
+          return { started: true, threadId: started.taskId, title: started.title }
         }),
     )
     server.registerTool(
@@ -833,8 +859,9 @@ export class AgentThreadService {
   }
 
   /**
-   * Copies the starting checkout's uncommitted changes to tracked files into the new worktree, repository by repository.
-   * The starting checkout is only read. Returns a line for the brief describing what was copied or why it was not.
+   * Copies the starting checkout's uncommitted changes, new files included, into the new worktree, repository by
+   * repository. The starting checkout and its staging area are only read. Returns lines for the brief describing what was
+   * copied or why it was not.
    */
   private async carryChanges(fromTask: string, toTask: string): Promise<string> {
     const from = this.workspace.listBindings(fromTask)
@@ -842,7 +869,7 @@ export class AgentThreadService {
     for (const binding of this.workspace.listBindings(toTask)) {
       const source = from.find((entry) => entry.repoId === binding.repoId)
       if (!source) continue
-      const patch = await git(source.cwd, ['diff', '--binary', 'HEAD']).catch(() => '')
+      const patch = await uncommittedPatch(source.cwd).catch(() => '')
       if (!patch.trim()) continue
       try {
         await git(binding.cwd, ['apply', '--3way', '--binary', '--whitespace=nowarn'], { input: patch })
@@ -854,6 +881,45 @@ export class AgentThreadService {
       }
     }
     return notes.join('\n')
+  }
+
+  /**
+   * Continue in a new worktree: a linked thread on a new branch of this project that opens with this conversation and
+   * this checkout's uncommitted changes, so the person's own checkout is free again. The original thread is untouched.
+   */
+  async continueInWorktree(sessionId: string, requested?: AgentSettings): Promise<StartedThread> {
+    const session = this.agents.get(sessionId)
+    if (session.parentId) throw new Error('Continue the main thread, not a helper.')
+    const task = this.workspace.getTask(session.taskId)
+    if (task.projectId === NO_PROJECT) throw new Error('A thread with no project has no checkout to branch from.')
+    if (task.mode === 'worktree') throw new Error('This thread already has its own worktree.')
+    const options = (await this.invoke('tasks.workspaceOptions', [task.projectId])) as {
+      worktreeUnavailable?: string | null
+    }
+    if (options.worktreeUnavailable) throw new Error(options.worktreeUnavailable)
+    const project = this.workspace.listProjects().find((entry) => entry.id === task.projectId)
+    const settings = requested ?? session.settings
+    await this.agents.validateSettings(settings)
+    const [started] = await this.start(
+      [
+        {
+          prompt: clipText(this.agents.continuationPrompt(sessionId), CONTINUATION_PROMPT_LIMIT),
+          title: task.title,
+          projectId: task.projectId,
+          projectName: project?.name ?? task.projectId,
+          mode: 'worktree',
+          bringChanges: true,
+        },
+      ],
+      {
+        source: { taskId: task.id, sessionId },
+        settings,
+        context: `Continued from the thread "${task.title}" in a new worktree, so its checkout is free for other work.`,
+        depth: this.depthOf(task.id),
+      },
+    )
+    if (!started || started.error) throw new Error(started?.error ?? 'The new thread could not start.')
+    return started
   }
 
   private contextOf(caller: AgentSessionInfo, task: Task): string {
@@ -1035,4 +1101,18 @@ function describe(entry: Planned): string {
 export function briefOf(prompt: string, context: string | undefined, carried = ''): string {
   const about = [context ?? '', carried].filter(Boolean)
   return about.length ? `${prompt}\n\n${about.join('\n')}` : prompt
+}
+
+/** Every uncommitted change in a checkout, new files included, as one binary patch against HEAD. A throwaway index
+ * collects them, so the checkout's own staging area is never touched. */
+async function uncommittedPatch(cwd: string): Promise<string> {
+  const index = join(await mkdtemp(join(tmpdir(), 'ramu-carry-')), 'index')
+  try {
+    const env = { GIT_INDEX_FILE: index }
+    await git(cwd, ['read-tree', 'HEAD'], { env })
+    await git(cwd, ['add', '--all', '--', '.'], { env })
+    return await git(cwd, ['diff', '--cached', '--binary', 'HEAD'], { env })
+  } finally {
+    await rm(dirname(index), { recursive: true, force: true }).catch(() => {})
+  }
 }

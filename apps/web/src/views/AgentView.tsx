@@ -439,7 +439,7 @@ export const AgentView = memo(function AgentView({
     warnModelChange: preferences.warnModelChange,
   })
   const [continueHost, setContinueHost] = useState<string | null>(null)
-  const { continuing, confirmContinue, setConfirmContinue, continueInNewChat } = useContinueInNewChat({
+  const { continuing, confirmContinue, setConfirmContinue, continueInNewChat, canUseWorktree } = useContinueInNewChat({
     session,
     pendingSettings,
     setError,
@@ -813,8 +813,9 @@ export const AgentView = memo(function AgentView({
           {confirmContinue && (
             <ContinueChatDialog
               busy={continuing}
+              canUseWorktree={canUseWorktree}
               onCancel={() => setConfirmContinue(false)}
-              onConfirm={() => void continueInNewChat()}
+              onConfirm={(worktree) => void continueInNewChat(worktree)}
             />
           )}
           {continueHost && session && (

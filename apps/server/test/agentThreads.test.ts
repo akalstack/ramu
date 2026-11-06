@@ -115,6 +115,7 @@ beforeEach(async () => {
     autoResumeOf: () => true,
     getGoal: () => null,
     queued: () => [],
+    continuationPrompt: (id: string) => `Transcript of ${id}`,
   } as unknown as AgentService
   const invoke = async (method: string, args: unknown[]) => {
     calls.push(method)
@@ -268,6 +269,36 @@ describe('thread_start', () => {
     expect(readFileSync(join(apiRoot, 'schema.ts'), 'utf8')).toContain('dueDate')
     const brief = (events.get('started-1')![0] as { text: string }).text
     expect(brief).toContain('uncommitted changes in api are already applied here')
+  })
+
+  it('continues a thread in a new worktree with its conversation and every uncommitted change, new files too', async () => {
+    await callerIn(api, 'edits')
+    writeFileSync(join(apiRoot, 'schema.ts'), "export const fields = ['dueDate']\n")
+    writeFileSync(join(apiRoot, 'migration.ts'), 'export const up = 1\n')
+    approvals.push(true)
+    const out = await tools('caller').call('thread_continue_in_worktree', {})
+    expect(out.started).toBe(true)
+    expect(permissionDetails).toHaveLength(1)
+    const [binding] = ws.listBindings(out.threadId)
+    expect(binding!.mode).toBe('worktree')
+    expect(readFileSync(join(binding!.cwd, 'migration.ts'), 'utf8')).toContain('up = 1')
+    expect(readFileSync(join(binding!.cwd, 'schema.ts'), 'utf8')).toContain('dueDate')
+    // The starting checkout keeps its files and its staging area exactly as they were.
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: apiRoot, encoding: 'utf8' })
+    expect(git('diff', '--cached', '--name-only')).toBe('')
+    expect(git('status', '--porcelain')).toContain('?? migration.ts')
+    const brief = (events.get('started-1')![0] as { text: string }).text
+    expect(brief).toContain('Transcript of caller')
+    expect(brief).toContain('already applied here')
+    expect(recorded).toHaveLength(1)
+    await expect(service.continueInWorktree('started-1')).rejects.toThrow(/already has its own worktree/)
+  })
+
+  it('stays in the checkout when the person declines the move', async () => {
+    await callerIn(api, 'edits')
+    const out = await tools('caller').call('thread_continue_in_worktree', {})
+    expect(out).toMatchObject({ started: false })
+    expect(calls).not.toContain('tasks.create')
   })
 
   it('keeps bringChanges to a new worktree of the same project', async () => {

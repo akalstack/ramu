@@ -722,6 +722,8 @@ export interface RamuMethods {
     settings: AgentSettings,
   ): { match: import('./continuation').ContinuationMatch | null; settings: AgentSettings; parent: string }
   'threads.continueHere'(start: import('./continuation').ContinuationStart): StartedThread
+  /** Continue in a new worktree: a linked thread on a new branch with this conversation and the uncommitted changes. */
+  'threads.continueInWorktree'(sessionId: string, settings?: AgentSettings): StartedThread
   /** Labels the original thread once its continuation has started. */
   'threads.noteContinued'(taskId: string, event: import('./continuation').ContinuedEvent): void
   'folders.roots'(): string[]

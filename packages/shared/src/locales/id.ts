@@ -5325,4 +5325,10 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Agen hanya menerima berkas pribadi berisi nilainya, bukan nilainya sendiri. Berkas itu dihapus setelah sehari.',
   'Asked for a secret': 'Meminta rahasia',
   'Asking for a secret': 'Meminta rahasia',
+  'In a new worktree, with the uncommitted changes': 'Di worktree baru, dengan perubahan yang belum di-commit',
+  'Start a new thread on a new branch in its own worktree, with the current conversation and a copy of the uncommitted changes, new files included. This checkout keeps its changes.':
+    'Mulai utas baru di branch baru dalam worktree-nya sendiri, dengan percakapan ini dan salinan perubahan yang belum di-commit, termasuk berkas baru. Checkout ini tetap menyimpan perubahannya.',
+  'Continue in a new worktree': 'Lanjutkan di worktree baru',
+  'Continue in a new worktree?': 'Lanjutkan di worktree baru?',
+  'Continued in {0}': 'Dilanjutkan di {0}',
 }

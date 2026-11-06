@@ -293,6 +293,8 @@ export default function ChatScreen() {
     changed: number
     ahead: number
     published: boolean
+    /** The thread already has its own worktree, so it cannot move into a new one. */
+    isolated: boolean
   }>()
   const [refresh, setRefresh] = useState(0)
   const [sheet, setSheet] = useState(false)
@@ -333,6 +335,7 @@ export default function ChatScreen() {
             changed: status.entries.length,
             ahead: status.ahead,
             published: Boolean(status.upstream),
+            isolated: bindings.some((b) => b.mode === 'worktree'),
           })
       })().catch(() => {})
       return () => {
@@ -789,6 +792,38 @@ export default function ChatScreen() {
             symbol: 'powerplug' as const,
             group: 'tools' as const,
             onPress: () => setMcpOpen(true),
+          },
+        ]
+      : []),
+    ...(live && !live.isolated && chat.sessionId && computer?.access !== 'viewer'
+      ? [
+          {
+            icon: GitFork,
+            label: tr('Continue in a new worktree'),
+            symbol: 'arrow.triangle.branch' as const,
+            group: 'tools' as const,
+            onPress: () =>
+              Alert.alert(
+                tr('Continue in a new worktree?'),
+                tr(
+                  'Start a new thread on a new branch in its own worktree, with the current conversation and a copy of the uncommitted changes, new files included. This checkout keeps its changes.',
+                ),
+                [
+                  { text: tr('Cancel'), style: 'cancel' },
+                  {
+                    text: tr('Continue'),
+                    onPress: () =>
+                      void act(async () => {
+                        const started = await store.invoke(
+                          chat.computerId,
+                          'threads.continueInWorktree',
+                          chat.sessionId!,
+                        )
+                        return tr('Continued in {0}', { 0: started.title })
+                      }),
+                  },
+                ],
+              ),
           },
         ]
       : []),

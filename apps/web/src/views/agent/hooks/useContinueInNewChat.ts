@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { clipText } from '@ramu/shared/text'
-import type { AgentSessionInfo, AgentSettings } from '@ramu/shared/types'
+import { NO_PROJECT, type AgentSessionInfo, type AgentSettings } from '@ramu/shared/types'
 import { useHost } from '../../../workspace/HostProvider'
 import { errorText } from '../../../workspace/TaskPane'
 import { useWorkspaceActions } from '../../../workspace/workspace'
 
-/** "Continue in new chat": a fresh chat in the same checkout that opens with this one's transcript as hidden context. */
+/** "Continue in new chat": a fresh chat that opens with this one's transcript as hidden context, in the same checkout
+ * or, for a thread on the project's checkout, a new worktree that brings its uncommitted changes. */
 export function useContinueInNewChat({
   session,
   pendingSettings,
@@ -19,12 +20,21 @@ export function useContinueInNewChat({
   const { invoke } = useHost()
   const [continuing, setContinuing] = useState(false),
     [confirmContinue, setConfirmContinue] = useState(false)
-  const continueInNewChat = async () => {
-    const previous = session && ws.task(session.taskId)
+  const previous = session ? ws.task(session.taskId) : undefined
+  /** Only a thread on the project's own checkout can move to a worktree; one already in a worktree has its own. */
+  const canUseWorktree = !!previous && previous.projectId !== NO_PROJECT && previous.mode === 'current'
+  const continueInNewChat = async (worktree = false) => {
     if (!session || !previous) return
     setContinuing(true)
     let created: string | null = null
     try {
+      if (worktree && canUseWorktree) {
+        // The host creates the worktree, copies the uncommitted changes and links both threads in one call.
+        const started = await invoke('threads.continueInWorktree', session.id, pendingSettings ?? undefined)
+        await ws.refresh()
+        ws.openTask(started.taskId)
+        return
+      }
       const prompt = await invoke('agent.continuationPrompt', session.id)
       const task = await invoke('tasks.create', {
         projectId: previous.projectId,
@@ -49,5 +59,5 @@ export function useContinueInNewChat({
       setConfirmContinue(false)
     }
   }
-  return { continuing, confirmContinue, setConfirmContinue, continueInNewChat }
+  return { continuing, confirmContinue, setConfirmContinue, continueInNewChat, canUseWorktree }
 }
