@@ -34,6 +34,16 @@ describe('Ramu tool calls', () => {
     expect(production.subject).toBe('https://shop.vercel.app')
   })
 
+  it('reads ci_setup as writing the workflow, or reading it when it existed', () => {
+    const call = ramuTool(use('mcp__ramu__ci_setup', {}))!
+    const wrote = describeRamuTool(call, JSON.stringify({ path: '.github/workflows/ci.yml', written: true }))
+    expect(wrote.done).toBe('Wrote the CI workflow')
+    expect(wrote.subject).toBe('.github/workflows/ci.yml')
+    expect(describeRamuTool(call, JSON.stringify({ path: '.gitlab-ci.yml', written: false })).done).toBe(
+      'Read the CI workflow',
+    )
+  })
+
   it('reads each artifact tool as a row of its own', () => {
     for (const name of [
       'artifact_preview',

@@ -8,7 +8,7 @@ Today an agent in Ramu can write the app, run it in a background terminal, check
 
 - **Starting:** `project_add` only clones a repository or registers a folder. Someone with an idea and no repository has to create a folder, run `git init` and pick a framework first, which a non-coder cannot do.
 - **Deploying:** a project can be linked to Vercel or Netlify, with status, logs, production deploys and rollback ([Deploying an app](guide/deploy.md)). Other platforms have no target yet: `railway`, `cloudflared` and `docker` are on the risky-command list (`agent/autoCommandRules.ts`), so an agent can run them, but each run is a one-off approval.
-- **CI/CD:** Ramu watches checks but never sets them up. Nobody generates the workflow, puts the deploy token into the repository's secrets or links the deploy platform to the repository.
+- **CI/CD:** Ramu adds a CI workflow through a pull request ([Set up CI](guide/git-hosting.md#set-up-ci)), but a push that breaks the default branch wakes nobody, and nothing requires CI before merge.
 - **Secrets:** `request_secret` and **Environment variables** put a token on the host. Nothing copies it to GitHub Actions or to the platform's own environment variables, so the person pastes the same value into three places.
 
 **Easier for the person:** one sentence becomes a running app. One action (**Deploy**) turns it into a public URL on an account they own. Every later change goes through a pull request with checks and a preview URL, and merging to the default branch deploys it. The agent knows the target, the live URL and the last deployment's result, so "it's broken in production" is a task it can act on: read the logs, fix the bug, open a pull request, watch the deploy.
@@ -57,7 +57,8 @@ Vercel and Netlify are built ([Deploying an app](guide/deploy.md)): `HostingAdap
 
 ### 4. CI/CD
 
-- **Set up CI** (project menu, deploy sheet, or `ci_setup` for the agent) writes `.github/workflows/ci.yml` from the project facts: install with the lockfile's package manager, cached, then lint, typecheck, test and build, on pull requests and pushes to the default branch. GitLab gets `.gitlab-ci.yml`. The agent reviews the file against the repository (monorepo filters, services such as Postgres for tests) before the commit; the change goes through a pull request like any other, so the person sees the diff.
+**Set up CI** is built ([Set up CI](guide/git-hosting.md#set-up-ci)): the generator in `packages/shared/src/ciWorkflow.ts`, the pull request from a temporary worktree in `apps/server/src/workspace/ci/`, and `ci_setup`. What remains:
+
 - **Deploy job** only for targets without Git integration: a `deploy.yml` that runs after CI passes on the default branch, using the platform's official action and repository secrets.
 - **Secrets sync:** the deploy sheet lists the app's variables (from `.env.example` and the code) next to where each one is set: this host, GitHub Actions, the platform's preview and production environments. **Sync** writes the missing ones to each `EnvTarget`: the forge's existing account (GitHub's repository secrets API) and the hosting adapter. Values come from **Environment variables** or `request_secret` and are never shown again; paired devices see names only, as today.
 - **Branch protection** (optional, checked by default for new repositories): CI required before merge, through the forge's API.

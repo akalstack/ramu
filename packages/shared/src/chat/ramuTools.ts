@@ -51,6 +51,7 @@ const KNOWN = new Set([
   'deploy_preview',
   'deploy_production',
   'deploy_rollback',
+  'ci_setup',
   'skill_update',
   'skill_archive',
   'skill_restore',
@@ -261,6 +262,13 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
       return reply('Deployed to production', 'Deploying to production', 'wrench', text(data.url))
     case 'deploy_rollback':
       return reply('Rolled back production', 'Rolling back production', 'wrench', text(data.url))
+    case 'ci_setup':
+      return reply(
+        data.written === false ? 'Read the CI workflow' : 'Wrote the CI workflow',
+        'Writing the CI workflow',
+        'wrench',
+        text(data.path),
+      )
     case 'skill_install':
       return reply(
         data.cancelled ? 'Cancelled skill installation' : 'Installed skill',

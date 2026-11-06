@@ -26,6 +26,7 @@ The same accounts publish artifacts with **Publish to the web** ([Artifacts](art
 - **Once linked**, the sheet shows the platform, the live address with **Open**, and the latest deployments with their state, branch and commit message. **Logs** shows the end of a deployment's build log.
 - **Deploy to production** builds the default branch. It asks once more, naming the address that changes, before anything starts.
 - **Roll back** on an earlier production deployment makes it live again, after a confirmation naming the address.
+- **Checks** says whether the repository has CI and offers **Set up CI** when it has none ([Set up CI](git-hosting.md#set-up-ci)).
 
 The project stays linked to the account that linked it. If you connect a different account later, deploy actions are refused until you connect that account again or link the project again.
 

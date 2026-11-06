@@ -5744,4 +5744,22 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Deploying to production': 'Men-deploy ke produksi',
   'Rolled back production': 'Mengembalikan produksi',
   'Rolling back production': 'Mengembalikan produksi',
+  'Set up CI…': 'Siapkan CI…',
+  'Set up CI': 'Siapkan CI',
+  'Set up CI for {0}': 'Siapkan CI untuk {0}',
+  'A pull request adds {0}. CI runs on it before you merge.':
+    'Sebuah pull request menambahkan {0}. CI berjalan padanya sebelum Anda menggabungkannya.',
+  '{0} already has {1}.': '{0} sudah memiliki {1}.',
+  'Adds {0} in a pull request. On every pull request and push to {1} it installs with {2}, then runs {3}.':
+    'Menambahkan {0} lewat pull request. Pada setiap pull request dan push ke {1}, CI memasang dependensi dengan {2}, lalu menjalankan {3}.',
+  'Adds {0} in a pull request. On every pull request and push to {1} it installs with {2}; the project has no lint, test or build script yet.':
+    'Menambahkan {0} lewat pull request. Pada setiap pull request dan push ke {1}, CI memasang dependensi dengan {2}; proyek ini belum punya skrip lint, test, atau build.',
+  'Connect a repository to this project first.': 'Hubungkan repository ke proyek ini terlebih dahulu.',
+  lint: 'lint',
+  typecheck: 'pemeriksaan tipe',
+  test: 'test',
+  build: 'build',
+  'Wrote the CI workflow': 'Menulis workflow CI',
+  'Read the CI workflow': 'Membaca workflow CI',
+  'Writing the CI workflow': 'Menulis workflow CI',
 }

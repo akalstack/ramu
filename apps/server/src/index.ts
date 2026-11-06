@@ -51,6 +51,7 @@ import { registerThemeTools } from './themeTools'
 import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
 import { createDeploys } from './workspace/deploy/deploys'
 import { registerDeployTools } from './workspace/deploy/tools'
+import { registerCiTools } from './workspace/ci/tools'
 import { setAcpTerminalService } from './providers/acpTerminals'
 import { SqliteBackgroundTerminalHistory } from './workspace/backgroundTerminalHistory'
 import { ToolRegistry } from './agent/toolRegistry'
@@ -1317,6 +1318,7 @@ const mcpHttp = createServer(async (req, res) => {
       () => workspace.listProjects().find((project) => project.id === deployProject)?.name ?? 'this project',
       (detail, signal) => agents.requestPermission(source.id, 'Deploy', detail, signal),
     )
+  if (!review) registerCiTools(server, source, () => agents.get(source.id))
   if (!review && !source.parentId) registerSecretTools(server, agents, source.id)
   // A chat keeps the settings it launched with, so its tools match its instructions until it relaunches. Turning a
   // setting off mid-thread keeps its tools listed, and their handlers refuse.

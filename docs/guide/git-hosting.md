@@ -47,6 +47,18 @@ Azure Repos remotes (`dev.azure.com`, `*.visualstudio.com` and their SSH forms) 
 - **Fix failing checks** includes the end of each failed pipeline step's log; **Address review comments** sends the active threads.
 - **Work items** from Azure Boards stand in for issues on the new-thread screen.
 
+## Set up CI
+
+**Set up CI…** in a project's menu, or **Set up CI** under **Checks** in the [deploy sheet](deploy.md#deploy-a-project), adds a CI workflow to a GitHub or GitLab repository: `.github/workflows/ci.yml` (GitHub Actions) or `.gitlab-ci.yml` (GitLab CI). The sheet first says what it will do, read from the default branch:
+
+- **Install** with the package manager the lockfile names (npm, pnpm, Yarn, Bun, uv, pip, Bundler or Go modules), cached between runs.
+- **Then** the lint, typecheck, test and build steps the project has: its `package.json` scripts, the Python tools it declares (Ruff, mypy, pytest, or Django's tests), RuboCop and Rails or RSpec tests, or `go vet`, `go test` and `go build`. The build and test commands in `ramu.json` ([Configuration](configuration.md)) take the place of the detected ones.
+- **When:** on every pull request and on pushes to the default branch. GitHub actions are pinned to a major version, and the job can only read the repository.
+
+The file arrives as a pull request from a new `ramu/set-up-ci` branch, made from the default branch on the server, so your checkout, branch and uncommitted work stay as they are. CI runs on that pull request, so you see it pass before merging. A default branch that already has the file is left alone. Pushing a workflow file to GitHub needs the `workflow` permission on the host's Git sign-in; when it is missing, Ramu says how to add it.
+
+Agents use `ci_setup`: it writes the same file into the thread's checkout (or returns the one already there) for the agent to adjust (monorepo filters, a database service for tests) before it commits on a branch and opens a pull request.
+
 ## Conflicts
 
 When a merge, rebase or pull stops on conflicts, Source Control lists the files under **Merge changes**. Opening one shows each conflict as an editor would: **Current** (the branch you are on), **Incoming** (what is being merged in) and the common ancestor when Git recorded it, with a few lines above for context.

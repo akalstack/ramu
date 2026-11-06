@@ -117,6 +117,8 @@ Agents choose an artifact's kind (`kind`: an `app`, a `doc` in Markdown or a `di
 
 Threads in a project check its deployments and logs with `deploy_status` and `deploy_logs`, start a preview with `deploy_preview`, and ask you before `deploy_production` and `deploy_rollback`. See [Deploying an app](deploy.md#agents).
 
+`ci_setup` writes a CI workflow into the thread's checkout for the agent to review and commit through a pull request. See [Set up CI](git-hosting.md#set-up-ci).
+
 ## Rules and MCP
 
 - **Settings → Agent setup → Rules** holds your own instructions. **Always** rules reach every new thread (24,000 characters per scope); **Manual** rules stay stored. Ramu also lists the instruction files providers read (`AGENTS.md`, `CLAUDE.md` and rules folders), read-only.

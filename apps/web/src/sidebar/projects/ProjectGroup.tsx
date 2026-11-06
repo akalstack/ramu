@@ -9,6 +9,7 @@ import {
   AppWindow,
   Archive,
   ChevronRight,
+  CircleCheck,
   FolderClosed,
   FolderOpen,
   FolderSearch,
@@ -39,6 +40,7 @@ import { InlineEdit } from './InlineEdit'
 import { ProjectHoverCard } from './ProjectHoverCard'
 import { ProjectRoutingDialog } from './ProjectRoutingDialog'
 import { DeployDialog } from './DeployDialog'
+import { CiSetupDialog } from './CiSetup'
 import { useSidebarExpansion } from './sidebarExpansion'
 import { ThreadPreviewList, useThreadPreview } from './ThreadPreviewList'
 import { useSlideMount } from './useSlideMount'
@@ -66,6 +68,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
   const [renaming, setRenaming] = useState(false)
   const [routing, setRouting] = useState(false)
   const [deploying, setDeploying] = useState(false)
+  const [settingUpCi, setSettingUpCi] = useState(false)
   const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: project.id,
     disabled: renaming,
@@ -161,6 +164,17 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
       ),
       onSelect: () => {
         if (canWrite()) setDeploying(true)
+      },
+    },
+    {
+      key: 'ci',
+      label: (
+        <>
+          <CircleCheck size={14} /> {t(' Set up CI…')}
+        </>
+      ),
+      onSelect: () => {
+        if (canWrite()) setSettingUpCi(true)
       },
     },
     { key: 'sep1', separator: true },
@@ -367,6 +381,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
         />
       )}
       {deploying && <DeployDialog project={project} repos={repos} onClose={() => setDeploying(false)} />}
+      {settingUpCi && <CiSetupDialog project={project} repos={repos} onClose={() => setSettingUpCi(false)} />}
       {error && <div className={ROW_ERROR_CLASS}>{error}</div>}
       {visible && <ThreadPreviewList ref={list} preview={preview} />}
     </section>

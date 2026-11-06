@@ -16,6 +16,7 @@ import { t, useLanguage } from '../../i18n'
 import { invoke as openOnThisComputer } from '../../ipc'
 import { errorText } from '../../lib/errors'
 import { useHost } from '../../workspace/HostProvider'
+import { CiSetupSection } from './CiSetup'
 
 const STATE: Record<DeploymentState, string> = {
   queued: 'Queued',
@@ -289,6 +290,7 @@ export function DeployDialog({
           </ul>
         </>
       )}
+      <CiSetupSection projectId={project.id} repoId={repoId} />
     </Dialog>
   )
 }

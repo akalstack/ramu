@@ -28,6 +28,7 @@ import type {
   Deployment,
 } from './types/deploy'
 import type { LimitRetryResult } from './chat/providerWait'
+import type { CiPreview } from './ciWorkflow'
 import type { VoiceBridge } from './voice/bridge'
 import type {
   SharedMcpConnection,
@@ -1192,6 +1193,10 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.logs'(projectId: string, deploymentId: string): string
   /** Makes an earlier production deployment live again. */
   'deploy.rollback'(projectId: string, deploymentId: string): void
+  /** What Set up CI would add to a repository of the project, from its last fetched default branch. */
+  'ci.preview'(projectId: string, repoId: string): CiPreview
+  /** Commits the CI workflow on a new branch from the default branch and opens a pull request for it. */
+  'ci.setup'(projectId: string, repoId: string): { url: string | null; path: string }
   'forge.bitbucket'(check: boolean): BitbucketSummary
   /** Checks and saves a Bitbucket API token (with its account email) or access token. Host only. */
   'forge.saveBitbucket'(input: { email?: string; token: string }): BitbucketSummary
