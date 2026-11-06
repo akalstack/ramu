@@ -76,6 +76,7 @@ function Navigator() {
           <Stack.Screen name="chat/[id]/scm" />
           <Stack.Screen name="chat/[id]/revision" />
           <Stack.Screen name="chat/[id]/pull-request" />
+          <Stack.Screen name="chat/[id]/conflict" />
           <Stack.Screen name="new" options={{ presentation: 'card' }} />
           <Stack.Screen name="search" />
           <Stack.Screen name="schedule-edit" options={{ presentation: 'modal' }} />

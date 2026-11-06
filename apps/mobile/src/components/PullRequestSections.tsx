@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, TextInput, View } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { ChevronRight, MessageSquare, PanelRight, RefreshCcw, Search, Wrench } from 'lucide-react-native'
+import {
+  Eye,
+  ChevronDown,
+  ChevronRight,
+  MessageSquare,
+  PanelRight,
+  RefreshCcw,
+  Search,
+  Wrench,
+} from 'lucide-react-native'
 import type {
   ForgeStatus,
   PullRequestFeedbackKind,
@@ -9,6 +18,7 @@ import type {
   PullRequestInfo,
   PullRequestList,
   PullRequestSummary,
+  PullRequestWatchStatus,
 } from '@ramu/shared/types'
 import {
   PULL_REQUEST_STAGE_LABEL,
@@ -21,7 +31,8 @@ import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
 import type { Chat } from '../runtime/types'
 import { Disclosure } from './Motion'
-import { Button, Card, Divider, IconButton, T, tap } from './ui'
+import { Button, Card, Divider, IconButton, Sheet, T, tap } from './ui'
+import { SheetGroup, SheetOption } from './SheetOptions'
 import { ChecksLine, PullRequestGlyph, StageText } from './PullRequestParts'
 
 const GROUP_LABEL: Record<PullRequestGroup, string> = {
@@ -75,15 +86,30 @@ export function CurrentPullRequest({
   const [status, setStatus] = useState<ForgeStatus | null>(null)
   const [draftsReady, setDraftsReady] = useState(false)
   const [starting, setStarting] = useState<PullRequestFeedbackKind | null>(null)
+  const [summary, setSummary] = useState<PullRequestSummary | null>(null)
+  const [watch, setWatch] = useState<PullRequestWatchStatus | null>(null)
+  const [picking, setPicking] = useState(false)
+  const [watching, setWatching] = useState(false)
   const { computerId, taskId } = chat
   const read = useCallback(async () => {
     const next = await store.invoke(computerId, 'forge.pullRequest', taskId, repoId)
     setStatus(next)
     const pr = next.pullRequest
     if (pr?.state === 'open') {
-      const batch = await store.invoke(computerId, 'forge.drafts', pr.url).catch(() => null)
+      // The branch's own read has no mergeability; the repository's list does, so conflicts show here too.
+      const [batch, list, watched] = await Promise.all([
+        store.invoke(computerId, 'forge.drafts', pr.url).catch(() => null),
+        store.invoke(computerId, 'forge.pullRequests', taskId, repoId, false, false).catch(() => null),
+        store.invoke(computerId, 'forge.watchStatus', taskId, repoId, pr.url).catch(() => null),
+      ])
       setDraftsReady(!!batch)
-    } else setDraftsReady(false)
+      setSummary(list?.pullRequests.find((entry) => entry.url === pr.url) ?? null)
+      setWatch(watched)
+    } else {
+      setDraftsReady(false)
+      setSummary(null)
+      setWatch(null)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the store's invoke is stable for a host
   }, [computerId, taskId, repoId])
   useEffect(() => {
@@ -105,16 +131,32 @@ export function CurrentPullRequest({
     )
   if (!pr) return null
   const stage = pullRequestStage(
-    {
-      state: pr.state,
-      draft: pr.draft,
-      checks: rolledChecks(pr.checks),
-      reviewDecision: pr.reviewDecision,
-      mergeable: 'unknown',
-      openThreads: null,
-    },
+    summary?.url === pr.url
+      ? summary
+      : {
+          state: pr.state,
+          draft: pr.draft,
+          checks: rolledChecks(pr.checks),
+          reviewDecision: pr.reviewDecision,
+          mergeable: 'unknown',
+          openThreads: null,
+        },
     { draftsReady },
   )
+  const watchedThread = watch?.sessionId ? watch.threads.find((thread) => thread.id === watch.sessionId) : null
+  const canPick = !readOnly && !watching && !!watch && (!!watch.threads.length || !!watch.sessionId)
+  const chooseWatch = async (sessionId: string | null) => {
+    setPicking(false)
+    setWatching(true)
+    try {
+      await store.invoke(computerId, 'forge.watch', taskId, repoId, pr.url, sessionId)
+      setWatch(await store.invoke(computerId, 'forge.watchStatus', taskId, repoId, pr.url))
+    } catch (error) {
+      onError(message(error))
+    } finally {
+      setWatching(false)
+    }
+  }
   const failing = pr.checks.some((check) => check.state === 'failure')
   const count = (state: string) => pr.checks.filter((check) => check.state === state).length
   const checks = [
@@ -214,6 +256,59 @@ export function CurrentPullRequest({
           />
         </View>
       ) : null}
+      {pr.state === 'open' && watch ? (
+        <View style={{ gap: space.xs }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${say('Watch in thread')}: ${watchedThread?.title ?? say('Watch off')}`}
+            accessibilityState={{ disabled: !canPick }}
+            disabled={!canPick}
+            onPress={() => {
+              tap()
+              setPicking(true)
+            }}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.s,
+              minHeight: 44,
+              paddingHorizontal: space.m,
+              borderRadius: radius.m,
+              backgroundColor: pressed ? c.raised : c.raised2,
+              opacity: canPick ? 1 : 0.6,
+            })}
+          >
+            <Eye size={15} color={watchedThread ? c.accent : c.soft} />
+            <T size={font.control} weight="500" style={{ flexShrink: 0 }}>
+              {say('Watch in thread')}
+            </T>
+            <T size={font.control} tone="muted" numberOfLines={1} style={{ flex: 1, textAlign: 'right' }}>
+              {watchedThread?.title ?? say('Watch off')}
+            </T>
+            <ChevronDown size={15} color={c.muted} />
+          </Pressable>
+          <T size={font.caption} tone="muted">
+            {watch.sessionId
+              ? say(
+                  'New failing checks and review comments return to this thread, even with the window closed. Its replies wait for you to send.',
+                )
+              : say('Choose a thread to handle new failing checks and review comments automatically.')}
+          </T>
+        </View>
+      ) : null}
+      <Sheet open={picking} onClose={() => setPicking(false)} title={say('Watch in thread')}>
+        <SheetGroup>
+          <SheetOption title={say('Watch off')} selected={!watch?.sessionId} onPress={() => void chooseWatch(null)} />
+          {(watch?.threads ?? []).map((thread) => (
+            <SheetOption
+              key={thread.id}
+              title={thread.title}
+              selected={thread.id === watch?.sessionId}
+              onPress={() => void chooseWatch(thread.id)}
+            />
+          ))}
+        </SheetGroup>
+      </Sheet>
     </Card>
   )
 }

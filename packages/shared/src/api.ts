@@ -998,6 +998,23 @@ export interface RamuMethods {
   'git.autoPull'(taskId: string, repoId: string): boolean
   'git.sync'(taskId: string, repoId: string, approval?: import('./protectedBranch').SyncApproval): void
   'git.continueOperation'(taskId: string, repoId: string): void
+  /** A conflicted file with its conflicts, for choosing a side in each. */
+  'git.conflictFile'(taskId: string, repoId: string, path: string): import('./types').ConflictFile
+  /** Keeps one side of one conflict (`hunk`) or of the whole file, and stages the file once nothing is left. */
+  'git.resolveConflict'(
+    taskId: string,
+    repoId: string,
+    path: string,
+    choice: import('./conflicts').ConflictChoice,
+    hunk?: number,
+    hash?: string,
+  ): { resolved: boolean }
+  /** One side for every conflicted file; files that cannot take it are listed instead. */
+  'git.resolveAllConflicts'(
+    taskId: string,
+    repoId: string,
+    choice: import('./conflicts').ConflictChoice,
+  ): { resolved: number; skipped: { path: string; error: string }[] }
   'git.abortOperation'(taskId: string, repoId: string): void
   'git.push'(taskId: string, repoId: string, expectedBranch?: string, remote?: string): void
   /** Remotes to choose between before publishing a branch with no upstream; null when nothing needs choosing. */
@@ -1072,6 +1089,15 @@ export interface RamuMethods {
     action: import('./types').PullRequestAction,
   ): void
   'forge.reviewThreads'(taskId: string, repoId: string, url: string): import('./types').PullRequestThread[]
+  /**
+   * Brings the pull request up to date with its base: on the hosting service when it can, otherwise by merging the base
+   * in the thread's checkout of the branch and pushing. Conflicts stay in that checkout to resolve.
+   */
+  'forge.updateBranch'(
+    taskId: string,
+    repoId: string,
+    url: string,
+  ): { where: 'service' | 'checkout'; taskId: string | null; conflicts: number; pushed: boolean }
   /** How to open a pull request in a thread: to work on it, or to review it with an agent. */
   'forge.pullRequestHandoff'(
     taskId: string,

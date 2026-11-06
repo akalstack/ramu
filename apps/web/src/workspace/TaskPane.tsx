@@ -18,6 +18,7 @@ import {
   FileDiff,
   FileText,
   GitBranch,
+  GitMerge,
   GitPullRequest,
   Globe,
   History,
@@ -43,6 +44,7 @@ import { AgentView } from '../views/AgentView'
 import { ErrorBoundary } from '../ErrorBoundary'
 import { GitDetailsView } from '../views/GitDetailsView'
 import { PullRequestView } from '../git/PullRequestView'
+import { ConflictView } from '../views/ConflictView'
 import { DiffView } from '../views/DiffView'
 import { FileView } from '../views/FileView'
 import { BrowserView } from '../views/BrowserView'
@@ -543,6 +545,9 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
                                 <GitDetailsView taskId={workspaceId} view={v} binding={binding} />
                               )}
                               {v.kind === 'pull-request' && <PullRequestView taskId={workspaceId} view={v} />}
+                              {v.kind === 'conflict' && binding && (
+                                <ConflictView taskId={workspaceId} view={v} binding={binding} />
+                              )}
                             </ErrorBoundary>
                           </VisitedView>
                         )}
@@ -879,6 +884,7 @@ function ViewIcon({ kind, path }: { kind: ViewDescriptor['kind']; path?: string 
   useLanguage()
   if (kind === 'git') return <GitBranch size={13} className="kind" />
   if (kind === 'pull-request') return <GitPullRequest size={13} className="kind" />
+  if (kind === 'conflict') return <GitMerge size={13} className="kind text-warn" />
   if (kind === 'review') return <FileDiff size={13} className="kind" />
   if (kind === 'diff') return <FileDiff size={13} className={path ? `kind file-kind ${fileToneClass(path)}` : 'kind'} />
   if (kind === 'terminal') return <SquareTerminal size={13} className="kind" />
@@ -910,6 +916,13 @@ function ViewLabel({
       <>
         {t('Changes')}
         <span className="tab-repo text-muted-foreground text-caption">{ws.task(v.taskId)?.title ?? t('Thread')}</span>
+      </>
+    )
+  if (v.kind === 'conflict')
+    return (
+      <>
+        {basename(v.path)}
+        <span className="tab-repo text-muted-foreground text-caption">{t('Conflicts')}</span>
       </>
     )
   if (v.kind === 'pull-request')

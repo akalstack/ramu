@@ -121,6 +121,25 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
     }
   }
 
+  const [notice, setNotice] = useState<string | null>(null)
+  /** The service updates the branch when it can; otherwise the thread's checkout merges the base in and pushes. */
+  const updateBranch = () =>
+    run('update-branch', async () => {
+      setNotice(null)
+      const result = await invoke('forge.updateBranch', taskId, view.repoId, view.url)
+      if (result.conflicts && result.taskId) {
+        ws.openTask(result.taskId)
+        setNotice(
+          t(
+            '{0} files have conflicts. Choose a side for each in Source Control → Merge changes, then continue the merge.',
+            {
+              '0': String(result.conflicts),
+            },
+          ),
+        )
+      } else if (result.pushed) setNotice(t('The base branch was merged in and pushed.'))
+    })
+
   const act = (action: PullRequestAction) =>
     run(action.kind, () => invoke('forge.pullRequestAction', taskId, view.repoId, view.url, action))
 
@@ -269,11 +288,19 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
               variant="secondary"
               size="sm"
               disabled={!!busy}
-              title={pr.mergeable === 'conflicts' ? t('Conflicts need resolving in a thread first') : undefined}
-              onClick={() => void act({ kind: 'update-branch' })}
+              title={
+                pr.mergeable === 'conflicts'
+                  ? t('Merges the base branch in the thread working on it, so you can resolve the conflicts there')
+                  : undefined
+              }
+              onClick={() => void updateBranch()}
             >
               <RotateCcw size={13} />
-              {busy === 'update-branch' ? t('Updating…') : t('Update branch')}
+              {busy === 'update-branch'
+                ? t('Updating…')
+                : pr.mergeable === 'conflicts'
+                  ? t('Resolve conflicts')
+                  : t('Update branch')}
             </Button>
           )}
           {open && (
@@ -296,6 +323,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
           )}
         </div>
         {error && <p className="m-0 whitespace-pre-wrap text-caption text-bad">{error}</p>}
+        {notice && <p className="m-0 text-caption text-warn">{notice}</p>}
         {pr.fork && !mine && open && (
           <p className="m-0 text-caption text-muted-foreground">
             {t('This pull request comes from a fork: an agent can review it here, but pushing to it needs its author.')}

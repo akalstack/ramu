@@ -29,6 +29,8 @@ import type {
 import { redactSecrets } from '@ramu/shared/forgeRemote'
 import { currentBranch, git, publishRemote } from '../git'
 import { registerForgeAdapter } from './adapter'
+import { enrichOpen } from './enrich'
+import { checksRollup } from '@ramu/shared/pullRequests'
 import { ForgeError, pullRequestDraft } from './github'
 import { azureCredential, type AzureCredential } from './azureCredentials'
 import { FAILED_STEPS, failedStepLog } from './buildLogs'
@@ -705,7 +707,23 @@ export async function listPullRequests(cwd: string, options: { includeClosed: bo
       availability: 'ready',
       service: 'azure',
       viewer: viewer?.providerDisplayName ?? null,
-      pullRequests: [...open, ...completed, ...abandoned].map((raw) => parseListPullRequest(raw, a.repo, viewerId)),
+      pullRequests: await enrichOpen(
+        [...open, ...completed, ...abandoned].map((raw) => parseListPullRequest(raw, a.repo, viewerId)),
+        async (pr) => {
+          const [statuses, threads] = await Promise.all([
+            repoApi<{ value: RawStatus[] }>(a, `/pullrequests/${pr.number}/statuses`).then((page) => page.value),
+            repoApi<{ value: RawThread[] }>(a, `/pullrequests/${pr.number}/threads`).then((page) => page.value),
+          ])
+          return {
+            checks: checksRollup(
+              statuses
+                .map((status) => ({ state: statusState(status.state) }))
+                .filter((check) => check.state !== 'skipped'),
+            ),
+            openThreads: parseThreads(threads).filter((thread) => !thread.resolved).length,
+          }
+        },
+      ),
     }
   } catch (error) {
     if (error instanceof ForgeError && error.availability)

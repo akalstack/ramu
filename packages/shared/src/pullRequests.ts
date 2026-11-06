@@ -1,4 +1,4 @@
-import type { PullRequestGroup, PullRequestStage, PullRequestSummary } from './types'
+import type { PullRequestChecksState, PullRequestGroup, PullRequestStage, PullRequestSummary } from './types'
 
 /** Ramu's own facts about a pull request that the hosting service does not know. */
 export interface PullRequestLocalState {
@@ -91,4 +91,13 @@ export function matchesPullRequest(
   if (!words.length) return true
   const haystack = `${pr.number} ${pr.title} ${pr.author ?? ''} ${pr.headBranch}`.toLowerCase()
   return words.every((word) => haystack.includes(word))
+}
+
+/** Many checks as one state: any failure, else anything still running, else passed; null with none that count. */
+export function checksRollup(
+  checks: { state: 'pending' | 'success' | 'failure' | 'skipped' }[],
+): PullRequestChecksState {
+  if (checks.some((check) => check.state === 'failure')) return 'failure'
+  if (checks.some((check) => check.state === 'pending')) return 'pending'
+  return checks.some((check) => check.state === 'success') ? 'success' : null
 }

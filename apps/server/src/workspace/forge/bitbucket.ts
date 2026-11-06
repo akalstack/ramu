@@ -28,6 +28,8 @@ import { parseGitlabRemote } from '@ramu/shared/forgeHosts'
 import { redactSecrets } from '@ramu/shared/forgeRemote'
 import { currentBranch, git, publishRemote } from '../git'
 import { registerForgeAdapter } from './adapter'
+import { enrichOpen } from './enrich'
+import { checksRollup } from '@ramu/shared/pullRequests'
 import { ForgeError, pullRequestDraft } from './github'
 import { bitbucketCredential, type BitbucketCredential } from './bitbucketCredentials'
 import { FAILED_STEPS, failedStepLog } from './buildLogs'
@@ -582,7 +584,18 @@ export async function listPullRequests(cwd: string, options: { includeClosed: bo
       availability: 'ready',
       service: 'bitbucket',
       viewer: userName(viewer),
-      pullRequests: [...open, ...closed].map((raw) => parseListPullRequest(raw, viewer)),
+      pullRequests: await enrichOpen(
+        [...open, ...closed].map((raw) => parseListPullRequest(raw, viewer)),
+        async (pr) => {
+          const [checks, comments] = await Promise.all([checksOf(a, pr.number), readComments(a, pr.number)])
+          return {
+            checks: checksRollup(checks),
+            // Top-level comments nobody resolved are the open threads, as the review threads read them.
+            openThreads: comments.filter((comment) => !comment.parent && !comment.deleted && !comment.resolution)
+              .length,
+          }
+        },
+      ),
     }
   } catch (error) {
     if (error instanceof ForgeError && error.availability)

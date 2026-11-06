@@ -29,6 +29,8 @@ export type ViewDescriptor =
       preview?: boolean
     }
   | { kind: 'git'; id: string; repoId: string; title: string; oid?: string; preview?: boolean }
+  /** A conflicted file, one conflict at a time, with a side to keep for each. */
+  | { kind: 'conflict'; id: string; repoId: string; path: string }
   /** A pull request of the repository: its state, checks, review threads, drafted replies and actions. */
   | { kind: 'pull-request'; id: string; repoId: string; url: string; number: number; title: string }
   | {

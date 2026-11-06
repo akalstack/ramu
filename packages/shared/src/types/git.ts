@@ -82,3 +82,17 @@ export interface CommitBranchOptions {
   newBranch?: string
   autoBranch?: boolean
 }
+
+/** A conflicted file, as the conflict view shows it. */
+export interface ConflictFile {
+  path: string
+  /** The file's text with its markers; null when it is binary, too large or deleted here. */
+  text: string | null
+  /** Of the text on disk, so a choice made on a stale view is refused. */
+  hash: string | null
+  hunks: import('../conflicts').ConflictHunk[]
+  /** Whether each side still has the file; false means that side deleted it. */
+  current: boolean
+  incoming: boolean
+  reason: 'binary' | 'too-large' | 'deleted' | null
+}

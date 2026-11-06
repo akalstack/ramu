@@ -417,6 +417,46 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
         void ctx.pullRequestIndex?.tick()
       },
     },
+    'forge.updateBranch': {
+      args: z.tuple([id, id, prUrl]),
+      run: async (taskId: string, repoId: string, url: string) => {
+        const cwd = gitCwdOf(taskId, repoId)
+        const list = ctx.pullRequestIndex
+          ? await ctx.pullRequestIndex.list(cwd, repoId, { includeClosed: false, force: true })
+          : await forge.listPullRequests(cwd, { includeClosed: false })
+        const pr = list.pullRequests.find((entry) => entry.url === url)
+        if (!pr || pr.state !== 'open') throw new Error('This pull request is not open.')
+        const service = await forge.serviceOf(cwd)
+        // The service merges the base in for us when it can; conflicts it cannot merge come back here.
+        if (pr.mergeable !== 'conflicts' && (service === 'github' || service === 'gitlab')) {
+          await redacted(() => forge.pullRequestAction(cwd, url, { kind: 'update-branch' }))
+          ctx.pullRequestIndex?.invalidate(repoId)
+          return { where: 'service' as const, taskId: null, conflicts: 0, pushed: false }
+        }
+        if (pr.fork) throw new Error('This pull request comes from a fork. Its author has to update it.')
+        // A checkout that has the branch: the linked thread's first, then the one this view belongs to.
+        const candidates = [
+          ...(ctx.pullRequestIndex?.threadsFor(url) ?? []).reverse(),
+          ...(workspace.listTasks().some((task) => task.id === taskId) ? [taskId] : []),
+        ]
+        for (const candidate of candidates) {
+          let checkout: string
+          try {
+            checkout = gitCwdOf(candidate, repoId)
+          } catch {
+            continue
+          }
+          if ((await git.currentBranch(checkout)) !== pr.headBranch) continue
+          return gitExclusive(ctx, candidate, repoId, async (locked) => {
+            const { conflicts } = await git.mergeRemoteBase(locked, pr.baseBranch)
+            if (!conflicts) await git.push(locked, pr.headBranch)
+            ctx.pullRequestIndex?.invalidate(repoId)
+            return { where: 'checkout' as const, taskId: candidate, conflicts, pushed: !conflicts }
+          })
+        }
+        throw new Error('Open this pull request in a thread first, so its branch is checked out to update.')
+      },
+    },
     'forge.reviewThreads': {
       args: z.tuple([id, id, prUrl]),
       run: (taskId: string, repoId: string, url: string) =>

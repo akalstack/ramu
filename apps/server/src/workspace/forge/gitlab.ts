@@ -31,6 +31,8 @@ import { glabHosts, parseGitlabRemote, type GitlabProject } from '@ramu/shared/f
 import { redactSecrets } from '@ramu/shared/forgeRemote'
 import { currentBranch, git, publishRemote } from '../git'
 import { registerForgeAdapter } from './adapter'
+import { enrichOpen } from './enrich'
+import { checksRollup } from '@ramu/shared/pullRequests'
 import { findExecutable } from '../../providers/providerBinaries'
 import { ForgeError, failureExcerpt, pullRequestDraft } from './github'
 import { savedGitlabCredential } from './gitlabCredentials'
@@ -161,14 +163,14 @@ async function access(cwd: string, request: typeof fetch = fetch): Promise<Acces
 export async function gitlabApi<T>(
   target: Pick<Access, 'token' | 'fetch'> & { origin: string },
   path: string,
-  init: { method?: string; body?: unknown } = {},
+  init: { method?: string; body?: unknown; text?: boolean } = {},
 ): Promise<T> {
   const response = await target
     .fetch(`https://${target.origin}/api/v4${path}`, {
       method: init.method ?? 'GET',
       headers: {
         'PRIVATE-TOKEN': target.token,
-        Accept: 'application/json',
+        Accept: init.text ? 'text/plain' : 'application/json',
         ...(init.body ? { 'Content-Type': 'application/json' } : {}),
       },
       ...(init.body ? { body: JSON.stringify(init.body) } : {}),
@@ -186,6 +188,8 @@ export async function gitlabApi<T>(
   if (!response.ok) throw new ForgeError(`GitLab answered ${response.status}. Try again in a moment.`, null)
   const text = await response.text()
   if (text.length > 8 * 1024 * 1024) throw new ForgeError('GitLab sent more than Ramu reads at once.', null)
+  // Job logs are plain text; everything else is JSON.
+  if (init.text) return text as T
   return (text ? JSON.parse(text) : null) as T
 }
 
@@ -331,6 +335,7 @@ export async function checksFeedback(cwd: string, url?: string): Promise<string>
       ? await gitlabApi<string>(
           { ...a, origin: a.project.origin },
           `/projects/${encode(a.project.path)}/jobs/${id}/trace`,
+          { text: true },
         )
           .then((text) => (typeof text === 'string' ? text : ''))
           .catch(() => '')
@@ -584,6 +589,31 @@ export function parseListMergeRequest(raw: RawListMergeRequest, viewer: string |
   }
 }
 
+/** What a list row lacks: the head pipeline's state, whether it is approved, and its unresolved threads. */
+export async function mergeRequestDetails(a: Access, iid: number): Promise<Partial<PullRequestSummary>> {
+  const [one, approvals, discussions] = await Promise.all([
+    projectApi<{ head_pipeline?: { status?: string } | null; detailed_merge_status?: string }>(
+      a,
+      `/merge_requests/${iid}`,
+    ),
+    projectApi<{ approved?: boolean }>(a, `/merge_requests/${iid}/approvals`).catch(() => null),
+    projectApi<RawDiscussion[]>(a, `/merge_requests/${iid}/discussions?per_page=100`).catch(() => null),
+  ])
+  const pipeline = one.head_pipeline?.status
+  return {
+    checks: pipeline ? checksRollup([{ state: jobState({ status: pipeline, allow_failure: false }) }]) : null,
+    reviewDecision: reviewDecision(one.detailed_merge_status, approvals?.approved === true),
+    ...(discussions
+      ? {
+          openThreads: discussions.filter((discussion) => {
+            const first = discussion.notes.find((note) => !note.system)
+            return first?.resolvable && !first.resolved
+          }).length,
+        }
+      : {}),
+  }
+}
+
 const viewerOf = (a: Access) =>
   gitlabApi<{ id?: number; username?: string }>({ ...a, origin: a.project.origin }, '/user').catch(() => null)
 
@@ -612,7 +642,10 @@ export async function listPullRequests(cwd: string, options: { includeClosed: bo
       availability: 'ready',
       service: 'gitlab',
       viewer,
-      pullRequests: [...open, ...done].map((raw) => parseListMergeRequest(raw, viewer)),
+      pullRequests: await enrichOpen(
+        [...open, ...done].map((raw) => parseListMergeRequest(raw, viewer)),
+        (pr) => mergeRequestDetails(a, pr.number),
+      ),
     }
   } catch (error) {
     if (error instanceof ForgeError && error.availability) return unavailable(error.availability)

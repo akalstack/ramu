@@ -22,6 +22,8 @@ export function viewKey(v: ViewInput | ViewDescriptor): string {
       return `git:${v.repoId}:${v.oid ?? 'upstream'}`
     case 'review':
       return `review:${v.taskId}`
+    case 'conflict':
+      return `conflict:${v.repoId}:${v.path}`
     case 'pull-request':
       return `pull-request:${v.repoId}:${v.url}`
     case 'agent':

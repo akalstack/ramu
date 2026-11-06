@@ -19,7 +19,8 @@ Opening a pull request shows it in full, with these actions:
 
 - **Open thread** goes to the thread already working on it. **Open in thread** makes a worktree on its branch and starts a thread that catches up on it: what it does, what is left, and the next step.
 - **Review with agent** (someone else's pull request) checks it out in a worktree and asks an agent to review it without changing files. Its drafted review (verdict, summary and line comments) waits for you to edit and **Post review**. Pull requests from forks can be reviewed on GitHub and GitLab, but not pushed to.
-- **Ready for review**, **Update branch** (when it is behind or conflicts), **Close** and **Reopen**.
+- **Ready for review**, **Close** and **Reopen**. Bitbucket cannot reopen a declined pull request.
+- **Update branch** (when it is behind) merges its base in. GitHub and GitLab do it themselves. For Bitbucket and Azure DevOps, and for any pull request with conflicts (**Resolve conflicts**), Ramu merges the base into the branch in the thread working on it: a clean merge is pushed, and conflicts stay there for [Conflicts](#conflicts).
 - **Merge…** offers the methods the repository allows, the last one you used first, and says what still blocks the merge before it can run. It can delete the branch and mark the thread done.
 
 ### Review replies
@@ -36,7 +37,7 @@ Repositories on gitlab.com, or a server your `glab` is signed in to, get merge r
 
 ## Bitbucket Cloud
 
-Bitbucket has no official CLI, so connect it in **Settings → Git** with an Atlassian API token that has Bitbucket scopes and your account email, or with a workspace or repository access token (leave the email empty). Ramu checks the credential before saving it in the host's OS credential store, and agents never see it. `BITBUCKET_EMAIL` with `BITBUCKET_API_TOKEN`, or `BITBUCKET_ACCESS_TOKEN`, on the host works too. Pull requests, the pull request list, merging, build statuses, reviewers, review replies and issues work as on GitHub; **Fix failing checks** includes the end of each failed Bitbucket Pipelines step's log. Git itself still pushes with the host's own Git credentials.
+Bitbucket has no official CLI, so connect it in **Settings → Git** with an Atlassian API token that has Bitbucket scopes and your account email, or with a workspace or repository access token (leave the email empty). Ramu checks the credential before saving it in the host's OS credential store, and agents never see it. `BITBUCKET_EMAIL` with `BITBUCKET_API_TOKEN`, or `BITBUCKET_ACCESS_TOKEN`, on the host works too. Pull requests, the pull request list (with build statuses and open comments for the newest 20), merging, reviewers, review replies and issues work as on GitHub; **Fix failing checks** includes the end of each failed Bitbucket Pipelines step's log. Git itself still pushes with the host's own Git credentials.
 
 ## Azure DevOps
 
@@ -45,6 +46,17 @@ Azure Repos remotes (`dev.azure.com`, `*.visualstudio.com` and their SSH forms) 
 - **Pull requests:** create them, and follow votes, required reviewers, statuses and build validation policies in Source Control.
 - **Fix failing checks** includes the end of each failed pipeline step's log; **Address review comments** sends the active threads.
 - **Work items** from Azure Boards stand in for issues on the new-thread screen.
+
+## Conflicts
+
+When a merge, rebase or pull stops on conflicts, Source Control lists the files under **Merge changes**. Opening one shows each conflict as an editor would: **Current** (the branch you are on), **Incoming** (what is being merged in) and the common ancestor when Git recorded it, with a few lines above for context.
+
+- **Accept current**, **Accept incoming** or **Accept both** on one conflict, on the whole file, or on every conflicted file at once (after a confirmation). Changes Git merged cleanly stay as they are.
+- A file with no markers (binary, or deleted on one side) takes one side as a whole.
+- **Resolve with AI** hands every conflicted file, or only the one you choose, to an agent thread that edits and stages them without committing.
+- **Edit in the editor** for anything else, then mark the file resolved.
+
+A file is staged once none of its conflicts are left, and the view moves on to the next conflicted file. Continue or abort the merge or rebase from Source Control.
 
 ## Branches and worktrees
 

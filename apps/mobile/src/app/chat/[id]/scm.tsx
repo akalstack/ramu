@@ -12,6 +12,7 @@ import {
   ArrowDown,
   ArrowUp,
   Check,
+  CheckCheck,
   ChevronDown,
   ChevronRight,
   CircleAlert,
@@ -19,6 +20,7 @@ import {
   CloudUpload,
   FolderGit2,
   Ellipsis,
+  FileWarning,
   GitBranch,
   GitBranchPlus,
   Minus,
@@ -32,7 +34,14 @@ import { font, radius, space, useTheme } from '../../../theme'
 import { belowHeader } from '../../../components/UndoToast'
 import { useChat, useStore } from '../../../runtime/store'
 import type { ChangedFile } from '../../../runtime/types'
-import type { RepositoryBinding, GitStash, CommitDraft, GitStatus } from '@ramu/shared/types'
+import {
+  DEFAULT_AGENT_SETTINGS,
+  type RepositoryBinding,
+  type GitStash,
+  type CommitDraft,
+  type GitStatus,
+} from '@ramu/shared/types'
+import type { ConflictChoice } from '@ramu/shared/conflicts'
 import { validBranchName } from '@ramu/shared/workspaceDefaults'
 interface GitCommitInfo {
   oid: string
@@ -53,6 +62,13 @@ import { Glass, floatingChrome } from '../../../components/Glass'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { CurrentPullRequest, PullRequestListSection } from '../../../components/PullRequestSections'
 import { canWriteHost } from '../../../runtime/viewerAccess'
+import {
+  ALL_FILES_LABEL,
+  ALL_FILES_TITLE,
+  CHOICES,
+  CHOICE_LABEL,
+  startConflictThread,
+} from '../../../runtime/conflicts'
 import {
   Button,
   Card,
@@ -92,6 +108,11 @@ function newBranchName(subject: string) {
     .slice(0, 24)
     .replace(/-+$/, '')
   return `ramu/${slug || `commit-${Date.now().toString(36).slice(-4)}`}`
+}
+
+/** Entries Git could not merge (`conflicted`), or every other entry. */
+function unresolved<E extends { staged: string | null; unstaged: string | null }>(entries: E[], conflicted: boolean) {
+  return entries.filter((entry) => (entry.staged === 'unmerged' || entry.unstaged === 'unmerged') === conflicted)
 }
 
 function StatusLetter({ status }: { status: ChangedFile['status'] }) {
@@ -168,6 +189,50 @@ function FileRow({
       ) : null}
       <View style={{ width: 28, alignItems: 'center' }}>
         <StatusLetter status={file.status} />
+      </View>
+    </View>
+  )
+}
+
+/** A file Git could not merge: it opens conflict by conflict, and its menu keeps one side of the whole file. */
+function ConflictRow({ path, onOpen, onMenu }: { path: string; onOpen: () => void; onMenu?: () => void }) {
+  const { c } = useTheme()
+  const say = useSay()
+  const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : ''
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space.s,
+        paddingLeft: space.l,
+        paddingRight: 4,
+        minHeight: 46,
+      }}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={say('Choose a side for each conflict in {0}', { 0: path })}
+        onPress={() => {
+          tap()
+          onOpen()
+        }}
+        style={{ flex: 1, justifyContent: 'center', alignSelf: 'stretch' }}
+      >
+        <T size={font.body - 1} weight="500" numberOfLines={1}>
+          {path.slice(dir.length)}
+        </T>
+        <T size={font.caption} tone="muted" numberOfLines={1}>
+          {dir}
+        </T>
+      </Pressable>
+      {onMenu ? (
+        <IconButton icon={Ellipsis} label={say('Resolve {0}', { 0: path })} size={34} tone="muted" onPress={onMenu} />
+      ) : null}
+      <View style={{ width: 28, alignItems: 'center' }}>
+        <Pill tone="warn" wash={c.warnWash}>
+          U
+        </Pill>
       </View>
     </View>
   )
@@ -250,8 +315,11 @@ export default function SourceControl() {
   const [action, setAction] = useState<CommitAction>('commit')
   const [tab, setTab] = useState<'changes' | 'commits' | 'stashes' | 'pulls'>('changes')
   const [filter, setFilter] = useState('')
-  const [folded, setFolded] = useState<{ staged?: boolean; changes?: boolean }>({})
-  const [sheet, setSheet] = useState<'repo' | 'branch' | 'newBranch' | 'action' | 'menu' | null>(null)
+  const [folded, setFolded] = useState<{ staged?: boolean; changes?: boolean; conflicts?: boolean }>({})
+  const [sheet, setSheet] = useState<
+    'repo' | 'branch' | 'newBranch' | 'action' | 'menu' | 'conflicts' | 'conflict' | null
+  >(null)
+  const [conflictPath, setConflictPath] = useState<string | null>(null)
   const [branchName, setBranchName] = useState('')
   const [busy, setBusy] = useState(false)
   const running = useRef(false)
@@ -302,7 +370,8 @@ export default function SourceControl() {
     )
     setStashes(stashList)
     setFiles(
-      status.entries.flatMap((e) =>
+      // Conflicted files have their own group; they are staged by resolving them.
+      unresolved(status.entries, false).flatMap((e) =>
         [true, false].flatMap((staged) => {
           const state = staged ? e.staged : e.unstaged
           return state
@@ -365,7 +434,11 @@ export default function SourceControl() {
   const staged = mine.filter((f) => f.staged === true)
   const unstaged = mine.filter((f) => f.staged === false)
   const changes: FileState[] = unstaged
-  const changeCount = mine.length
+  const conflicted = gitStatus ? unresolved(gitStatus.entries, true).map((entry) => entry.path) : []
+  const shownConflicted = filter.trim()
+    ? conflicted.filter((path) => path.toLowerCase().includes(filter.trim().toLowerCase()))
+    : conflicted
+  const changeCount = mine.length + conflicted.length
   const needle = filter.trim().toLowerCase()
   const shownStaged = needle ? staged.filter((f) => f.path.toLowerCase().includes(needle)) : staged
   const shownUnstaged = needle ? changes.filter((f) => f.path.toLowerCase().includes(needle)) : changes
@@ -459,6 +532,75 @@ export default function SourceControl() {
   const continueOperation = (method: 'git.continueOperation' | 'git.abortOperation') => {
     if (!chat || !binding) throw new Error('Select a repository first.')
     return store.invoke(chat.computerId, method, chat.taskId, binding.repoId)
+  }
+  const openConflict = (path: string) => {
+    if (!chat || !binding) return
+    router.push({ pathname: '/chat/[id]/conflict', params: { id: chat.id, repoId: binding.repoId, path } })
+  }
+  /** One side for one file, or for every conflicted file when `path` is null (after a confirmation). */
+  const chooseSide = (path: string | null, choice: ConflictChoice) => {
+    if (!chat || !binding) return
+    if (path) {
+      void run(
+        () => store.invoke(chat.computerId, 'git.resolveConflict', chat.taskId, binding.repoId, path, choice),
+        'Resolved and staged.',
+      )
+      return
+    }
+    Alert.alert(
+      tr(ALL_FILES_TITLE[choice]),
+      tr(
+        'Every conflict in {0} files is replaced by that side, and each file is staged. Changes Git merged cleanly stay.',
+        { 0: conflicted.length },
+      ),
+      [
+        { text: tr('Cancel'), style: 'cancel' },
+        {
+          text: tr(ALL_FILES_LABEL[choice]),
+          onPress: () =>
+            void run(async () => {
+              const result = await store.invoke(
+                chat.computerId,
+                'git.resolveAllConflicts',
+                chat.taskId,
+                binding.repoId,
+                choice,
+              )
+              if (result.skipped.length)
+                throw new Error(result.skipped.map((entry) => `${entry.path}: ${entry.error}`).join('\n'))
+            }, 'Resolved and staged.'),
+        },
+      ],
+    )
+  }
+  /** Hands every conflicted file, or only the given ones, to an agent in a new thread in this checkout. */
+  const resolveWithAi = async (only?: string[]) => {
+    const paths = only ?? conflicted
+    if (running.current || !chat || !binding || !paths.length) return
+    running.current = true
+    setBusy(true)
+    try {
+      if (!chat.projectId) throw new Error(tr('This checkout is not part of a project.'))
+      const started = await startConflictThread(store.invoke, {
+        computerId: chat.computerId,
+        projectId: chat.projectId.slice(chat.projectId.indexOf(':') + 1),
+        workspaceId: chat.mode === 'worktree' ? chat.workspaceId : null,
+        repoName: binding.repoName,
+        cwd: binding.cwd,
+        kind: gates.operation ?? 'merge',
+        paths,
+        whole: !only,
+        settings: chat.settings?.model ? chat.settings : (store.defaults[chat.computerId] ?? DEFAULT_AGENT_SETTINGS),
+        say: tr,
+      })
+      await store.refresh(chat.computerId).catch(() => {})
+      router.push({ pathname: '/chat/[id]', params: { id: store.resolveChat(chat.computerId, started) } })
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error), true)
+    } finally {
+      running.current = false
+      setBusy(false)
+    }
   }
   const generate = async () => {
     if (gates.operation || gates.conflicts)
@@ -863,6 +1005,41 @@ export default function SourceControl() {
           {tab === 'pulls' && chat && binding ? <PullRequestListSection chat={chat} repoId={binding.repoId} /> : null}
           {tab === 'changes' ? (
             <>
+              {conflicted.length ? (
+                <Group
+                  title={tr('Merge changes')}
+                  count={shownConflicted.length}
+                  open={!folded.conflicts}
+                  onToggle={() => setFolded((f) => ({ ...f, conflicts: !f.conflicts }))}
+                  action={
+                    canWrite
+                      ? {
+                          icon: CheckCheck,
+                          label: tr('Accept a side in every conflicted file'),
+                          onPress: () => setSheet('conflicts'),
+                        }
+                      : undefined
+                  }
+                >
+                  {shownConflicted.map((path, i) => (
+                    <View key={path}>
+                      {i ? <Divider inset={space.l} /> : null}
+                      <ConflictRow
+                        path={path}
+                        onOpen={() => openConflict(path)}
+                        onMenu={
+                          canWrite
+                            ? () => {
+                                setConflictPath(path)
+                                setSheet('conflict')
+                              }
+                            : undefined
+                        }
+                      />
+                    </View>
+                  ))}
+                </Group>
+              ) : null}
               {
                 <Group
                   title={tr('Staged Changes')}
@@ -927,7 +1104,7 @@ export default function SourceControl() {
                   </View>
                 ))}
               </Group>
-              {needle && !shownStaged.length && !shownUnstaged.length ? (
+              {needle && !shownStaged.length && !shownUnstaged.length && !shownConflicted.length ? (
                 <T tone="muted">No changed file matches.</T>
               ) : null}
               {!changeCount ? <T tone="muted">No changes in this checkout.</T> : null}
@@ -1314,6 +1491,88 @@ export default function SourceControl() {
               />
             )
           })}
+        </SheetGroup>
+      </Sheet>
+
+      <Sheet open={sheet === 'conflicts'} onClose={() => setSheet(null)} title={tr('Merge changes')}>
+        <SheetGroup>
+          <SheetOption
+            icon={Sparkles}
+            title={tr('Resolve with AI')}
+            disabled={busy}
+            onPress={() => {
+              setSheet(null)
+              void resolveWithAi()
+            }}
+          />
+        </SheetGroup>
+        <SheetGroup
+          footer={tr(
+            'Every conflict in {0} files is replaced by that side, and each file is staged. Changes Git merged cleanly stay.',
+            { 0: conflicted.length },
+          )}
+        >
+          {CHOICES.map((choice) => (
+            <SheetOption
+              key={choice}
+              icon={CheckCheck}
+              title={tr(ALL_FILES_LABEL[choice])}
+              disabled={busy}
+              onPress={() => {
+                setSheet(null)
+                chooseSide(null, choice)
+              }}
+            />
+          ))}
+        </SheetGroup>
+      </Sheet>
+
+      <Sheet open={sheet === 'conflict'} onClose={() => setSheet(null)} title={conflictPath ?? ''}>
+        <SheetGroup>
+          <SheetOption
+            icon={FileWarning}
+            title={tr('Open conflicts')}
+            help={tr('Choose a side for each conflict in {0}', { 0: conflictPath ?? '' })}
+            onPress={() => {
+              setSheet(null)
+              if (conflictPath) openConflict(conflictPath)
+            }}
+          />
+        </SheetGroup>
+        <SheetGroup>
+          {CHOICES.map((choice) => (
+            <SheetOption
+              key={choice}
+              icon={Check}
+              title={tr(CHOICE_LABEL[choice])}
+              disabled={busy}
+              onPress={() => {
+                setSheet(null)
+                if (conflictPath) chooseSide(conflictPath, choice)
+              }}
+            />
+          ))}
+        </SheetGroup>
+        <SheetGroup>
+          <SheetOption
+            icon={Sparkles}
+            title={tr('Resolve this file with AI')}
+            disabled={busy}
+            onPress={() => {
+              setSheet(null)
+              if (conflictPath) void resolveWithAi([conflictPath])
+            }}
+          />
+          <SheetOption
+            icon={Plus}
+            title={tr('Mark resolved')}
+            help={tr('Mark resolved after editing it yourself')}
+            disabled={busy}
+            onPress={() => {
+              setSheet(null)
+              if (conflictPath) setStaged([conflictPath], true)
+            }}
+          />
         </SheetGroup>
       </Sheet>
 

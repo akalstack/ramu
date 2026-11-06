@@ -6,6 +6,8 @@ import type { AgentSettings, CommitBranchOptions, DiffContents, PullMode } from 
 import { discardPreview } from '../../workspace/discardPreview'
 import * as files from '../../workspace/files'
 import * as git from '../../workspace/git'
+import * as conflicts from '../../workspace/conflicts'
+import type { ConflictChoice } from '@ramu/shared/conflicts'
 import { RemoteRefresh } from '../../workspace/remoteRefresh'
 import {
   assertNoActiveWriter,
@@ -20,6 +22,7 @@ import { agentSettings, fingerprintHash, gitOid, id, pullMode, relPath } from '.
 import type { RegisterHandlers } from '../types'
 
 const branchName = z.string().min(1).max(200)
+const conflictChoice = z.enum(['current', 'incoming', 'both'])
 const stagedPaths = z.array(relPath).max(10_000)
 const discardPaths = z.array(relPath).min(1).max(10_000)
 
@@ -58,6 +61,32 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
         )
         return { original: await git.showBlob(cwd, staged === 'all' ? 'HEAD' : 'INDEX', path), modified: working }
       },
+    },
+    'git.conflictFile': {
+      args: z.tuple([id, id, relPath]),
+      run: (taskId: string, repoId: string, path: string) => conflicts.conflictFile(gitCwdOf(taskId, repoId), path),
+    },
+    'git.resolveConflict': {
+      args: z.tuple([
+        id,
+        id,
+        relPath,
+        conflictChoice,
+        z.number().int().min(0).max(10_000).optional(),
+        z.string().min(1).max(200).optional(),
+      ]),
+      run: (taskId: string, repoId: string, path: string, choice: ConflictChoice, hunk?: number, hash?: string) =>
+        gitExclusive(ctx, taskId, repoId, (cwd) =>
+          conflicts.resolveConflict(cwd, path, choice, {
+            ...(hunk === undefined ? {} : { hunk }),
+            ...(hash ? { hash } : {}),
+          }),
+        ),
+    },
+    'git.resolveAllConflicts': {
+      args: z.tuple([id, id, conflictChoice]),
+      run: (taskId: string, repoId: string, choice: ConflictChoice) =>
+        gitExclusive(ctx, taskId, repoId, (cwd) => conflicts.resolveAllConflicts(cwd, choice)),
     },
     'git.stage': {
       args: z.tuple([id, id, stagedPaths]),

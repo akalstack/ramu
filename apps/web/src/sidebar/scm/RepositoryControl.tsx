@@ -12,7 +12,9 @@ import { REPO_SECTION } from './classes'
 import { CommitBox } from './CommitBox'
 import { ConfirmationDialog } from './ConfirmationDialog'
 import { RemoteChoiceDialog } from './RemoteChoiceDialog'
-import { ConflictList } from './ConflictList'
+import { CHOICE_LABEL, ConflictList } from './ConflictList'
+import type { ConflictChoice } from '@ramu/shared/conflicts'
+import { Dialog } from '../../Menu'
 import { GitInspector } from './GitInspector'
 import { OperationBanner } from './OperationBanner'
 import { PullRequestSection } from './PullRequestSection'
@@ -33,6 +35,12 @@ import { useResolveWithAi } from './useResolveWithAi'
 import { useHost } from '../../workspace/HostProvider'
 
 /** Source Control for one repository: changes, commit box and operation state, plus its Git section. */
+const ALL_TITLE: Record<ConflictChoice, string> = {
+  current: 'Keep the current side in every conflicted file?',
+  incoming: 'Keep the incoming side in every conflicted file?',
+  both: 'Keep both sides in every conflicted file?',
+}
+
 export function RepositoryControl({
   taskId,
   binding,
@@ -71,6 +79,7 @@ export function RepositoryControl({
   const [stagedOpen, setStagedOpen] = useState(true)
   const [changesOpen, setChangesOpen] = useState(true)
   const [gitTab, setGitTab] = useState<GitTab>('commits')
+  const [acceptAll, setAcceptAll] = useState<ConflictChoice | null>(null)
   useEffect(() => {
     if (showGit) onGitCollapsed?.(!historyOpen)
   }, [showGit, historyOpen, onGitCollapsed])
@@ -164,6 +173,30 @@ export function RepositoryControl({
   return (
     <div ref={root} className={`scm-repo-body${compact ? ' compact' : ''}${collapsed ? ' collapsed' : ''}`}>
       {fileContext.contextMenu.menu}
+      {acceptAll && (
+        <Dialog
+          title={t(ALL_TITLE[acceptAll])}
+          confirmLabel={t(CHOICE_LABEL[acceptAll])}
+          onConfirm={() => {
+            const choice = acceptAll
+            setAcceptAll(null)
+            void actions.run(async () => {
+              actions.requireSaved()
+              const result = await invoke('git.resolveAllConflicts', taskId, binding.repoId, choice)
+              if (result.skipped.length)
+                reportError(result.skipped.map((entry) => `${entry.path}: ${entry.error}`).join('\n'))
+            })
+          }}
+          onCancel={() => setAcceptAll(null)}
+        >
+          <p className="m-0">
+            {t(
+              'Every conflict in {0} files is replaced by that side, and each file is staged. Changes Git merged cleanly stay.',
+              { '0': String(conflicts.length) },
+            )}
+          </p>
+        </Dialog>
+      )}
       {actions.remoteChoices && (
         <RemoteChoiceDialog
           branch={status?.branch ?? null}
@@ -260,7 +293,15 @@ export function RepositoryControl({
               canResolveWithAi={!status?.operation}
               busy={busy}
               resolving={resolving}
-              onResolveWithAi={() => void resolveWithAi()}
+              onResolveWithAi={(paths) => void resolveWithAi(paths)}
+              onChoose={(path, choice) =>
+                path
+                  ? void actions.run(async () => {
+                      actions.requireSaved()
+                      await invoke('git.resolveConflict', taskId, binding.repoId, path, choice)
+                    })
+                  : setAcceptAll(choice)
+              }
               onMarkResolved={(path) => stagePaths([path], true)}
             />
           )}

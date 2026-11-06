@@ -571,6 +571,24 @@ export async function mergeBranch(cwd: string, name: string): Promise<void> {
     )
   }
 }
+/**
+ * Brings a branch up to date with its base from the remote by merging it in, as a hosting service's "Update branch"
+ * does. Conflicts leave the merge in progress for Source Control and are counted, not thrown.
+ */
+export async function mergeRemoteBase(cwd: string, base: string): Promise<{ conflicts: number }> {
+  await requireClean(cwd, false, 'updating the branch')
+  await git(cwd, ['check-ref-format', '--branch', base])
+  const { remote } = await publishRemote(cwd, await currentBranch(cwd))
+  if (!remote) throw new Error('This repository has no remote to update from.')
+  await git(cwd, ['fetch', '--no-tags', remote, `+refs/heads/${base}:refs/remotes/${remote}/${base}`])
+  try {
+    await git(cwd, ['merge', '--no-edit', '--no-autostash', `refs/remotes/${remote}/${base}`])
+    return { conflicts: 0 }
+  } catch (error) {
+    if (!(await operation(cwd))) throw error
+    return { conflicts: (await status(cwd)).entries.filter((entry) => entry.staged === 'unmerged').length }
+  }
+}
 /** Starts a branch at HEAD and switches to it, keeping uncommitted changes. The branch we leave is not touched. */
 export async function branchFromHere(cwd: string, name: string): Promise<void> {
   await git(cwd, ['check-ref-format', '--branch', name])

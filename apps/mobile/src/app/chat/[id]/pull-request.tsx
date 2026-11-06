@@ -65,6 +65,7 @@ export default function PullRequestScreen() {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [merging, setMerging] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
   const computerId = chat?.computerId ?? ''
   const taskId = chat?.taskId ?? ''
 
@@ -149,6 +150,27 @@ export default function PullRequestScreen() {
   }
   const act = (action: PullRequestAction) =>
     run(action.kind, () => store.invoke(computerId, 'forge.pullRequestAction', taskId, repoId, url, action))
+
+  /** The service updates the branch when it can; otherwise the thread's checkout merges the base in and pushes. */
+  const updateBranch = () =>
+    run('update-branch', async () => {
+      setNotice(null)
+      const result = await store.invoke(computerId, 'forge.updateBranch', taskId, repoId, url)
+      if (result.conflicts && result.taskId) {
+        setNotice(
+          say(
+            '{0} files have conflicts. Choose a side for each in Source Control → Merge changes, then continue the merge.',
+            { 0: result.conflicts },
+          ),
+        )
+        // The merge stopped in that thread's checkout: its Source Control lists the files to choose a side for.
+        await store.refresh(computerId).catch(() => {})
+        router.push({
+          pathname: '/chat/[id]/scm',
+          params: { id: store.resolveChat(computerId, result.taskId) },
+        })
+      } else if (result.pushed) setNotice(say('The base branch was merged in and pushed.'))
+    })
 
   const openTask = (hostTaskId: string) =>
     router.push({ pathname: '/chat/[id]', params: { id: store.resolveChat(computerId, hostTaskId) } })
@@ -325,9 +347,15 @@ export default function PullRequestScreen() {
                     <Button
                       kind="secondary"
                       icon={RotateCcw}
-                      title={busy === 'update-branch' ? say('Updating…') : say('Update branch')}
+                      title={
+                        busy === 'update-branch'
+                          ? say('Updating…')
+                          : pr.mergeable === 'conflicts'
+                            ? say('Resolve conflicts')
+                            : say('Update branch')
+                      }
                       disabled={!!busy}
-                      onPress={() => void act({ kind: 'update-branch' })}
+                      onPress={() => void updateBranch()}
                       style={{ flexGrow: 1 }}
                     />
                   ) : null}
@@ -358,7 +386,12 @@ export default function PullRequestScreen() {
               ) : null}
               {open && pr.mergeable === 'conflicts' && canWrite ? (
                 <T size={font.caption} tone="muted">
-                  {say('Conflicts need resolving in a thread first')}
+                  {say('Merges the base branch in the thread working on it, so you can resolve the conflicts there')}
+                </T>
+              ) : null}
+              {notice ? (
+                <T size={font.control} tone="soft" accessibilityLiveRegion="polite">
+                  {notice}
                 </T>
               ) : null}
               {error ? (
