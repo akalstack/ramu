@@ -49,6 +49,8 @@ import type { ArtifactInfo } from '@ramu/shared/artifacts'
 import type { TunnelChoice } from '@ramu/shared/types'
 import { registerThemeTools } from './themeTools'
 import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
+import { createDeploys } from './workspace/deploy/deploys'
+import { registerDeployTools } from './workspace/deploy/tools'
 import { setAcpTerminalService } from './providers/acpTerminals'
 import { SqliteBackgroundTerminalHistory } from './workspace/backgroundTerminalHistory'
 import { ToolRegistry } from './agent/toolRegistry'
@@ -506,6 +508,7 @@ schedules.webhookBases = () =>
     ...(network.enabled ? candidateUrls(network.host, network.port, Boolean(config.tls)) : []),
   ].map((candidate) => ({ url: candidate.url, via: candidate.interface }))
 const pullRequestWatches = new PullRequestWatchService(db, workspace, agents, changed)
+const deploys = createDeploys(workspace)
 // Thread rows show their pull request, so a change there refreshes the thread lists.
 const pullRequestIndex = new PullRequestIndex(workspace, agents, () => send('workspace:changed', {}))
 const pullRequestDrafts = new PullRequestDrafts(
@@ -886,6 +889,7 @@ const dispatcher = createDispatcher(
     artifactWebhookBases: () => schedules.webhookBases?.().map((base) => base.url.replace(/\/$/, '')) ?? [],
     schedules,
     pullRequestWatches,
+    deploys,
     pullRequestIndex,
     pullRequestDrafts,
     recaps,
@@ -1302,6 +1306,17 @@ const mcpHttp = createServer(async (req, res) => {
   if (!review) externalSkills.register(server, agents, source.id)
   if (!review) pullRequestWatches.register(server, source.id)
   if (!review) agentThreads.register(server, source.id)
+  const deployProject = workspace.getTask(source.taskId).projectId
+  if (!review && deployProject && deployProject !== NO_PROJECT)
+    registerDeployTools(
+      server,
+      deploys.service,
+      source,
+      deployProject,
+      () => agents.get(source.id),
+      () => workspace.listProjects().find((project) => project.id === deployProject)?.name ?? 'this project',
+      (detail, signal) => agents.requestPermission(source.id, 'Deploy', detail, signal),
+    )
   if (!review && !source.parentId) registerSecretTools(server, agents, source.id)
   // A chat keeps the settings it launched with, so its tools match its instructions until it relaunches. Turning a
   // setting off mid-thread keeps its tools listed, and their handlers refuse.

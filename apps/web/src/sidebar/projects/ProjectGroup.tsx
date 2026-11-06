@@ -15,6 +15,7 @@ import {
   GitBranch,
   Link2,
   Pencil,
+  Rocket,
   Route,
   Plus,
   SquarePen,
@@ -37,6 +38,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { InlineEdit } from './InlineEdit'
 import { ProjectHoverCard } from './ProjectHoverCard'
 import { ProjectRoutingDialog } from './ProjectRoutingDialog'
+import { DeployDialog } from './DeployDialog'
 import { useSidebarExpansion } from './sidebarExpansion'
 import { ThreadPreviewList, useThreadPreview } from './ThreadPreviewList'
 import { useSlideMount } from './useSlideMount'
@@ -63,6 +65,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
   const { ref: list, visible } = useSlideMount(open)
   const [renaming, setRenaming] = useState(false)
   const [routing, setRouting] = useState(false)
+  const [deploying, setDeploying] = useState(false)
   const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: project.id,
     disabled: renaming,
@@ -149,6 +152,17 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
           } as MenuEntry,
         ]
       : []),
+    {
+      key: 'deploy',
+      label: (
+        <>
+          <Rocket size={14} /> {t(' Deploy…')}
+        </>
+      ),
+      onSelect: () => {
+        if (canWrite()) setDeploying(true)
+      },
+    },
     { key: 'sep1', separator: true },
     {
       key: 'connect',
@@ -352,6 +366,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
           onClose={() => setRouting(false)}
         />
       )}
+      {deploying && <DeployDialog project={project} repos={repos} onClose={() => setDeploying(false)} />}
       {error && <div className={ROW_ERROR_CLASS}>{error}</div>}
       {visible && <ThreadPreviewList ref={list} preview={preview} />}
     </section>

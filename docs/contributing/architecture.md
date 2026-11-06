@@ -87,7 +87,7 @@ User-facing behavior is in the [browser guide](../guide/browser-and-computer.md#
 | --- | --- |
 | `agent/` | Thread lifecycle, one collaborator per concern: session store and registry, recorder, message dispatcher, goals, provider wait, user requests (questions, permissions, elicitation), fallback router, advisor, sub-agents, stream pump, restart recovery. Each owns its state and sees the rest through a narrow `*Host` interface. `agent.ts` is the thin `AgentService` façade that wires them together. |
 | `providers/` | Provider plumbing and the `ProviderAdapter` interface (`adapter.ts`) with one adapter per provider in `adapters/`: binary lookup, account environment, sign-in checks, login arguments and update plans. Also usage and usage-limit detection and `fakeAgent.ts` for simulated runs. |
-| `workspace/` | Repositories, files, Git, isolation checkouts, terminals (PTY), editorconfig, discard previews, forge (GitHub) adapters. |
+| `workspace/` | Repositories, files, Git, isolation checkouts, terminals (PTY), editorconfig, discard previews, forge (GitHub) adapters, and hosting adapters in `deploy/` (`HostingAdapter`: required reads plus declared capabilities, one file per platform, each passing `test/deployAdapters.test.ts`). |
 | `review/` | Recorded diffs, review state and stats, undo and restore with conflict checks. |
 | `memory/` | Shared memory notes, memory files, learning, recaps. |
 | `remote/` | Pairing, devices, network listener and socket, presence announcements, mobile push, host folder browsing. |

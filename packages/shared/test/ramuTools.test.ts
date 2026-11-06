@@ -20,6 +20,20 @@ describe('Ramu tool calls', () => {
     expect(ramuTool(use('mcp__ramu__made_up'))).toBeNull()
   })
 
+  it('reads each deploy tool as a row naming the live address', () => {
+    for (const name of ['deploy_status', 'deploy_logs', 'deploy_preview', 'deploy_production', 'deploy_rollback']) {
+      const call = ramuTool(use(`mcp__ramu__${name}`, {}))
+      expect(call?.name, name).toBe(name)
+      expect(describeRamuTool(call!).done, name).not.toBe('Used')
+    }
+    const production = describeRamuTool(
+      ramuTool(use('mcp__ramu__deploy_production', {}))!,
+      JSON.stringify({ url: 'https://shop.vercel.app' }),
+    )
+    expect(production.done).toBe('Deployed to production')
+    expect(production.subject).toBe('https://shop.vercel.app')
+  })
+
   it('reads each artifact tool as a row of its own', () => {
     for (const name of [
       'artifact_preview',
