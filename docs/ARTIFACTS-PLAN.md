@@ -156,6 +156,10 @@ The [shipping plan](SHIP-AN-APP-PLAN.md) and this one share one rule: make the s
 - **Shipping:** from Home, "a pitch deck for my app" becomes Slides and "a booking site with payments" becomes a project, both without the person choosing a kind.
 - Checks that need a physical phone, PowerPoint, Word or Keynote, or live sources are listed under [Acceptance](roadmap.md#acceptance) until run.
 
+## Images, video and narration
+
+Kinds that need generated images, video or narration (Design, Slides, Doc illustrations, Motion) get them through [Abilities](ABILITIES-PLAN.md), so a deck made on a Claude thread still gets its pictures from a signed-in provider that can make them.
+
 ## Later options
 
 - **Real-time co-editing between two people** on one Doc. Ramu is one person across devices today, and two people would need presence and merging, not versions.
