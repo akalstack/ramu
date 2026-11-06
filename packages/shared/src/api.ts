@@ -524,7 +524,8 @@ export interface RamuMethods {
     name: string
     connected: boolean
   }[]
-  'pages.saveHostingToken'(target: 'netlify' | 'vercel' | 'cloudflare-pages', token: string): void
+  /** `account` is the Cloudflare account ID, for a token limited to Pages that cannot list accounts. */
+  'pages.saveHostingToken'(target: 'netlify' | 'vercel' | 'cloudflare-pages', token: string, account?: string): void
   'pages.removeHostingToken'(target: 'netlify' | 'vercel' | 'cloudflare-pages'): void
   /** Deploys the page's current version as a static site on the person's own account; updates the same site later. */
   'pages.publish'(

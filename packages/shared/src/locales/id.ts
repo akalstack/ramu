@@ -5588,4 +5588,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Install cloudflared or ngrok on this host to open pages to anyone.": "Pasang cloudflared atau ngrok di host ini untuk membuka halaman ke siapa pun.",
   "Open to anyone": "Buka untuk siapa pun",
   "The tunnel stopped. Ramu tries again.": "Tunnel berhenti. Ramu mencoba lagi.",
+  "Cloudflare account ID (for a token limited to Pages)": "ID akun Cloudflare (untuk token yang terbatas ke Pages)",
 }

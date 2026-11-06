@@ -46,8 +46,10 @@ export class PagePublisher {
     }))
   }
 
-  async saveToken(target: Exclude<StaticTarget, 'github-pages'>, token: string) {
-    await this.tokens[target].save({ token: token.trim(), label: `${staticAdapter(target).name} token` })
+  /** A Cloudflare token limited to Pages may need the account ID beside it; it is kept with the token. */
+  async saveToken(target: Exclude<StaticTarget, 'github-pages'>, token: string, account?: string) {
+    const value = target === 'cloudflare-pages' && account?.trim() ? `${account.trim()}:${token.trim()}` : token.trim()
+    await this.tokens[target].save({ token: value, label: `${staticAdapter(target).name} token` })
   }
 
   async removeToken(target: Exclude<StaticTarget, 'github-pages'>) {

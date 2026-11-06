@@ -494,11 +494,24 @@ export const registerPageHandlers: RegisterHandlers = (ctx) => {
     'pages.closePublic': { args: z.tuple([id]), run: (pageId: string) => ctx.publicPages?.stop(pageId) },
     'pages.publishTargets': { args: z.tuple([]), run: () => publishing().targets() },
     'pages.saveHostingToken': {
-      args: z.tuple([z.enum(['netlify', 'vercel', 'cloudflare-pages']), z.string().trim().min(8).max(4000)]),
-      run: (target: 'netlify' | 'vercel' | 'cloudflare-pages', token: string) => {
+      args: z.tuple([
+        z.enum(['netlify', 'vercel', 'cloudflare-pages']),
+        z
+          .string()
+          .trim()
+          .min(8)
+          .max(4000)
+          .regex(/^[^:\s]+$/, 'Paste the token alone'),
+        z
+          .string()
+          .trim()
+          .regex(/^[a-f0-9]{32}$/, 'A Cloudflare account ID is 32 letters and digits')
+          .optional(),
+      ]),
+      run: (target: 'netlify' | 'vercel' | 'cloudflare-pages', token: string, account?: string) => {
         // A deploy token is a host credential: it is set on the host, like Git hosting logins.
         if (ctx.host.canAdministerIntegrations?.() === false) throw new Error('Add hosting tokens on the host itself.')
-        return publishing().saveToken(target, token)
+        return publishing().saveToken(target, token, account)
       },
     },
     'pages.removeHostingToken': {

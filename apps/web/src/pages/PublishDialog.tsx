@@ -29,6 +29,7 @@ export function PublishDialog({ page, onClose }: { page: PageInfo; onClose(): vo
   const [targets, setTargets] = useState<{ target: Target; name: string; connected: boolean }[]>([])
   const [target, setTarget] = useState<Target>((page.published?.target as Target | undefined) ?? 'github-pages')
   const [token, setToken] = useState('')
+  const [account, setAccount] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
@@ -97,6 +98,15 @@ export function PublishDialog({ page, onClose }: { page: PageInfo; onClose(): vo
             value={token}
             onChange={(event) => setToken(event.target.value)}
           />
+          {target === 'cloudflare-pages' && (
+            <Input
+              autoComplete="off"
+              aria-label={t('Cloudflare account ID (for a token limited to Pages)')}
+              placeholder={t('Cloudflare account ID (for a token limited to Pages)')}
+              value={account}
+              onChange={(event) => setAccount(event.target.value)}
+            />
+          )}
           <p className="m-0 text-caption text-muted-foreground">
             {t('Kept in this host’s credential store. Create one at {url}', {
               url: TOKEN_HELP[target as Exclude<Target, 'github-pages'>],

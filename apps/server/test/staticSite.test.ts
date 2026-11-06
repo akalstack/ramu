@@ -107,3 +107,16 @@ it('says which step a refused token failed at, without echoing the platform', as
     'The token was refused while creating the site.',
   )
 })
+
+it('uses a saved Cloudflare account ID when the token cannot list accounts', async () => {
+  const { seen, fetcher } = platform([
+    [/^POST .*\/accounts\/acc2\/pages\/projects$/, () => ({ body: {} })],
+    [/upload-token$/, () => ({ body: { result: { jwt: 'jwt' } } })],
+    [/assets\/upload$/, () => ({ body: {} })],
+    [/upsert-hashes$/, () => ({ body: {} })],
+    [/deployments$/, () => ({ body: {} })],
+  ])
+  await cloudflarePages(fetcher).deploy(files, { name: 'Trip' }, 'acc2:cf')
+  expect(seen.some((entry) => entry.url.endsWith('/accounts'))).toBe(false)
+  expect(seen[0]!.auth).toBe('Bearer cf')
+})

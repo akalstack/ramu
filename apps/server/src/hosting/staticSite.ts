@@ -244,14 +244,23 @@ export function cloudflarePages(fetcher: Fetch = fetch): StaticHostingAdapter {
     target: 'cloudflare-pages',
     name: 'Cloudflare Pages',
     async deploy(files, site, token, signal) {
-      const accounts = await call<{ result: { id: string }[] }>(
-        fetcher,
-        `${api}/accounts`,
-        { token, signal },
-        'reading the account',
-      )
-      const account = accounts.result[0]?.id
-      if (!account) throw new Error('The token can see no Cloudflare account.')
+      // A token limited to Pages often cannot list accounts, so it is saved as `<account id>:<token>`.
+      const [given, secret] = token.includes(':') ? (token.split(':', 2) as [string, string]) : [null, token]
+      token = secret
+      let account = given
+      if (!account) {
+        const accounts = await call<{ result: { id: string }[] }>(
+          fetcher,
+          `${api}/accounts`,
+          { token, signal },
+          'reading the account',
+        )
+        account = accounts.result[0]?.id ?? null
+      }
+      if (!account)
+        throw new Error(
+          'The token can see no Cloudflare account. Add your account ID (shown in the Cloudflare dashboard) with the token.',
+        )
       const project = site.siteId ?? slug(site.name)
       if (!site.siteId)
         await call(
