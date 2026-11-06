@@ -90,7 +90,7 @@ export interface TerminalGroup {
 export interface WorkspaceUiState {
   openTaskIds: string[]
   activeTaskId: string | null
-  sidebar: 'projects' | 'explorer' | 'search' | 'scm' | 'schedules' | 'inbox'
+  sidebar: 'projects' | 'explorer' | 'search' | 'scm' | 'schedules' | 'inbox' | 'pages'
   /** Sidebar sections and projects the user folded (`section:pinned`, `project:<id>`); everything else is open. */
   collapsed?: string[]
   /** What the right-side toggle hid (tool panel and/or workspace), restored when it is toggled back. */

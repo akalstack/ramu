@@ -20,6 +20,7 @@ import { SeparatorOverlay, usePanelRef, type Layout, type PanelSize } from 'reac
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import {
+  AppWindow,
   CalendarClock,
   Inbox,
   Settings,
@@ -68,6 +69,8 @@ import { AppSettingsProvider, useAppSettings } from './settings/AppSettings'
 import { ModelSetsProvider } from './models/ModelSets'
 import type { SettingsSection } from './settings/SettingsPage'
 import { SchedulesPage } from './Automation'
+import { PagesPage } from './pages/PagesPage'
+import { PageNotices } from './pages/PageNotices'
 import { InboxPage } from './inbox/InboxPage'
 import { useInboxModel } from './inbox/useBrief'
 import { LiveView } from './liveView/LiveView'
@@ -353,7 +356,12 @@ function Shell() {
   )
 
   // The start screen shows for New chat, and when nothing is open yet.
-  const globalPage = ui.sidebar === 'schedules' || ui.sidebar === 'inbox'
+  useEffect(() => {
+    const show = () => ws.setSidebar('pages')
+    window.addEventListener('ramu:open-page', show)
+    return () => window.removeEventListener('ramu:open-page', show)
+  }, [ws])
+  const globalPage = ui.sidebar === 'schedules' || ui.sidebar === 'inbox' || ui.sidebar === 'pages'
   const workspaceTool = ui.sidebar === 'explorer' || ui.sidebar === 'search' || ui.sidebar === 'scm' ? ui.sidebar : null
   // Chats with nothing open is the home page: the start box and a line leading to the Inbox. New chat without a project lands here too.
   const landing = ui.sidebar === 'projects' && !ui.activeTaskId
@@ -706,6 +714,14 @@ function Shell() {
               >
                 <CalendarClock size={15} /> <span className="grow flex-1 min-w-0 text-left">{t('Schedules')}</span>
               </Button>
+              <Button
+                variant="secondary"
+                className={`nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible w-full bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start${ui.sidebar === 'pages' ? ' active' : ''}`}
+                aria-pressed={ui.sidebar === 'pages'}
+                onClick={() => ws.setSidebar(ui.sidebar === 'pages' ? 'projects' : 'pages')}
+              >
+                <AppWindow size={15} /> <span className="grow flex-1 min-w-0 text-left">{t('Pages')}</span>
+              </Button>
             </nav>
             <div className="sidebar-body [&:has(.scm-panel)]:flex [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:flex [&:has(.explorer-panel)]:overflow-hidden flex-1 overflow-auto min-h-0">
               <HostProjects />
@@ -743,6 +759,7 @@ function Shell() {
             <div key={`task-area:${shownHost}`} className="task-area flex-1 min-h-0 flex">
               {landing && <HomePage />}
               {ui.sidebar === 'inbox' && <InboxPage />}
+              {ui.sidebar === 'pages' && <PagesPage />}
               {ui.sidebar === 'schedules' && (
                 <SchedulesPage
                   createRequested={createScheduleRequested}
@@ -777,6 +794,7 @@ function Shell() {
       {palette && <Palette ws={ws} commands={commands} mode={palette} onClose={() => setPalette(null)} />}
       {searchingChats && <SearchChats onClose={() => setSearchingChats(false)} />}
       <Notifications />
+      <PageNotices />
       <PendingThreadDelivery />
       <PairingRequestDialog />
       <PermissionRequestDialog />

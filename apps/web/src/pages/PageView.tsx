@@ -1,0 +1,750 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  ArrowLeft,
+  Bug,
+  MessageSquarePlus,
+  Monitor,
+  MoreHorizontal,
+  MousePointerClick,
+  Play,
+  Smartphone,
+  Square,
+  Tablet,
+  X,
+} from 'lucide-react'
+import type { InteractiveDocument, InteractiveState } from '@ramu/shared/interactive'
+import type { PageInfo, PageRun, PageVersion } from '@ramu/shared/pages'
+import { interactiveExport } from '@ramu/shared/interactiveExport'
+import { Button } from '../components/desktop-button'
+import { Input } from '../components/desktop-input'
+import { Textarea } from '@/components/ui/textarea'
+import { GHOST_ICON_BUTTON_CLASS, GHOST_TEXT_BUTTON_CLASS } from '../components/button-classes'
+import { Dialog, Menu, type MenuEntry } from '../Menu'
+import { t, useLanguage } from '../i18n'
+import { useHost } from '../workspace/HostProvider'
+import { useHostRuntime, useWorkspace } from '../workspace/workspace'
+import { notifyError } from '../chat/Notifications'
+import { useViewOnly } from '../composer/useViewOnly'
+import { ContentFrame } from '../interactive/ContentFrame'
+import { useContentDocument } from '../interactive/useContentDocument'
+import { appThemeVariables } from '../interactive/InteractiveContent'
+import { usePageBridge, type PickedElement } from './usePageBridge'
+import { GrantSheet, PageSettings, runStatusLabel } from './PageSettings'
+import { openPage } from './openPage'
+
+const VIEWPORTS = [
+  { id: 'fit', label: 'Fit to width', width: undefined, Icon: Monitor },
+  { id: 'tablet', label: 'Tablet (768 px)', width: 768, Icon: Tablet },
+  { id: 'phone', label: 'Phone (390 px)', width: 390, Icon: Smartphone },
+] as const
+
+const message = (error: unknown) =>
+  error instanceof Error
+    ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+    : String(error)
+
+/** One page, full window: its frame, toolbar, runs, questions about its records and everything the person can do with it. */
+export function PageView({ pageId, onBack }: { pageId: string; onBack(): void }) {
+  useLanguage()
+  const { invoke } = useHost()
+  const { on } = useHostRuntime()
+  const ws = useWorkspace()
+  const viewOnly = useViewOnly()
+  const [page, setPage] = useState<PageInfo | null>(null)
+  const [document, setDocument] = useState<InteractiveDocument | null>(null)
+  const [missing, setMissing] = useState(false)
+  const [generation, setGeneration] = useState(0)
+  const [viewport, setViewport] = useState<(typeof VIEWPORTS)[number]['id']>('fit')
+  const [ready, setReady] = useState(false)
+  const [frameError, setFrameError] = useState('')
+  const [dialog, setDialog] = useState<
+    | null
+    | { kind: 'settings' | 'versions' | 'delete' | 'project' | 'rename' }
+    | { kind: 'thread'; prompt: string; resolve?: (agreed: boolean) => void; title: string }
+  >(null)
+  const [picking, setPicking] = useState(false)
+  const [picked, setPicked] = useState<PickedElement | null>(null)
+  const [question, setQuestion] = useState('')
+  const [answer, setAnswer] = useState<PageRun | null>(null)
+  const [asking, setAsking] = useState(false)
+  const [status, setStatus] = useState('')
+  const state = useRef<InteractiveState | null>(null)
+  const revision = useRef(0)
+  const frame = useRef<HTMLIFrameElement>(null)
+  const load = useCallback(async () => {
+    try {
+      const [info, saved] = await Promise.all([invoke('pages.get', pageId), invoke('pages.state', pageId)])
+      setPage(info)
+      setDocument((current) => {
+        if (current?.reference.version === info.version) return current
+        void invoke('pages.document', pageId)
+          .then(setDocument)
+          .catch(() => {})
+        return current
+      })
+      // Another device's values replace these only when they are newer than what this frame last saw.
+      if (saved.revision !== revision.current) {
+        revision.current = saved.revision
+        state.current = saved.state
+        bridgeRestore.current?.(saved.state)
+      }
+      setMissing(false)
+    } catch {
+      setMissing(true)
+    }
+  }, [invoke, pageId])
+  const bridgeRestore = useRef<((state: InteractiveState | null) => void) | null>(null)
+  useEffect(() => {
+    void load()
+    return on('pages:changed', (payload) => {
+      if (payload.pageId === pageId && !payload.run) void load()
+    })
+  }, [load, on, pageId])
+  const instance = `page:${pageId}:${document?.reference.version ?? 0}:${generation}`
+  const { url } = useContentDocument(document?.html, instance, !!document, state, document?.reference.network)
+  useEffect(() => setReady(false), [url])
+  const askThread = useCallback(
+    (prompt: string, title: string) =>
+      new Promise<boolean>((resolve) => setDialog({ kind: 'thread', prompt, resolve, title })),
+    [],
+  )
+  const bridge = usePageBridge({
+    pageId,
+    version: document?.reference.version ?? 1,
+    frame,
+    instance,
+    stateRevision: revision,
+    onPicked: (element) => {
+      setPicking(false)
+      setPicked(element)
+    },
+    onError: setFrameError,
+    onStartThread: (prompt) => askThread(prompt, t('The page asks to start a thread')),
+  })
+  bridgeRestore.current = bridge.restore
+  useEffect(() => {
+    const receive = (event: MessageEvent) => {
+      if (event.source !== frame.current?.contentWindow) return
+      const m = event.data as { ramuInteractive?: number; instance?: string; type?: string }
+      if (m?.ramuInteractive !== 1 || m.instance !== instance) return
+      if (m.type === 'ready') {
+        frame.current?.contentWindow?.postMessage(
+          { ramuInteractive: 1, instance, type: 'theme', value: appThemeVariables() },
+          '*',
+        )
+        frame.current?.contentWindow?.postMessage({ ramuInteractive: 1, instance, type: 'active', value: true }, '*')
+        setReady(true)
+      }
+    }
+    window.addEventListener('message', receive)
+    return () => window.removeEventListener('message', receive)
+  }, [instance])
+  const startThread = async (prompt: string) => {
+    try {
+      const started = await invoke('pages.startThread', pageId, prompt)
+      await ws.refresh()
+      ws.openTask(started.taskId)
+    } catch (error) {
+      notifyError(message(error), page?.title)
+    }
+  }
+  if (missing)
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-muted-foreground">
+        <p>{t('This page was deleted or is on a host that is not connected.')}</p>
+        <Button variant="outline" onClick={onBack}>
+          {t('Back to Pages')}
+        </Button>
+      </div>
+    )
+  if (!page) return <div className="p-6 text-muted-foreground">{t('Loading…')}</div>
+  const width = VIEWPORTS.find((entry) => entry.id === viewport)?.width
+  const runs = Object.entries(page.capabilities.runs ?? {})
+  const hasRecords = !!page.capabilities.records && !!page.grants.records && !!page.grants.ai
+  const outdated = page.published && page.published.version < page.version
+  const exportHtml = () => {
+    if (!document) return
+    const exported = interactiveExport(document, state.current, false, appThemeVariables())
+    const link = window.document.createElement('a')
+    link.href = URL.createObjectURL(new Blob([exported.html], { type: exported.mimeType }))
+    link.download = `${page.title}.html`
+    link.click()
+  }
+  const publishPrompt = () =>
+    page.capabilities.records || page.capabilities.ai
+      ? null
+      : `Publish this page to the web as a static site on my own account (GitHub Pages, Cloudflare Pages, Netlify or Vercel, whichever I already use; ask if none). Read it with page_get, write its exact HTML to a new folder, deploy it, and when it is live record the address with page_published so the page remembers it.${page.published ? ` It is already live at ${page.published.url} on ${page.published.target}; update that site.` : ''}`
+  const menu: MenuEntry[] = [
+    { key: 'settings', label: t('Page settings…'), onSelect: () => setDialog({ kind: 'settings' }) },
+    { key: 'versions', label: t('Versions…'), onSelect: () => setDialog({ kind: 'versions' }) },
+    { key: 'rename', label: t('Rename…'), disabled: viewOnly, onSelect: () => setDialog({ kind: 'rename' }) },
+    {
+      key: 'pin',
+      label: page.pinned ? t('Unpin') : t('Pin to top'),
+      disabled: viewOnly,
+      onSelect: () => void invoke('pages.update', pageId, { pinned: !page.pinned }).catch(() => {}),
+    },
+    { key: 'sep1', separator: true },
+    { key: 'export', label: t('Export HTML'), disabled: !document, onSelect: exportHtml },
+    {
+      key: 'publish',
+      label: outdated ? t('Update live site') : t('Publish to the web…'),
+      disabled: viewOnly,
+      onSelect: () => {
+        const prompt = publishPrompt()
+        if (prompt) void askThread(prompt, t('Publish to the web')).then((agreed) => agreed && void startThread(prompt))
+        else setDialog({ kind: 'project' })
+      },
+    },
+    {
+      key: 'project',
+      label: t('Make it a project…'),
+      disabled: viewOnly,
+      onSelect: () => setDialog({ kind: 'project' }),
+    },
+    {
+      key: 'duplicate',
+      label: t('Duplicate'),
+      disabled: viewOnly,
+      onSelect: () =>
+        void invoke('pages.duplicate', pageId)
+          .then((copy) => openPage(copy.id))
+          .catch((e) => notifyError(message(e))),
+    },
+    { key: 'sep2', separator: true },
+    {
+      key: 'delete',
+      label: t('Delete page…'),
+      danger: true,
+      disabled: viewOnly,
+      onSelect: () => setDialog({ kind: 'delete' }),
+    },
+  ]
+  return (
+    <div className="flex h-full w-full min-w-0 flex-col">
+      <header className="flex min-h-11 flex-none items-center gap-1.5 border-b border-border px-3">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className={GHOST_ICON_BUTTON_CLASS}
+          aria-label={t('Back to Pages')}
+          onClick={onBack}
+        >
+          <ArrowLeft size={15} />
+        </Button>
+        <span aria-hidden className="text-[17px] leading-none">
+          {page.icon}
+        </span>
+        <h1 className="m-0 min-w-0 truncate text-body font-semibold">{page.title}</h1>
+        <span className="flex-none text-caption text-muted-foreground">v{page.version}</span>
+        {page.published && (
+          <a
+            className="min-w-0 truncate text-caption text-muted-foreground underline"
+            href={page.published.url}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {page.published.url.replace(/^https:\/\//, '')}
+          </a>
+        )}
+        <div className="ml-auto flex flex-none items-center gap-0.5">
+          {runs.map(([name, run]) => (
+            <Button
+              key={name}
+              variant="ghost"
+              className={GHOST_TEXT_BUTTON_CLASS}
+              disabled={viewOnly || !!bridge.running || !page.grants.ai}
+              title={run.prompt}
+              onClick={() =>
+                void invoke('pages.runFlow', pageId, name).catch((e) => notifyError(message(e), page.title))
+              }
+            >
+              <Play size={12} /> {run.label}
+            </Button>
+          ))}
+          <Button
+            variant="ghost"
+            className={GHOST_TEXT_BUTTON_CLASS}
+            aria-pressed={picking}
+            disabled={viewOnly || !ready}
+            title={t('Point at something on the page and say what to change')}
+            onClick={() => {
+              const next = !picking
+              setPicking(next)
+              bridge.pick(next)
+            }}
+          >
+            <MousePointerClick size={13} /> {t('Edit')}
+          </Button>
+          <Button
+            variant="ghost"
+            className={GHOST_TEXT_BUTTON_CLASS}
+            disabled={viewOnly}
+            onClick={() => setDialog({ kind: 'thread', prompt: '', title: t('Ask about this page') })}
+          >
+            <MessageSquarePlus size={13} /> {t('Ask about this')}
+          </Button>
+          <div role="group" aria-label={t('Preview width')} className="mx-1 flex items-center rounded-md bg-fill p-0.5">
+            {VIEWPORTS.map(({ id, label, Icon }) => (
+              <Button
+                key={id}
+                variant="ghost"
+                size="icon-sm"
+                aria-pressed={viewport === id}
+                aria-label={t(label)}
+                title={t(label)}
+                className={`${GHOST_ICON_BUTTON_CLASS} size-6 min-h-0 aria-pressed:bg-raised aria-pressed:text-foreground`}
+                onClick={() => setViewport(id)}
+              >
+                <Icon size={13} />
+              </Button>
+            ))}
+          </div>
+          <Menu
+            label={t('Page actions')}
+            icon={<MoreHorizontal size={14} />}
+            className={GHOST_ICON_BUTTON_CLASS}
+            align="end"
+            items={menu}
+          />
+        </div>
+      </header>
+      {page.lastError && (
+        <div role="alert" className="flex items-center gap-2 border-b border-border bg-fill px-3 py-1.5 text-caption">
+          <Bug size={13} className="flex-none text-bad" />
+          <span className="min-w-0 flex-1 truncate">
+            {t('This page hit an error: {message}', { message: page.lastError.message })}
+          </span>
+          {!viewOnly && (
+            <Button
+              variant="ghost"
+              className={GHOST_TEXT_BUTTON_CLASS}
+              onClick={() => {
+                const error = page.lastError!
+                void startThread(
+                  `Fix this error in my page. Reproduce it with preview_interactive, then publish the fixed version with publish_interactive {page: "${page.id}", changes}.\nError on ${error.device ?? 'a device'} in v${error.version}: ${error.message}${error.steps?.length ? `\nWhat the person did before it: ${error.steps.join(' → ')}` : ''}`,
+                ).then(() => invoke('pages.clearError', pageId))
+              }}
+            >
+              {t('Fix this')}
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={`${GHOST_ICON_BUTTON_CLASS} size-6`}
+            aria-label={t('Dismiss')}
+            onClick={() => void invoke('pages.clearError', pageId)}
+          >
+            <X size={12} />
+          </Button>
+        </div>
+      )}
+      {outdated && (
+        <div className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-caption text-muted-foreground">
+          <span className="flex-1">
+            {t('The live site shows v{live}; this page is at v{version}.', {
+              live: page.published!.version,
+              version: page.version,
+            })}
+          </span>
+        </div>
+      )}
+      {bridge.running && (
+        <div role="status" className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-caption">
+          <span className="min-w-0 flex-1 truncate text-muted-foreground">
+            {runStatusLabel('running')} · {bridge.running.steps.at(-1)?.text ?? bridge.running.task.slice(0, 80)}
+          </span>
+          <Button variant="ghost" className={GHOST_TEXT_BUTTON_CLASS} onClick={bridge.stopRun}>
+            <Square size={11} /> {t('Stop')}
+          </Button>
+        </div>
+      )}
+      {bridge.confirm && (
+        <div
+          role="alertdialog"
+          className="flex items-center gap-2 border-b border-border bg-fill px-3 py-1.5 text-caption"
+        >
+          <span className="flex-1">{bridge.confirm.text}</span>
+          <Button variant="outline" onClick={() => bridge.answerConfirm(false)}>
+            {t('Keep them')}
+          </Button>
+          <Button variant="destructive" onClick={() => bridge.answerConfirm(true)}>
+            {t('Allow')}
+          </Button>
+        </div>
+      )}
+      {picked && (
+        <form
+          className="flex items-center gap-2 border-b border-border px-3 py-1.5"
+          onSubmit={(event) => {
+            event.preventDefault()
+            const input = (event.currentTarget.elements.namedItem('change') as HTMLInputElement).value.trim()
+            if (!input) return
+            void startThread(
+              `${input}\nChange only this element of the page (the person pointed at it): ${picked.selector}\nIts text: ${JSON.stringify(picked.text)}\nIts HTML: ${picked.html}`,
+            )
+            setPicked(null)
+          }}
+        >
+          <span className="max-w-[40%] flex-none truncate text-caption text-muted-foreground" title={picked.text}>
+            {picked.text || picked.selector}
+          </span>
+          <Input
+            name="change"
+            autoFocus
+            placeholder={t('What should change here?')}
+            aria-label={t('What should change here?')}
+          />
+          <Button type="submit">{t('Ask')}</Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={GHOST_ICON_BUTTON_CLASS}
+            aria-label={t('Cancel')}
+            onClick={() => setPicked(null)}
+          >
+            <X size={13} />
+          </Button>
+        </form>
+      )}
+      {hasRecords && (
+        <form
+          className="flex items-center gap-2 border-b border-border px-3 py-1.5"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (question.trim().length < 2) return
+            setAsking(true)
+            setAnswer(null)
+            void invoke('pages.ask', pageId, question.trim())
+              .then(setAnswer)
+              .catch((e) => notifyError(message(e), page.title))
+              .finally(() => setAsking(false))
+          }}
+        >
+          <Input
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            placeholder={t('Ask this page, such as “how much on food in March?”')}
+            aria-label={t('Ask this page')}
+          />
+          <Button type="submit" variant="outline" disabled={asking || question.trim().length < 2}>
+            {asking ? t('Asking…') : t('Ask')}
+          </Button>
+        </form>
+      )}
+      {answer && (
+        <PageAnswer
+          run={answer}
+          question={question}
+          onKeep={(prompt) => void startThread(prompt)}
+          onClose={() => setAnswer(null)}
+        />
+      )}
+      {frameError && (
+        <p role="status" className="m-0 border-b border-border px-3 py-1.5 text-caption text-muted-foreground">
+          {frameError}{' '}
+          <Button
+            variant="ghost"
+            className={GHOST_TEXT_BUTTON_CLASS}
+            onClick={() => {
+              setFrameError('')
+              setGeneration((n) => n + 1)
+            }}
+          >
+            {t('Reload')}
+          </Button>
+        </p>
+      )}
+      {status && (
+        <p role="status" className="m-0 border-b border-border px-3 py-1.5 text-caption text-muted-foreground">
+          {status}
+        </p>
+      )}
+      <div className={`relative min-h-0 flex-1 overflow-auto ${width ? 'flex justify-center bg-fill px-3 py-4' : ''}`}>
+        <div
+          className={`relative ${width ? 'h-full overflow-hidden rounded-lg bg-(--canvas)' : 'size-full'}`}
+          style={{ width }}
+        >
+          {url && <ContentFrame ref={frame} key={url} title={page.title} url={url} ready={ready} onLoad={() => {}} />}
+          {!ready && (
+            <p className="absolute inset-0 m-0 flex items-center justify-center text-muted-foreground">
+              {t('Loading…')}
+            </p>
+          )}
+        </div>
+      </div>
+      {!viewOnly && page.pendingGrants.length > 0 && <GrantSheet page={page} onDone={() => void load()} />}
+      {dialog?.kind === 'settings' && <PageSettings page={page} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'versions' && (
+        <VersionsDialog
+          page={page}
+          onClose={() => setDialog(null)}
+          onRestore={(version) =>
+            void invoke('pages.restoreVersion', pageId, version)
+              .then(() => setStatus(t('Restored v{version} as the newest version.', { version })))
+              .catch((e) => notifyError(message(e), page.title))
+          }
+        />
+      )}
+      {dialog?.kind === 'rename' && <RenameDialog page={page} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'delete' && (
+        <Dialog
+          title={t('Delete {title}?', { title: page.title })}
+          confirmLabel={t('Delete page')}
+          danger
+          onCancel={() => setDialog(null)}
+          onConfirm={() =>
+            void invoke('pages.delete', pageId)
+              .then(onBack)
+              .catch((e) => notifyError(message(e)))
+          }
+        >
+          <p>{t('Its records, photos, runs and share links are deleted too. Threads keep their cards.')}</p>
+        </Dialog>
+      )}
+      {dialog?.kind === 'project' && (
+        <Dialog
+          title={t('Make it a project?')}
+          confirmLabel={t('Make it a project')}
+          onCancel={() => setDialog(null)}
+          onConfirm={() => {
+            setDialog(null)
+            void invoke('pages.makeProject', pageId)
+              .then(async (made) => {
+                await ws.refresh()
+                ws.openTask(made.thread.taskId)
+              })
+              .catch((e) => notifyError(message(e), page.title))
+          }}
+        >
+          <p>
+            {page.capabilities.records || page.capabilities.ai
+              ? t(
+                  'This page keeps records or uses a model on this host, so it cannot go on the web as it is. A project can have its own database and server.',
+                )
+              : t('A project can have a backend, more files, sign-in and its own domain.')}
+          </p>
+          <p>
+            {t(
+              'Ramu writes the page’s sources and records to a new folder in Ramu Projects and starts a thread there to turn it into an app.',
+            )}
+          </p>
+        </Dialog>
+      )}
+      {dialog?.kind === 'thread' && (
+        <ThreadDialog
+          title={dialog.title}
+          prompt={dialog.prompt}
+          onCancel={() => {
+            dialog.resolve?.(false)
+            setDialog(null)
+          }}
+          onConfirm={(prompt) => {
+            setDialog(null)
+            if (dialog.resolve) dialog.resolve(true)
+            else void startThread(prompt)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+/** The answer to a question about the page's records, with a small bar chart when it has a breakdown. */
+function PageAnswer({
+  run,
+  question,
+  onKeep,
+  onClose,
+}: {
+  run: PageRun
+  question: string
+  onKeep(prompt: string): void
+  onClose(): void
+}) {
+  useLanguage()
+  const value = (run.answer ?? {}) as { text?: string; rows?: { label?: unknown; value?: unknown }[] }
+  const rows = Array.isArray(value.rows)
+    ? value.rows
+        .flatMap((row) =>
+          typeof row?.value === 'number' ? [{ label: String(row.label ?? ''), value: row.value }] : [],
+        )
+        .slice(0, 12)
+    : []
+  const max = Math.max(1, ...rows.map((row) => Math.abs(row.value)))
+  return (
+    <section className="border-b border-border px-3 py-2" aria-label={t('Answer')}>
+      <div className="flex items-start gap-2">
+        <p className="m-0 flex-1">{run.status === 'done' ? (value.text ?? '') : (run.error ?? t('No answer.'))}</p>
+        {run.status === 'done' && (
+          <Button
+            variant="ghost"
+            className={GHOST_TEXT_BUTTON_CLASS}
+            onClick={() =>
+              onKeep(
+                `Add a panel to my page that always shows the answer to "${question}" from its records (today it is: ${value.text ?? ''}). Compute it with ramuContent.records, not a model call, and publish the new version.`,
+              )
+            }
+          >
+            {t('Keep as a panel')}
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className={`${GHOST_ICON_BUTTON_CLASS} size-6`}
+          aria-label={t('Close')}
+          onClick={onClose}
+        >
+          <X size={12} />
+        </Button>
+      </div>
+      {rows.length > 0 && (
+        <div className="mt-2 grid grid-cols-[minmax(0,10rem)_1fr_auto] items-center gap-x-2 gap-y-1 text-caption">
+          {rows.map((row) => (
+            <div key={row.label} className="contents">
+              <span className="truncate text-muted-foreground">{row.label}</span>
+              <span
+                className="h-2 rounded-sm bg-(--accent)"
+                style={{ width: `${(Math.abs(row.value) / max) * 100}%` }}
+              />
+              <span className="text-right tabular-nums">{row.value.toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+/** Every version with its phone and desktop screenshots and what it changed, so the right one is restored. */
+function VersionsDialog({
+  page,
+  onClose,
+  onRestore,
+}: {
+  page: PageInfo
+  onClose(): void
+  onRestore(version: number): void
+}) {
+  useLanguage()
+  const { invoke } = useHost()
+  const [versions, setVersions] = useState<PageVersion[] | null>(null)
+  useEffect(() => {
+    void invoke('pages.versions', page.id)
+      .then(setVersions)
+      .catch(() => setVersions([]))
+  }, [invoke, page.id])
+  return (
+    <Dialog
+      title={t('Versions of {title}', { title: page.title })}
+      confirmLabel={t('Done')}
+      onCancel={onClose}
+      onConfirm={onClose}
+    >
+      <div className="undo-preview flex flex-col gap-3">
+        {!versions && <p>{t('Loading…')}</p>}
+        {versions?.map((version) => (
+          <div key={version.reference.version} className="flex gap-3 border-b border-border pb-3 last:border-0">
+            {version.preview ? (
+              <img
+                src={version.preview}
+                alt={t('Preview of {title}', { title: `v${version.reference.version}` })}
+                className="h-40 w-24 flex-none rounded-md object-cover object-top"
+              />
+            ) : (
+              <div className="h-40 w-24 flex-none rounded-md bg-fill" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="m-0 font-medium text-foreground">
+                v{version.reference.version}
+                {version.reference.version === page.version ? ` · ${t('Current')}` : ''}
+              </p>
+              <p className="m-0 text-caption text-muted-foreground">
+                {new Date(version.reference.createdAt).toLocaleString()}
+              </p>
+              <p className="m-0 mt-1">{version.reference.changes ?? version.reference.summary}</p>
+              {version.reference.version !== page.version && (
+                <Button variant="outline" className="mt-2" onClick={() => onRestore(version.reference.version)}>
+                  {t('Restore v{version}', { version: version.reference.version })}
+                </Button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Dialog>
+  )
+}
+
+function RenameDialog({ page, onClose }: { page: PageInfo; onClose(): void }) {
+  useLanguage()
+  const { invoke } = useHost()
+  const [title, setTitle] = useState(page.title)
+  const [icon, setIcon] = useState(page.icon)
+  return (
+    <Dialog
+      title={t('Rename page')}
+      confirmLabel={t('Save')}
+      confirmDisabled={!title.trim()}
+      onCancel={onClose}
+      onConfirm={() =>
+        void invoke('pages.update', page.id, { title, icon })
+          .then(onClose)
+          .catch((e) => notifyError(message(e)))
+      }
+    >
+      <div className="flex gap-2">
+        <Input
+          className="w-14 text-center"
+          aria-label={t('Icon')}
+          value={icon}
+          maxLength={4}
+          onChange={(e) => setIcon(e.target.value)}
+        />
+        <Input
+          aria-label={t('Title')}
+          value={title}
+          maxLength={160}
+          autoFocus
+          onChange={(e) => setTitle(e.target.value)}
+        />
+      </div>
+    </Dialog>
+  )
+}
+
+/** Confirms a thread a page or the person starts, with the request editable before it goes. */
+function ThreadDialog({
+  title,
+  prompt,
+  onCancel,
+  onConfirm,
+}: {
+  title: string
+  prompt: string
+  onCancel(): void
+  onConfirm(prompt: string): void
+}) {
+  useLanguage()
+  const [text, setText] = useState(prompt)
+  return (
+    <Dialog
+      title={title}
+      confirmLabel={t('Start thread')}
+      confirmDisabled={!text.trim()}
+      onCancel={onCancel}
+      onConfirm={() => onConfirm(text.trim())}
+    >
+      <p>{t('A new thread starts with this page attached. It works with its usual access and approvals.')}</p>
+      <Textarea
+        className="min-h-24 bg-field text-body"
+        aria-label={t('Request')}
+        autoFocus
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+      />
+    </Dialog>
+  )
+}

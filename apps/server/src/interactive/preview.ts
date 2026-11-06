@@ -43,7 +43,7 @@ export async function previewInteractive(
       reducedMotion: 'reduce',
       colorScheme: 'dark',
     })
-    const source = interactiveHtml(html, 'preview', null, undefined, network)
+    const source = interactiveHtml(html, 'preview', null, undefined, network, 'fake')
     await context.route('**/*', async (route) => {
       const request = route.request()
       if (request.isNavigationRequest())

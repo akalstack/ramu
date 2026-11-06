@@ -6,12 +6,12 @@ import { createFinishedGate } from '@ramu/shared/chat/finishedGate'
  * or fails counts as `scheduled` instead, so scheduled work can be muted on its own, and so does a scheduled run that could
  * not start a thread at all. `input` covers every thread. `digest` is the once-a-day "your recap is ready" note.
  */
-export const PUSH_CATEGORIES = ['input', 'failed', 'done', 'scheduled', 'digest'] as const
+export const PUSH_CATEGORIES = ['input', 'failed', 'done', 'scheduled', 'digest', 'pages'] as const
 export type PushCategory = (typeof PUSH_CATEGORIES)[number]
 /** Off until a phone asks for them: a registration that lists no categories does not get these. */
 export const OPT_IN_CATEGORIES: readonly PushCategory[] = ['digest']
 /** Where a tap on a push that is not about one thread goes; see `pushTarget` in the mobile app. */
-export type PushTarget = 'schedules' | 'recaps'
+export type PushTarget = 'schedules' | 'recaps' | 'page'
 interface Registration {
   deviceId: string
   token: string
@@ -150,6 +150,23 @@ export class MobilePush {
       target: 'recaps' satisfies PushTarget,
     }))
   }
+  /**
+   * A notification a page sends, with the words it chose. The person allowed this page to notify, and the grant sheet
+   * says the text travels through the phone's push service; the tap opens the page.
+   */
+  async deliverPage(pageId: string, title: string, body: string) {
+    await this.send(
+      'pages',
+      body,
+      (registration) => ({
+        computerId: registration.computerId,
+        kind: 'pages',
+        target: 'page' satisfies PushTarget,
+        pageId,
+      }),
+      title,
+    )
+  }
   private wants(registration: Registration, category: PushCategory) {
     return registration.categories ? registration.categories.includes(category) : !OPT_IN_CATEGORIES.includes(category)
   }
@@ -157,6 +174,7 @@ export class MobilePush {
     category: PushCategory,
     body: string,
     data: (registration: Registration) => Record<string, unknown>,
+    title = 'Ramu',
   ) {
     this.prune()
     for (const registration of this.registrations) {
@@ -167,7 +185,7 @@ export class MobilePush {
         signal: AbortSignal.timeout(10_000),
         body: JSON.stringify({
           to: registration.token,
-          title: 'Ramu',
+          title,
           body,
           sound: 'default',
           data: data(registration),

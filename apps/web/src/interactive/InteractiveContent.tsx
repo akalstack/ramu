@@ -20,6 +20,9 @@ import { Button } from '../components/desktop-button'
 import { GHOST_ICON_BUTTON_CLASS, GHOST_TEXT_BUTTON_CLASS } from '../components/button-classes'
 import { Menu, type MenuEntry } from '../Menu'
 import { ChatCodeBlock } from '../chat/ChatCodeBlock'
+import type { PageInfo } from '@ramu/shared/pages'
+import { usePageIndex } from '../pages/pageIndex'
+import { openPage } from '../pages/openPage'
 import type { InteractiveRevision, InteractiveUpdate } from '@ramu/shared/interactiveRevisions'
 import {
   InteractiveCarriedValues,
@@ -52,7 +55,7 @@ type Viewport = (typeof VIEWPORTS)[number]['id']
 const heights = new Map<string, number>()
 
 /** The app's live palette as the theme tokens a document is drawn with. */
-function appThemeVariables(): Record<string, string> {
+export function appThemeVariables(): Record<string, string> {
   const style = getComputedStyle(window.document.documentElement)
   const dark = style.colorScheme !== 'light'
   const fallback = interactivePaletteFromVariant(dark ? DEFAULT_DARK : DEFAULT_LIGHT, dark ? 'dark' : 'light')
@@ -82,11 +85,14 @@ function InteractiveDocumentCard({
   onClose,
   previous,
   update,
+  page,
 }: {
   reference: InteractiveReference
   copyFrom?: InteractiveReference
   versions?: { load(): void; items: MenuEntry[] }
   onClose?: () => void
+  /** The kept page this document belongs to, and whether the card shows a version another thread published. */
+  page?: { info: PageInfo | null; elsewhere: boolean }
   /** The version this one replaced, for Compare and carrying values over. */
   previous?: InteractiveReference
   /** A revision of this document the agent is checking now. */
@@ -314,6 +320,21 @@ function InteractiveDocumentCard({
   }
   const files = document?.files ?? []
   const menu: MenuEntry[] = [
+    ...(onClose
+      ? []
+      : page?.info
+        ? [{ key: 'open-page', label: t('Open page'), onSelect: () => openPage(page.info!.id) }]
+        : [
+            {
+              key: 'keep',
+              label: t('Keep as page'),
+              title: t('List it under Pages, open it on any device and change it from any thread'),
+              onSelect: () =>
+                void invoke('pages.keep', reference.sessionId, reference.id)
+                  .then((kept) => openPage(kept.id))
+                  .catch((e) => setError(String(e))),
+            },
+          ]),
     {
       key: 'ask',
       label: t('Ask about this'),
@@ -391,6 +412,22 @@ function InteractiveDocumentCard({
           <span className="flex-none text-caption text-muted-foreground" title={checked}>
             v{reference.version}
           </span>
+          {page?.info && (
+            <Button
+              variant="ghost"
+              className={`${GHOST_TEXT_BUTTON_CLASS} h-6 min-h-0 flex-none`}
+              title={t('Open page')}
+              onClick={() => openPage(page.info!.id)}
+            >
+              <span aria-hidden>{page.info.icon}</span> {t('Page')}
+            </Button>
+          )}
+          {page && !page.info && reference.pageId && (
+            <span className="flex-none text-caption text-muted-foreground">{t('Page deleted')}</span>
+          )}
+          {page?.elsewhere && (
+            <span className="flex-none text-caption text-muted-foreground">{t('Updated in another thread')}</span>
+          )}
           {update?.state === 'updating' && (
             <span role="status" className="flex-none animate-pulse text-caption text-muted-foreground">
               {t('Updating…')}
@@ -742,10 +779,12 @@ function InteractiveContentBrowser({
   reference,
   previous,
   update,
+  page,
 }: {
   reference: InteractiveReference
   previous?: InteractiveReference
   update?: InteractiveUpdate
+  page?: { info: PageInfo | null; elsewhere: boolean }
 }) {
   useLanguage()
   const { id: hostId, invoke } = useHost()
@@ -782,6 +821,7 @@ function InteractiveContentBrowser({
         versions={{ load, items }}
         previous={previous}
         update={update}
+        page={page}
       />
       {selected && selected.version !== reference.version && (
         <InteractiveDocumentCard
@@ -805,16 +845,33 @@ export function InteractiveContent({
   revision?: InteractiveRevision
   update?: InteractiveUpdate
 }) {
-  const { id } = useHost()
-  if (revision && revision.latest.version > reference.version)
-    return <InteractiveVersionRow reference={reference} revision={revision} />
-  const previous = revision?.versions.find((entry) => entry.version < reference.version)
+  const { id, invoke } = useHost()
+  const index = usePageIndex()
+  const info = index.pages.get(reference.id) ?? null
+  const replaced = !!revision && revision.latest.version > reference.version
+  // A kept page's live card follows the page, so a version another thread published shows here too.
+  const [current, setCurrent] = useState<InteractiveReference | null>(null)
+  const newer = !replaced && info && info.version > reference.version ? info.version : null
+  useEffect(() => {
+    if (!newer) return setCurrent(null)
+    let cancelled = false
+    void invoke('pages.document', reference.id, newer)
+      .then((document) => !cancelled && setCurrent(document.reference))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [invoke, reference.id, newer])
+  if (replaced) return <InteractiveVersionRow reference={reference} revision={revision} />
+  const shown = current ?? reference
+  const previous = current ? reference : revision?.versions.find((entry) => entry.version < reference.version)
   return (
     <InteractiveContentBrowser
-      key={`${id}:${reference.sessionId}:${reference.id}:${reference.version}`}
-      reference={reference}
+      key={`${id}:${shown.sessionId}:${shown.id}:${shown.version}`}
+      reference={shown}
       previous={previous}
       update={update}
+      page={index.loaded || info ? { info, elsewhere: !!current } : undefined}
     />
   )
 }

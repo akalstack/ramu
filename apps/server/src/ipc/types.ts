@@ -37,6 +37,12 @@ export interface Services {
   getSharedMcp?: () => import('../mcp/service').SharedMcpService
   threadTitles?: import('../agent/threadTitles').ThreadTitles
   interactive?: import('../interactive/store').InteractiveStore
+  pages?: import('../interactive/pages').PageStore
+  pageAi?: import('../interactive/pageAi').PageAi
+  /** Sends a page's notification to paired phones and this host's desktop. */
+  notifyPage?: (page: import('@ramu/shared/pages').PageInfo, title: string, body: string) => void
+  /** Addresses a sender can reach this host's page webhooks at. */
+  pageWebhookBases?: () => string[]
   diagnostics?: import('../background/diagnostics').LocalDiagnostics
   externalSkills?: import('../memory/externalSkills').ExternalSkills
   workspace: Workspace

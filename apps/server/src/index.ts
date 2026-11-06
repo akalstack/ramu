@@ -19,9 +19,18 @@ import {
 } from './agent/projectSetup'
 import { MobileLiveActivities } from './remote/mobileLiveActivity'
 import { MobilePush } from './remote/mobilePush'
-import { DEFAULT_FALLBACK_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
+import {
+  DEFAULT_AGENT_SETTINGS,
+  DEFAULT_FALLBACK_PREFERENCES,
+  type AppPreferences,
+  type ModelPreferences,
+} from '@ramu/shared/types'
 import { InteractiveStore } from './interactive/store'
 import { registerInteractiveTools } from './interactive/tools'
+import { PageStore } from './interactive/pages'
+import { PageAi } from './interactive/pageAi'
+import { PageAutomation } from './interactive/pageAutomation'
+import type { PageInfo } from '@ramu/shared/pages'
 import { registerThemeTools } from './themeTools'
 import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
 import { setAcpTerminalService } from './providers/acpTerminals'
@@ -573,6 +582,30 @@ agents.mcpDestination = (session, settings) => {
 // Calls that arrive over the network are marked, so a desktop dialog is never opened on this computer for someone else.
 const origin = new AsyncLocalStorage<{ network: boolean; deviceId?: string }>()
 const interactive = new InteractiveStore(db, (session, ref) => agents.interactivePublished(session, ref))
+/** The model a page's AI uses: the maintenance model for fast work, the default model for smart work. */
+const pageSettings = (quality: 'fast' | 'smart') => {
+  const preferences = workspace.getAppState<Partial<AppPreferences>>('app-preferences', {})
+  const models = workspace.getAppState<ModelPreferences | null>('model-preferences', null)
+  const step = models?.sets
+    .find((set) => set.id === models.defaultSetId)
+    ?.steps.find((entry) => entry.id === models.defaultStepId)
+  const chosen = quality === 'fast' ? (preferences.intelligence?.maintenanceModel ?? step) : step
+  return { ...DEFAULT_AGENT_SETTINGS, ...chosen }
+}
+const pages = new PageStore(db, interactive, (pageId, run) =>
+  send('pages:changed', { pageId, ...(run ? { run } : {}) }),
+)
+const pageAi = new PageAi(pages, (...args) => agents.analyze(...args), pageSettings)
+const notifyPage = (page: PageInfo, title: string, body: string) => {
+  send('pages:changed', { pageId: page.id, notice: { title: title.slice(0, 80), body: body.slice(0, 240) } })
+  void mobilePush.deliverPage(page.id, title, body).catch(() => {})
+}
+const pageAutomation = new PageAutomation(pages, pageAi, (page, title, body) => notifyPage(page, title, body), {
+  read: () => workspace.getAppState<Record<string, number>>('page-schedule-marks', {}),
+  write: (marks) => workspace.setAppState('page-schedule-marks', marks),
+})
+pages.onRecord = (pageId, record) => pageAutomation.recordChanged(pageId, record)
+pageAutomation.start()
 let sharedMcp: SharedMcpService | undefined
 const getSharedMcp = () => {
   try {
@@ -711,6 +744,10 @@ const dispatcher = createDispatcher(
     agents,
     threadTitles,
     interactive,
+    pages,
+    pageAi,
+    notifyPage,
+    pageWebhookBases: () => schedules.webhookBases?.().map((base) => base.url.replace(/\/$/, '')) ?? [],
     schedules,
     pullRequestWatches,
     pullRequestIndex,
@@ -993,6 +1030,14 @@ const handle = () => async (req: import('node:http').IncomingMessage, res: Serve
     }
     // A webhook carries no device token: its unguessable address and the schedule's signature check stand in for one.
     const hookPath = (req.url ?? '').split('?')[0] ?? ''
+    if (req.method === 'POST' && hookPath.startsWith(`${WEBHOOK_PATH}page/`)) {
+      const raw = await readWebhookBody(req)
+      const answer = raw
+        ? pageAutomation.receive(decodeURIComponent(hookPath.slice(`${WEBHOOK_PATH}page/`.length)), raw)
+        : { status: 413, body: { error: 'The request is too large' } }
+      res.writeHead(answer.status, json).end(JSON.stringify(answer.body))
+      return
+    }
     if (req.method === 'POST' && hookPath.startsWith(WEBHOOK_PATH)) {
       const raw = await readWebhookBody(req)
       const answer = raw
@@ -1064,7 +1109,15 @@ const mcpHttp = createServer(async (req, res) => {
       source,
     )
   const server = review ? withoutTools(registry.server) : registry.server
-  if (!review) registerInteractiveTools(server, interactive, source.id)
+  if (!review)
+    registerInteractiveTools(server, interactive, source.id, {
+      pages,
+      ai: pageAi,
+      projectId: () => {
+        const projectId = workspace.getTask(source.taskId).projectId
+        return projectId === NO_PROJECT ? null : projectId
+      },
+    })
   if (!review)
     registerBackgroundTerminalTools(
       server,

@@ -262,7 +262,13 @@ export function Notifications() {
   }, [])
   const watching = useRef<(taskId: string, sessionId: string) => boolean>(() => false)
   watching.current = (taskId, sessionId) => {
-    if (ws.ui.activeTaskId !== taskId || ws.composing || ws.ui.sidebar === 'schedules' || ws.ui.sidebar === 'inbox')
+    if (
+      ws.ui.activeTaskId !== taskId ||
+      ws.composing ||
+      ws.ui.sidebar === 'schedules' ||
+      ws.ui.sidebar === 'inbox' ||
+      ws.ui.sidebar === 'pages'
+    )
       return false
     const state = ws.taskUi[taskId]
     const active = state?.views.find((view) => view.id === state.activeViewId)

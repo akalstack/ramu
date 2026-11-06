@@ -446,6 +446,77 @@ export interface RamuMethods {
   'interactive.media'(sessionId: string, id: string, version: number): { wide: string | null; light: string | null }
   /** Publishes an older version again as the newest one. */
   'interactive.restore'(sessionId: string, id: string, version: number): import('./interactive').InteractiveReference
+  'pages.list'(): import('./pages').PageInfo[]
+  'pages.get'(pageId: string): import('./pages').PageInfo
+  'pages.exists'(pageId: string): boolean
+  'pages.versions'(pageId: string): import('./pages').PageVersion[]
+  'pages.document'(pageId: string, version?: number): import('./interactive').InteractiveDocument
+  /** Keeps a thread's document as a page owned by the host. */
+  'pages.keep'(sessionId: string, contentId: string, title?: string, icon?: string): import('./pages').PageInfo
+  'pages.update'(
+    pageId: string,
+    patch: { title?: string; icon?: string; pinned?: boolean; projectId?: string | null },
+  ): import('./pages').PageInfo
+  'pages.delete'(pageId: string): void
+  'pages.restoreVersion'(pageId: string, version: number): import('./pages').PageInfo
+  'pages.duplicate'(pageId: string, title?: string): import('./pages').PageInfo
+  'pages.state'(pageId: string): import('./pages').PageState
+  /** Saves over the revision read; `accepted: false` returns the newer state another device saved. */
+  'pages.saveState'(
+    pageId: string,
+    state: unknown,
+    revision: number,
+  ): import('./pages').PageState & { accepted: boolean }
+  'pages.grant'(pageId: string, grants: import('./pages').PageGrants): import('./pages').PageInfo
+  'pages.usage'(pageId: string): import('./pages').PageUsage
+  /** One ramuContent call from the page's frame, checked against its grants. */
+  'pages.call'(pageId: string, method: string, args: unknown[]): unknown
+  /** Starts a page run and returns its id at once; its steps arrive on pages:changed. */
+  'pages.runStart'(
+    pageId: string,
+    task: string,
+    options?: {
+      shape?: unknown
+      maxSteps?: number
+      name?: string
+      functions?: { name: string; description: string; input: Record<string, string> }[]
+    },
+  ): string | null
+  'pages.runFlow'(
+    pageId: string,
+    name: string,
+    functions?: { name: string; description: string; input: Record<string, string> }[],
+  ): string | null
+  /** Ask this page: a read-only page agent answers a question about its records. */
+  'pages.ask'(pageId: string, question: string): import('./pages').PageRun
+  'pages.runs'(pageId: string): import('./pages').PageRun[]
+  'pages.runStop'(runId: string): void
+  'pages.runUndo'(runId: string): import('./pages').PageRun
+  'pages.runReply'(callId: string, value: unknown, error?: string): boolean
+  'pages.runConfirm'(confirmId: string, allowed: boolean): boolean
+  'pages.reportError'(
+    pageId: string,
+    error: { message: string; version: number; device?: string; steps?: string[] },
+  ): void
+  'pages.clearError'(pageId: string): void
+  'pages.exportRecords'(pageId: string): { json: string; csv: Record<string, string> }
+  'pages.importCsv'(pageId: string, collection: string, text: string): { added: number }
+  'pages.widget'(pageId: string): { title: string; value: string; items: string[] } | null
+  'pages.webhookUrls'(pageId: string): string[]
+  /** Hands work the page cannot do itself to a new thread, with the page attached. */
+  'pages.startThread'(pageId: string, prompt: string): StartedThread
+  'pages.makeProject'(pageId: string, name?: string): { projectId: string; folder: string; thread: StartedThread }
+  'pages.share'(pageId: string, canAdd: boolean): import('./pages').PageShare
+  'pages.shares'(pageId: string): import('./pages').PageShare[]
+  'pages.revokeShare'(token: string): void
+  'pages.renewShare'(token: string): import('./pages').PageShare
+  'pages.openShare'(token: string): {
+    share: import('./pages').PageShare
+    page: Pick<import('./pages').PageInfo, 'id' | 'title' | 'icon' | 'version' | 'capabilities'>
+    document: import('./interactive').InteractiveDocument
+    state: import('./pages').PageState
+  }
+  'pages.shareCall'(token: string, method: string, args: unknown[]): unknown
 
   'onboarding.get'(): { needed: boolean }
   'onboarding.complete'(): void
@@ -1391,6 +1462,8 @@ export type PushEvents = {
   /** Projects, repositories, chats or sessions were created, renamed, moved or removed (by any client). */
   'workspace:changed': Record<string, never>
   'memory:changed': Record<string, never>
+  /** A page, its records or one of its runs changed; `run` carries a run's newest steps while it works. */
+  'pages:changed': { pageId: string; run?: import('./pages').PageRun; notice?: { title: string; body: string } }
   /** `created` is the id of a summary that just became ready, so clients can raise one notification. */
   'summaries:changed': { created: string | null }
   'rules:changed': Record<string, never>

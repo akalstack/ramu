@@ -12,6 +12,7 @@ import { previewInteractive } from './preview'
 import { bundleInteractive } from './bundle'
 import { resolveInteractiveKit } from './kit'
 import { compileInteractive, INTERACTIVE_MAX_ARTIFACT } from './compile'
+import { pageCapabilitiesOf } from './capabilities'
 
 export const interactiveInput = z.object({
   network: z
@@ -165,6 +166,8 @@ export class InteractiveStore {
     const input = kept.length ? { ...parsed, checks: [...parsed.checks, ...kept].slice(0, 24) } : parsed
     if (signal?.aborted) throw new Error('Preview cancelled')
     if (!input.html === !input.files) throw new Error('Provide either html or files, not both.')
+    // A declaration that does not validate fails here, before any browser starts.
+    pageCapabilitiesOf(input)
     if (
       input.files &&
       input.files.reduce((total, file) => total + Buffer.byteLength(file.content), 0) > INTERACTIVE_MAX_HTML
