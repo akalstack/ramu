@@ -25,6 +25,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 - **Activity tokens:** Claude and Codex turns record tokens; OpenCode, Cursor and ACP runtimes need a documented per-turn token count in their protocols first.
 - **Helpers on another host:** `ramu_agent` with a `host` would mirror a helper's events into the parent live, which needs an event channel between hosts; a thread started there with its report covers the need until then.
 - **Review replies:** agents draft a reply per review thread (fixed, no change, or a question for the reviewer), the person sends them with one **Push and reply**, and the pull request watch picks up every new comment, not only requested changes. See [the plan](PR-REVIEW-PLAN.md).
+- **Pull requests in Source Control:** a Pull requests tab beside Commits and Stashes that lists yours, the ones waiting on your review, and the rest. It opens any of them in a worktree thread, reviews with a read-only agent, updates the branch, and merges with clean-up. See [the plan](PR-MANAGEMENT-PLAN.md).
 - **Code quality:** push events are checked for channel and shape where they enter the phone and the desktop, and RPC results take each method's declared type; checking RPC results against runtime schemas is still to do. About 140 `react-hooks/exhaustive-deps` disables name the trigger they are keyed on and are mostly deliberate; convert one only when touching it, after checking it neither loops nor refetches.
 
 ## Acceptance

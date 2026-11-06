@@ -20,7 +20,7 @@ Today **Address review comments** and **Watch in thread** send open review threa
 4. **Review:** a **Review replies** card in the thread and in Source Control lists each thread with its comment, outcome, draft reply and the commit's diff. The person can edit a reply, change its outcome, uncheck it, or tell the agent "redo this one" in the composer.
 5. **Send:** **Push and reply** pushes the branch, posts the checked replies, and re-requests review from reviewers who requested changes (on by default, can be unchecked). **Resolve fixed threads** is off by default, because many teams let the reviewer resolve. **Reply only** sends the replies without pushing, for rounds with nothing but No change and Question replies.
 6. **Wait:** the pull request shows **Waiting on reviewer** and the watch keeps going. Answers to a Question come back with the thread's history, and the agent continues from there.
-7. **Finish:** when it's approved, the checks pass and there are no open threads, the pull request shows **Ready to merge** in Source Control and Inbox. Merging stays with the person on the forge (see Later).
+7. **Finish:** when it's approved, the checks pass and there are no open threads, the pull request shows **Ready to merge** in Source Control and Inbox. Merging and updating the branch belong to [Pull requests in Source Control](PR-MANAGEMENT-PLAN.md).
 
 Every post needs that person action; the agent never posts or pushes by itself. That keeps the loop safe without a round limit: each round costs one click.
 
@@ -34,7 +34,7 @@ One state in Source Control, the thread header, Inbox and the phone, worked out 
 | **Replies ready** | A draft batch is waiting | **Push and reply** |
 | **Checks failing** | Unchanged | **Fix failing checks** |
 | **Waiting on reviewer** | Replies posted, review requested | None |
-| **Ready to merge** | Approved, green, no open threads | Open on the forge |
+| **Ready to merge** | Approved, green, no open threads | **Merge** ([Pull requests in Source Control](PR-MANAGEMENT-PLAN.md)) |
 
 **Replies ready** counts as "needs you" in Inbox and on Home, and sends a push notification on the phone like other needs-you items.
 
@@ -101,7 +101,5 @@ Tests: adapter tests for each forge's thread mapping and reply calls (in the sty
 
 ## Later
 
-- **Merge from Ramu** (with the forge's merge method and branch-protection result), and **Update branch** or rebase when it falls behind the base or has conflicts.
 - **Auto-send Question replies** for people who want clarifying questions posted without review, if asked for.
 - Suggested-change blocks (GitHub `suggestion` fences) applied directly when the reviewer wrote the exact change.
-- Reviewing someone else's pull request: the agent drafts review comments for the person to post.
