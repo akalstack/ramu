@@ -56,6 +56,7 @@ An agent can start separate threads you own: a follow-up, the matching change in
 
 - In Full access, one thread in the same project starts at once. Anything wider shows one approval card.
 - Started threads can start one more level, and a thread can start 8 an hour.
+- Asked to work on a repository that is not a project yet, the agent can add it: a Git URL is cloned beside your other repositories with the host's own Git credentials, and a folder on the host is registered. A project that already has that remote is reused. Outside Full access it asks first.
 - **Let agents start threads** (Settings → Threads) turns this off.
 
 ### On another host

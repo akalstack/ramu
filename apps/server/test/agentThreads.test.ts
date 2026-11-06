@@ -123,6 +123,14 @@ beforeEach(async () => {
     if (method === 'tasks.create') return ws.createTask(args[0] as Parameters<Workspace['createTask']>[0])
     if (method === 'tasks.setup') return ws.setupTask(args[0] as string)
     if (method === 'tasks.rename') return ws.renameTask(args[0] as string, args[1] as string)
+    if (method === 'folders.addProject') return ws.addProjectFromFolder(args[0] as string)
+    if (method === 'folders.clone') {
+      // The test clones into its own temporary folder, never the real parent the service chose.
+      const [, name] = args as [string, string]
+      const target = join(apiRoot, '..', name)
+      execFileSync('git', ['clone', '-q', apiRoot, target])
+      return target
+    }
     if (method === 'settings.models.get')
       return {
         defaultSetId: 's',
@@ -306,6 +314,33 @@ describe('thread_start', () => {
     await expect(
       tools('caller').call('thread_start', { threads: [{ prompt: 'x', project: 'web', bringChanges: true }] }),
     ).rejects.toThrow(/same project/)
+  })
+})
+
+describe('project_add', () => {
+  it('reuses the project that already has the remote, and clones one that is not here yet', async () => {
+    await callerIn(api)
+    execFileSync('git', ['remote', 'add', 'origin', 'https://github.com/acme/api.git'], { cwd: apiRoot })
+    const { call } = tools('caller')
+    expect(await call('project_add', { url: 'git@github.com:acme/api.git' })).toMatchObject({
+      projectId: api.id,
+      added: false,
+    })
+    expect(calls).not.toContain('folders.clone')
+    const cloned = await call('project_add', { url: 'https://github.com/acme/billing.git' })
+    expect(cloned).toMatchObject({ name: 'billing', added: true })
+    expect(ws.listProjects().some((project) => project.id === cloned.projectId)).toBe(true)
+  })
+
+  it('asks before adding a folder outside Full access and refuses a URL with no repository name', async () => {
+    await callerIn(api, 'edits')
+    const folder = join(apiRoot, '..', 'web')
+    expect(await tools('caller').call('project_add', { path: folder })).toMatchObject({ added: false })
+    expect(permissionDetails[0]).toContain(folder)
+    approvals.push(true)
+    await expect(tools('caller').call('project_add', { url: 'https://github.com/acme/..' })).rejects.toThrow(
+      /Name the folder/,
+    )
   })
 })
 

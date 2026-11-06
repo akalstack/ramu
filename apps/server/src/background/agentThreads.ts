@@ -208,6 +208,39 @@ export class AgentThreadService {
         }),
     )
     server.registerTool(
+      'project_add',
+      {
+        description:
+          "Add a project to this host when the person asks to work on a repository that is not one yet: url clones it beside their other repositories, path registers a folder already on this host. A project that already has that remote is reused, not cloned again. Then start work there with thread_start. Uses the host's own Git credentials; never put a password or token in the URL.",
+        inputSchema: {
+          url: z.string().min(1).max(2000).optional(),
+          path: z.string().min(1).max(4096).optional(),
+          name: z
+            .string()
+            .regex(/^[\w.-]{1,100}$/)
+            .optional()
+            .describe('Folder name for a clone; defaults to the repository name.'),
+        },
+      },
+      (input, extra) =>
+        result(async () => {
+          const caller = this.agents.get(sessionId)
+          if (caller.settings.access !== 'full') {
+            const allowed = await this.agents.requestPermission(
+              sessionId,
+              'adding a project',
+              input.url
+                ? `Clone ${input.url} into ${this.cloneParent()} and add it as a project.`
+                : `Add ${input.path} as a project.`,
+              extra.signal,
+            )
+            if (!allowed) return { added: false, message: 'The person chose not to add this project. Do not retry.' }
+          }
+          const project = await this.addProject(input)
+          return { ...project, note: `Start work there with thread_start and project "${project.name}".` }
+        }),
+    )
+    server.registerTool(
       'thread_start',
       {
         description: `Start new threads the person owns, when they ask for separate work: a follow-up here, a change in another project, or several parts in parallel. Each thread appears in the sidebar, keeps working on its own and reports back here when it finishes or needs input. This is not ramu_agent: a helper works for this thread and ends with it. Write each prompt as a complete brief (goal, what to change, what is already known, how to tell it is done) because the new thread has not seen this conversation. project takes a name or id and defaults to this one. checkout: default follows the project's setting; worktree gives a new branch (optional branch name); bringChanges copies this checkout's uncommitted changes into a new worktree of the same project. host starts them on another host your agents can use (see project_list with host); project is then required, and that host decides their model and the most access they get. Up to ${MAX_THREADS_PER_CALL} at once. The person may be asked to approve first; if they decline, do not retry.`,
@@ -658,7 +691,16 @@ export class AgentThreadService {
 
   /** What this host would do with a continued thread: the project it matches, the model it would run, where to clone. */
   async prepareContinuation(repo: Pick<ContinuationRepo, 'remoteUrl' | 'repoName'>, requested: AgentSettings) {
-    const projects = await Promise.all(
+    return {
+      match: matchProject(repo, await this.projectRemotes()),
+      settings: await this.settingsForHost(requested, 'edits', 'edits'),
+      parent: this.cloneParent(),
+    }
+  }
+
+  /** Each project with a single repository, with every remote it has: a fork may call the shared one upstream. */
+  private projectRemotes() {
+    return Promise.all(
       this.workspace.listProjects().map(async (project) => {
         const repositories = this.workspace.listRepositories(project.id)
         // Every remote counts: a fork may call the shared repository upstream rather than origin.
@@ -676,15 +718,38 @@ export class AgentThreadService {
         return { id: project.id, name: project.name, remotes }
       }),
     )
+  }
+
+  /** Where a clone goes: beside the person's other repositories in their home folder, or the home folder itself. */
+  private cloneParent(): string {
     const known = this.workspace
       .listProjects()
       .flatMap((project) => this.workspace.listRepositories(project.id))
       .find((entry) => dirname(entry.root).startsWith(homedir()))
-    return {
-      match: matchProject(repo, projects),
-      settings: await this.settingsForHost(requested, 'edits', 'edits'),
-      parent: known ? dirname(known.root) : homedir(),
+    return known ? dirname(known.root) : homedir()
+  }
+
+  /** Clones a repository, or registers a folder already on this host, as a project; an existing match is reused. */
+  async addProject(input: { url?: string; path?: string; name?: string }): Promise<{
+    projectId: string
+    name: string
+    added: boolean
+  }> {
+    if (!input.url === !input.path) throw new Error('Give either a Git URL to clone or a folder path on this host.')
+    if (input.url) {
+      const repoName = input.name ?? repoNameOf(input.url)
+      const match = matchProject({ remoteUrl: input.url, repoName }, await this.projectRemotes())
+      if (match?.by === 'remote') return { projectId: match.projectId, name: match.name, added: false }
+      const path = (await this.invoke('folders.clone', [this.cloneParent(), repoName, input.url])) as string
+      const { project } = (await this.invoke('folders.addProject', [path])) as { project: { id: string; name: string } }
+      return { projectId: project.id, name: project.name, added: true }
     }
+    const existing = this.workspace.listProjects().find((project) => project.root === input.path)
+    if (existing) return { projectId: existing.id, name: existing.name, added: false }
+    const { project } = (await this.invoke('folders.addProject', [input.path])) as {
+      project: { id: string; name: string }
+    }
+    return { projectId: project.id, name: project.name, added: true }
   }
 
   /** Starts a thread a person sent here from another host. The start carries a key, so a lost reply finds the same one. */
@@ -1115,4 +1180,15 @@ async function uncommittedPatch(cwd: string): Promise<string> {
   } finally {
     await rm(dirname(index), { recursive: true, force: true }).catch(() => {})
   }
+}
+
+/** The folder name a clone of this URL gets, as `git clone` would choose it. */
+function repoNameOf(url: string): string {
+  const name = url
+    .replace(/[/\\]+$/, '')
+    .split(/[/:]/)
+    .at(-1)!
+    .replace(/\.git$/, '')
+  if (!/^[\w.-]{1,100}$/.test(name) || name === '.' || name === '..') throw new Error('Name the folder for this clone.')
+  return name
 }
