@@ -92,6 +92,22 @@ The list is data in `packages/shared`, so the phone and desktop show the same th
 - [Agents](guide/agents.md) gets **Abilities**: what they are, Auto, per-project overrides, Ask before using another provider, and how `needs` picks a helper. [Providers](guide/providers.md) lists which abilities each provider was verified to offer and where the check result shows. [SECURITY.md](../SECURITY.md) says what an ability call sends to the other provider. The mobile README is updated too.
 - Every string goes through `t()` with its Indonesian translation.
 
+### 7. Cost-aware Auto
+
+- **Measure first:** for each ability, Ramu keeps a small set of fixed sample tasks (for example, five image prompts and five long-context questions with known answers). It runs them on each signed-in provider that has the ability when that provider is first checked and after each update, and stores a quality score with the result. The score comes from a reviewer model's rubric for images and from exact checks where answers are known.
+- **Then choose:** with **Auto**, Ramu picks the cheapest provider whose score is within a margin of the best, using Activity's per-provider usage for the cost. Subscriptions count as cheaper than API keys while they have room.
+- **Shown to the person:** the Abilities settings show each provider's score and typical cost per call, and the transcript row says "chosen as the cheapest good enough".
+
+### 8. Abilities from Shared MCP servers
+
+- A Shared MCP server the person connected (an image, speech or search service) can provide an ability. The person maps one of its tools to an ability in **Settings → Models → Abilities** ("generate_image uses Replicate's `create_prediction`"). Ramu then calls that tool through the existing Shared MCP gateway, with the same approval rules as any MCP call.
+- An MCP-provided ability is listed beside providers in Auto, with the same live check and quality score before it is used automatically.
+
+### 9. Music and sound effects
+
+- `music` and `sound_effect` abilities, offered where a provider or a mapped MCP server provides them, for Motion artifacts' background music and cues. Each comes with the license terms its provider states, shown on the row and kept with the artifact.
+- The host mixes them into the MP4 with the voice-over, and **Sound** in the Motion toolbar adjusts levels or removes a track.
+
 ## Safety
 
 - An ability call sends the other provider only the caller's prompt and the inputs it passed. It never sends the conversation, files, memory or credentials, and the row shows exactly what was sent.
@@ -105,10 +121,7 @@ The list is data in `packages/shared`, so the phone and desktop show the same th
 - **Helper by need:** "make 6 store screenshots" started as a helper with `needs: ['image_generation']` runs on Codex while the lead stays on Claude.
 - **Search fallback:** a thread on a provider without native search gets cited results from `web_search`.
 - **Settings respected:** with image generation set to Off for a project, the tool is refused there and offered elsewhere. With **Ask before using another provider** on, each call waits for approval.
+- **Cost-aware Auto:** with two providers that can make images, Auto picks the cheaper one whose score is within the margin, and the row says why.
+- **MCP ability:** an image service connected as a Shared MCP server and mapped to `generate_image` makes the hero image, with its call recorded like any MCP call.
+- **Music:** a Motion explainer gets background music from a provider that offers it, and the exported MP4 has it mixed under the narration.
 - Checks that need live providers are listed under [Acceptance](roadmap.md#acceptance) until run.
-
-## Later options
-
-- **Cost-aware Auto:** prefer the cheapest provider that can do an ability well enough, using Activity's per-provider usage. It needs measured quality per ability first.
-- **Abilities from Shared MCP servers:** an MCP server the person connected (an image or speech service) could provide an ability like a provider does, with its own grant.
-- **Music and sound effects**, for Motion artifacts.

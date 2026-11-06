@@ -137,6 +137,31 @@ The [shipping plan](SHIP-AN-APP-PLAN.md) and this one share one rule: make the s
 - `guide/pages.md` becomes `guide/artifacts.md`, with a section per kind, edit in place, exports, design systems, dashboards and live refresh. The mobile README, VERIFICATION.md, SECURITY.md (exports run on the host; live refresh and what each source can read), [Agents](guide/agents.md) (the `artifact_*` tools and `kind`) and the site's feature list are updated.
 - Every string goes through `t()` with its Indonesian translation.
 
+### 10. Two people editing one artifact
+
+Ramu is one person across devices today, so versions are enough. A household or a small team sharing an artifact through a share link that can edit needs more:
+
+- **Presence:** who has the artifact open, and on which part (a slide, a heading), shown on both sides.
+- **Merging:** a Doc's and a deck's text are kept as a CRDT (Yjs) on the host, so two people typing at once merge instead of making competing versions. A version is still saved when either stops editing for a minute, so Restore and Compare keep working.
+- **Access:** an editing share link names the person it is for and can be revoked like any share link. Kinds without text (Dashboard, Motion) stay one editor at a time, with "Being edited by …" shown to the other.
+
+### 11. Templates
+
+- **Save as template** on any artifact keeps its source and its design system with no records, values or history. **New** shows the person's templates for the chosen kind above the blank start, for example "Weekly report", "Pitch deck" or "Expense tracker".
+- Templates travel between hosts the way **Import a page** does now: a template share link opens on another connected host as a copy.
+- Ramu ships a small starting set per kind (a report, a 6-slide deck, a landing page, a metrics dashboard, a 30-second explainer, a flowchart). It is kept in the repository and checked by the same previews as any artifact.
+
+### 12. Dashboards from named services
+
+- Besides records, folders, Ramu data and Shared MCP servers, a Dashboard or Live artifact can read **named services** through connectors on the host: Salesforce, Amplitude and Grafana first.
+- Each connector is one file implementing `query(spec)` with that service's own sign-in, kept in `credentials/`. It is read-only, and each service is its own grant on the artifact, listed in plain words.
+- A connector is added only after its sign-in and the data it can read are reviewed and written up in SECURITY.md, the same bar as Shared MCP.
+
+### 13. Voice-over for Motion
+
+- A Motion artifact can have narration: the agent writes a script per scene, and the **speech** ability ([Abilities](ABILITIES-PLAN.md)) turns it into audio on a signed-in provider that offers it. The host mixes the audio into the MP4 with the browser's own audio encoder, timed to the scenes.
+- **Narration** in the artifact's toolbar previews, re-records one scene, or removes the narration. The grant sheet says which provider receives the script, and no other content leaves the host.
+
 ## Safety
 
 - Every kind renders in the same sandboxed frame as pages, offline unless sources are declared. Exports and refreshes run on the host with the artifact's grants, never with a thread's access.
@@ -154,15 +179,12 @@ The [shipping plan](SHIP-AN-APP-PLAN.md) and this one share one rule: make the s
 - **Motion:** "a 30-second explainer of how sync works" plays in the card and exports an MP4 that plays on the phone.
 - **Diagram:** a sequence diagram from a thread exports as SVG, and editing a label in place makes a new version.
 - **Shipping:** from Home, "a pitch deck for my app" becomes Slides and "a booking site with payments" becomes a project, both without the person choosing a kind.
+- **Two editors:** two people with an editing share link type in the same Doc at once. Both see each other's place, and the text merges with no lost edits.
+- **Templates:** **Save as template** on the expense tracker and **New** from it on another host starts an App with the same code and no records.
+- **Named service:** a Dashboard on Amplitude events refreshes from the connector and shows only what the grant names.
+- **Voice-over:** the sync explainer gets narration from a signed-in speech provider, and the exported MP4 plays it in time with the scenes.
 - Checks that need a physical phone, PowerPoint, Word or Keynote, or live sources are listed under [Acceptance](roadmap.md#acceptance) until run.
 
 ## Images, video and narration
 
 Kinds that need generated images, video or narration (Design, Slides, Doc illustrations, Motion) get them through [Abilities](ABILITIES-PLAN.md), so a deck made on a Claude thread still gets its pictures from a signed-in provider that can make them.
-
-## Later options
-
-- **Real-time co-editing between two people** on one Doc. Ramu is one person across devices today, and two people would need presence and merging, not versions.
-- **Templates:** a gallery of starting artifacts per kind, shared between hosts the way Duplicate and Import a page work now.
-- **Dashboard sources for named services** (Salesforce, Amplitude, Grafana) through their own connectors, instead of only Shared MCP servers. Each needs its own sign-in and security review.
-- **Voice-over for Motion:** narration generated and mixed into the MP4. It needs a speech model on the host and a review of what leaves it.
