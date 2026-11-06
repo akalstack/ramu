@@ -79,6 +79,8 @@ export async function executeBrowserBridge(
     case 'forward':
     case 'reload':
       return runtime.historyForAgent(command.tabId, runId, owner, command.kind)
+    case 'appearance':
+      return runtime.appearanceForAgent(command.tabId, runId, owner, command.colorScheme)
     case 'close':
       return runtime.closeForAgent(command.tabId, runId, owner)
     case 'end':

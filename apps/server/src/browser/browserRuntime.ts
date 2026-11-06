@@ -1015,6 +1015,26 @@ export class BrowserRuntime {
     })
   }
 
+  /** Light or dark mode for the page, as the person's appearance switch sets it; it stays with the tab. */
+  async appearanceForAgent(
+    id: string,
+    runId: string,
+    owner: Pick<BrowserOwner, 'hostId' | 'threadId'>,
+    colorScheme: NonNullable<BrowserTabAdjust['colorScheme']>,
+  ): Promise<TabInfo> {
+    const tab = this.tab(id)
+    this.assertOwner(tab, owner)
+    tab.lease = observed(tab.lease, runId)
+    return this.agentAction(id, runId, tab.lease.generation, owner, async (page) => {
+      if (!page.adjust)
+        throw new BrowserError('unavailable', 'Update Ramu on this computer to change the page display.')
+      await page.adjust({ colorScheme })
+      tab.colorScheme = colorScheme === 'system' ? undefined : colorScheme
+      this.changed()
+      return this.info(tab)
+    })
+  }
+
   async closeForAgent(id: string, runId: string, owner: Pick<BrowserOwner, 'hostId' | 'threadId'>): Promise<void> {
     const tab = this.tab(id)
     return this.agentAction(id, runId, tab.lease.generation, owner, async () => {

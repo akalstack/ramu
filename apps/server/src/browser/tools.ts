@@ -503,6 +503,15 @@ export function registerBrowserTools(
       async (args) => call({ kind: move, ...(await aim(args)) }),
     )
   server.registerTool(
+    'browser_set_appearance',
+    {
+      description:
+        'Show a tab this run controls in light or dark mode by setting prefers-color-scheme, to check both themes of a page; system follows the computer again. It stays with the tab, as Display → Appearance on the phone viewer sets it. Inspect or screenshot afterwards.',
+      inputSchema: { tabId: tab, colorScheme: z.enum(['light', 'dark', 'system']) },
+    },
+    async (args) => call({ kind: 'appearance', ...(await aim(args)) }),
+  )
+  server.registerTool(
     'browser_close',
     {
       description: 'Close a tab this run controls. This destroys the page; hiding its pane is a separate human action.',

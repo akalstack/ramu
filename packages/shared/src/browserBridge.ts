@@ -156,6 +156,7 @@ export type BrowserBridgeCommand =
   | { kind: 'handle-dialog'; tabId: string; dialogId: string; accept: boolean; promptText?: string }
   | { kind: 'wait'; tabId: string; text?: string; urlIncludes?: string; timeoutMs: number }
   | { kind: 'back' | 'forward' | 'reload'; tabId: string }
+  | { kind: 'appearance'; tabId: string; colorScheme: NonNullable<BrowserTabAdjust['colorScheme']> }
   | { kind: 'close'; tabId: string }
   | { kind: 'end' }
 

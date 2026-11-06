@@ -300,6 +300,28 @@ describe('phone layout', () => {
     expect(adjust).toHaveBeenCalledWith({ zoom: 1.5 })
   })
 
+  it('lets the controlling run switch a tab between light and dark mode, but not a tab the person holds', async () => {
+    const { runtime, created } = setup()
+    const { tab } = await runtime.open(run, 'https://a.test')
+    const adjust = vi.fn(async () => {})
+    Object.assign(created[0]!.page, { adjust })
+    const appearance = (colorScheme: 'light' | 'dark' | 'system') =>
+      executeBrowserBridge(runtime, run.hostId, {
+        requestId: 'request',
+        clientId: 'desktop',
+        threadId: run.threadId,
+        runId: run.runId,
+        expiresAt: Date.now() + 1000,
+        command: { kind: 'appearance', tabId: tab.id, colorScheme },
+      }) as Promise<{ colorScheme?: string }>
+    expect((await appearance('dark')).colorScheme).toBe('dark')
+    expect(adjust).toHaveBeenLastCalledWith({ colorScheme: 'dark' })
+    expect((await appearance('system')).colorScheme).toBeUndefined()
+    runtime.takeControl(tab.id, 'phone')
+    await expect(appearance('light')).rejects.toBeInstanceOf(BrowserError)
+    expect(adjust).toHaveBeenCalledTimes(2)
+  })
+
   it('leaves a page shown on a desktop untouched', async () => {
     const { runtime } = setup()
     const { tab } = await runtime.open({ ...user }, 'https://a.test')
