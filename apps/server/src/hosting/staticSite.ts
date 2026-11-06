@@ -151,8 +151,20 @@ export function vercel(fetcher: Fetch = fetch): StaticHostingAdapter {
         'deploying',
       )
       // The production alias is the project name; a deployment without one is still reachable at its own address.
-      const alias = deployment.alias?.find((entry) => entry.endsWith('.vercel.app')) ?? `${name}.vercel.app`
-      return { url: `https://${alias || deployment.url}`, siteId: name }
+      // The project's production domain is public; team-scoped and per-deployment addresses sit behind Vercel's
+      // login when deployment protection is on. Production domains are assigned just after the deployment returns,
+      // so they are read from the project.
+      void deployment
+      const domains = await call<{ domains?: { name: string }[] }>(
+        fetcher,
+        `https://api.vercel.com/v9/projects/${encodeURIComponent(name)}/domains`,
+        { token, signal },
+        'reading the project domains',
+      ).catch(() => ({ domains: [] }))
+      const alias =
+        (domains.domains ?? []).map((entry) => entry.name).sort((a, b) => a.length - b.length)[0] ??
+        `${name}.vercel.app`
+      return { url: `https://${alias}`, siteId: name }
     },
   }
 }

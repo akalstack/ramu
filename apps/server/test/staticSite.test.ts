@@ -50,7 +50,17 @@ it('deploys to Netlify with digests, uploads what it asks for, and reuses the si
 
 it('deploys to Vercel as a production deployment with inline files', async () => {
   const { seen, fetcher } = platform([
-    [/deployments/, () => ({ body: { id: 'x', url: 'trip-abc.vercel.app', alias: ['trip-costs.vercel.app'] } })],
+    [
+      /deployments/,
+      () => ({
+        body: { id: 'x', url: 'trip-abc.vercel.app', alias: ['trip-costs-team-x.vercel.app'] },
+      }),
+    ],
+    // The production domain appears on the project, not yet in the deployment's aliases.
+    [
+      /projects\/trip-costs\/domains/,
+      () => ({ body: { domains: [{ name: 'trip-costs-team-x.vercel.app' }, { name: 'trip-costs.vercel.app' }] } }),
+    ],
   ])
   expect(await vercel(fetcher).deploy(files, { name: 'Trip costs' }, 'tok')).toEqual({
     url: 'https://trip-costs.vercel.app',
