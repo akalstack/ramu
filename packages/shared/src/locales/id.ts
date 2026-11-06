@@ -5589,4 +5589,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Open to anyone": "Buka untuk siapa pun",
   "The tunnel stopped. Ramu tries again.": "Tunnel berhenti. Ramu mencoba lagi.",
   "Cloudflare account ID (for a token limited to Pages)": "ID akun Cloudflare (untuk token yang terbatas ke Pages)",
+  "Ramu hit a problem": "Ramu mengalami masalah",
+  "Your drafts and threads are safe. Try again, and if it keeps happening, copy the details for a bug report.": "Draf dan thread kamu aman. Coba lagi, dan kalau masih terjadi, salin detailnya untuk laporan bug.",
 }

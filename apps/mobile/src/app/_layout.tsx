@@ -24,6 +24,9 @@ import { AutomationProvider } from '../runtime/automation'
 // so sheets present as sheets and back always has somewhere to go.
 export const unstable_settings = { anchor: '(tabs)' }
 
+// A crash anywhere below shows a recoverable screen instead of the developer error screen.
+export { AppErrorBoundary as ErrorBoundary } from '../components/AppErrorBoundary'
+
 function Navigator() {
   const { c, scheme } = useTheme()
   const store = useStore()
