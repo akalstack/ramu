@@ -30,12 +30,14 @@ import { registerInteractiveTools } from './interactive/tools'
 import { PageStore } from './interactive/pages'
 import { PageAi, webSearch, type PageExternal, type PageExternalTool } from './interactive/pageAi'
 import type { JsonValue } from '@ramu/shared/interactive'
+import { PublicPages } from './interactive/publicPages'
 import { PageAutomation, recheckLibraries } from './interactive/pageAutomation'
 import { compileInteractive, pinnedLibraries } from './interactive/compile'
 import { resolveInteractiveKit } from './interactive/kit'
 import { previewInteractive } from './interactive/preview'
 import { openHeadlessPage } from './interactive/pageHeadless'
 import type { PageInfo } from '@ramu/shared/pages'
+import type { TunnelChoice } from '@ramu/shared/types'
 import { registerThemeTools } from './themeTools'
 import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
 import { setAcpTerminalService } from './providers/acpTerminals'
@@ -679,6 +681,19 @@ const pageAutomation = new PageAutomation(
   },
 )
 pages.onRecord = (pageId, record) => pageAutomation.recordChanged(pageId, record)
+/** The tunnel a public page uses: the host's ngrok when it has no fixed domain, else a Cloudflare quick tunnel. */
+const publicPageTunnel = (): TunnelChoice =>
+  network.tunnel?.kind === 'ngrok' && !network.tunnel.domain ? { kind: 'ngrok' } : { kind: 'quick' }
+const publicPages = new PublicPages(
+  pages,
+  {
+    read: () => workspace.getAppState<string[]>('public-pages', []),
+    write: (ids) => workspace.setAppState('public-pages', ids),
+  },
+  undefined,
+  (pageId) => send('pages:changed', { pageId }),
+)
+void publicPages.restore(publicPageTunnel())
 pageAutomation.start()
 let sharedMcp: SharedMcpService | undefined
 const getSharedMcp = () => {
@@ -821,6 +836,8 @@ const dispatcher = createDispatcher(
     pages,
     pageAi,
     notifyPage,
+    publicPages,
+    publicPageTunnel,
     pageWebhookBases: () => schedules.webhookBases?.().map((base) => base.url.replace(/\/$/, '')) ?? [],
     schedules,
     pullRequestWatches,
@@ -846,6 +863,7 @@ async function stop(intentional = false, exitCode = 0) {
   stopping = true
   clearInterval(tick)
   tunnels.stop()
+  publicPages.close()
   await schedules.stop()
   await pullRequestWatches.stop()
   await pullRequestIndex.stop()

@@ -506,3 +506,36 @@ it('reads Ramu data only for the sources declared and allowed, scoped to the pag
   expect(listTasks).toHaveBeenCalledWith('p')
   expect(() => read('pullRequests')).toThrow('did not declare')
 })
+
+it('opens a page to people without Ramu on its own listener that serves only that page', async () => {
+  const { PublicPages } = await import('../src/interactive/publicPages')
+  const { interactive, pages, page } = await setup()
+  const used: unknown[] = []
+  const tunnel = () =>
+    ({
+      use: (choice: unknown, target: unknown) => used.push([choice, target]),
+      stop: () => used.push('stopped'),
+      status: () => ({ state: 'running', error: null }),
+      address: () => 'https://abc.trycloudflare.com',
+    }) as never
+  let saved: string[] = []
+  const open = new PublicPages(pages, { read: () => saved, write: (ids) => void (saved = ids) }, tunnel)
+  await expect(open.start(page.id, { kind: 'quick' })).rejects.toThrow('cannot be opened')
+  const plain = interactive.publish('s', (await interactive.preview('s', { ...input, html: '<p>Trip</p>' })).id, 'pp')
+  const trip = pages.keep('s', plain.id, { title: 'Trip' })
+  await expect(open.start(trip.id, { kind: 'tailscale' })).rejects.toThrow('own name')
+  const status = await open.start(trip.id, { kind: 'quick' })
+  expect(status).toMatchObject({ state: 'running', url: 'https://abc.trycloudflare.com' })
+  const port = open.port(trip.id)!
+  expect(used[0]).toEqual([{ kind: 'quick' }, `http://127.0.0.1:${port}`])
+  expect(saved).toEqual([trip.id])
+  const home = await fetch(`http://127.0.0.1:${port}/`)
+  expect(home.status).toBe(200)
+  expect(home.headers.get('content-security-policy')).toContain('sandbox allow-scripts')
+  expect(await home.text()).toContain('<p>Trip</p>')
+  expect((await fetch(`http://127.0.0.1:${port}/socket`)).status).toBe(404)
+  expect((await fetch(`http://127.0.0.1:${port}/`, { method: 'POST' })).status).toBe(405)
+  open.stop(trip.id)
+  expect(saved).toEqual([])
+  expect(open.status(trip.id).state).toBe('off')
+})

@@ -41,6 +41,9 @@ export interface Services {
   pageAi?: import('../interactive/pageAi').PageAi
   /** Sends a page's notification to paired phones and this host's desktop. */
   notifyPage?: (page: import('@ramu/shared/pages').PageInfo, title: string, body: string) => void
+  /** Pages opened to people without Ramu, each on its own listener and tunnel. */
+  publicPages?: import('../interactive/publicPages').PublicPages
+  publicPageTunnel?: () => import('@ramu/shared/types').TunnelChoice
   /** Addresses a sender can reach this host's page webhooks at. */
   pageWebhookBases?: () => string[]
   diagnostics?: import('../background/diagnostics').LocalDiagnostics

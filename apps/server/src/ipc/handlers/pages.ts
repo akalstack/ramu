@@ -271,7 +271,13 @@ export const registerPageHandlers: RegisterHandlers = (ctx) => {
       run: (pageId: string, patch: { title?: string; icon?: string; pinned?: boolean; projectId?: string | null }) =>
         need().pages.update(pageId, patch),
     },
-    'pages.delete': { args: z.tuple([id]), run: (pageId: string) => need().pages.delete(pageId) },
+    'pages.delete': {
+      args: z.tuple([id]),
+      run: (pageId: string) => {
+        ctx.publicPages?.stop(pageId)
+        need().pages.delete(pageId)
+      },
+    },
     'pages.restoreVersion': {
       args: z.tuple([id, z.number().int().positive()]),
       run: (pageId: string, version: number) => need().pages.restoreVersion(pageId, version),
@@ -474,6 +480,18 @@ export const registerPageHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, z.string().trim().min(1).max(120).optional()]),
       run: (pageId: string, projectName?: string) => makePageProject(ctx, pageId, projectName),
     },
+    'pages.publicStatus': {
+      args: z.tuple([id]),
+      run: (pageId: string) => ctx.publicPages?.status(pageId) ?? { state: 'off', url: null, error: null, since: null },
+    },
+    'pages.openPublic': {
+      args: z.tuple([id]),
+      run: (pageId: string) => {
+        if (!ctx.publicPages || !ctx.publicPageTunnel) throw new Error('Update this host to open pages to anyone.')
+        return ctx.publicPages.start(pageId, ctx.publicPageTunnel())
+      },
+    },
+    'pages.closePublic': { args: z.tuple([id]), run: (pageId: string) => ctx.publicPages?.stop(pageId) },
     'pages.publishTargets': { args: z.tuple([]), run: () => publishing().targets() },
     'pages.saveHostingToken': {
       args: z.tuple([z.enum(['netlify', 'vercel', 'cloudflare-pages']), z.string().trim().min(8).max(4000)]),

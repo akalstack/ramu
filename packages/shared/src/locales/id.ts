@@ -5582,4 +5582,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Token use by day and provider": "Pemakaian token per hari dan provider",
   "Thread titles and states": "Judul dan status thread",
   "Pull requests on threads": "Pull request di thread",
+  "A page that keeps records or uses this host’s features cannot be opened to people without Ramu.": "Halaman yang menyimpan catatan atau memakai fitur host ini tidak bisa dibuka untuk orang tanpa Ramu.",
+  "Anyone with the link sees this page, without Ramu, while this host is on. It gets its own address through your Cloudflare or ngrok tool and serves only this page.": "Siapa pun yang punya tautannya bisa melihat halaman ini tanpa Ramu selama host ini menyala. Halaman mendapat alamat sendiri lewat Cloudflare atau ngrok milikmu dan hanya menyajikan halaman ini.",
+  "Close to everyone": "Tutup untuk semua orang",
+  "Install cloudflared or ngrok on this host to open pages to anyone.": "Pasang cloudflared atau ngrok di host ini untuk membuka halaman ke siapa pun.",
+  "Open to anyone": "Buka untuk siapa pun",
+  "The tunnel stopped. Ramu tries again.": "Tunnel berhenti. Ramu mencoba lagi.",
 }

@@ -531,6 +531,11 @@ export interface RamuMethods {
     pageId: string,
     target: 'github-pages' | 'netlify' | 'vercel' | 'cloudflare-pages',
   ): import('./pages').PageInfo
+  /** Whether a page is open to people without Ramu, and its address. */
+  'pages.publicStatus'(pageId: string): import('./pages').PublicPageStatus
+  /** Opens a page to anyone through its own listener and tunnel; only a page that uses no host feature. */
+  'pages.openPublic'(pageId: string): import('./pages').PublicPageStatus
+  'pages.closePublic'(pageId: string): void
   /** Copies a page another host shared into a new page here, with no records, values or grants. */
   'pages.import'(
     document: import('./interactive').InteractiveDocument,

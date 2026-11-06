@@ -269,3 +269,11 @@ export interface PageState {
   state: InteractiveState | null
   revision: number
 }
+
+/** A page opened to people without Ramu: its own tunnel's state and address. */
+export interface PublicPageStatus {
+  state: 'off' | 'starting' | 'running' | 'missing' | 'failed'
+  url: string | null
+  error: string | null
+  since: number | null
+}

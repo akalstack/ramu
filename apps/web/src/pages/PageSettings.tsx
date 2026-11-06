@@ -6,6 +6,7 @@ import { Checkbox } from '../components/desktop-checkbox'
 import { Input } from '../components/desktop-input'
 import { GHOST_TEXT_BUTTON_CLASS } from '../components/button-classes'
 import { Dialog, timeAgo } from '../Menu'
+import { PublicPageSection } from './PublicPageSection'
 import { t, useLanguage } from '../i18n'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime } from '../workspace/workspace'
@@ -347,6 +348,7 @@ export function PageSettings({ page, onClose }: { page: PageInfo; onClose(): voi
             ))}
           </section>
         )}
+        <PublicPageSection page={page} />
         <section>
           <h4 className="m-0 mb-1.5 text-body font-medium text-foreground">{t('Share links')}</h4>
           <p className="mt-0 mb-2 text-caption text-muted-foreground">
