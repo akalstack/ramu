@@ -5571,4 +5571,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Share link": "Tautan berbagi",
   "Show in the home screen widget": "Tampilkan di widget layar utama",
   "Remove from the home screen widget": "Hapus dari widget layar utama",
+  "Connect GitHub in Settings → Git hosting": "Hubungkan GitHub di Pengaturan → Git hosting",
+  "Deploys this page as a static site on your own account. Ramu hosts nothing.": "Menerbitkan halaman ini sebagai situs statis di akunmu sendiri. Ramu tidak meng-host apa pun.",
+  "Deploys v{version} to {url}.": "Menerbitkan v{version} ke {url}.",
+  "Kept in this host’s credential store. Create one at {url}": "Disimpan di penyimpanan kredensial host ini. Buat di {url}",
+  "Needs a token": "Perlu token",
+  "Where": "Tempat",
+  "{name} token": "Token {name}",
 }

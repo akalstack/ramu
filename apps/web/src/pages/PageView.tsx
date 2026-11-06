@@ -31,6 +31,7 @@ import { appThemeVariables } from '../interactive/InteractiveContent'
 import { usePageBridge, type PickedElement } from './usePageBridge'
 import { GrantSheet, PageSettings, runStatusLabel } from './PageSettings'
 import { openPage } from './openPage'
+import { PublishDialog } from './PublishDialog'
 
 const VIEWPORTS = [
   { id: 'fit', label: 'Fit to width', width: undefined, Icon: Monitor },
@@ -59,7 +60,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
   const [frameError, setFrameError] = useState('')
   const [dialog, setDialog] = useState<
     | null
-    | { kind: 'settings' | 'versions' | 'delete' | 'project' | 'rename' }
+    | { kind: 'settings' | 'versions' | 'delete' | 'project' | 'rename' | 'publish' }
     | { kind: 'thread'; prompt: string; resolve?: (agreed: boolean) => void; title: string }
   >(null)
   const [picking, setPicking] = useState(false)
@@ -170,10 +171,6 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
     link.download = `${page.title}.html`
     link.click()
   }
-  const publishPrompt = () =>
-    page.capabilities.records || page.capabilities.ai
-      ? null
-      : `Publish this page to the web as a static site on my own account (GitHub Pages, Cloudflare Pages, Netlify or Vercel, whichever I already use; ask if none). Read it with page_get, write its exact HTML to a new folder, deploy it, and when it is live record the address with page_published so the page remembers it.${page.published ? ` It is already live at ${page.published.url} on ${page.published.target}; update that site.` : ''}`
   const menu: MenuEntry[] = [
     { key: 'settings', label: t('Page settings…'), onSelect: () => setDialog({ kind: 'settings' }) },
     { key: 'versions', label: t('Versions…'), onSelect: () => setDialog({ kind: 'versions' }) },
@@ -190,11 +187,8 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
       key: 'publish',
       label: outdated ? t('Update live site') : t('Publish to the web…'),
       disabled: viewOnly,
-      onSelect: () => {
-        const prompt = publishPrompt()
-        if (prompt) void askThread(prompt, t('Publish to the web')).then((agreed) => agreed && void startThread(prompt))
-        else setDialog({ kind: 'project' })
-      },
+      // A page with records or AI needs a server of its own: Make it a project explains and offers that.
+      onSelect: () => setDialog({ kind: page.capabilities.records || page.capabilities.ai ? 'project' : 'publish' }),
     },
     {
       key: 'project',
@@ -348,6 +342,11 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
               version: page.version,
             })}
           </span>
+          {!viewOnly && (
+            <Button variant="ghost" className={GHOST_TEXT_BUTTON_CLASS} onClick={() => setDialog({ kind: 'publish' })}>
+              {t('Update live site')}
+            </Button>
+          )}
         </div>
       )}
       {bridge.running && (
@@ -477,6 +476,7 @@ export function PageView({ pageId, onBack }: { pageId: string; onBack(): void })
       </div>
       {!viewOnly && page.pendingGrants.length > 0 && <GrantSheet page={page} onDone={() => void load()} />}
       {dialog?.kind === 'settings' && <PageSettings page={page} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'publish' && <PublishDialog page={page} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'versions' && (
         <VersionsDialog
           page={page}

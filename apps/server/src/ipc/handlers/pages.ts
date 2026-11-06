@@ -10,6 +10,8 @@ import type { AnswerShape, PageFunction } from '../../interactive/pageAi'
 import { widgetData } from '../../interactive/pageAutomation'
 import { makePageProject } from '../../interactive/pageProject'
 import { openHeadlessPage } from '../../interactive/pageHeadless'
+import { PagePublisher } from '../../interactive/pagePublish'
+import type { StaticTarget } from '../../hosting/staticSite'
 
 const field = z.enum([
   'string',
@@ -175,6 +177,14 @@ async function readPageFolder(ctx: HandlerContext, pageId: string, path: string,
 /** Pages: kept documents with shared state, records, AI, runs, shares and the way to a project. */
 export const registerPageHandlers: RegisterHandlers = (ctx) => {
   if (ctx.pageAi) ctx.pageAi.track = (label, detail, work, cancel) => ctx.activity.run(label, detail, work, cancel)
+  let publisher: PagePublisher | undefined
+  const publishing = () =>
+    (publisher ??= new PagePublisher(
+      need().pages,
+      () => ctx.forgeAccounts,
+      (key, fallback) => ctx.workspace.getAppState(key, fallback),
+      (key, value) => ctx.workspace.setAppState(key, value),
+    ))
   const need = () => {
     if (!ctx.pages || !ctx.pageAi) throw new Error('Update this host for Pages.')
     return { pages: ctx.pages, ai: ctx.pageAi }
@@ -417,6 +427,23 @@ export const registerPageHandlers: RegisterHandlers = (ctx) => {
     'pages.makeProject': {
       args: z.tuple([id, z.string().trim().min(1).max(120).optional()]),
       run: (pageId: string, projectName?: string) => makePageProject(ctx, pageId, projectName),
+    },
+    'pages.publishTargets': { args: z.tuple([]), run: () => publishing().targets() },
+    'pages.saveHostingToken': {
+      args: z.tuple([z.enum(['netlify', 'vercel', 'cloudflare-pages']), z.string().trim().min(8).max(4000)]),
+      run: (target: 'netlify' | 'vercel' | 'cloudflare-pages', token: string) => {
+        // A deploy token is a host credential: it is set on the host, like Git hosting logins.
+        if (ctx.host.canAdministerIntegrations?.() === false) throw new Error('Add hosting tokens on the host itself.')
+        return publishing().saveToken(target, token)
+      },
+    },
+    'pages.removeHostingToken': {
+      args: z.tuple([z.enum(['netlify', 'vercel', 'cloudflare-pages'])]),
+      run: (target: 'netlify' | 'vercel' | 'cloudflare-pages') => publishing().removeToken(target),
+    },
+    'pages.publish': {
+      args: z.tuple([id, z.enum(['github-pages', 'netlify', 'vercel', 'cloudflare-pages'])]),
+      run: (pageId: string, target: StaticTarget) => publishing().publish(pageId, target),
     },
     'pages.share': {
       args: z.tuple([id, z.boolean()]),

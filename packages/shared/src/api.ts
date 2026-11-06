@@ -518,6 +518,19 @@ export interface RamuMethods {
     state: import('./pages').PageState
   }
   'pages.shareCall'(token: string, method: string, args: unknown[]): unknown
+  /** Static hosting platforms a page can be published to, and whether this host has their login. */
+  'pages.publishTargets'(): {
+    target: 'github-pages' | 'netlify' | 'vercel' | 'cloudflare-pages'
+    name: string
+    connected: boolean
+  }[]
+  'pages.saveHostingToken'(target: 'netlify' | 'vercel' | 'cloudflare-pages', token: string): void
+  'pages.removeHostingToken'(target: 'netlify' | 'vercel' | 'cloudflare-pages'): void
+  /** Deploys the page's current version as a static site on the person's own account; updates the same site later. */
+  'pages.publish'(
+    pageId: string,
+    target: 'github-pages' | 'netlify' | 'vercel' | 'cloudflare-pages',
+  ): import('./pages').PageInfo
   /** Copies a page another host shared into a new page here, with no records, values or grants. */
   'pages.import'(
     document: import('./interactive').InteractiveDocument,

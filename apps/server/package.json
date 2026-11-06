@@ -36,6 +36,7 @@
     "@dagrejs/dagre": "2.0.4",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@napi-rs/keyring": "2.1.1",
+    "@noble/hashes": "1.8.0",
     "@opencode/client": "2.0.30",
     "chart.js": "4.6.1",
     "editorconfig": "^3.0.2",

@@ -412,6 +412,9 @@ importers:
       '@napi-rs/keyring':
         specifier: 2.1.1
         version: 2.1.1
+      '@noble/hashes':
+        specifier: 1.8.0
+        version: 1.8.0
       '@opencode/client':
         specifier: 2.0.30
         version: 2.0.30(effect@4.0.1)(solid-js@1.9.17)

@@ -441,3 +441,39 @@ it('imports a page another host shared without its records, values or grants', a
     ),
   ).toThrow('HTTPS origin')
 })
+
+it('publishes a page without records or AI to the web and updates the same site later', async () => {
+  const { PagePublisher } = await import('../src/interactive/pagePublish')
+  const { interactive, pages, page } = await setup()
+  const forge = { resolve: async () => ({ kind: 'saved', token: 'gh' }), choiceId: () => 'saved' }
+  const state = new Map<string, unknown>()
+  const requests: string[] = []
+  const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    requests.push(`${init?.method ?? 'GET'} ${url}`)
+    if (url.endsWith('/user')) return new Response(JSON.stringify({ login: 'me' }))
+    if (url.includes('/contents/') && !init?.method) return new Response('', { status: 404 })
+    return new Response('{}')
+  }) as typeof fetch
+  const publisher = new PagePublisher(
+    pages,
+    () => forge as never,
+    (key, fallback) => (state.get(key) ?? fallback) as never,
+    (key, value) => void state.set(key, value),
+    fetcher,
+  )
+  await expect(publisher.publish(page.id, 'github-pages')).rejects.toThrow('Make it a project')
+  const plain = interactive.publish('s', (await interactive.preview('s', { ...input, html: '<p>Trip</p>' })).id, 'p1')
+  const trip = pages.keep('s', plain.id, { title: 'Trip costs' })
+  const live = await publisher.publish(trip.id, 'github-pages')
+  expect(live.published).toMatchObject({
+    target: 'github-pages',
+    url: 'https://me.github.io/trip-costs/',
+    siteId: 'trip-costs',
+    version: 1,
+  })
+  requests.length = 0
+  await publisher.publish(trip.id, 'github-pages')
+  expect(requests.some((request) => request.startsWith('POST') && request.endsWith('/user/repos'))).toBe(false)
+  expect(publisher.targets().find((target) => target.target === 'github-pages')?.connected).toBe(true)
+})

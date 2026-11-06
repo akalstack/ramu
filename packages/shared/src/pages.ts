@@ -99,6 +99,8 @@ export interface PagePublication {
   url: string
   version: number
   at: number
+  /** The platform's id for the site, so Update live site deploys to the same one. */
+  siteId?: string
 }
 
 export interface PageInfo {
