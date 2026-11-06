@@ -1,5 +1,7 @@
 import { InteractiveFollowupPicker } from './InteractiveFollowupPicker'
-import { shareInteractive } from './interactiveShare'
+import { shareFile } from './interactiveShare'
+import { ArtifactKindMark, SHARE_LABELS } from './ArtifactKindMark'
+import { interactiveExport, kindExports, type ExportedFile } from '@ramu/shared/interactiveExport'
 import { interactiveVersions, canCopyInteractiveState } from '@ramu/shared/interactiveVersions'
 import { InteractiveVisibility } from './InteractiveVisibility'
 import { translate } from '@ramu/shared/i18n'
@@ -245,13 +247,17 @@ export function InteractiveDocumentCard({
     setFailed(false)
     setEvicted(false)
   }
+  const send = (file: ExportedFile) => {
+    setSharing(true)
+    void shareFile(file)
+      .catch(() => setError(t('Could not share this content. Try again.')))
+      .finally(() => setSharing(false))
+  }
   const share = (raw = false) => {
     const run = () => {
       if (!document || sharing) return
-      setSharing(true)
-      void shareInteractive(document, state.current, raw, theme)
-        .catch(() => setError(t('Could not share this content. Try again.')))
-        .finally(() => setSharing(false))
+      const exported = interactiveExport(document, state.current, raw, theme)
+      send({ name: exported.name, content: exported.html, mimeType: exported.mimeType })
     }
     if (raw) run()
     else capture(run)
@@ -304,6 +310,7 @@ export function InteractiveDocumentCard({
   return (
     <View style={{ marginVertical: 12, gap: 8 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <ArtifactKindMark kind={reference.kind ?? 'app'} color={c.muted} />
         <T weight="600" style={{ flex: 1 }}>
           {reference.title} · v{reference.version}
         </T>
@@ -473,10 +480,23 @@ export function InteractiveDocumentCard({
                 onClose={() => setSelection(null)}
               />
             )}
-            <View style={{ gap: 0 }}>
-              <ContentAction title={t('Share HTML')} disabled={!document || sharing} onPress={() => share()} />
-              <ContentAction title={t('Share source')} disabled={!document || sharing} onPress={() => share(true)} />
-            </View>
+            {reference.kind ? (
+              <View style={{ gap: 0 }}>
+                {(document ? kindExports(document, theme) : []).map(({ format, file }) => (
+                  <ContentAction
+                    key={format}
+                    title={t(SHARE_LABELS[format])}
+                    disabled={sharing}
+                    onPress={() => send(file)}
+                  />
+                ))}
+              </View>
+            ) : (
+              <View style={{ gap: 0 }}>
+                <ContentAction title={t('Share HTML')} disabled={!document || sharing} onPress={() => share()} />
+                <ContentAction title={t('Share source')} disabled={!document || sharing} onPress={() => share(true)} />
+              </View>
+            )}
             {copyFrom && canCopyInteractiveState(copyFrom, reference) && (
               <ContentAction
                 title={translate(store.language, 'Copy saved scenario from v{version}', { version: copyFrom.version })}

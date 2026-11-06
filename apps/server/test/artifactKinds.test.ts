@@ -1,0 +1,141 @@
+import { afterEach, expect, it, vi } from 'vitest'
+import { openDb, type Db } from '../src/db'
+import { InteractiveStore, type InteractiveInput } from '../src/interactive/store'
+import { PageStore } from '../src/interactive/pages'
+import { cleanSvg } from '../src/interactive/svg'
+
+const databases: Db[] = []
+afterEach(() => {
+  for (const db of databases.splice(0)) db.close()
+})
+const previewer = vi.fn(async (_html: string) => ({
+  screenshot: 'data:image/png;base64,AA==',
+  height: 400,
+  checks: [],
+  errors: [] as string[],
+}))
+
+function setup() {
+  const db = openDb(':memory:')
+  databases.push(db)
+  db.exec(
+    "INSERT INTO projects(id,name,created_at) VALUES('p','P',0); INSERT INTO tasks(id,project_id,title,mode,status,created_at) VALUES('t','p','T','current','idle',0); INSERT INTO agent_sessions(id,task_id,provider,cwd,state,created_at) VALUES('s','t','codex','/tmp','idle',0)",
+  )
+  const interactive = new InteractiveStore(db, vi.fn(), previewer)
+  return { interactive, pages: new PageStore(db, interactive) }
+}
+const doc = (source: string): InteractiveInput => ({
+  kind: 'doc',
+  source,
+  title: 'Launch plan',
+  summary: 'The plan',
+  checks: [],
+})
+
+it('publishes a doc drawn from Markdown, with anchors, tables and its Mermaid blocks, and keeps its source', async () => {
+  const { interactive, pages } = setup()
+  const markdown =
+    '## Goals\n\nSee [risks](#risks) <script>alert(1)</script>\n\n| Step | Owner |\n| --- | --- |\n| Ship | Ana |\n\n```mermaid\nflowchart LR\n  A[Plan] --> B[Ship]\n```\n\n## Risks\n\nNone.\n'
+  const preview = await interactive.preview('s', doc(markdown))
+  expect(preview.errors).toEqual([])
+  const html = previewer.mock.calls.at(-1)![0]
+  expect(html).toContain('<h2 id="goals">Goals</h2>')
+  expect(html).toContain('<table class="table">')
+  expect(html).toContain('pele-flowchart')
+  expect(html).not.toContain('<script>')
+  expect(html).not.toContain('language-mermaid')
+  const reference = interactive.publish('s', preview.id, 'r1')
+  expect(reference).toMatchObject({ kind: 'doc', files: ['document.md'], network: { resources: [], connect: [] } })
+  const kept = pages.keep('s', reference.id, { title: 'Launch plan' })
+  expect(kept.kind).toBe('doc')
+  expect(pages.document(kept.id).files).toEqual([{ path: 'document.md', content: markdown }])
+  expect(pages.duplicate(kept.id).kind).toBe('doc')
+})
+
+it('fails a doc preview when a heading cannot be reached', async () => {
+  const { interactive } = setup()
+  const preview = await interactive.preview('s', doc('## Risks\n\ntext\n\n## Risks\n\n##\n\n[gone](#missing)\n'))
+  expect(preview.errors).toEqual([
+    'Two headings share the anchor #risks ("Risks"). Give one a different name.',
+    'Heading 3 is empty. Give it text or remove it.',
+    'The link to #missing has no heading or note to go to.',
+  ])
+  expect(() => interactive.publish('s', preview.id, 'r1')).toThrow(/Fix preview errors/)
+})
+
+it('publishes a Mermaid diagram with its drawing, and fails one that does not parse', async () => {
+  const { interactive } = setup()
+  const source = 'sequenceDiagram\n  Phone->>Host: Sync\n  Host-->>Phone: Done'
+  const good = await interactive.preview('s', {
+    kind: 'diagram',
+    format: 'mermaid',
+    source,
+    title: 'Sync',
+    summary: 'How sync works',
+    checks: [],
+  })
+  expect(good.errors).toEqual([])
+  const reference = interactive.publish('s', good.id, 'r1')
+  expect(reference).toMatchObject({ kind: 'diagram', files: ['diagram.mmd', 'diagram.svg'] })
+  const files = interactive.get('s', reference.id, 1).files!
+  expect(files[0]).toEqual({ path: 'diagram.mmd', content: source })
+  expect(files[1]!.content).toMatch(/^<svg xmlns="http:\/\/www.w3.org\/2000\/svg"[^>]*pele-sequence/)
+
+  const bad = await interactive.preview('s', {
+    kind: 'diagram',
+    format: 'mermaid',
+    source: 'flowchart LR\n  A -->',
+    title: 'Broken',
+    summary: 'Does not parse',
+    checks: [],
+  })
+  expect(bad.errors[0]).toMatch(/^The diagram does not parse: Parse error on line 2/)
+  expect(() => interactive.publish('s', bad.id, 'r2')).toThrow(/Fix preview errors/)
+})
+
+it('checks each kind’s source before drawing it', async () => {
+  const { interactive } = setup()
+  const base = { title: 'X', summary: 'Y', checks: [] }
+  await expect(interactive.preview('s', { ...base, kind: 'diagram', source: 'flowchart LR' })).rejects.toThrow(
+    'Say which the diagram is written in: format "mermaid" or "svg".',
+  )
+  await expect(interactive.preview('s', { ...base, kind: 'doc', source: '  ' })).rejects.toThrow(
+    'Write the doc as Markdown in source.',
+  )
+  await expect(interactive.preview('s', { ...base, kind: 'doc', source: '# Hi', html: '<p>x</p>' })).rejects.toThrow(
+    'html and files are for apps',
+  )
+  await expect(interactive.preview('s', { ...base, source: '# Hi' })).rejects.toThrow('Set kind to doc or diagram')
+  await expect(
+    interactive.preview('s', { ...base, kind: 'diagram', format: 'svg', source: '<p>not svg</p>' }),
+  ).rejects.toThrow('An SVG diagram needs an <svg> element.')
+})
+
+it('fails an SVG diagram that would run script or load from elsewhere', async () => {
+  const { interactive } = setup()
+  const preview = await interactive.preview('s', {
+    kind: 'diagram',
+    format: 'svg',
+    source: '<svg viewBox="0 0 10 10"><script>alert(1)</script><rect onclick="x()" width="5" height="5"/></svg>',
+    title: 'Unsafe',
+    summary: 'Has a script',
+    checks: [],
+  })
+  expect(preview.errors).toEqual([
+    'The SVG uses <script> elements, onclick attributes, which diagrams do not allow. Remove them.',
+  ])
+})
+
+it('keeps only drawing elements and plain attributes in SVG', () => {
+  expect(
+    cleanSvg(
+      '<?xml version="1.0"?><svg viewBox="0 0 10 10"><a href="https://example.com"><rect/></a><use href="#dot"/><style>g > rect { fill: red }</style><rect style="fill:url(https://example.com/x.png)"/><circle fill="url(#g)" r="2"/>A &amp; B</svg>',
+    ),
+  ).toEqual({
+    svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><use href="#dot"/><style>g &gt; rect { fill: red }</style><rect/><circle fill="url(#g)" r="2"/>A &amp; B</svg>',
+    removed: ['<a> elements', 'style values that load from elsewhere'],
+  })
+  expect(() => cleanSvg('<!DOCTYPE svg [<!ENTITY x "y">]><svg/>')).toThrow('Remove the <!DOCTYPE>')
+  expect(() => cleanSvg('<svg><g></svg>')).toThrow('The SVG closes </svg> where <g> is open.')
+  expect(() => cleanSvg('<svg/><svg/>')).toThrow('Put everything inside one <svg> element.')
+})

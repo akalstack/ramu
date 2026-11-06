@@ -4,6 +4,7 @@ import type { InteractiveDocument, InteractiveReference, JsonValue } from '@ramu
 import { interactiveOrigin, readInteractiveState } from '@ramu/shared/interactive'
 import {
   ARTIFACT_LIMITS,
+  artifactKind,
   declaredCapabilities,
   migrateRecord,
   pendingGrants,
@@ -75,8 +76,7 @@ export class PageStore {
     const data = JSON.parse(row.data) as PageData
     return {
       id: row.id,
-      // A kind this build does not know yet, written by a newer one, still opens as the web page it renders as.
-      kind: row.kind === 'app' ? row.kind : 'app',
+      kind: artifactKind(row.kind),
       title: data.title,
       icon: data.icon,
       projectId: data.projectId,
@@ -159,8 +159,10 @@ export class PageStore {
     this.db.exec('SAVEPOINT keep_page')
     try {
       this.db
-        .prepare('INSERT INTO artifacts(id,data,current_version,pinned,created_at,changed_at) VALUES(?,?,?,0,?,?)')
-        .run(contentId, JSON.stringify(data), latest.version, now, now)
+        .prepare(
+          'INSERT INTO artifacts(id,kind,data,current_version,pinned,created_at,changed_at) VALUES(?,?,?,?,0,?,?)',
+        )
+        .run(contentId, latest.kind ?? 'app', JSON.stringify(data), latest.version, now, now)
       for (const version of versions)
         this.db
           .prepare(
@@ -209,8 +211,8 @@ export class PageStore {
         published.files,
       )
     this.db
-      .prepare('UPDATE artifacts SET current_version=?, changed_at=? WHERE id=?')
-      .run(published.reference.version, Date.now(), artifactId)
+      .prepare('UPDATE artifacts SET kind=?, current_version=?, changed_at=? WHERE id=?')
+      .run(published.reference.kind ?? 'app', published.reference.version, Date.now(), artifactId)
     this.write(artifactId, (data) => ({
       ...data,
       sessionId: published.reference.sessionId,
@@ -356,8 +358,10 @@ export class PageStore {
     this.db.exec('SAVEPOINT duplicate_page')
     try {
       this.db
-        .prepare('INSERT INTO artifacts(id,data,current_version,pinned,created_at,changed_at) VALUES(?,?,1,0,?,?)')
-        .run(id, JSON.stringify(data), now, now)
+        .prepare(
+          'INSERT INTO artifacts(id,kind,data,current_version,pinned,created_at,changed_at) VALUES(?,?,?,1,0,?,?)',
+        )
+        .run(id, source.kind, JSON.stringify(data), now, now)
       this.db
         .prepare('INSERT INTO artifact_versions(artifact_id,version,reference,html,preview,files) VALUES(?,1,?,?,?,?)')
         .run(
@@ -389,6 +393,8 @@ export class PageStore {
     }
     const files = document.files ? JSON.stringify(document.files) : null
     const capabilities = this.declared(id, 1, { html: document.html, files })
+    // The kind comes from another host's answer, so only a kind this build knows is kept.
+    const kind = artifactKind(document.reference.kind)
     const reference: InteractiveReference = {
       id,
       version: 1,
@@ -402,6 +408,7 @@ export class PageStore {
       artifactId: id,
       ...(document.reference.files ? { files: document.reference.files.slice(0, 40) } : {}),
       ...(document.reference.libraries ? { libraries: document.reference.libraries } : {}),
+      ...(kind !== 'app' ? { kind } : {}),
     }
     const data: PageData = {
       title: clipTitle(from.title),
@@ -414,8 +421,10 @@ export class PageStore {
     this.db.exec('SAVEPOINT import_page')
     try {
       this.db
-        .prepare('INSERT INTO artifacts(id,data,current_version,pinned,created_at,changed_at) VALUES(?,?,1,0,?,?)')
-        .run(id, JSON.stringify(data), now, now)
+        .prepare(
+          'INSERT INTO artifacts(id,kind,data,current_version,pinned,created_at,changed_at) VALUES(?,?,?,1,0,?,?)',
+        )
+        .run(id, reference.kind ?? 'app', JSON.stringify(data), now, now)
       this.db
         .prepare('INSERT INTO artifact_versions(artifact_id,version,reference,html,preview,files) VALUES(?,1,?,?,?,?)')
         .run(id, JSON.stringify(reference), document.html, document.preview, files)

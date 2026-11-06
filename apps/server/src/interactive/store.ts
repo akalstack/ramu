@@ -1,7 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { Db } from '../db'
-import type { InteractiveDocument, InteractivePreview, InteractiveReference } from '@ramu/shared/interactive'
+import type {
+  InteractiveDocument,
+  InteractiveFile,
+  InteractivePreview,
+  InteractiveReference,
+} from '@ramu/shared/interactive'
 import {
   INTERACTIVE_MAX_FILES,
   INTERACTIVE_MAX_HTML,
@@ -13,8 +18,25 @@ import { bundleInteractive } from './bundle'
 import { resolveInteractiveKit } from './kit'
 import { compileInteractive, INTERACTIVE_MAX_ARTIFACT, pinnedLibraries } from './compile'
 import { pageCapabilitiesOf } from './capabilities'
+import { renderArtifactSource } from './kinds'
+import { ARTIFACT_KINDS } from '@ramu/shared/artifacts'
+import { parseArtifactSource } from '@ramu/shared/artifactSource'
 
 export const interactiveInput = z.object({
+  kind: z
+    .enum(ARTIFACT_KINDS)
+    .optional()
+    .describe(
+      'app (default): interactive HTML in html or files. doc: writing to keep (a report, plan, spec, notes) as Markdown in source. diagram: a flowchart, sequence, state or concept diagram as Mermaid or SVG in source, with format.',
+    ),
+  source: z
+    .string()
+    .max(300_000)
+    .optional()
+    .describe(
+      'The Doc or Diagram itself. Doc: Markdown with GFM tables, task lists, footnotes and ```mermaid blocks; raw HTML shows as text. Diagram: Mermaid text, or one <svg> element.',
+    ),
+  format: z.enum(['mermaid', 'svg']).optional().describe('How a diagram is written; required with kind diagram.'),
   network: z
     .object({
       resources: z
@@ -82,6 +104,8 @@ export const interactiveInput = z.object({
 export type InteractiveInput = z.infer<typeof interactiveInput>
 /** Exactly one of a single document or a project; the runnable document is always one bundled HTML string. */
 export function interactiveDocumentHtml(input: InteractiveInput): string {
+  if (input.kind && input.kind !== 'app')
+    throw new Error('A doc or diagram is drawn when it is previewed. Preview it again.')
   if (!input.html === !input.files) throw new Error('Provide either html or files, not both.')
   if (input.files) {
     const bytes = input.files.reduce((total, file) => total + Buffer.byteLength(file.content), 0)
@@ -165,6 +189,9 @@ export class InteractiveStore {
     const kept = this.keptChecks(revision?.previous, parsed, revision?.dropChecks)
     const input = kept.length ? { ...parsed, checks: [...parsed.checks, ...kept].slice(0, 24) } : parsed
     if (signal?.aborted) throw new Error('Preview cancelled')
+    if (input.kind && input.kind !== 'app') return this.previewKind(session, input, signal, kept)
+    if (input.source !== undefined)
+      throw new Error('Set kind to doc or diagram to publish source; apps use html or files.')
     if (!input.html === !input.files) throw new Error('Provide either html or files, not both.')
     // A declaration that does not validate fails here, before any browser starts.
     pageCapabilitiesOf(input)
@@ -181,6 +208,39 @@ export class InteractiveStore {
     rejectViewportHeights(html)
     const output = await this.previewer(html, input.checks, signal, input.network)
     if (signal?.aborted) throw new Error('Preview cancelled')
+    return this.savePreview(session, input, html, output, kept, null)
+  }
+  /**
+   * A Doc or Diagram is drawn into HTML on the host and checked like any page, with its kind's own checks: a diagram
+   * parses, and every heading of a doc has an anchor of its own.
+   */
+  private async previewKind(
+    session: string,
+    input: InteractiveInput,
+    signal: AbortSignal | undefined,
+    kept: InteractiveInput['checks'],
+  ) {
+    if (input.html !== undefined || input.files !== undefined)
+      throw new Error(`A ${input.kind} is written in source; html and files are for apps.`)
+    const source = parseArtifactSource({ ...input, kind: input.kind ?? 'app' })
+    const offline = { ...input, network: OFFLINE_NETWORK }
+    const rendered = await renderArtifactSource(source, input.title)
+    if (signal?.aborted) throw new Error('Preview cancelled')
+    if (Buffer.byteLength(rendered.html) > INTERACTIVE_MAX_ARTIFACT)
+      throw new Error(`This ${input.kind} draws to more than 1.5 MB. Split it or simplify its diagrams.`)
+    const output = await this.previewer(rendered.html, offline.checks, signal, OFFLINE_NETWORK)
+    if (signal?.aborted) throw new Error('Preview cancelled')
+    output.errors = [...rendered.problems, ...output.errors].slice(0, 20)
+    return this.savePreview(session, offline, rendered.html, output, kept, rendered.files)
+  }
+  private savePreview(
+    session: string,
+    input: InteractiveInput,
+    html: string,
+    output: Awaited<ReturnType<typeof previewInteractive>>,
+    kept: InteractiveInput['checks'],
+    sourceFiles: InteractiveFile[] | null,
+  ): InteractivePreview & { keptChecks?: string[] } {
     const result: InteractivePreview & { keptChecks?: string[] } = {
       ...output,
       ...(kept.length ? { keptChecks: kept.map((check) => check.label) } : {}),
@@ -199,15 +259,18 @@ export class InteractiveStore {
           'DELETE FROM interactive_previews WHERE id=(SELECT id FROM interactive_previews WHERE session_id=? ORDER BY created_at LIMIT 1)',
         )
         .run(session)
-    this.db
-      .prepare('INSERT INTO interactive_previews(id,session_id,input,result,created_at) VALUES(?,?,?,?,?)')
-      .run(
-        result.id,
-        session,
-        JSON.stringify(input),
-        JSON.stringify({ ...result, artifact: html, artifactDigest: createHash('sha256').update(html).digest('hex') }),
-        result.createdAt,
-      )
+    this.db.prepare('INSERT INTO interactive_previews(id,session_id,input,result,created_at) VALUES(?,?,?,?,?)').run(
+      result.id,
+      session,
+      JSON.stringify(input),
+      JSON.stringify({
+        ...result,
+        artifact: html,
+        artifactDigest: createHash('sha256').update(html).digest('hex'),
+        ...(sourceFiles ? { sourceFiles } : {}),
+      }),
+      result.createdAt,
+    )
     return result
   }
   publish(session: string, previewId: string, requestId: string, options: PublishOptions = {}): InteractiveReference {
@@ -231,7 +294,11 @@ export class InteractiveStore {
     if (!row || row.created_at < Date.now() - 30 * 60_000)
       throw new Error('Preview expired or belongs to another session. Preview again.')
     const input = interactiveInput.parse(JSON.parse(row.input))
-    const preview = JSON.parse(row.result) as InteractivePreview & { artifact?: string; artifactDigest?: string }
+    const preview = JSON.parse(row.result) as InteractivePreview & {
+      artifact?: string
+      artifactDigest?: string
+      sourceFiles?: InteractiveFile[]
+    }
     if (
       preview.artifact !== undefined &&
       createHash('sha256').update(preview.artifact).digest('hex') !== preview.artifactDigest
@@ -269,12 +336,18 @@ export class InteractiveStore {
       ...(input.files ? { libraries: pinnedLibraries() } : {}),
       ...(input.stateSchema ? { stateSchema: input.stateSchema } : {}),
       ...(input.files ? { files: entryFirst(input.files, input.entry).map((file) => file.path) } : {}),
+      ...(input.kind && input.kind !== 'app' ? { kind: input.kind } : {}),
+      ...(preview.sourceFiles ? { files: preview.sourceFiles.map((file) => file.path) } : {}),
       ...(previous ? { changes: options.changes!.trim().slice(0, 300) } : {}),
       ...(options.restoredFrom ? { restoredFrom: options.restoredFrom } : {}),
       ...(options.artifactId ? { artifactId: options.artifactId } : {}),
     }
     const html = preview.artifact ?? interactiveDocumentHtml(input)
-    const files = input.files ? JSON.stringify(entryFirst(input.files, input.entry)) : null
+    const files = input.files
+      ? JSON.stringify(entryFirst(input.files, input.entry))
+      : preview.sourceFiles
+        ? JSON.stringify(preview.sourceFiles)
+        : null
     // The immutable version and its canonical event commit together. Reopening never resurrects a deliberately rewound event.
     this.db.exec('SAVEPOINT publish_artifact')
     try {

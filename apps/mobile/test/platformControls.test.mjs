@@ -6273,11 +6273,15 @@ function interactiveCardHarness(os, cached = true) {
       interactiveFollowup: (_reference, state) => JSON.stringify(state),
     },
     './InteractiveFrame': { default: 'InteractiveFrame' },
-    './interactiveShare': {
-      shareInteractive: async (...args) => {
+    // A share exports the document with the captured scenario, then hands the file to the share sheet.
+    '@ramu/shared/interactiveExport': {
+      interactiveExport: (...args) => {
         shares.push(args)
+        return { name: 'export.html', html: '', mimeType: 'text/html' }
       },
+      kindExports: () => [],
     },
+    './interactiveShare': { shareFile: async () => {} },
   })
   return {
     render: () =>

@@ -99,7 +99,7 @@ Hosts whose platform or description (**Settings → Threads → Describe this ho
 
 ## Artifacts
 
-Agents publish artifacts to keep with `artifact_publish` (`artifact: true`, or an artifact's id for a new version from any thread), find them with `artifact_list` and `artifact_get`, work with an artifact's records through `artifact_records`, start its runs with `artifact_run`, and record where one is live with `artifact_published` (an artifact publishes itself through **Publish to the web**; this records a deploy an agent did from a project). Deleting an artifact stays your action. See [Artifacts](artifacts.md).
+Agents choose an artifact's kind (`kind`: an `app`, a `doc` in Markdown or a `diagram` in Mermaid or SVG), check it with `artifact_preview`, publish it to keep with `artifact_publish` (`artifact: true`, or an artifact's id for a new version from any thread), find them with `artifact_list` and `artifact_get`, work with an artifact's records through `artifact_records`, start its runs with `artifact_run`, and record where one is live with `artifact_published` (an artifact publishes itself through **Publish to the web**; this records a deploy an agent did from a project). Deleting an artifact stays your action. See [Artifacts](artifacts.md).
 
 ## Rules and MCP
 

@@ -1,21 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { createInteractiveSharer } from '../src/interactiveShare'
-import type { InteractiveDocument } from '../src/interactive'
-const document: InteractiveDocument = {
-  reference: {
-    id: 'c',
-    version: 1,
-    sessionId: 's',
-    network: { resources: [], connect: [] },
-    title: 'Title',
-    summary: '',
-    digest: 'hash',
-    createdAt: 1,
-    checked: true,
-  },
-  html: '<p>Exact</p>',
-  preview: null,
-}
+import type { ExportedFile } from '../src/interactiveExport'
+const file: ExportedFile = { name: 'Title.md', content: '# Exact', mimeType: 'text/markdown' }
 it('keeps a share in progress from overwriting its file and releases the lock after a rejected sheet', async () => {
   let rejectSheet!: (error: Error) => void
   const sheet = new Promise<void>((_resolve, reject) => {
@@ -27,14 +13,15 @@ it('keeps a share in progress from overwriting its file and releases the lock af
     .mockImplementationOnce(() => sheet)
     .mockResolvedValue(undefined)
   const action = createInteractiveSharer({ available: async () => true, write, share })
-  const first = action(document, null, true)
+  const first = action(file)
   await vi.waitFor(() => expect(share).toHaveBeenCalledTimes(1))
-  await expect(action(document, null)).rejects.toThrow('Another share')
+  await expect(action(file)).rejects.toThrow('Another share')
   expect(write).toHaveBeenCalledTimes(1)
-  expect(write).toHaveBeenCalledWith(expect.stringContaining(`<body>${document.html}</body>`))
+  expect(write).toHaveBeenCalledWith(file)
+  expect(share).toHaveBeenCalledWith('file:///cache/export.html', { name: 'Title.md', mimeType: 'text/markdown' })
   rejectSheet(new Error('Share failed'))
   await expect(first).rejects.toThrow('Share failed')
-  await expect(action(document, null)).resolves.toBeUndefined()
+  await expect(action(file)).resolves.toBeUndefined()
   expect(write).toHaveBeenCalledTimes(2)
 })
 it('does not write when sharing is unavailable and recovers from a failed file write', async () => {
@@ -47,10 +34,10 @@ it('does not write when sharing is unavailable and recovers from a failed file w
     .mockReturnValue('file:///cache/export.html')
   const share = vi.fn().mockResolvedValue(undefined)
   const action = createInteractiveSharer({ available, write, share })
-  await expect(action(document, null)).rejects.toThrow('unavailable')
+  await expect(action(file)).rejects.toThrow('unavailable')
   expect(write).not.toHaveBeenCalled()
-  await expect(action(document, null)).rejects.toThrow('Disk full')
+  await expect(action(file)).rejects.toThrow('Disk full')
   expect(share).not.toHaveBeenCalled()
-  await expect(action(document, null)).resolves.toBeUndefined()
+  await expect(action(file)).resolves.toBeUndefined()
   expect(share).toHaveBeenCalledTimes(1)
 })

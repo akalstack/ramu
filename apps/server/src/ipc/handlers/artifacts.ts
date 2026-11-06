@@ -2,7 +2,12 @@ import { readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { join, sep } from 'node:path'
 import { z } from 'zod'
 import { INTERACTIVE_MAX_HTML, type InteractiveDocument, type JsonValue } from '@ramu/shared/interactive'
-import type { ArtifactGrants, ArtifactRecordQuery, RamuDataSource } from '@ramu/shared/artifacts'
+import {
+  ARTIFACT_KINDS,
+  type ArtifactGrants,
+  type ArtifactRecordQuery,
+  type RamuDataSource,
+} from '@ramu/shared/artifacts'
 import { NO_PROJECT } from '@ramu/shared/types'
 import { id } from '../schemas'
 import type { HandlerContext, RegisterHandlers } from '../types'
@@ -308,6 +313,7 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
               }),
               files: z.array(z.string().max(200)).max(40).optional(),
               libraries: z.record(z.string().max(60), z.string().max(40)).optional(),
+              kind: z.enum(ARTIFACT_KINDS).optional(),
             })
             .passthrough(),
           html: z.string().min(1).max(1_500_000),

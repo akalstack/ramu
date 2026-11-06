@@ -32,6 +32,7 @@ import { usePageBridge, type PickedElement } from './usePageBridge'
 import { GrantSheet, PageSettings, runStatusLabel } from './PageSettings'
 import { openPage } from './openPage'
 import { PublishDialog } from './PublishDialog'
+import { ArtifactKindMark, kindExportEntries } from './ArtifactKindMark'
 
 const VIEWPORTS = [
   { id: 'fit', label: 'Fit to width', width: undefined, Icon: Monitor },
@@ -185,7 +186,9 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
       onSelect: () => void invoke('artifacts.update', artifactId, { pinned: !page.pinned }).catch(() => {}),
     },
     { key: 'sep1', separator: true },
-    { key: 'export', label: t('Export HTML'), disabled: !document, onSelect: exportHtml },
+    ...(page.kind === 'app'
+      ? [{ key: 'export', label: t('Export HTML'), disabled: !document, onSelect: exportHtml }]
+      : kindExportEntries(document, appThemeVariables())),
     {
       key: 'publish',
       label: outdated ? t('Update live site') : t('Publish to the web…'),
@@ -232,6 +235,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
         <span aria-hidden className="text-[17px] leading-none">
           {page.icon}
         </span>
+        <ArtifactKindMark kind={page.kind} size={13} className="flex-none text-muted-foreground" />
         <h1 className="m-0 min-w-0 truncate text-body font-semibold">{page.title}</h1>
         <span className="flex-none text-caption text-muted-foreground">v{page.version}</span>
         {page.published && (

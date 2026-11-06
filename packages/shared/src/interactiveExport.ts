@@ -1,3 +1,4 @@
+import { ARTIFACT_SOURCE_FILES } from './artifacts'
 import {
   interactiveCsp,
   interactiveHtml,
@@ -24,4 +25,44 @@ export function interactiveExport(
       : interactiveHtml(document.html, 'export', readInteractiveState(state), theme, document.reference.network),
     mimeType: 'text/html' as const,
   }
+}
+
+/** A file an artifact exports, ready to download or hand to the share sheet. */
+export interface ExportedFile {
+  name: string
+  content: string
+  mimeType: string
+}
+
+export type KindExportFormat = 'markdown' | 'html' | 'svg' | 'mermaid'
+
+const fileName = (title: string) =>
+  title
+    // eslint-disable-next-line no-control-regex -- control characters are not allowed in file names
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '')
+    .trim()
+    .slice(0, 80) || 'artifact'
+
+/**
+ * What a Doc or Diagram exports, made from the sources its version keeps: a Doc as Markdown and HTML, a Diagram as SVG
+ * and, when written in Mermaid, its Mermaid source. An App exports through interactiveExport, so it has none here.
+ */
+export function kindExports(
+  document: InteractiveDocument,
+  theme?: Record<string, string>,
+): { format: KindExportFormat; file: ExportedFile }[] {
+  const source = (path: string) => document.files?.find((file) => file.path === path)?.content
+  const name = fileName(document.reference.title)
+  const formats: { format: KindExportFormat; file: ExportedFile }[] = []
+  const add = (format: KindExportFormat, extension: string, mimeType: string, content: string | undefined) => {
+    if (content !== undefined) formats.push({ format, file: { name: `${name}.${extension}`, content, mimeType } })
+  }
+  if (document.reference.kind === 'doc') {
+    add('markdown', 'md', 'text/markdown', source(ARTIFACT_SOURCE_FILES.doc))
+    add('html', 'html', 'text/html', interactiveExport(document, null, true, theme).html)
+  } else if (document.reference.kind === 'diagram') {
+    add('svg', 'svg', 'image/svg+xml', source(ARTIFACT_SOURCE_FILES.svg))
+    add('mermaid', 'mmd', 'text/plain', source(ARTIFACT_SOURCE_FILES.mermaid))
+  }
+  return formats
 }

@@ -1,4 +1,5 @@
 import { INTERACTIVE_DEFAULT_THEME_CSS } from './interactiveTheme'
+import type { ArtifactKind } from './artifacts'
 /** Versioned, host/thread scoped references. Renderers retrieve document bytes separately. */
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
 export interface InteractiveReference {
@@ -23,6 +24,8 @@ export interface InteractiveReference {
   restoredFrom?: number
   /** The kept page that owns this document, when there is one. */
   artifactId?: string
+  /** A Doc or Diagram; absent for an App. Every kind runs as the same bundled HTML. */
+  kind?: Exclude<ArtifactKind, 'app'>
 }
 export interface InteractiveNetwork {
   resources: string[]

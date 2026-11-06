@@ -23,6 +23,7 @@ import { ChatCodeBlock } from '../chat/ChatCodeBlock'
 import type { ArtifactInfo } from '@ramu/shared/artifacts'
 import { usePageIndex } from '../pages/pageIndex'
 import { openPage } from '../pages/openPage'
+import { ArtifactKindMark, kindExportEntries } from '../pages/ArtifactKindMark'
 import type { InteractiveRevision, InteractiveUpdate } from '@ramu/shared/interactiveRevisions'
 import {
   InteractiveCarriedValues,
@@ -30,17 +31,7 @@ import {
   InteractiveVersionRow,
   interactiveAnchor,
 } from './InteractiveRevision'
-import {
-  AppWindow,
-  Maximize2,
-  Minimize2,
-  Monitor,
-  MoreHorizontal,
-  RotateCcw,
-  Smartphone,
-  Tablet,
-  X,
-} from 'lucide-react'
+import { Maximize2, Minimize2, Monitor, MoreHorizontal, RotateCcw, Smartphone, Tablet, X } from 'lucide-react'
 
 /** Live documents per renderer; offscreen cards unload, so this only bounds several cards visible together. */
 const LIVE_LIMIT = 3
@@ -383,13 +374,17 @@ function InteractiveDocumentCard({
         ]
       : []),
     { key: 'export-sep', separator: true },
-    { key: 'export', label: t('Export HTML'), disabled: !document, onSelect: () => download() },
-    {
-      key: 'source',
-      label: files.length ? t('Export bundled source') : t('Export source'),
-      disabled: !document,
-      onSelect: () => download(true),
-    },
+    ...(reference.kind
+      ? kindExportEntries(document, appThemeVariables())
+      : [
+          { key: 'export', label: t('Export HTML'), disabled: !document, onSelect: () => download() },
+          {
+            key: 'source',
+            label: files.length ? t('Export bundled source') : t('Export source'),
+            disabled: !document,
+            onSelect: () => download(true),
+          },
+        ]),
   ]
   const checked = reference.checked ? t('Controls checked in preview') : t('Rendering checked in preview')
   return (
@@ -407,7 +402,7 @@ function InteractiveDocumentCard({
         aria-describedby={`interactive-summary-${key}`}
       >
         <header className="flex min-h-9 items-center gap-1.5 py-1 pr-1.5 pl-3">
-          <AppWindow size={14} className="flex-none text-muted-foreground" aria-hidden />
+          <ArtifactKindMark kind={reference.kind ?? 'app'} className="flex-none text-muted-foreground" />
           <h3 className="m-0 min-w-0 truncate text-body font-medium">{reference.title}</h3>
           <span className="flex-none text-caption text-muted-foreground" title={checked}>
             v{reference.version}

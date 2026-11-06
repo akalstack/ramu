@@ -17,7 +17,8 @@
     "rehype-raw": "^7.0.0",
     "rehype-sanitize": "^6.0.0",
     "remark-frontmatter": "^5.0.0",
-    "remark-gfm": "catalog:"
+    "remark-gfm": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

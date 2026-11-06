@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { AppWindow, Pin, Plus } from 'lucide-react'
 import { NO_PROJECT } from '@ramu/shared/types'
 import { draftKey, draftStore, loadDraft, saveDraft } from '../composer/drafts'
-import type { ArtifactInfo } from '@ramu/shared/artifacts'
-import { declaredCapabilities } from '@ramu/shared/artifacts'
+import type { ArtifactInfo, ArtifactKind } from '@ramu/shared/artifacts'
+import { ARTIFACT_KINDS, declaredCapabilities } from '@ramu/shared/artifacts'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { RowButton } from '../components/row-button'
 import { SearchInput } from '../SearchInput'
@@ -16,6 +17,7 @@ import { takePendingPage } from './openPage'
 import { ImportPageDialog } from './ImportPageDialog'
 import { Button } from '../components/desktop-button'
 import { useViewOnly } from '../composer/useViewOnly'
+import { ArtifactKindMark, artifactKindLabel } from './ArtifactKindMark'
 
 /** Every page kept on this host, newest first with pinned ones on top. */
 export function usePages() {
@@ -41,6 +43,7 @@ export function PagesPage() {
   const pages = usePages()
   const ws = useWorkspace()
   const [query, setQuery] = useState('')
+  const [kind, setKind] = useState<ArtifactKind | 'all'>('all')
   const [importing, setImporting] = useState(false)
   const viewOnly = useViewOnly()
   const host = useHost()
@@ -62,7 +65,11 @@ export function PagesPage() {
   }, [])
   if (open) return <PageView key={open} artifactId={open} onBack={() => setOpen(null)} />
   const projects = new Map(ws.projects.map((project) => [project.id, project.name]))
-  const shown = (pages ?? []).filter((page) => page.title.toLowerCase().includes(query.trim().toLowerCase()))
+  const shown = (pages ?? []).filter(
+    (page) => (kind === 'all' || page.kind === kind) && page.title.toLowerCase().includes(query.trim().toLowerCase()),
+  )
+  // The kind filter appears once there is more than one kind to tell apart.
+  const kinds = ARTIFACT_KINDS.filter((entry) => pages?.some((page) => page.kind === entry))
   return (
     <div className="h-full w-full overflow-auto">
       <div className="mx-auto flex w-full max-w-[760px] flex-col gap-4 px-6 pt-6 pb-10">
@@ -71,7 +78,7 @@ export function PagesPage() {
             <h1 className="m-[0_0_4px] text-heading font-semibold tracking-[-0.01em]">{t('Artifacts')}</h1>
             <p className="m-0 text-control text-muted-foreground">
               {t(
-                'Sites agents made for you to keep. Open them here or on your phone, and change one by asking in any thread.',
+                'Apps, docs and diagrams agents made for you to keep. Open them here or on your phone, and change one by asking in any thread.',
               )}
             </p>
           </div>
@@ -92,6 +99,27 @@ export function PagesPage() {
             placeholder={t('Search artifacts')}
             aria-label={t('Search artifacts')}
           />
+        )}
+        {kinds.length > 1 && (
+          <ToggleGroup
+            size="sm"
+            variant="outline"
+            spacing={2}
+            className="flex-wrap gap-1.5"
+            aria-label={t('Kind')}
+            value={[kind]}
+            onValueChange={(values) => values[0] && setKind(values[0] as ArtifactKind | 'all')}
+          >
+            <ToggleGroupItem value="all" className="px-2.5">
+              {t('All')}
+            </ToggleGroupItem>
+            {kinds.map((entry) => (
+              <ToggleGroupItem key={entry} value={entry} className="gap-1.5 px-2.5">
+                <ArtifactKindMark kind={entry} size={13} named={false} />
+                {artifactKindLabel(entry)}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
         )}
         {pages && pages.length === 0 && (
           <Empty className="py-16">
@@ -120,16 +148,20 @@ export function PagesPage() {
                   </span>
                   <span className="min-w-0 flex-1 text-left">
                     <span className="block truncate text-body text-foreground">{page.title}</span>
-                    <span className="block truncate text-caption text-muted-foreground">
-                      {[
-                        page.projectId ? projects.get(page.projectId) : null,
-                        `v${page.version}`,
-                        uses.includes('records') ? t('Records') : null,
-                        uses.includes('ai') ? t('AI') : null,
-                        page.lastError ? t('Has an error') : null,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
+                    <span className="flex min-w-0 items-center gap-1 text-caption text-muted-foreground">
+                      <ArtifactKindMark kind={page.kind} size={12} className="flex-none" named={false} />
+                      <span className="truncate">
+                        {[
+                          artifactKindLabel(page.kind),
+                          page.projectId ? projects.get(page.projectId) : null,
+                          `v${page.version}`,
+                          uses.includes('records') ? t('Records') : null,
+                          uses.includes('ai') ? t('AI') : null,
+                          page.lastError ? t('Has an error') : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
                     </span>
                   </span>
                   {page.pinned && (

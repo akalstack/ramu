@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { interactiveExport } from '../src/interactiveExport'
+import { interactiveExport, kindExports } from '../src/interactiveExport'
 import type { InteractiveDocument } from '../src/interactive'
 const document: InteractiveDocument = {
   reference: {
@@ -31,4 +31,39 @@ it("exports styled source and a runnable snapshot in the reader's theme, with a 
   expect(runnable.html).toContain('--background:#ffffff;')
   expect(runnable.html).toContain('Content-Security-Policy')
   expect(interactiveExport(document, { custom: 'invalid' }).html).toContain('initial=null')
+})
+
+it('exports a doc as Markdown and HTML and a diagram as SVG and Mermaid, from the sources its version keeps', () => {
+  const doc: InteractiveDocument = {
+    ...document,
+    reference: { ...document.reference, kind: 'doc', title: 'Plan: Q3/Q4' },
+    html: '<article class="ramu-doc"><h1 id="plan">Plan</h1></article>',
+    files: [{ path: 'document.md', content: '# Plan' }],
+  }
+  expect(kindExports(doc).map(({ format, file }) => [format, file.name, file.mimeType])).toEqual([
+    ['markdown', 'Plan Q3Q4.md', 'text/markdown'],
+    ['html', 'Plan Q3Q4.html', 'text/html'],
+  ])
+  expect(kindExports(doc)[0]!.file.content).toBe('# Plan')
+  expect(kindExports(doc)[1]!.file.content).toContain(`<body>${doc.html}</body>`)
+  const diagram = (files: InteractiveDocument['files']): InteractiveDocument => ({
+    ...document,
+    reference: { ...document.reference, kind: 'diagram', title: 'Sync' },
+    files,
+  })
+  expect(
+    kindExports(
+      diagram([
+        { path: 'diagram.mmd', content: 'flowchart LR' },
+        { path: 'diagram.svg', content: '<svg/>' },
+      ]),
+    ).map(({ format, file }) => [format, file.name, file.content]),
+  ).toEqual([
+    ['svg', 'Sync.svg', '<svg/>'],
+    ['mermaid', 'Sync.mmd', 'flowchart LR'],
+  ])
+  expect(kindExports(diagram([{ path: 'diagram.svg', content: '<svg/>' }])).map(({ format }) => format)).toEqual([
+    'svg',
+  ])
+  expect(kindExports(document)).toEqual([])
 })

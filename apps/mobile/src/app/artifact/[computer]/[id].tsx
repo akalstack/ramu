@@ -23,6 +23,9 @@ import { contentStorage } from '../../../storage'
 import { Header, HeaderButton, Screen } from '../../../components/Screen'
 import { Button, Card, Row, Sheet, T } from '../../../components/ui'
 import InteractiveFrame from '../../../components/InteractiveFrame'
+import { SHARE_LABELS } from '../../../components/ArtifactKindMark'
+import { shareFile } from '../../../components/interactiveShare'
+import { kindExports } from '@ramu/shared/interactiveExport'
 import { pageRunActivity } from '../../../runtime/pageRunActivity'
 import { WIDGET_PAGE_KEY, widgetPage } from '../../../components/PageWidgetSync'
 import {
@@ -657,6 +660,17 @@ export default function PageScreen() {
             >
               <T>{say('Add to Home Screen or share')}</T>
             </Row>
+            {(document ? kindExports(document, theme) : []).map(({ format, file }) => (
+              <Row
+                key={format}
+                onPress={() => {
+                  setMenu(false)
+                  void shareFile(file).catch(() => setError(say('Could not share this content. Try again.')))
+                }}
+              >
+                <T>{say(SHARE_LABELS[format])}</T>
+              </Row>
+            ))}
           </Card>
           {page && !shared && declaredCapabilities(page.capabilities).length ? (
             <T size={font.caption} tone="muted">

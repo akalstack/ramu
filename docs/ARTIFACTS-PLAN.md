@@ -56,16 +56,18 @@ The kind is chosen by the agent from the request, shown as a small mark on every
 
 ### 1. Kinds in the engine
 
-- **Kind and source:** `artifact_publish` takes `kind` and that kind's source, validated by a zod schema per kind in `packages/shared`. `artifact_preview` renders every kind in the headless browser, with the kind's own checks:
-  - **Slides:** every slide fits its frame.
-  - **Doc:** every heading is reachable.
-  - **Dashboard:** every query returns.
-  - **Motion:** total length is within its bound.
-  - **Diagram:** it parses.
-- **Renderers:** each kind's renderer is bundled into the frame's bootstrap: Markdown, a deck, a design canvas, charts, a timeline player and Mermaid (Pele with the theme variables chat diagrams use, in `apps/web/src/chat/MermaidBlock.tsx`). They share `ramu:kit` and the theme tokens, so artifacts look like Ramu in light and dark. Rendering stays offline unless the artifact declares sources.
+App, Doc and Diagram are in the engine (see [Kinds](guide/artifacts.md#kinds)). The remaining kinds and exports follow the same path: `artifact_publish` and `artifact_preview` take the kind and its source, validated by a zod schema per kind in `packages/shared/src/artifactSource.ts`, and the host draws the source into HTML for the sandboxed frame in `apps/server/src/interactive/kinds.ts`.
+
+- **Kinds and their preview checks:**
+  - **Slides:** a slide list and theme, rendered as a deck; every slide fits its frame.
+  - **Design:** HTML and CSS frames on a canvas.
+  - **Dashboard:** chart and figure specs over declared sources; every query returns.
+  - **Motion:** a timeline player; total length is within its bound.
+- **Renderers** share `ramu:kit` and the theme tokens, so every kind looks like Ramu in light and dark. Rendering stays offline unless the artifact declares sources.
 - **Exports run on the host:**
   - **PPTX and DOCX:** written from the source with a pinned writer library, never by a model.
   - **PDF:** the rendered frame printed by the headless browser.
+  - **PNG:** a Diagram, a slide or a design frame captured by the headless browser.
   - **MP4 and WebM:** frames captured by the headless browser and encoded with the browser's own WebCodecs `VideoEncoder`. This adds no ffmpeg binary, which is what kept browser recording out of Ramu so far.
   - **Exports are kept:** every export is stored with the version it was made from, so a second export of the same version is instant.
 
@@ -90,7 +92,7 @@ The kind is chosen by the agent from the request, shown as a small mark on every
 
 ### 5. Desktop
 
-- The **Artifacts** list in the sidebar gets kind filters, and the artifact view opens as a workspace tab beside the chat, with the toolbar each kind needs:
+- The artifact view opens as a workspace tab beside the chat, with the toolbar each kind needs:
   - Slides: previous, next, present.
   - Doc: outline, edit.
   - Motion: play and scrub.

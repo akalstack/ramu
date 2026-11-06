@@ -13,6 +13,7 @@ import { Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from 
 import { Nothing } from '../../../components/InboxParts'
 import { HostChip } from '../../../components/HostChip'
 import { Row, T } from '../../../components/ui'
+import { ArtifactKindMark, kindLabel } from '../../../components/ArtifactKindMark'
 
 /** Every artifact on the paired hosts, newest first with pinned ones on top, as the desktop's Artifacts. */
 export default function PagesScreen() {
@@ -122,11 +123,19 @@ export default function PagesScreen() {
               <T size={22}>{page.icon}</T>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <T numberOfLines={1}>{page.title}</T>
-                <T size={font.caption} tone="muted" numberOfLines={1}>
-                  {[multi ? host.name : null, `v${page.version}`, page.lastError ? say('Has an error') : null]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </T>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <ArtifactKindMark kind={page.kind} size={12} color={c.muted} />
+                  <T size={font.caption} tone="muted" numberOfLines={1} style={{ flex: 1 }}>
+                    {[
+                      say(kindLabel(page.kind)),
+                      multi ? host.name : null,
+                      `v${page.version}`,
+                      page.lastError ? say('Has an error') : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </T>
+                </View>
               </View>
               {page.pinned ? <Pin size={14} color={c.muted} /> : null}
               <T size={font.caption} tone="muted">

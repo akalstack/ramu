@@ -14,6 +14,7 @@ import { Input } from '../components/desktop-input'
 import { GHOST_TEXT_BUTTON_CLASS } from '../components/button-classes'
 import { Dialog, timeAgo } from '../Menu'
 import { PublicPageSection } from './PublicPageSection'
+import { saveFile } from './ArtifactKindMark'
 import { t, useLanguage } from '../i18n'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime } from '../workspace/workspace'
@@ -296,14 +297,6 @@ export function PageSettings({ page, onClose }: { page: ArtifactInfo; onClose():
       notifyError(error instanceof Error ? error.message : String(error), page.title)
     }
   }
-  const download = (name: string, text: string, type: string) => {
-    const url = URL.createObjectURL(new Blob([text], { type }))
-    const link = document.createElement('a')
-    link.href = url
-    link.download = name
-    link.click()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
-  }
   const shareLink = (share: ArtifactShare) =>
     artifactLink({ computerId: hostId, artifactId: share.artifactId, share: share.token })
   return (
@@ -415,9 +408,9 @@ export function PageSettings({ page, onClose }: { page: ArtifactInfo; onClose():
                 onClick={() =>
                   void act(async () => {
                     const exported = await invoke('artifacts.exportRecords', page.id)
-                    download(`${page.title}.json`, exported.json, 'application/json')
+                    saveFile({ name: `${page.title}.json`, content: exported.json, mimeType: 'application/json' })
                     for (const [name, csv] of Object.entries(exported.csv))
-                      download(`${page.title}-${name}.csv`, csv, 'text/csv')
+                      saveFile({ name: `${page.title}-${name}.csv`, content: csv, mimeType: 'text/csv' })
                   })
                 }
               >

@@ -2,7 +2,19 @@
 
 Agents can publish small interactive documents in a thread: explanations, diagrams, data explorers, calculators and prototypes. Their controls run locally with no further model call. A document you want to keep becomes an **artifact**: listed under **Artifacts** on the desktop and the phone, opened without its thread, changed by asking in any thread, and able to keep records and use your host's AI when you allow it.
 
-Every artifact is an **App**: interactive web content. Below, an App's **page** is the web page it shows, as in **Page settings**.
+## Kinds
+
+The agent picks the kind from what you ask for. Each artifact's kind shows as a small mark on its row under **Artifacts** and on its card in the thread, and **Artifacts** on the desktop can be filtered by kind.
+
+| Kind | What it is | Exports |
+| --- | --- | --- |
+| **App** | Interactive web content: calculators, trackers, explorers, games | HTML, source |
+| **Doc** | Writing to keep: a report, plan, spec or notes, written in Markdown with tables, task lists, footnotes and Mermaid diagrams | Markdown, HTML |
+| **Diagram** | A flowchart, sequence, state or concept diagram, written in Mermaid or SVG | SVG, and Mermaid when written in it |
+
+Docs and diagrams are drawn on the host into the same sandboxed frame as apps, in the app's colors for light and dark, with no script and nothing loaded from the network. Mermaid is drawn with [Pele](https://pele.run); an SVG keeps only drawing elements, so it cannot run script, follow links or load files. Versions, Compare, Restore, share links, **Open to anyone** and **Publish to the web** work for every kind. **Export** on the desktop downloads the kind's formats; on the phone the card's actions and the artifact's menu hand them to the share sheet.
+
+Below, an App's **page** is the web page it shows, as in **Page settings**. Records, AI and the other capabilities are for apps.
 
 ## In a thread
 
@@ -53,7 +65,7 @@ On the phone, **Show in the home screen widget** puts a page's declared widget (
 
 ## For agents
 
-Agents use `artifact_preview` to test a document (one HTML file or a small project, up to 512 KB) and `artifact_publish` to publish the exact tested version. Preview clicks the declared controls in a headless browser, takes screenshots at phone and desktop widths, and blocks publication on script errors or failed checks. A revision passes `previous` to both and a short `changes` sentence to publish; checks kept with the previous version run again unless dropped on purpose.
+Agents use `artifact_preview` to test a document (one HTML file or a small project, up to 512 KB) and `artifact_publish` to publish the exact tested version. A doc (`kind: "doc"`, Markdown in `source`, up to 200 KB) or a diagram (`kind: "diagram"`, `format` `mermaid` or `svg`, the text in `source`) is previewed the same way and has its own checks: a diagram must parse, and every heading of a doc must have an anchor of its own (no empty headings, no two with the same name, and every `#link` reaches one). Preview clicks the declared controls in a headless browser, takes screenshots at phone and desktop widths, and blocks publication on script errors or failed checks. A revision passes `previous` to both and a short `changes` sentence to publish; checks kept with the previous version run again unless dropped on purpose.
 
 - `artifact_publish` with `artifact: true` keeps a new document as an artifact (with `title` and one emoji `icon`); `artifact: "<id>"` publishes a new version of an existing artifact from any thread.
 - `artifact_list` and `artifact_get` find an artifact and read its kind, sources, capabilities and last error; `artifact_records` queries, adds or updates its records; `artifact_run` starts one of its runs; `artifact_published` records where it is live. `artifact_read` and `artifact_versions` read a thread's own documents.
