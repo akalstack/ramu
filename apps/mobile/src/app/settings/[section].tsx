@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AbilitySummary } from '../../components/AbilitySummary'
 import { HostAddressSheet } from '../../components/HostAddressSheet'
 import { hostOfUrl, networkName } from '@ramu/shared/networkLabel'
 import { Alert, Platform, View } from 'react-native'
@@ -420,7 +421,7 @@ function Usage({ computer }: { computer: string }) {
 const desktopOnly: Partial<Record<SettingsSection, string>> = {
   browser: 'Browser profiles, imports and downloads are managed in Ramu on the host.',
   providers: 'Provider executable paths and sign-in are managed in Ramu on the host.',
-  models: 'Model sets and the fallback order are edited in Ramu on the host.',
+  models: 'Model sets, the fallback order and the provider for each ability are edited in Ramu on the host.',
   access: 'Permission rules are edited in Ramu on the host.',
   workflows: 'Sub-agent routing and the advisor are set up in Ramu on the host.',
   memory: 'The skills library and its model choices are managed in Ramu on the host.',
@@ -475,6 +476,7 @@ export default function SettingsSectionPage() {
         {section.scope === 'host' && id !== 'computer' ? (
           <HostGroups section={id} host={host} name={name} locked={locked} />
         ) : null}
+        {id === 'models' ? <AbilitySummary key={selected} hostId={selected} /> : null}
         {id === 'memory' ? <MemoryList key={selected} hostId={selected} /> : null}
         {note ? <Hint>{translate(language, note)}</Hint> : null}
       </SettingScroll>

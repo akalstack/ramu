@@ -26,4 +26,28 @@ describe('transcript blocks', () => {
       'error',
     ])
   })
+
+  it('shows an ability call once, as its own row, even when the call was refused', () => {
+    const events: AgentEvent[] = [
+      { kind: 'tool-use', toolUseId: 'u', name: 'mcp__ramu__generate_image', summary: '{"prompt":"Hero"}', at: 1 },
+      { kind: 'tool-result', toolUseId: 'u', isError: true, summary: '{"status":"refused"}', at: 2 },
+      {
+        kind: 'ability',
+        call: {
+          id: 'c',
+          ability: 'image_generation',
+          tool: 'generate_image',
+          status: 'refused',
+          refusal: 'unavailable',
+          args: { prompt: 'Hero' },
+          sent: { prompt: 'Hero', inputs: [] },
+          summary: 'No signed-in provider here has image generation.',
+        },
+        at: 3,
+      },
+    ]
+    expect(toBlocks(events).map((block) => (block.kind === 'event' ? block.event.kind : block.kind))).toEqual([
+      'ability',
+    ])
+  })
 })

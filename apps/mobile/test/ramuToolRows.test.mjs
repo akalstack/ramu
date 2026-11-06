@@ -46,3 +46,27 @@ test("a sub-agent's report back is its own card, not text the person typed", () 
     body: 'Nothing to review.',
   })
 })
+
+test('an ability call is one ability row, its tool call hidden even when refused', () => {
+  const call = {
+    id: 'c',
+    ability: 'image_generation',
+    tool: 'generate_image',
+    status: 'refused',
+    refusal: 'unavailable',
+    args: { prompt: 'Hero' },
+    sent: { prompt: 'Hero', inputs: [] },
+    summary: 'No signed-in provider here has image generation.',
+  }
+  const rows = transcript([
+    use('a1', 'mcp__ramu__generate_image', { prompt: 'Hero' }),
+    done('a1', true),
+    { kind: 'ability', call },
+  ])
+  assert.deepEqual(
+    rows
+      .filter((item) => item.kind === 'tool' || item.kind === 'tools' || item.kind === 'ability')
+      .map((item) => item.kind),
+    ['ability'],
+  )
+})

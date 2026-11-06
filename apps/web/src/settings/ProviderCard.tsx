@@ -32,6 +32,7 @@ import { SECONDARY_BUTTON_CLASS } from './constants'
 import { ProviderAddAccount, type ProviderPrefs } from './ProviderAccountControls'
 import { ProviderLoginRow } from './ProviderLoginRow'
 import { ProviderCompatibility } from './ProviderCompatibility'
+import { ProviderAbilities } from './AbilitySettings'
 import { compatibilityPlan } from './compatibilityPlan'
 
 const BROWSE_BUTTON_CLASS = `${SECONDARY_BUTTON_CLASS} icon p-0 size-(--action-size) flex-none justify-center`
@@ -325,6 +326,11 @@ export function ProviderCard({
           />
         </SettingsRow>
       )}
+      {enabled && status?.installed && status.abilities?.length ? (
+        <SettingsRow className="settings-stack">
+          <ProviderAbilities status={status} onChecked={onCheckAgain} />
+        </SettingsRow>
+      ) : null}
       {enabled &&
         [status?.versionError, status?.error, status?.updateError].filter(Boolean).map((message) => (
           <SettingsRow key={message} className="settings-stack">

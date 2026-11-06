@@ -245,6 +245,8 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   },
   { section: 'models', title: 'When to switch', words: 'usage threshold percent 5-hour weekly fallback' },
   { section: 'models', title: 'Fallback order', words: 'provider model effort chain list order' },
+  { section: 'models', title: 'Abilities', words: 'image generation web search long documents provider routing' },
+  { section: 'models', title: 'Ask before using another provider', words: 'ability approval image search provider' },
   { section: 'workflows', title: 'Where sub-agents run', words: 'subagent native provider cross delegate' },
   { section: 'workflows', title: 'Custom agents', words: 'custom agent reusable reviewer recipe' },
   { section: 'chats', title: 'Describe this host', words: 'host description gpu office network suggest continue' },

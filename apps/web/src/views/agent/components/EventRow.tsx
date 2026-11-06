@@ -1,6 +1,7 @@
 import { ThreadsStartedCard } from './StartedThreads'
 import { LocalInlineAction } from '@/components/inline-action'
 import { ContinuedCard } from './ContinuedCard'
+import { AbilityRow } from './AbilityRow'
 import { ThemeCard } from '../../../theme/ThemeCard'
 import { InteractiveContent } from '../../../interactive/InteractiveContent'
 import { t as translate, useLanguage } from '../../../i18n'
@@ -224,6 +225,8 @@ export function EventRow({
       )
     case 'theme':
       return <ThemeCard theme={e.theme} />
+    case 'ability':
+      return <AbilityRow call={e.call} sessionId={sessionId} live={live} />
     case 'content':
       return <AgentContentView content={e.content} taskId={taskId} />
     case 'plan':

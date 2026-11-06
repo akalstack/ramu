@@ -14,7 +14,7 @@ Use the host's LAN or VPN address, never `localhost`. The host must stay awake a
 ## What you can do
 
 - **Threads:** one card per project, standalone threads last. Swipe a thread to mark it done or archive it, with **Undo**.
-- **Chat:** live transcripts, models and access, queue and steer, stop, approvals, questions and forms, goals and teammates.
+- **Chat:** live transcripts, models and access, queue and steer, stop, approvals, questions and forms, goals and teammates. Ability rows show the image or answer with **Make another** and **Use another provider**; **Settings → Models** shows each ability's choice read-only.
 - **Inbox:** the Brief of what needs you across every host, plus Running, Recaps, Learned and Completed. The tab and app icon badges count what needs you.
 - **Schedules:** see, run, pause and edit schedules, on any host.
 - **Artifacts:** every artifact on your hosts, opened full screen without its thread, with the same values as the desktop. Add records offline and they sync when the host is back; **Add to Home Screen or share** shares a `ramu://artifact/…` link that opens it in Ramu, and an artifact with a widget can show it on the home screen. See [Artifacts](../../docs/guide/artifacts.md).

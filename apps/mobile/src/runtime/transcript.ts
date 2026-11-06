@@ -4,7 +4,7 @@ import { helperGroups } from '@ramu/shared/chat/helperPresentation'
 import { toolKind } from '@ramu/shared/chat/agentTools'
 import { visibleMessage } from '@ramu/shared/chat/visibleMessage'
 import { resultStopped } from '@ramu/shared/chat/turnResult'
-import { describeRamuTool, ramuTool, ramuToolHasOwnUi } from '@ramu/shared/chat/ramuTools'
+import { describeRamuTool, isAbilityToolCall, ramuTool, ramuToolHasOwnUi } from '@ramu/shared/chat/ramuTools'
 import { fileToolDiffs, fileToolLine } from '@ramu/shared/chat/fileTools'
 import type { Chat, ToolKind, TranscriptItem } from './types'
 import type { OutboxItem } from './store'
@@ -193,6 +193,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
             }),
       })
     } else if (e.kind === 'theme') items.push({ kind: 'theme', id, theme: e.theme })
+    else if (e.kind === 'ability') items.push({ kind: 'ability', id, call: e.call })
     else if (e.kind === 'threads-started') items.push({ kind: 'threads', id, threads: e.threads })
     else if (e.kind === 'continued') items.push({ kind: 'continued', id, event: e })
     // A block can open empty as a reply starts; an empty row would blink in and out at the end of the chat.
@@ -235,6 +236,8 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
       const failedCall = result ? result.isError : e.status === 'failed'
       // As on desktop, a question, goal, schedule or sub-agent call has its own place in the chat; a failed one stays.
       if (ramuToolHasOwnUi(e) && !failedCall) return
+      // An ability call's own row stands for it, refusals included.
+      if (isAbilityToolCall(e)) return
       const call = ramuTool(e)
       const ramu = call ? describeRamuTool(call, result?.summary) : undefined
       // As on desktop, file tools say only the file's name (and an edit its +/- lines) until opened.

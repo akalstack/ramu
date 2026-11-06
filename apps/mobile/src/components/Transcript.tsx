@@ -26,6 +26,8 @@ import * as Clipboard from 'expo-clipboard'
 import { readableRuns, readableText, type ReadableStyle } from '../runtime/transcript'
 import type { Attachment } from '@ramu/shared/types'
 import { useRouter } from 'expo-router'
+import { ABILITY_DONE, ABILITY_LABELS, type AbilityCall } from '@ramu/shared/providers/abilities'
+import { providerName } from '@ramu/shared/providers/providers'
 import {
   Check,
   Copy,
@@ -438,6 +440,75 @@ function AttachmentTile({ file, chat }: { file: Attachment; chat: Chat }) {
   )
 }
 
+/** An ability call: where it ran, what was sent, the result, and running it again from the phone. */
+function AbilityCard({ call, chat }: { call: AbilityCall; chat: Chat }) {
+  const say = useSay()
+  const store = useStore()
+  const router = useRouter()
+  const [running, setRunning] = useState(false)
+  const done = call.status === 'done'
+  const image = call.ability === 'image_generation' || call.ability === 'image_edit'
+  const runner = call.provider === 'ramu' ? say("Ramu's search") : call.provider ? providerName(call.provider) : ''
+  const headline = done
+    ? say(ABILITY_DONE[call.ability], { '0': runner })
+    : say(call.status === 'refused' ? '{0} not used' : '{0} failed', { '0': say(ABILITY_LABELS[call.ability]) })
+  const online = store.isOnline(chat.computerId) && !!chat.sessionId
+  const again = (other: boolean) => {
+    setRunning(true)
+    void store
+      .invoke(chat.computerId, 'abilities.again', chat.sessionId!, call.id, other)
+      .catch(() => {})
+      .finally(() => setRunning(false))
+  }
+  return (
+    <Card style={{ padding: space.m, gap: space.s }}>
+      <T weight="600" numberOfLines={2} tone={done ? undefined : 'bad'}>
+        {headline}
+      </T>
+      {call.model ? (
+        <T size={font.caption} tone="muted" numberOfLines={1}>
+          {call.model}
+        </T>
+      ) : null}
+      {call.sent.prompt ? (
+        <T
+          size={font.caption}
+          tone="muted"
+        >{`${say('Sent')}: “${call.sent.prompt}”${call.sent.inputs.length ? ` · ${call.sent.inputs.join(', ')}` : ''}`}</T>
+      ) : null}
+      {call.attachments?.length ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
+          {call.attachments.map((file) => (
+            <AttachmentTile key={file.id} file={file} chat={chat} />
+          ))}
+        </View>
+      ) : null}
+      {(!done || !image) && call.summary ? (
+        <T size={font.caption} tone="soft" numberOfLines={done ? 12 : 4}>
+          {call.summary}
+        </T>
+      ) : null}
+      {online ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
+          {done && image ? (
+            <Button kind="secondary" title={say('Make another')} disabled={running} onPress={() => again(false)} />
+          ) : null}
+          {done && call.provider !== 'ramu' ? (
+            <Button kind="ghost" title={say('Use another provider')} disabled={running} onPress={() => again(true)} />
+          ) : null}
+          {call.refusal === 'unavailable' ? (
+            <Button
+              kind="secondary"
+              title={say('Set up a provider')}
+              onPress={() => router.push({ pathname: '/settings/[section]', params: { section: 'providers' } })}
+            />
+          ) : null}
+        </View>
+      ) : null}
+    </Card>
+  )
+}
+
 /** What the chat screen knows about an item's place in the conversation. */
 export interface ItemMeta {
   /** A centred "Today 6:13 PM" above this message: the first one, a new day, or after a pause (the desktop's rule). */
@@ -664,6 +735,8 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       return <ImageBlock uri={item.uri} alt={item.alt} />
     case 'theme':
       return <ThemeProposal theme={item.theme} />
+    case 'ability':
+      return <AbilityCard call={item.call} chat={chat} />
     case 'threads':
       return <StartedThreadsCard threads={item.threads} chat={chat} />
     case 'continued':

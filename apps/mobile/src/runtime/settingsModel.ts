@@ -402,6 +402,18 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
         },
       ],
     },
+    {
+      title: 'Abilities',
+      rows: [
+        {
+          kind: 'toggle',
+          path: 'abilities.askBeforeOtherProvider',
+          title: 'Ask before using another provider',
+          help: 'Each call that would run on a provider other than the thread’s waits for your approval, which names the provider and what is sent.',
+          words: 'ability approval image search provider',
+        },
+      ],
+    },
   ],
   providers: [
     {

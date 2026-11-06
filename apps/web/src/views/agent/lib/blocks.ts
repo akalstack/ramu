@@ -1,4 +1,4 @@
-import { ramuTool, ramuToolHasOwnUi } from '@ramu/shared/chat/ramuTools'
+import { isAbilityToolCall, ramuTool, ramuToolHasOwnUi } from '@ramu/shared/chat/ramuTools'
 import { requestOutcomes } from '@ramu/shared/chat/questions'
 import type { AgentEvent } from '@ramu/shared/types'
 import { type ChatBlock as Block } from '@ramu/shared/chat/chatFolding'
@@ -52,8 +52,8 @@ export function toBlocks(events: AgentEvent[]): Block[] {
     }
     // Background commands use their Bash row.
     if (event.kind === 'agent' && event.taskType === 'local_bash') continue
-    // The advisor's card stands for its tool calls.
-    if (event.kind === 'tool-use' && isAdvisorTool(event)) continue
+    // The advisor's card stands for its tool calls, and an ability row for its call.
+    if (event.kind === 'tool-use' && (isAdvisorTool(event) || isAbilityToolCall(event))) continue
     // Questions, goals, schedules and sub-agents have their own place in the chat; a failed call stays, since nothing else shows it.
     if (
       event.kind === 'tool-use' &&

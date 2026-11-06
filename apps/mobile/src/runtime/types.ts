@@ -73,6 +73,8 @@ export type TranscriptItem = (
       update?: import('@ramu/shared/interactiveRevisions').InteractiveUpdate
     }
   | { kind: 'image'; id: string; uri: string; alt?: string }
+  /** An ability call (an image, a web search, a long read) that Ramu ran on a provider that has the ability. */
+  | { kind: 'ability'; id: string; call: import('@ramu/shared/providers/abilities').AbilityCall }
   /** A theme the agent drafted with `propose_theme`; the person previews it before anything changes. */
   | { kind: 'theme'; id: string; theme: import('@ramu/shared/theme').RamuTheme }
   /** Threads this thread's agent started; each row opens one. */

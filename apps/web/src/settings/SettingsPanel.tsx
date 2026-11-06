@@ -16,6 +16,7 @@ import { GoalSettings } from './GoalSettings'
 import { MemoryBrowser, MemorySettings } from './MemorySettings'
 import { SummarySettings } from '../summaries/SummarySettings'
 import { AdvisorSettings, SubagentSettings } from './FallbackSettings'
+import { AbilitySettings } from './AbilitySettings'
 import { CustomAgentSettings } from './CustomAgents'
 import { RemoteAccessSettings } from './RemoteAccess'
 import { modelStepName, recommendedSets, useModelSets, ModelSetsOverride } from '../models/ModelSets'
@@ -276,6 +277,7 @@ export function SettingsPanel({
                 />
               )}
               {page === 'models' && <ProviderFallbackSettings {...draftProps} />}
+              {page === 'models' && <AbilitySettings value={appDraft} onChange={setAppDraft} busy={busy} />}
               {page === 'models' && (
                 <ToggleRow
                   {...draftProps}
