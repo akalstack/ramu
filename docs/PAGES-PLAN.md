@@ -71,31 +71,47 @@ A page can also expose its own flows: a **Run** declared in `ramu.json` with a n
 
 Agents get the matching instructions in `tools.ts`: when to use records instead of saved state, schemas first, choosing ask, run or a thread by the work, schemas on every AI result, page functions for anything the page already knows how to do, and never calling AI on every keystroke.
 
-### 3. Desktop
+### 3. What only Ramu can do
+
+These come from what Ramu already has (an always-on host, agents that can fix code, a phone app with widgets and Live Activities, projects with Git), and each removes a step the person would otherwise take by hand.
+
+- **Pages that fix themselves.** A script error or failed capability call on any device is reported to the host with the page's version, state and the steps before it. The page shows **Fix this**, which hands off to a thread with that report attached; the agent reproduces it with `preview_interactive`, publishes a fixed version and the page reloads. Nobody copies an error message.
+- **Checks that stay.** The controls and checks `preview_interactive` ran are kept with the page and run again on every new version and whenever a pinned library changes, so a change that breaks the add-transaction button is caught before it is published, not discovered on the phone.
+- **Point and ask.** **Edit** on an open page lets the person tap an element (on the phone, with voice through the native keyboard) and say what to change: "make this total bigger", "put the chart first". The selection, its text and a screenshot go to the thread like the browser panel's annotations, so the agent changes the right thing the first time.
+- **Ask this page.** Every page with records gets a question box with no code from the page: "how much on food in March?" runs a read-only page agent over the records and answers with numbers and a small chart. A useful answer can be kept as a new panel on the page with one tap, which publishes a version.
+- **Works offline on the phone.** Records added without a connection queue on the phone and sync when the host answers, with conflicts shown, not overwritten. Ask and Run calls made offline wait in the same queue, so the expense tracker works on a plane.
+- **On the phone's home screen.** A page can declare a **widget** (a number, a short list or a small chart from its records, refreshed by the host) for the iOS and Android home screen, and a long Run shows as a Live Activity like agent work does today.
+- **Triggers on records.** Besides schedules, a page can declare "when a record matches, run this" (a transaction over the budget, a habit missed three days), which notifies or starts a declared Run. The same webhook path as [webhook schedules](guide/background-work.md#when-a-request-arrives) can add records from outside (a bank's email alert, a form on the person's site), validated against the schema.
+- **Pages from work already in Ramu.** "Make a page from this thread" turns a thread's results (a test report, a comparison, a migration checklist) into a page; a page in a project can be granted read-only access to one folder of that project (for example `data/`), so a project's dashboard updates when its files change. Never the whole checkout, and never write access.
+- **Visual version history.** **Versions** shows each version's phone and desktop screenshots from its checks side by side with a one-line summary of what changed, so the person restores the right one without opening each.
+- **Duplicate as a template.** **Duplicate** copies a page with its code and capabilities but empty records, so a household ledger becomes a club's ledger in one step, and another host can import it from a share link.
+- **Your data stays on your host.** Records, photos and run history never leave the host except to the provider a call uses, and the grant sheet says which provider sees what.
+
+### 4. Desktop
 
 - **Pages** in the left sidebar under Inbox and Schedules (no right sidebar), opening a list built from the existing list rows, and a page view that reuses the interactive card's frame at full size with its toolbar (Fit, Tablet, Phone, **Versions**, **Ask about this**, **Share link**, **Export**, the page menu).
 - **Keep as page** on every interactive card; a kept card shows the page's title and **Open page**.
 - Projects show their pages in the project's menu, so a page made for a project is found from both places.
 
-### 4. Phone
+### 5. Phone
 
 - A **Pages** tab entry listing the host's pages (with the existing host filter), opening a page in the private browser already used for interactive content, now loaded from the host by page id so it works without the thread.
 - **Add to Home Screen** through the phone's share sheet with the page's title and icon; the link opens the Ramu app at that page and asks to reconnect when the host is unreachable, never showing a stale copy as current.
 - Offline: the last opened version is cached on the phone and marked "Saved copy" until the host answers.
 
-### 5. Share link
+### 6. Share link
 
 - **Share link** makes a link to the current version for anyone using a device paired with this host, opened in the same sandbox, read-only by default; **Can add records** lets a household share one ledger. AI calls from a shared link use the owner's grant and count against the same daily limit. It names the host, can be revoked, and expires after 30 days unless renewed.
 - Opening a page to people without Ramu goes through the host's own tunnel ([Your own tunnel](guide/remote-hosts.md#your-own-tunnel)) on a separate hostname serving only that page's static bytes, never Ramu's API. It needs a security review before it ships, like the tunnelled app in the ship-an-app plan's **Own server**; until then the path for outsiders is **Publish to the web**.
 
-### 6. Connection with shipping an app
+### 7. Connection with shipping an app
 
 - **Publish to the web** exports the page's tested bytes as a static site and deploys it through the ship-an-app plan's `HostingAdapter` (GitHub Pages, Cloudflare Pages, Netlify or Vercel), on the person's account, with the same one-time approval for the first production deploy. The page remembers the target and live URL; a new version offers **Update live site**. This needs only the deploy targets from that plan, not a repository or CI.
 - A page with records or AI cannot be published to the web as is: the sheet says so and offers **Make it a project**, where the ship-an-app plan gives it a database and a server-side model call on the person's own accounts.
 - **Make it a project** writes the page's sources and its record schemas (as a database schema and seed data) (they are already kept with each publication) into a new project through `project_create`, using the Vite + React stack when the page uses React and a static site otherwise, then follows that plan's path from **Building** onward.
 - Ship-an-app's stack choice sends a request like "a page that adds up my monthly costs" to a page instead of a project when it needs no backend, data shared between people or a domain, so the smallest thing that works is made first.
 
-### 7. Documentation
+### 8. Documentation
 
 - Rename and extend [Interactive content](guide/interactive-content.md) to **Pages and interactive content**: keeping a page, the Pages list, opening on the phone, shared state, versions, share links, publishing to the web and making it a project. Document each capability with a worked example (the expense dashboard). Update [Agents](guide/agents.md) (`page`, `page_list`, `page_get`, `page_records`), [Providers](guide/providers.md) (pages using a provider, and where their usage shows), the [mobile README](../apps/mobile/README.md) and [VERIFICATION.md](../apps/mobile/VERIFICATION.md), and [SECURITY.md](../SECURITY.md) (share links and tunnel isolation).
 - Every string through `t()` with its Indonesian translation.
@@ -107,6 +123,7 @@ Agents get the matching instructions in `tools.ts`: when to use records instead 
 - A page run's tools are fixed by the page's grants for the whole run; it cannot widen them, reach the host's files or shell, or start a thread without the person's confirmation. Runs are bounded in steps, tokens, time and record writes, and every run's record changes can be undone together.
 - Records, fetched pages and MCP results are untrusted input to the run. Deleting records, sending through an MCP server or anything that leaves the host asks the person in the page, whatever the grant, so an instruction planted in a record can at worst change records the run could already change, and those can be undone.
 - AI calls are bounded in size, rate and daily count, and records in count and bytes; images are stripped of location metadata before storage.
+- Webhook-added records are checked against the page's schema and limited in rate; a project folder grant is read-only, one folder, and shown in the grant sheet with its path. Widgets show only what the page declared for them, and nothing on a locked phone unless the person allows it.
 - Share links are revocable, revocable and expiring; a page served beyond paired devices never shares an origin or port with Ramu's API.
 - Publishing to the web and the first deploy are the person's actions, through the same approval card as any production deploy.
 
@@ -114,6 +131,9 @@ Agents get the matching instructions in `tools.ts`: when to use records instead 
 
 - **Keep and reopen:** ask for "a page to split trip costs between four people", enter amounts on the desktop, then open it from the phone's Pages list a day later from another network over a tunnel and see the same amounts, without finding the thread.
 - **Expense dashboard:** ask for "a dashboard where I add transactions and see spending by category each month". On the phone, type "coffee 35k yesterday" and photograph a receipt; both become categorized transactions through the host's model. A month later the dashboard shows the totals, a daily summary arrives as a notification, **Monthly review** runs as a page agent that reads the records, converts currencies through a page function and adds a note, with its steps visible and **Stop** working from the phone; **Undo run** removes its changes. A request to add a bank import hands off to a thread that publishes a new version.
+- **Fix and edit without words for code:** a page that throws on the phone shows **Fix this**, and the fixed version loads there without the person describing the error; tapping the total and saying "make this bigger" changes that element only.
+- **Offline and widget:** transactions added in airplane mode sync when the phone reconnects, and the home-screen widget shows this month's total within a minute.
+- **Ask this page:** "how much on food in March?" answers correctly from the records with no code written for it, and **Keep** adds it as a panel.
 - **Change from anywhere:** in a new thread, "add a currency switch to my trip page" updates the same page as a new version, and **Versions** restores the old one.
 - **Home Screen:** a page added to the phone's Home Screen opens in two taps and says when the host is offline.
 - **Publish:** the trip page goes live on GitHub Pages from **Publish to the web** with one approval, and **Update live site** ships the next version.
