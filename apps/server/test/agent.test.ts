@@ -3275,6 +3275,57 @@ describe('isolated sub-agents', () => {
   })
 })
 
+describe('helpers started together', () => {
+  it('gives each its own copy when two waited-for helpers start in the same step', async () => {
+    const { execFileSync } = await import('node:child_process')
+    const { writeFileSync } = await import('node:fs')
+    const sh = (...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' })
+    sh('init', '-q', '-b', 'main')
+    for (const [k, v] of [
+      ['user.email', 'a@b.c'],
+      ['user.name', 'X'],
+      ['commit.gpgsign', 'false'],
+    ])
+      sh('config', k!, v!)
+    writeFileSync(join(cwd, 'app.txt'), 'v1\n')
+    sh('add', '.')
+    sh('commit', '-qm', 'init')
+    const svc = service()
+    svc.isolationRoot = join(cwd, '..', `iso-pair-${Date.now()}`)
+    svc.usage = { list: () => [], update: () => {} }
+    svc.preferences = () => ({
+      ...DEFAULT_APP_PREFERENCES,
+      subagents: {
+        ...DEFAULT_APP_PREFERENCES.subagents,
+        mode: 'single',
+        single: { id: 'c', provider: 'codex', model: 'codex-test', effort: null },
+      },
+    })
+    const parent = svc.start('t', scopeOf(cwd), 'hello', full)
+    await until(() => svc.get(parent.id).state === 'idle')
+    db.prepare('UPDATE agent_sessions SET settings = ? WHERE id = ?').run(
+      JSON.stringify({ ...full, access: 'edits' }),
+      parent.id,
+    )
+    const pair = [
+      svc.spawnSubagent(parent.id, { description: 'Edit app', prompt: 'change app' }),
+      svc.spawnSubagent(parent.id, { description: 'Edit docs', prompt: 'change docs' }),
+    ]
+    for (const started of pair) started.catch(() => {})
+    await until(() => (svc.events(parent.id).filter((e) => e.kind === 'agent').length ?? 0) >= 2)
+    const helpers = svc
+      .events(parent.id)
+      .flatMap((e) => (e.kind === 'agent' ? [e.agentId] : []))
+      .filter((id, index, all) => all.indexOf(id) === index)
+    expect(helpers).toHaveLength(2)
+    for (const id of helpers) {
+      expect(svc.task(parent.id, id)).toMatchObject({ isolated: true })
+      expect(svc.get(id).cwd).not.toBe(cwd)
+    }
+    svc.stopAll()
+  })
+})
+
 describe('thread continuation after restart', () => {
   const persist = (id: string, event: AgentEvent) =>
     db

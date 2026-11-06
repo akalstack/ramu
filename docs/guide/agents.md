@@ -19,7 +19,7 @@ Every enabled account of a provider is tried before another model.
 The agent can start helpers for parts of a task. Helper cards show progress; open one to read, message or stop it. Stopping the thread stops its helpers.
 
 - **Routing** (Settings → Goals & delegation → Sub-agents) can send helpers to another provider or model, or keep each provider's own.
-- A helper that would write beside other work gets its own copy of the checkout: one running in the background while the thread goes on, or one started while another writing helper still runs. Its changes come back when it finishes; any that conflict stay in its copy for review. A helper the thread waits for alone, a read-only helper and a teammate work in the thread's own checkout, so their edits show as they happen. A helper card says **Own copy** when it has one.
+- A helper that would write beside other work gets its own copy of the checkout: one running in the background while the thread goes on, or one started alongside another writing helper, including two the agent starts in the same step. Its changes come back when it finishes; any that conflict stay in its copy for review. A helper the thread waits for alone, a read-only helper and a teammate work in the thread's own checkout, so their edits show as they happen. A helper card says **Own copy** when it has one.
 
 ## Teammates
 

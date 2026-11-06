@@ -29,8 +29,9 @@ import {
   teammateNotePrompt,
 } from '@ramu/shared/chat/agentTasks'
 import { applyIsolation, collectPatch, createIsolation, removeIsolation } from '../workspace/isolation'
-import { needsOwnCheckout } from './helperCheckout'
+import { needsOwnCheckout, otherWriters } from './helperCheckout'
 import type { ChildRun, SubagentInput, SubagentResult } from './types'
+
 import { FOREGROUND_WAIT_MS, ASK_WAIT_MS } from './constants'
 import { str, errorMessage } from './util'
 import { transcriptOf } from './handoff'
@@ -45,6 +46,9 @@ import type { SessionStore } from './sessionStore'
 import type { AgentTasks } from './agentTasks'
 import type { ProviderWaits } from './providerWait'
 import type { AgentService } from '../agent'
+
+/** How long a helper about to share the checkout waits for a sibling started in the same step to show up. */
+const SIBLING_SETTLE_MS = 150
 
 /** What SubagentRunner needs from the rest of the service. */
 export interface SubagentRunnerHost
@@ -283,6 +287,8 @@ export class SubagentRunner {
   }
 
   private readonly pendingStarts = new Map<symbol, string>()
+  /** The starts above that will write: a sibling being prepared counts as another writer before it has a session. */
+  private readonly pendingWriters = new Map<symbol, string>()
   private readonly cancelledStarts = new Set<symbol>()
 
   /** Stopping a thread cancels the sub-agents it was still choosing a model for, even when the thread itself had finished. */
@@ -303,10 +309,12 @@ export class SubagentRunner {
       throw new Error(`${cap} sub-agents are already running. Wait for one to finish, then try again.`)
     const reservation = Symbol()
     this.pendingStarts.set(reservation, parentId)
+    if (!input.custom?.readOnly && !input.teammate) this.pendingWriters.set(reservation, parentId)
     try {
       return await this.startSubagent(parentId, input, signal, forced, reservation)
     } finally {
       this.pendingStarts.delete(reservation)
+      this.pendingWriters.delete(reservation)
       this.cancelledStarts.delete(reservation)
     }
   }
@@ -374,20 +382,30 @@ export class SubagentRunner {
     const name = clipText(input.name?.trim() || input.description.trim() || 'Sub-agent', 80)
     // Its own copy of the checkout whenever it would write beside another writer, so parallel work never collides.
     const isolationRoot = this.host.isolationRoot()
-    const otherWriters = [...this.children].filter(
-      ([id, other]) =>
-        other.parentId === parentId &&
-        !other.readOnly &&
-        ['starting', 'running', 'needs-input'].includes(this.host.get(id).state),
-    ).length
-    const isolation =
-      isolationRoot &&
+    const ownCheckout = () =>
       needsOwnCheckout({
         background: !!input.background,
         readOnly: !!input.custom?.readOnly,
         teammate: !!input.teammate,
-        otherWriters,
+        otherWriters: otherWriters({
+          events: this.host.events(parentId),
+          running: [...this.children].filter(
+            ([id, other]) =>
+              other.parentId === parentId &&
+              !other.readOnly &&
+              ['starting', 'running', 'needs-input'].includes(this.host.get(id).state),
+          ).length,
+          starting: [...this.pendingWriters].filter(([key, id]) => key !== reservation && id === parentId).length,
+        }),
       })
+    let separate = ownCheckout()
+    // A provider may report a sibling call a moment after this one; look once more before sharing the checkout.
+    if (!separate && !input.custom?.readOnly && !input.teammate) {
+      await new Promise((resolve) => setTimeout(resolve, SIBLING_SETTLE_MS))
+      separate = ownCheckout()
+    }
+    const isolation =
+      isolationRoot && separate
         ? await createIsolation({
             cwd: parent.cwd,
             covers: parent.covers,
@@ -452,6 +470,7 @@ export class SubagentRunner {
       startedAt: Date.now(),
     }
     this.pendingStarts.delete(reservation)
+    this.pendingWriters.delete(reservation)
     this.children.set(child.id, run)
     this.host.attempted.set(child.id, new Set([settingsKey(target.settings, catalogs)]))
     const settings = target.settings
