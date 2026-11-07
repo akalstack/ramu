@@ -8,7 +8,7 @@ vi.mock('../src/i18n', () => ({
 function fakeWindow() {
   const children: { textContent: string; style: { cssText: string } }[] = []
   const body = {
-    style: { cssText: '' },
+    style: { cssText: '', setProperty: vi.fn() },
     replaceChildren: () => void children.splice(0),
     append: (child: (typeof children)[number]) => void children.push(child),
   }
@@ -24,6 +24,7 @@ it('shows where the presenter is, the slide’s notes as text and what comes nex
     win,
     { index: 1, count: 6, title: 'The problem', notes: '<b>Pause</b> here', next: 'Our answer' },
     since,
+    { '--background': '#000' },
   )
   expect(children.map((child) => child.textContent)).toEqual([
     '2 of 6 · 1:05',
@@ -31,6 +32,6 @@ it('shows where the presenter is, the slide’s notes as text and what comes nex
     '<b>Pause</b> here',
     'Next: Our answer',
   ])
-  showPresenterSlide(win, { index: 5, count: 6, title: 'Thanks', notes: '', next: null }, since)
+  showPresenterSlide(win, { index: 5, count: 6, title: 'Thanks', notes: '', next: null }, since, {})
   expect(children.map((child) => child.textContent).slice(1)).toEqual(['Thanks', 'No speaker notes on this slide.'])
 })

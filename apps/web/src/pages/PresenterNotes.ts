@@ -31,13 +31,20 @@ const minutes = (ms: number) => {
 }
 
 /** Fills the presenter window with the slide's notes, what comes next and the time since presenting began. */
-export function showPresenterSlide(target: Window, slide: PresenterSlide, since: number): void {
+export function showPresenterSlide(
+  target: Window,
+  slide: PresenterSlide,
+  since: number,
+  /** The app's theme variables, so the window matches Ramu in light and dark. */
+  theme: Record<string, string>,
+): void {
   if (target.closed) return
   const doc = target.document
   doc.title = t('Presenter notes')
   doc.body.replaceChildren()
   doc.body.style.cssText =
-    'margin:0;padding:32px;background:#111;color:#eee;font:20px/1.5 system-ui,sans-serif;display:flex;flex-direction:column;gap:16px;height:100vh;box-sizing:border-box'
+    'margin:0;padding:32px;background:var(--background);color:var(--foreground);font:20px/1.5 var(--font-sans,system-ui),sans-serif;display:flex;flex-direction:column;gap:16px;height:100vh;box-sizing:border-box'
+  for (const [name, value] of Object.entries(theme)) doc.body.style.setProperty(name, value)
   const line = (text: string, style: string) => {
     const element = doc.createElement('div')
     element.textContent = text
@@ -46,9 +53,9 @@ export function showPresenterSlide(target: Window, slide: PresenterSlide, since:
   }
   line(
     `${t('{current} of {count}', { current: slide.index + 1, count: slide.count })} · ${minutes(Date.now() - since)}`,
-    'color:#999;font-size:16px',
+    'color:var(--muted);font-size:16px',
   )
   line(slide.title, 'font-size:28px;font-weight:600')
   line(slide.notes || t('No speaker notes on this slide.'), 'flex:1;overflow:auto;white-space:pre-wrap')
-  if (slide.next) line(`${t('Next')}: ${slide.next}`, 'color:#999;font-size:16px')
+  if (slide.next) line(`${t('Next')}: ${slide.next}`, 'color:var(--muted);font-size:16px')
 }
