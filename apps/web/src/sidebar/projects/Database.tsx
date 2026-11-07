@@ -82,7 +82,7 @@ export function DatabaseSection({
             <span className="text-muted-foreground">
               {resource.previewBranch
                 ? t(
-                    'Production uses the main branch. Previews, this host and CI use a preview branch, so they never change production data. Sync below sets {0}.',
+                    'Production has its own database. Previews, this host and CI use a separate preview copy (a Neon branch, or a second Supabase project), so they never change production data. Sync below sets {0}.',
                     { 0: resource.variables.join(', ') },
                   )
                 : t('Sync below sets {0}.', { 0: resource.variables.join(', ') })}
@@ -100,7 +100,7 @@ export function DatabaseSection({
         <>
           <p className="text-caption text-muted-foreground">
             {t(
-              'This app stores data. Provision creates a Postgres database on your own account, with a separate branch for previews and development.',
+              'This app stores data. Provision creates a Postgres database on your own account, with a separate copy for previews and development.',
             )}
           </p>
           <div role="radiogroup" aria-label={t('Database provider')} className="flex flex-col gap-0.5">

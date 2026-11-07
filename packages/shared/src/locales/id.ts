@@ -5890,13 +5890,13 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Belum terhubung. Database untuk proyek Anda memerlukan akun.',
   Database: 'Database',
   'Postgres on {0} · {1}': 'Postgres di {0} · {1}',
-  'Production uses the main branch. Previews, this host and CI use a preview branch, so they never change production data. Sync below sets {0}.':
-    'Produksi memakai branch utama. Preview, host ini, dan CI memakai branch preview, jadi tidak pernah mengubah data produksi. Sinkronisasi di bawah mengatur {0}.',
+  'Production has its own database. Previews, this host and CI use a separate preview copy (a Neon branch, or a second Supabase project), so they never change production data. Sync below sets {0}.':
+    'Produksi punya database sendiri. Preview, host ini, dan CI memakai salinan preview terpisah (branch Neon, atau proyek Supabase kedua), sehingga tidak pernah mengubah data produksi. Sinkronkan di bawah mengatur {0}.',
   'Sync below sets {0}.': 'Sinkronisasi di bawah mengatur {0}.',
   'Before each production deploy from Ramu, {0} runs against the production database.':
     'Sebelum setiap deploy produksi dari Ramu, {0} dijalankan pada database produksi.',
-  'This app stores data. Provision creates a Postgres database on your own account, with a separate branch for previews and development.':
-    'Aplikasi ini menyimpan data. Sediakan membuat database Postgres di akun Anda sendiri, dengan branch terpisah untuk preview dan pengembangan.',
+  'This app stores data. Provision creates a Postgres database on your own account, with a separate copy for previews and development.':
+    'Aplikasi ini menyimpan data. Provision membuat database Postgres di akun Anda sendiri, dengan salinan terpisah untuk preview dan pengembangan.',
   'Database provider': 'Penyedia database',
   Provision: 'Sediakan',
   'Postgres on your account’s plan; the free plan includes 0.5 GB and sleeps when idle.':
@@ -6047,7 +6047,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Which stores?': 'Toko yang mana?',
   'Connect Expo on the computer running the host to release.': 'Hubungkan Expo di komputer yang menjalankan host untuk merilis.',
   'Finish what the stores need in the Deploy sheet on a computer first.': 'Selesaikan dulu yang dibutuhkan toko di lembar Deploy di komputer.',
-  'previews use their own branch': 'preview memakai cabangnya sendiri',
+  'previews use their own database':
+    'preview memakai database sendiri',
   Databases: 'Basis data',
   'Put {0} online, or see where it is deployed': 'Online-kan {0}, atau lihat di mana ia di-deploy',
   'Running without Docker, with your permissions.': 'Berjalan tanpa Docker, dengan izin Anda.',
@@ -6108,4 +6109,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'API key, cost not reported': 'API key, biaya tidak dilaporkan',
   'About {0} a call': 'Sekitar {0} per panggilan',
   'chosen as the cheapest good enough': 'dipilih sebagai yang termurah dan cukup baik',
+  'Postgres on your organization’s plan, with a second project for previews; the free plan allows two projects and pauses them after a week without use.':
+    'Postgres pada paket organisasi Anda, dengan proyek kedua untuk preview; paket gratis mengizinkan dua proyek dan menjedanya setelah seminggu tidak dipakai.',
+  'Create an access token with an expiry. Supabase tokens reach every organization you belong to, and Ramu creates projects in the first one':
+    'Buat access token dengan masa berlaku. Token Supabase menjangkau setiap organisasi tempat Anda bergabung, dan Ramu membuat proyek di organisasi pertama',
 }

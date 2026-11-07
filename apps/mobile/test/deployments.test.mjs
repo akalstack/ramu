@@ -218,7 +218,7 @@ test('lists a project’s databases with their provider, variables and preview b
     {
       id: 'neon:n1',
       name: 'shop',
-      detail: 'Neon · DATABASE_URL, DATABASE_URL_UNPOOLED · previews use their own branch',
+      detail: 'Neon · DATABASE_URL, DATABASE_URL_UNPOOLED · previews use their own database',
       page: 'https://console.neon.tech/app/projects/n1',
     },
   ])

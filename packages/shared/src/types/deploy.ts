@@ -22,7 +22,7 @@ export type CliSignInPlatform = (typeof CLI_SIGN_IN_PLATFORMS)[number]
 export const REMOTE_SIGN_IN_PLATFORMS: readonly CliSignInPlatform[] = ['vercel', 'netlify', 'railway']
 
 /** Database and storage providers with a resource adapter on the server. */
-export const RESOURCE_PROVIDERS = ['neon'] as const
+export const RESOURCE_PROVIDERS = ['neon', 'supabase'] as const
 export type ResourceProvider = (typeof RESOURCE_PROVIDERS)[number]
 
 /** Services that build an app and hand it to the app stores. */

@@ -212,7 +212,7 @@ export function resourceRows(
       detail: [
         provider,
         resource.variables.join(', '),
-        resource.previewBranch ? t('previews use their own branch') : null,
+        resource.previewBranch ? t('previews use their own database') : null,
       ]
         .filter(Boolean)
         .join(' · '),
