@@ -61,7 +61,7 @@ App, Doc, Diagram, Slides, Dashboard (over tables the agent fills in), Design (f
 - **Kinds and their preview checks:**
 - **Renderers** share `ramu:kit` and the theme tokens, so every kind looks like Ramu in light and dark. Rendering stays offline unless the artifact declares sources.
 - **Exports run on the host:**
-  - **MP4 and WebM:** frames captured by the headless browser and encoded with the browser's own WebCodecs `VideoEncoder`. This adds no ffmpeg binary, which is what kept browser recording out of Ramu so far.
+  - **MP4:** WebM is made today (frames stepped with the Web Animations API, encoded with the browser's WebCodecs and packaged by Mediabunny); MP4 for players that need it, and narration mixed in.
 
 ### 2. Editing in place
 

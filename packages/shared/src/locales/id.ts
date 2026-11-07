@@ -5703,6 +5703,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Export frame images': 'Ekspor gambar frame',
   Motion: 'Animasi',
   'Export poster image': 'Ekspor gambar poster',
+  'Export video': 'Ekspor video',
+  'Share video': 'Bagikan video',
   'Share poster image': 'Bagikan gambar poster',
   'Share frame images': 'Bagikan gambar frame',
   Dashboard: 'Dasbor',

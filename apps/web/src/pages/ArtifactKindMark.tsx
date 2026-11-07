@@ -110,6 +110,7 @@ const HOST_EXPORT_LABELS: Record<HostExportFormat, () => string> = {
   pdf: () => t('Export PDF'),
   png: () => t('Export slide images'),
   docx: () => t('Export Word'),
+  webm: () => t('Export video'),
 }
 
 /**

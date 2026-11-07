@@ -445,6 +445,9 @@ importers:
       mdast-util-gfm:
         specifier: 3.1.0
         version: 3.1.0(supports-color@10.2.2)
+      mediabunny:
+        specifier: 1.64.0
+        version: 1.64.0
       micromark:
         specifier: 4.0.3
         version: 4.0.3(supports-color@10.2.2)
@@ -6830,8 +6833,8 @@ packages:
     resolution: {integrity: sha512-yz3xRaG20c6/BOzvYoDaGtPmGscs7YivItZEEqe6GbwNfHuxu9YNmvnEkMzKldAGY4/80pRcQRZSEnhquk9XuQ==}
     engines: {node: '>= 0.8'}
 
-  mediabunny@1.62.0:
-    resolution: {integrity: sha512-D8E8BDxjCyqyrGj074jLRQNgilDW5izJu8o9pg7THMYMIZBL1Fao5hOtdDPDfA+nSnk68tMa8IaCJmz8hSpJpw==}
+  mediabunny@1.64.0:
+    resolution: {integrity: sha512-ILat5qSwfmZjnYhk7Dc8uEvEQNtzXNxUVyfxR9Fp6JRa8Axsg5xE1EXwCTOzXJHhH/a2eyk6sZ1ffivCk4rIXg==}
 
   memoize-one@5.2.1:
     resolution: {integrity: sha512-zYiwtZUcYyXKo/np96AGZAckk+FWWsUdJ3cHGGmld7+AhvcWmQyGCYUh1hc4Q/pkOhb65dQR/pqCyK0cOaHz4Q==}
@@ -15778,7 +15781,7 @@ snapshots:
 
   media-typer@1.1.1: {}
 
-  mediabunny@1.62.0:
+  mediabunny@1.64.0:
     dependencies:
       '@types/dom-mediacapture-transform': 0.1.12
       '@types/dom-webcodecs': 0.1.13
@@ -18338,7 +18341,7 @@ snapshots:
       '@peculiar/x509': 1.14.3
       buffer: 6.0.3
       debug: 4.4.0(supports-color@10.2.2)
-      mediabunny: 1.62.0
+      mediabunny: 1.64.0
       multicast-dns: 7.2.5
       tweetnacl: 1.0.3
     transitivePeerDependencies:

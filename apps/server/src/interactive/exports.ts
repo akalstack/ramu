@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
 import JSZip from 'jszip'
 import { chromium, type Page } from 'playwright-core'
 import { ARTIFACT_SOURCE_FILES, artifactKind } from '@ramu/shared/artifacts'
@@ -25,6 +28,7 @@ const MIME: Record<HostExportFormat, string> = {
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   png: 'image/png',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  webm: 'video/webm',
 }
 
 function deckOf(document: InteractiveDocument): SlidesSource {
@@ -51,10 +55,11 @@ async function withPage<T>(
   viewport: { width: number; height: number },
   scale: number,
   work: (page: Page) => Promise<T>,
+  limitMs = 90_000,
 ): Promise<T> {
   const executablePath = await ensureInteractiveBrowser()
   const browser = await chromium.launch({ executablePath, headless: true, chromiumSandbox: true, timeout: 10_000 })
-  const timer = setTimeout(() => void browser.close().catch(() => {}), 90_000)
+  const timer = setTimeout(() => void browser.close().catch(() => {}), limitMs)
   try {
     const context = await browser.newContext({
       viewport,
@@ -142,6 +147,93 @@ function frameImages(document: InteractiveDocument): Promise<Buffer> {
   })
 }
 
+const require = createRequire(import.meta.url)
+const VIDEO_FPS = 12
+
+/**
+ * A motion as a WebM video: its CSS animations are paused and stepped to each frame's exact time with the Web
+ * Animations API, so frames never depend on how fast the browser is, then encoded with the browser's own WebCodecs
+ * (VP9) and packaged by Mediabunny in a blank page that the artifact never touches. No ffmpeg is involved.
+ */
+function motionVideo(document: InteractiveDocument): Promise<Buffer> {
+  const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.motion)?.content
+  if (!stored) throw new Error('This motion version has no scenes. Ask the agent to publish it again.')
+  const seconds = (JSON.parse(stored) as { scenes: { seconds: number }[] }).scenes.reduce(
+    (total, scene) => total + scene.seconds,
+    0,
+  )
+  const frames = Math.ceil(seconds * VIDEO_FPS)
+  return withPage(
+    document,
+    { width: 1280, height: 720 },
+    1,
+    async (page) => {
+      await page.addStyleTag({
+        content: 'html body{margin:0;padding:0}html body .ramu-motion{max-width:none;border:0;border-radius:0}',
+      })
+      await page.evaluate('document.getAnimations().forEach((a) => a.pause())')
+      const stage = page.locator('.ramu-motion').first()
+      // WebCodecs needs a secure page: the encoder gets an https address the browser answers itself, offline.
+      await page
+        .context()
+        .route('https://ramu-encoder.invalid/', (route) =>
+          route.fulfill({ body: '<!doctype html><title>encode</title>', contentType: 'text/html' }),
+        )
+      const encoder = await page.context().newPage()
+      await encoder.goto('https://ramu-encoder.invalid/')
+      await encoder.addScriptTag({
+        content: `var module={exports:{}};var exports=module.exports;${readFileSync(join(dirname(require.resolve('mediabunny')), 'mediabunny.min.cjs'), 'utf8')}`,
+      })
+      await encoder.evaluate(async (fps: number) => {
+        const { Output, WebMOutputFormat, BufferTarget, CanvasSource, QUALITY_HIGH } = (
+          window as unknown as { Mediabunny: typeof import('mediabunny') }
+        ).Mediabunny
+        const canvas = new OffscreenCanvas(1280, 720)
+        const target = new BufferTarget()
+        const output = new Output({ format: new WebMOutputFormat(), target })
+        const source = new CanvasSource(canvas, { codec: 'vp9', bitrate: QUALITY_HIGH })
+        output.addVideoTrack(source, { frameRate: fps })
+        await output.start()
+        Object.assign(window, { video: { canvas, target, output, source } })
+      }, VIDEO_FPS)
+      for (let index = 0; index < frames; index++) {
+        await page.evaluate(
+          `document.getAnimations().forEach((a) => { a.currentTime = ${(index / VIDEO_FPS) * 1000} })`,
+        )
+        const shot = (await stage.screenshot({ type: 'jpeg', quality: 90, animations: 'allow' })).toString('base64')
+        await encoder.evaluate(
+          async ({ shot, index, fps }: { shot: string; index: number; fps: number }) => {
+            const { canvas, source } = (
+              window as unknown as {
+                video: { canvas: OffscreenCanvas; source: { add(t: number, d: number): Promise<void> } }
+              }
+            ).video
+            const bitmap = await createImageBitmap(await (await fetch(`data:image/jpeg;base64,${shot}`)).blob())
+            canvas.getContext('2d')!.drawImage(bitmap, 0, 0, 1280, 720)
+            bitmap.close()
+            await source.add(index / fps, 1 / fps)
+          },
+          { shot, index, fps: VIDEO_FPS },
+        )
+      }
+      const encoded = await encoder.evaluate(async () => {
+        const { output, target } = (
+          window as unknown as {
+            video: { output: { finalize(): Promise<void> }; target: { buffer: ArrayBuffer | null } }
+          }
+        ).video
+        await output.finalize()
+        const bytes = new Uint8Array(target.buffer!)
+        let text = ''
+        for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+        return btoa(text)
+      })
+      return Buffer.from(encoded, 'base64')
+    },
+    5 * 60_000,
+  )
+}
+
 /** One 1920 × 1080 PNG per slide, numbered in order, in one zip. */
 function slideImages(document: InteractiveDocument): Promise<Buffer> {
   return withPage(document, { width: 1280, height: 720 }, 1.5, async (page) => {
@@ -171,21 +263,25 @@ export class ArtifactExports {
   /** One export at a time: each starts its own browser. */
   private queue: Promise<unknown> = Promise.resolve()
 
+  private readonly makers: Record<'pdf' | 'png' | 'webm', (document: InteractiveDocument) => Promise<Buffer>>
+
   constructor(
     private readonly db: Db,
-    private readonly makers: {
-      pdf(document: InteractiveDocument): Promise<Buffer>
-      png(document: InteractiveDocument): Promise<Buffer>
-    } = {
+    /** Tests replace the browser-backed makers they exercise. */
+    makers: Partial<Record<'pdf' | 'png' | 'webm', (document: InteractiveDocument) => Promise<Buffer>>> = {},
+  ) {
+    this.makers = {
       pdf: printPdf,
+      webm: motionVideo,
       png: (document) =>
         document.reference.kind === 'slides'
           ? slideImages(document)
           : document.reference.kind === 'design'
             ? frameImages(document)
             : pictureImage(document),
-    },
-  ) {}
+      ...makers,
+    }
+  }
 
   async make(document: InteractiveDocument, format: HostExportFormat): Promise<ExportedFile> {
     const kind = artifactKind(document.reference.kind)

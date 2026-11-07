@@ -387,3 +387,27 @@ it.skipIf(!interactiveBrowserPath())(
   },
   120_000,
 )
+
+it.skipIf(!interactiveBrowserPath())(
+  'exports a motion as a WebM video stepped frame by frame',
+  async () => {
+    const { db, interactive } = setup(previewInteractive)
+    const preview = await interactive.preview('s', {
+      kind: 'motion',
+      scenes: [
+        { seconds: 1, html: '<h1 style="margin:40px">Sync</h1>' },
+        { seconds: 1, html: '<p style="margin:40px">Every device.</p>' },
+      ],
+      title: 'Sync',
+      summary: 'S',
+      checks: [],
+    } as never)
+    const document = interactive.get('s', interactive.publish('s', preview.id, 'r1').id, 1)
+    const video = await new ArtifactExports(db).make(document, 'webm')
+    expect(video).toMatchObject({ name: 'Sync.webm', mimeType: 'video/webm' })
+    const bytes = Buffer.from(video.content, 'base64')
+    expect(bytes.subarray(0, 4).toString('hex')).toBe('1a45dfa3')
+    expect(bytes.length).toBeGreaterThan(1000)
+  },
+  300_000,
+)

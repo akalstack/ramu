@@ -45,6 +45,7 @@ const HOST_SHARE_LABELS: Record<HostExportFormat, string> = {
   pdf: 'Share PDF',
   png: 'Share slide images',
   docx: 'Share Word',
+  webm: 'Share video',
 }
 /** An export the host makes and the phone hands to the share sheet once it arrives; a diagram's PNG is one image. */
 export const hostShareLabel = (format: HostExportFormat, kind: ArtifactKind) =>
