@@ -179,6 +179,13 @@ export async function previewInteractive(
     await page.setViewportSize({ width: 900, height: 740 })
     const wideScreenshot = `data:image/png;base64,${(await page.screenshot({ timeout: 3000 })).toString('base64')}`
     await measure()
+    // Boxes marked data-ramu-fit (a deck's text) size their type to their own width, so text that spills out here
+    // spills out at every size, in print and in the exported file.
+    const spilled = await page.evaluate<string[]>(
+      '[...document.querySelectorAll("[data-ramu-fit]")].filter(e=>e.scrollHeight>e.clientHeight+1||e.scrollWidth>e.clientWidth+1).map(e=>e.getAttribute("data-ramu-fit")).slice(0,20)',
+    )
+    for (const label of spilled)
+      if (errors.length < 20) errors.push(`${label} does not fit on the slide. Shorten it or split the slide.`)
     for (const width of [320, 768]) {
       await page.setViewportSize({ width, height: 740 })
       await measure()

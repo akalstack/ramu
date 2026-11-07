@@ -1,4 +1,4 @@
-import { ARTIFACT_SOURCE_FILES } from './artifacts'
+import { ARTIFACT_SOURCE_FILES, type ArtifactKind } from './artifacts'
 import {
   interactiveCsp,
   interactiveHtml,
@@ -30,13 +30,36 @@ export function interactiveExport(
 /** A file an artifact exports, ready to download or hand to the share sheet. */
 export interface ExportedFile {
   name: string
+  /** Text, or the bytes as base64 when encoding says so. */
   content: string
   mimeType: string
+  encoding?: 'base64'
+}
+
+/** Files the host makes in its headless browser or with a writer library, kept with the version they were made from. */
+export type HostExportFormat = 'pdf' | 'pptx' | 'png'
+
+/** What the host can make for a kind: every kind prints to PDF, and a deck also writes PowerPoint and slide images. */
+export function hostExportFormats(kind: ArtifactKind): HostExportFormat[] {
+  return kind === 'slides' ? ['pptx', 'pdf', 'png'] : ['pdf']
+}
+
+/** How many slides a deck version has, read from the slide list it keeps; 0 for every other kind. */
+export function slideCount(document: InteractiveDocument): number {
+  if (document.reference.kind !== 'slides') return 0
+  const source = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.slides)?.content
+  try {
+    const deck = source ? (JSON.parse(source) as { slides?: unknown }) : null
+    return Array.isArray(deck?.slides) ? deck.slides.length : 0
+  } catch {
+    return 0
+  }
 }
 
 export type KindExportFormat = 'markdown' | 'html' | 'svg' | 'mermaid'
 
-const fileName = (title: string) =>
+/** A title as a file name that every platform accepts. */
+export const exportFileName = (title: string) =>
   title
     // eslint-disable-next-line no-control-regex -- control characters are not allowed in file names
     .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '')
@@ -44,21 +67,24 @@ const fileName = (title: string) =>
     .slice(0, 80) || 'artifact'
 
 /**
- * What a Doc or Diagram exports, made from the sources its version keeps: a Doc as Markdown and HTML, a Diagram as SVG
- * and, when written in Mermaid, its Mermaid source. An App exports through interactiveExport, so it has none here.
+ * What a Doc, Diagram or deck exports on the device, made from the sources its version keeps: a Doc as Markdown and
+ * HTML, a deck as HTML, a Diagram as SVG and, when written in Mermaid, its Mermaid source. An App exports through
+ * interactiveExport, and the files only the host can make come from hostExportFormats.
  */
 export function kindExports(
   document: InteractiveDocument,
   theme?: Record<string, string>,
 ): { format: KindExportFormat; file: ExportedFile }[] {
   const source = (path: string) => document.files?.find((file) => file.path === path)?.content
-  const name = fileName(document.reference.title)
+  const name = exportFileName(document.reference.title)
   const formats: { format: KindExportFormat; file: ExportedFile }[] = []
   const add = (format: KindExportFormat, extension: string, mimeType: string, content: string | undefined) => {
     if (content !== undefined) formats.push({ format, file: { name: `${name}.${extension}`, content, mimeType } })
   }
   if (document.reference.kind === 'doc') {
     add('markdown', 'md', 'text/markdown', source(ARTIFACT_SOURCE_FILES.doc))
+    add('html', 'html', 'text/html', interactiveExport(document, null, true, theme).html)
+  } else if (document.reference.kind === 'slides') {
     add('html', 'html', 'text/html', interactiveExport(document, null, true, theme).html)
   } else if (document.reference.kind === 'diagram') {
     add('svg', 'svg', 'image/svg+xml', source(ARTIFACT_SOURCE_FILES.svg))

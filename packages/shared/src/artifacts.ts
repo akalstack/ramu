@@ -111,8 +111,11 @@ export interface ArtifactPublication {
   siteId?: string
 }
 
-/** What an artifact is: an App is interactive web content, a Doc is writing to keep, a Diagram is a drawing. */
-export const ARTIFACT_KINDS = ['app', 'doc', 'diagram'] as const
+/**
+ * What an artifact is: an App is interactive web content, a Doc is writing to keep, a Diagram is a drawing, Slides is a
+ * deck.
+ */
+export const ARTIFACT_KINDS = ['app', 'doc', 'diagram', 'slides'] as const
 export type ArtifactKind = (typeof ARTIFACT_KINDS)[number]
 
 /** A stored or received kind; anything this build does not know opens as the web page every kind renders as. */
@@ -123,11 +126,15 @@ export function artifactKind(value: unknown): ArtifactKind {
 /** How a Diagram is written. */
 export type DiagramFormat = 'mermaid' | 'svg'
 
-/** The files a Doc or Diagram version keeps as its source. A Mermaid diagram also keeps its drawing as SVG. */
+/**
+ * The files a Doc, Diagram or Slides version keeps as its source. A Mermaid diagram also keeps its drawing as SVG, and a
+ * deck keeps its images beside its slide list.
+ */
 export const ARTIFACT_SOURCE_FILES = {
   doc: 'document.md',
   mermaid: 'diagram.mmd',
   svg: 'diagram.svg',
+  slides: 'slides.json',
 } as const
 
 export interface ArtifactInfo {

@@ -23,9 +23,9 @@ import { contentStorage } from '../../../storage'
 import { Header, HeaderButton, Screen } from '../../../components/Screen'
 import { Button, Card, Row, Sheet, T } from '../../../components/ui'
 import InteractiveFrame from '../../../components/InteractiveFrame'
-import { SHARE_LABELS } from '../../../components/ArtifactKindMark'
+import { HOST_SHARE_LABELS, SHARE_LABELS } from '../../../components/ArtifactKindMark'
 import { shareFile } from '../../../components/interactiveShare'
-import { kindExports } from '@ramu/shared/interactiveExport'
+import { hostExportFormats, kindExports } from '@ramu/shared/interactiveExport'
 import { pageRunActivity } from '../../../runtime/pageRunActivity'
 import { WIDGET_PAGE_KEY, widgetPage } from '../../../components/PageWidgetSync'
 import {
@@ -671,6 +671,22 @@ export default function PageScreen() {
                 <T>{say(SHARE_LABELS[format])}</T>
               </Row>
             ))}
+            {page && online && !shared && !viewer
+              ? hostExportFormats(page.kind).map((format) => (
+                  <Row
+                    key={format}
+                    onPress={() => {
+                      setMenu(false)
+                      void store
+                        .invoke(computerId, 'artifacts.export', artifactId, document?.reference.version, format)
+                        .then(shareFile)
+                        .catch(() => setError(say('Could not share this content. Try again.')))
+                    }}
+                  >
+                    <T>{say(HOST_SHARE_LABELS[format])}</T>
+                  </Row>
+                ))
+              : null}
           </Card>
           {page && !shared && declaredCapabilities(page.capabilities).length ? (
             <T size={font.caption} tone="muted">

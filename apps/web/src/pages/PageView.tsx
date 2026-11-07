@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import type { InteractiveDocument, InteractiveState } from '@ramu/shared/interactive'
 import type { ArtifactInfo, ArtifactRun, ArtifactVersion } from '@ramu/shared/artifacts'
-import { interactiveExport } from '@ramu/shared/interactiveExport'
+import { interactiveExport, slideCount } from '@ramu/shared/interactiveExport'
 import { Button } from '../components/desktop-button'
 import { Input } from '../components/desktop-input'
 import { Textarea } from '@/components/ui/textarea'
@@ -32,7 +32,8 @@ import { usePageBridge, type PickedElement } from './usePageBridge'
 import { GrantSheet, PageSettings, runStatusLabel } from './PageSettings'
 import { openPage } from './openPage'
 import { PublishDialog } from './PublishDialog'
-import { ArtifactKindMark, kindExportEntries } from './ArtifactKindMark'
+import { ArtifactKindMark, hostExportEntries, kindExportEntries } from './ArtifactKindMark'
+import { SlideToolbar, useSlideControls } from './SlideControls'
 
 const VIEWPORTS = [
   { id: 'fit', label: 'Fit to width', width: undefined, Icon: Monitor },
@@ -73,6 +74,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   const state = useRef<InteractiveState | null>(null)
   const revision = useRef(0)
   const frame = useRef<HTMLIFrameElement>(null)
+  const stage = useRef<HTMLDivElement>(null)
   const load = useCallback(async () => {
     try {
       const [info, saved] = await Promise.all([
@@ -107,6 +109,8 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   }, [load, on, artifactId])
   const instance = `page:${artifactId}:${document?.reference.version ?? 0}:${generation}`
   const { url } = useContentDocument(document?.html, instance, !!document, state, document?.reference.network)
+  const slides = document ? slideCount(document) : 0
+  const slideControls = useSlideControls(frame, stage, instance, slides)
   useEffect(() => setReady(false), [url])
   const askThread = useCallback(
     (prompt: string, title: string) =>
@@ -189,6 +193,12 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
     ...(page.kind === 'app'
       ? [{ key: 'export', label: t('Export HTML'), disabled: !document, onSelect: exportHtml }]
       : kindExportEntries(document, appThemeVariables())),
+    ...hostExportEntries(
+      page.kind,
+      page.title,
+      (format) => invoke('artifacts.export', artifactId, document?.reference.version, format),
+      !document,
+    ),
     {
       key: 'publish',
       label: outdated ? t('Update live site') : t('Publish to the web…'),
@@ -249,6 +259,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           </a>
         )}
         <div className="ml-auto flex flex-none items-center gap-0.5">
+          {slides > 0 && <SlideToolbar controls={slideControls} count={slides} disabled={!ready} />}
           {runs.map(([name, run]) => (
             <Button
               key={name}
@@ -470,7 +481,8 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
       )}
       <div className={`relative min-h-0 flex-1 overflow-auto ${width ? 'flex justify-center bg-fill px-3 py-4' : ''}`}>
         <div
-          className={`relative ${width ? 'h-full overflow-hidden rounded-lg bg-(--canvas)' : 'size-full'}`}
+          ref={stage}
+          className={`relative ${width ? 'h-full overflow-hidden rounded-lg bg-(--canvas)' : 'size-full'} ${slideControls.presenting ? '[&>iframe]:pointer-events-none' : ''}`}
           style={{ width }}
         >
           {url && <ContentFrame ref={frame} key={url} title={page.title} url={url} ready={ready} onLoad={() => {}} />}

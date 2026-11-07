@@ -38,6 +38,8 @@ export interface Services {
   threadTitles?: import('../agent/threadTitles').ThreadTitles
   interactive?: import('../interactive/store').InteractiveStore
   pages?: import('../interactive/pages').PageStore
+  /** PDF, PowerPoint and slide images made from a version and kept with it. */
+  artifactExports?: import('../interactive/exports').ArtifactExports
   /** Hosting accounts, project deploy bindings and CLI sign-ins. */
   deploys?: import('../workspace/deploy/deploys').Deploys
   pageAi?: import('../interactive/pageAi').PageAi

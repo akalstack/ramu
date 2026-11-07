@@ -1,7 +1,14 @@
 import { InteractiveFollowupPicker } from './InteractiveFollowupPicker'
 import { shareFile } from './interactiveShare'
-import { ArtifactKindMark, SHARE_LABELS } from './ArtifactKindMark'
-import { interactiveExport, kindExports, type ExportedFile } from '@ramu/shared/interactiveExport'
+import { ArtifactKindMark, HOST_SHARE_LABELS, SHARE_LABELS } from './ArtifactKindMark'
+import {
+  hostExportFormats,
+  interactiveExport,
+  kindExports,
+  type ExportedFile,
+  type HostExportFormat,
+} from '@ramu/shared/interactiveExport'
+import { artifactKind } from '@ramu/shared/artifacts'
 import { interactiveVersions, canCopyInteractiveState } from '@ramu/shared/interactiveVersions'
 import { InteractiveVisibility } from './InteractiveVisibility'
 import { translate } from '@ramu/shared/i18n'
@@ -253,6 +260,14 @@ export function InteractiveDocumentCard({
       .catch(() => setError(t('Could not share this content. Try again.')))
       .finally(() => setSharing(false))
   }
+  // The host makes these (and keeps them with the version), so the share sheet opens once the file arrives.
+  const shareMade = (format: HostExportFormat) => {
+    setSharing(true)
+    void invoke(chat.computerId, 'interactive.export', reference.sessionId, reference.id, reference.version, format)
+      .then(shareFile)
+      .catch(() => setError(t('Could not share this content. Try again.')))
+      .finally(() => setSharing(false))
+  }
   const share = (raw = false) => {
     const run = () => {
       if (!document || sharing) return
@@ -495,6 +510,18 @@ export function InteractiveDocumentCard({
               <View style={{ gap: 0 }}>
                 <ContentAction title={t('Share HTML')} disabled={!document || sharing} onPress={() => share()} />
                 <ContentAction title={t('Share source')} disabled={!document || sharing} onPress={() => share(true)} />
+              </View>
+            )}
+            {online && (
+              <View style={{ gap: 0 }}>
+                {hostExportFormats(artifactKind(reference.kind)).map((format) => (
+                  <ContentAction
+                    key={format}
+                    title={t(HOST_SHARE_LABELS[format])}
+                    disabled={sharing}
+                    onPress={() => shareMade(format)}
+                  />
+                ))}
               </View>
             )}
             {copyFrom && canCopyInteractiveState(copyFrom, reference) && (

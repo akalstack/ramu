@@ -37,6 +37,7 @@ import { providerLogin } from './providers/abilityChecks'
 import { AttachmentStore } from './attachments'
 import { registerInteractiveTools } from './interactive/tools'
 import { PageStore } from './interactive/pages'
+import { ArtifactExports } from './interactive/exports'
 import { PageAi, webSearch, type PageExternal, type PageExternalTool } from './interactive/pageAi'
 import type { JsonValue } from '@ramu/shared/interactive'
 import { PublicPages } from './interactive/publicPages'
@@ -888,6 +889,7 @@ const dispatcher = createDispatcher(
     threadTitles,
     interactive,
     pages,
+    artifactExports: new ArtifactExports(db),
     pageAi,
     abilities,
     notifyPage,

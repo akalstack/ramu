@@ -5,9 +5,10 @@ import { ARTIFACT_SOURCE_FILES, type DiagramFormat } from '@ramu/shared/artifact
 import type { ArtifactSource } from '@ramu/shared/artifactSource'
 import type { InteractiveFile } from '@ramu/shared/interactive'
 import { INTERACTIVE_KIT_CSS } from './kit'
+import { renderSlides } from './slides'
 import { cleanSvg } from './svg'
 
-/** What a Doc or Diagram becomes: the HTML the frame runs, the files its version keeps, and what its checks found. */
+/** What a Doc, Diagram or deck becomes: the HTML the frame runs, the files its version keeps, and what its checks found. */
 export interface RenderedKind {
   html: string
   files: InteractiveFile[]
@@ -142,7 +143,15 @@ async function renderDiagram(format: DiagramFormat, source: string, title: strin
   }
 }
 
-/** Draws a Doc or Diagram as the HTML the sandboxed frame runs. It has no script and loads nothing. */
-export function renderArtifactSource(source: ArtifactSource, title: string): Promise<RenderedKind> {
+/**
+ * Draws a Doc, Diagram or deck as the HTML the sandboxed frame runs. It has no script and loads nothing; a deck's images
+ * come from `files`.
+ */
+export async function renderArtifactSource(
+  source: ArtifactSource,
+  title: string,
+  files: InteractiveFile[] = [],
+): Promise<RenderedKind> {
+  if (source.kind === 'slides') return renderSlides(source, title, files)
   return source.kind === 'doc' ? renderDoc(source.source) : renderDiagram(source.format, source.source, title)
 }

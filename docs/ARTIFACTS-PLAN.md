@@ -56,20 +56,17 @@ The kind is chosen by the agent from the request, shown as a small mark on every
 
 ### 1. Kinds in the engine
 
-App, Doc and Diagram are in the engine (see [Kinds](guide/artifacts.md#kinds)). The remaining kinds and exports follow the same path: `artifact_publish` and `artifact_preview` take the kind and its source, validated by a zod schema per kind in `packages/shared/src/artifactSource.ts`, and the host draws the source into HTML for the sandboxed frame in `apps/server/src/interactive/kinds.ts`.
+App, Doc, Diagram and Slides are in the engine, with PDF for every kind and PowerPoint and slide images for decks, kept per version (see [Kinds](guide/artifacts.md#kinds)). The remaining kinds and exports follow the same path: `artifact_publish` and `artifact_preview` take the kind and its source, validated by a zod schema per kind in `packages/shared/src/artifactSource.ts`, and the host draws the source into HTML for the sandboxed frame in `apps/server/src/interactive/kinds.ts`.
 
 - **Kinds and their preview checks:**
-  - **Slides:** a slide list and theme, rendered as a deck; every slide fits its frame.
   - **Design:** HTML and CSS frames on a canvas.
   - **Dashboard:** chart and figure specs over declared sources; every query returns.
   - **Motion:** a timeline player; total length is within its bound.
 - **Renderers** share `ramu:kit` and the theme tokens, so every kind looks like Ramu in light and dark. Rendering stays offline unless the artifact declares sources.
 - **Exports run on the host:**
-  - **PPTX and DOCX:** written from the source with a pinned writer library, never by a model.
-  - **PDF:** the rendered frame printed by the headless browser.
-  - **PNG:** a Diagram, a slide or a design frame captured by the headless browser.
+  - **DOCX:** written from a Doc's source with a pinned writer library, never by a model.
+  - **PNG:** a Diagram or a design frame captured by the headless browser.
   - **MP4 and WebM:** frames captured by the headless browser and encoded with the browser's own WebCodecs `VideoEncoder`. This adds no ffmpeg binary, which is what kept browser recording out of Ramu so far.
-  - **Exports are kept:** every export is stored with the version it was made from, so a second export of the same version is instant.
 
 ### 2. Editing in place
 
@@ -93,12 +90,11 @@ App, Doc and Diagram are in the engine (see [Kinds](guide/artifacts.md#kinds)). 
 ### 5. Desktop
 
 - The artifact view opens as a workspace tab beside the chat, with the toolbar each kind needs:
-  - Slides: previous, next, present.
   - Doc: outline, edit.
   - Motion: play and scrub.
   - Dashboard: range and refresh.
 - Thread cards for every kind show a live preview (the first slide, the doc's opening, the chart, the poster frame) with **Open**, **Keep as artifact** and the kind's export.
-- **Present** for Slides fills the screen, with notes on a second display when there is one.
+- While presenting Slides, speaker notes show on a second display when there is one.
 
 ### 6. Phone
 

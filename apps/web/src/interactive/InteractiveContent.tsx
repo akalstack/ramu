@@ -20,10 +20,10 @@ import { Button } from '../components/desktop-button'
 import { GHOST_ICON_BUTTON_CLASS, GHOST_TEXT_BUTTON_CLASS } from '../components/button-classes'
 import { Menu, type MenuEntry } from '../Menu'
 import { ChatCodeBlock } from '../chat/ChatCodeBlock'
-import type { ArtifactInfo } from '@ramu/shared/artifacts'
+import { artifactKind, type ArtifactInfo } from '@ramu/shared/artifacts'
 import { usePageIndex } from '../pages/pageIndex'
 import { openPage } from '../pages/openPage'
-import { ArtifactKindMark, kindExportEntries } from '../pages/ArtifactKindMark'
+import { ArtifactKindMark, hostExportEntries, kindExportEntries } from '../pages/ArtifactKindMark'
 import type { InteractiveRevision, InteractiveUpdate } from '@ramu/shared/interactiveRevisions'
 import {
   InteractiveCarriedValues,
@@ -385,6 +385,9 @@ function InteractiveDocumentCard({
             onSelect: () => download(true),
           },
         ]),
+    ...hostExportEntries(artifactKind(reference.kind), reference.title, (format) =>
+      invoke('interactive.export', reference.sessionId, reference.id, reference.version, format),
+    ),
   ]
   const checked = reference.checked ? t('Controls checked in preview') : t('Rendering checked in preview')
   return (

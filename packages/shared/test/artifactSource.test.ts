@@ -29,6 +29,36 @@ it('reads a doc or diagram source and says what is wrong with one that does not 
 it('opens a kind this build does not know as an app', () => {
   expect(artifactKind('doc')).toBe('doc')
   expect(artifactKind('diagram')).toBe('diagram')
-  expect(artifactKind('slides')).toBe('app')
+  expect(artifactKind('slides')).toBe('slides')
+  expect(artifactKind('motion')).toBe('app')
   expect(artifactKind(undefined)).toBe('app')
+})
+
+it('reads a deck, filling in the theme, and names the slide and field of the first problem', () => {
+  expect(parseArtifactSource({ kind: 'slides', slides: [{ layout: 'title', title: 'Hi' }] })).toEqual({
+    kind: 'slides',
+    slides: [{ layout: 'title', title: 'Hi' }],
+    theme: { appearance: 'auto' },
+  })
+  const deck = (slides: unknown[], theme?: unknown) => () => parseArtifactSource({ kind: 'slides', slides, theme })
+  expect(deck([{ layout: 'content', title: 'A' }])).toThrow('Slide 1: a content slide needs body.')
+  expect(
+    deck([
+      { layout: 'title', title: 'A' },
+      { layout: 'quote', body: ' ' },
+    ]),
+  ).toThrow('Slide 2: a quote slide needs body.')
+  expect(deck([{ layout: 'image', image: { path: 'a.png', alt: 'A' }, columns: ['a', 'b'] }])).toThrow(
+    'Slide 1: an image slide does not show columns.',
+  )
+  expect(deck([{ layout: 'title', title: 'x'.repeat(201) }])).toThrow(
+    'Slide 1 title: Slide text is at most 200 characters. Split the slide.',
+  )
+  expect(
+    deck([{ layout: 'chart', chart: { type: 'pie', labels: ['a', 'b'], series: [{ name: 'n', values: [0, 0] }] } }]),
+  ).toThrow('Slide 1: a pie chart needs values of zero or more, and at least one above zero.')
+  expect(deck([{ layout: 'title', title: 'A' }], { accent: 'violet' })).toThrow(
+    'Give the accent as a hex color such as #7652d4.',
+  )
+  expect(deck([])).toThrow('Write the deck as a list of slides in slides.')
 })

@@ -24,7 +24,7 @@ export interface InteractiveReference {
   restoredFrom?: number
   /** The kept page that owns this document, when there is one. */
   artifactId?: string
-  /** A Doc or Diagram; absent for an App. Every kind runs as the same bundled HTML. */
+  /** A Doc, Diagram or Slides; absent for an App. Every kind runs as the same bundled HTML. */
   kind?: Exclude<ArtifactKind, 'app'>
 }
 export interface InteractiveNetwork {
@@ -207,7 +207,8 @@ const save=()=>{clearTimeout(timer);timer=setTimeout(()=>send('state',snapshot()
 ${bridgeCode}
 Object.defineProperty(window,'ramuContent',{value:Object.freeze({getState:()=>custom,setState:s=>{custom=s;save()},onRestore:f=>{restore.push(f);f(custom)},onActive:f=>{activity.push(f);f(active)},...page})});
 const theme=t=>{if(!t||typeof t!=='object')return;for(const [k,v] of Object.entries(t))if(/^--[a-z0-9-]+$/.test(k)&&typeof v==='string'&&!/[;{}<>]/.test(v))document.documentElement.style.setProperty(k,v)};
-addEventListener('message',e=>{if(parent!==window&&e.source!==parent)return;let m=e.data;try{if(typeof m==='string')m=JSON.parse(m)}catch{return}if(!m||m.ramuInteractive!==1||m.instance!==instance)return;if(m.type==='theme')theme(m.value);if(m.type==='active'){active=!!m.value;for(const f of activity)f(active);save()}if(m.type==='snapshot')send('state',snapshot(),m.requestId);if(m.type==='restore'){custom=m.value?.custom??null;for(const f of restore)f(custom)}received(m)});
+const slide=v=>{const s=document.querySelectorAll('[data-ramu-slide]'),i=Math.max(0,Math.min(s.length-1,Number(v?.index)||0));document.documentElement.toggleAttribute('data-ramu-present',!!v?.present);s.forEach((e,k)=>e.toggleAttribute('data-ramu-current',k===i));if(!v?.present)s[i]?.scrollIntoView({block:'start'})};
+addEventListener('message',e=>{if(parent!==window&&e.source!==parent)return;let m=e.data;try{if(typeof m==='string')m=JSON.parse(m)}catch{return}if(!m||m.ramuInteractive!==1||m.instance!==instance)return;if(m.type==='theme')theme(m.value);if(m.type==='slide')slide(m.value);if(m.type==='active'){active=!!m.value;for(const f of activity)f(active);save()}if(m.type==='snapshot')send('state',snapshot(),m.requestId);if(m.type==='restore'){custom=m.value?.custom??null;for(const f of restore)f(custom)}received(m)});
 addEventListener('error',e=>send('error',{message:String(e.message).slice(0,1000),steps:steps.slice()}));addEventListener('unhandledrejection',e=>send('error',{message:String(e.reason?.message??e.reason??'An interaction failed.').slice(0,1000),steps:steps.slice()}));
 addEventListener('DOMContentLoaded',()=>{if(initial){controls().forEach((e,i)=>{const s=initial.controls.find(c=>c.key===key(e,i));if(s){e.value=s.value;e.checked=s.checked;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}))}});for(const f of restore)f(custom)}document.addEventListener('input',save);document.addEventListener('change',save);document.addEventListener('submit',e=>e.preventDefault());let h=0;const size=()=>{const next=Math.max(48,Math.min(2000,Math.ceil(document.body.getBoundingClientRect().height)));if(next!==h){h=next;send('height',h)}};new ResizeObserver(size).observe(document.body);size();send('ready',true)});
 document.addEventListener('click',e=>{if(e.target.closest('a[href]'))e.preventDefault()},true);

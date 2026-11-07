@@ -241,6 +241,12 @@ interface ArtifactMethods {
   'artifacts.exists'(artifactId: string): boolean
   'artifacts.versions'(artifactId: string): import('./artifacts').ArtifactVersion[]
   'artifacts.document'(artifactId: string, version?: number): import('./interactive').InteractiveDocument
+  /** A PDF, PowerPoint or slide images the host makes from a version (the current one when absent), kept with it. */
+  'artifacts.export'(
+    artifactId: string,
+    version: number | undefined,
+    format: import('./interactiveExport').HostExportFormat,
+  ): import('./interactiveExport').ExportedFile
   /** Keeps a thread's document as an artifact owned by the host. */
   'artifacts.keep'(
     sessionId: string,
@@ -578,6 +584,13 @@ export interface RamuMethods extends ArtifactMethods {
   'interactive.list'(sessionId: string): import('./interactive').InteractiveReference[]
   /** The desktop and light screenshots a version's checks took, for Compare. */
   'interactive.media'(sessionId: string, id: string, version: number): { wide: string | null; light: string | null }
+  /** A PDF, PowerPoint or slide images the host makes from a thread's version, kept with it. */
+  'interactive.export'(
+    sessionId: string,
+    id: string,
+    version: number,
+    format: import('./interactiveExport').HostExportFormat,
+  ): import('./interactiveExport').ExportedFile
   /** Publishes an older version again as the newest one. */
   'interactive.restore'(sessionId: string, id: string, version: number): import('./interactive').InteractiveReference
   'onboarding.get'(): { needed: boolean }

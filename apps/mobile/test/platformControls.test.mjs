@@ -6274,7 +6274,9 @@ function interactiveCardHarness(os, cached = true) {
         return { name: 'export.html', html: '', mimeType: 'text/html' }
       },
       kindExports: () => [],
+      hostExportFormats: () => [],
     },
+    '@ramu/shared/artifacts': { artifactKind: (kind) => kind ?? 'app' },
     './interactiveShare': { shareFile: async () => {} },
   })
   return {

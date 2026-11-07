@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { interactiveExport, kindExports } from '../src/interactiveExport'
+import { hostExportFormats, interactiveExport, kindExports, slideCount } from '../src/interactiveExport'
 import type { InteractiveDocument } from '../src/interactive'
 const document: InteractiveDocument = {
   reference: {
@@ -66,4 +66,20 @@ it('exports a doc as Markdown and HTML and a diagram as SVG and Mermaid, from th
     'svg',
   ])
   expect(kindExports(document)).toEqual([])
+})
+
+it('exports a deck as HTML on the device and asks the host for PowerPoint, PDF and slide images', () => {
+  const deck: InteractiveDocument = {
+    ...document,
+    reference: { ...document.reference, kind: 'slides', title: 'Review' },
+    html: '<div class="ramu-deck"></div>',
+    files: [{ path: 'slides.json', content: JSON.stringify({ slides: [{}, {}, {}], theme: { appearance: 'auto' } }) }],
+  }
+  expect(kindExports(deck).map(({ format, file }) => [format, file.name])).toEqual([['html', 'Review.html']])
+  expect(slideCount(deck)).toBe(3)
+  expect(slideCount({ ...deck, files: [{ path: 'slides.json', content: '{' }] })).toBe(0)
+  expect(slideCount(document)).toBe(0)
+  expect(hostExportFormats('slides')).toEqual(['pptx', 'pdf', 'png'])
+  expect(hostExportFormats('app')).toEqual(['pdf'])
+  expect(hostExportFormats('doc')).toEqual(['pdf'])
 })

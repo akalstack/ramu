@@ -1,14 +1,28 @@
-import { AppWindow, FileText, Workflow, type LucideIcon } from 'lucide-react'
+import { AppWindow, FileText, Presentation, Workflow, type LucideIcon } from 'lucide-react'
 import type { ArtifactKind } from '@ramu/shared/artifacts'
 import type { InteractiveDocument } from '@ramu/shared/interactive'
-import { kindExports, type ExportedFile, type KindExportFormat } from '@ramu/shared/interactiveExport'
+import {
+  hostExportFormats,
+  kindExports,
+  type ExportedFile,
+  type HostExportFormat,
+  type KindExportFormat,
+} from '@ramu/shared/interactiveExport'
+import { notify } from '@/components/app-toaster'
 import type { MenuEntry } from '../Menu'
+import { notifyError } from '../chat/Notifications'
+import { errorText } from '../lib/errors'
 import { t } from '../i18n'
 
-const KIND_ICONS: Record<ArtifactKind, LucideIcon> = { app: AppWindow, doc: FileText, diagram: Workflow }
+const KIND_ICONS: Record<ArtifactKind, LucideIcon> = {
+  app: AppWindow,
+  doc: FileText,
+  diagram: Workflow,
+  slides: Presentation,
+}
 
 export function artifactKindLabel(kind: ArtifactKind): string {
-  return kind === 'doc' ? t('Doc') : kind === 'diagram' ? t('Diagram') : t('App')
+  return kind === 'doc' ? t('Doc') : kind === 'diagram' ? t('Diagram') : kind === 'slides' ? t('Slides') : t('App')
 }
 
 /**
@@ -36,7 +50,9 @@ export function ArtifactKindMark({
 
 /** Saves a file through the browser's download, as every export on the desktop does. */
 export function saveFile(file: ExportedFile) {
-  const url = URL.createObjectURL(new Blob([file.content], { type: file.mimeType }))
+  const content =
+    file.encoding === 'base64' ? Uint8Array.from(atob(file.content), (c) => c.charCodeAt(0)) : file.content
+  const url = URL.createObjectURL(new Blob([content], { type: file.mimeType }))
   const link = document.createElement('a')
   link.href = url
   link.download = file.name
@@ -61,5 +77,35 @@ export function kindExportEntries(document: InteractiveDocument | null, theme: R
     key: `export-${format}`,
     label: EXPORT_LABELS[format](),
     onSelect: () => saveFile(file),
+  }))
+}
+
+const HOST_EXPORT_LABELS: Record<HostExportFormat, () => string> = {
+  pptx: () => t('Export PowerPoint'),
+  pdf: () => t('Export PDF'),
+  png: () => t('Export slide images'),
+}
+
+/**
+ * The files the host makes for a kind (PDF for every kind; PowerPoint and slide images for a deck) for a menu. Making
+ * one can take a few seconds the first time, so a toast says so until it is saved.
+ */
+export function hostExportEntries(
+  kind: ArtifactKind,
+  title: string,
+  make: (format: HostExportFormat) => Promise<ExportedFile>,
+  disabled = false,
+): MenuEntry[] {
+  return hostExportFormats(kind).map((format) => ({
+    key: `export-${format}`,
+    label: HOST_EXPORT_LABELS[format](),
+    disabled,
+    onSelect: () => {
+      const toast = notify.add({ type: 'loading', title: t('Making the export…'), description: title, timeout: 0 })
+      void make(format)
+        .then(saveFile)
+        .catch((error) => notifyError(errorText(error), title))
+        .finally(() => notify.close(toast))
+    },
   }))
 }

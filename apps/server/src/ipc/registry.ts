@@ -28,6 +28,7 @@ import { registerUiHandlers } from './handlers/ui'
 import { registerThreadStartHandlers } from './handlers/threadStart'
 import { registerWorkspaceHandlers } from './handlers/workspace'
 import type { HandlerContext, MethodTable } from './types'
+import type { HostExportFormat } from '@ramu/shared/interactiveExport'
 
 /** The renderer's method table: every handler group, merged. Method names are unique across groups. */
 export const registerHandlers = (ctx: HandlerContext): MethodTable => {
@@ -52,6 +53,18 @@ export const registerHandlers = (ctx: HandlerContext): MethodTable => {
           ctx.interactive.get(session, id, version)
           const { wide, light } = ctx.interactive.media(id, version)
           return { wide, light }
+        },
+      },
+      'interactive.export': {
+        args: z.tuple([
+          z.string().min(1).max(200),
+          z.string().uuid(),
+          z.number().int().positive(),
+          z.enum(['pdf', 'pptx', 'png']),
+        ]),
+        run: (session: string, id: string, version: number, format: HostExportFormat) => {
+          if (!ctx.interactive || !ctx.artifactExports) throw new Error('Update this host for exports.')
+          return ctx.artifactExports.make(ctx.interactive.get(session, id, version), format)
         },
       },
       'interactive.restore': {

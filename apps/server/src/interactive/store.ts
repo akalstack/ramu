@@ -20,14 +20,14 @@ import { compileInteractive, INTERACTIVE_MAX_ARTIFACT, pinnedLibraries } from '.
 import { pageCapabilitiesOf } from './capabilities'
 import { renderArtifactSource } from './kinds'
 import { ARTIFACT_KINDS } from '@ramu/shared/artifacts'
-import { parseArtifactSource } from '@ramu/shared/artifactSource'
+import { parseArtifactSource, slideSchema, slideThemeSchema, SLIDES_MAX } from '@ramu/shared/artifactSource'
 
 export const interactiveInput = z.object({
   kind: z
     .enum(ARTIFACT_KINDS)
     .optional()
     .describe(
-      'app (default): interactive HTML in html or files. doc: writing to keep (a report, plan, spec, notes) as Markdown in source. diagram: a flowchart, sequence, state or concept diagram as Mermaid or SVG in source, with format.',
+      'app (default): interactive HTML in html or files. doc: writing to keep (a report, plan, spec, notes) as Markdown in source. diagram: a flowchart, sequence, state or concept diagram as Mermaid or SVG in source, with format. slides: a deck as slides and theme, with its images in files.',
     ),
   source: z
     .string()
@@ -37,6 +37,12 @@ export const interactiveInput = z.object({
       'The Doc or Diagram itself. Doc: Markdown with GFM tables, task lists, footnotes and ```mermaid blocks; raw HTML shows as text. Diagram: Mermaid text, or one <svg> element.',
     ),
   format: z.enum(['mermaid', 'svg']).optional().describe('How a diagram is written; required with kind diagram.'),
+  slides: z
+    .array(slideSchema)
+    .max(SLIDES_MAX)
+    .optional()
+    .describe(`The slides of a deck (kind slides), in order, at most ${SLIDES_MAX}.`),
+  theme: slideThemeSchema.optional().describe('The colors of a deck (kind slides).'),
   network: z
     .object({
       resources: z
@@ -190,8 +196,8 @@ export class InteractiveStore {
     const input = kept.length ? { ...parsed, checks: [...parsed.checks, ...kept].slice(0, 24) } : parsed
     if (signal?.aborted) throw new Error('Preview cancelled')
     if (input.kind && input.kind !== 'app') return this.previewKind(session, input, signal, kept)
-    if (input.source !== undefined)
-      throw new Error('Set kind to doc or diagram to publish source; apps use html or files.')
+    if (input.source !== undefined || input.slides !== undefined)
+      throw new Error('Set kind to doc, diagram or slides to publish source or slides; apps use html or files.')
     if (!input.html === !input.files) throw new Error('Provide either html or files, not both.')
     // A declaration that does not validate fails here, before any browser starts.
     pageCapabilitiesOf(input)
@@ -211,8 +217,8 @@ export class InteractiveStore {
     return this.savePreview(session, input, html, output, kept, null)
   }
   /**
-   * A Doc or Diagram is drawn into HTML on the host and checked like any page, with its kind's own checks: a diagram
-   * parses, and every heading of a doc has an anchor of its own.
+   * A Doc, Diagram or deck is drawn into HTML on the host and checked like any page, with its kind's own checks: a
+   * diagram parses, every heading of a doc has an anchor of its own, and every slide's text fits its box.
    */
   private async previewKind(
     session: string,
@@ -220,11 +226,15 @@ export class InteractiveStore {
     signal: AbortSignal | undefined,
     kept: InteractiveInput['checks'],
   ) {
-    if (input.html !== undefined || input.files !== undefined)
-      throw new Error(`A ${input.kind} is written in source; html and files are for apps.`)
+    if (input.html !== undefined || (input.files !== undefined && input.kind !== 'slides'))
+      throw new Error(
+        input.kind === 'slides'
+          ? 'A deck is written in slides; html is for apps.'
+          : `A ${input.kind} is written in source; html and files are for apps.`,
+      )
     const source = parseArtifactSource({ ...input, kind: input.kind ?? 'app' })
     const offline = { ...input, network: OFFLINE_NETWORK }
-    const rendered = await renderArtifactSource(source, input.title)
+    const rendered = await renderArtifactSource(source, input.title, input.files)
     if (signal?.aborted) throw new Error('Preview cancelled')
     if (Buffer.byteLength(rendered.html) > INTERACTIVE_MAX_ARTIFACT)
       throw new Error(`This ${input.kind} draws to more than 1.5 MB. Split it or simplify its diagrams.`)
@@ -323,6 +333,8 @@ export class InteractiveStore {
       id = previous.id
       version = previous.version + 1
     }
+    // A deck's files are its images, kept with its drawn source rather than as an app's project.
+    const project = input.kind && input.kind !== 'app' ? undefined : input.files
     const reference: InteractiveReference = {
       id,
       version,
@@ -333,9 +345,9 @@ export class InteractiveStore {
       createdAt: Date.now(),
       checked: preview.checks.length > 0,
       network: input.network ?? OFFLINE_NETWORK,
-      ...(input.files ? { libraries: pinnedLibraries() } : {}),
+      ...(project ? { libraries: pinnedLibraries() } : {}),
       ...(input.stateSchema ? { stateSchema: input.stateSchema } : {}),
-      ...(input.files ? { files: entryFirst(input.files, input.entry).map((file) => file.path) } : {}),
+      ...(project ? { files: entryFirst(project, input.entry).map((file) => file.path) } : {}),
       ...(input.kind && input.kind !== 'app' ? { kind: input.kind } : {}),
       ...(preview.sourceFiles ? { files: preview.sourceFiles.map((file) => file.path) } : {}),
       ...(previous ? { changes: options.changes!.trim().slice(0, 300) } : {}),
@@ -343,8 +355,8 @@ export class InteractiveStore {
       ...(options.artifactId ? { artifactId: options.artifactId } : {}),
     }
     const html = preview.artifact ?? interactiveDocumentHtml(input)
-    const files = input.files
-      ? JSON.stringify(entryFirst(input.files, input.entry))
+    const files = project
+      ? JSON.stringify(entryFirst(project, input.entry))
       : preview.sourceFiles
         ? JSON.stringify(preview.sourceFiles)
         : null

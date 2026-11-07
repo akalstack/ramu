@@ -7,6 +7,10 @@ const UTI: Record<string, string> = {
   'text/html': 'public.html',
   'text/markdown': 'net.daringfireball.markdown',
   'image/svg+xml': 'public.svg-image',
+  'application/pdf': 'com.adobe.pdf',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation':
+    'org.openxmlformats.presentationml.presentation',
+  'application/zip': 'public.zip-archive',
 }
 
 export const shareFile = createInteractiveSharer({
@@ -15,7 +19,7 @@ export const shareFile = createInteractiveSharer({
     // One replaceable file per format prevents accumulating a file for every shared revision.
     const extension = exported.name.slice(exported.name.lastIndexOf('.') + 1).replace(/[^a-z]/gi, '') || 'txt'
     const file = new File(Paths.cache, `ramu-export.${extension}`)
-    await file.write(exported.content)
+    await file.write(exported.content, exported.encoding === 'base64' ? { encoding: 'base64' } : undefined)
     return file.uri
   },
   share: (uri, metadata) =>
