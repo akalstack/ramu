@@ -96,6 +96,8 @@ export class HostingAccounts {
         setState,
         credentials,
       )
+    // Cloudflare Workers uses the Cloudflare account Pages uses: one sign-in, one place to replace it.
+    const cloudflare = saved('cloudflare')
     this.saved = {
       vercel: saved('vercel'),
       netlify: saved('netlify'),
@@ -103,7 +105,8 @@ export class HostingAccounts {
       fly: saved('fly'),
       server: saved('server'),
       'github-pages': saved('github-pages'),
-      cloudflare: saved('cloudflare'),
+      cloudflare,
+      'cloudflare-workers': cloudflare,
       neon: saved('neon'),
       expo: saved('expo'),
     }

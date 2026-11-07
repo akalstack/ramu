@@ -18,6 +18,7 @@ const BILLING_PAGES: Record<AccountPlatform, string> = {
   // GitHub Pages is free for public repositories and reports no usage, so no report is made for it.
   'github-pages': '',
   cloudflare: 'https://dash.cloudflare.com/?to=/:account/billing',
+  'cloudflare-workers': 'https://dash.cloudflare.com/?to=/:account/billing',
   neon: 'https://console.neon.tech/app/billing',
   expo: 'https://expo.dev/settings/billing',
 }

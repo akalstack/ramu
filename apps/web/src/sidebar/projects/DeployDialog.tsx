@@ -133,6 +133,7 @@ export function DeployDialog({
   // GitHub Pages goes through the repository's GitHub sign-in, so it needs nothing connected first.
   const toPages = !binding && platform === 'github-pages'
   const toCloudflare = !binding && platform === 'cloudflare'
+  const toWorkers = !binding && platform === 'cloudflare-workers'
   const confirm = () => {
     if (storeOnly) return onClose()
     if (toServer) {
@@ -178,13 +179,15 @@ export function DeployDialog({
                   ? t('Set up GitHub Pages')
                   : toCloudflare
                     ? t('Set up Cloudflare Pages')
-                    : !binding
-                      ? t('Link repository')
-                      : !canDeploy
-                        ? t('Done')
-                        : confirming
-                          ? t('Deploy now')
-                          : t('Deploy to production')
+                    : toWorkers
+                      ? t('Set up Cloudflare Workers')
+                      : !binding
+                        ? t('Link repository')
+                        : !canDeploy
+                          ? t('Done')
+                          : confirming
+                            ? t('Deploy now')
+                            : t('Deploy to production')
       }
       confirmDisabled={
         !status ||
@@ -286,6 +289,13 @@ export function DeployDialog({
             <p className="m-0 mt-3 text-caption">
               {t(
                 'For a static site: Ramu creates the Pages project, keeps your Pages token and account id in the repository’s GitHub Actions secrets, and opens a pull request with a deploy job that builds the site and uploads it with wrangler. Every merge to the default branch deploys, and each pull request gets a preview.',
+              )}
+            </p>
+          )}
+          {toWorkers && (
+            <p className="m-0 mt-3 text-caption">
+              {t(
+                'For a Worker with a wrangler config: Ramu keeps your Cloudflare token (which needs Workers Scripts edit) and account id in the repository’s GitHub Actions secrets and opens a pull request with a job that runs wrangler deploy. Every merge to the default branch deploys.',
               )}
             </p>
           )}

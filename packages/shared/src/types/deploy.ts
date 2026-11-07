@@ -11,6 +11,7 @@ export const HOSTING_PLATFORMS = [
   'server',
   'github-pages',
   'cloudflare',
+  'cloudflare-workers',
 ] as const
 export type HostingPlatform = (typeof HOSTING_PLATFORMS)[number]
 

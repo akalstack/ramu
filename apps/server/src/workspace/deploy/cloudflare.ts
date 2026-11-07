@@ -1,7 +1,7 @@
 // Cloudflare Pages with the person's own API token, limited to Pages: its API for the account and the Pages project.
 // Builds run in the repository's GitHub Actions (`wrangler pages deploy` with that token from the repository's
 // secrets); Ramu reads those runs, and dispatches the same job for a production deploy or a rollback.
-import { CLOUDFLARE_WORKFLOW } from '@ramu/shared/cloudflareDeploy'
+import { CLOUDFLARE_WORKFLOW, WORKERS_WORKFLOW } from '@ramu/shared/cloudflareDeploy'
 import { apexOf, recordName } from '@ramu/shared/domains'
 import { actionsDeploys } from './actionsDeploys'
 import {
@@ -173,3 +173,48 @@ export function cloudflareAdapter(
 }
 
 registerHostingAdapter(cloudflareAdapter())
+
+const WORKER = /^[a-z0-9-]{1,63}$/
+
+/**
+ * Cloudflare Workers with the same Cloudflare account as Pages (its token also needs Workers Scripts edit). Deploys
+ * run `wrangler deploy` in the repository's GitHub Actions; the Worker answers at its workers.dev address.
+ */
+export function cloudflareWorkersAdapter(
+  options: { api?: string; github?: string; fetch?: typeof fetch; pollMs?: number } = {},
+): HostingAdapter {
+  const pages = cloudflareAdapter(options)
+  const cloudflare = cloudflareApi(options)
+  const job = actionsDeploys({
+    workflow: WORKERS_WORKFLOW,
+    api: options.github ?? 'https://api.github.com',
+    fetch: options.fetch ?? fetch,
+    pollMs: options.pollMs ?? 2_000,
+  })
+  return {
+    id: 'cloudflare-workers',
+    name: 'Cloudflare Workers',
+    tokenPage: 'https://dash.cloudflare.com/profile/api-tokens',
+    account: (auth) => pages.account(auth),
+    listDeployments: (auth, site, limit) => job.list(auth, site, limit),
+    deploymentStatus: (auth, site, id) => job.status(auth, site, id),
+    deploymentLogs: (auth, site, id, lines) => job.log(auth, site, id, lines),
+    async productionUrl(auth, site) {
+      if (!WORKER.test(site.siteName) || !auth.scope) return null
+      const { subdomain } = await cloudflare
+        .call<{ subdomain?: string }>(
+          auth,
+          `/accounts/${encodeURIComponent(auth.scope)}/workers/subdomain`,
+          'reading the workers.dev address',
+        )
+        .catch(() => ({ subdomain: undefined }))
+      return subdomain ? `https://${site.siteName}.${subdomain}.workers.dev` : null
+    },
+    capabilities: {
+      deployProduction: (auth, site, ref) => job.deploy(auth, site, ref),
+      rollback: (auth, site, id) => job.rollback(auth, site, id),
+    },
+  }
+}
+
+registerHostingAdapter(cloudflareWorkersAdapter())

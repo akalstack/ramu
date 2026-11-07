@@ -28,13 +28,7 @@ export function pagesBuild(files: string[], packageJson: string | null): PagesBu
   }
   if (!manifest.scripts?.build) return null
   const uses = (name: string) => name in { ...manifest.dependencies, ...manifest.devDependencies }
-  const manager = files.includes('pnpm-lock.yaml')
-    ? 'pnpm'
-    : files.includes('yarn.lock')
-      ? 'yarn'
-      : files.includes('bun.lock') || files.includes('bun.lockb')
-        ? 'bun'
-        : 'npm'
+  const manager = packageManagerOf(files)
   const output = uses('next')
     ? 'out'
     : uses('react-scripts') || uses('@sveltejs/kit') || uses('@docusaurus/core')
@@ -44,6 +38,19 @@ export function pagesBuild(files: string[], packageJson: string | null): PagesBu
         : 'dist'
   return { manager, output }
 }
+
+/** The package manager a repository's lockfile names. */
+export const packageManagerOf = (files: string[]): PagesBuild['manager'] =>
+  files.includes('pnpm-lock.yaml')
+    ? 'pnpm'
+    : files.includes('yarn.lock')
+      ? 'yarn'
+      : files.includes('bun.lock') || files.includes('bun.lockb')
+        ? 'bun'
+        : 'npm'
+
+/** The command that installs a repository's dependencies exactly as its lockfile says. */
+export const installCommand = (manager: PagesBuild['manager']) => INSTALL[manager]
 
 const INSTALL: Record<PagesBuild['manager'], string> = {
   npm: 'npm ci',

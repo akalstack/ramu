@@ -1,4 +1,4 @@
-import { CloudflareSetup } from './cloudflareSetup'
+import { CloudflareSetup, WorkersSetup } from './cloudflareSetup'
 import { PagesSetup } from './pagesSetup'
 import { TokenExpiryNotices } from './tokenExpiry'
 import { DEFAULT_AGENT_SETTINGS, type AgentSettings } from '@ramu/shared/types'
@@ -60,6 +60,7 @@ export interface Deploys {
   fly: FlySetup
   pages: PagesSetup
   cloudflare: CloudflareSetup
+  workers: WorkersSetup
   wake: ProjectWake
 }
 
@@ -288,6 +289,7 @@ export function createDeploys(
     ),
     fly: new FlySetup(accounts, service, { repository: githubRepository, actionsSecrets: githubActionsTarget }),
     pages: new PagesSetup(accounts, service, { repository: githubRepository }),
+    workers: new WorkersSetup(accounts, service, { repository: githubRepository, actionsSecrets: githubActionsTarget }),
     cloudflare: new CloudflareSetup(accounts, service, {
       repository: githubRepository,
       actionsSecrets: githubActionsTarget,

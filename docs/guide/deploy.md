@@ -67,6 +67,10 @@ Merge it to deploy. The job's runs are the deployments, **Logs** shows a run's l
 
 For the same kinds of static site, **Cloudflare Pages** uses a Cloudflare API token you paste once in **Settings → Git → Hosting accounts**: a custom token with only **Account → Cloudflare Pages → Edit** for the one account your sites go in, since it is kept in each linked repository's Actions secrets. **Set up Cloudflare Pages** creates the Pages project (named after the Ramu project), puts the token and the account id in the repository's Actions secrets (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) and opens a pull request with `.github/workflows/cloudflare-deploy.yml`, which builds the site and uploads it with wrangler. Production deploys from the default branch to `https://<project>.pages.dev`, after CI passes when the repository has Ramu's CI, and each pull request gets a preview at its branch's address. **Deploy to production** and **Roll back** dispatch the same job. **Domains** adds a custom domain to the Pages project and shows the CNAME record to add where its DNS is kept; the Pages token cannot change DNS.
 
+## Cloudflare Workers
+
+For a Worker with a wrangler config (`wrangler.toml`, `wrangler.jsonc` or `wrangler.json` naming it), **Cloudflare Workers** uses the same Cloudflare account as Pages; its token also needs **Account → Workers Scripts → Edit**. **Set up Cloudflare Workers** puts the token and account id in the repository's Actions secrets and opens a pull request with `.github/workflows/cloudflare-workers-deploy.yml`, which installs the dependencies and runs `wrangler deploy`. The Worker answers at its `workers.dev` address; its routes and bindings come from the wrangler config. **Deploy to production** and **Roll back** dispatch the same job.
+
 ## Your own server
 
 **Own server** in the deploy sheet runs the app on a Linux server you rent (Ubuntu or Debian), as a Docker container behind [Caddy](https://caddyserver.com), which serves your domain over HTTPS with certificates it gets and renews itself. Deploys run in the repository's GitHub Actions, so the server never needs Ramu running.

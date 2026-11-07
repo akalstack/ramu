@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { cloudflareProjectName, cloudflareWorkflow } from '@ramu/shared/cloudflareDeploy'
-import { cloudflareAdapter, cloudflareBranchAlias } from '../src/workspace/deploy/cloudflare'
+import { cloudflareProjectName, cloudflareWorkflow, workerName, workersWorkflow } from '@ramu/shared/cloudflareDeploy'
+import { cloudflareAdapter, cloudflareBranchAlias, cloudflareWorkersAdapter } from '../src/workspace/deploy/cloudflare'
 
 describe('the Cloudflare Pages deploy job', () => {
   it('deploys production after CI and a preview per pull request, with wrangler and the repository’s secrets', () => {
@@ -118,5 +118,26 @@ describe('the Cloudflare Pages adapter', () => {
         zone: 'shop.com',
       },
     ])
+  })
+})
+
+describe('Cloudflare Workers', () => {
+  it('runs wrangler deploy after installing with the lockfile’s manager, and finds the Worker’s name and address', async () => {
+    const workflow = parse(workersWorkflow({ defaultBranch: 'main', afterCi: false, manager: 'pnpm' })) as {
+      on: Record<string, unknown>
+      jobs: { deploy: { steps: { uses?: string; run?: string; with?: Record<string, string> }[] } }
+    }
+    expect(workflow.on.push).toEqual({ branches: ['main'] })
+    expect(workflow.jobs.deploy.steps.some((step) => step.run?.includes('pnpm install --frozen-lockfile'))).toBe(true)
+    expect(workflow.jobs.deploy.steps.at(-1)?.with?.command).toBe('deploy')
+    expect(workerName('name = "api-worker"\nmain = "src/index.ts"')).toBe('api-worker')
+    expect(workerName('{\n  // edge\n  "name": "edge"\n}')).toBe('edge')
+    expect(workerName('main = "src/index.ts"')).toBeNull()
+    const fetcher = (async () =>
+      new Response(JSON.stringify({ success: true, result: { subdomain: 'ana' } }))) as unknown as typeof fetch
+    const workers = cloudflareWorkersAdapter({ api: 'https://cf.test', fetch: fetcher })
+    expect(
+      await workers.productionUrl({ token: 'cf', scope: 'acc1' }, { siteId: 'ana/api', siteName: 'api-worker' }),
+    ).toBe('https://api-worker.ana.workers.dev')
   })
 })

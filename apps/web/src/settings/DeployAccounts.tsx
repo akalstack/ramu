@@ -14,7 +14,7 @@ import { ServerConnect } from './ServerConnect'
 import { useSettingsInvoke } from './SettingsScope'
 
 /** What to pick on each platform's token page: the smallest scope it offers. */
-const SCOPE_HINT: Record<Exclude<AccountPlatform, 'server' | 'github-pages'>, string> = {
+const SCOPE_HINT: Record<Exclude<AccountPlatform, 'server' | 'github-pages' | 'cloudflare-workers'>, string> = {
   vercel: 'Scope: the team your projects are in, not Full Account',
   netlify: 'Netlify tokens reach every team you belong to, so choose an expiry',
   railway: 'Pick the workspace your projects are in, so the token reaches only that workspace',
@@ -78,7 +78,7 @@ export function DeployAccounts() {
     <>
       {/* GitHub Pages uses the repository's GitHub sign-in, listed under GitHub; there is nothing to connect. */}
       {summary?.accounts
-        .filter((account) => account.platform !== 'github-pages')
+        .filter((account) => account.platform !== 'github-pages' && account.platform !== 'cloudflare-workers')
         .map((account) => (
           <DeployAccountRow
             key={account.platform}
@@ -209,117 +209,120 @@ function DeployAccountRow({
           </span>
         </div>
       )}
-      {open && account.platform !== 'server' && account.platform !== 'github-pages' && (
-        <div className="mb-3 flex flex-col gap-3 rounded-(--radius-m) bg-fill p-4 text-caption">
-          {cliPlatform && (
-            <section className="flex flex-col gap-2" aria-label={t('Sign in with {0}', { 0: account.name })}>
-              <strong>{t('Sign in with {0}', { 0: account.name })}</strong>
+      {open &&
+        account.platform !== 'server' &&
+        account.platform !== 'github-pages' &&
+        account.platform !== 'cloudflare-workers' && (
+          <div className="mb-3 flex flex-col gap-3 rounded-(--radius-m) bg-fill p-4 text-caption">
+            {cliPlatform && (
+              <section className="flex flex-col gap-2" aria-label={t('Sign in with {0}', { 0: account.name })}>
+                <strong>{t('Sign in with {0}', { 0: account.name })}</strong>
+                <p className="m-0 text-muted-foreground">
+                  {t(
+                    'Runs {0}’s own sign-in on the host. Authorize Ramu in the page it opens; the token stays in this host’s credential store and your own CLI login is not changed.',
+                    { 0: account.name },
+                  )}
+                </p>
+                {signIn?.state === 'waiting' && signIn.url && (
+                  <span className="flex flex-wrap items-center gap-2" role="status">
+                    <Button size="sm" onClick={() => void openOnThisComputer('app.openExternal', signIn.url!)}>
+                      {t('Open the sign-in page')}
+                    </Button>
+                    {signIn.code && (
+                      <span>
+                        {t('Code')} <strong className="font-mono">{signIn.code}</strong>
+                      </span>
+                    )}
+                    <span className="text-muted-foreground">{t('Waiting for you to authorize…')}</span>
+                  </span>
+                )}
+                {signIn?.state === 'failed' && signIn.error && (
+                  <p role="alert" className="m-0 text-destructive">
+                    {signIn.error}
+                  </p>
+                )}
+                {!waiting && (
+                  <span>
+                    <Button
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => void run(async () => setSignIn(await invoke('deploy.signIn', cliPlatform)))}
+                    >
+                      {t('Sign in with {0}', { 0: account.name })}
+                    </Button>
+                  </span>
+                )}
+              </section>
+            )}
+            <form
+              className="flex flex-col gap-2"
+              onSubmit={(event) => {
+                event.preventDefault()
+                void run(async () => {
+                  await invoke('deploy.saveToken', account.platform, token.trim())
+                  setToken('')
+                  setOpen(false)
+                  reload(false)
+                })
+              }}
+            >
+              <strong>{account.cli ? t('Or use a token') : t('Connect with a token')}</strong>
+              <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-muted-foreground">
+                <li>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void openOnThisComputer('app.openExternal', account.tokenPage)}
+                  >
+                    {t('Open {0}’s token page', { 0: account.name })}
+                  </Button>
+                </li>
+                <li>{t('Name it Ramu.')}</li>
+                <li>{t(SCOPE_HINT[account.platform])}</li>
+                <li>
+                  {account.kind === 'hosting'
+                    ? t('Set an expiry, then copy the token and paste it here.')
+                    : t('Copy the key and paste it here.')}
+                </li>
+              </ol>
+              <label htmlFor={tokenId} className="flex flex-col gap-1">
+                {t('API token')}
+                <Input
+                  id={tokenId}
+                  type="password"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  disabled={busy}
+                  value={token}
+                  onChange={(event) => setToken(event.target.value)}
+                />
+              </label>
               <p className="m-0 text-muted-foreground">
                 {t(
-                  'Runs {0}’s own sign-in on the host. Authorize Ramu in the page it opens; the token stays in this host’s credential store and your own CLI login is not changed.',
-                  { 0: account.name },
+                  'The token goes straight to the host’s credential store, is checked with {0}, and is never shown again.',
+                  {
+                    0: account.name,
+                  },
                 )}
               </p>
-              {signIn?.state === 'waiting' && signIn.url && (
-                <span className="flex flex-wrap items-center gap-2" role="status">
-                  <Button size="sm" onClick={() => void openOnThisComputer('app.openExternal', signIn.url!)}>
-                    {t('Open the sign-in page')}
-                  </Button>
-                  {signIn.code && (
-                    <span>
-                      {t('Code')} <strong className="font-mono">{signIn.code}</strong>
-                    </span>
-                  )}
-                  <span className="text-muted-foreground">{t('Waiting for you to authorize…')}</span>
-                </span>
-              )}
-              {signIn?.state === 'failed' && signIn.error && (
+              {error && (
                 <p role="alert" className="m-0 text-destructive">
-                  {signIn.error}
+                  {error}
                 </p>
               )}
-              {!waiting && (
-                <span>
-                  <Button
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => void run(async () => setSignIn(await invoke('deploy.signIn', cliPlatform)))}
-                  >
-                    {t('Sign in with {0}', { 0: account.name })}
-                  </Button>
-                </span>
-              )}
-            </section>
-          )}
-          <form
-            className="flex flex-col gap-2"
-            onSubmit={(event) => {
-              event.preventDefault()
-              void run(async () => {
-                await invoke('deploy.saveToken', account.platform, token.trim())
-                setToken('')
-                setOpen(false)
-                reload(false)
-              })
-            }}
-          >
-            <strong>{account.cli ? t('Or use a token') : t('Connect with a token')}</strong>
-            <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-muted-foreground">
-              <li>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void openOnThisComputer('app.openExternal', account.tokenPage)}
-                >
-                  {t('Open {0}’s token page', { 0: account.name })}
+              <span className="flex gap-2">
+                <Button type="submit" size="sm" disabled={busy || token.trim().length < 8}>
+                  {busy ? t('Checking…') : t('Save')}
                 </Button>
-              </li>
-              <li>{t('Name it Ramu.')}</li>
-              <li>{t(SCOPE_HINT[account.platform])}</li>
-              <li>
-                {account.kind === 'hosting'
-                  ? t('Set an expiry, then copy the token and paste it here.')
-                  : t('Copy the key and paste it here.')}
-              </li>
-            </ol>
-            <label htmlFor={tokenId} className="flex flex-col gap-1">
-              {t('API token')}
-              <Input
-                id={tokenId}
-                type="password"
-                autoComplete="off"
-                autoCapitalize="none"
-                spellCheck={false}
-                disabled={busy}
-                value={token}
-                onChange={(event) => setToken(event.target.value)}
-              />
-            </label>
-            <p className="m-0 text-muted-foreground">
-              {t(
-                'The token goes straight to the host’s credential store, is checked with {0}, and is never shown again.',
-                {
-                  0: account.name,
-                },
-              )}
-            </p>
-            {error && (
-              <p role="alert" className="m-0 text-destructive">
-                {error}
-              </p>
-            )}
-            <span className="flex gap-2">
-              <Button type="submit" size="sm" disabled={busy || token.trim().length < 8}>
-                {busy ? t('Checking…') : t('Save')}
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={close}>
-                {t('Cancel')}
-              </Button>
-            </span>
-          </form>
-        </div>
-      )}
+                <Button type="button" variant="ghost" size="sm" onClick={close}>
+                  {t('Cancel')}
+                </Button>
+              </span>
+            </form>
+          </div>
+        )}
     </>
   )
 }

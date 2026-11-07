@@ -6088,4 +6088,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Read it by running expo config': 'Baca dengan menjalankan expo config',
   'Runs the project’s own app.config code on this computer to read the configuration it computes':
     'Menjalankan kode app.config proyek di komputer ini untuk membaca konfigurasi yang dihitungnya',
+  'Set up Cloudflare Workers': 'Siapkan Cloudflare Workers',
+  'For a Worker with a wrangler config: Ramu keeps your Cloudflare token (which needs Workers Scripts edit) and account id in the repository’s GitHub Actions secrets and opens a pull request with a job that runs wrangler deploy. Every merge to the default branch deploys.':
+    'Untuk Worker dengan konfigurasi wrangler: Ramu menyimpan token Cloudflare Anda (yang perlu Workers Scripts edit) dan id akun di secret GitHub Actions repositori, lalu membuka pull request berisi job yang menjalankan wrangler deploy. Setiap penggabungan ke cabang default men-deploy.',
 }
