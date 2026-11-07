@@ -74,6 +74,7 @@ describe('the Cloudflare Pages adapter', () => {
       [false, 'https://feature-login.shop.pages.dev'],
       [true, 'https://shop.pages.dev'],
     ])
+    expect(new URL(adapter.tokenPage).searchParams.get('permissionGroupKeys')).toBe('[{"key":"page","type":"edit"}]')
     expect(cloudflareBranchAlias('A/very-long-branch-name-that-goes-on')).toBe('a-very-long-branch-name-that')
     await expect(adapter.productionUrl(auth, { siteId: 'ana/shop', siteName: 'bad name' })).rejects.toThrow(
       'not one Ramu set up',

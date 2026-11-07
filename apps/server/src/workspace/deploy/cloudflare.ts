@@ -96,7 +96,10 @@ export function cloudflareAdapter(
   return {
     id: 'cloudflare',
     name: 'Cloudflare Pages',
-    tokenPage: 'https://dash.cloudflare.com/profile/api-tokens',
+    // Cloudflare's token form takes a template: only Pages edit, named Ramu.
+    tokenPage: `https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=${encodeURIComponent(
+      JSON.stringify([{ key: 'page', type: 'edit' }]),
+    )}&name=Ramu`,
     async account(auth) {
       const verified = await cloudflare.call<{ status?: string; expires_on?: string }>(
         auth,
