@@ -345,7 +345,12 @@ export class PageStore {
    * A version the person wrote themselves, drawn from what they edited, on top of `base`. When another version arrived
    * since `base` the edit is refused rather than merged, so neither side's words are lost silently.
    */
-  saveEdit(artifactId: string, base: number, drawn: { html: string; files: InteractiveFile[] }): ArtifactInfo {
+  saveEdit(
+    artifactId: string,
+    base: number,
+    drawn: { html: string; files: InteractiveFile[] },
+    changes = 'Edited by you',
+  ): ArtifactInfo {
     const current = this.row(artifactId).current_version
     if (current !== base)
       throw new Error(
@@ -356,7 +361,7 @@ export class PageStore {
       ...latest.reference,
       version: current + 1,
       createdAt: Date.now(),
-      changes: 'Edited by you',
+      changes,
       artifactId,
     }
     delete reference.restoredFrom

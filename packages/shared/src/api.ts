@@ -249,6 +249,8 @@ interface ArtifactMethods {
   'artifacts.editSource'(artifactId: string, base: number, text: string): import('./artifacts').ArtifactInfo
   /** The design artifact this host draws Design, Slides and Dashboard artifacts with, or null. */
   'artifacts.designSystem'(): string | null
+  /** Draws a deck, dashboard or design again with the host's design system, as a new version on top of `base`. */
+  'artifacts.restyle'(artifactId: string, base: number): import('./artifacts').ArtifactInfo
   /** Makes a design with tokens the host's design system, or stops using one with null. */
   'artifacts.setDesignSystem'(artifactId: string | null): void
   /** Keeps an artifact's current version as a template, without its records, values, grants or history. */

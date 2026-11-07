@@ -278,6 +278,23 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           },
         ]
       : []),
+    ...((page.kind === 'slides' || page.kind === 'dashboard' || page.kind === 'design') &&
+    designSystem &&
+    designSystem !== artifactId
+      ? [
+          {
+            key: 'restyle',
+            label: t('Restyle with the design system'),
+            disabled: viewOnly || !document,
+            onSelect: () => {
+              if (!document) return
+              void invoke('artifacts.restyle', artifactId, document.reference.version)
+                .then(() => load())
+                .catch((e) => notifyError(message(e)))
+            },
+          },
+        ]
+      : []),
     {
       key: 'template',
       label: t('Save as template'),

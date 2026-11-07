@@ -4,6 +4,7 @@ import { InteractiveStore, type InteractiveInput } from '../src/interactive/stor
 import { PageStore } from '../src/interactive/pages'
 import { cleanSvg } from '../src/interactive/svg'
 import { renderArtifactSource } from '../src/interactive/kinds'
+import { restyleArtifact } from '../src/interactive/restyle'
 import { parseArtifactSource } from '@ramu/shared/artifactSource'
 import { editableSource } from '@ramu/shared/artifacts'
 
@@ -199,4 +200,31 @@ it('keeps an artifact as a template without its values, and starts new artifacts
   pages.removeTemplate(template.id)
   expect(pages.templates()).toEqual([])
   expect(() => pages.fromTemplate(template.id)).toThrow('That template was removed.')
+})
+
+it('restyles a deck with the host’s design system as a new version, and needs one chosen first', async () => {
+  const { interactive, pages } = setup()
+  const system = await interactive.preview('s', {
+    kind: 'design',
+    frames: [{ name: 'Tokens', width: 400, height: 300, html: '<p>Aa</p>' }],
+    tokens: { colors: { primary: '#ff5500' } },
+    title: 'Brand',
+    summary: 'B',
+    checks: [],
+  } as never)
+  const brand = pages.keep('s', interactive.publish('s', system.id, 'r1').id, { title: 'Brand' })
+  const deck = await interactive.preview('s', {
+    kind: 'slides',
+    slides: [{ layout: 'title', title: 'Hello' }],
+    title: 'Deck',
+    summary: 'D',
+    checks: [],
+  } as never)
+  const kept = pages.keep('s', interactive.publish('s', deck.id, 'r2').id, { title: 'Deck' })
+  await expect(restyleArtifact(pages, kept.id, 1, null)).rejects.toThrow('Choose a design system first')
+  const restyled = await restyleArtifact(pages, kept.id, 1, brand.id)
+  expect(restyled.version).toBe(2)
+  const document = pages.document(kept.id)
+  expect(document.reference.changes).toBe('Restyled with Brand')
+  expect(document.html).toContain('--primary:#ff5500')
 })

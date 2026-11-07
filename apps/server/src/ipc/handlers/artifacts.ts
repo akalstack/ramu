@@ -21,6 +21,7 @@ import {
 import { ARTIFACT_SOURCE_FILES, DESIGN_SYSTEM_KEY, designTokensOf, editableSource } from '@ramu/shared/artifacts'
 import { STARTER_TEMPLATES } from '@ramu/shared/starterTemplates'
 import { renderArtifactSource } from '../../interactive/kinds'
+import { restyleArtifact } from '../../interactive/restyle'
 import { HOST_EXPORT_FORMATS, type HostExportFormat } from '@ramu/shared/interactiveExport'
 import { id } from '../schemas'
 import type { HandlerContext, RegisterHandlers } from '../types'
@@ -307,6 +308,16 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
         }
         ctx.workspace.setAppState(DESIGN_SYSTEM_KEY, artifactId)
       },
+    },
+    'artifacts.restyle': {
+      args: z.tuple([id, z.number().int().positive()]),
+      run: (artifactId: string, base: number) =>
+        restyleArtifact(
+          need().pages,
+          artifactId,
+          base,
+          ctx.workspace.getAppState<string | null>(DESIGN_SYSTEM_KEY, null),
+        ),
     },
     'artifacts.saveTemplate': {
       args: z.tuple([id]),
