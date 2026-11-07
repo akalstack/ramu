@@ -106,6 +106,8 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   const editForm = useRef<HTMLFormElement>(null)
   // A flowchart's labels while the person changes its words without its Mermaid syntax.
   const [editingLabels, setEditingLabels] = useState<{ base: number; source: string; labels: string[] } | null>(null)
+  const labelEditing = useRef(editingLabels)
+  const labelInputs = useRef<(HTMLInputElement | null)[]>([])
   // A deck's slide text while the person edits it, slide by slide, and the version it started from.
   const [editingDesign, setEditingDesign] = useState<{
     base: number
@@ -221,6 +223,14 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
     instance,
     stateRevision: revision,
     onPicked: (element) => {
+      // While labels are edited, a word clicked on the drawing focuses its field, and the next click works too.
+      if (labelEditing.current) {
+        const clicked = element.text.replace(/\s+/g, ' ').trim()
+        const at = labelEditing.current.labels.findIndex((label) => label.replace(/\s+/g, ' ').trim() === clicked)
+        if (at >= 0) labelInputs.current[at]?.focus()
+        bridge.pick(true)
+        return
+      }
       setPicking(false)
       setPicked(element)
     },
@@ -228,6 +238,20 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
     onStartThread: (prompt) => askThread(prompt, t('The page asks to start a thread')),
   })
   bridgeRestore.current = bridge.restore
+  // Editing labels keeps the drawing in view in pick mode, so a word on it can be clicked to edit.
+  useEffect(() => {
+    labelEditing.current = editingLabels
+  }, [editingLabels])
+  const labelsOpen = !!editingLabels
+  const pickLatest = useRef(bridge.pick)
+  useEffect(() => {
+    pickLatest.current = bridge.pick
+  })
+  useEffect(() => {
+    if (!labelsOpen || !ready) return
+    pickLatest.current(true)
+    return () => pickLatest.current(false)
+  }, [labelsOpen, ready])
   useEffect(() => {
     const receive = (event: MessageEvent) => {
       if (event.source !== frame.current?.contentWindow) return
@@ -919,7 +943,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
       {editingLabels && (
         <form
           aria-label={t('Edit labels')}
-          className="flex min-h-0 flex-1 flex-col gap-2 p-3"
+          className="flex max-h-[45%] min-h-0 flex-col gap-2 border-t border-(--line) p-3"
           onSubmit={(event) => {
             event.preventDefault()
             setSavingEdit(true)
@@ -938,6 +962,9 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
             {editingLabels.labels.map((label, index) => (
               <li key={index}>
                 <Input
+                  ref={(input) => {
+                    labelInputs.current[index] = input
+                  }}
                   aria-label={t('Label {number}', { number: index + 1 })}
                   value={label}
                   onChange={(event) =>
@@ -1036,7 +1063,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
         </form>
       )}
       <div
-        hidden={!!editing || !!editingSlides || !!editingDesign || !!editingLabels}
+        hidden={!!editing || !!editingSlides || !!editingDesign}
         className={`relative min-h-0 flex-1 overflow-auto ${width ? 'flex justify-center bg-fill px-3 py-4' : ''}`}
       >
         <div
