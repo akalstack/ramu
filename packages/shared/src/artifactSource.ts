@@ -234,6 +234,28 @@ export const dashboardDatasetSchema = z
     }
     return { ...table, columns: table.columns }
   })
+export const DASHBOARD_RANGE_MAX = 3650
+/** The live tables whose rows carry a time, by the column that holds it. */
+const SOURCE_TIME: Partial<Record<DashboardSourceKind, string>> = { deployments: 'created', uptime: 'checked' }
+const DATE = /^\d{4}-\d{2}-\d{2}/
+
+/**
+ * The column a table's rows are dated by: a live source's own time column, else the first column whose values are all
+ * ISO dates; -1 when it has none, and then a range leaves the table whole.
+ */
+export function dashboardTimeColumn(table: {
+  columns: string[]
+  rows: (string | number | null)[][]
+  source?: DashboardSourceKind
+}): number {
+  const known = table.source && SOURCE_TIME[table.source]
+  if (known) return table.columns.indexOf(known)
+  return table.columns.findIndex((_, at) => {
+    const values = table.rows.map((row) => row[at]).filter((value) => value !== null && value !== '')
+    return values.length > 0 && values.every((value) => typeof value === 'string' && DATE.test(value))
+  })
+}
+
 export const DASHBOARD_AGGREGATES = ['sum', 'average', 'count', 'min', 'max', 'last'] as const
 export const dashboardFigureSchema = z.object({
   label: z.string().trim().min(1).max(60),
@@ -262,6 +284,7 @@ const dashboardSource = z
     charts: z.array(dashboardChartSchema).max(12).default([]),
     theme: slideThemeSchema.default({ appearance: 'auto' }),
     refreshMinutes: z.number().int().min(5).max(1440).optional(),
+    rangeDays: z.number().int().min(1).max(DASHBOARD_RANGE_MAX).optional(),
   })
   .superRefine((board, ctx) => {
     const tables = new Map(board.datasets.map((table) => [table.id, table]))
@@ -437,6 +460,7 @@ export function parseArtifactSource(input: {
   figures?: unknown
   charts?: unknown
   refreshMinutes?: unknown
+  rangeDays?: unknown
   frames?: unknown
   scenes?: unknown
   tokens?: unknown

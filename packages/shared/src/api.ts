@@ -261,6 +261,8 @@ interface ArtifactMethods {
   'artifacts.removeTemplate'(templateId: string): void
   /** Sets how often a dashboard's live tables are read again, as a new version on top of `base`. */
   'artifacts.setRefresh'(artifactId: string, base: number, minutes: number): import('./artifacts').ArtifactInfo
+  /** Shows only a dashboard's last `days` of dated rows (all of them when null), as a new version on top of `base`. */
+  'artifacts.setRange'(artifactId: string, base: number, days: number | null): import('./artifacts').ArtifactInfo
   /** Saves the person's text for each slide of a deck as a new version on top of `base`; refused if another came since. */
   'artifacts.editSlides'(
     artifactId: string,

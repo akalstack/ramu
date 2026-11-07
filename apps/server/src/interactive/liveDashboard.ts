@@ -60,7 +60,7 @@ export class LiveDashboards {
     if (kept && this.now() - kept.at < refreshMs(document)) return kept.document
     const source = await this.fresh(document, projectId)
     if (!source) return document
-    const refreshed = { ...document, html: renderDashboard(source, document.reference.title).html }
+    const refreshed = { ...document, html: renderDashboard(source, document.reference.title, this.now()).html }
     this.drawn.set(key, { at: this.now(), document: refreshed })
     if (this.drawn.size > KEEP) this.drawn.delete(this.drawn.keys().next().value!)
     return refreshed

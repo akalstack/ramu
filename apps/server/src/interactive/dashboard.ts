@@ -1,7 +1,12 @@
 // A Dashboard drawn on the host: figures and charts worked out from the tables it carries, as plain HTML with SVG
 // charts in the frame's theme colors. It says when its data was read, so a copy opened later never passes for current.
 import { ARTIFACT_SOURCE_FILES } from '@ramu/shared/artifacts'
-import type { DashboardAggregate, DashboardSource, SlideChart } from '@ramu/shared/artifactSource'
+import {
+  dashboardTimeColumn,
+  type DashboardAggregate,
+  type DashboardSource,
+  type SlideChart,
+} from '@ramu/shared/artifactSource'
 import type { RenderedKind } from './kinds'
 import { chartSvg, deckVariables } from './slides'
 
@@ -93,8 +98,28 @@ const DASHBOARD_CSS =
   '.ramu-dashchart figcaption{font-weight:600;margin-bottom:8px}' +
   '.ramu-dashchart svg{display:block;width:100%;height:auto}'
 
-export function renderDashboard(board: DashboardSource, title: string): RenderedKind {
-  const tables = new Map(board.datasets.map((table) => [table.id, table]))
+const DAY_MS = 86_400_000
+
+/** The board with each dated table cut to its last `rangeDays` before `now`; undated tables stay whole. */
+function withinRange(board: DashboardSource, now: number): DashboardSource {
+  if (!board.rangeDays) return board
+  const since = now - board.rangeDays * DAY_MS
+  return {
+    ...board,
+    datasets: board.datasets.map((table) => {
+      const at = dashboardTimeColumn(table)
+      if (at < 0) return table
+      return { ...table, rows: table.rows.filter((row) => Date.parse(String(row[at])) >= since) }
+    }),
+  }
+}
+
+const rangeLabel = (days: number) =>
+  days % 365 === 0 ? `last ${days / 365 === 1 ? 'year' : `${days / 365} years`}` : `last ${days} days`
+
+export function renderDashboard(board: DashboardSource, title: string, now = Date.now()): RenderedKind {
+  const shown = withinRange(board, now)
+  const tables = new Map(shown.datasets.map((table) => [table.id, table]))
   const figures = board.figures.map((figure) => {
     const value = aggregate(column(tables.get(figure.dataset)!, figure.column), figure.aggregate)
     return `<div class="ramu-figure"><span>${escapeHtml(figure.label)}</span><strong>${escapeHtml(formatFigure(value, figure.unit))}</strong></div>`
@@ -108,7 +133,7 @@ export function renderDashboard(board: DashboardSource, title: string): Rendered
   return {
     html:
       `<style>${DASHBOARD_CSS}</style><div class="ramu-dashboard" role="region" aria-label="${escapeHtml(title)}"${variables ? ` style="${variables}"` : ''}>` +
-      `<p class="ramu-asof">${read ? `As of <time datetime="${read}">${escapeHtml(new Date(read).toUTCString())}</time>` : 'Data as it was when this version was published'}</p>` +
+      `<p class="ramu-asof">${read ? `As of <time datetime="${read}">${escapeHtml(new Date(read).toUTCString())}</time>` : 'Data as it was when this version was published'}${board.rangeDays ? ` · ${rangeLabel(board.rangeDays)}` : ''}</p>` +
       (figures.length ? `<div class="ramu-figures">${figures.join('')}</div>` : '') +
       (charts.length ? `<div class="ramu-charts">${charts.join('')}</div>` : '') +
       '</div>',
@@ -121,6 +146,7 @@ export function renderDashboard(board: DashboardSource, title: string): Rendered
           charts: board.charts,
           theme: board.theme,
           ...(board.refreshMinutes ? { refreshMinutes: board.refreshMinutes } : {}),
+          ...(board.rangeDays ? { rangeDays: board.rangeDays } : {}),
         }),
       },
     ],

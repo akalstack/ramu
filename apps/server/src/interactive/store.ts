@@ -26,6 +26,7 @@ import {
   designFrameSchema,
   motionSceneSchema,
   dashboardChartSchema,
+  DASHBOARD_RANGE_MAX,
   designTokenCss,
   designTokensSchema,
   type DesignTokens,
@@ -91,6 +92,15 @@ export const interactiveInput = z.object({
     .optional()
     .describe(
       'How often a dashboard with live tables reads them again: on opening and for watched figures (default 5).',
+    ),
+  rangeDays: z
+    .number()
+    .int()
+    .min(1)
+    .max(DASHBOARD_RANGE_MAX)
+    .optional()
+    .describe(
+      'Show only the last this many days of a dashboard’s dated tables (such as 30), counted from when it is drawn.',
     ),
   charts: z
     .array(dashboardChartSchema)

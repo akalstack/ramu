@@ -150,6 +150,37 @@ it('reads a table from a project file, by header or key, and refuses paths outsi
   expect(read).toHaveBeenCalledWith('p1', expect.objectContaining({ file: 'data/s.csv' }))
 })
 
+it('cuts dated tables to the dashboard’s range when drawn, leaving undated ones whole', () => {
+  const parsed = parseArtifactSource({
+    kind: 'dashboard',
+    rangeDays: 7,
+    datasets: [
+      {
+        id: 'daily',
+        columns: ['day', 'signups'],
+        rows: [
+          ['2026-10-01', 100],
+          ['2026-11-02', 3],
+          ['2026-11-06T12:00:00Z', 4],
+        ],
+      },
+      { id: 'plans', columns: ['plan', 'count'], rows: [['free', 9]] },
+      { id: 'deploys', source: 'deployments' },
+    ],
+    figures: [
+      { label: 'Signups', dataset: 'daily', column: 'signups' },
+      { label: 'Plans', dataset: 'plans', column: 'count' },
+    ],
+  })
+  if (parsed.kind !== 'dashboard') throw new Error('not a dashboard')
+  const drawn = renderDashboard(parsed, 'Growth', Date.parse('2026-11-07T00:00:00Z'))
+  expect(drawn.html).toContain('<span>Signups</span><strong>7</strong>')
+  expect(drawn.html).toContain('<span>Plans</span><strong>9</strong>')
+  expect(drawn.html).toContain(' · last 7 days</p>')
+  expect(JSON.parse(drawn.files[0]!.content)).toMatchObject({ rangeDays: 7 })
+  expect(JSON.parse(drawn.files[0]!.content).datasets[0].rows).toHaveLength(3)
+})
+
 it('tells the person’s devices when a watched figure changes, remembering values between rounds', async () => {
   const source = parseArtifactSource({
     kind: 'dashboard',

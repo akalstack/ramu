@@ -13,6 +13,7 @@ import { NO_PROJECT } from '@ramu/shared/types'
 import {
   DOC_MAX_SOURCE,
   SLIDES_MAX,
+  DASHBOARD_RANGE_MAX,
   editSlideText,
   parseArtifactSource,
   slideTextEdit,
@@ -428,6 +429,21 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
           ...(JSON.parse(stored) as object),
           refreshMinutes: minutes,
         })
+        return pages.saveEdit(artifactId, base, await renderArtifactSource(source, artifact.title), editedBy())
+      },
+    },
+    'artifacts.setRange': {
+      args: z.tuple([id, z.number().int().positive(), z.number().int().min(1).max(DASHBOARD_RANGE_MAX).nullable()]),
+      run: async (artifactId: string, base: number, days: number | null) => {
+        const { pages } = need()
+        const artifact = pages.get(artifactId)
+        if (artifact.kind !== 'dashboard') throw new Error('Only a dashboard has a time range.')
+        const stored = pages
+          .document(artifactId, base)
+          .files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.dashboard)?.content
+        if (!stored) throw new Error('This dashboard version has no tables. Ask the agent to publish it again.')
+        const { rangeDays: _was, ...board } = JSON.parse(stored) as { rangeDays?: number }
+        const source = parseArtifactSource({ kind: 'dashboard', ...board, ...(days ? { rangeDays: days } : {}) })
         return pages.saveEdit(artifactId, base, await renderArtifactSource(source, artifact.title), editedBy())
       },
     },

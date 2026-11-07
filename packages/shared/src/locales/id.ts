@@ -6037,4 +6037,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Who said it': 'Siapa yang mengatakannya',
   'Text {number} of {frame}': 'Teks {number} dari {frame}',
   'No text in this frame.': 'Tidak ada teks di bingkai ini.',
+  'Range': 'Rentang',
+  'All time': 'Sepanjang waktu',
+  'Last year': 'Setahun terakhir',
+  'Last {count} days': '{count} hari terakhir',
 }
