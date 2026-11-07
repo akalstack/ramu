@@ -233,6 +233,18 @@ describe('ability calls', () => {
     })
   })
 
+  it('follows a project’s own choice in its ramu.json over the host’s', async () => {
+    const abilities = service(working)
+    await abilities.refresh()
+    writeFileSync(join(cwd, 'ramu.json'), JSON.stringify({ abilities: { web_search: 'off' } }))
+    expect(await abilities.call('thread', 'web_search', { query: 'Node release' })).toMatchObject({
+      status: 'refused',
+      message: expect.stringContaining("turned off in this project's ramu.json"),
+    })
+    writeFileSync(join(cwd, 'ramu.json'), JSON.stringify({ abilities: { web_search: 'auto' } }))
+    expect(await abilities.call('thread', 'web_search', { query: 'Node release' })).toMatchObject({ status: 'done' })
+  })
+
   it('moves on to the next provider at a usage limit, and never to another login of the same one', async () => {
     await service(working, 'opencode').refresh()
     const run = vi.fn<AbilityRun>(async (route, declaration, request, signal, timeout) => {

@@ -13,7 +13,7 @@ import {
   SIDEBAR_WIDTH_RANGE,
 } from '@ramu/shared/types'
 import { agentSettings, id, pullMode, providerId } from './schemas'
-import { ABILITIES, DEFAULT_ABILITY_PREFERENCES } from '@ramu/shared/providers/abilities'
+import { ABILITIES, DEFAULT_ABILITY_PREFERENCES, type AbilityPreferences } from '@ramu/shared/providers/abilities'
 
 export const providerBinaries = z
   .object(
@@ -102,8 +102,12 @@ const subagentPreferences = z.preprocess(
   }),
 )
 const abilityChoice = z.union([z.enum(['auto', 'off']), z.object({ provider: providerId, model: z.string().max(200) })])
+/** Auto, Off or one provider and model per ability; a project's `ramu.json` can set these over the host's. */
+export const abilityChoices = z.object(
+  Object.fromEntries(ABILITIES.map((ability) => [ability, abilityChoice.optional()])),
+) as z.ZodType<AbilityPreferences['choices']>
 const abilityPreferences = z.object({
-  choices: z.object(Object.fromEntries(ABILITIES.map((ability) => [ability, abilityChoice.optional()]))).default({}),
+  choices: abilityChoices.default({}),
   askBeforeOtherProvider: z.boolean().default(false),
 })
 const advisorPreferences = z.object({

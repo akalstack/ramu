@@ -33,6 +33,7 @@ import type { JsonValue } from '@ramu/shared/interactive'
 import { AbilityChecks, type AbilityLogin, type AbilityProbe } from '../providers/abilityChecks'
 import type { AbilityDeclaration } from '../providers/adapter'
 import { providerAdapter } from '../providers/adapters'
+import { loadProjectConfig } from '../workspace/projectConfig'
 import { classifyLimit } from '../providers/limitClassifier'
 import { providerAccountId } from '../providers/providerBinaries'
 import { resolveInRoot } from '../workspace/files'
@@ -379,11 +380,22 @@ export class AbilityService {
       const session = this.host.session(sessionId)
       prepared = await this.prepare(session, tool, args)
       const done = prepared
-      const routes = abilityRoutes(ability, this.preferences(), this.passed(), this.order(), providerAccountId, exclude)
+      const host = this.preferences()
+      // The thread's project can narrow the host's choices in its ramu.json, such as keeping a client to one provider.
+      const project = loadProjectConfig(session.cwd).config.abilities ?? {}
+      const choices = { ...host.choices, ...project }
+      const routes = abilityRoutes(
+        ability,
+        { ...host, choices },
+        this.passed(),
+        this.order(),
+        providerAccountId,
+        exclude,
+      )
       if (routes === null)
         throw new Refusal(
           'off',
-          `${ABILITY_LABELS[ability]} is turned off in Settings → Models → Abilities. Continue without it and say so in your reply.`,
+          `${ABILITY_LABELS[ability]} is turned off ${project[ability] === 'off' ? "in this project's ramu.json" : 'in Settings → Models → Abilities'}. Continue without it and say so in your reply.`,
         )
       const stop = new AbortController()
       const abort = () => stop.abort()

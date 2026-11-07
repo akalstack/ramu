@@ -1,7 +1,7 @@
 import { closeSync, fstatSync, openSync, readFileSync, realpathSync } from 'node:fs'
 import { isAbsolute, join, relative } from 'node:path'
 import { z } from 'zod'
-import { appPreferences } from '../ipc/preferences'
+import { abilityChoices, appPreferences } from '../ipc/preferences'
 import { STACK_IDS } from '@ramu/shared/stacks'
 
 export const projectActionSchema = z.object({
@@ -38,6 +38,8 @@ export const projectConfigSchema = z.object({
       branchInstructions: appPreferences.shape.worktreeBranchInstructions.removeDefault().optional(),
     })
     .optional(),
+  /** Ability choices for this project over the host's Settings → Models → Abilities, such as one provider for a client. */
+  abilities: abilityChoices.optional(),
   /** What a new project was started with, so later threads know how to run, build, test and deploy it. */
   stack: z
     .object({
