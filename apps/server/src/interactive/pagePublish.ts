@@ -1,38 +1,22 @@
 import { interactiveExport } from '@ramu/shared/interactiveExport'
 import type { ArtifactInfo } from '@ramu/shared/artifacts'
-import { SavedCredential } from '../workspace/forge/savedCredential'
 import type { ForgeAccountStore } from '../workspace/forgeAccounts'
 import type { HostingAccounts } from '../workspace/deploy/accounts'
 import { STATIC_TARGETS, staticAdapter, type StaticTarget } from '../hosting/staticSite'
 import type { PageStore } from './pages'
 
-type State = ConstructorParameters<typeof SavedCredential>[1]
-type SetState = ConstructorParameters<typeof SavedCredential>[2]
-
 /**
  * Publish to the web: a page's exact tested bytes as a one-file static site on the person's own account. GitHub Pages
- * uses the GitHub login saved in Settings, Netlify and Vercel the hosting accounts deploys use (Settings → Hosting
- * accounts), and Cloudflare Pages a token kept in the host's credential store.
+ * uses the GitHub login saved in Settings; Netlify, Vercel and Cloudflare Pages the hosting accounts deploys use
+ * (Settings → Hosting accounts).
  */
 export class PagePublisher {
-  private readonly cloudflare: SavedCredential<{ token: string; label?: string }>
-
   constructor(
     private readonly pages: PageStore,
     private readonly forge: () => ForgeAccountStore | undefined,
     private readonly hosting: HostingAccounts | undefined,
-    getState: State,
-    setState: SetState,
     private readonly fetcher: typeof fetch = fetch,
-    credentials?: ConstructorParameters<typeof SavedCredential>[3],
-  ) {
-    this.cloudflare = new SavedCredential<{ token: string; label?: string }>(
-      { key: 'hosting-cloudflare-pages', connectionId: 'hosting-cloudflare-pages', shown: 'label' },
-      getState,
-      setState,
-      credentials,
-    )
-  }
+  ) {}
 
   /** Each platform, and whether this host can deploy there without asking for a token. */
   targets(): { target: StaticTarget; name: string; connected: boolean }[] {
@@ -42,16 +26,8 @@ export class PagePublisher {
       connected:
         target === 'github-pages'
           ? !!this.forge()?.choiceId('https://github.com')
-          : target === 'cloudflare-pages'
-            ? !!this.cloudflare.savedField()
-            : !!this.hosting?.connected(target),
+          : !!this.hosting?.connected(target === 'cloudflare-pages' ? 'cloudflare' : target),
     }))
-  }
-
-  /** A Cloudflare token limited to Pages may need the account ID beside it; it is kept with the token. */
-  async saveCloudflareToken(token: string, account?: string) {
-    const value = account?.trim() ? `${account.trim()}:${token.trim()}` : token.trim()
-    await this.cloudflare.save({ token: value, label: 'Cloudflare Pages token' })
   }
 
   private async token(target: StaticTarget): Promise<string> {
@@ -60,12 +36,12 @@ export class PagePublisher {
       if (account?.kind !== 'saved') throw new Error('Connect a GitHub account in Settings → Git hosting first.')
       return account.token
     }
-    if (target === 'cloudflare-pages') {
-      const saved = await this.cloudflare.read()
-      if (!saved) throw new Error('Add a Cloudflare Pages token first.')
-      return saved.token
-    }
     if (!this.hosting) throw new Error('Update this host to publish there.')
+    if (target === 'cloudflare-pages') {
+      // A token limited to Pages often cannot list accounts, so the account it was connected with goes beside it.
+      const { auth, defaultScope } = await this.hosting.auth('cloudflare')
+      return defaultScope ? `${defaultScope}:${auth.token}` : auth.token
+    }
     return (await this.hosting.auth(target)).auth.token
   }
 

@@ -519,7 +519,6 @@ it('publishes a page without records or AI to the web and updates the same site 
   const { PagePublisher } = await import('../src/interactive/pagePublish')
   const { interactive, pages, page } = await setup()
   const forge = { resolve: async () => ({ kind: 'saved', token: 'gh' }), choiceId: () => 'saved' }
-  const state = new Map<string, unknown>()
   const requests: string[] = []
   const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
@@ -529,15 +528,8 @@ it('publishes a page without records or AI to the web and updates the same site 
     return new Response('{}')
   }) as typeof fetch
   // Netlify and Vercel come from the hosting accounts deploys use; only Vercel is connected here.
-  const hosting = { connected: (target: string) => target === 'vercel' }
-  const publisher = new PagePublisher(
-    pages,
-    () => forge as never,
-    hosting as never,
-    (key, fallback) => (state.get(key) ?? fallback) as never,
-    (key, value) => void state.set(key, value),
-    fetcher,
-  )
+  const hosting = { connected: (target: string) => target === 'vercel' || target === 'cloudflare' }
+  const publisher = new PagePublisher(pages, () => forge as never, hosting as never, fetcher)
   await expect(publisher.publish(page.id, 'github-pages')).rejects.toThrow('Make it a project')
   const plain = interactive.publish('s', (await interactive.preview('s', { ...input, html: '<p>Trip</p>' })).id, 'p1')
   const trip = pages.keep('s', plain.id, { title: 'Trip costs' })
@@ -554,6 +546,8 @@ it('publishes a page without records or AI to the web and updates the same site 
   expect(publisher.targets().find((target) => target.target === 'github-pages')?.connected).toBe(true)
   expect(publisher.targets().find((target) => target.target === 'vercel')?.connected).toBe(true)
   expect(publisher.targets().find((target) => target.target === 'netlify')?.connected).toBe(false)
+  // Cloudflare Pages uses the Cloudflare hosting account deploys use.
+  expect(publisher.targets().find((target) => target.target === 'cloudflare-pages')?.connected).toBe(true)
 })
 
 it('reads Ramu data only for the sources declared and allowed, scoped to the page project', async () => {

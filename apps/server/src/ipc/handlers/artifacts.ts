@@ -261,13 +261,7 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
   if (ctx.pageAi) ctx.pageAi.track = (label, detail, work, cancel) => ctx.activity.run(label, detail, work, cancel)
   let publisher: PagePublisher | undefined
   const publishing = () =>
-    (publisher ??= new PagePublisher(
-      need().pages,
-      () => ctx.forgeAccounts,
-      ctx.deploys?.accounts,
-      (key, fallback) => ctx.workspace.getAppState(key, fallback),
-      (key, value) => ctx.workspace.setAppState(key, value),
-    ))
+    (publisher ??= new PagePublisher(need().pages, () => ctx.forgeAccounts, ctx.deploys?.accounts))
   /** A document another host shared, with the title and icon it had there. */
   const importArgs = z.tuple([
     z.object({
@@ -758,26 +752,6 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
     },
     'artifacts.closePublic': { args: z.tuple([id]), run: (artifactId: string) => ctx.publicPages?.stop(artifactId) },
     'artifacts.publishTargets': { args: z.tuple([]), run: () => publishing().targets() },
-    'artifacts.saveCloudflareToken': {
-      args: z.tuple([
-        z
-          .string()
-          .trim()
-          .min(8)
-          .max(4000)
-          .regex(/^[^:\s]+$/, 'Paste the token alone'),
-        z
-          .string()
-          .trim()
-          .regex(/^[a-f0-9]{32}$/, 'A Cloudflare account ID is 32 letters and digits')
-          .optional(),
-      ]),
-      run: (token: string, account?: string) => {
-        // A deploy token is a host credential: it is set on the host, like Git hosting logins.
-        if (ctx.host.canAdministerIntegrations?.() === false) throw new Error('Add hosting tokens on the host itself.')
-        return publishing().saveCloudflareToken(token, account)
-      },
-    },
     'artifacts.publish': {
       args: z.tuple([id, z.enum(['github-pages', 'netlify', 'vercel', 'cloudflare-pages'])]),
       run: (artifactId: string, target: StaticTarget) => publishing().publish(artifactId, target),

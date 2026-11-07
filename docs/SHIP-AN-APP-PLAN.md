@@ -47,7 +47,7 @@ Vercel, Netlify and the person's own server are built ([Deploying an app](guide/
 - **Connecting an account, still to do:** the same CLI sign-in for `gh`, `wrangler` and `eas` as those platforms land; starting a sign-in from a paired device for a remote host, with the link shown there (hosting accounts change only on the host today); and token links prefilled where the platform allows it (GitHub's fine-grained token form, Cloudflare's templates).
 - **Deploy watch, still to do:** deploys, pushes and merges from Ramu are followed ([When a deployment finishes](guide/deploy.md#when-a-deployment-finishes), `workspace/deploy/deployWatch.ts`), and **Deployment failed** webhook presets cover Vercel and Netlify. Pushes from outside Ramu are not followed without a webhook schedule.
 - **UI:** the sheet's remaining steps from [the person's path](#the-persons-path) (set the variables, push and wait for the first deployment). The pull request card shows the preview, and the phone a project's deployments, domains, databases, uptime, usage and store builds, with **Roll back** and **Release** ([Deploying an app](guide/deploy.md#on-the-phone)).
-- **Publish to the web:** Netlify and Vercel use the hosting accounts; the static upload in `hosting/staticSite.ts` moves onto the adapters as a capability, with Cloudflare Pages and GitHub Pages, as those adapters land.
+- **Publish to the web:** an artifact publishes through the hosting accounts deploys use (Netlify, Vercel, Cloudflare Pages) or the GitHub login (GitHub Pages); its one-file upload in `hosting/staticSite.ts` stays separate from the Git-based adapters, since an artifact has no repository.
 
 ### 3. CI/CD
 
@@ -68,7 +68,7 @@ A VPS over SSH is built ([Your own server](guide/deploy.md#your-own-server), `wo
 
 ### 5. Domains
 
-**Add domain**, the records in plain words, **Create records** in Vercel DNS and Netlify DNS, the domain tools and the watch that wakes a thread when a domain is live are built ([Deploying an app](guide/deploy.md#deploy-a-project)). What remains: **Create records** at Cloudflare DNS with a token that can edit DNS (the artifacts' Cloudflare Pages token cannot), and domains for each new platform's adapter. The phone lists a project's domains; adding one is on a computer.
+**Add domain**, the records in plain words, **Create records** in Vercel DNS and Netlify DNS, the domain tools and the watch that wakes a thread when a domain is live are built ([Deploying an app](guide/deploy.md#deploy-a-project)). What remains: **Create records** at Cloudflare DNS with a token that can edit DNS (the Cloudflare Pages token cannot), and domains for each new platform's adapter. The phone lists a project's domains; adding one is on a computer.
 
 ### 6. Databases and storage
 

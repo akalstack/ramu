@@ -1,14 +1,11 @@
 import { useEffect, useState } from 'react'
 import type { ArtifactInfo } from '@ramu/shared/artifacts'
-import { Input } from '../components/desktop-input'
 import { RowButton } from '../components/row-button'
 import { Dialog } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { useHost } from '../workspace/HostProvider'
 
 type Target = 'github-pages' | 'netlify' | 'vercel' | 'cloudflare-pages'
-
-const CLOUDFLARE_TOKENS = 'https://dash.cloudflare.com/profile/api-tokens'
 
 const message = (error: unknown) =>
   error instanceof Error
@@ -24,8 +21,6 @@ export function PublishDialog({ page, onClose }: { page: ArtifactInfo; onClose()
   const { invoke } = useHost()
   const [targets, setTargets] = useState<{ target: Target; name: string; connected: boolean }[]>([])
   const [target, setTarget] = useState<Target>((page.published?.target as Target | undefined) ?? 'github-pages')
-  const [token, setToken] = useState('')
-  const [account, setAccount] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
@@ -34,20 +29,14 @@ export function PublishDialog({ page, onClose }: { page: ArtifactInfo; onClose()
       .catch(() => {})
   }, [invoke])
   const chosen = targets.find((entry) => entry.target === target)
-  const needsToken = !!chosen && !chosen.connected && target === 'cloudflare-pages'
-  // Netlify and Vercel are connected once in Settings and shared with deploys.
-  const needsAccount = !!chosen && !chosen.connected && (target === 'netlify' || target === 'vercel')
+  // Netlify, Vercel and Cloudflare Pages are connected once in Settings and shared with deploys.
+  const needsAccount = !!chosen && !chosen.connected && target !== 'github-pages'
   const update = page.published?.target === target
   return (
     <Dialog
       title={update ? t('Update live site') : t('Publish to the web')}
       confirmLabel={busy ? t('Publishing…') : update ? t('Update live site') : t('Publish')}
-      confirmDisabled={
-        !chosen ||
-        (needsToken && token.trim().length < 8) ||
-        needsAccount ||
-        (target === 'github-pages' && !chosen.connected)
-      }
+      confirmDisabled={!chosen || needsAccount || (target === 'github-pages' && !chosen.connected)}
       busy={busy}
       error={error}
       onCancel={onClose}
@@ -55,7 +44,6 @@ export function PublishDialog({ page, onClose }: { page: ArtifactInfo; onClose()
         setBusy(true)
         setError(null)
         void (async () => {
-          if (needsToken) await invoke('artifacts.saveCloudflareToken', token.trim(), account.trim() || undefined)
           await invoke('artifacts.publish', page.id, target)
           onClose()
         })()
@@ -83,35 +71,11 @@ export function PublishDialog({ page, onClose }: { page: ArtifactInfo; onClose()
                 ? t('Connected')
                 : entry.target === 'github-pages'
                   ? t('Connect GitHub in Settings → Git hosting')
-                  : entry.target === 'cloudflare-pages'
-                    ? t('Needs a token')
-                    : t('Connect it in Settings → Git → Hosting accounts')}
+                  : t('Connect it in Settings → Git → Hosting accounts')}
             </span>
           </RowButton>
         ))}
       </div>
-      {needsToken && (
-        <div className="mt-3 flex flex-col gap-1.5">
-          <Input
-            type="password"
-            autoComplete="off"
-            aria-label={t('{name} token', { name: chosen!.name })}
-            placeholder={t('{name} token', { name: chosen!.name })}
-            value={token}
-            onChange={(event) => setToken(event.target.value)}
-          />
-          <Input
-            autoComplete="off"
-            aria-label={t('Cloudflare account ID (for a token limited to Pages)')}
-            placeholder={t('Cloudflare account ID (for a token limited to Pages)')}
-            value={account}
-            onChange={(event) => setAccount(event.target.value)}
-          />
-          <p className="m-0 text-caption text-muted-foreground">
-            {t('Kept in this host’s credential store. Create one at {url}', { url: CLOUDFLARE_TOKENS })}
-          </p>
-        </div>
-      )}
     </Dialog>
   )
 }

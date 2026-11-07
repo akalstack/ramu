@@ -368,8 +368,6 @@ interface ArtifactMethods {
     connected: boolean
   }[]
   /** `account` is the Cloudflare account ID, for a token limited to Pages that cannot list accounts. */
-  /** Netlify and Vercel use the hosting accounts in Settings; Cloudflare Pages keeps its own token. Host only. */
-  'artifacts.saveCloudflareToken'(token: string, account?: string): void
   /** Deploys the artifact's current version as a static site on the person's own account; updates the same site later. */
   'artifacts.publish'(
     artifactId: string,
