@@ -123,21 +123,13 @@ Ramu is one person across devices today, so versions are enough. A household or 
 - **Merging:** a Doc's and a deck's text are kept as a CRDT (Yjs) on the host, so two people typing at once merge instead of making competing versions. A version is still saved when either stops editing for a minute, so Restore and Compare keep working.
 - **Access:** an editing share link names the person it is for and can be revoked like any share link. Kinds without text (Dashboard, Motion) stay one editor at a time, with "Being edited by …" shown to the other.
 
-### 9. Templates
-
-**Save as template** (desktop) and starting a new artifact from one (desktop and phone) are built ([Templates](guide/artifacts.md#templates)). Remaining:
-
-- A template's design system, once design systems exist. (**New** on the desktop and **Start from a template** on the phone offer templates today.)
-- Templates travel between hosts the way **Import an artifact** does now: a template share link opens on another connected host as a copy.
-- Starting points for the kinds still to come (a landing page for Design, a 30-second explainer for Motion); the report, deck, dashboard and flowchart ship today.
-
-### 10. Dashboards from named services
+### 9. Dashboards from named services
 
 - Besides records, folders, Ramu data and Shared MCP servers, a Dashboard or Live artifact can read **named services** through connectors on the host: Salesforce, Amplitude and Grafana first.
 - Each connector is one file implementing `query(spec)` with that service's own sign-in, kept in `credentials/`. It is read-only, and each service is its own grant on the artifact, listed in plain words.
 - A connector is added only after its sign-in and the data it can read are reviewed and written up in SECURITY.md, the same bar as Shared MCP.
 
-### 11. Voice-over for Motion
+### 10. Voice-over for Motion
 
 - A Motion artifact can have narration: the agent writes a script per scene, and the **speech** ability ([Abilities](ABILITIES-PLAN.md)) turns it into audio on a signed-in provider that offers it. The host mixes the audio into the MP4 with the browser's own audio encoder, timed to the scenes.
 - **Narration** in the artifact's toolbar previews, re-records one scene, or removes the narration. The grant sheet says which provider receives the script, and no other content leaves the host.

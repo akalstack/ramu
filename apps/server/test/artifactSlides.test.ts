@@ -323,7 +323,9 @@ it.skipIf(!interactiveBrowserPath())(
   'the starter deck and dashboard pass their previews',
   async () => {
     const { interactive } = setup(previewInteractive)
-    for (const template of STARTER_TEMPLATES.filter((entry) => entry.kind === 'slides' || entry.kind === 'dashboard')) {
+    for (const template of STARTER_TEMPLATES.filter((entry) =>
+      ['slides', 'dashboard', 'design', 'motion'].includes(entry.kind),
+    )) {
       const preview = await interactive.preview('s', {
         kind: template.kind,
         ...template.source,

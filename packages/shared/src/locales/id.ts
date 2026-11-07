@@ -5690,6 +5690,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Restyle with the design system': 'Gaya ulang dengan sistem desain',
   'Stop using as design system': 'Berhenti gunakan sebagai sistem desain',
   'Saved as a template': 'Disimpan sebagai template',
+  'Keep it as a template': 'Simpan sebagai template',
   'Start from a template': 'Mulai dari template',
   'Start from a design': 'Mulai dari desain',
   'Start from a design…': 'Mulai dari desain…',

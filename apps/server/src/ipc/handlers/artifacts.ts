@@ -264,6 +264,38 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       (key, fallback) => ctx.workspace.getAppState(key, fallback),
       (key, value) => ctx.workspace.setAppState(key, value),
     ))
+  /** A document another host shared, with the title and icon it had there. */
+  const importArgs = z.tuple([
+    z.object({
+      reference: z
+        .object({
+          title: z.string().max(160),
+          summary: z.string().max(3000),
+          digest: z.string().max(128),
+          network: z.object({
+            resources: z.array(z.string().max(250)).max(12),
+            connect: z.array(z.string().max(250)).max(12),
+          }),
+          files: z.array(z.string().max(200)).max(40).optional(),
+          libraries: z.record(z.string().max(60), z.string().max(40)).optional(),
+          kind: z.enum(ARTIFACT_KINDS).optional(),
+        })
+        .passthrough(),
+      html: z.string().min(1).max(1_500_000),
+      preview: z.string().max(3_000_000).nullable(),
+      files: z
+        .array(
+          z.object({
+            path: z.string().min(1).max(200),
+            content: z.string().max(INTERACTIVE_MAX_HTML),
+            encoding: z.enum(['utf8', 'base64']).optional(),
+          }),
+        )
+        .max(40)
+        .optional(),
+    }),
+    z.object({ title: z.string().trim().min(1).max(160), icon: z.string().max(16) }),
+  ])
   const stateOf = (key: string) => ctx.workspace.getAppState<string | null>(key, null)
   const need = () => {
     if (!ctx.pages || !ctx.pageAi) throw new Error('Update this host for Artifacts.')
@@ -466,39 +498,15 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       run: (artifactId: string, title?: string) => need().pages.duplicate(artifactId, title),
     },
     'artifacts.import': {
-      args: z.tuple([
-        z.object({
-          reference: z
-            .object({
-              title: z.string().max(160),
-              summary: z.string().max(3000),
-              digest: z.string().max(128),
-              network: z.object({
-                resources: z.array(z.string().max(250)).max(12),
-                connect: z.array(z.string().max(250)).max(12),
-              }),
-              files: z.array(z.string().max(200)).max(40).optional(),
-              libraries: z.record(z.string().max(60), z.string().max(40)).optional(),
-              kind: z.enum(ARTIFACT_KINDS).optional(),
-            })
-            .passthrough(),
-          html: z.string().min(1).max(1_500_000),
-          preview: z.string().max(3_000_000).nullable(),
-          files: z
-            .array(
-              z.object({
-                path: z.string().min(1).max(200),
-                content: z.string().max(INTERACTIVE_MAX_HTML),
-                encoding: z.enum(['utf8', 'base64']).optional(),
-              }),
-            )
-            .max(40)
-            .optional(),
-        }),
-        z.object({ title: z.string().trim().min(1).max(160), icon: z.string().max(16) }),
-      ]),
+      args: importArgs,
       run: (document: InteractiveDocument, from: { title: string; icon: string }) =>
         need().pages.importPage(document, from),
+    },
+    // A shared artifact kept as a template on this host instead of as an artifact.
+    'artifacts.importTemplate': {
+      args: importArgs,
+      run: (document: InteractiveDocument, from: { title: string; icon: string }) =>
+        need().pages.saveTemplateFrom(document, from),
     },
     'artifacts.state': { args: z.tuple([id]), run: (artifactId: string) => need().pages.state(artifactId) },
     'artifacts.saveState': {

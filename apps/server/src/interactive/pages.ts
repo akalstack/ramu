@@ -395,6 +395,23 @@ export class PageStore {
     return template
   }
 
+  /** A document another host shared, kept as a template here: its code and source, with nothing of its values. */
+  saveTemplateFrom(document: InteractiveDocument, from: { title: string; icon: string }): ArtifactTemplate {
+    const template: ArtifactTemplate = {
+      id: randomUUID(),
+      kind: artifactKind(document.reference.kind),
+      title: clipTitle(from.title),
+      icon: pageIcon(from.icon),
+      createdAt: Date.now(),
+    }
+    const kept: InteractiveDocument = { reference: document.reference, html: document.html, preview: document.preview }
+    if (document.files) kept.files = document.files
+    this.db
+      .prepare('INSERT INTO artifact_templates(id,kind,title,icon,document,created_at) VALUES(?,?,?,?,?,?)')
+      .run(template.id, template.kind, template.title, template.icon, JSON.stringify(kept), template.createdAt)
+    return template
+  }
+
   templates(): ArtifactTemplate[] {
     return (
       this.db

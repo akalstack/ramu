@@ -375,6 +375,11 @@ interface ArtifactMethods {
     document: import('./interactive').InteractiveDocument,
     from: { title: string; icon: string },
   ): import('./artifacts').ArtifactInfo
+  /** Keeps an artifact another host shared as a template here, without making an artifact of it. */
+  'artifacts.importTemplate'(
+    document: import('./interactive').InteractiveDocument,
+    from: { title: string; icon: string },
+  ): import('./artifacts').ArtifactTemplate
 }
 
 export interface RamuMethods extends ArtifactMethods {

@@ -103,4 +103,53 @@ export const STARTER_TEMPLATES: readonly StarterTemplate[] = [
         'flowchart LR\n  A[Start] --> B{Decide}\n  B -->|Yes| C[Do it]\n  B -->|No| D[Wait]\n  C --> E[Done]\n  D --> B',
     },
   },
+  {
+    id: 'starter:landing-page',
+    kind: 'design',
+    title: 'Landing page',
+    icon: '🖼️',
+    source: {
+      frames: [
+        {
+          name: 'Landing (desktop)',
+          width: 1440,
+          height: 900,
+          css: 'main{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:24px;text-align:center;padding:0 160px;font-family:var(--font-sans)}h1{font-size:64px;margin:0;line-height:1.05}p{font-size:22px;color:var(--muted);margin:0;max-width:720px}a{background:var(--primary);color:#fff;padding:14px 28px;border-radius:var(--radius);text-decoration:none;font-weight:600}',
+          html: '<main><h1>Say what it does in one line</h1><p>One or two sentences on who it is for and why it is better.</p><a>Get started</a></main>',
+        },
+        {
+          name: 'Landing (phone)',
+          width: 390,
+          height: 844,
+          css: 'main{display:flex;flex-direction:column;justify-content:center;height:100%;gap:16px;padding:0 24px;font-family:var(--font-sans)}h1{font-size:36px;margin:0;line-height:1.1}p{font-size:17px;color:var(--muted);margin:0}a{background:var(--primary);color:#fff;padding:12px 20px;border-radius:var(--radius);text-align:center;text-decoration:none;font-weight:600}',
+          html: '<main><h1>Say what it does in one line</h1><p>One or two sentences on who it is for.</p><a>Get started</a></main>',
+        },
+      ],
+    },
+  },
+  {
+    id: 'starter:explainer',
+    kind: 'motion',
+    title: '30-second explainer',
+    icon: '🎬',
+    source: {
+      scenes: [
+        {
+          seconds: 8,
+          css: 'div{display:flex;align-items:center;justify-content:center;height:100%;font:600 64px var(--font-sans)}span{animation:rise .8s var(--scene-start) both}@keyframes rise{from{opacity:0;transform:translateY(24px)}}',
+          html: '<div><span>The problem, in one line</span></div>',
+        },
+        {
+          seconds: 10,
+          css: 'ol{height:100%;margin:0;padding:0 15%;display:flex;flex-direction:column;justify-content:center;gap:20px;font:500 40px var(--font-sans)}li{animation:in .6s both}li:nth-child(1){animation-delay:var(--scene-start)}li:nth-child(2){animation-delay:calc(var(--scene-start) + 2s)}li:nth-child(3){animation-delay:calc(var(--scene-start) + 4s)}@keyframes in{from{opacity:0}}',
+          html: '<ol><li>First, what happens</li><li>Then, what changes</li><li>Finally, what you get</li></ol>',
+        },
+        {
+          seconds: 12,
+          css: 'div{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px;font-family:var(--font-sans)}strong{font-size:56px}span{font-size:28px;color:var(--muted)}',
+          html: '<div><strong>Your product</strong><span>Try it today</span></div>',
+        },
+      ],
+    },
+  },
 ]
