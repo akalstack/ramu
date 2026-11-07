@@ -51,6 +51,7 @@ import type { TunnelChoice } from '@ramu/shared/types'
 import { registerThemeTools } from './themeTools'
 import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
 import { createDeploys } from './workspace/deploy/deploys'
+import { LocalApps } from './workspace/deploy/localApp'
 import { registerDeployTools, registerReleaseTools } from './workspace/deploy/tools'
 import { registerCiTools } from './workspace/ci/tools'
 import { setAcpTerminalService } from './providers/acpTerminals'
@@ -766,6 +767,16 @@ const publicPages = new PublicPages(
   (artifactId) => send('artifacts:changed', { artifactId }),
 )
 void publicPages.restore(publicPageTunnel())
+// Apps published from this computer get tunnels of their own, of the same kind as pages opened to anyone.
+const localApps = new LocalApps({
+  saved: {
+    read: () => workspace.getAppState<Record<string, string>>('local-apps', {}),
+    write: (apps) => workspace.setAppState('local-apps', apps),
+  },
+  choice: publicPageTunnel,
+  changed: () => send('workspace:changed', {}),
+})
+void localApps.restore()
 pageAutomation.start()
 let sharedMcp: SharedMcpService | undefined
 const getSharedMcp = () => {
@@ -916,6 +927,7 @@ const dispatcher = createDispatcher(
     schedules,
     pullRequestWatches,
     deploys,
+    localApps,
     pullRequestIndex,
     pullRequestDrafts,
     recaps,
@@ -942,6 +954,7 @@ async function stop(intentional = false, exitCode = 0) {
   await schedules.stop()
   await pullRequestWatches.stop()
   await deploys.domains.stop()
+  localApps.close()
   await deploys.deployWatch.stop()
   await deploys.uptime.stop()
   await deploys.usageNotices.stop()

@@ -42,6 +42,7 @@ export interface Services {
   artifactExports?: import('../interactive/exports').ArtifactExports
   /** Hosting accounts, project deploy bindings and CLI sign-ins. */
   deploys?: import('../workspace/deploy/deploys').Deploys
+  localApps?: import('../workspace/deploy/localApp').LocalApps
   pageAi?: import('../interactive/pageAi').PageAi
   /** Abilities: live checks per provider and calls routed to a provider that has one. */
   abilities?: import('../agent/abilities').AbilityService

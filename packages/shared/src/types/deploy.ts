@@ -346,3 +346,12 @@ export interface DeployLinkResult {
   /** The pull request adding the deploy job and the files it needs, or null when there is none to merge. */
   pullRequest: string | null
 }
+
+/** An app published from this computer through a tunnel of its own (Deploy → Run on this computer). */
+export interface LocalAppStatus {
+  state: 'off' | 'building' | 'running' | 'failed'
+  /** The app's own public address once its tunnel is up. */
+  url: string | null
+  error: string | null
+  since: number | null
+}

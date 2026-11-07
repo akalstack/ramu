@@ -5752,6 +5752,13 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Connected as {0}': 'Terhubung sebagai {0}',
   'Connect it in Settings → Git → Hosting accounts': 'Hubungkan di Pengaturan → Git → Akun hosting',
   'Connect a repository to this project and publish it to GitHub first.': 'Hubungkan repositori ke proyek ini dan terbitkan ke GitHub dulu.',
+  'Run on this computer': 'Jalankan di komputer ini',
+  'Building the app…': 'Membangun aplikasi…',
+  'It did not start.': 'Aplikasi tidak berjalan.',
+  'Starting its tunnel…': 'Menyalakan tunnel-nya…',
+  'Publish from this computer': 'Publikasikan dari komputer ini',
+  'For demos and home use: the app runs in a Docker container here and gets a public address of its own, which reaches only the app. It is offline while this computer sleeps or Ramu is not running.':
+    'Untuk demo dan pemakaian di rumah: aplikasi berjalan di kontainer Docker di sini dan mendapat alamat publik sendiri, yang hanya menjangkau aplikasi itu. Aplikasi offline saat komputer ini tidur atau Ramu tidak berjalan.',
   'Live at {0}': 'Aktif di {0}',
   'This builds {0} and replaces what visitors see at {1}.': 'Ini membangun {0} dan mengganti yang dilihat pengunjung di {1}.',
   'Latest deployments': 'Deployment terbaru',

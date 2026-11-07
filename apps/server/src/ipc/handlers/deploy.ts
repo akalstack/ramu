@@ -58,6 +58,10 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
     if (!ctx.deploys) throw new Error('Update this host for deploys.')
     return ctx.deploys
   }
+  const localApps = () => {
+    if (!ctx.localApps) throw new Error('Update this host for deploys.')
+    return ctx.localApps
+  }
   const administrator = () => ctx.host.canAdministerIntegrations?.() === true
   const administrate = () => {
     if (!administrator()) throw new Error('Connect hosting accounts on the host running Ramu.')
@@ -259,6 +263,19 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
     'deploy.usage': {
       args: z.tuple([id]),
       run: (projectId: string) => deploys().usage(project(projectId)),
+    },
+    'deploy.localStatus': {
+      args: z.tuple([id]),
+      run: (projectId: string) => localApps().status(project(projectId)),
+    },
+    'deploy.localPublish': {
+      args: z.tuple([id, id]),
+      run: (projectId: string, repoId: string) =>
+        localApps().publish(project(projectId), repositoryOf(projectId, repoId).root),
+    },
+    'deploy.localStop': {
+      args: z.tuple([id]),
+      run: (projectId: string) => localApps().stop(project(projectId)),
     },
     'deploy.uptime': {
       args: z.tuple([id]),

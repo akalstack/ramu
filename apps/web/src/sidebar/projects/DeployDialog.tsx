@@ -26,6 +26,7 @@ import { DomainsSection } from './Domains'
 import { EnvSyncSection } from './EnvSync'
 import { ReleaseSection } from './Release'
 import { UptimeSection } from './Uptime'
+import { LocalAppSection } from './LocalApp'
 import { UsageSection } from './Usage'
 
 const open = (url: string) => void openOnThisComputer('app.openExternal', url)
@@ -385,6 +386,7 @@ export function DeployDialog({
       />
       <EnvSyncSection key={provisioned} projectId={project.id} repoId={repoId} />
       <CiSetupSection projectId={project.id} repoId={repoId} />
+      <LocalAppSection projectId={project.id} repoId={repoId} />
     </Dialog>
   )
 }

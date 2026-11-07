@@ -67,6 +67,10 @@ Once set up, the deploy job's runs are the deployments: **Logs** shows a run's l
 
 Once set up, the sheet works as for the platforms: the deploy job's runs are the deployments, **Logs** shows a run's log (and the app's own output for the version running now), **Deploy to production** starts the job on the default branch, and **Roll back** starts it with an earlier deployment's commit, deploying that image again without building. The [deploy watch](#when-a-deployment-finishes), [uptime](#uptime) and **Domains** (adding one updates the Caddy site; the records go at your domain provider) work the same way. **Environment variables** syncs to the server's production variables, kept in a file on the server readable only by that user and passed to the container, never baked into the image; writing them restarts the container. There is no usage report: the server's host bills for it.
 
+## On this computer
+
+For demos and home use, **Run on this computer** in the Deploy sheet publishes the selected repository's app from this computer, with no account or server. Ramu builds it into a Docker container (with the repository's Dockerfile, or one it writes for the stack and passes to the build without adding it to the repository), runs it with only its port published to this computer's loopback address, and gives it a public address of its own through a separate tunnel of the kind chosen for pages opened to anyone (Cloudflare or ngrok without a fixed domain). The address reaches only the app, never Ramu, and changes when Ramu restarts. The app is offline while the computer sleeps or Ramu is not running; an app left published starts again with Ramu. **Stop** takes the address down first, then the container. Docker must be installed and running.
+
 ## When a deployment finishes
 
 Ramu follows a deployment until the platform finishes it, then wakes one thread with one message, through the same queue as pull request feedback:

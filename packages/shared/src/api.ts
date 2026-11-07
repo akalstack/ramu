@@ -37,6 +37,7 @@ import type {
   StoreRelease,
   StoreTarget,
   UptimeStatus,
+  LocalAppStatus,
   UsageReport,
 } from './types/deploy'
 import type { LimitRetryResult } from './chat/providerWait'
@@ -1259,6 +1260,12 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.provision'(projectId: string, repoId: string, provider: ResourceProvider, plan: string): ProjectResources
   /** What the project's platforms report for the current billing period, beside the plan's limits they report. */
   'deploy.usage'(projectId: string): UsageReport[]
+  /** The app published from this computer, if any: its state and its own public address. */
+  'deploy.localStatus'(projectId: string): LocalAppStatus
+  /** Builds the repository's app into a container on this computer and publishes it through a tunnel of its own. */
+  'deploy.localPublish'(projectId: string, repoId: string): LocalAppStatus
+  /** Takes the app off the internet, then stops its container. */
+  'deploy.localStop'(projectId: string): void
   /** The live address watch: the address checked, the last check, any unknown span and the open incident. */
   'deploy.uptime'(projectId: string): UptimeStatus
   /** Turns the live address watch on or off; off forgets its checks and closes an open incident without a recap. */
