@@ -79,7 +79,6 @@ A Doc's Markdown and a Mermaid diagram's source (desktop and phone) a deck's sli
 ### 4. Desktop
 
 - The artifact view opens as a workspace tab beside the chat, with the toolbar each kind has today (Outline and Edit text for docs, Range and Refresh for dashboards, playback for motions).
-- While presenting Slides, speaker notes show on a second display when there is one.
 
 ### 5. Phone
 

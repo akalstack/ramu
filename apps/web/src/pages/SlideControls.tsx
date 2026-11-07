@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { ChevronLeft, ChevronRight, Presentation } from 'lucide-react'
 import { Button } from '../components/desktop-button'
 import { GHOST_ICON_BUTTON_CLASS, GHOST_TEXT_BUTTON_CLASS } from '../components/button-classes'
 import { t } from '../i18n'
+import { audienceScreen, openPresenterWindow, showPresenterSlide, type PresenterSlide } from './PresenterNotes'
 
 const NEXT_KEYS = new Set(['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'])
 const PREVIOUS_KEYS = new Set(['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'])
@@ -16,9 +17,12 @@ export function useSlideControls(
   stage: RefObject<HTMLDivElement | null>,
   instance: string,
   count: number,
+  /** A slide's title, notes and the next slide's title, for the presenter window on another display. */
+  slideAt?: (index: number) => Omit<PresenterSlide, 'index' | 'count'>,
 ) {
   const [index, setIndex] = useState(0)
   const [presenting, setPresenting] = useState(false)
+  const notes = useRef<{ window: Window; since: number } | null>(null)
   const show = useCallback(
     (next: number, present: boolean) => {
       const bounded = Math.max(0, Math.min(count - 1, next))
@@ -27,9 +31,15 @@ export function useSlideControls(
         { ramuInteractive: 1, instance, type: 'slide', value: { index: bounded, present } },
         '*',
       )
+      if (notes.current && slideAt)
+        showPresenterSlide(notes.current.window, { ...slideAt(bounded), index: bounded, count }, notes.current.since)
     },
-    [frame, instance, count],
+    [frame, instance, count, slideAt],
   )
+  const closeNotes = () => {
+    notes.current?.window.close()
+    notes.current = null
+  }
   useEffect(() => {
     if (!presenting) return
     const key = (event: KeyboardEvent) => {
@@ -41,6 +51,7 @@ export function useSlideControls(
     }
     const left = () => {
       if (window.document.fullscreenElement) return
+      closeNotes()
       setPresenting(false)
       show(index, false)
     }
@@ -51,14 +62,18 @@ export function useSlideControls(
       window.document.removeEventListener('fullscreenchange', left)
     }
   }, [presenting, index, count, show])
+  // With a second display the deck fills it and the speaker notes open on this one; otherwise the deck fills this one.
   const present = () =>
-    void stage.current
-      ?.requestFullscreen()
-      .then(() => {
-        setPresenting(true)
-        show(index, true)
-      })
-      .catch(() => {})
+    void (async () => {
+      const audience = slideAt ? await audienceScreen() : null
+      await stage.current?.requestFullscreen(
+        (audience ? { screen: audience } : undefined) as unknown as FullscreenOptions,
+      )
+      const opened = audience ? openPresenterWindow() : null
+      notes.current = opened ? { window: opened, since: Date.now() } : null
+      setPresenting(true)
+      show(index, true)
+    })().catch(() => {})
   return { index, presenting, show, present }
 }
 

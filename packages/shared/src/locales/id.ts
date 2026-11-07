@@ -6065,4 +6065,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Making the video…': 'Menyiapkan video…',
   'Run {server}’s read-only tools without asking, so scheduled runs keep going':
     'Jalankan alat baca-saja {server} tanpa bertanya, agar run terjadwal tetap berjalan',
+  'Presenter notes': 'Catatan presenter',
+  'No speaker notes on this slide.': 'Tidak ada catatan pembicara di slide ini.',
 }

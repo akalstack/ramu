@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDown,
   ArrowLeft,
@@ -186,7 +186,19 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   const instance = `page:${artifactId}:${document?.reference.version ?? 0}:${generation}`
   const { url } = useContentDocument(document?.html, instance, !!document, state, document?.reference.network)
   const slides = document ? slideCount(document) : 0
-  const slideControls = useSlideControls(frame, stage, instance, slides)
+  // Each slide's title and notes for the presenter window, from the deck's source.
+  const deckSource = document?.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.slides)?.content
+  const slideAt = useMemo(() => {
+    if (!deckSource) return undefined
+    const deck = (JSON.parse(deckSource) as { slides: Slide[] }).slides
+    const titled = (slide: Slide | undefined) => slide?.title || slide?.body?.split('\n')[0] || ''
+    return (index: number) => ({
+      title: titled(deck[index]),
+      notes: deck[index]?.notes ?? '',
+      next: deck[index + 1] ? titled(deck[index + 1]) : null,
+    })
+  }, [deckSource])
+  const slideControls = useSlideControls(frame, stage, instance, slides, slideAt)
   // While this deck is presented here, a phone turning its slides turns them here too.
   const { presenting, show: showSlide } = slideControls
   useEffect(

@@ -56,6 +56,7 @@ import {
   powerMonitor,
   nativeTheme,
   net,
+  screen,
   type Session,
   type WebContents,
 } from 'electron'
@@ -231,6 +232,11 @@ async function main() {
     // Only the shell page that holds the recording lease may capture audio, and never video or from a guest page.
     ses.setPermissionRequestHandler((wc, permission, callback, details) => {
       const media = details as { mediaTypes?: string[]; isMainFrame?: boolean }
+      // Presenting a deck on another display needs to know the displays; only the app's own page may ask.
+      if (permission === 'window-management')
+        return callback(
+          !!wc && wc.getType() === 'window' && (details as { isMainFrame?: boolean }).isMainFrame !== false,
+        )
       callback(
         permission === 'media' &&
           !!wc &&
@@ -438,7 +444,25 @@ async function main() {
     contents.on('will-navigate', (e, url) => {
       if (url !== contents.getURL()) e.preventDefault()
     })
-    contents.setWindowOpenHandler(({ url }) => {
+    contents.setWindowOpenHandler(({ url, frameName }) => {
+      // A deck's presenter notes: a blank window the app fills itself, on the display the full-screen deck is not on.
+      if (url === 'about:blank' && frameName === 'ramu-presenter' && contents === win.webContents) {
+        const deck = screen.getDisplayMatching(win.getBounds()).id
+        const area = (screen.getAllDisplays().find((display) => display.id !== deck) ?? screen.getPrimaryDisplay())
+          .workArea
+        return {
+          action: 'allow',
+          overrideBrowserWindowOptions: {
+            x: area.x + 40,
+            y: area.y + 40,
+            width: Math.min(960, area.width - 80),
+            height: Math.min(680, area.height - 80),
+            title: t('Presenter notes'),
+            autoHideMenuBar: true,
+            webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+          },
+        }
+      }
       if (!isWebLink(url)) return { action: 'deny' }
       // The person chooses, per device, whether clicked links use their own browser or the integrated one.
       if (linkTargetFrom(deviceState.snapshot()[LINK_TARGET_KEY]) === 'integrated' && !win.isDestroyed())
@@ -447,6 +471,11 @@ async function main() {
       return { action: 'deny' }
     })
   }
+  // The presenter notes window shows only what the app writes into it: no navigation, no further windows.
+  win.webContents.on('did-create-window', (child) => {
+    child.webContents.on('will-navigate', (event) => event.preventDefault())
+    child.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  })
   win.webContents.on('render-process-gone', () => contentDocuments.clear())
   win.webContents.on('did-navigate', () => contentDocuments.clear())
   wire(win.webContents)
