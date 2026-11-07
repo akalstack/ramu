@@ -28,6 +28,7 @@ import { contentStorage } from '../../../storage'
 import { Header, HeaderButton, Screen } from '../../../components/Screen'
 import { Button, Card, IconButton, Row, Sheet, T } from '../../../components/ui'
 import InteractiveFrame from '../../../components/InteractiveFrame'
+import MotionVideo from '../../../components/MotionVideo'
 import { hostShareLabel, SHARE_LABELS } from '../../../components/ArtifactKindMark'
 import { shareFile } from '../../../components/interactiveShare'
 import { hostExportFormats, kindExports, slideCount } from '@ramu/shared/interactiveExport'
@@ -103,6 +104,8 @@ export default function PageScreen() {
   const [editingSlides, setEditingSlides] = useState<{ base: number; slides: (Slide & { from: number })[] } | null>(
     null,
   )
+  // A motion played as the host's MP4 in the phone's own video player.
+  const [playing, setPlaying] = useState(false)
   // A flowchart's labels while the person changes its words without its Mermaid syntax.
   const [editingLabels, setEditingLabels] = useState<{ base: number; source: string; labels: string[] } | null>(null)
   // A design's frame words while the person edits them, one list per frame, and the version they started from.
@@ -770,6 +773,16 @@ export default function PageScreen() {
                 <T>{say('Edit text')}</T>
               </Row>
             ) : null}
+            {page?.kind === 'motion' && document && online && !shared ? (
+              <Row
+                onPress={() => {
+                  setMenu(false)
+                  setPlaying(true)
+                }}
+              >
+                <T>{say('Play as video')}</T>
+              </Row>
+            ) : null}
             {page?.kind === 'diagram' &&
             document &&
             online &&
@@ -898,6 +911,22 @@ export default function PageScreen() {
                   // A newer version or a problem in the text keeps the edit open, so nothing typed is lost.
                   .catch((failure) => Alert.alert(say('That didn’t work'), reason(failure)))
                   .finally(() => setSavingEdit(false))
+              }}
+            />
+          </View>
+        ) : null}
+      </Sheet>
+      <Sheet open={playing} onClose={() => setPlaying(false)} title={page?.title ?? say('Play as video')}>
+        {playing && document ? (
+          <View style={{ padding: space.l }}>
+            <MotionVideo
+              computerId={computerId}
+              artifactId={artifactId}
+              version={document.reference.version}
+              title={page?.title ?? document.reference.title}
+              onError={(message) => {
+                setPlaying(false)
+                Alert.alert(say('That didn’t work'), message)
               }}
             />
           </View>

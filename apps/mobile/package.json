@@ -59,6 +59,7 @@
     "expo-status-bar": "~58.0.4",
     "expo-symbols": "~58.0.4",
     "expo-system-ui": "~58.0.6",
+    "expo-video": "~58.0.13",
     "expo-widgets": "~58.0.23",
     "highlight.js": "^11.12.0",
     "lucide-react-native": "1.54.0",

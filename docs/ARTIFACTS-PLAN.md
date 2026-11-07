@@ -83,9 +83,8 @@ A Doc's Markdown and a Mermaid diagram's source (desktop and phone) a deck's sli
 
 ### 5. Phone
 
-- The **Artifacts** tab filters by kind, a deck shows one slide at a time with swipe and arrows, a doc keeps a reading width with **Edit text**, and a dashboard draws its figures above its charts (built). Remaining viewers:
+- The **Artifacts** tab filters by kind, a deck shows one slide at a time with swipe and arrows, a doc keeps a reading width with **Edit text**, a dashboard draws its figures above its charts, and a motion plays as native video (built). Remaining viewers:
   - Slides: Present when the phone is connected to a display.
-  - Motion: native video for the exported MP4.
 - **Export** hands the file to the share sheet; **Add to Home Screen or share** and the home-screen widget work for every kind.
 
 ### 6. Connection with shipping an app

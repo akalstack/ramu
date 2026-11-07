@@ -6061,4 +6061,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Edit labels': 'Sunting label',
   'Label {number}': 'Label {number}',
   'Change the words on the diagram without its Mermaid source': 'Ubah kata-kata pada diagram tanpa sumber Mermaid-nya',
+  'Play as video': 'Putar sebagai video',
+  'Making the video…': 'Menyiapkan video…',
 }
