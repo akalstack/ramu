@@ -975,7 +975,74 @@ export function parseCheckRuns(runs: RawCheckRun[]): ForgeCheck[] {
 export async function commitChecksFeedback(cwd: string, sha: string, branch: string): Promise<string> {
   const failed = (await commitChecks(cwd, sha)).filter((check) => check.state === 'failure')
   if (!failed.length) throw new Error(`No checks are failing on ${sha.slice(0, 7)}.`)
-  return brokenBranchPrompt(sha, branch, await failedCheckSections(cwd, failed))
+  return redactSecrets(brokenBranchPrompt(sha, branch, await failedCheckSections(cwd, failed)))
+}
+
+interface RawProtection {
+  required_status_checks?: { contexts?: string[]; checks?: { context: string }[] } | null
+}
+
+/** Why GitHub refused a branch protection change, in words the person can act on. */
+function protectionRefusal(error: unknown): Error {
+  const text = error instanceof Error ? error.message : String(error)
+  if (/upgrade to github pro|make this repository public/i.test(text))
+    return new Error('Requiring CI on a private repository needs a paid GitHub plan; GitHub refused it.', {
+      cause: error,
+    })
+  if (/HTTP 40[34]/.test(text))
+    return new Error(
+      'The GitHub account Ramu uses cannot change branch protection here; it needs admin access to the repository.',
+      { cause: error },
+    )
+  return new Error('GitHub did not accept the branch protection change. Try again from the repository’s settings.', {
+    cause: error,
+  })
+}
+
+/** What requiring `check` takes, given the branch's current protection (null when it has none or it is unreadable). */
+export function protectionPlan(
+  current: RawProtection | null,
+  check: string,
+): 'create' | 'add' | 'already' | 'protected' {
+  if (!current) return 'create'
+  const required = current.required_status_checks
+  if (!required) return 'protected'
+  const names = [...(required.contexts ?? []), ...(required.checks ?? []).map((entry) => entry.context)]
+  return names.includes(check) ? 'already' : 'add'
+}
+
+/**
+ * Makes `check` required before merging into `branch`. Existing rules are kept: a branch with required checks gets
+ * this one added, and one protected without required checks is left for the person to change on GitHub.
+ */
+export async function requireCheck(
+  cwd: string,
+  branch: string,
+  check: string,
+): Promise<'required' | 'already' | 'protected'> {
+  const remote = await forgeRemoteOf(cwd)
+  if (!remote) throw new ForgeError('This repository has no GitHub remote.', 'no-remote')
+  const path = `/repos/${remote.owner}/${remote.repo}/branches/${encodeURIComponent(branch)}/protection`
+  // A branch without protection and an account that cannot read it both answer 404; writing tells them apart.
+  const plan = protectionPlan(await githubRest<RawProtection>(cwd, 'GET', path).catch(() => null), check)
+  if (plan === 'already' || plan === 'protected') return plan
+  if (plan === 'add') {
+    await githubRest(cwd, 'POST', `${path}/required_status_checks/contexts`, { contexts: [check] }).catch(
+      (error: unknown) => {
+        throw protectionRefusal(error)
+      },
+    )
+    return 'required'
+  }
+  await githubRest(cwd, 'PUT', path, {
+    required_status_checks: { strict: false, contexts: [check] },
+    enforce_admins: false,
+    required_pull_request_reviews: null,
+    restrictions: null,
+  }).catch((error: unknown) => {
+    throw protectionRefusal(error)
+  })
+  return 'required'
 }
 
 /** A prompt that hands the pull request's failing checks to an agent. */

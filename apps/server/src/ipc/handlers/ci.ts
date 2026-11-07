@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { ciPreview, setUpCi } from '../../workspace/ci/setup'
+import { CREATED_REPOSITORIES, ciPreview, setUpCi } from '../../workspace/ci/setup'
 import { id } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
@@ -13,14 +13,18 @@ export const registerCiHandlers: RegisterHandlers = (ctx) => {
   return {
     'ci.preview': {
       args: z.tuple([id, id]),
-      run: (projectId: string, repoId: string) => ciPreview(rootOf(projectId, repoId)),
+      run: async (projectId: string, repoId: string) => {
+        const preview = await ciPreview(rootOf(projectId, repoId))
+        const created = ctx.workspace.getAppState<string[]>(CREATED_REPOSITORIES, []).includes(repoId)
+        return { ...preview, requireByDefault: created && preview.forge === 'github' }
+      },
     },
     'ci.setup': {
-      args: z.tuple([id, id]),
+      args: z.tuple([id, id, z.boolean()]),
       // One setup per repository at a time, so two clicks never open two pull requests.
-      run: (projectId: string, repoId: string) =>
+      run: (projectId: string, repoId: string, requireCi: boolean) =>
         ctx.lock.run(`ci:${repoId}`, async () => {
-          const result = await setUpCi(rootOf(projectId, repoId))
+          const result = await setUpCi(rootOf(projectId, repoId), requireCi)
           ctx.pullRequestIndex?.invalidate(repoId)
           return result
         }),

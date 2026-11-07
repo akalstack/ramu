@@ -45,6 +45,18 @@ export interface CiPreview {
   defaultBranch: string
   /** The default branch already has this file, so there is nothing to set up. */
   exists: boolean
+  /** Requiring CI before merge is offered checked: Ramu created this repository, so no one relies on its old rules. */
+  requireByDefault: boolean
+}
+
+/** What happened to branch protection after Set up CI, when the person asked for it. */
+export type CiProtection =
+  { state: 'required' | 'already' | 'protected' | 'unsupported' } | { state: 'failed'; message: string }
+
+export interface CiSetupResult {
+  url: string | null
+  path: string
+  protection: CiProtection | null
 }
 
 /** The check name the job reports, which branch protection requires. */

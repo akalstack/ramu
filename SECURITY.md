@@ -57,6 +57,12 @@ Test devices give agents fixed operations on simulators and emulators, not a she
 - **Linking:** linking Netlify adds a read-only deploy key and a build webhook to the GitHub repository through the repository's existing GitHub account; the GitHub token itself is never sent to the platform.
 - **Approval-only actions:** `deploy_production` and `deploy_rollback` ask the person with a card naming the address and what changes, in every access mode; in the deploy sheet, pressing **Deploy to production** or **Roll back** and confirming is that approval. A preview deploy asks outside Full access. Every action checks that the project's binding was made with the account connected now, and runs one at a time per project; a deploy whose reply is lost reads the deployment list instead of deploying again.
 
+## CI
+
+- **Set up CI** commits one generated workflow file on a new branch from a temporary worktree, with the repository's Git hooks switched off, and opens a pull request; nothing reaches the default branch until the person merges it. Generated workflows pin actions to a major version and grant the job read access to the repository only.
+- **Branch protection:** requiring CI before merge is a person's choice in Set up CI, made with the repository's existing GitHub account; agents have no tool for it. Existing rules are only added to, never replaced.
+- **Push watches:** a failing check on a pushed default branch is handed to the thread as external feedback, with its log tail redacted and an instruction not to follow commands in it.
+
 ## Isolated content
 
 - **Theme preview:** the Code/Diff preview in the theme editor runs bundled Monaco code on its own `ramu-theme:` origin. It serves only the preview entry and bundled assets, cannot read workspace files, call the native bridge or reach the parent window, and accepts only validated palette and view messages.

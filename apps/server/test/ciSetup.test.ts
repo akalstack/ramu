@@ -3,12 +3,13 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createPullRequest } from '../src/workspace/forge'
+import { createPullRequest, requireCheck } from '../src/workspace/forge'
 import { ciPreview, draftCi, setUpCi } from '../src/workspace/ci/setup'
 
 vi.mock('../src/workspace/forge', () => ({
   forgeRemoteOf: vi.fn(async () => ({ origin: 'github.com', protocol: 'https', owner: 'acme', repo: 'shop' })),
   createPullRequest: vi.fn(async () => ({ pullRequest: { url: 'https://github.com/acme/shop/pull/7' } })),
+  requireCheck: vi.fn(async () => 'required'),
 }))
 vi.mock('../src/workspace/forge/route', () => ({ kindOfOrigin: vi.fn(async () => 'github') }))
 
@@ -67,8 +68,13 @@ describe('Set up CI', () => {
     const { remote, here } = repository()
     run(here, 'checkout', '-b', 'feature/work')
     writeFileSync(join(here, 'notes.txt'), 'unsaved work')
-    const result = await setUpCi(here)
-    expect(result).toEqual({ url: 'https://github.com/acme/shop/pull/7', path: '.github/workflows/ci.yml' })
+    const result = await setUpCi(here, false)
+    expect(result).toEqual({
+      url: 'https://github.com/acme/shop/pull/7',
+      path: '.github/workflows/ci.yml',
+      protection: null,
+    })
+    expect(vi.mocked(requireCheck)).not.toHaveBeenCalled()
     expect(vi.mocked(createPullRequest)).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ base: 'main', title: 'Set up CI', draft: false }),
@@ -84,10 +90,20 @@ describe('Set up CI', () => {
     expect(run(here, 'branch', '--list', 'ramu/*').trim()).toBe('')
   })
 
+  it('requires the CI check on the default branch when asked, and reports a refusal without failing', async () => {
+    const { here } = repository()
+    expect((await setUpCi(here, true)).protection).toEqual({ state: 'required' })
+    expect(vi.mocked(requireCheck)).toHaveBeenCalledWith(here, 'main', 'CI')
+    vi.mocked(requireCheck).mockRejectedValueOnce(new Error('It needs admin access to the repository.'))
+    const refused = await setUpCi(here, true)
+    expect(refused.url).toBe('https://github.com/acme/shop/pull/7')
+    expect(refused.protection).toEqual({ state: 'failed', message: 'It needs admin access to the repository.' })
+  })
+
   it('picks a free branch name when an earlier attempt is still on the remote', async () => {
     const { remote, here } = repository()
-    await setUpCi(here)
-    await setUpCi(here)
+    await setUpCi(here, false)
+    await setUpCi(here, false)
     expect(run(remote, 'branch', '--list', 'ramu/*').trim().split(/\s+/)).toEqual([
       'ramu/set-up-ci',
       'ramu/set-up-ci-2',
@@ -101,7 +117,7 @@ describe('Set up CI', () => {
     run(here, 'commit', '-m', 'ci')
     run(here, 'push')
     expect((await ciPreview(here)).exists).toBe(true)
-    await expect(setUpCi(here)).rejects.toThrow('main already has .github/workflows/ci.yml')
+    await expect(setUpCi(here, false)).rejects.toThrow('main already has .github/workflows/ci.yml')
     expect(vi.mocked(createPullRequest)).not.toHaveBeenCalled()
   })
 

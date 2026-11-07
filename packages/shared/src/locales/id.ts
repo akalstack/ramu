@@ -5762,4 +5762,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Wrote the CI workflow': 'Menulis workflow CI',
   'Read the CI workflow': 'Membaca workflow CI',
   'Writing the CI workflow': 'Menulis workflow CI',
+  '{0} now needs CI to pass before a pull request merges.': '{0} kini mewajibkan CI lulus sebelum pull request digabungkan.',
+  '{0} already needs CI to pass before merging.': '{0} sudah mewajibkan CI lulus sebelum penggabungan.',
+  '{0} has protection rules without required checks, so Ramu left them alone. Add CI as a required check in the repository’s branch settings.':
+    '{0} punya aturan proteksi tanpa pemeriksaan wajib, jadi Ramu tidak mengubahnya. Tambahkan CI sebagai pemeriksaan wajib di pengaturan branch repository.',
+  'Require the pipeline to succeed in the project’s merge request settings on GitLab.':
+    'Wajibkan pipeline berhasil di pengaturan merge request proyek di GitLab.',
+  'Require CI to pass before merging into {0}': 'Wajibkan CI lulus sebelum digabungkan ke {0}',
 }

@@ -38,7 +38,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 
 - **Deploys with real accounts:** in Settings → Hosting accounts on macOS and Linux with the current CLIs, `vercel login` and `netlify login --request` sign-ins (and a Vercel session renewed after it expires), the guided token page with its scope note, linking a GitHub repository to Vercel (with and without Vercel's GitHub app) and to Netlify (deploy key and build webhook), the latest deployments and their logs (Netlify's build log endpoint), a production deploy and a rollback on each, the deploy tools' approval cards from a phone, and Publish to the web through the connected accounts.
 
-- **Set up CI with real accounts:** on a GitHub repository signed in with `gh` (with and without the `workflow` scope) and on GitLab.com, for an npm, a pnpm, a uv and a Go project: the pull request opens from `ramu/set-up-ci`, its CI run passes, and `ci_setup` writes the same file in a thread; a push of a failing commit to the default branch from Source Control wakes that thread with the job log.
+- **Set up CI with real accounts:** on a GitHub repository signed in with `gh` (with and without the `workflow` scope) and on GitLab.com, for an npm, a pnpm, a uv and a Go project: the pull request opens from `ramu/set-up-ci`, its CI run passes, and `ci_setup` writes the same file in a thread; a push of a failing commit to the default branch from Source Control wakes that thread with the job log; **Require CI to pass before merging** on a public repository, a private one on a free plan (refused with its note), a branch with existing required checks, and an account without admin access.
 
 Representative tasks to run once the above is available:
 

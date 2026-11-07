@@ -76,6 +76,15 @@ describe('pull request parsing', () => {
     ])
   })
 
+  it('plans requiring a check around the branch protection already there', () => {
+    expect(forge.protectionPlan(null, 'CI')).toBe('create')
+    expect(forge.protectionPlan({ required_status_checks: null }, 'CI')).toBe('protected')
+    expect(forge.protectionPlan({ required_status_checks: { contexts: ['lint'] } }, 'CI')).toBe('add')
+    expect(forge.protectionPlan({ required_status_checks: { contexts: [], checks: [{ context: 'CI' }] } }, 'CI')).toBe(
+      'already',
+    )
+  })
+
   it('normalizes state, draft and review decision', () => {
     const parsed = forge.parsePullRequest({
       number: 3,

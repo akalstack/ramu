@@ -9,9 +9,12 @@ import {
   type CiFacts,
   type CiForge,
   type CiPreview,
+  type CiProtection,
+  type CiSetupResult,
   type CiWorkflow,
+  CI_CHECK,
 } from '@ramu/shared/ciWorkflow'
-import { createPullRequest, forgeRemoteOf } from '../forge'
+import { createPullRequest, forgeRemoteOf, requireCheck } from '../forge'
 import { kindOfOrigin } from '../forge/route'
 import { branchExists, commitBranchInfo, fetchedBranch, git, publishRemote } from '../git'
 import { loadProjectConfig } from '../projectConfig'
@@ -82,8 +85,11 @@ const existsAt = (root: string, ref: string, path: string) =>
     () => false,
   )
 
+/** App state listing the repositories Ramu created on a forge, where requiring CI breaks no one's habits. */
+export const CREATED_REPOSITORIES = 'created-repositories'
+
 /** What Set up CI would add, read from the last fetched default branch without asking the network. */
-export async function ciPreview(root: string): Promise<CiPreview> {
+export async function ciPreview(root: string): Promise<Omit<CiPreview, 'requireByDefault'>> {
   const forge = await forgeOf(root, true)
   const defaultBranch = (await commitBranchInfo(root)).defaultBranch ?? 'main'
   const { remote } = await publishRemote(root, defaultBranch)
@@ -129,7 +135,7 @@ function pushFailure(error: unknown): Error {
  * is made in a temporary worktree with the repository's hooks switched off: they expect installed dependencies, and the
  * change is one generated file the person reviews in the pull request.
  */
-export async function setUpCi(root: string): Promise<{ url: string | null; path: string }> {
+export async function setUpCi(root: string, requireCi: boolean): Promise<CiSetupResult> {
   const forge = await forgeOf(root, true)
   const defaultBranch = (await commitBranchInfo(root)).defaultBranch ?? 'main'
   const { remote } = await publishRemote(root, defaultBranch)
@@ -168,7 +174,11 @@ export async function setUpCi(root: string): Promise<{ url: string | null; path:
       base: defaultBranch,
       draft: false,
     })
-    return { url: status.pullRequest?.url ?? null, path: workflow.path }
+    return {
+      url: status.pullRequest?.url ?? null,
+      path: workflow.path,
+      protection: requireCi ? await protect(root, forge, defaultBranch) : null,
+    }
   } finally {
     if (added) {
       await git(root, ['worktree', 'remove', '--force', '--', tree]).catch(() => undefined)
@@ -176,6 +186,16 @@ export async function setUpCi(root: string): Promise<{ url: string | null; path:
       await git(root, ['branch', '-D', branch]).catch(() => undefined)
     }
     await rm(scratch, { recursive: true, force: true })
+  }
+}
+
+/** Requires the CI check before merging. The pull request is already open, so a refusal is reported, not thrown. */
+async function protect(root: string, forge: CiForge, branch: string): Promise<CiProtection> {
+  if (forge !== 'github') return { state: 'unsupported' }
+  try {
+    return { state: await requireCheck(root, branch, CI_CHECK) }
+  } catch (error) {
+    return { state: 'failed', message: error instanceof Error ? error.message : String(error) }
   }
 }
 
