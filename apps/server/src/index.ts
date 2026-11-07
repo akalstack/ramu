@@ -790,7 +790,26 @@ void publicPages.restore(publicPageTunnel())
 // A dashboard's live tables, read from its own project: its deploys in each source's fixed column order, or a file in
 // its folder, read only.
 const isoTime = (at: number) => new Date(at).toISOString()
-const liveDashboards = new LiveDashboards(async (projectId, { source, file, records, columns }) => {
+const liveDashboards = new LiveDashboards(async (projectId, { source, file, records, mcp, columns }) => {
+  if (mcp && projectId) {
+    // Only a tool the server marks read-only, on a server Shared MCP approved for this project, is called.
+    const signal = AbortSignal.timeout(30_000)
+    const opened = await pageExternal.open(
+      { id: `dashboard-${projectId}`, projectId } as ArtifactInfo,
+      pageSettings('fast'),
+      [mcp.server],
+      signal,
+    )
+    try {
+      const tool = opened.tools.find((entry) => entry.name === mcp.tool && entry.readOnly)
+      if (!tool) return []
+      const content = (await tool.call(mcp.arguments ?? {}, signal)) as { type?: string; text?: string }[]
+      const text = content.map((part) => (part.type === 'text' ? (part.text ?? '') : '')).join('')
+      return tableFromFile('result.json', text, columns)
+    } finally {
+      await opened.close()
+    }
+  }
   if (records) {
     // Only an App in the dashboard's own project (or, for a dashboard in no project, an App in none) is read.
     if (!pages.has(records.artifact) || (pages.get(records.artifact).projectId ?? null) !== projectId) return []

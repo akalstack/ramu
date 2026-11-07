@@ -167,7 +167,7 @@ it('reads an App’s records as a live table, also for a dashboard in no project
       datasets: [{ id: 'x', records: { artifact: app, collection: 'e' }, file: 'a.csv', columns: ['a'] }],
       figures: [{ label: 'A', dataset: 'x', column: 'a', aggregate: 'count' }],
     }),
-  ).toThrow('one of a source, a file or records')
+  ).toThrow('one of a source, a file, records or an MCP tool')
   const drawn = renderDashboard(parsed, 'Spending')
   const document = {
     reference: { id: 'r', version: 1, kind: 'dashboard', title: 'Spending' },
@@ -221,6 +221,38 @@ it('takes the columns of the threads, pull requests and activity sources, and re
   )
   expect((await new LiveDashboards(read).serve(document, null)).html).toContain('<strong>1.5 USD</strong>')
   expect(read.mock.calls.map((call) => call[1].source)).toEqual(['activity'])
+})
+
+it('reads a table from a Shared MCP tool on open, only with a project', async () => {
+  const parsed = parseArtifactSource({
+    kind: 'dashboard',
+    datasets: [
+      {
+        id: 'signups',
+        mcp: { server: 'analytics', tool: 'signups_by_day', arguments: { days: 7 } },
+        columns: ['day', 'count'],
+      },
+    ],
+    figures: [{ label: 'Signups', dataset: 'signups', column: 'count' }],
+  })
+  if (parsed.kind !== 'dashboard') throw new Error('not a dashboard')
+  const drawn = renderDashboard(parsed, 'Growth')
+  const document = {
+    reference: { id: 'm', version: 1, kind: 'dashboard', title: 'Growth' },
+    html: drawn.html,
+    files: drawn.files,
+  } as unknown as InteractiveDocument
+  const read = vi.fn<ReadDashboardSource>(async () => [
+    ['Mon', 4],
+    ['Tue', 6],
+  ])
+  const live = new LiveDashboards(read)
+  expect(await live.serve(document, null)).toBe(document)
+  expect((await live.serve(document, 'p1')).html).toContain('<strong>10</strong>')
+  expect(read).toHaveBeenCalledWith(
+    'p1',
+    expect.objectContaining({ mcp: { server: 'analytics', tool: 'signups_by_day', arguments: { days: 7 } } }),
+  )
 })
 
 it('cuts dated tables to the dashboard’s range when drawn, leaving undated ones whole', () => {

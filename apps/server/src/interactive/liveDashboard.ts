@@ -7,14 +7,14 @@ import type { InteractiveDocument } from '@ramu/shared/interactive'
 import { figureValues, renderDashboard } from './dashboard'
 
 type Cell = string | number | null
-type LiveTable = Pick<DashboardSource['datasets'][number], 'source' | 'file' | 'records' | 'columns'>
+type LiveTable = Pick<DashboardSource['datasets'][number], 'source' | 'file' | 'records' | 'mcp' | 'columns'>
 /**
  * Reads one live table, its rows in the table's column order: a project's deploys or file, or an App's records. A
  * dashboard in no project (`projectId` null) reads only the host's agent activity and records of an App in no project.
  */
 export type ReadDashboardSource = (projectId: string | null, table: LiveTable) => Promise<Cell[][]>
 const isLive = (table: LiveTable, projectId: string | null) =>
-  !!table.records || table.source === 'activity' || (!!projectId && !!(table.source || table.file))
+  !!table.records || table.source === 'activity' || (!!projectId && !!(table.source || table.file || table.mcp))
 
 const REFRESH_MS = 5 * 60_000
 

@@ -165,16 +165,16 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   const dashboardSource = document?.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.dashboard)?.content
   const dashboardBoard = dashboardSource
     ? (JSON.parse(dashboardSource) as {
-        datasets: (Parameters<typeof dashboardTimeColumn>[0] & { file?: string; records?: object })[]
+        datasets: (Parameters<typeof dashboardTimeColumn>[0] & { file?: string; records?: object; mcp?: object })[]
         refreshMinutes?: number
         rangeDays?: number
       })
     : null
   // A dashboard with dated rows, or a file whose rows are read later, can be cut to a recent range.
   const ranged = !!dashboardBoard?.datasets.some(
-    (table) => table.file || table.records || dashboardTimeColumn(table) >= 0,
+    (table) => table.file || table.records || table.mcp || dashboardTimeColumn(table) >= 0,
   )
-  const liveRefresh = dashboardBoard?.datasets.some((table) => table.source || table.file || table.records)
+  const liveRefresh = dashboardBoard?.datasets.some((table) => table.source || table.file || table.records || table.mcp)
     ? (dashboardBoard.refreshMinutes ?? 5)
     : null
   // A motion's length, from the scenes its version keeps, for the toolbar's scrub bar.

@@ -65,7 +65,7 @@ App, Doc, Diagram, Slides, Dashboard (over tables the agent fills in), Design (f
 - **Built:** a Dashboard's table can read its project's deployments, usage or uptime, again on every open (at most every five minutes), with "As of" ([Kinds](guide/artifacts.md#kinds)).
 - **Built:** a table can also read a CSV or JSON file in its project's folder, or an App artifact's records in the same project, read-only.
 - **Built:** Ramu data as live tables: the project's threads and pull requests, and the host's agent activity.
-- **More sources:** Shared MCP servers allowed one by one, as a page can be granted them.
+- **Built:** a table from a read-only tool of a Shared MCP server approved for the project.
 - **Built:** watched figures on a kept dashboard's live tables are read every ten minutes and a change is told to the person's devices ([Kinds](guide/artifacts.md#kinds)). A dashboard's refresh rule (`refreshMinutes`) sets how often, and the phone's saved copy shows the "As of" of its last read when offline. **Refresh** in the desktop toolbar changes it.
 - **Built:** apps run on the host on schedules and notify through their triggers; a server's read-only MCP tools can run without asking once allowed for that artifact, while every other call still asks.
 

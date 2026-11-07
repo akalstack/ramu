@@ -234,9 +234,21 @@ export const dashboardDatasetSchema = z
         "An App artifact's own records, read again when the dashboard is opened. columns names the fields to show (createdAt is when each record was added); leave rows out. The App must be in the dashboard's project.",
       ),
   })
+  .extend({
+    mcp: z
+      .object({
+        server: z.string().trim().min(1).max(80).describe('A Shared MCP server approved for the project, by name.'),
+        tool: z.string().trim().min(1).max(120).describe('A tool the server marks read-only.'),
+        arguments: z.record(z.string().max(60), z.union([z.string().max(500), z.number(), z.boolean()])).optional(),
+      })
+      .optional()
+      .describe(
+        "A read-only tool of a Shared MCP server approved for the dashboard's project, called again when it is opened; its JSON result (an array of objects) fills the table by the names in columns. Leave rows out.",
+      ),
+  })
   .transform((table, ctx) => {
-    if ([table.source, table.file, table.records].filter(Boolean).length > 1) {
-      ctx.addIssue({ code: 'custom', message: `Give ${table.id} one of a source, a file or records.` })
+    if ([table.source, table.file, table.records, table.mcp].filter(Boolean).length > 1) {
+      ctx.addIssue({ code: 'custom', message: `Give ${table.id} one of a source, a file, records or an MCP tool.` })
       return z.NEVER
     }
     if (table.source) return { ...table, columns: [...DASHBOARD_SOURCES[table.source]], rows: table.rows }
