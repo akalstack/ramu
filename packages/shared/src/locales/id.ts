@@ -5678,6 +5678,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   Templates: 'Template',
   'Save as template': 'Simpan sebagai template',
   'Saved as a template': 'Disimpan sebagai template',
+  'Start from a template': 'Mulai dari template',
+  'Makes a new artifact from this template': 'Membuat artefak baru dari template ini',
   'Slide {number}': 'Slide {number}',
   'Title of slide {number}': 'Judul slide {number}',
   'Column {column} of slide {number}': 'Kolom {column} slide {number}',

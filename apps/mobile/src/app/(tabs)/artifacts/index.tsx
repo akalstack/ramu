@@ -5,14 +5,14 @@ import { AppWindow, Pin, Plus } from 'lucide-react-native'
 import { useTabActions } from '../../../components/Overlays'
 import { STANDALONE } from '../../../runtime/types'
 import { GlassButton } from '../../../components/Screen'
-import type { ArtifactInfo } from '@ramu/shared/artifacts'
+import type { ArtifactInfo, ArtifactTemplate } from '@ramu/shared/artifacts'
 import { font, space, useTheme } from '../../../theme'
 import { useStore } from '../../../runtime/store'
 import { ago, useSay } from '../../../i18n'
 import { Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from '../../../components/Screen'
 import { Nothing } from '../../../components/InboxParts'
 import { HostChip } from '../../../components/HostChip'
-import { Row, T } from '../../../components/ui'
+import { Row, SectionLabel, T } from '../../../components/ui'
 import { ArtifactKindMark, kindLabel } from '../../../components/ArtifactKindMark'
 
 /** Every artifact on the paired hosts, newest first with pinned ones on top, as the desktop's Artifacts. */
@@ -63,6 +63,23 @@ export default function PagesScreen() {
       params: { project: STANDALONE, computer: store.selected, start: `${say('Make me a page to')} ` },
     })
   const viewOnly = store.computers.find((x) => x.id === store.selected)?.access === 'viewer'
+  // Starting points on the selected host: the person's own templates, then the set Ramu ships.
+  const [templates, setTemplates] = useState<ArtifactTemplate[]>([])
+  const selectedOnline = online.includes(store.selected)
+  useEffect(() => {
+    if (viewOnly || !selectedOnline) {
+      setTemplates([])
+      return
+    }
+    void store.invoke(store.selected, 'artifacts.templates').then(setTemplates, () => setTemplates([]))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [store.selected, viewOnly, selectedOnline] by design; the store is current as of that run
+  }, [store.selected, viewOnly, selectedOnline])
+  const startFrom = (template: ArtifactTemplate) =>
+    void store.invoke(store.selected, 'artifacts.fromTemplate', template.id).then(
+      (made) =>
+        router.push({ pathname: '/artifact/[computer]/[id]', params: { computer: store.selected, id: made.id } }),
+      () => {},
+    )
   const actions = useTabActions(
     viewOnly ? null : { icon: Plus, label: say('New'), systemIcon: 'plus', onPress: newPage },
   )
@@ -159,6 +176,26 @@ export default function PagesScreen() {
             )}
           </View>
         )}
+        {templates.length ? (
+          <View style={{ marginTop: space.l }}>
+            <SectionLabel>{say('Start from a template')}</SectionLabel>
+            {templates.map((template) => (
+              <Row
+                key={template.id}
+                accessibilityLabel={template.title}
+                accessibilityHint={say('Makes a new artifact from this template')}
+                onPress={() => startFrom(template)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l }}
+              >
+                <T size={22}>{template.icon}</T>
+                <T numberOfLines={1} style={{ flex: 1 }}>
+                  {template.title}
+                </T>
+                <ArtifactKindMark kind={template.kind} size={12} color={c.muted} />
+              </Row>
+            ))}
+          </View>
+        ) : null}
       </PageScrollView>
     </Screen>
   )
