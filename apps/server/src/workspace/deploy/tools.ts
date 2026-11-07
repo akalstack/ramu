@@ -4,11 +4,12 @@ import { z } from 'zod'
 import { domainName } from '@ramu/shared/domains'
 import type { DnsRecord, UsageReport } from '@ramu/shared/types/deploy'
 import { currentBranch } from '../git'
+import type { DeployWatches } from './deployWatch'
 import type { DomainWatches } from './domainWatch'
 import type { DeployService } from './service'
 
 const DEPLOY_GUIDE =
-  'Deploy tools work on the project this thread belongs to, on the platform and account linked in its Deploy sheet. Call deploy_status first: it names the platform, the live address, the latest deployments and the capabilities the platform has; never call an action it does not list. Never run vercel or netlify yourself to deploy. deploy_production, deploy_rollback, deploy_domain_add and deploy_domain_records always ask the person; a refusal is final for this request. deploy_production first runs the migrate command from ramu.json against the production database; a failed migration stops the deploy and returns its output to fix. Never delete a database; that is the person’s action on the provider’s page.'
+  'Deploy tools work on the project this thread belongs to, on the platform and account linked in its Deploy sheet. Call deploy_status first: it names the platform, the live address, the latest deployments and the capabilities the platform has; never call an action it does not list. Never run vercel or netlify yourself to deploy. deploy_production, deploy_rollback, deploy_domain_add and deploy_domain_records always ask the person; a refusal is final for this request. deploy_production first runs the migrate command from ramu.json against the production database; a failed migration stops the deploy and returns its output to fix. Never delete a database; that is the person’s action on the provider’s page. After deploy_preview, deploy_production or a push of the production branch, Ramu wakes this thread once the deployment finishes, with its address or the end of its build log; do not poll for it.'
 
 const deploymentId = z.string().trim().min(1).max(200)
 const domain = z.string().trim().min(1).max(260)
@@ -23,7 +24,8 @@ const recordText = (record: DnsRecord) =>
 export function registerDeployTools(
   server: McpServer,
   deploys: DeployService,
-  watches: Pick<DomainWatches, 'watch'>,
+  /** Domains followed until live, and deployments followed until they finish; both wake this thread. */
+  watches: { domains: Pick<DomainWatches, 'watch'>; deploys: Pick<DeployWatches, 'follow'> },
   /** The project's usage reports: its hosting platform's, then its resources'. */
   usage: (projectId: string) => Promise<UsageReport[]>,
   source: AgentSessionInfo,
@@ -65,7 +67,7 @@ export function registerDeployTools(
     'deploy_preview',
     {
       description:
-        'Builds this thread’s current branch as a preview deployment, after it is pushed. Returns the deployment; check it with deploy_status and deploy_logs. Outside Full access the person approves it first.',
+        'Builds this thread’s current branch as a preview deployment, after it is pushed. Returns the deployment; this thread is woken with its address or build log when it finishes, so do not poll. Outside Full access the person approves it first.',
       inputSchema: {},
     },
     async (_args, extra) => {
@@ -80,14 +82,16 @@ export function registerDeployTools(
           extra.signal,
           'The person declined the preview deployment. Do not retry it without a new request.',
         )
-      return result(await deploys.deploy(projectId, branch, false))
+      const deployment = await deploys.deploy(projectId, branch, false)
+      watches.deploys.follow(projectId, deployment, source.parentId ?? source.id)
+      return result(deployment)
     },
   )
   server.registerTool(
     'deploy_production',
     {
       description:
-        'Builds the production branch and makes it live. Always asks the person with a card naming the address; a refusal is final.',
+        'Builds the production branch and makes it live. Always asks the person with a card naming the address; a refusal is final. This thread is woken with the address or build log when the deployment finishes, so do not poll.',
       inputSchema: {},
     },
     async (_args, extra) => {
@@ -99,7 +103,9 @@ export function registerDeployTools(
         extra.signal,
         'The person declined the production deploy. Do not retry it without a new request.',
       )
-      return result(await deploys.deploy(projectId, null, true))
+      const deployment = await deploys.deploy(projectId, null, true)
+      watches.deploys.follow(projectId, deployment, source.parentId ?? source.id)
+      return result(deployment)
     },
   )
   server.registerTool(
@@ -160,7 +166,8 @@ export function registerDeployTools(
         'The person declined adding the domain. Do not retry it without a new request.',
       )
       const added = await deploys.addDomain(projectId, name)
-      if (!(added.configured && added.certificate)) watches.watch(projectId, added.name, source.parentId ?? source.id)
+      if (!(added.configured && added.certificate))
+        watches.domains.watch(projectId, added.name, source.parentId ?? source.id)
       return result({ domain: added })
     },
   )
@@ -185,7 +192,7 @@ export function registerDeployTools(
       )
       const updated = await deploys.createRecords(projectId, found.name)
       if (!(updated.configured && updated.certificate))
-        watches.watch(projectId, updated.name, source.parentId ?? source.id)
+        watches.domains.watch(projectId, updated.name, source.parentId ?? source.id)
       return result({ domain: updated })
     },
   )

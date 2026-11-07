@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto'
+import { createHash, createHmac } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -192,6 +192,30 @@ describe('reading what senders send', () => {
     expect(signatureMatches(token, 'tok', { 'x-gitlab-token': 'tok' }, raw)).toBe(true)
     expect(signatureMatches(token, 'tok', {}, raw)).toBe(false)
     expect(signatureMatches(null, null, {}, raw)).toBe(true)
+  })
+
+  it('checks Vercel’s SHA-1 signature and Netlify’s signed token against the exact bytes', () => {
+    const raw = Buffer.from('{"type":"deployment.error"}')
+    const vercel = SOURCE_DEFAULTS.vercel.signature
+    const sha1 = createHmac('sha1', 'v3rcel').update(raw).digest('hex')
+    expect(signatureMatches(vercel, 'v3rcel', { 'x-vercel-signature': sha1 }, raw)).toBe(true)
+    const sha256 = createHmac('sha256', 'v3rcel').update(raw).digest('hex')
+    expect(signatureMatches(vercel, 'v3rcel', { 'x-vercel-signature': sha256 }, raw)).toBe(false)
+
+    const netlify = SOURCE_DEFAULTS.netlify.signature
+    const part = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url')
+    const jws = (secret: string, body: Buffer, alg = 'HS256') => {
+      const unsigned = `${part({ alg, typ: 'JWT' })}.${part({ iss: 'netlify', sha256: createHash('sha256').update(body).digest('hex') })}`
+      return `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`
+    }
+    expect(signatureMatches(netlify, 'n3tlify', { 'x-webhook-signature': jws('n3tlify', raw) }, raw)).toBe(true)
+    expect(signatureMatches(netlify, 'n3tlify', { 'x-webhook-signature': jws('other', raw) }, raw)).toBe(false)
+    const altered = jws('n3tlify', Buffer.from('{}'))
+    expect(signatureMatches(netlify, 'n3tlify', { 'x-webhook-signature': altered }, raw)).toBe(false)
+    expect(signatureMatches(netlify, 'n3tlify', { 'x-webhook-signature': jws('n3tlify', raw, 'none') }, raw)).toBe(
+      false,
+    )
+    expect(signatureMatches(netlify, 'n3tlify', {}, raw)).toBe(false)
   })
 
   it('reads JSON, GitHub’s form posts and plain text', () => {

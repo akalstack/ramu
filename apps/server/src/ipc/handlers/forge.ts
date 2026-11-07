@@ -418,9 +418,22 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
     'forge.pullRequestAction': {
       args: z.tuple([id, id, prUrl, pullRequestAction]),
       run: async (taskId: string, repoId: string, url: string, action: PullRequestAction) => {
-        await redacted(() => forge.pullRequestAction(gitCwdOf(taskId, repoId), url, action))
+        const cwd = gitCwdOf(taskId, repoId)
+        // The base is read before merging, while the pull request is still listed as open.
+        const base =
+          action.kind === 'merge' && ctx.deploys && ctx.pullRequestIndex
+            ? (
+                await ctx.pullRequestIndex.list(cwd, repoId, { includeClosed: false, force: false }).catch(() => null)
+              )?.pullRequests.find((pr) => pr.url === url)?.baseBranch
+            : undefined
+        await redacted(() => forge.pullRequestAction(cwd, url, action))
         ctx.pullRequestIndex?.invalidate(repoId)
         void ctx.pullRequestIndex?.tick()
+        // A merge into the production branch deploys it: the thread working on the pull request hears how it went.
+        if (base)
+          void ctx.deploys
+            ?.pushed(repoId, base, null, ctx.pullRequestIndex?.threadsFor(url).at(-1) ?? null)
+            .catch((error: unknown) => console.error('Could not follow the deployment of the merge:', error))
       },
     },
     'forge.updateBranch': {

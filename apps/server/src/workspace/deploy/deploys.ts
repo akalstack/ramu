@@ -1,6 +1,7 @@
 import { DEFAULT_AGENT_SETTINGS, type AgentSettings } from '@ramu/shared/types'
 import type { InboxNotice } from '@ramu/shared/chat/notices'
 import type { UsageReport } from '@ramu/shared/types/deploy'
+import { commandLine } from '@ramu/shared/stacks'
 import type { AgentService } from '../../agent'
 import { HostCredentialStore } from '../../credentials/store'
 import type { Db } from '../../db'
@@ -8,6 +9,7 @@ import { forgeRemoteOf, repositoryToken } from '../forge/github'
 import { commitBranchInfo } from '../git'
 import type { Workspace } from '../workspace'
 import { HostingAccounts } from './accounts'
+import { DeployWatches } from './deployWatch'
 import { DomainWatches } from './domainWatch'
 import { ResourceService } from './resources'
 import { DeployService } from './service'
@@ -16,12 +18,21 @@ import { UptimeWatches } from './uptime'
 import { projectUsage, UsageNotices } from './usage'
 import { ProjectWake } from './wake'
 
+const commandOf = (argv: string[] | null | undefined) => (argv ? commandLine(argv) : null)
+
 /** The deploy pieces one host shares between IPC, agent tools and Publish to the web. */
 export interface Deploys {
   accounts: HostingAccounts
   service: DeployService
   signIns: HostingSignIns
   domains: DomainWatches
+  /** Deployments followed until they finish, then handed to a thread. */
+  deployWatch: DeployWatches
+  /**
+   * A thread pushed `branch` of a repository, or a pull request merged into it (`commit` null): when that is the
+   * production branch of the repository the project's platform watches, the deployment it starts is followed.
+   */
+  pushed(repoId: string, branch: string, commit: string | null, taskId: string | null): Promise<void>
   uptime: UptimeWatches
   /** Every usage report of a project: its hosting platform's, then its resources'. */
   usage(projectId: string): Promise<UsageReport[]>
@@ -88,6 +99,11 @@ export function createDeploys(
     accounts,
   )
   const wake = new ProjectWake(db, workspace, agents)
+  const deployWatch = new DeployWatches(
+    { getState, setState, migrate: (projectId) => commandOf(stack(projectId)?.migrate) },
+    wake,
+    service,
+  )
   const uptime = new UptimeWatches(
     {
       getState,
@@ -132,6 +148,18 @@ export function createDeploys(
     usageNotices: notices,
     signIns: new HostingSignIns(accounts),
     domains: new DomainWatches(workspace, wake, service),
+    deployWatch,
+    async pushed(repoId, branch, commit, taskId) {
+      const repository = workspace.getRepository(repoId)
+      const binding = service.binding(repository.projectId)
+      if (!binding?.repository || binding.productionBranch !== branch) return
+      const remote = await forgeRemoteOf(repository.root)
+      if (remote?.origin !== 'github.com' || `${remote.owner}/${remote.repo}` !== binding.repository) return
+      const session = taskId
+        ? agents.list(taskId).findLast((entry) => !entry.parentId && entry.state !== 'stopped')
+        : undefined
+      deployWatch.followPush(repository.projectId, commit, session?.id ?? null)
+    },
     uptime,
     resources,
     wake,

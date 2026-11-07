@@ -20,8 +20,14 @@ function setup(approve: boolean) {
     domains: vi.fn(async () => [managed]),
     addDomain: vi.fn(async (_project: string, name: string) => ({ ...managed, name, managedDns: false })),
     createRecords: vi.fn(async () => managed),
+    project: vi.fn(async () => ({
+      binding: { siteName: 'shop', productionBranch: 'main' },
+      productionUrl: 'https://shop.vercel.app',
+      deployments: [],
+    })),
+    deploy: vi.fn(async (_project: string, _ref: string | null, production: boolean) => ({ id: 'd1', production })),
   }
-  const watches = { watch: vi.fn() }
+  const watches = { domains: { watch: vi.fn() }, deploys: { follow: vi.fn() } }
   const asked: string[] = []
   const source = { id: 's1', parentId: null, cwd: '/tmp/shop', settings: { access: 'full' } }
   registerDeployTools(
@@ -56,7 +62,19 @@ describe('domain tools', () => {
     const { tools, deploys, watches } = setup(true)
     await tools.get('deploy_domain_add')!({ domain: 'https://WWW.shop.id' }, {})
     expect(deploys.addDomain).toHaveBeenCalledWith('p1', 'www.shop.id')
-    expect(watches.watch).toHaveBeenCalledWith('p1', 'www.shop.id', 's1')
+    expect(watches.domains.watch).toHaveBeenCalledWith('p1', 'www.shop.id', 's1')
     await expect(tools.get('deploy_domain_add')!({ domain: 'localhost' }, {})).rejects.toThrow('domain name')
+  })
+})
+
+describe('deploy tools', () => {
+  it('follow a production deploy so this thread hears how it finished, and never deploy when refused', async () => {
+    const refused = setup(false)
+    await expect(refused.tools.get('deploy_production')!({}, {})).rejects.toThrow('declined')
+    expect(refused.deploys.deploy).not.toHaveBeenCalled()
+    expect(refused.watches.deploys.follow).not.toHaveBeenCalled()
+    const { tools, watches } = setup(true)
+    await tools.get('deploy_production')!({}, {})
+    expect(watches.deploys.follow).toHaveBeenCalledWith('p1', { id: 'd1', production: true }, 's1')
   })
 })

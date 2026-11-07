@@ -35,6 +35,18 @@ The same accounts publish artifacts with **Publish to the web** ([Artifacts](art
   - Ramu checks a newly added domain every minute for up to three days, and when it serves HTTPS it wakes the project's most recent thread with one message, through the same queue as pull request feedback.
 - **Checks** says whether the repository has CI and offers **Set up CI** when it has none ([Set up CI](git-hosting.md#set-up-ci)).
 
+## When a deployment finishes
+
+Ramu follows a deployment until the platform finishes it, then wakes one thread with one message, through the same queue as pull request feedback:
+
+- **What starts it:** a deploy from Ramu (**Deploy to production**, `deploy_production` or `deploy_preview`); a push of the production branch from a thread (**Push** or **Sync**) to the repository the platform watches; and **Merge…** of a pull request into that branch. For a push, Ramu finds the platform's production deployment of the pushed commit; for a merge, the first production deployment that starts after it.
+- **Which thread:** the one that deployed, pushed or is linked to the merged pull request, or the project's most recent thread when there is none or it was closed since.
+- **What it says:** the live address when the deployment is ready; when it fails, the deployment and the end of its build log, with anything that looks like a secret replaced by `[redacted]`, so the agent can find the cause and propose a fix. A failed production deployment leaves the previous one live.
+- **Migrations:** a push or merge that the platform deploys on its own runs no migration from Ramu. When `ramu.json` names a `migrate` command, the message says so, and the agent offers **Deploy to production** (through `deploy_production`, which runs the migrations first) if the change adds one.
+- A push the platform has not started deploying within 20 minutes, or a deployment still building after two hours, is no longer followed. A push replaced by a newer one is followed through the newer push.
+
+Pushes made outside Ramu, such as from a terminal or GitHub's website, are not followed. For those, a **Deployment failed** [webhook schedule](background-work.md#when-a-request-arrives) for Vercel or Netlify starts a thread instead.
+
 ## Usage
 
 **Usage this billing period** in the deploy sheet shows what the project's platforms report through their APIs, next to the plan's limit when the API reports one. **Open billing** opens the platform's billing page. Ramu never changes a plan or adds a payment method, and neither can an agent.
@@ -67,7 +79,7 @@ The deploy sheet shows **Database** when the project needs one: its stack stores
 - **Provision** creates a Neon Postgres project named after the Ramu project on your connected Neon account, and a `preview` branch of it (a copy that shares storage until it changes). Production uses the main branch; preview deployments, this host and GitHub Actions use the `preview` branch, so they never change production data.
 - Ramu keeps both branches' connection values in the host's credential store and sets the preview branch's `DATABASE_URL` (pooled, for the app) and `DATABASE_URL_UNPOOLED` (direct, for migrations) in this host's Environment variables. **Sync** in **Environment variables** then copies them on: the main branch's values to the platform's production variables, the preview branch's to its preview variables and GitHub Actions. The sheet shows names only.
 - Once provisioned, the sheet shows the database, and **Open** for its page on Neon; its size and compute time are under [Usage](#usage). Resizing and deleting it are done on Neon's page; neither the sheet nor an agent deletes a database.
-- **Migrations:** when `ramu.json` names a `migrate` command (the Django and Rails stacks fill it in), **Deploy to production** and `deploy_production` first run it on this host against the production database, in the repository's checkout of the production branch. The checkout must be on that branch at the commit pushed to GitHub, so the migrations match what deploys. A failed migration stops the deploy: the sheet shows its output, and the project's most recent thread is woken with it to find a fix. Pushes to the default branch that the platform deploys on its own do not run migrations from Ramu.
+- **Migrations:** when `ramu.json` names a `migrate` command (the Django and Rails stacks fill it in), **Deploy to production** and `deploy_production` first run it on this host against the production database, in the repository's checkout of the production branch. The checkout must be on that branch at the commit pushed to GitHub, so the migrations match what deploys. A failed migration stops the deploy: the sheet shows its output, and the project's most recent thread is woken with it to find a fix. Pushes to the default branch that the platform deploys on its own do not run migrations from Ramu; the thread woken when that deployment finishes is told so.
 
 The project stays linked to the account that linked it. If you connect a different account later, deploy actions are refused until you connect that account again or link the project again.
 
@@ -77,7 +89,7 @@ Threads in a project get deploy tools for that project, on its linked platform a
 
 - `deploy_status`: the target, live address, what the platform can do, and the latest deployments.
 - `deploy_logs`: the end of a deployment's build log.
-- `deploy_preview`: a preview deployment of the thread's current branch (Vercel; Netlify builds previews from pull requests). Outside Full access it asks first.
+- `deploy_preview`: a preview deployment of the thread's current branch (Vercel; Netlify builds previews from pull requests). Outside Full access it asks first. The thread is woken when it finishes, as after `deploy_production` ([When a deployment finishes](#when-a-deployment-finishes)).
 - `deploy_domains`: the project's domains, the records each needs and whether it is live.
 - `deploy_usage`: what the platform and database report for the billing period, beside the plan's limits, and the billing page. Read-only.
 - `deploy_domain_add` and `deploy_domain_records`: add a domain, or create its records in the platform's DNS. They always ask you with a card naming the domain and each record, in every access mode, and the thread is woken when the domain is live.

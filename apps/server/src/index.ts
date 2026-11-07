@@ -923,6 +923,7 @@ async function stop(intentional = false, exitCode = 0) {
   await schedules.stop()
   await pullRequestWatches.stop()
   await deploys.domains.stop()
+  await deploys.deployWatch.stop()
   await deploys.uptime.stop()
   await deploys.usageNotices.stop()
   await pullRequestIndex.stop()
@@ -1321,7 +1322,7 @@ const mcpHttp = createServer(async (req, res) => {
     registerDeployTools(
       server,
       deploys.service,
-      deploys.domains,
+      { domains: deploys.domains, deploys: deploys.deployWatch },
       deploys.usage,
       source,
       deployProject,
@@ -2119,6 +2120,7 @@ const tick = setInterval(() => {
   void schedules.tick().catch(console.error)
   void pullRequestWatches.tick().catch(console.error)
   void deploys.domains.tick().catch(console.error)
+  void deploys.deployWatch.tick().catch(console.error)
   void deploys.uptime.tick().catch(console.error)
   void deploys.usageNotices.tick().catch(console.error)
   void pullRequestIndex.tick().catch(console.error)

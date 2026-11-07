@@ -184,6 +184,11 @@ export class DeployService {
     }
   }
 
+  async deployment(projectId: string, deploymentId: string): Promise<Deployment> {
+    const { binding, auth } = await this.bound(projectId)
+    return this.adapter(binding.platform).deploymentStatus(auth, binding, deploymentId)
+  }
+
   async logs(projectId: string, deploymentId: string): Promise<string> {
     const { binding, auth } = await this.bound(projectId)
     return this.adapter(binding.platform).deploymentLogs(auth, binding, deploymentId, LOG_LINES)

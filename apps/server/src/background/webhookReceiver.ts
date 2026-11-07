@@ -1,5 +1,5 @@
 // Webhook requests reaching a schedule: the host's own listener (`POST /hooks/<token>`) hands the raw request here. The address token finds the schedule, the signature proves the sender, and the schedule decides the rest.
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 import { MAX_WEBHOOK_BODY_BYTES, type WebhookRequest, type WebhookSignature } from '@ramu/shared/webhooks'
 import type { WebhookDelivery } from '@ramu/shared/types'
 import type { ScheduleService } from './schedules'
@@ -26,8 +26,26 @@ export function signatureMatches(
   if (!secret) return false
   const sent = headers[signature.header.toLowerCase()] ?? ''
   if (signature.kind === 'token') return same(sent, secret)
-  const digest = createHmac('sha256', secret).update(raw).digest(signature.encoding)
+  if (signature.kind === 'jws') return jwsMatches(sent, secret, raw)
+  const digest = createHmac(signature.algorithm ?? 'sha256', secret)
+    .update(raw)
+    .digest(signature.encoding)
   return same(sent, `${signature.prefix}${digest}`)
+}
+
+/** An HS256 JSON web token signed with the secret, whose `sha256` claim is the hex digest of this exact body. */
+function jwsMatches(token: string, secret: string, raw: Buffer): boolean {
+  const [header, payload, signed] = token.split('.')
+  if (!header || !payload || !signed || token.split('.').length !== 3) return false
+  const expected = createHmac('sha256', secret).update(`${header}.${payload}`).digest('base64url')
+  if (!same(signed, expected)) return false
+  try {
+    const algorithm = (JSON.parse(Buffer.from(header, 'base64url').toString('utf8')) as { alg?: unknown }).alg
+    const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { sha256?: unknown }
+    return algorithm === 'HS256' && claims.sha256 === createHash('sha256').update(raw).digest('hex')
+  } catch {
+    return false
+  }
 }
 
 /** JSON, or a form post's `payload` field (GitHub's form content type), or the text itself. */

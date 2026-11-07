@@ -15,13 +15,17 @@ export type WebhookFilter =
   | { path: string; op: 'exists' }
 
 /**
- * How the sender proves a request is theirs. `hmac`: an HMAC-SHA256 of the raw body in a header (GitHub, Sentry);
- * `token`: the secret itself in a header (GitLab). Without one, only the unguessable address protects the schedule.
+ * How the sender proves a request is theirs. `hmac`: an HMAC of the raw body in a header, SHA-256 unless `algorithm`
+ * says SHA-1 (GitHub, Sentry; Vercel signs with SHA-1); `token`: the secret itself in a header (GitLab); `jws`: a
+ * JSON web token signed with the secret whose `sha256` claim is the body's digest (Netlify). Without one, only the
+ * unguessable address protects the schedule.
  */
 export type WebhookSignature =
-  { kind: 'hmac'; header: string; encoding: 'hex' | 'base64'; prefix: string } | { kind: 'token'; header: string }
+  | { kind: 'hmac'; header: string; encoding: 'hex' | 'base64'; prefix: string; algorithm?: 'sha1' }
+  | { kind: 'token'; header: string }
+  | { kind: 'jws'; header: string }
 
-export type WebhookSource = 'github' | 'gitlab' | 'sentry' | 'generic'
+export type WebhookSource = 'github' | 'gitlab' | 'sentry' | 'vercel' | 'netlify' | 'generic'
 
 /** The `webhook` schedule rule: no clock, a run per matching request. */
 export interface WebhookTrigger {
@@ -140,6 +144,18 @@ export function describeRequest(source: WebhookSource, request: WebhookRequest):
     const title = first('body.data.issue.title') ?? first('body.data.event.title') ?? first('body.data.error.title')
     return [resource, first('body.action'), title].filter(Boolean).join(' · ') || 'Sentry event'
   }
+  if (source === 'vercel') {
+    const name = first('body.payload.deployment.name')
+    const branch = first('body.payload.deployment.meta.githubCommitRef')
+    return [first('body.type'), name, branch].filter(Boolean).join(' · ') || 'Vercel event'
+  }
+  if (source === 'netlify') {
+    const state = first('body.state')
+    return (
+      [state && `deploy ${state}`, first('body.name'), first('body.branch')].filter(Boolean).join(' · ') ||
+      'Netlify event'
+    )
+  }
   return first('body.event') ?? first('body.type') ?? first('body.action') ?? 'Request'
 }
 
@@ -207,6 +223,19 @@ export const SOURCE_DEFAULTS: Record<
     replayKey: '{{headers.request-id}}',
     label: 'Sentry',
     brand: 'sentry',
+  },
+  vercel: {
+    signature: { kind: 'hmac', header: 'x-vercel-signature', encoding: 'hex', prefix: '', algorithm: 'sha1' },
+    replayKey: '{{body.id}}',
+    label: 'Vercel',
+    brand: 'vercel',
+  },
+  netlify: {
+    signature: { kind: 'jws', header: 'x-webhook-signature' },
+    // Netlify sends one notification per deploy and state, and names no delivery of its own.
+    replayKey: '{{body.id}}-{{body.state}}',
+    label: 'Netlify',
+    brand: 'netlify',
   },
   generic: { signature: null, replayKey: null, label: 'Any service', brand: null },
 }
@@ -323,6 +352,44 @@ export const WEBHOOK_PRESETS: WebhookPreset[] = [
     coalesceKey: '{{body.data.issue.id}}',
     prompt:
       'Sentry reported a new error. Find where it comes from in this project, explain the cause, and fix it if the fix is clear. Do not push; leave the change for me to review.',
+  },
+  {
+    id: 'vercel-deployment-failed',
+    source: 'vercel',
+    label: 'Deployment failed',
+    description: 'A Vercel deployment failed to build or deploy.',
+    filters: [{ path: 'body.type', op: 'equals', value: 'deployment.error' }],
+    fields: [
+      'body.payload.deployment.id',
+      'body.payload.deployment.name',
+      'body.payload.deployment.url',
+      'body.payload.deployment.meta.githubCommitRef',
+      'body.payload.deployment.meta.githubCommitSha',
+      'body.payload.target',
+      'body.payload.links.deployment',
+    ],
+    coalesceKey: '{{body.payload.deployment.id}}',
+    prompt:
+      'A Vercel deployment failed. Read its build log with deploy_logs, find the cause, fix it on a branch and open a pull request. If a variable, the plan or Vercel itself is at fault, tell me what to do instead of changing code.',
+  },
+  {
+    id: 'netlify-deployment-failed',
+    source: 'netlify',
+    label: 'Deployment failed',
+    description: 'A Netlify deploy failed.',
+    filters: [{ path: 'body.state', op: 'equals', value: 'error' }],
+    fields: [
+      'body.id',
+      'body.name',
+      'body.context',
+      'body.branch',
+      'body.commit_ref',
+      'body.error_message',
+      'body.admin_url',
+    ],
+    coalesceKey: '{{body.id}}',
+    prompt:
+      'A Netlify deploy failed. Read its build log with deploy_logs, find the cause, fix it on a branch and open a pull request. If a variable, the plan or Netlify itself is at fault, tell me what to do instead of changing code.',
   },
   {
     id: 'generic',

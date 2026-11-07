@@ -50,7 +50,7 @@ const webhookPath = z.string().max(200).refine(isWebhookPath, 'Use a path like b
 const filterText = z.string().max(300)
 const webhookRuleSchema = z.object({
   kind: z.literal('webhook'),
-  source: z.enum(['github', 'gitlab', 'sentry', 'generic']),
+  source: z.enum(['github', 'gitlab', 'sentry', 'vercel', 'netlify', 'generic']),
   filters: z
     .array(
       z.discriminatedUnion('op', [
@@ -67,8 +67,10 @@ const webhookRuleSchema = z.object({
         header: z.string().trim().toLowerCase().min(1).max(100),
         encoding: z.enum(['hex', 'base64']),
         prefix: z.string().max(40),
+        algorithm: z.literal('sha1').optional(),
       }),
       z.object({ kind: z.literal('token'), header: z.string().trim().toLowerCase().min(1).max(100) }),
+      z.object({ kind: z.literal('jws'), header: z.string().trim().toLowerCase().min(1).max(100) }),
     ])
     .nullable(),
   replayKey: z.string().max(300).nullable(),

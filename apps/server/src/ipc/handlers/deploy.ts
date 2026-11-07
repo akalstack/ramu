@@ -122,7 +122,9 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
       run: (projectId: string) =>
         exclusive(projectId, async () => {
           try {
-            return await deploys().service.deploy(project(projectId), null, true)
+            const deployment = await deploys().service.deploy(project(projectId), null, true)
+            deploys().deployWatch.follow(projectId, deployment, null)
+            return deployment
           } catch (error) {
             // The sheet shows the failure; the project's thread gets the output so it can fix the migration.
             if (error instanceof MigrationError) {

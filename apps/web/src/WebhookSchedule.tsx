@@ -344,11 +344,11 @@ export function WebhookPanel({
           )}
         </div>
       )}
-      {rule.source === 'sentry' && (
+      {(rule.source === 'sentry' || rule.source === 'vercel') && (
         <div className="flex items-center gap-2">
           <Input
-            aria-label={t('Client secret from Sentry')}
-            placeholder={t('Client secret from Sentry')}
+            aria-label={rule.source === 'sentry' ? t('Client secret from Sentry') : t('Webhook secret from Vercel')}
+            placeholder={rule.source === 'sentry' ? t('Client secret from Sentry') : t('Webhook secret from Vercel')}
             type="password"
             value={secretDraft}
             onChange={(event) => setSecretDraft(event.target.value)}
