@@ -18,6 +18,7 @@ import './railway'
 import './fly'
 import './server'
 import './githubPages'
+import './cloudflare'
 import './neon'
 
 /** What an account needs from its platform's adapter: a name, a token page and who a token belongs to. */
@@ -91,6 +92,7 @@ export class HostingAccounts {
       fly: saved('fly'),
       server: saved('server'),
       'github-pages': saved('github-pages'),
+      cloudflare: saved('cloudflare'),
       neon: saved('neon'),
       expo: saved('expo'),
     }

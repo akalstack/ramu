@@ -1,5 +1,5 @@
 // Deploys made by a GitHub Actions job in the repository, for targets without a Git integration (the person's own
-// server, Fly.io). The job's runs are the deployments; Ramu dispatches the same job for a production deploy, and with
+// server, Fly.io, GitHub Pages, Cloudflare Pages). The job's runs are the deployments; Ramu dispatches the same job for a production deploy, and with
 // an earlier commit's `tag` for a rollback. Only runs of that one workflow file are read or dispatched.
 import type { Deployment, DeploymentState } from '@ramu/shared/types/deploy'
 import { DeployError, platformCall, tail, type HostingAuth, type HostingSite } from './adapter'
@@ -9,6 +9,8 @@ interface WorkflowRun {
   status?: string
   conclusion?: string | null
   head_branch?: string | null
+  /** What started the run; a pull request's run is a preview. */
+  event?: string
   head_sha?: string
   display_title?: string
   created_at?: string
@@ -38,7 +40,7 @@ function deploymentOf(run: WorkflowRun): Deployment {
     id: String(run.id),
     state: runState(run),
     url: null,
-    production: true,
+    production: run.event !== 'pull_request',
     ref: run.head_branch ?? null,
     commit,
     message: commit && commit === run.head_sha ? (run.head_commit?.message?.split('\n')[0] ?? null) : null,

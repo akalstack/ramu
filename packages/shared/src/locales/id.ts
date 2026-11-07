@@ -6073,4 +6073,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Uses the repository’s GitHub sign-in': 'Memakai login GitHub repositori',
   'For a static site: Ramu turns on GitHub Pages for the repository and opens a pull request with a deploy job that builds the site (or publishes its files as they are) with GitHub’s own Pages actions. Every merge to the default branch deploys; there are no preview deployments, and the site is public.':
     'Untuk situs statis: Ramu menyalakan GitHub Pages untuk repositori dan membuka pull request berisi job deploy yang membangun situs (atau menerbitkan berkasnya apa adanya) dengan action Pages milik GitHub. Setiap penggabungan ke cabang default men-deploy; tidak ada deployment preview, dan situsnya publik.',
+  'Set up Cloudflare Pages': 'Siapkan Cloudflare Pages',
+  'For a static site: Ramu creates the Pages project, keeps your Pages token and account id in the repository’s GitHub Actions secrets, and opens a pull request with a deploy job that builds the site and uploads it with wrangler. Every merge to the default branch deploys, and each pull request gets a preview.':
+    'Untuk situs statis: Ramu membuat proyek Pages, menyimpan token Pages dan id akun Anda di secret GitHub Actions repositori, dan membuka pull request berisi job deploy yang membangun situs dan mengunggahnya dengan wrangler. Setiap penggabungan ke cabang default men-deploy, dan setiap pull request mendapat preview.',
+  'Create a custom token with only Account → Cloudflare Pages → Edit, for the one account your sites go in; it is kept in each linked repository’s Actions secrets':
+    'Buat token kustom dengan hanya Account → Cloudflare Pages → Edit, untuk satu akun tempat situs Anda; token disimpan di secret Actions setiap repositori yang ditautkan',
 }

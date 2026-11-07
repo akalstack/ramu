@@ -132,6 +132,7 @@ export function DeployDialog({
   const toFly = !binding && platform === 'fly'
   // GitHub Pages goes through the repository's GitHub sign-in, so it needs nothing connected first.
   const toPages = !binding && platform === 'github-pages'
+  const toCloudflare = !binding && platform === 'cloudflare'
   const confirm = () => {
     if (storeOnly) return onClose()
     if (toServer) {
@@ -175,13 +176,15 @@ export function DeployDialog({
                 ? t('Set up Fly.io')
                 : toPages
                   ? t('Set up GitHub Pages')
-                  : !binding
-                    ? t('Link repository')
-                    : !canDeploy
-                      ? t('Done')
-                      : confirming
-                        ? t('Deploy now')
-                        : t('Deploy to production')
+                  : toCloudflare
+                    ? t('Set up Cloudflare Pages')
+                    : !binding
+                      ? t('Link repository')
+                      : !canDeploy
+                        ? t('Done')
+                        : confirming
+                          ? t('Deploy now')
+                          : t('Deploy to production')
       }
       confirmDisabled={
         !status ||
@@ -276,6 +279,13 @@ export function DeployDialog({
             <p className="m-0 mt-3 text-caption">
               {t(
                 'For a static site: Ramu turns on GitHub Pages for the repository and opens a pull request with a deploy job that builds the site (or publishes its files as they are) with GitHub’s own Pages actions. Every merge to the default branch deploys; there are no preview deployments, and the site is public.',
+              )}
+            </p>
+          )}
+          {toCloudflare && (
+            <p className="m-0 mt-3 text-caption">
+              {t(
+                'For a static site: Ramu creates the Pages project, keeps your Pages token and account id in the repository’s GitHub Actions secrets, and opens a pull request with a deploy job that builds the site and uploads it with wrangler. Every merge to the default branch deploys, and each pull request gets a preview.',
               )}
             </p>
           )}

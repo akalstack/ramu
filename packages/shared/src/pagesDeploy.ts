@@ -52,6 +52,34 @@ const INSTALL: Record<PagesBuild['manager'], string> = {
   bun: 'npm install -g bun && bun install --frozen-lockfile',
 }
 
+/** The job steps that pick the commit, check it out and build the site, shared by the static hosting jobs. */
+export function staticBuildSteps(build: PagesBuild | null): string[] {
+  return [
+    '      - name: Choose the commit',
+    '        id: commit',
+    '        env:',
+    '          TAG: ${{ inputs.tag }}',
+    '          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}',
+    '        run: |',
+    '          if [ -n "$TAG" ] && ! printf \'%s\' "$TAG" | grep -Eq \'^[0-9a-f]{40}$\'; then echo "::error::tag must be a full commit SHA"; exit 1; fi',
+    '          echo "sha=${TAG:-$SHA}" >> "$GITHUB_OUTPUT"',
+    '      - uses: actions/checkout@v4',
+    '        with:',
+    '          ref: ${{ steps.commit.outputs.sha }}',
+    ...(build
+      ? [
+          '      - uses: actions/setup-node@v4',
+          '        with:',
+          '          node-version: lts/*',
+          '      - name: Install',
+          `        run: ${INSTALL[build.manager]}`,
+          '      - name: Build',
+          `        run: ${build.manager === 'npm' ? 'npm run build' : `${build.manager} run build`}`,
+        ]
+      : []),
+  ]
+}
+
 export interface PagesWorkflowFacts {
   defaultBranch: string
   /** The repository has Ramu's CI workflow, so deploys wait for it to pass. */
@@ -85,28 +113,7 @@ export function pagesWorkflow(facts: PagesWorkflowFacts): string {
     "    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'",
     '    runs-on: ubuntu-latest',
     '    steps:',
-    '      - name: Choose the commit',
-    '        id: commit',
-    '        env:',
-    '          TAG: ${{ inputs.tag }}',
-    '          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}',
-    '        run: |',
-    '          if [ -n "$TAG" ] && ! printf \'%s\' "$TAG" | grep -Eq \'^[0-9a-f]{40}$\'; then echo "::error::tag must be a full commit SHA"; exit 1; fi',
-    '          echo "sha=${TAG:-$SHA}" >> "$GITHUB_OUTPUT"',
-    '      - uses: actions/checkout@v4',
-    '        with:',
-    '          ref: ${{ steps.commit.outputs.sha }}',
-    ...(build
-      ? [
-          '      - uses: actions/setup-node@v4',
-          '        with:',
-          '          node-version: lts/*',
-          '      - name: Install',
-          `        run: ${INSTALL[build.manager]}`,
-          '      - name: Build',
-          `        run: ${build.manager === 'npm' ? 'npm run build' : `${build.manager} run build`}`,
-        ]
-      : []),
+    ...staticBuildSteps(build),
     '      - uses: actions/configure-pages@v5',
     '      - uses: actions/upload-pages-artifact@v3',
     '        with:',
