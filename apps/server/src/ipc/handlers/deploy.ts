@@ -277,6 +277,9 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
           )
           // Development on this host uses the preview branch, never production's data.
           await hostTarget(ctx.environment).set('development', values)
+          // A Worker reaches D1 through its wrangler config, which a pull request binds.
+          const d1 = name === 'cloudflare-d1' ? deploys().resources.binding(project(projectId), 'database') : null
+          if (d1) await deploys().workers.proposeD1(project(projectId), repoId, d1.id)
           return deploys().resources.status(projectId, [...(await readAppVariables(root)), ...DATABASE_VARIABLES])
         }),
     },

@@ -48,5 +48,5 @@ export function forgeBrand(service: ForgeService): BrandId {
 export function accountBrand(platform: AccountPlatform): BrandId {
   if (platform === 'server') return 'docker'
   if (platform === 'github-pages') return 'github'
-  return platform === 'cloudflare-workers' ? 'cloudflare' : platform
+  return platform === 'cloudflare-workers' || platform === 'cloudflare-d1' ? 'cloudflare' : platform
 }

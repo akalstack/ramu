@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { RESOURCE_KINDS, type ProjectResources, type ResourceKind, type ResourceProvider } from '@ramu/shared/types'
+import { accountBrand } from '@ramu/shared/brands'
 import { BrandIcon } from '@/components/brand-icon'
 import { Button } from '@/components/desktop-button'
 import { RowButton } from '@/components/row-button'
@@ -130,7 +131,7 @@ function KindSection({
         made.map((resource) => (
           <div key={resource.id} className="flex flex-col gap-1 text-caption">
             <span className="flex items-center gap-2">
-              <BrandIcon brand={resource.provider} />
+              <BrandIcon brand={accountBrand(resource.provider)} />
               <span className="flex-1 text-foreground">
                 {t(words.made, {
                   0: shown.providers.find((entry) => entry.provider === resource.provider)?.name ?? resource.provider,
@@ -146,9 +147,13 @@ function KindSection({
               </Button>
             </span>
             <span className="text-muted-foreground">
-              {resource.previewBranch
-                ? t(words.preview, { 0: resource.variables.join(', ') })
-                : t('Sync below sets {0}.', { 0: resource.variables.join(', ') })}
+              {resource.provider === 'cloudflare-d1'
+                ? t(
+                    'Bound to the Worker as env.DB by a pull request; wrangler dev uses a separate preview database, and the deploy job applies the migrations in migrations/.',
+                  )
+                : resource.previewBranch
+                  ? t(words.preview, { 0: resource.variables.join(', ') })
+                  : t('Sync below sets {0}.', { 0: resource.variables.join(', ') })}
             </span>
             {kind === 'database' && shown.migrate && (
               <span className="text-muted-foreground">
@@ -171,7 +176,7 @@ function KindSection({
                 aria-pressed={chosen?.provider === entry.provider}
                 onClick={() => setProvider(entry.provider)}
               >
-                <BrandIcon brand={entry.provider} />
+                <BrandIcon brand={accountBrand(entry.provider)} />
                 <span className="flex-1 text-foreground">{entry.name}</span>
                 <span className="text-caption text-muted-foreground">
                   {entry.connected && entry.plans[0]

@@ -11,6 +11,8 @@ export interface ProposedFile {
   /** Relative to the repository root. */
   path: string
   content: string
+  /** The file exists on the default branch and this changes it; `make` built the content from that version. */
+  replaces?: true
 }
 
 export interface ProposedChange {
@@ -60,7 +62,7 @@ export async function proposeFile(
   const change = await make(ref, defaultBranch)
   if (!change.files.length) return { url: null, change, defaultBranch }
   for (const file of change.files)
-    if (await existsAt(root, ref, file.path))
+    if (!file.replaces && (await existsAt(root, ref, file.path)))
       throw new Error(`${defaultBranch} already has ${file.path}. Ask an agent to change it instead.`)
   const name = await freeBranch(root, remote, branch)
   const scratch = await mkdtemp(join(tmpdir(), 'ramu-propose-'))

@@ -19,6 +19,7 @@ const BILLING_PAGES: Record<AccountPlatform, string> = {
   'github-pages': '',
   cloudflare: 'https://dash.cloudflare.com/?to=/:account/billing',
   'cloudflare-workers': 'https://dash.cloudflare.com/?to=/:account/billing',
+  'cloudflare-d1': 'https://dash.cloudflare.com/?to=/:account/billing',
   neon: 'https://console.neon.tech/app/billing',
   // Supabase's Management API reports no usage, so no report is made for it.
   supabase: 'https://supabase.com/dashboard/org/_/billing',

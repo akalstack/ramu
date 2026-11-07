@@ -51,7 +51,13 @@ export interface ResourceHost {
   setState(key: string, value: unknown): void
   /** The project's `ramu.json` stack facts. */
   stack(projectId: string): { database: boolean; migrate: string[] | null }
+  /** The platform the project deploys to, which decides whether D1 is offered. */
+  platform?(projectId: string): string | null
 }
+
+/** D1 is reached through a Worker's binding, so it is offered only for a project deployed to Cloudflare Workers. */
+const offered = (provider: ResourceProvider, platform: string | null | undefined) =>
+  provider !== 'cloudflare-d1' || platform === 'cloudflare-workers'
 
 /** A migration that failed: its output tail, for the person and the thread. */
 export class MigrationError extends Error {
@@ -139,6 +145,11 @@ export class ResourceService {
     return { auth, accountId: connected ?? (await this.adapter(provider).account(auth)).id }
   }
 
+  /** The project's resource of a kind, as kept. */
+  binding(projectId: string, kind: ResourceKind): ResourceBinding | null {
+    return this.bindings(projectId).find((entry) => entry.kind === kind) ?? null
+  }
+
   /** The project's database, when its provider can make and remove branches for pull requests. */
   private branchable(projectId: string): ResourceBinding | null {
     const binding = this.bindings(projectId).find((entry) => entry.kind === 'database' && entry.previewBranch)
@@ -211,16 +222,18 @@ export class ResourceService {
           ? stack.database || appVariables.includes('DATABASE_URL')
           : NEEDS[kind].some((name) => appVariables.includes(name)),
       ),
-      providers: RESOURCE_PROVIDERS.map((provider) => {
-        const adapter = this.adapter(provider)
-        return {
-          provider,
-          name: adapter.name,
-          kind: adapter.kind,
-          connected: this.accounts.connected(provider),
-          plans: adapter.plans,
-        }
-      }),
+      providers: RESOURCE_PROVIDERS.filter((provider) => offered(provider, this.host.platform?.(projectId))).map(
+        (provider) => {
+          const adapter = this.adapter(provider)
+          return {
+            provider,
+            name: adapter.name,
+            kind: adapter.kind,
+            connected: this.accounts.connected(provider),
+            plans: adapter.plans,
+          }
+        },
+      ),
       resources,
       migrate: stack.migrate ? commandLine(stack.migrate) : null,
     }
@@ -239,6 +252,8 @@ export class ResourceService {
   ): Promise<Record<string, string>> {
     const adapter = this.adapter(provider)
     if (!adapter.plans.some((entry) => entry.id === plan)) throw new Error('Choose one of the offered plans.')
+    if (!offered(provider, this.host.platform?.(projectId)))
+      throw new Error('D1 is for a project deployed to Cloudflare Workers. Link the project to Workers first.')
     if (this.bindings(projectId).some((binding) => binding.kind === adapter.kind))
       throw new Error(`This project already has ${KIND_NAMES[adapter.kind]}. Manage it on the provider’s page.`)
     const { auth, accountId } = await this.auth(provider)
@@ -312,7 +327,8 @@ export class ResourceService {
   async migrateProduction(projectId: string, root: string, branch: string, commit?: string | null): Promise<void> {
     const argv = this.host.stack(projectId).migrate
     const binding = this.bindings(projectId).find((entry) => entry.kind === 'database')
-    if (!argv || !binding) return
+    // D1's migrations run in the Worker's deploy job, against the database it binds.
+    if (!argv || !binding || binding.provider === 'cloudflare-d1') return
     const secrets = await this.secrets(projectId, binding.kind).read()
     if (!secrets) throw new Error('This host lost the database’s connection values. Provision it again on this host.')
     if ((await currentBranch(root)) !== branch)

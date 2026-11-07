@@ -14,12 +14,15 @@ import { ServerConnect } from './ServerConnect'
 import { useSettingsInvoke } from './SettingsScope'
 
 /** What to pick on each platform's token page: the smallest scope it offers. */
-const SCOPE_HINT: Record<Exclude<AccountPlatform, 'server' | 'github-pages' | 'cloudflare-workers'>, string> = {
+const SCOPE_HINT: Record<
+  Exclude<AccountPlatform, 'server' | 'github-pages' | 'cloudflare-workers' | 'cloudflare-d1'>,
+  string
+> = {
   vercel: 'Scope: the team your projects are in, not Full Account',
   netlify: 'Netlify tokens reach every team you belong to, so choose an expiry',
   railway: 'Pick the workspace your projects are in, so the token reaches only that workspace',
   cloudflare:
-    'Create a custom token with only Account → Cloudflare Pages → Edit, for the one account your sites go in; it is kept in each linked repository’s Actions secrets',
+    'Create a custom token for the one account your sites go in, with Account → Cloudflare Pages → Edit (add Workers Scripts → Edit for Workers and D1 → Edit for D1 databases); it is kept in each linked repository’s Actions secrets',
   fly: 'Create an organization token for the organization your apps go in, rather than a personal access token',
   neon: 'Create a personal API key. Neon keys reach your whole account and do not expire, so revoke it on Neon when Ramu no longer needs it',
   supabase:
@@ -84,7 +87,8 @@ export function DeployAccounts() {
     <>
       {/* GitHub Pages uses the repository's GitHub sign-in, listed under GitHub; there is nothing to connect. */}
       {summary?.accounts
-        .filter((account) => account.platform !== 'github-pages' && account.platform !== 'cloudflare-workers')
+        // Workers and D1 use the Cloudflare row's token; GitHub Pages uses the repository's GitHub account.
+        .filter((account) => !['github-pages', 'cloudflare-workers', 'cloudflare-d1'].includes(account.platform))
         .map((account) => (
           <DeployAccountRow
             key={account.platform}
@@ -223,7 +227,8 @@ function DeployAccountRow({
       {open &&
         account.platform !== 'server' &&
         account.platform !== 'github-pages' &&
-        account.platform !== 'cloudflare-workers' && (
+        account.platform !== 'cloudflare-workers' &&
+        account.platform !== 'cloudflare-d1' && (
           <div className="mb-3 flex flex-col gap-3 rounded-(--radius-m) bg-fill p-4 text-caption">
             {cliPlatform && (
               <section className="flex flex-col gap-2" aria-label={t('Sign in with {0}', { 0: account.name })}>

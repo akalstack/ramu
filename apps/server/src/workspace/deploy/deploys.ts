@@ -90,6 +90,7 @@ export function createDeploys(
         database: stack(projectId)?.database ?? false,
         migrate: stack(projectId)?.migrate ?? null,
       }),
+      platform: (projectId): string | null => service.binding(projectId)?.platform ?? null,
     },
     accounts,
     credentials,

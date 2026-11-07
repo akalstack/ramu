@@ -6073,8 +6073,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Set up Cloudflare Pages': 'Siapkan Cloudflare Pages',
   'For a static site: Ramu creates the Pages project, keeps your Pages token and account id in the repository’s GitHub Actions secrets, and opens a pull request with a deploy job that builds the site and uploads it with wrangler. Every merge to the default branch deploys, and each pull request gets a preview.':
     'Untuk situs statis: Ramu membuat proyek Pages, menyimpan token Pages dan id akun Anda di secret GitHub Actions repositori, dan membuka pull request berisi job deploy yang membangun situs dan mengunggahnya dengan wrangler. Setiap penggabungan ke cabang default men-deploy, dan setiap pull request mendapat preview.',
-  'Create a custom token with only Account → Cloudflare Pages → Edit, for the one account your sites go in; it is kept in each linked repository’s Actions secrets':
-    'Buat token kustom dengan hanya Account → Cloudflare Pages → Edit, untuk satu akun tempat situs Anda; token disimpan di secret Actions setiap repositori yang ditautkan',
+  'Create a custom token for the one account your sites go in, with Account → Cloudflare Pages → Edit (add Workers Scripts → Edit for Workers and D1 → Edit for D1 databases); it is kept in each linked repository’s Actions secrets':
+    'Buat token kustom untuk satu akun tempat situs Anda berada, dengan Account → Cloudflare Pages → Edit (tambahkan Workers Scripts → Edit untuk Workers dan D1 → Edit untuk database D1); token disimpan di Actions secrets setiap repositori yang ditautkan',
   'Other servers': 'Server lain',
   '{0}, kept for the projects set up on it': '{0}, disimpan untuk proyek yang disiapkan di sana',
   'Use for new setups': 'Pakai untuk penyiapan baru',
@@ -6163,4 +6163,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'A Shared MCP tool Auto tries after your signed-in providers.':
     'Alat Shared MCP yang dicoba Auto setelah penyedia yang Anda masuki.',
   'The number the sign-in page shows': 'Angka yang ditampilkan halaman masuk',
+  'Bound to the Worker as env.DB by a pull request; wrangler dev uses a separate preview database, and the deploy job applies the migrations in migrations/.':
+    'Diikat ke Worker sebagai env.DB lewat pull request; wrangler dev memakai database preview terpisah, dan job deploy menerapkan migrasi di migrations/.',
+  'SQLite on your Cloudflare account, bound to the Worker as DB, with a second database for wrangler dev.':
+    'SQLite di akun Cloudflare Anda, diikat ke Worker sebagai DB, dengan database kedua untuk wrangler dev.',
 }
