@@ -60,13 +60,7 @@ App, Doc, Diagram, Slides, Dashboard (over tables the agent fills in), Design (f
 
 - **Narration in video:** MP4 and WebM are made today (frames stepped with the Web Animations API, encoded with the browser's WebCodecs and packaged by Mediabunny); narration still to be mixed in.
 
-### 2. Editing in place
-
-A Doc's Markdown and a Mermaid diagram's source (desktop and phone) a deck's slide text and order and a design's frame words (desktop and phone) are edited with **Edit text** and saved as a version marked "Edited by you" with the device it was made on; an edit made on an older version is refused rather than merged, and agents are told to keep the person's wording ([Kinds](guide/artifacts.md#kinds)). Remaining:
-
-- Inline formatting (bold, links) edited as formatting on the phone; its blocks are edited formatted today, with inline marks shown as Markdown.
-
-### 3. Dashboards and Live artifacts
+### 2. Dashboards and Live artifacts
 
 - **Built:** a Dashboard's table can read its project's deployments, usage or uptime, again on every open (at most every five minutes), with "As of" ([Kinds](guide/artifacts.md#kinds)).
 - **Built:** a table can also read a CSV or JSON file in its project's folder, or an App artifact's records in the same project, read-only.
@@ -75,28 +69,28 @@ A Doc's Markdown and a Mermaid diagram's source (desktop and phone) a deck's sli
 - **Built:** watched figures on a kept dashboard's live tables are read every ten minutes and a change is told to the person's devices ([Kinds](guide/artifacts.md#kinds)). A dashboard's refresh rule (`refreshMinutes`) sets how often, and the phone's saved copy shows the "As of" of its last read when offline. **Refresh** in the desktop toolbar changes it.
 - **Built:** apps run on the host on schedules and notify through their triggers; a server's read-only MCP tools can run without asking once allowed for that artifact, while every other call still asks.
 
-### 4. Desktop
+### 3. Desktop
 
 - The artifact view opens as a workspace tab beside the chat, with the toolbar each kind has today (Outline and Edit text for docs, Range and Refresh for dashboards, playback for motions).
 
-### 5. Phone
+### 4. Phone
 
 - The **Artifacts** tab filters by kind, a deck shows one slide at a time with swipe and arrows, a doc keeps a reading width with **Edit text**, a dashboard draws its figures above its charts, and a motion plays as native video (built). Remaining viewers:
   - Slides: Present when the phone is connected to a display.
 - **Export** hands the file to the share sheet; **Add to Home Screen or share** and the home-screen widget work for every kind.
 
-### 6. Connection with shipping an app
+### 5. Connection with shipping an app
 
 The [shipping plan](SHIP-AN-APP-PLAN.md) and this one share one rule: make the smallest thing that does the job first, and grow it when it needs more.
 
 - **App to project:** an App artifact grows into a project through **Make it a project** (built), and **Publish to the web** moves onto the shipping plan's `HostingAdapter` when it exists. The static GitHub Pages, Netlify, Vercel and Cloudflare Pages deploys built for pages are its first targets.
 
-### 7. Documentation
+### 6. Documentation
 
 - The site's feature list names the kinds, with the [shipping plan's](SHIP-AN-APP-PLAN.md) site rewrite.
 - Each new behavior above is described in [Artifacts](guide/artifacts.md), the mobile README and VERIFICATION.md as it lands.
 
-### 8. Two people editing one artifact
+### 7. Two people editing one artifact
 
 Ramu is one person across devices today, so versions are enough. A household or a small team sharing an artifact through a share link that can edit needs more:
 
@@ -104,13 +98,13 @@ Ramu is one person across devices today, so versions are enough. A household or 
 - **Merging:** a Doc's and a deck's text are kept as a CRDT (Yjs) on the host, so two people typing at once merge instead of making competing versions. A version is still saved when either stops editing for a minute, so Restore and Compare keep working.
 - **Access:** an editing share link names the person it is for and can be revoked like any share link. Kinds without text (Dashboard, Motion) stay one editor at a time, with "Being edited by …" shown to the other.
 
-### 9. Dashboards from named services
+### 8. Dashboards from named services
 
 - Besides records, folders, Ramu data and Shared MCP servers, a Dashboard or Live artifact can read **named services** through connectors on the host: Salesforce, Amplitude and Grafana first.
 - Each connector is one file implementing `query(spec)` with that service's own sign-in, kept in `credentials/`. It is read-only, and each service is its own grant on the artifact, listed in plain words.
 - A connector is added only after its sign-in and the data it can read are reviewed and written up in SECURITY.md, the same bar as Shared MCP.
 
-### 10. Voice-over for Motion
+### 9. Voice-over for Motion
 
 - A Motion artifact can have narration: the agent writes a script per scene, and the **speech** ability ([Abilities](ABILITIES-PLAN.md)) turns it into audio on a signed-in provider that offers it. The host mixes the audio into the MP4 with the browser's own audio encoder, timed to the scenes.
 - **Narration** in the artifact's toolbar previews, re-records one scene, or removes the narration. The grant sheet says which provider receives the script, and no other content leaves the host.

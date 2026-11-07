@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Image, PanResponder, Pressable, Share, TextInput, View, useWindowDimensions } from 'react-native'
+import { Alert, Image, PanResponder, Pressable, Share, Text, TextInput, View, useWindowDimensions } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react-native'
 import type { Slide } from '@ramu/shared/artifactSource'
 import { designTexts } from '@ramu/shared/designText'
 import { mermaidLabels, withMermaidLabels } from '@ramu/shared/mermaidLabels'
 import { docBlocks, withDocBlocks, type DocBlock } from '@ramu/shared/docBlocks'
+import { inlineRuns } from '@ramu/shared/inlineMarks'
 import {
   interactiveHtml,
   readInteractiveState,
@@ -932,7 +933,6 @@ export default function PageScreen() {
                     <TextInput
                       accessibilityLabel={say('Block {number}', { number: index + 1 })}
                       multiline
-                      value={block.text}
                       onChangeText={(text) => change({ text })}
                       style={{
                         flex: 1,
@@ -943,7 +943,28 @@ export default function PageScreen() {
                         fontStyle: block.kind === 'quote' ? 'italic' : 'normal',
                         textDecorationLine: block.kind === 'task' && block.done ? 'line-through' : 'none',
                       }}
-                    />
+                    >
+                      {inlineRuns(block.text).map((run, at) => (
+                        <Text
+                          key={at}
+                          style={
+                            run.style === 'marker'
+                              ? { color: c.muted }
+                              : run.style === 'bold'
+                                ? { fontWeight: '700' }
+                                : run.style === 'italic'
+                                  ? { fontStyle: 'italic' }
+                                  : run.style === 'code'
+                                    ? { fontFamily: 'Menlo', backgroundColor: c.fill }
+                                    : run.style === 'link'
+                                      ? { color: c.accent, textDecorationLine: 'underline' }
+                                      : undefined
+                          }
+                        >
+                          {run.text}
+                        </Text>
+                      ))}
+                    </TextInput>
                   </View>
                 )
               })
