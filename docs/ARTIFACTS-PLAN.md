@@ -73,7 +73,7 @@ App, Doc, Diagram, Slides, Dashboard (over tables the agent fills in), Design (f
 
 Between the person's own devices, an edit of a doc, a Mermaid diagram or a deck's slide text made from an earlier version merges line by line on save, and each editor names the other devices editing the same text ([Kinds](guide/artifacts.md#kinds)). A household or a small team sharing an artifact through a share link that can edit needs more:
 
-- **Access:** an editing share link names the person it is for and can be revoked like any share link. Kinds without text (Dashboard, Motion) stay one editor at a time, with "Being edited by …" shown to the other.
+- **Access:** an editing share link names the person it is for, opens only on a device paired with the host, expires after 30 days unless renewed and can be revoked like any share link; that person's edits carry their name in versions. Kinds without text (Dashboard, Motion) stay one editor at a time, with "Being edited by …" shown to the other.
 - **Live merging:** a Doc's and a deck's text kept as a CRDT (Yjs) on the host, so two people typing at once see each other's words as they type. A version is still saved when either stops editing for a minute, so Restore and Compare keep working.
 - **Presence by part:** on which slide or heading each person is.
 
@@ -81,8 +81,8 @@ Between the person's own devices, an edit of a doc, a Mermaid diagram or a deck'
 
 Grafana and Amplitude are built: their accounts in Settings, a table naming its data source and query, and a grant per dashboard and service, reviewed in [SECURITY.md](../SECURITY.md) ([Dashboards](guide/artifacts.md#kinds)). Remaining:
 
-- **Salesforce:** a connector beside `interactive/grafana.ts` signing in through OAuth for a connected app, with its own `service.id`, added only after its sign-in and the data it can read are written up in SECURITY.md.
-- **Live (App) artifacts:** reading a named service from an App's own code, through the same per-artifact grant.
+- **Salesforce:** a connector beside `interactive/grafana.ts` signing in through OAuth with the person's own connected app (they register it in their org and Settings takes its consumer key; the refresh token stays in the credential store), with its own `service.id`, added only after its sign-in and the data it can read are written up in SECURITY.md.
+- **Live (App) artifacts:** reading a named service from an App's own code, declared as a capability and asked once on first open like its other grants, with **Page settings** taking it back.
 
 ### 6. Voice-over for Motion
 
