@@ -2,6 +2,7 @@
 // Builds run in the repository's GitHub Actions (`wrangler pages deploy` with that token from the repository's
 // secrets); Ramu reads those runs, and dispatches the same job for a production deploy or a rollback.
 import { CLOUDFLARE_WORKFLOW } from '@ramu/shared/cloudflareDeploy'
+import { apexOf, recordName } from '@ramu/shared/domains'
 import { actionsDeploys } from './actionsDeploys'
 import {
   DeployError,
@@ -10,6 +11,7 @@ import {
   type HostingAdapter,
   type HostingAuth,
   type HostingSite,
+  type PlatformDomain,
 } from './adapter'
 
 const PROJECT = /^[a-z0-9-]{1,58}$/
@@ -61,6 +63,12 @@ export function cloudflareApi(options: { api?: string; fetch?: typeof fetch } = 
       })
     },
   }
+}
+
+/** The Pages project's API path, in the account the binding was made in. */
+function projectPath(auth: HostingAuth, project: string): string {
+  if (!auth.scope) throw new DeployError('This project’s Cloudflare account is not known. Link it again.', 'not-found')
+  return `/accounts/${encodeURIComponent(auth.scope)}/pages/projects/${project}`
 }
 
 export function cloudflareAdapter(
@@ -119,6 +127,44 @@ export function cloudflareAdapter(
     capabilities: {
       deployProduction: (auth, site, ref) => job.deploy(auth, site, ref),
       rollback: (auth, site, id) => job.rollback(auth, site, id),
+      domains: {
+        async list(auth, site): Promise<PlatformDomain[]> {
+          const project = projectOf(site)
+          const domains = await cloudflare.call<{ name: string; status?: string }[]>(
+            auth,
+            `${projectPath(auth, project)}/domains`,
+            'reading the domains',
+          )
+          return domains.map((domain) => {
+            const zone = apexOf(domain.name)
+            const live = domain.status === 'active'
+            return {
+              name: domain.name,
+              records: [
+                {
+                  type: 'CNAME',
+                  host: domain.name,
+                  name: recordName(domain.name, zone),
+                  value: `${project}.pages.dev`,
+                },
+              ],
+              configured: live,
+              certificate: live,
+              managedDns: false,
+              zone,
+            }
+          })
+        },
+        async add(auth, site, name) {
+          await cloudflare.call(auth, `${projectPath(auth, projectOf(site))}/domains`, 'adding the domain', {
+            method: 'POST',
+            body: JSON.stringify({ name }),
+          })
+        },
+        async createRecords() {
+          throw new Error('The Pages token cannot change DNS. Add the CNAME record where the domain’s DNS is kept.')
+        },
+      },
     },
   }
 }

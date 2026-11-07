@@ -68,7 +68,7 @@ A VPS over SSH is built ([Your own server](guide/deploy.md#your-own-server), `wo
 
 ### 5. Domains
 
-**Add domain**, the records in plain words, **Create records** in Vercel DNS and Netlify DNS, the domain tools and the watch that wakes a thread when a domain is live are built ([Deploying an app](guide/deploy.md#deploy-a-project)). What remains: **Create records** at Cloudflare DNS with a token that can edit DNS (the Cloudflare Pages token cannot), and domains for each new platform's adapter. The phone lists a project's domains; adding one is on a computer.
+**Add domain**, the records in plain words, **Create records** in Vercel DNS and Netlify DNS, the domain tools and the watch that wakes a thread when a domain is live are built ([Deploying an app](guide/deploy.md#deploy-a-project)). What remains: **Create records** at Cloudflare DNS with a token that can edit DNS (the Cloudflare Pages token cannot). Cloudflare Pages adds custom domains through its own API (the CNAME is added by the person); GitHub Pages' custom domain is set on GitHub. The phone lists a project's domains; adding one is on a computer.
 
 ### 6. Databases and storage
 

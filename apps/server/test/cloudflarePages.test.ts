@@ -79,4 +79,43 @@ describe('the Cloudflare Pages adapter', () => {
       'not one Ramu set up',
     )
   })
+
+  it('adds a custom domain to the Pages project and gives the CNAME it needs', async () => {
+    const calls: string[] = []
+    const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
+      calls.push(`${init?.method ?? 'GET'} ${String(input)} ${init?.body ?? ''}`)
+      return new Response(
+        JSON.stringify({
+          success: true,
+          result: [
+            { name: 'www.shop.com', status: 'pending' },
+            { name: 'shop.com', status: 'active' },
+          ],
+        }),
+      )
+    }) as typeof fetch
+    const domains = cloudflareAdapter({ api: 'https://cf.test', fetch: fetcher }).capabilities.domains!
+    const auth = { token: 'cf', scope: 'acc1' }
+    const site = { siteId: 'ana/shop', siteName: 'shop' }
+    await domains.add(auth, site, 'www.shop.com')
+    expect(calls[0]).toBe('POST https://cf.test/accounts/acc1/pages/projects/shop/domains {"name":"www.shop.com"}')
+    expect(await domains.list(auth, site)).toEqual([
+      {
+        name: 'www.shop.com',
+        records: [{ type: 'CNAME', host: 'www.shop.com', name: 'www', value: 'shop.pages.dev' }],
+        configured: false,
+        certificate: false,
+        managedDns: false,
+        zone: 'shop.com',
+      },
+      {
+        name: 'shop.com',
+        records: [{ type: 'CNAME', host: 'shop.com', name: '@', value: 'shop.pages.dev' }],
+        configured: true,
+        certificate: true,
+        managedDns: false,
+        zone: 'shop.com',
+      },
+    ])
+  })
 })
