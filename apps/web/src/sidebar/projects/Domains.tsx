@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { DnsRecord, DomainStatus } from '@ramu/shared/types'
+import { domainState } from '@ramu/shared/deployText'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
 import { t, useLanguage } from '../../i18n'
@@ -25,13 +26,6 @@ function recordInstruction(record: DnsRecord): string {
     2: record.value,
   })
 }
-
-const stateOf = (domain: DomainStatus) =>
-  domain.configured && domain.certificate
-    ? t('Live over HTTPS')
-    : domain.configured
-      ? t('Waiting for the HTTPS certificate')
-      : t('Waiting for DNS')
 
 /**
  * The Deploy sheet's custom domains: adding one, the DNS records it needs in plain words, and Create records when its
@@ -80,7 +74,7 @@ export function DomainsSection({ projectId, platform }: { projectId: string; pla
         <div key={domain.name} className="flex flex-col gap-1 text-caption">
           <span className="flex items-center gap-2">
             <strong className="text-foreground">{domain.name}</strong>
-            <span className="text-muted-foreground">{stateOf(domain)}</span>
+            <span className="text-muted-foreground">{domainState(domain, t)}</span>
           </span>
           {!domain.configured && (
             <>

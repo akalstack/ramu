@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, Linking, View } from 'react-native'
 import { ExternalLink, RotateCcw } from 'lucide-react-native'
 import { accountBrand } from '@ramu/shared/brands'
 import { translate } from '@ramu/shared/i18n'
-import type { ProjectDeployment, UptimeStatus, UsageReport } from '@ramu/shared/types/deploy'
+import type { DomainStatus, ProjectDeployment, UptimeStatus, UsageReport } from '@ramu/shared/types/deploy'
 import { deploymentsView, rollbackConfirmation } from '../runtime/deployments'
 import { useStore } from '../runtime/store'
 import { VIEW_ONLY_WRITE_NOTICE } from '../runtime/viewerAccess'
@@ -18,6 +18,7 @@ interface Loaded {
   key: string
   status?: ProjectDeployment
   uptime?: UptimeStatus | null
+  domains?: DomainStatus[]
   usage?: UsageReport[]
   error?: string
 }
@@ -60,13 +61,14 @@ export function ProjectDeployments({
   const read = useCallback(async () => {
     const mine = key
     try {
-      const [status, uptime, usage] = await Promise.all([
+      const [status, uptime, usage, domains] = await Promise.all([
         runtime.current.invoke(hostId, 'deploy.project', projectId),
         // A host whose platform cannot report these still shows its deployments.
         runtime.current.invoke(hostId, 'deploy.uptime', projectId).catch(() => null),
         runtime.current.invoke(hostId, 'deploy.usage', projectId).catch(() => []),
+        runtime.current.invoke(hostId, 'deploy.domains', projectId).catch(() => []),
       ])
-      if (active.current === mine) setData({ key: mine, status, uptime, usage })
+      if (active.current === mine) setData({ key: mine, status, uptime, usage, domains })
     } catch (reason) {
       if (active.current === mine)
         setData({ key: mine, error: reason instanceof Error ? reason.message : String(reason) })
@@ -80,7 +82,9 @@ export function ProjectDeployments({
 
   const loaded = data.key === key ? data : { key }
   const status = loaded.status
-  const view = status ? deploymentsView(status, loaded.uptime ?? null, loaded.usage ?? [], t, time) : null
+  const view = status
+    ? deploymentsView(status, loaded.uptime ?? null, loaded.usage ?? [], t, time, loaded.domains ?? [])
+    : null
 
   // Off forgets the watch's checks and closes an open incident, as on the desktop.
   const setUptime = (enabled: boolean) => {
@@ -205,6 +209,32 @@ export function ProjectDeployments({
               </View>
             ))}
           </View>
+          {view.domains.length ? (
+            <>
+              <SectionLabel>{t('Domains')}</SectionLabel>
+              <View style={{ paddingHorizontal: space.m, gap: space.s }}>
+                {view.domains.map((domain) => (
+                  <View key={domain.name} style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+                    <View style={{ flex: 1 }}>
+                      <T weight="600">{domain.name}</T>
+                      <T size={font.caption} tone={domain.live ? 'muted' : 'warn'}>
+                        {domain.state}
+                      </T>
+                    </View>
+                    {domain.live ? (
+                      <Button
+                        title={t('Open')}
+                        accessibilityLabel={t('Open {0}', { 0: domain.name })}
+                        icon={ExternalLink}
+                        kind="secondary"
+                        onPress={() => open(domain.name)}
+                      />
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            </>
+          ) : null}
           {view.uptime.lines.length ? (
             <>
               <SectionLabel

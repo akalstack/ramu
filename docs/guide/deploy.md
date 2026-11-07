@@ -97,7 +97,7 @@ For an Expo app (an `app.json` or `app.config.*` at the repository root, as the 
 
 ## On the phone
 
-**Deployments** in a project's menu on the phone shows the platform and repository, the live address with **Open**, the latest deployments with their state, branch, time and **Open**, the [uptime](#uptime) watch with any open incident and its switch, and [usage](#usage) with **Open billing**. **Roll back** on an earlier production deployment asks first, naming the version and the address that changes, as in the deploy sheet. Linking, deploying, store releases, domains and databases are on a computer. Viewer pairings do not see deployments.
+**Deployments** in a project's menu on the phone shows the platform and repository, the live address with **Open**, the latest deployments with their state, branch, time and **Open**, the project's custom domains with where each is (**Open** once live over HTTPS), the [uptime](#uptime) watch with any open incident and its switch, and [usage](#usage) with **Open billing**. **Roll back** on an earlier production deployment asks first, naming the version and the address that changes, as in the deploy sheet. Linking, deploying, store releases, adding domains and databases are on a computer. Viewer pairings do not see deployments.
 
 ## Usage
 

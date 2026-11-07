@@ -137,3 +137,17 @@ test('the rollback confirmation names the version and the address that changes',
     'Production · main · t1\nAdd booking\n\nhttps://shop.example.com will show this version until the next deploy.',
   )
 })
+
+test('lists custom domains with where each is, and only a live one opens', () => {
+  const view = deploymentsView(status(), null, [], t, time, [
+    { name: 'shop.com', records: [], configured: true, certificate: true, managedDns: false },
+    { name: 'www.shop.com', records: [], configured: true, certificate: false, managedDns: false },
+    { name: 'new.shop.com', records: [], configured: false, certificate: false, managedDns: true },
+  ])
+  assert.deepEqual(view.domains, [
+    { name: 'shop.com', state: 'Live over HTTPS', live: true },
+    { name: 'www.shop.com', state: 'Waiting for the HTTPS certificate', live: false },
+    { name: 'new.shop.com', state: 'Waiting for DNS', live: false },
+  ])
+  assert.deepEqual(deploymentsView(status(), null, [], t, time).domains, [])
+})

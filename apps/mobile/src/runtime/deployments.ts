@@ -1,8 +1,15 @@
 // The phone's Deployments view of a project: what the host's deploy calls return, as rows and lines to show. No React
 // Native in here, so it is unit tested.
-import { canRollBackTo, DEPLOYMENT_STATE, deployText, liveDeployment, nearLimit } from '@ramu/shared/deployText'
+import {
+  canRollBackTo,
+  DEPLOYMENT_STATE,
+  deployText,
+  domainState,
+  liveDeployment,
+  nearLimit,
+} from '@ramu/shared/deployText'
 import type { Translate } from '@ramu/shared/forgeStatus'
-import type { Deployment, ProjectDeployment, UptimeStatus, UsageReport } from '@ramu/shared/types/deploy'
+import type { Deployment, DomainStatus, ProjectDeployment, UptimeStatus, UsageReport } from '@ramu/shared/types/deploy'
 
 export interface DeploymentRow {
   id: string
@@ -22,6 +29,8 @@ export interface DeploymentsView {
   error: string | null
   rows: DeploymentRow[]
   uptime: { lines: string[]; down: boolean }
+  /** The project's custom domains and where each is; a live one can be opened. */
+  domains: { name: string; state: string; live: boolean }[]
   usage: {
     platform: UsageReport['platform']
     title: string
@@ -36,6 +45,7 @@ export function deploymentsView(
   usage: UsageReport[],
   t: Translate,
   time: (at: number) => string,
+  domains: DomainStatus[] = [],
 ): DeploymentsView {
   const words = deployText(t, time)
   const binding = status.binding
@@ -53,6 +63,11 @@ export function deploymentsView(
       rollBack: canRollBackTo(status, deployment),
     })),
     uptime: uptimeLines(uptime, t, time, words.uptimeCheck),
+    domains: domains.map((domain) => ({
+      name: domain.name,
+      state: domainState(domain, t),
+      live: domain.configured && domain.certificate,
+    })),
     usage: usage.map((report) => ({
       platform: report.platform,
       title: report.period

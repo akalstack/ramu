@@ -47,7 +47,7 @@ Vercel, Netlify and the person's own server are built ([Deploying an app](guide/
 - **Connecting an account, still to do:** the same CLI sign-in for `gh`, `wrangler` and `eas` as those platforms land; starting a sign-in from a paired device for a remote host, with the link shown there (hosting accounts change only on the host today); token links prefilled where the platform allows it (GitHub's fine-grained token form, Cloudflare's templates); and offering an expiring token again before it runs out (Settings shows the date today).
 - **Deploy watch, still to do:** deploys, pushes and merges from Ramu are followed ([When a deployment finishes](guide/deploy.md#when-a-deployment-finishes), `workspace/deploy/deployWatch.ts`), and **Deployment failed** webhook presets cover Vercel and Netlify. Pushes an agent makes with `git push` in its shell are not followed yet, nor are pushes from outside Ramu without a webhook schedule.
 - **Marks:** each resource kind names its `BrandId` (`packages/shared/src/brands.ts`) and shows its `BrandIcon` beside its name, as the hosting platforms do.
-- **UI:** the sheet's remaining steps from [the person's path](#the-persons-path) (create the GitHub repository when there is none, set the variables, push and wait for the first deployment), and **Deploy** suggested when a goal is met. The pull request card shows the preview, and the phone a project's deployments, uptime and usage with **Roll back** ([Deploying an app](guide/deploy.md#on-the-phone)); domains and databases are not on the phone yet, and the agent does not post the preview address in the thread by itself.
+- **UI:** the sheet's remaining steps from [the person's path](#the-persons-path) (create the GitHub repository when there is none, set the variables, push and wait for the first deployment), and **Deploy** suggested when a goal is met. The pull request card shows the preview, and the phone a project's deployments, uptime and usage with **Roll back** ([Deploying an app](guide/deploy.md#on-the-phone)); databases are not on the phone yet, and the agent does not post the preview address in the thread by itself.
 - **Publish to the web:** Netlify and Vercel use the hosting accounts; the static upload in `hosting/staticSite.ts` moves onto the adapters as a capability, with Cloudflare Pages and GitHub Pages, as those adapters land.
 
 ### 3. CI/CD
@@ -72,7 +72,7 @@ A VPS over SSH is built ([Your own server](guide/deploy.md#your-own-server), `wo
 
 ### 5. Domains
 
-**Add domain**, the records in plain words, **Create records** in Vercel DNS and Netlify DNS, the domain tools and the watch that wakes a thread when a domain is live are built ([Deploying an app](guide/deploy.md#deploy-a-project)). What remains: **Create records** at Cloudflare DNS with a token that can edit DNS (the artifacts' Cloudflare Pages token cannot), domains for each new platform's adapter, and the domains list on the phone.
+**Add domain**, the records in plain words, **Create records** in Vercel DNS and Netlify DNS, the domain tools and the watch that wakes a thread when a domain is live are built ([Deploying an app](guide/deploy.md#deploy-a-project)). What remains: **Create records** at Cloudflare DNS with a token that can edit DNS (the artifacts' Cloudflare Pages token cannot), and domains for each new platform's adapter. The phone lists a project's domains; adding one is on a computer.
 
 ### 6. Databases and storage
 

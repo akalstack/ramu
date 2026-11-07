@@ -5,6 +5,7 @@ import type {
   AccountPlatform,
   Deployment,
   DeploymentState,
+  DomainStatus,
   ProjectDeployment,
   UptimeCheck,
   UsageFigure,
@@ -48,6 +49,14 @@ export function canRollBackTo(status: ProjectDeployment, deployment: Deployment)
 }
 
 /** A usage figure at 80% of its limit or more, which the clients mark as a warning. */
+/** Where a custom domain is: live over HTTPS, waiting for its certificate, or waiting for its DNS. */
+export const domainState = (domain: Pick<DomainStatus, 'configured' | 'certificate'>, t: Translate) =>
+  domain.configured && domain.certificate
+    ? t('Live over HTTPS')
+    : domain.configured
+      ? t('Waiting for the HTTPS certificate')
+      : t('Waiting for DNS')
+
 export const nearLimit = (figure: UsageFigure) => !!figure.limit && figure.used >= figure.limit * 0.8
 
 export function deployText(t: Translate, time: (at: number) => string) {
