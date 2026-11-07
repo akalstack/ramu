@@ -33,7 +33,10 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
   /** Pull and Sync follow the saved preference, so every entry point integrates the same way. */
   const savedPullMode = (): PullMode => storedPreferences().pullMode ?? DEFAULT_APP_PREFERENCES.pullMode
 
-  /** A push of the default branch from a thread is followed, so CI failing on it, or its deployment, wakes that thread. */
+  /**
+   * A push from a thread is followed: CI failing on the default branch, the production deployment of that branch, or the
+   * preview deployment of another, wakes that thread.
+   */
   const followPush = (taskId: string, cwd: string, repoId: string) => {
     void ctx.pullRequestWatches?.watchPush(taskId, cwd, repoId).catch((error: unknown) => {
       console.error('Could not follow the push:', error)

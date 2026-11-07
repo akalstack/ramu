@@ -190,11 +190,15 @@ export function createDeploys(
     deployWatch,
     async pushed(repoId, branch, commit, taskId) {
       const linked = await linkedTo(repoId)
-      if (!linked || linked.binding.productionBranch !== branch) return
+      if (!linked) return
+      const production = linked.binding.productionBranch === branch
+      // Another branch is a preview the platform may build; it is found by the pushed commit.
+      if (!production && !commit) return
       const session = taskId
         ? agents.list(taskId).findLast((entry) => !entry.parentId && entry.state !== 'stopped')
         : undefined
-      deployWatch.followPush(linked.projectId, commit, session?.id ?? null)
+      if (production) deployWatch.followPush(linked.projectId, commit, session?.id ?? null)
+      else deployWatch.followPreview(linked.projectId, branch, commit!, session?.id ?? null)
     },
     async preview(repoId, branch) {
       const linked = await linkedTo(repoId)

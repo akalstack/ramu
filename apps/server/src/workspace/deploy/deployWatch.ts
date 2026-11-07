@@ -1,6 +1,7 @@
 // Following a deployment until the platform finishes it, then waking one thread through its durable queue: the live
 // address on success, the end of the build log on failure. Deploys Ramu starts are followed by their id; a push or
-// merge that the platform deploys on its own is found by its commit, or as the next production deployment. A store
+// merge that the platform deploys on its own is found by its commit, or as the next production deployment, and a push
+// of another branch by its preview deployment's commit. A store
 // build is followed through its submission to TestFlight or Play's internal track.
 import { randomUUID } from 'node:crypto'
 import type { Deployment, StoreBuild } from '@ramu/shared/types/deploy'
@@ -25,6 +26,7 @@ const LOG_LINES = 80
 type Followed =
   | { kind: 'deployment'; deploymentId: string; production: boolean }
   | { kind: 'push'; commit: string | null }
+  | { kind: 'preview'; branch: string; commit: string }
   | { kind: 'release'; buildId: string }
 
 type DeployWatch = Followed & {
@@ -107,6 +109,27 @@ export class DeployWatches {
     )
   }
 
+  /**
+   * Follows the preview deployment the platform starts for a push of another branch, by its commit, so the thread can
+   * give the person the preview's address (or fix its build). A platform that builds no preview for the branch is
+   * forgotten after twenty minutes; only the newest push of a branch is followed.
+   */
+  followPreview(projectId: string, branch: string, commit: string, sessionId: string | null): void {
+    if (!this.service.binding(projectId)) return
+    this.add(
+      {
+        id: randomUUID(),
+        kind: 'preview',
+        branch,
+        commit: commit.toLowerCase(),
+        projectId,
+        sessionId: sessionId ?? this.wake.latestThread(projectId),
+        since: Date.now(),
+      },
+      (entry) => entry.kind === 'preview' && entry.projectId === projectId && entry.branch === branch,
+    )
+  }
+
   /** Follows a store build Ramu started until its submission finishes; `sessionId` null wakes the latest thread. */
   followRelease(projectId: string, buildId: string, sessionId: string | null): void {
     this.add(
@@ -147,11 +170,11 @@ export class DeployWatches {
       try {
         const deployment = await this.find(watch)
         if (!deployment) {
-          if (watch.kind === 'push' && age > UNSEEN_TTL) this.host.setState(KEY, this.without(watch.id))
+          if (watch.kind !== 'deployment' && age > UNSEEN_TTL) this.host.setState(KEY, this.without(watch.id))
           continue
         }
         // A newer push replaced this one on the platform; that push has its own watch.
-        if (watch.kind === 'push' && deployment.state === 'canceled') {
+        if (watch.kind !== 'deployment' && deployment.state === 'canceled') {
           this.host.setState(KEY, this.without(watch.id))
           continue
         }
@@ -222,6 +245,8 @@ export class DeployWatches {
   private async find(watch: Exclude<DeployWatch, { kind: 'release' }>): Promise<Deployment | null> {
     if (watch.kind === 'deployment') return this.service.deployment(watch.projectId, watch.deploymentId)
     const { deployments } = await this.service.project(watch.projectId)
+    if (watch.kind === 'preview')
+      return deployments.find((entry) => !entry.production && entry.commit?.toLowerCase() === watch.commit) ?? null
     const production = deployments.filter((entry) => entry.production)
     if (watch.commit) return production.find((entry) => entry.commit?.toLowerCase() === watch.commit) ?? null
     // Oldest first: the merge's deployment is the first one started after it.
@@ -246,7 +271,7 @@ export class DeployWatches {
       deployment.production ? 'The production deployment' : 'The preview deployment',
       deployment.ref ? ` of ${deployment.ref}` : '',
       short(deployment.commit) ? ` (${short(deployment.commit)})` : '',
-      watch.kind === 'push' ? ', which the platform started for the push,' : '',
+      watch.kind === 'push' || watch.kind === 'preview' ? ', which the platform started for the push,' : '',
     ].join('')
     if (deployment.state === 'ready') {
       const url = deployment.production

@@ -145,6 +145,27 @@ describe('deploy watches', () => {
     expect(ignored.enqueueBackground).not.toHaveBeenCalled()
   })
 
+  it('tells the pushing thread its branch’s preview address, found by the pushed commit', async () => {
+    const preview = deployment({
+      id: 'pv',
+      state: 'ready',
+      production: false,
+      ref: 'feature',
+      commit: SHA,
+      url: 'https://shop-git-feature.vercel.app',
+    })
+    const { watches, enqueueBackground } = setup({
+      lists: [[deployment({ id: 'other', production: false, commit: 'f'.repeat(40) })], [preview]],
+    })
+    watches.followPreview('p1', 'feature', SHA, 'pusher')
+    await poll(watches, 2)
+    expect(enqueueBackground).toHaveBeenCalledTimes(1)
+    const text = enqueueBackground.mock.calls[0]?.[1] as string
+    expect(text).toContain('The preview deployment of feature (a1b2c3d)')
+    expect(text).toContain('https://shop-git-feature.vercel.app is live')
+    expect(text).not.toContain('migrate')
+  })
+
   it('wakes the project’s latest thread when the one that deployed was stopped', async () => {
     const { watches, enqueueBackground, sessions } = setup({ statuses: [deployment({ state: 'ready' })] })
     watches.follow('p1', { id: 'd1', production: true }, 'pusher')
