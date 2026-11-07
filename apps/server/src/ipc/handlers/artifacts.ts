@@ -9,7 +9,7 @@ import {
   type RamuDataSource,
 } from '@ramu/shared/artifacts'
 import { NO_PROJECT } from '@ramu/shared/types'
-import type { HostExportFormat } from '@ramu/shared/interactiveExport'
+import { HOST_EXPORT_FORMATS, type HostExportFormat } from '@ramu/shared/interactiveExport'
 import { id } from '../schemas'
 import type { HandlerContext, RegisterHandlers } from '../types'
 import type { AnswerShape, PageFunction } from '../../interactive/pageAi'
@@ -258,7 +258,7 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       run: (artifactId: string, version?: number) => need().pages.document(artifactId, version),
     },
     'artifacts.export': {
-      args: z.tuple([id, z.number().int().positive().optional(), z.enum(['pdf', 'pptx', 'png'])]),
+      args: z.tuple([id, z.number().int().positive().optional(), z.enum(HOST_EXPORT_FORMATS)]),
       run: (artifactId: string, version: number | undefined, format: HostExportFormat) => {
         if (!ctx.artifactExports) throw new Error('Update this host for exports.')
         return ctx.artifactExports.make(need().pages.document(artifactId, version), format)

@@ -271,7 +271,7 @@ it.skipIf(!interactiveBrowserPath())(
           ],
         },
       ],
-      figures: [{ label: 'Total', dataset: 'costs', column: 'usd', unit: ' USD' }],
+      figures: [{ label: 'Total', dataset: 'costs', column: 'usd', aggregate: 'sum', unit: ' USD' }],
       charts: [{ title: 'By service', type: 'pie', dataset: 'costs', x: 'service', y: ['usd'] }],
       title: 'Costs',
       summary: 'C',

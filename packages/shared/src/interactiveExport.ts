@@ -37,7 +37,8 @@ export interface ExportedFile {
 }
 
 /** Files the host makes in its headless browser or with a writer library, kept with the version they were made from. */
-export type HostExportFormat = 'pdf' | 'pptx' | 'png' | 'docx'
+export const HOST_EXPORT_FORMATS = ['pdf', 'pptx', 'png', 'docx'] as const
+export type HostExportFormat = (typeof HOST_EXPORT_FORMATS)[number]
 
 /**
  * What the host can make for a kind: every kind prints to PDF, a deck also writes PowerPoint and slide images, a doc

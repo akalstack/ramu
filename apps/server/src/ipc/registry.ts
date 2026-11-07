@@ -28,7 +28,7 @@ import { registerUiHandlers } from './handlers/ui'
 import { registerThreadStartHandlers } from './handlers/threadStart'
 import { registerWorkspaceHandlers } from './handlers/workspace'
 import type { HandlerContext, MethodTable } from './types'
-import type { HostExportFormat } from '@ramu/shared/interactiveExport'
+import { HOST_EXPORT_FORMATS, type HostExportFormat } from '@ramu/shared/interactiveExport'
 
 /** The renderer's method table: every handler group, merged. Method names are unique across groups. */
 export const registerHandlers = (ctx: HandlerContext): MethodTable => {
@@ -60,7 +60,7 @@ export const registerHandlers = (ctx: HandlerContext): MethodTable => {
           z.string().min(1).max(200),
           z.string().uuid(),
           z.number().int().positive(),
-          z.enum(['pdf', 'pptx', 'png']),
+          z.enum(HOST_EXPORT_FORMATS),
         ]),
         run: (session: string, id: string, version: number, format: HostExportFormat) => {
           if (!ctx.interactive || !ctx.artifactExports) throw new Error('Update this host for exports.')
