@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { designTokenCss, parseArtifactSource } from '@ramu/shared/artifactSource'
 import { openDb } from '../src/db'
-import { InteractiveStore } from '../src/interactive/store'
+import { InteractiveStore, withDesignTokens } from '../src/interactive/store'
 import { renderDesign } from '../src/interactive/design'
 
 const design = (frames: unknown) => parseArtifactSource({ kind: 'design', frames })
@@ -82,4 +82,13 @@ it('draws decks and dashboards with the host’s design system, and lets a desig
   expect(html).toContain('--primary:#00aa00')
   expect(html).not.toContain('--primary:#ff5500')
   db.close()
+})
+
+it('places a design system’s style inside an app’s head, never before its doctype', () => {
+  const style = '<style>:root{--primary:#ff5500}</style>'
+  expect(withDesignTokens('<!doctype html><html><head><title>x</title></head><body></body></html>', style)).toBe(
+    `<!doctype html><html><head>${style}<title>x</title></head><body></body></html>`,
+  )
+  expect(withDesignTokens('<div>app</div>', style)).toBe(`${style}<div>app</div>`)
+  expect(withDesignTokens('<div>app</div>', '')).toBe('<div>app</div>')
 })

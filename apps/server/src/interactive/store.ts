@@ -163,6 +163,15 @@ export const interactiveInput = z.object({
 })
 export type InteractiveInput = z.infer<typeof interactiveInput>
 /** Exactly one of a single document or a project; the runnable document is always one bundled HTML string. */
+/** A page with a design system's style placed inside its head, or first when it has none, never before a doctype. */
+export function withDesignTokens(html: string, style: string): string {
+  if (!style) return html
+  const head = /<head\b[^>]*>/i.exec(html) ?? /<html\b[^>]*>/i.exec(html)
+  return head
+    ? `${html.slice(0, head.index + head[0].length)}${style}${html.slice(head.index + head[0].length)}`
+    : `${style}${html}`
+}
+
 export function interactiveDocumentHtml(input: InteractiveInput): string {
   if (input.kind && input.kind !== 'app')
     throw new Error('A doc or diagram is drawn when it is previewed. Preview it again.')
@@ -271,9 +280,12 @@ export class InteractiveStore {
       input.files.reduce((total, file) => total + Buffer.byteLength(file.content), 0) > INTERACTIVE_MAX_HTML
     )
       throw new Error('Interactive project files exceed 512 KB in total')
-    const html = input.files
+    const compiled = input.files
       ? resolveInteractiveKit(await compileInteractive(input.files, input.entry ?? 'index.html'))
       : interactiveDocumentHtml(input)
+    // Apps follow the host's design system too: its tokens take the place of the theme's in the page.
+    const system = this.designSystem()
+    const html = system ? withDesignTokens(compiled, designTokenCss(system)) : compiled
     if (Buffer.byteLength(html) > INTERACTIVE_MAX_ARTIFACT)
       throw new Error('Compiled interactive content exceeds 1.5 MB.')
     rejectViewportHeights(html)

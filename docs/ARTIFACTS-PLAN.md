@@ -83,7 +83,6 @@ A Doc's Markdown and a Mermaid diagram's source (desktop and phone) and a deck's
 A Design with tokens (colors, type, radius) can be the host's design system, chosen with **Use as design system**; new Designs, decks and dashboards are drawn with its tokens ([Kinds](guide/artifacts.md#kinds)). Remaining:
 
 - A design system per project instead of per host, its fonts as files, and spacing tokens.
-- App artifacts following it too. (**Restyle** applies the system to an existing deck, dashboard or design today.)
 - From a codebase, the agent can draft a design system from the project's own CSS variables and components. The person reviews it before it is used.
 
 ### 5. Desktop
