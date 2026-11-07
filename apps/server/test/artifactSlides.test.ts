@@ -110,7 +110,7 @@ it('checks a deck before drawing it, slide by slide', async () => {
     ),
   ).rejects.toThrow('Slide 1: every chart series needs one value per label.')
   await expect(interactive.preview('s', { ...base, slides: SLIDES })).rejects.toThrow(
-    'Set kind to doc, diagram or slides',
+    'Set kind to doc, diagram, slides or dashboard',
   )
   await expect(interactive.preview('s', { ...deck(), html: '<p>x</p>' })).rejects.toThrow('html is for apps')
   expect(() => parseArtifactSource({ kind: 'slides', slides: Array.from({ length: 61 }, () => SLIDES[0]) })).toThrow(
@@ -249,6 +249,37 @@ it.skipIf(!interactiveBrowserPath())(
       checks: [],
     })
     const document = interactive.get('s', interactive.publish('s', diagram.id, 'r1').id, 1)
+    const png = Buffer.from((await new ArtifactExports(db).make(document, 'png')).content, 'base64')
+    expect(png.subarray(1, 4).toString()).toBe('PNG')
+  },
+  60_000,
+)
+
+it.skipIf(!interactiveBrowserPath())(
+  'previews a dashboard and draws its PNG in the host’s browser',
+  async () => {
+    const { db, interactive } = setup(previewInteractive)
+    const board = await interactive.preview('s', {
+      kind: 'dashboard',
+      datasets: [
+        {
+          id: 'costs',
+          columns: ['service', 'usd'],
+          rows: [
+            ['Vercel', 20],
+            ['Neon', 19],
+          ],
+        },
+      ],
+      figures: [{ label: 'Total', dataset: 'costs', column: 'usd', unit: ' USD' }],
+      charts: [{ title: 'By service', type: 'pie', dataset: 'costs', x: 'service', y: ['usd'] }],
+      title: 'Costs',
+      summary: 'C',
+      checks: [],
+    })
+    expect(board.errors).toEqual([])
+    const document = interactive.get('s', interactive.publish('s', board.id, 'r1').id, 1)
+    expect(document.reference.kind).toBe('dashboard')
     const png = Buffer.from((await new ArtifactExports(db).make(document, 'png')).content, 'base64')
     expect(png.subarray(1, 4).toString()).toBe('PNG')
   },

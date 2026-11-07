@@ -108,10 +108,11 @@ function printPdf(document: InteractiveDocument): Promise<Buffer> {
   )
 }
 
-/** A diagram as one PNG at twice its drawn size, on the page's own background. */
-function diagramImage(document: InteractiveDocument): Promise<Buffer> {
+/** A diagram or dashboard as one PNG at twice its drawn size, on the page's own background. */
+function pictureImage(document: InteractiveDocument): Promise<Buffer> {
+  const selector = document.reference.kind === 'dashboard' ? '.ramu-dashboard' : '.ramu-diagram'
   return withPage(document, { width: 1200, height: 900 }, 2, (page) =>
-    page.locator('.ramu-diagram').first().screenshot({ type: 'png', animations: 'disabled' }),
+    page.locator(selector).first().screenshot({ type: 'png', animations: 'disabled' }),
   )
 }
 
@@ -151,7 +152,7 @@ export class ArtifactExports {
       png(document: InteractiveDocument): Promise<Buffer>
     } = {
       pdf: printPdf,
-      png: (document) => (document.reference.kind === 'diagram' ? diagramImage(document) : slideImages(document)),
+      png: (document) => (document.reference.kind === 'slides' ? slideImages(document) : pictureImage(document)),
     },
   ) {}
 

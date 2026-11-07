@@ -20,14 +20,22 @@ import { compileInteractive, INTERACTIVE_MAX_ARTIFACT, pinnedLibraries } from '.
 import { pageCapabilitiesOf } from './capabilities'
 import { renderArtifactSource } from './kinds'
 import { ARTIFACT_KINDS } from '@ramu/shared/artifacts'
-import { parseArtifactSource, slideSchema, slideThemeSchema, SLIDES_MAX } from '@ramu/shared/artifactSource'
+import {
+  dashboardChartSchema,
+  dashboardDatasetSchema,
+  dashboardFigureSchema,
+  parseArtifactSource,
+  slideSchema,
+  slideThemeSchema,
+  SLIDES_MAX,
+} from '@ramu/shared/artifactSource'
 
 export const interactiveInput = z.object({
   kind: z
     .enum(ARTIFACT_KINDS)
     .optional()
     .describe(
-      'app (default): interactive HTML in html or files. doc: writing to keep (a report, plan, spec, notes) as Markdown in source. diagram: a flowchart, sequence, state or concept diagram as Mermaid or SVG in source, with format. slides: a deck as slides and theme, with its images in files.',
+      'app (default): interactive HTML in html or files. doc: writing to keep (a report, plan, spec, notes) as Markdown in source. diagram: a flowchart, sequence, state or concept diagram as Mermaid or SVG in source, with format. slides: a deck as slides and theme, with its images in files. dashboard: figures and charts over tables, in datasets, figures and charts.',
     ),
   source: z
     .string()
@@ -42,7 +50,22 @@ export const interactiveInput = z.object({
     .max(SLIDES_MAX)
     .optional()
     .describe(`The slides of a deck (kind slides), in order, at most ${SLIDES_MAX}.`),
-  theme: slideThemeSchema.optional().describe('The colors of a deck (kind slides).'),
+  theme: slideThemeSchema.optional().describe('The colors of a deck or dashboard (kind slides or dashboard).'),
+  datasets: z
+    .array(dashboardDatasetSchema)
+    .max(8)
+    .optional()
+    .describe('The tables a dashboard works from (kind dashboard), each with its columns, rows and when it was read.'),
+  figures: z
+    .array(dashboardFigureSchema)
+    .max(12)
+    .optional()
+    .describe('Headline numbers of a dashboard: one column of one table, summed, averaged, counted, min, max or last.'),
+  charts: z
+    .array(dashboardChartSchema)
+    .max(12)
+    .optional()
+    .describe('Charts of a dashboard: one table, x as the categories, y as number columns added up per category.'),
   network: z
     .object({
       resources: z
@@ -196,8 +219,10 @@ export class InteractiveStore {
     const input = kept.length ? { ...parsed, checks: [...parsed.checks, ...kept].slice(0, 24) } : parsed
     if (signal?.aborted) throw new Error('Preview cancelled')
     if (input.kind && input.kind !== 'app') return this.previewKind(session, input, signal, kept)
-    if (input.source !== undefined || input.slides !== undefined)
-      throw new Error('Set kind to doc, diagram or slides to publish source or slides; apps use html or files.')
+    if (input.source !== undefined || input.slides !== undefined || input.datasets !== undefined)
+      throw new Error(
+        'Set kind to doc, diagram, slides or dashboard to publish source, slides or datasets; apps use html or files.',
+      )
     if (!input.html === !input.files) throw new Error('Provide either html or files, not both.')
     // A declaration that does not validate fails here, before any browser starts.
     pageCapabilitiesOf(input)
@@ -230,7 +255,9 @@ export class InteractiveStore {
       throw new Error(
         input.kind === 'slides'
           ? 'A deck is written in slides; html is for apps.'
-          : `A ${input.kind} is written in source; html and files are for apps.`,
+          : input.kind === 'dashboard'
+            ? 'A dashboard is written in datasets, figures and charts; html and files are for apps.'
+            : `A ${input.kind} is written in source; html and files are for apps.`,
       )
     const source = parseArtifactSource({ ...input, kind: input.kind ?? 'app' })
     const offline = { ...input, network: OFFLINE_NETWORK }

@@ -48,7 +48,7 @@ export function hostExportFormats(kind: ArtifactKind): HostExportFormat[] {
     ? ['pptx', 'pdf', 'png']
     : kind === 'doc'
       ? ['docx', 'pdf']
-      : kind === 'diagram'
+      : kind === 'diagram' || kind === 'dashboard'
         ? ['png', 'pdf']
         : ['pdf']
 }
@@ -65,7 +65,7 @@ export function slideCount(document: InteractiveDocument): number {
   }
 }
 
-export type KindExportFormat = 'markdown' | 'html' | 'svg' | 'mermaid'
+export type KindExportFormat = 'markdown' | 'html' | 'svg' | 'mermaid' | 'csv'
 
 /** A title as a file name that every platform accepts. */
 export const exportFileName = (title: string) =>
@@ -98,6 +98,30 @@ export function kindExports(
   } else if (document.reference.kind === 'diagram') {
     add('svg', 'svg', 'image/svg+xml', source(ARTIFACT_SOURCE_FILES.svg))
     add('mermaid', 'mmd', 'text/plain', source(ARTIFACT_SOURCE_FILES.mermaid))
+  } else if (document.reference.kind === 'dashboard') {
+    const board = source(ARTIFACT_SOURCE_FILES.dashboard)
+    add('csv', 'csv', 'text/csv', board === undefined ? undefined : dashboardCsv(board))
   }
   return formats
+}
+
+/** One CSV cell: quoted when it must be, and never read as a formula by a spreadsheet. */
+const csvCell = (value: unknown) => {
+  if (value === null || value === undefined) return ''
+  let text = String(value)
+  if (typeof value === 'string' && /^[=+\-@\t\r]/.test(text)) text = `'${text}`
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
+
+/**
+ * A dashboard's tables as CSV, from the source its version keeps. One table is plain CSV; several follow one another,
+ * each after a line with its id and separated by an empty line.
+ */
+export function dashboardCsv(source: string): string {
+  const { datasets } = JSON.parse(source) as { datasets: { id: string; columns: string[]; rows: unknown[][] }[] }
+  const table = (data: (typeof datasets)[number]) =>
+    [data.columns, ...data.rows].map((row) => row.map(csvCell).join(',')).join('\n')
+  return datasets.length === 1
+    ? `${table(datasets[0]!)}\n`
+    : `${datasets.map((data) => `${csvCell(data.id)}\n${table(data)}`).join('\n\n')}\n`
 }

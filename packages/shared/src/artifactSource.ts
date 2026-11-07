@@ -141,8 +141,85 @@ const slidesSource = z
   })
 export type SlidesSource = z.infer<typeof slidesSource>
 
+export const DASHBOARD_ROWS_MAX = 5000
+const columnName = z.string().trim().min(1).max(60)
+export const dashboardDatasetSchema = z.object({
+  id: z.string().trim().min(1).max(40).describe('The name figures and charts use for this table.'),
+  columns: z.array(columnName).min(1).max(30),
+  rows: z
+    .array(z.array(z.union([z.string().max(200), z.number(), z.null()])).max(30))
+    .max(DASHBOARD_ROWS_MAX, `A table has at most ${DASHBOARD_ROWS_MAX} rows. Summarize it first.`)
+    .describe('One value per column in each row: text, a number or null.'),
+  asOf: z.iso.datetime({ offset: true }).optional().describe('When this data was read, shown as "As of".'),
+})
+export const DASHBOARD_AGGREGATES = ['sum', 'average', 'count', 'min', 'max', 'last'] as const
+export const dashboardFigureSchema = z.object({
+  label: z.string().trim().min(1).max(60),
+  dataset: z.string().max(40),
+  column: columnName,
+  aggregate: z.enum(DASHBOARD_AGGREGATES).default('sum'),
+  unit: z.string().max(12).optional(),
+})
+export const dashboardChartSchema = z.object({
+  title: z.string().trim().min(1).max(100),
+  type: z.enum(['bar', 'line', 'pie']),
+  dataset: z.string().max(40),
+  x: columnName.describe('The column whose values become the categories along the axis, or the pie slices.'),
+  y: z.array(columnName).min(1).max(6).describe('Number columns, one series each; rows with the same x are added up.'),
+  unit: z.string().max(12).optional(),
+})
+const dashboardSource = z
+  .object({
+    kind: z.literal('dashboard'),
+    datasets: z.array(dashboardDatasetSchema).min(1, 'A dashboard needs at least one table in datasets.').max(8),
+    figures: z.array(dashboardFigureSchema).max(12).default([]),
+    charts: z.array(dashboardChartSchema).max(12).default([]),
+    theme: slideThemeSchema.default({ appearance: 'auto' }),
+  })
+  .superRefine((board, ctx) => {
+    const tables = new Map(board.datasets.map((table) => [table.id, table]))
+    if (tables.size !== board.datasets.length) ctx.addIssue({ code: 'custom', message: 'Give each table its own id.' })
+    board.datasets.forEach((table) => {
+      if (table.rows.some((row) => row.length !== table.columns.length))
+        ctx.addIssue({ code: 'custom', message: `Every row of ${table.id} needs one value per column.` })
+    })
+    if (!board.figures.length && !board.charts.length)
+      ctx.addIssue({ code: 'custom', message: 'A dashboard shows at least one figure or chart.' })
+    const numeric = (table: (typeof board.datasets)[number], column: string) => {
+      const at = table.columns.indexOf(column)
+      return table.rows.every((row) => row[at] === null || typeof row[at] === 'number')
+    }
+    const check = (what: string, dataset: string, columns: string[], numbers: string[]) => {
+      const table = tables.get(dataset)
+      if (!table) return ctx.addIssue({ code: 'custom', message: `${what} uses ${dataset}, which is not in datasets.` })
+      for (const column of columns)
+        if (!table.columns.includes(column))
+          ctx.addIssue({ code: 'custom', message: `${what} uses ${column}, which ${dataset} does not have.` })
+      for (const column of numbers)
+        if (table.columns.includes(column) && !numeric(table, column))
+          ctx.addIssue({
+            code: 'custom',
+            message: `${what} adds up ${column}, but some of its values are not numbers.`,
+          })
+    }
+    for (const figure of board.figures)
+      check(
+        `The figure "${figure.label}"`,
+        figure.dataset,
+        [figure.column],
+        figure.aggregate === 'count' ? [] : [figure.column],
+      )
+    for (const chart of board.charts) {
+      check(`The chart "${chart.title}"`, chart.dataset, [chart.x, ...chart.y], chart.y)
+      if (chart.type === 'pie' && chart.y.length !== 1)
+        ctx.addIssue({ code: 'custom', message: `The pie chart "${chart.title}" has exactly one y column.` })
+    }
+  })
+export type DashboardSource = z.infer<typeof dashboardSource>
+export type DashboardAggregate = (typeof DASHBOARD_AGGREGATES)[number]
+
 /** The source of an artifact that is not an App, checked per kind before anything is drawn. */
-const artifactSourceSchema = z.discriminatedUnion('kind', [docSource, diagramSource, slidesSource])
+const artifactSourceSchema = z.discriminatedUnion('kind', [docSource, diagramSource, slidesSource, dashboardSource])
 export type ArtifactSource = z.infer<typeof artifactSourceSchema>
 
 /** Reads a kind's source from tool input, with the first problem as a sentence the author can act on. */
@@ -152,6 +229,9 @@ export function parseArtifactSource(input: {
   format?: string
   slides?: unknown
   theme?: unknown
+  datasets?: unknown
+  figures?: unknown
+  charts?: unknown
 }): ArtifactSource {
   const result = artifactSourceSchema.safeParse(input)
   if (result.success) return result.data

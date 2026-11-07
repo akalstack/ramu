@@ -106,7 +106,7 @@ it('checks each kind’s source before drawing it', async () => {
     'html and files are for apps',
   )
   await expect(interactive.preview('s', { ...base, source: '# Hi' })).rejects.toThrow(
-    'Set kind to doc, diagram or slides',
+    'Set kind to doc, diagram, slides or dashboard',
   )
   await expect(
     interactive.preview('s', { ...base, kind: 'diagram', format: 'svg', source: '<p>not svg</p>' }),

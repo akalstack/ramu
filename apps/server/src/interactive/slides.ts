@@ -193,7 +193,7 @@ export function deckColors(theme: SlideTheme): Record<string, string> {
 }
 
 /** Variables the deck sets on itself: a fixed light or dark palette, and the accent over the reader's own. */
-function deckVariables(theme: SlideTheme): string {
+export function deckVariables(theme: SlideTheme): string {
   const variables =
     theme.appearance === 'auto'
       ? theme.accent
@@ -209,7 +209,7 @@ function deckVariables(theme: SlideTheme): string {
 const format = (value: number, unit = '') => `${value.toLocaleString('en', { maximumFractionDigits: 2 })}${unit}`
 
 /** A bar, line or pie chart as SVG in the theme's chart colors, sized for its box with text at slide point sizes. */
-function chartSvg(chart: SlideChart, box: SlideBox): string {
+export function chartSvg(chart: SlideChart, box: SlideBox): string {
   const width = 1000
   const height = Math.round((width * box.h) / box.w)
   // SVG units per point of type, so labels match the deck's text at any width.

@@ -1,4 +1,4 @@
-import { AppWindow, FileText, Presentation, Workflow, type LucideIcon } from 'lucide-react-native'
+import { AppWindow, FileText, LayoutDashboard, Presentation, Workflow, type LucideIcon } from 'lucide-react-native'
 import type { ArtifactKind } from '@ramu/shared/artifacts'
 import type { HostExportFormat, KindExportFormat } from '@ramu/shared/interactiveExport'
 import { useSay } from '../i18n'
@@ -8,8 +8,15 @@ const KIND_ICONS: Record<ArtifactKind, LucideIcon> = {
   doc: FileText,
   diagram: Workflow,
   slides: Presentation,
+  dashboard: LayoutDashboard,
 }
-const KIND_LABELS: Record<ArtifactKind, string> = { app: 'App', doc: 'Doc', diagram: 'Diagram', slides: 'Slides' }
+const KIND_LABELS: Record<ArtifactKind, string> = {
+  app: 'App',
+  doc: 'Doc',
+  diagram: 'Diagram',
+  slides: 'Slides',
+  dashboard: 'Dashboard',
+}
 
 /** English copy keys for a kind's name and for sharing each of its exports, translated with say(). */
 export const kindLabel = (kind: ArtifactKind) => KIND_LABELS[kind]
@@ -18,6 +25,7 @@ export const SHARE_LABELS: Record<KindExportFormat, string> = {
   html: 'Share HTML',
   svg: 'Share SVG',
   mermaid: 'Share Mermaid',
+  csv: 'Share CSV',
 }
 const HOST_SHARE_LABELS: Record<HostExportFormat, string> = {
   pptx: 'Share PowerPoint',
@@ -27,7 +35,7 @@ const HOST_SHARE_LABELS: Record<HostExportFormat, string> = {
 }
 /** An export the host makes and the phone hands to the share sheet once it arrives; a diagram's PNG is one image. */
 export const hostShareLabel = (format: HostExportFormat, kind: ArtifactKind) =>
-  format === 'png' && kind === 'diagram' ? 'Share PNG' : HOST_SHARE_LABELS[format]
+  format === 'png' && kind !== 'slides' ? 'Share PNG' : HOST_SHARE_LABELS[format]
 
 /** The small mark rows and cards show for what an artifact is, named for screen readers. */
 export function ArtifactKindMark({ kind, size = 14, color }: { kind: ArtifactKind; size?: number; color: string }) {
