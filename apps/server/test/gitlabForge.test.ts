@@ -19,6 +19,7 @@ import {
   parseProjects,
   pullRequestAction,
   readyTitle,
+  requirePipeline,
 } from '../src/workspace/forge/gitlab'
 
 it('reports the latest attempt of each pipeline job, and allowed failures do not fail the merge request', () => {
@@ -380,5 +381,33 @@ it('uses a token saved in Settings for its own server first, and lists it withou
     expect(await gitlabToken('code.example.com', env)).toEqual({ token: 'env-token', source: 'environment' })
   } finally {
     configureGitlabCredentials(null)
+  }
+})
+
+it('turns on Pipelines must succeed only when it is off, changing nothing else', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-gitlab-pipeline-'))
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'git@gitlab.com:a/b.git'], { cwd: dir })
+  vi.stubEnv('GLAB_CONFIG_DIR', '/nonexistent')
+  vi.stubEnv('GITLAB_HOST', 'gitlab.com')
+  vi.stubEnv('GITLAB_TOKEN', 'glpat-test')
+  let on = false
+  const writes: unknown[] = []
+  const request = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url !== 'https://gitlab.com/api/v4/projects/a%2Fb') return new Response('', { status: 404 })
+    if (init?.method === 'PUT') {
+      writes.push(JSON.parse(String(init.body)))
+      on = true
+    }
+    return new Response(JSON.stringify({ only_allow_merge_if_pipeline_succeeds: on }))
+  }) as unknown as typeof fetch
+  try {
+    await expect(requirePipeline(dir, request)).resolves.toBe('required')
+    expect(writes).toEqual([{ only_allow_merge_if_pipeline_succeeds: true }])
+    await expect(requirePipeline(dir, request)).resolves.toBe('already')
+    expect(writes).toHaveLength(1)
+  } finally {
+    vi.unstubAllEnvs()
+    rmSync(dir, { recursive: true, force: true })
   }
 })

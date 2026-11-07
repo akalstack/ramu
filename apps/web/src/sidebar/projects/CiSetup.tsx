@@ -39,7 +39,8 @@ function useCiSetup(projectId: string, repoId: string | null) {
     }
   }, [host, projectId, repoId])
   const current = preview?.repoId === repoId ? preview.value : null
-  const requireCi = current?.forge === 'github' && (requireChoice ?? current.requireByDefault)
+  const requireCi =
+    (current?.forge === 'github' || current?.forge === 'gitlab') && (requireChoice ?? current.requireByDefault)
   const setUp = async () => {
     if (!repoId) return
     setBusy(true)
@@ -137,7 +138,7 @@ function CiSummary({ state }: { state: CiSetupState }) {
               { 0: preview.path, 1: preview.defaultBranch, 2: preview.toolchain },
             )}
       </p>
-      {preview.forge === 'github' && (
+      {(preview.forge === 'github' || preview.forge === 'gitlab') && (
         <label className="flex items-center gap-2 text-caption">
           <Checkbox checked={state.requireCi} onCheckedChange={(checked) => state.setRequireCi(checked === true)} />
           {t('Require CI to pass before merging into {0}', { 0: preview.defaultBranch })}

@@ -197,6 +197,18 @@ export async function gitlabApi<T>(
 const projectApi = <T = unknown>(a: Access, path = '', init?: { method?: string; body?: unknown }) =>
   gitlabApi<T>({ ...a, origin: a.project.origin }, `/projects/${encode(a.project.path)}${path}`, init)
 
+/**
+ * Turns on the project's "Pipelines must succeed" merge setting, so a merge request cannot merge while CI fails.
+ * Nothing else in the project's settings is changed.
+ */
+export async function requirePipeline(cwd: string, request: typeof fetch = fetch): Promise<'required' | 'already'> {
+  const a = await access(cwd, request)
+  const project = await projectApi<{ only_allow_merge_if_pipeline_succeeds?: boolean } | null>(a)
+  if (project?.only_allow_merge_if_pipeline_succeeds) return 'already'
+  await projectApi(a, '', { method: 'PUT', body: { only_allow_merge_if_pipeline_succeeds: true } })
+  return 'required'
+}
+
 interface RawMergeRequest {
   iid: number
   title: string

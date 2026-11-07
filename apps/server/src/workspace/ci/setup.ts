@@ -14,6 +14,7 @@ import {
   CI_CHECK,
 } from '@ramu/shared/ciWorkflow'
 import { forgeRemoteOf, requireCheck } from '../forge'
+import { requirePipeline } from '../forge/gitlab'
 import { kindOfOrigin } from '../forge/route'
 import { commitBranchInfo, git, publishRemote } from '../git'
 import { existsAt, proposeFile } from '../proposeFile'
@@ -144,8 +145,9 @@ export async function setUpCi(root: string, requireCi: boolean): Promise<CiSetup
 
 /** Requires the CI check before merging. The pull request is already open, so a refusal is reported, not thrown. */
 async function protect(root: string, forge: CiForge, branch: string): Promise<CiProtection> {
-  if (forge !== 'github') return { state: 'unsupported' }
   try {
+    if (forge === 'gitlab') return { state: await requirePipeline(root) }
+    if (forge !== 'github') return { state: 'unsupported' }
     return { state: await requireCheck(root, branch, CI_CHECK) }
   } catch (error) {
     return { state: 'failed', message: error instanceof Error ? error.message : String(error) }

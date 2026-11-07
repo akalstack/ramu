@@ -16,7 +16,7 @@ export const registerCiHandlers: RegisterHandlers = (ctx) => {
       run: async (projectId: string, repoId: string) => {
         const preview = await ciPreview(rootOf(projectId, repoId))
         const created = ctx.workspace.getAppState<string[]>(CREATED_REPOSITORIES, []).includes(repoId)
-        return { ...preview, requireByDefault: created && preview.forge === 'github' }
+        return { ...preview, requireByDefault: created && (preview.forge === 'github' || preview.forge === 'gitlab') }
       },
     },
     'ci.setup': {

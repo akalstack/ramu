@@ -56,7 +56,7 @@ Vercel, Netlify and the person's own server are built ([Deploying an app](guide/
 
 - **Deploy job** only for targets without Git integration: the own server's `deploy.yml` and Fly.io's `fly-deploy.yml` are built (`packages/shared/src/serverDeploy.ts` and `flyDeploy.ts`, proposed with the files they need in one pull request, secrets written through the GitHub Actions `EnvTarget`). GitHub Pages gets its own the same way as it lands, using its official action.
 - **Secrets sync for more targets:** the deploy sheet's sync over `EnvTarget` (`workspace/deploy/envSync.ts`: this host, GitHub Actions secrets, Vercel and Netlify) is built ([Deploying an app](guide/deploy.md#deploy-a-project)). GitLab CI variables join it as a target, and each new hosting adapter declares `environment` (names per preview and production, and writing values) so it is covered.
-- **Branch protection on GitLab:** GitHub is built; GitLab's "Pipelines must succeed" project setting is not set yet, and repositories created by the deploy sheet should join the ones it is checked by default for.
+- **Required CI by default:** repositories created by the deploy sheet should join the ones **Require CI to pass** is checked by default for, as repositories published from Source Control do.
 
 ### 4. Own server
 
