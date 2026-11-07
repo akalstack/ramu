@@ -55,6 +55,7 @@ Only checks that still need a physical phone, an account or a live provider. Tes
 - [ ] A page with a widget shown from **Show in the home screen widget** appears on the iOS and Android home screen with its number or list, and updates after a record is added.
 - [ ] A page run lasting more than a few seconds shows a Live Activity on iOS that ends with the run.
 - [ ] A deck opens on its first slide alone; swiping sideways and the arrows move through it on iOS and Android, and taps still follow its links.
+- [ ] With the deck in **Present** on the desktop, turning slides on the phone turns them on the desktop.
 - [ ] **Kind** filters the Artifacts tab to docs, decks, dashboards, designs or motions once a host has more than one kind.
 - [ ] **Edit text** on a doc, a Mermaid diagram, a deck (including both columns and a quote's attribution) and a design saves a new version marked "Edited by you on" the phone's name, and the desktop shows it.
 - [ ] A deck's PowerPoint, a doc's Word file, a diagram's PNG and a motion's MP4 reach the share sheet and open in the phone's apps.

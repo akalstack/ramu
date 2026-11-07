@@ -198,6 +198,23 @@ it('saves the person’s words in a design’s frames, keeping its markup and st
   await expect(methods['artifacts.editDesign']!.run(kept.id, 2, [['Only one']])).rejects.toThrow('changed while')
 })
 
+it('tells the host’s devices which slide a deck is on, and only for a deck', async () => {
+  const { registerArtifactHandlers } = await import('../src/ipc/handlers/artifacts')
+  const send = vi.fn()
+  let kind = 'slides'
+  const methods = registerArtifactHandlers({
+    pages: { get: () => ({ kind }) },
+    pageAi: {},
+    activity: { run: () => {} },
+    host: { send },
+  } as never)
+  const id = '00000000-0000-4000-8000-000000000001'
+  methods['artifacts.turnSlide']!.run(id, 3)
+  expect(send).toHaveBeenCalledWith('artifacts:slide', { artifactId: id, index: 3 })
+  kind = 'doc'
+  expect(() => methods['artifacts.turnSlide']!.run(id, 0)).toThrow('Only a deck')
+})
+
 it('edits a Mermaid diagram’s source in place, and offers no text to edit for an SVG diagram', async () => {
   const { interactive, pages } = setup()
   const preview = await interactive.preview('s', {

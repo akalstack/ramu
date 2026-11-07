@@ -180,6 +180,15 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   const { url } = useContentDocument(document?.html, instance, !!document, state, document?.reference.network)
   const slides = document ? slideCount(document) : 0
   const slideControls = useSlideControls(frame, stage, instance, slides)
+  // While this deck is presented here, a phone turning its slides turns them here too.
+  const { presenting, show: showSlide } = slideControls
+  useEffect(
+    () =>
+      on('artifacts:slide', (payload) => {
+        if (presenting && payload.artifactId === artifactId) showSlide(payload.index, true)
+      }),
+    [on, presenting, artifactId, showSlide],
+  )
   useEffect(() => setReady(false), [url])
   const askThread = useCallback(
     (prompt: string, title: string) =>

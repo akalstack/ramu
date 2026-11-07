@@ -135,8 +135,10 @@ export default function PageScreen() {
       slideAt.current = next
       setSlide(next)
       post({ type: 'slide', value: { index: next, present: true } })
+      // A desktop presenting this deck follows the phone, so the phone works as its remote.
+      if (online && !shared) void store.invoke(computerId, 'artifacts.turnSlide', artifactId, next).catch(() => {})
     },
-    [post, slides],
+    [post, slides, online, shared, store, computerId, artifactId],
   )
   const showSlideLatest = useRef(showSlide)
   useEffect(() => {

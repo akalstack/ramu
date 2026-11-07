@@ -86,7 +86,6 @@ A Doc's Markdown and a Mermaid diagram's source (desktop and phone) a deck's sli
   - Slides: Present when the phone is connected to a display.
   - Motion: native video for the exported MP4.
 - **Export** hands the file to the share sheet; **Add to Home Screen or share** and the home-screen widget work for every kind.
-- **Present from the phone:** the phone turns slides on the desktop's Present view of the same deck.
 
 ### 6. Connection with shipping an app
 
