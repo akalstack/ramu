@@ -43,6 +43,8 @@ export type ViewDescriptor =
       threadId?: string
       requestId?: string
     }
+  /** A kept artifact opened beside the thread, with the toolbar its kind has. */
+  | { kind: 'artifact'; id: string; artifactId: string; title: string }
   /** An integrated-browser tab of this computer's desktop app. The page itself lives in the shell; `url` is where a restored tab reopens. */
   | { kind: 'browser'; id: string; url?: string; tabId?: string; profileId?: string }
   /** Without a repoId the terminal starts where the task's agent runs (the workspace). */

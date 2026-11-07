@@ -69,28 +69,24 @@ App, Doc, Diagram, Slides, Dashboard (over tables the agent fills in), Design (f
 - **Built:** watched figures on a kept dashboard's live tables are read every ten minutes and a change is told to the person's devices ([Kinds](guide/artifacts.md#kinds)). A dashboard's refresh rule (`refreshMinutes`) sets how often, and the phone's saved copy shows the "As of" of its last read when offline. **Refresh** in the desktop toolbar changes it.
 - **Built:** apps run on the host on schedules and notify through their triggers; a server's read-only MCP tools can run without asking once allowed for that artifact, while every other call still asks.
 
-### 3. Desktop
-
-- The artifact view opens as a workspace tab beside the chat, with the toolbar each kind has today (Outline and Edit text for docs, Range and Refresh for dashboards, playback for motions).
-
-### 4. Phone
+### 3. Phone
 
 - The **Artifacts** tab filters by kind, a deck shows one slide at a time with swipe and arrows, a doc keeps a reading width with **Edit text**, a dashboard draws its figures above its charts, and a motion plays as native video (built). Remaining viewers:
   - Slides: Present when the phone is connected to a display.
 - **Export** hands the file to the share sheet; **Add to Home Screen or share** and the home-screen widget work for every kind.
 
-### 5. Connection with shipping an app
+### 4. Connection with shipping an app
 
 The [shipping plan](SHIP-AN-APP-PLAN.md) and this one share one rule: make the smallest thing that does the job first, and grow it when it needs more.
 
 - **App to project:** an App artifact grows into a project through **Make it a project** (built), and **Publish to the web** moves onto the shipping plan's `HostingAdapter` when it exists. The static GitHub Pages, Netlify, Vercel and Cloudflare Pages deploys built for pages are its first targets.
 
-### 6. Documentation
+### 5. Documentation
 
 - The site's feature list names the kinds, with the [shipping plan's](SHIP-AN-APP-PLAN.md) site rewrite.
 - Each new behavior above is described in [Artifacts](guide/artifacts.md), the mobile README and VERIFICATION.md as it lands.
 
-### 7. Two people editing one artifact
+### 6. Two people editing one artifact
 
 Ramu is one person across devices today, so versions are enough. A household or a small team sharing an artifact through a share link that can edit needs more:
 
@@ -98,13 +94,13 @@ Ramu is one person across devices today, so versions are enough. A household or 
 - **Merging:** a Doc's and a deck's text are kept as a CRDT (Yjs) on the host, so two people typing at once merge instead of making competing versions. A version is still saved when either stops editing for a minute, so Restore and Compare keep working.
 - **Access:** an editing share link names the person it is for and can be revoked like any share link. Kinds without text (Dashboard, Motion) stay one editor at a time, with "Being edited by …" shown to the other.
 
-### 8. Dashboards from named services
+### 7. Dashboards from named services
 
 - Besides records, folders, Ramu data and Shared MCP servers, a Dashboard or Live artifact can read **named services** through connectors on the host: Salesforce, Amplitude and Grafana first.
 - Each connector is one file implementing `query(spec)` with that service's own sign-in, kept in `credentials/`. It is read-only, and each service is its own grant on the artifact, listed in plain words.
 - A connector is added only after its sign-in and the data it can read are reviewed and written up in SECURITY.md, the same bar as Shared MCP.
 
-### 9. Voice-over for Motion
+### 8. Voice-over for Motion
 
 - A Motion artifact can have narration: the agent writes a script per scene, and the **speech** ability ([Abilities](ABILITIES-PLAN.md)) turns it into audio on a signed-in provider that offers it. The host mixes the audio into the MP4 with the browser's own audio encoder, timed to the scenes.
 - **Narration** in the artifact's toolbar previews, re-records one scene, or removes the narration. The grant sheet says which provider receives the script, and no other content leaves the host.

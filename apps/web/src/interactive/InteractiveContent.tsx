@@ -1,3 +1,5 @@
+import { useOptionalWorkspace } from '../workspace/workspace'
+import { isWorkspaceCtx } from '../workspace/workspaceModel'
 import { ContentFrame } from './ContentFrame'
 import { observeContentVisibility } from './contentVisibility'
 import { useContentDocument } from './useContentDocument'
@@ -92,6 +94,14 @@ function InteractiveDocumentCard({
   useLanguage()
   const host = useHost()
   const { invoke } = host
+  const ws = useOptionalWorkspace()
+  // A kept artifact opens as a tab beside this thread; from anywhere else it opens under Artifacts.
+  const openKept = (info: ArtifactInfo) => {
+    const thread = ws?.ui.activeTaskId
+    if (ws && thread && !isWorkspaceCtx(thread) && ws.task(thread))
+      ws.openView(thread, { kind: 'artifact', artifactId: info.id, title: info.title })
+    else openPage(info.id)
+  }
   const cache = useMemo(() => interactiveStorage(hostStorageFor(host.id), 'content'), [host.id])
   const [document, setDocument] = useState<InteractiveDocument | null>(() =>
     cache.document(reference.id, reference.version),
@@ -314,7 +324,7 @@ function InteractiveDocumentCard({
     ...(onClose
       ? []
       : page?.info
-        ? [{ key: 'open-page', label: t('Open'), onSelect: () => openPage(page.info!.id) }]
+        ? [{ key: 'open-page', label: t('Open'), onSelect: () => openKept(page.info!) }]
         : [
             {
               key: 'keep',
@@ -415,7 +425,7 @@ function InteractiveDocumentCard({
               variant="ghost"
               className={`${GHOST_TEXT_BUTTON_CLASS} h-6 min-h-0 flex-none`}
               title={t('Open')}
-              onClick={() => openPage(page.info!.id)}
+              onClick={() => openKept(page.info!)}
             >
               <span aria-hidden>{page.info.icon}</span> {t('Artifact')}
             </Button>

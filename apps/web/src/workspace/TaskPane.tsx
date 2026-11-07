@@ -14,6 +14,7 @@ import { NO_PROJECT, type Attachment, type FileContext } from '@ramu/shared/type
 import { notifyError } from '../chat/Notifications'
 import { useModelSets } from '../models/ModelSets'
 import {
+  AppWindow,
   CircleAlert,
   FileDiff,
   FileText,
@@ -31,6 +32,7 @@ import {
 } from 'lucide-react'
 import { memo, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { ChangeReviewTab } from '../Changes'
+import { PageView } from '../pages/PageView'
 import { type AgentSettings, type AgentSessionInfo, type ViewDescriptor } from '@ramu/shared/types'
 import { formatKeys, type TaskAction } from '../commands'
 import { AgentControls } from '../chat/AgentControls'
@@ -545,6 +547,9 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
                                 <GitDetailsView taskId={workspaceId} view={v} binding={binding} />
                               )}
                               {v.kind === 'pull-request' && <PullRequestView taskId={workspaceId} view={v} />}
+                              {v.kind === 'artifact' && (
+                                <PageView artifactId={v.artifactId} onBack={() => ws.closeView(workspaceId, v.id)} />
+                              )}
                               {v.kind === 'conflict' && binding && (
                                 <ConflictView taskId={workspaceId} view={v} binding={binding} />
                               )}
@@ -884,6 +889,7 @@ function ViewIcon({ kind, path }: { kind: ViewDescriptor['kind']; path?: string 
   useLanguage()
   if (kind === 'git') return <GitBranch size={13} className="kind" />
   if (kind === 'pull-request') return <GitPullRequest size={13} className="kind" />
+  if (kind === 'artifact') return <AppWindow size={13} className="kind" />
   if (kind === 'conflict') return <GitMerge size={13} className="kind text-warn" />
   if (kind === 'review') return <FileDiff size={13} className="kind" />
   if (kind === 'diff') return <FileDiff size={13} className={path ? `kind file-kind ${fileToneClass(path)}` : 'kind'} />
@@ -909,6 +915,7 @@ function ViewLabel({
   useLanguage()
   const ws = useWorkspace()
   if (v.kind === 'agent') return <>{t('Thread')}</>
+  if (v.kind === 'artifact') return <>{v.title}</>
   if (v.kind === 'terminal') return <>{v.title ?? repoName(v.repoId)}</>
   if (v.kind === 'browser') return <>{t('Browser')}</>
   if (v.kind === 'review')

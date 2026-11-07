@@ -192,6 +192,11 @@ export function useWorkspace(): WorkspaceApi {
   return ws
 }
 
+/** The store on screen, or null where none is (a live view window), for content shown in both. */
+export function useOptionalWorkspace(): WorkspaceApi | null {
+  return useContext(Ctx)
+}
+
 /** The per-host parts of the store above: terminals, terminal activity, host events, storage. */
 export function useHostRuntime(): HostRuntime {
   const runtime = useContext(RuntimeCtx)

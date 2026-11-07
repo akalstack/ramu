@@ -26,6 +26,8 @@ export function viewKey(v: ViewInput | ViewDescriptor): string {
       return `conflict:${v.repoId}:${v.path}`
     case 'pull-request':
       return `pull-request:${v.repoId}:${v.url}`
+    case 'artifact':
+      return `artifact:${v.artifactId}`
     case 'agent':
       return `agent:${v.sessionId}`
     case 'browser':

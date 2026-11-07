@@ -41,6 +41,8 @@ Below, an App's **page** is the web page it shows, as in **Page settings**. Reco
 
 ## In a thread
 
+**Artifact** on a kept artifact's card (or **Open** in its menu) opens it as a tab beside the thread, with the same toolbar as under **Artifacts**: Edit text, Outline, Range and Refresh, playback, Present and Export. Its back arrow closes the tab.
+
 Each document appears as a card. The card can **Reset**, switch width (Fit, Tablet, Phone), **Expand**, show older **Versions**, keep **Saved scenarios**, and **Export** HTML or source. **Ask about this** adds the document, with its current state, to your next message; **Choose values** attaches only the values you pick.
 
 Each document has one live card: its newest version. When the agent revises it, the older card collapses in place to one row (the title, "v2 · replaced by v4", what the next version changed, and **Go to latest**), so the transcript keeps its order without three similar documents in a row. Expanding an older row shows that version read-only with **Restore**, which publishes it again as the newest version. While the agent checks a revision the live card says **Updating…**; a revision that fails its checks leaves the current version as it was and says why.
