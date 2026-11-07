@@ -52,6 +52,7 @@ import { registerThemeTools } from './themeTools'
 import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
 import { createDeploys } from './workspace/deploy/deploys'
 import { LocalApps } from './workspace/deploy/localApp'
+import { LiveDashboards } from './interactive/liveDashboard'
 import { registerDeployTools, registerReleaseTools } from './workspace/deploy/tools'
 import { registerCiTools } from './workspace/ci/tools'
 import { setAcpTerminalService } from './providers/acpTerminals'
@@ -767,6 +768,32 @@ const publicPages = new PublicPages(
   (artifactId) => send('artifacts:changed', { artifactId }),
 )
 void publicPages.restore(publicPageTunnel())
+// A dashboard's live tables, read from its own project's deploys in each source's fixed column order.
+const isoTime = (at: number) => new Date(at).toISOString()
+const liveDashboards = new LiveDashboards(async (projectId, source) => {
+  if (source === 'deployments')
+    return (await deploys.service.project(projectId)).deployments.map((deployment) => [
+      isoTime(deployment.createdAt),
+      deployment.state,
+      deployment.production ? 'production' : 'preview',
+      deployment.ref,
+      deployment.message,
+      deployment.url,
+    ])
+  if (source === 'usage')
+    return (await deploys.usage(projectId)).flatMap((report) =>
+      report.figures.map((figure) => [
+        report.platform,
+        figure.metric,
+        figure.service,
+        figure.used,
+        figure.limit,
+        figure.unit,
+      ]),
+    )
+  const last = deploys.uptime.status(projectId).last
+  return last ? [[isoTime(last.at), last.result, last.status, last.ms]] : []
+})
 // Apps published from this computer get tunnels of their own, of the same kind as pages opened to anyone.
 const localApps = new LocalApps({
   saved: {
@@ -917,6 +944,7 @@ const dispatcher = createDispatcher(
     interactive,
     pages,
     artifactExports: new ArtifactExports(db),
+    liveDashboards,
     pageAi,
     abilities,
     notifyPage,

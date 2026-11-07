@@ -255,7 +255,12 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
     'artifacts.versions': { args: z.tuple([id]), run: (artifactId: string) => need().pages.versions(artifactId) },
     'artifacts.document': {
       args: z.tuple([id, z.number().int().positive().optional()]),
-      run: (artifactId: string, version?: number) => need().pages.document(artifactId, version),
+      run: async (artifactId: string, version?: number) => {
+        const { pages } = need()
+        const document = pages.document(artifactId, version)
+        // A dashboard's live tables are read again from its own project when it is opened.
+        return ctx.liveDashboards ? ctx.liveDashboards.serve(document, pages.get(artifactId).projectId) : document
+      },
     },
     'artifacts.export': {
       args: z.tuple([id, z.number().int().positive().optional(), z.enum(HOST_EXPORT_FORMATS)]),

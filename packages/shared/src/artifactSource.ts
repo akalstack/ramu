@@ -143,15 +143,42 @@ export type SlidesSource = z.infer<typeof slidesSource>
 
 export const DASHBOARD_ROWS_MAX = 5000
 const columnName = z.string().trim().min(1).max(60)
-export const dashboardDatasetSchema = z.object({
-  id: z.string().trim().min(1).max(40).describe('The name figures and charts use for this table.'),
-  columns: z.array(columnName).min(1).max(30),
-  rows: z
-    .array(z.array(z.union([z.string().max(200), z.number(), z.null()])).max(30))
-    .max(DASHBOARD_ROWS_MAX, `A table has at most ${DASHBOARD_ROWS_MAX} rows. Summarize it first.`)
-    .describe('One value per column in each row: text, a number or null.'),
-  asOf: z.iso.datetime({ offset: true }).optional().describe('When this data was read, shown as "As of".'),
-})
+/**
+ * Live tables a dashboard reads from its own project on the host, each with fixed columns; the host reads them again
+ * when the dashboard is opened, at most every few minutes.
+ */
+export const DASHBOARD_SOURCES = {
+  deployments: ['created', 'state', 'production', 'branch', 'message', 'url'],
+  usage: ['platform', 'metric', 'service', 'used', 'limit', 'unit'],
+  uptime: ['checked', 'result', 'status', 'ms'],
+} as const
+export type DashboardSourceKind = keyof typeof DASHBOARD_SOURCES
+
+export const dashboardDatasetSchema = z
+  .object({
+    id: z.string().trim().min(1).max(40).describe('The name figures and charts use for this table.'),
+    columns: z.array(columnName).min(1).max(30).optional().describe('Required unless the table has a source.'),
+    rows: z
+      .array(z.array(z.union([z.string().max(200), z.number(), z.null()])).max(30))
+      .max(DASHBOARD_ROWS_MAX, `A table has at most ${DASHBOARD_ROWS_MAX} rows. Summarize it first.`)
+      .default([])
+      .describe('One value per column in each row: text, a number or null.'),
+    asOf: z.iso.datetime({ offset: true }).optional().describe('When this data was read, shown as "As of".'),
+    source: z
+      .enum(Object.keys(DASHBOARD_SOURCES) as [DashboardSourceKind, ...DashboardSourceKind[]])
+      .optional()
+      .describe(
+        "A live table from the dashboard's project, read again when it is opened: deployments (created, state, production, branch, message, url), usage (platform, metric, service, used, limit, unit) or uptime (checked, result, status, ms). Leave columns and rows out.",
+      ),
+  })
+  .transform((table, ctx) => {
+    if (table.source) return { ...table, columns: [...DASHBOARD_SOURCES[table.source]], rows: table.rows }
+    if (!table.columns) {
+      ctx.addIssue({ code: 'custom', message: `Give ${table.id} its columns, or a source.` })
+      return z.NEVER
+    }
+    return { ...table, columns: table.columns }
+  })
 export const DASHBOARD_AGGREGATES = ['sum', 'average', 'count', 'min', 'max', 'last'] as const
 export const dashboardFigureSchema = z.object({
   label: z.string().trim().min(1).max(60),

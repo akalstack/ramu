@@ -38,7 +38,16 @@ export const registerHandlers = (ctx: HandlerContext): MethodTable => {
         args: z.tuple([z.string().min(1).max(200), z.string().uuid(), z.number().int().positive()]),
         run: (session: string, id: string, version: number) => {
           if (!ctx.interactive) throw new Error('Update this host for Interactive Content')
-          return ctx.interactive.get(session, id, version)
+          const document = ctx.interactive.get(session, id, version)
+          if (!ctx.liveDashboards || document.reference.kind !== 'dashboard') return document
+          // A card in a thread reads its dashboard's live tables from the thread's project.
+          let projectId: string | null = null
+          try {
+            projectId = ctx.workspace.getTask(ctx.agents.get(session).taskId).projectId
+          } catch {
+            // A thread no longer in a project shows the dashboard as published.
+          }
+          return ctx.liveDashboards.serve(document, projectId)
         },
       },
       'interactive.list': {

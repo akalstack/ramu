@@ -1,4 +1,6 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
+import type { InteractiveDocument } from '@ramu/shared/interactive'
+import { LiveDashboards, type ReadDashboardSource } from '../src/interactive/liveDashboard'
 import { parseArtifactSource } from '@ramu/shared/artifactSource'
 import { dashboardCsv } from '@ramu/shared/interactiveExport'
 import { aggregate, dashboardChart, renderDashboard } from '../src/interactive/dashboard'
@@ -67,4 +69,46 @@ it('writes CSV a spreadsheet cannot run as a formula', () => {
     }),
   )
   expect(csv).toBe(`a\nnote\n"'=HYPERLINK(""x"")"\n"a,b"\n\nb\nn\n1\n`)
+})
+
+it('takes a live table’s columns from its source and needs columns otherwise', () => {
+  const live = parseArtifactSource({
+    kind: 'dashboard',
+    datasets: [{ id: 'deploys', source: 'deployments' }],
+    figures: [{ label: 'Deploys', dataset: 'deploys', column: 'state', aggregate: 'count' }],
+  })
+  if (live.kind !== 'dashboard') throw new Error('not a dashboard')
+  expect(live.datasets[0]!.columns).toEqual(['created', 'state', 'production', 'branch', 'message', 'url'])
+  expect(() => parseArtifactSource({ kind: 'dashboard', datasets: [{ id: 'x', rows: [] }], figures: [] })).toThrow(
+    'Give x its columns, or a source.',
+  )
+})
+
+it('reads live tables again when opened, at most every five minutes, and only with a project', async () => {
+  const source = parseArtifactSource({
+    kind: 'dashboard',
+    datasets: [{ id: 'usage', source: 'usage' }],
+    figures: [{ label: 'Used', dataset: 'usage', column: 'used' }],
+  })
+  if (source.kind !== 'dashboard') throw new Error('not a dashboard')
+  const published = renderDashboard(source, 'Costs')
+  const document = {
+    reference: { id: 'a', version: 1, kind: 'dashboard', title: 'Costs' },
+    html: published.html,
+    files: published.files,
+  } as unknown as InteractiveDocument
+  let now = Date.parse('2026-11-07T10:00:00Z')
+  let used = 40
+  const read = vi.fn<ReadDashboardSource>(async () => [['vercel', 'transfer', null, used, 100, 'bytes']])
+  const live = new LiveDashboards(read, () => now)
+  expect(await live.serve(document, null)).toBe(document)
+  const first = await live.serve(document, 'p1')
+  expect(first.html).toContain('<strong>40</strong>')
+  expect(first.html).toContain('As of <time datetime="2026-11-07T10:00:00.000Z">')
+  used = 55
+  now += 60_000
+  expect((await live.serve(document, 'p1')).html).toContain('<strong>40</strong>')
+  now += 5 * 60_000
+  expect((await live.serve(document, 'p1')).html).toContain('<strong>55</strong>')
+  expect(read).toHaveBeenCalledTimes(2)
 })

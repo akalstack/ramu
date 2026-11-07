@@ -74,8 +74,8 @@ App, Doc, Diagram, Slides and Dashboard (over tables the agent fills in) are in 
 
 ### 3. Dashboards and Live artifacts
 
-- **Sources** are the ones a page can already be granted: its own records, one project folder (read-only), Ramu data (read-only) and Shared MCP servers allowed one by one.
-- **New source:** a project's deployments, usage and uptime, once the shipping plan adds them.
+- **Built:** a Dashboard's table can read its project's deployments, usage or uptime, again on every open (at most every five minutes), with "As of" ([Kinds](guide/artifacts.md#kinds)).
+- **More sources** are the ones a page can already be granted: its own records, one project folder (read-only), Ramu data (read-only) and Shared MCP servers allowed one by one.
 - **Refreshing:** a refresh rule (every N minutes while open, or on a schedule) re-runs the declared queries on the host. Results are stored with the time they were read, so a Dashboard opened offline on the phone shows "As of 09:40", never data passed off as current.
 - **Live** is a Dashboard or App whose refresh runs on the host through the existing page schedules. It can raise a notification when a declared value changes, using the existing triggers. MCP calls that only read run without asking each time once the person allowed that server for that artifact. Anything that writes still asks in the toolbar.
 
