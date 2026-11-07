@@ -296,6 +296,11 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
     }),
     z.object({ title: z.string().trim().min(1).max(160), icon: z.string().max(16) }),
   ])
+  // An edit's version says which device made it, so a change made on the phone is told apart from one at the desk.
+  const editedBy = () => {
+    const device = ctx.host.callerName?.()
+    return device ? `Edited by you on ${device.slice(0, 60)}` : 'Edited by you'
+  }
   const stateOf = (key: string) => ctx.workspace.getAppState<string | null>(key, null)
   const need = () => {
     if (!ctx.pages || !ctx.pageAi) throw new Error('Update this host for Artifacts.')
@@ -329,7 +334,7 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
         )
         const drawn = await renderArtifactSource(source, artifact.title)
         if (drawn.problems.length) throw new Error(drawn.problems[0])
-        return pages.saveEdit(artifactId, base, drawn)
+        return pages.saveEdit(artifactId, base, drawn, editedBy())
       },
     },
     'artifacts.designSystem': {
@@ -422,7 +427,7 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
           ...(JSON.parse(stored) as object),
           refreshMinutes: minutes,
         })
-        return pages.saveEdit(artifactId, base, await renderArtifactSource(source, artifact.title))
+        return pages.saveEdit(artifactId, base, await renderArtifactSource(source, artifact.title), editedBy())
       },
     },
     'artifacts.editSlides': {
@@ -443,7 +448,7 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
         const images = (document.files ?? []).filter((file) => file.encoding === 'base64')
         const drawn = await renderArtifactSource(source, artifact.title, images)
         if (drawn.problems.length) throw new Error(drawn.problems[0])
-        return pages.saveEdit(artifactId, base, drawn)
+        return pages.saveEdit(artifactId, base, drawn, editedBy())
       },
     },
     'artifacts.export': {

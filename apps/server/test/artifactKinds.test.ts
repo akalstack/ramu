@@ -160,6 +160,25 @@ it('saves the person’s own edit of a doc as a new version, and refuses one mad
   expect(() => pages.saveEdit(kept.id, 1, drawn)).toThrow('it is now at v2')
 })
 
+it('marks an edit with the device it was made on', async () => {
+  const { registerArtifactHandlers } = await import('../src/ipc/handlers/artifacts')
+  const { interactive, pages } = setup()
+  const preview = await interactive.preview('s', doc('## Goals\n\nShip sync.\n'))
+  const kept = pages.keep('s', interactive.publish('s', preview.id, 'r1').id, { title: 'Launch plan' })
+  let caller: string | undefined = 'Ayu’s iPhone'
+  const methods = registerArtifactHandlers({
+    pages,
+    pageAi: {},
+    activity: { run: () => {} },
+    host: { callerName: () => caller },
+  } as never)
+  await methods['artifacts.editSource']!.run(kept.id, 1, '## Goals\n\nShip sync on Friday.\n')
+  expect(pages.document(kept.id).reference.changes).toBe('Edited by you on Ayu’s iPhone')
+  caller = undefined
+  await methods['artifacts.editSource']!.run(kept.id, 2, '## Goals\n\nShip sync on Monday.\n')
+  expect(pages.document(kept.id).reference.changes).toBe('Edited by you')
+})
+
 it('edits a Mermaid diagram’s source in place, and offers no text to edit for an SVG diagram', async () => {
   const { interactive, pages } = setup()
   const preview = await interactive.preview('s', {

@@ -78,6 +78,8 @@ export interface Services {
 export interface RuntimeHost {
   browserDevice?(): string | undefined
   browserGrantEligible?(deviceId: string): boolean
+  /** The name of the device the current call came from: a paired device's own name, or this computer's. */
+  callerName?(): string | undefined
   userData: string
   /** Initial integration/credential administration is local to the execution host. */
   canAdministerIntegrations?(): boolean

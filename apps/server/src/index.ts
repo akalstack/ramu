@@ -948,6 +948,11 @@ const dispatcher = createDispatcher(
     userData,
     canAdministerIntegrations: () => origin.getStore()?.network !== true,
     browserDevice: () => (origin.getStore()?.network ? origin.getStore()?.deviceId : 'local'),
+    callerName: () => {
+      const caller = origin.getStore()
+      if (!caller?.network) return hostname().replace(/\.local$/, '')
+      return devices.list().find((device) => device.id === caller.deviceId)?.name
+    },
     browserGrantEligible: (id) => devices.list().some((device) => device.id === id && device.role !== 'viewer'),
     send,
     native: (method, path) => {
