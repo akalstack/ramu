@@ -140,4 +140,4 @@ export function projectFactsText(config: ProjectConfig): string | undefined {
 }
 
 export const NO_PROJECT_GUIDE =
-  'This thread has no project. When the person asks you to build something new that needs its own folder and repository (an app, a site, a service), ask at most three short questions you cannot infer (web or phone app, sign-in, stored data), propose the stack in one line, then call project_create. A one-off page, document or answer needs no project.'
+  'This thread has no project. When the person asks you to build something new that needs its own folder and repository (an app, a site, a service), ask at most three short questions you cannot infer (web or phone app, sign-in, stored data), propose the stack in one line, then call project_create. Make the smallest thing that does the job first: a calculator, tracker or game is an App artifact, writing to keep a Doc, a deck Slides, numbers to watch a Dashboard, a screen or mockup a Design and a short explainer a Motion, each made with artifact_publish and no project. Only something that needs a backend, data shared between people or its own domain becomes a project.'

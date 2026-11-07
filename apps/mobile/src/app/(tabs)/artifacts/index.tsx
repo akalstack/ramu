@@ -5,15 +5,16 @@ import { AppWindow, Pin, Plus } from 'lucide-react-native'
 import { useTabActions } from '../../../components/Overlays'
 import { STANDALONE } from '../../../runtime/types'
 import { GlassButton } from '../../../components/Screen'
-import type { ArtifactInfo, ArtifactTemplate } from '@ramu/shared/artifacts'
+import { ARTIFACT_KINDS, type ArtifactInfo, type ArtifactKind, type ArtifactTemplate } from '@ramu/shared/artifacts'
 import { font, space, useTheme } from '../../../theme'
 import { useStore } from '../../../runtime/store'
 import { ago, useSay } from '../../../i18n'
 import { Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from '../../../components/Screen'
 import { Nothing } from '../../../components/InboxParts'
 import { HostChip } from '../../../components/HostChip'
-import { Row, SectionLabel, T } from '../../../components/ui'
-import { ArtifactKindMark, kindLabel } from '../../../components/ArtifactKindMark'
+import { Chip, Row, SectionLabel, Sheet, T } from '../../../components/ui'
+import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
+import { ArtifactKindMark, kindIcon, kindLabel } from '../../../components/ArtifactKindMark'
 
 /** Every artifact on the paired hosts, newest first with pinned ones on top, as the desktop's Artifacts. */
 export default function PagesScreen() {
@@ -30,6 +31,9 @@ export default function PagesScreen() {
   )
   const [pages, setPages] = useState<Record<string, ArtifactInfo[]>>({})
   const [query, setQuery] = useState('')
+  // The kind filter appears once the list holds more than one kind to tell apart.
+  const [kind, setKind] = useState<ArtifactKind | 'all'>('all')
+  const [choosingKind, setChoosingKind] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const load = useCallback(
     async (computerId: string) => {
@@ -83,9 +87,15 @@ export default function PagesScreen() {
   const actions = useTabActions(
     viewOnly ? null : { icon: Plus, label: say('New'), systemIcon: 'plus', onPress: newPage },
   )
+  const kinds = ARTIFACT_KINDS.filter((entry) =>
+    hosts.some((host) => (pages[host.id] ?? []).some((page) => page.kind === entry)),
+  )
   const rows = hosts
     .flatMap((host) => (pages[host.id] ?? []).map((page) => ({ page, host })))
-    .filter(({ page }) => page.title.toLowerCase().includes(query.trim().toLowerCase()))
+    .filter(
+      ({ page }) =>
+        (kind === 'all' || page.kind === kind) && page.title.toLowerCase().includes(query.trim().toLowerCase()),
+    )
     .sort((a, b) => Number(b.page.pinned) - Number(a.page.pinned) || b.page.changedAt - a.page.changedAt)
   return (
     <Screen>
@@ -109,6 +119,16 @@ export default function PagesScreen() {
         <LargeTitle>{say('Artifacts')}</LargeTitle>
         <View style={{ flexDirection: 'row', paddingHorizontal: space.l, paddingTop: space.m }}>
           <HostChip all={multi && allHosts} onAll={multi ? setAllHosts : undefined} />
+          {kinds.length > 1 ? (
+            <View style={{ marginLeft: space.s }}>
+              <Chip
+                label={kind === 'all' ? say('All kinds') : say(kindLabel(kind))}
+                accessibilityLabel={say('Kind')}
+                chevron
+                onPress={() => setChoosingKind(true)}
+              />
+            </View>
+          ) : null}
         </View>
         <TextInput
           accessibilityLabel={say('Search artifacts')}
@@ -197,6 +217,22 @@ export default function PagesScreen() {
           </View>
         ) : null}
       </PageScrollView>
+      <Sheet open={choosingKind} onClose={() => setChoosingKind(false)} title={say('Kind')}>
+        <SheetGroup>
+          {(['all', ...kinds] as const).map((entry) => (
+            <SheetOption
+              key={entry}
+              icon={entry === 'all' ? undefined : kindIcon(entry)}
+              title={entry === 'all' ? say('All kinds') : say(kindLabel(entry))}
+              selected={kind === entry}
+              onPress={() => {
+                setKind(entry)
+                setChoosingKind(false)
+              }}
+            />
+          ))}
+        </SheetGroup>
+      </Sheet>
     </Screen>
   )
 }

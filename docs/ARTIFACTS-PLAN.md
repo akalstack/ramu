@@ -100,15 +100,7 @@ A Doc's Markdown and a Mermaid diagram's source (desktop and phone) and a deck's
 
 The [shipping plan](SHIP-AN-APP-PLAN.md) and this one share one rule: make the smallest thing that does the job first, and grow it when it needs more.
 
-- **Start box routing:** the shipping plan's stack choice on Home sends a request to the right kind before it reaches a project:
-  - "a page that adds up my monthly costs" becomes an App artifact,
-  - "a pitch deck" becomes Slides,
-  - "a dashboard of our signups" becomes a Dashboard on the project's database once it has one.
-
-  Only a request that needs a backend, data shared between people or its own domain becomes a project.
 - **App to project:** an App artifact grows into a project through **Make it a project** (built), and **Publish to the web** moves onto the shipping plan's `HostingAdapter` when it exists. The static GitHub Pages, Netlify, Vercel and Cloudflare Pages deploys built for pages are its first targets.
-- **Shipped apps feed dashboards:** a deployed project's deployments, usage and uptime (shipping plan sections 3, 8 and 9) become Dashboard and Live sources. "Show me this week's errors and deploys" is an artifact, not a page of the hosting dashboard.
-- **Launch artifacts:** **Make a release note** and **Make a launch deck** from a project's merged pull requests are Doc and Slides artifacts on the project, ready to export or publish with the site.
 
 ### 7. Documentation
 

@@ -33,6 +33,7 @@ const KIND_LABELS: Record<ArtifactKind, string> = {
 
 /** English copy keys for a kind's name and for sharing each of its exports, translated with say(). */
 export const kindLabel = (kind: ArtifactKind) => KIND_LABELS[kind]
+export const kindIcon = (kind: ArtifactKind) => KIND_ICONS[kind]
 export const SHARE_LABELS: Record<KindExportFormat, string> = {
   markdown: 'Share Markdown',
   html: 'Share HTML',

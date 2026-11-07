@@ -15,6 +15,7 @@ import {
   FolderSearch,
   GitBranch,
   Link2,
+  Megaphone,
   Pencil,
   Rocket,
   Route,
@@ -45,6 +46,7 @@ import { useSidebarExpansion } from './sidebarExpansion'
 import { ThreadPreviewList, useThreadPreview } from './ThreadPreviewList'
 import { useSlideMount } from './useSlideMount'
 import { useHost } from '../../workspace/HostProvider'
+import { draftKey, draftStore, saveDraft } from '../../composer/drafts'
 
 export function ProjectGroup({ project, previewLimit }: { project: Project; previewLimit?: number }) {
   useLanguage()
@@ -88,6 +90,12 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
     } catch (e) {
       setError(errorText(e))
     }
+  }
+
+  // A launch write-up starts as a request already in New chat's box, so the person can adjust it before it goes.
+  const writeUp = (request: string) => {
+    saveDraft(draftKey.newChat(project.id), request, draftStore(host.id))
+    ws.newTask(project.id)
   }
 
   const act = async (fn: () => Promise<unknown>): Promise<boolean> => {
@@ -166,6 +174,40 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
         if (canWrite()) setDeploying(true)
       },
     },
+    ...(repos.length
+      ? [
+          {
+            key: 'launch',
+            label: (
+              <>
+                <Megaphone size={14} /> {t(' Tell people what shipped')}
+              </>
+            ),
+            submenu: [
+              {
+                key: 'release-note',
+                label: t('Make a release note'),
+                onSelect: () =>
+                  writeUp(
+                    t(
+                      'Make a release note as a Doc artifact from the pull requests merged since the last release: what changed for the people who use it, grouped by what they would notice, with each pull request linked.',
+                    ),
+                  ),
+              },
+              {
+                key: 'launch-deck',
+                label: t('Make a launch deck'),
+                onSelect: () =>
+                  writeUp(
+                    t(
+                      'Make a short launch deck as a Slides artifact from the pull requests merged since the last release: the problem, what is new, how it looks, and what comes next, with speaker notes.',
+                    ),
+                  ),
+              },
+            ],
+          } as MenuEntry,
+        ]
+      : []),
     {
       key: 'ci',
       label: (

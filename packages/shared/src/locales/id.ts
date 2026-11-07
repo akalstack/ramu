@@ -5692,6 +5692,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Saved as a template': 'Disimpan sebagai template',
   'Keep it as a template': 'Simpan sebagai template',
   'Start from a template': 'Mulai dari template',
+  'All kinds': 'Semua jenis',
   'Start from a design': 'Mulai dari desain',
   'Start from a design…': 'Mulai dari desain…',
   'Search designs…': 'Cari desain…',
@@ -6025,4 +6026,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Use a key I already have': 'Pakai kunci yang sudah saya punya',
   'Use a key Ramu creates instead': 'Pakai kunci buatan Ramu saja',
   'User': 'Pengguna',
+  'Tell people what shipped': 'Kabarkan yang sudah dirilis',
+  'Make a release note': 'Buat catatan rilis',
+  'Make a launch deck': 'Buat dek peluncuran',
+  'Make a release note as a Doc artifact from the pull requests merged since the last release: what changed for the people who use it, grouped by what they would notice, with each pull request linked.':
+    'Buat catatan rilis sebagai artefak Dokumen dari pull request yang digabung sejak rilis terakhir: apa yang berubah bagi orang yang memakainya, dikelompokkan menurut apa yang akan mereka sadari, dengan tautan ke setiap pull request.',
+  'Make a short launch deck as a Slides artifact from the pull requests merged since the last release: the problem, what is new, how it looks, and what comes next, with speaker notes.':
+    'Buat dek peluncuran singkat sebagai artefak Slide dari pull request yang digabung sejak rilis terakhir: masalahnya, apa yang baru, tampilannya, dan langkah berikutnya, dengan catatan pembicara.',
 }
