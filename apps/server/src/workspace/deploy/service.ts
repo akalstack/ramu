@@ -201,6 +201,22 @@ export class DeployService {
     }
   }
 
+  /** Variables for one git branch's previews, when the bound platform keeps them per branch. */
+  branchEnvironment(projectId: string): {
+    set(branch: string, values: Record<string, string>): Promise<void>
+    remove(branch: string, keys: string[]): Promise<void>
+  } | null {
+    const binding = this.binding(projectId)
+    const environment = binding ? this.adapter(binding.platform).capabilities.environment : undefined
+    if (!binding || !environment?.setBranch || !environment.removeBranch) return null
+    return {
+      set: async (branch, values) =>
+        environment.setBranch!((await this.bound(projectId)).auth, binding, branch, values),
+      remove: async (branch, keys) =>
+        environment.removeBranch!((await this.bound(projectId)).auth, binding, branch, keys),
+    }
+  }
+
   async deployment(projectId: string, deploymentId: string): Promise<Deployment> {
     const { binding, auth } = await this.bound(projectId)
     return this.adapter(binding.platform).deploymentStatus(auth, binding, deploymentId)

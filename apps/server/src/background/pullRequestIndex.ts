@@ -192,8 +192,12 @@ export class PullRequestIndex {
    * branch; in the shared checkout only the most recently active thread takes the checked-out branch's pull request,
    * so older threads there do not all claim it.
    */
+  /** Told every list read for a repository, such as to keep a database branch per open pull request. */
+  onList: ((repoId: string, list: PullRequestList) => void) | null = null
+
   private absorb(repoId: string, list: PullRequestList, checkedOut: string | null): void {
     if (list.availability !== 'ready') return
+    this.onList?.(repoId, list)
     const byUrl = new Map(list.pullRequests.map((pr) => [pr.url, pr]))
     const byBranch = new Map<string, PullRequestSummary>()
     for (const pr of [...list.pullRequests].sort((a, b) => a.updatedAt - b.updatedAt))

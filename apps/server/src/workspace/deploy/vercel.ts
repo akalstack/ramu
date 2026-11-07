@@ -291,6 +291,43 @@ export function vercelAdapter(options: { api?: string; fetch?: typeof fetch } = 
             { upsert: 'true' },
           )
         },
+        async setBranch(auth, site, branch, values) {
+          const entries = Object.entries(values)
+          if (!entries.length) return
+          await call(
+            `/v10/projects/${project(site)}/env`,
+            auth,
+            'setting a branch’s environment variables',
+            {
+              method: 'POST',
+              body: JSON.stringify(
+                entries.map(([key, value]) => ({
+                  key,
+                  value,
+                  type: 'encrypted',
+                  target: ['preview'],
+                  gitBranch: branch,
+                })),
+              ),
+            },
+            { upsert: 'true' },
+          )
+        },
+        async removeBranch(auth, site, branch, keys) {
+          const { envs } = await call<{ envs?: { id: string; key: string; gitBranch?: string | null }[] }>(
+            `/v10/projects/${project(site)}/env`,
+            auth,
+            'reading the environment variables',
+          )
+          for (const env of envs ?? [])
+            if (env.gitBranch === branch && keys.includes(env.key))
+              await call(
+                `/v9/projects/${project(site)}/env/${encodeURIComponent(env.id)}`,
+                auth,
+                'removing a branch’s environment variable',
+                { method: 'DELETE' },
+              )
+        },
       },
       domains: {
         async list(auth, site) {

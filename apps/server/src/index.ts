@@ -534,6 +534,11 @@ const deploys = createDeploys(workspace, db, agents, {
 })
 // Thread rows show their pull request, so a change there refreshes the thread lists.
 const pullRequestIndex = new PullRequestIndex(workspace, agents, () => send('workspace:changed', {}))
+// Each open pull request of a linked repository with a branchable database gets a database branch of its own.
+pullRequestIndex.onList = (repoId, list) =>
+  void deploys.pullRequests(repoId, list.pullRequests).catch((error: unknown) => {
+    console.error('Database branches for pull requests:', error)
+  })
 const pullRequestDrafts = new PullRequestDrafts(
   workspace,
   agents,

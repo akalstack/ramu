@@ -112,6 +112,13 @@ export function neonAdapter(options: { api?: string; fetch?: typeof fetch } = {}
       return found ? resource(auth, found) : null
     },
     page: (id) => `https://console.neon.tech/app/projects/${encodeURIComponent(id)}`,
+    async removeBranch(auth, id, name) {
+      const found = (await branches(auth, id)).find((branch) => branch.name === name)
+      if (!found || found.default || found.primary) return
+      await call(`${project(id)}/branches/${encodeURIComponent(found.id)}`, auth, 'deleting a branch', {
+        method: 'DELETE',
+      })
+    },
     async branch(auth, id, name) {
       const existing = (await branches(auth, id)).find((branch) => branch.name === name)
       if (existing) return connection(auth, id, existing)

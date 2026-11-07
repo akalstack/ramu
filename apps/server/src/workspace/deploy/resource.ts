@@ -26,6 +26,8 @@ export interface ResourceAdapter {
   page(id: string): string
   /** A copy of the resource for previews and development, created once and reused, with its own variables. */
   branch?(auth: HostingAuth, id: string, name: string): Promise<Record<string, string>>
+  /** Deletes a branch `branch` made; nothing when it is already gone. */
+  removeBranch?(auth: HostingAuth, id: string, name: string): Promise<void>
   /** What the resource used in the current billing period, as far as the provider's API reports it. */
   usage?(auth: HostingAuth, id: string): Promise<PlatformUsage>
 }

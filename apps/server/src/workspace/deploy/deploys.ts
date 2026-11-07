@@ -38,6 +38,11 @@ export interface Deploys {
    * production branch of the repository the project's platform watches, the deployment it starts is followed.
    */
   pushed(repoId: string, branch: string, commit: string | null, taskId: string | null): Promise<void>
+  /**
+   * Keeps a database branch per open pull request of a linked repository: one is made (and the preview deployed again
+   * with it) when a pull request opens, and removed with its variables when it closes or merges.
+   */
+  pullRequests(repoId: string, pullRequests: { headBranch: string; state: string; fork?: boolean }[]): Promise<void>
   /** The newest preview deployment of a branch, when the repository is the one its project's platform watches. */
   preview(repoId: string, branch: string): Promise<Deployment | null>
   uptime: UptimeWatches
@@ -195,6 +200,34 @@ export function createDeploys(
     },
     raise: (notice) => events.notice(notice),
   })
+  const reconciling = new Set<string>()
+  const reconcileBranches = async (
+    repoId: string,
+    pullRequests: { headBranch: string; state: string; fork?: boolean }[],
+  ) => {
+    const projectId = workspace.getRepository(repoId).projectId
+    if (!resources.canBranch(projectId) && !resources.branchesOf(projectId).length) return
+    const linked = await linkedTo(repoId)
+    const environment = linked ? service.branchEnvironment(linked.projectId) : null
+    if (!linked || !environment) return
+    const open = new Set(
+      pullRequests
+        .filter((pr) => pr.state === 'open' && !pr.fork && pr.headBranch !== linked.binding.productionBranch)
+        .map((pr) => pr.headBranch),
+    )
+    for (const branch of resources.branchesOf(projectId))
+      if (!open.has(branch)) {
+        const keys = await resources.closeBranch(projectId, branch)
+        if (keys.length) await environment.remove(branch, keys)
+      }
+    for (const branch of open) {
+      const values = await resources.openBranch(projectId, branch)
+      if (!values) continue
+      await environment.set(branch, values)
+      // The branch's first preview was built with the shared preview database; this one uses its own.
+      await service.deploy(projectId, branch, false).catch(() => null)
+    }
+  }
   return {
     accounts,
     service,
@@ -215,6 +248,16 @@ export function createDeploys(
         : undefined
       if (production) deployWatch.followPush(linked.projectId, commit, session?.id ?? null)
       else deployWatch.followPreview(linked.projectId, branch, commit!, session?.id ?? null)
+    },
+    async pullRequests(repoId, pullRequests) {
+      // One reconcile per repository at a time, so two list reads never make the same branch twice.
+      if (reconciling.has(repoId)) return
+      reconciling.add(repoId)
+      try {
+        await reconcileBranches(repoId, pullRequests)
+      } finally {
+        reconciling.delete(repoId)
+      }
     },
     async preview(repoId, branch) {
       const linked = await linkedTo(repoId)

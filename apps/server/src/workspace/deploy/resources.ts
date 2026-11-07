@@ -85,6 +85,18 @@ export const runMigration: MigrationRunner = (argv, cwd, variables) =>
   })
 
 const key = (projectId: string) => `resources:${projectId}`
+const branchKey = (projectId: string) => `resource-branches:${projectId}`
+/** Open pull requests with a database branch of their own; past this, they share the preview branch. */
+const BRANCHES_MAX = 4
+/** A provider branch name for a git branch: lowercase letters, digits and dashes. */
+export const pullRequestBranch = (gitBranch: string) =>
+  `pr-${
+    gitBranch
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40) || 'branch'
+  }`
 
 export class ResourceService {
   constructor(
@@ -117,6 +129,53 @@ export class ResourceService {
         'missing-permission',
       )
     return { auth, accountId: connected ?? (await this.adapter(provider).account(auth)).id }
+  }
+
+  /** The project's database, when its provider can make and remove branches for pull requests. */
+  private branchable(projectId: string): ResourceBinding | null {
+    const binding = this.bindings(projectId).find((entry) => entry.kind === 'database' && entry.previewBranch)
+    if (!binding) return null
+    const adapter = this.adapter(binding.provider)
+    return adapter.branch && adapter.removeBranch ? binding : null
+  }
+
+  /** Git branches whose pull request has a database branch of its own. */
+  branchesOf(projectId: string): string[] {
+    return this.host.getState<string[]>(branchKey(projectId), [])
+  }
+
+  canBranch(projectId: string): boolean {
+    return !!this.branchable(projectId)
+  }
+
+  /**
+   * A database branch for a pull request's git branch, copied from production; its connection values, or null when it
+   * has one already, the project cannot branch, or as many pull requests as allowed have one.
+   */
+  async openBranch(projectId: string, gitBranch: string): Promise<Record<string, string> | null> {
+    const binding = this.branchable(projectId)
+    const open = this.branchesOf(projectId)
+    if (!binding || open.includes(gitBranch) || open.length >= BRANCHES_MAX) return null
+    const { auth } = await this.auth(binding.provider, binding.accountId)
+    const values = await this.adapter(binding.provider).branch!(auth, binding.id, pullRequestBranch(gitBranch))
+    this.host.setState(branchKey(projectId), [...this.branchesOf(projectId), gitBranch])
+    return values
+  }
+
+  /** Deletes a closed pull request's database branch; the variable names it set, for removing them on the platform. */
+  async closeBranch(projectId: string, gitBranch: string): Promise<string[]> {
+    if (!this.branchesOf(projectId).includes(gitBranch)) return []
+    const binding = this.bindings(projectId).find((entry) => entry.kind === 'database')
+    if (binding) {
+      const { auth } = await this.auth(binding.provider, binding.accountId)
+      await this.adapter(binding.provider).removeBranch?.(auth, binding.id, pullRequestBranch(gitBranch))
+    }
+    this.host.setState(
+      branchKey(projectId),
+      this.branchesOf(projectId).filter((branch) => branch !== gitBranch),
+    )
+    const secrets = binding ? await this.secrets(projectId, binding.kind).read() : null
+    return Object.keys(secrets?.preview ?? {})
   }
 
   async status(projectId: string, appVariables: string[]): Promise<ProjectResources> {

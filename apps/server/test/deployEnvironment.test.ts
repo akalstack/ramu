@@ -84,6 +84,73 @@ describe('hosting adapters’ environment variables', () => {
   })
 })
 
+describe('variables for one git branch', () => {
+  it('Vercel sets encrypted preview values for the branch, and removes only that branch’s', async () => {
+    const { calls, fetcher } = api((method) =>
+      method === 'GET'
+        ? {
+            envs: [
+              { id: 'e1', key: 'DATABASE_URL', gitBranch: 'login' },
+              { id: 'e2', key: 'DATABASE_URL', gitBranch: null },
+              { id: 'e3', key: 'STRIPE_KEY', gitBranch: 'login' },
+            ],
+          }
+        : {},
+    )
+    const env = vercelAdapter({ api: 'https://vercel.test', fetch: fetcher }).capabilities.environment!
+    await env.setBranch!(auth, site, 'login', { DATABASE_URL: 'postgresql://pr' })
+    expect(calls.at(-1)).toEqual({
+      method: 'POST',
+      url: 'https://vercel.test/v10/projects/prj_1/env?upsert=true&teamId=team_1',
+      body: [
+        { key: 'DATABASE_URL', value: 'postgresql://pr', type: 'encrypted', target: ['preview'], gitBranch: 'login' },
+      ],
+    })
+    await env.removeBranch!(auth, site, 'login', ['DATABASE_URL'])
+    expect(calls.filter((call) => call.method === 'DELETE').map((call) => call.url)).toEqual([
+      'https://vercel.test/v9/projects/prj_1/env/e1?teamId=team_1',
+    ])
+  })
+
+  it('Netlify gives the branch its own context value, and deletes only that value', async () => {
+    const { calls, fetcher } = api((method, url) => {
+      if (url.endsWith('/sites/site_1')) return { account_id: 'acct_1' }
+      if (method === 'GET')
+        return [
+          {
+            key: 'DATABASE_URL',
+            values: [
+              { id: 'v1', context: 'all' },
+              { id: 'v2', context: 'branch', context_parameter: 'login' },
+            ],
+          },
+        ]
+      return {}
+    })
+    const env = netlifyAdapter({ api: 'https://netlify.test', fetch: fetcher }).capabilities.environment!
+    const target = { siteId: 'site_1', siteName: 'shop' }
+    await env.setBranch!(auth, target, 'login', { DATABASE_URL: 'postgresql://pr', REDIS_URL: 'redis://pr' })
+    await env.removeBranch!(auth, target, 'login', ['DATABASE_URL'])
+    expect(calls.filter((call) => call.method !== 'GET')).toEqual([
+      {
+        method: 'POST',
+        url: 'https://netlify.test/accounts/acct_1/env?site_id=site_1',
+        body: [{ key: 'REDIS_URL', values: [{ context: 'branch', context_parameter: 'login', value: 'redis://pr' }] }],
+      },
+      {
+        method: 'PATCH',
+        url: 'https://netlify.test/accounts/acct_1/env/DATABASE_URL?site_id=site_1',
+        body: { context: 'branch', context_parameter: 'login', value: 'postgresql://pr' },
+      },
+      {
+        method: 'DELETE',
+        url: 'https://netlify.test/accounts/acct_1/env/DATABASE_URL/value/v2?site_id=site_1',
+        body: null,
+      },
+    ])
+  })
+})
+
 /** A target kept in memory, recording what was written to it. */
 function memory(id: string, environments: EnvEnvironment[], names: Partial<Record<EnvEnvironment, string[]>>) {
   const written: { environment: EnvEnvironment; values: Record<string, string> }[] = []

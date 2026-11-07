@@ -246,3 +246,60 @@ describe('migrations before a production deploy', () => {
     expect(runner).not.toHaveBeenCalled()
   })
 })
+
+describe('a database branch per pull request', () => {
+  it('opens one per git branch up to four, and closing deletes it and names the variables to remove', async () => {
+    const server = await fake(neonRoutes([]))
+    const branch = vi.fn(async (_auth: unknown, _id: string, name: string) => ({
+      DATABASE_URL: `postgresql://${name}`,
+    }))
+    const removeBranch = vi.fn(async () => {})
+    const state = new Map<string, unknown>()
+    const { store } = credentials()
+    const resources = new ResourceService(
+      {
+        getState: <T>(name: string, fallback: T) => (state.get(name) as T) ?? fallback,
+        setState: (name, value) => void state.set(name, value),
+        stack: () => ({ database: true, migrate: null }),
+      },
+      { auth: async () => ({ auth, accountId: 'u1', defaultScope: null }), connected: () => true } as never,
+      store,
+      () => ({ ...neonAdapter({ api: server.url }), branch, removeBranch }),
+    )
+    expect(resources.canBranch('p')).toBe(false)
+    await resources.provision('p', 'neon', 'default', 'shop')
+    expect(resources.canBranch('p')).toBe(true)
+    expect(await resources.openBranch('p', 'Feature/Login')).toEqual({ DATABASE_URL: 'postgresql://pr-feature-login' })
+    expect(await resources.openBranch('p', 'Feature/Login')).toBeNull()
+    for (const name of ['a', 'b', 'c']) expect(await resources.openBranch('p', name)).not.toBeNull()
+    expect(await resources.openBranch('p', 'e')).toBeNull()
+    expect(resources.branchesOf('p')).toEqual(['Feature/Login', 'a', 'b', 'c'])
+    expect(await resources.closeBranch('p', 'Feature/Login')).toEqual(['DATABASE_URL'])
+    expect(removeBranch).toHaveBeenCalledWith(auth, 'prj_1', 'pr-feature-login')
+    expect(resources.branchesOf('p')).toEqual(['a', 'b', 'c'])
+    expect(await resources.closeBranch('p', 'never-opened')).toEqual([])
+  })
+
+  it('deletes a pull request’s Neon branch by name, and never the default one', async () => {
+    const server = await fake([
+      {
+        method: 'GET',
+        path: /^\/projects\/prj_1\/branches$/,
+        body: {
+          branches: [
+            { id: 'br_main', name: 'pr-main', default: true },
+            { id: 'br_pr', name: 'pr-login' },
+          ],
+        },
+      },
+      { method: 'DELETE', path: /^\/projects\/prj_1\/branches\/br_pr$/, body: {} },
+    ])
+    const neon = neonAdapter({ api: server.url })
+    await neon.removeBranch!(auth, 'prj_1', 'pr-login')
+    await neon.removeBranch!(auth, 'prj_1', 'pr-main')
+    await neon.removeBranch!(auth, 'prj_1', 'pr-gone')
+    expect(server.requests.filter((request) => request.startsWith('DELETE'))).toEqual([
+      'DELETE /projects/prj_1/branches/br_pr',
+    ])
+  })
+})

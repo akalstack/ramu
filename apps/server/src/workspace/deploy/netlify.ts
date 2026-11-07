@@ -279,6 +279,45 @@ export function netlifyAdapter(options: { api?: string; github?: string; fetch?:
               body: JSON.stringify({ context, value }),
             })
         },
+        async setBranch(auth, target, branch, values) {
+          const base = await siteEnv(auth, target.siteId)
+          const [path, query] = base.split('?') as [string, string]
+          const existing = new Set(
+            (await call<{ key: string }[]>(base, auth, 'reading the environment variables')).map((entry) => entry.key),
+          )
+          const added = Object.entries(values).filter(([key]) => !existing.has(key))
+          if (added.length)
+            await call(base, auth, 'adding a branch’s environment variables', {
+              method: 'POST',
+              body: JSON.stringify(
+                added.map(([key, value]) => ({
+                  key,
+                  values: [{ context: 'branch', context_parameter: branch, value }],
+                })),
+              ),
+            })
+          for (const [key, value] of Object.entries(values).filter(([name]) => existing.has(name)))
+            await call(`${path}/${encodeURIComponent(key)}?${query}`, auth, 'setting a branch’s environment variable', {
+              method: 'PATCH',
+              body: JSON.stringify({ context: 'branch', context_parameter: branch, value }),
+            })
+        },
+        async removeBranch(auth, target, branch, keys) {
+          const base = await siteEnv(auth, target.siteId)
+          const [path, query] = base.split('?') as [string, string]
+          const env = await call<
+            { key: string; values?: { id?: string; context?: string; context_parameter?: string }[] }[]
+          >(base, auth, 'reading the environment variables')
+          for (const entry of env.filter((item) => keys.includes(item.key)))
+            for (const value of entry.values ?? [])
+              if (value.id && value.context === 'branch' && value.context_parameter === branch)
+                await call(
+                  `${path}/${encodeURIComponent(entry.key)}/value/${encodeURIComponent(value.id)}?${query}`,
+                  auth,
+                  'removing a branch’s environment variable',
+                  { method: 'DELETE' },
+                )
+        },
       },
       domains: {
         async list(auth, target) {

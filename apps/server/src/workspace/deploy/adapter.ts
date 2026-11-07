@@ -68,6 +68,10 @@ export interface HostingCapabilities {
       environment: PlatformEnvironment,
       values: Record<string, string>,
     ): Promise<void>
+    /** Preview variables for one git branch only, beside the preview values every other branch gets. */
+    setBranch?(auth: HostingAuth, site: HostingSite, branch: string, values: Record<string, string>): Promise<void>
+    /** Removes the variables `setBranch` gave one git branch, leaving every other value as it was. */
+    removeBranch?(auth: HostingAuth, site: HostingSite, branch: string, keys: string[]): Promise<void>
   }
   /** Custom domains on the project: adding one, what its DNS needs, and how far it is from serving HTTPS. */
   domains?: {
