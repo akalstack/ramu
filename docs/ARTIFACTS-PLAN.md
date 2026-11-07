@@ -65,7 +65,7 @@ App, Doc, Diagram, Slides, Dashboard (over tables the agent fills in), Design (f
 A Doc's Markdown and a Mermaid diagram's source (desktop and phone) and a deck's slide text and order (desktop and phone) are edited with **Edit text** and saved as a version marked "Edited by you" with the device it was made on; an edit made on an older version is refused rather than merged, and agents are told to keep the person's wording ([Kinds](guide/artifacts.md#kinds)). Remaining:
 
 - The Doc in the editor Ramu already uses for files (Tiptap on the desktop) instead of its Markdown, and a native rich-text view on the phone.
-- A deck's columns and quote attribution on the phone (it edits titles, text, notes and order), labels edited on the drawn diagram itself (today in its Mermaid source), and a design frame's text.
+- Labels edited on the drawn diagram itself (today in its Mermaid source), and a design frame's text.
 
 ### 3. Dashboards and Live artifacts
 

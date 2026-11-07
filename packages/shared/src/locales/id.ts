@@ -6034,4 +6034,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Make a short launch deck as a Slides artifact from the pull requests merged since the last release: the problem, what is new, how it looks, and what comes next, with speaker notes.':
     'Buat dek peluncuran singkat sebagai artefak Slide dari pull request yang digabung sejak rilis terakhir: masalahnya, apa yang baru, tampilannya, dan langkah berikutnya, dengan catatan pembicara.',
   'Outline': 'Kerangka',
+  'Who said it': 'Siapa yang mengatakannya',
 }

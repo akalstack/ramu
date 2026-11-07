@@ -854,7 +854,28 @@ export default function PageScreen() {
                       style={field}
                     />
                   ) : null}
-                  {slide.layout === 'two-columns' && slide.columns ? null : (
+                  {slide.layout === 'two-columns' && slide.columns ? (
+                    slide.columns.map((column, at) => (
+                      <TextInput
+                        key={at}
+                        accessibilityLabel={say('Column {column} of slide {number}', {
+                          column: at + 1,
+                          number: index + 1,
+                        })}
+                        multiline
+                        value={column}
+                        onChangeText={(text) =>
+                          change({
+                            columns: (at === 0 ? [text, slide.columns![1]] : [slide.columns![0], text]) as [
+                              string,
+                              string,
+                            ],
+                          })
+                        }
+                        style={[field, { minHeight: 72 }]}
+                      />
+                    ))
+                  ) : (
                     <TextInput
                       accessibilityLabel={say('Text of slide {number}', { number: index + 1 })}
                       multiline
@@ -863,6 +884,16 @@ export default function PageScreen() {
                       style={[field, { minHeight: 72 }]}
                     />
                   )}
+                  {slide.layout === 'quote' ? (
+                    <TextInput
+                      accessibilityLabel={say('Who said it, slide {number}', { number: index + 1 })}
+                      placeholder={say('Who said it')}
+                      placeholderTextColor={c.muted}
+                      value={slide.by ?? ''}
+                      onChangeText={(by) => change({ by })}
+                      style={field}
+                    />
+                  ) : null}
                   <TextInput
                     accessibilityLabel={say('Speaker notes of slide {number}', { number: index + 1 })}
                     placeholder={say('Speaker notes')}
@@ -883,7 +914,6 @@ export default function PageScreen() {
               disabled={savingEdit}
               onPress={() => {
                 setSavingEdit(true)
-                // Columns and quote attribution are edited on the desktop; here they are sent back as they were.
                 const edits = editingSlides.slides.map(({ from, title, body, columns, by, notes }) => ({
                   from,
                   title: title ?? '',
