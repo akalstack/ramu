@@ -3,8 +3,15 @@ import { ActivityIndicator, Alert, Linking, View } from 'react-native'
 import { ExternalLink, RotateCcw } from 'lucide-react-native'
 import { accountBrand } from '@ramu/shared/brands'
 import { translate } from '@ramu/shared/i18n'
-import type { DomainStatus, ProjectDeployment, UptimeStatus, UsageReport } from '@ramu/shared/types/deploy'
-import { deploymentsView, rollbackConfirmation } from '../runtime/deployments'
+import type {
+  DomainStatus,
+  ProjectDeployment,
+  StoreRelease,
+  StoreTarget,
+  UptimeStatus,
+  UsageReport,
+} from '@ramu/shared/types/deploy'
+import { deploymentsView, rollbackConfirmation, storeView } from '../runtime/deployments'
 import { useStore } from '../runtime/store'
 import { VIEW_ONLY_WRITE_NOTICE } from '../runtime/viewerAccess'
 import { font, space, useTheme } from '../theme'
@@ -19,6 +26,7 @@ interface Loaded {
   status?: ProjectDeployment
   uptime?: UptimeStatus | null
   domains?: DomainStatus[]
+  release?: StoreRelease | null
   usage?: UsageReport[]
   error?: string
 }
@@ -61,14 +69,15 @@ export function ProjectDeployments({
   const read = useCallback(async () => {
     const mine = key
     try {
-      const [status, uptime, usage, domains] = await Promise.all([
+      const [status, uptime, usage, domains, release] = await Promise.all([
         runtime.current.invoke(hostId, 'deploy.project', projectId),
         // A host whose platform cannot report these still shows its deployments.
         runtime.current.invoke(hostId, 'deploy.uptime', projectId).catch(() => null),
         runtime.current.invoke(hostId, 'deploy.usage', projectId).catch(() => []),
         runtime.current.invoke(hostId, 'deploy.domains', projectId).catch(() => []),
+        runtime.current.invoke(hostId, 'deploy.release', projectId).catch(() => null),
       ])
-      if (active.current === mine) setData({ key: mine, status, uptime, usage, domains })
+      if (active.current === mine) setData({ key: mine, status, uptime, usage, domains, release })
     } catch (reason) {
       if (active.current === mine)
         setData({ key: mine, error: reason instanceof Error ? reason.message : String(reason) })
@@ -100,6 +109,43 @@ export function ProjectDeployments({
           Alert.alert(t('That didn’t work'), reason instanceof Error ? reason.message : String(reason)),
       )
       .finally(() => setBusy(false))
+  }
+
+  const stores = storeView(loaded.release ?? null, t, time)
+  // Release asks which stores, then says what happens; the second press is the approval, as on the desktop.
+  const release = () => {
+    if (!writable() || busy) return
+    const start = (target: StoreTarget) =>
+      Alert.alert(
+        t('Release now'),
+        t(
+          'This builds the default branch on EAS and uploads it for testers. Nothing is submitted for review, and the project’s latest thread hears how each build and upload finished.',
+        ),
+        [
+          { text: t('Cancel'), style: 'cancel' },
+          {
+            text: t('Release now'),
+            onPress: () => {
+              if (!writable()) return
+              setBusy(true)
+              void runtime.current
+                .invoke(hostId, 'deploy.startRelease', projectId, target)
+                .then(
+                  () => read(),
+                  (reason: unknown) =>
+                    Alert.alert(t('That didn’t work'), reason instanceof Error ? reason.message : String(reason)),
+                )
+                .finally(() => setBusy(false))
+            },
+          },
+        ],
+      )
+    Alert.alert(t('Release'), t('Which stores?'), [
+      { text: t('iOS and Android'), onPress: () => start('all') },
+      { text: t('iOS'), onPress: () => start('ios') },
+      { text: t('Android'), onPress: () => start('android') },
+      { text: t('Cancel'), style: 'cancel' },
+    ])
   }
 
   const rollBack = (deploymentId: string) => {
@@ -288,6 +334,68 @@ export function ProjectDeployments({
               </View>
             </>
           ) : null}
+        </>
+      ) : null}
+      {stores ? (
+        <>
+          <SectionLabel
+            right={
+              <Button
+                title={t('Release')}
+                kind="secondary"
+                disabled={busy || !online || viewOnly || !stores.canRelease}
+                onPress={release}
+              />
+            }
+          >
+            {t('Store releases')}
+          </SectionLabel>
+          <View style={{ paddingHorizontal: space.m, gap: space.m }}>
+            {stores.blocked ? (
+              <T size={font.caption} tone="muted">
+                {stores.blocked}
+              </T>
+            ) : null}
+            {stores.builds.map((build) => (
+              <View key={build.id} style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <T weight="600" tone={build.failed ? 'bad' : 'text'}>
+                    {build.state}
+                  </T>
+                  <T size={font.caption} tone="muted">
+                    {build.detail}
+                  </T>
+                  {build.message ? (
+                    <T size={font.caption} numberOfLines={1}>
+                      {build.message}
+                    </T>
+                  ) : null}
+                  {build.error ? (
+                    <T size={font.caption} tone="bad">
+                      {build.error}
+                    </T>
+                  ) : null}
+                  {build.upload ? (
+                    <T size={font.caption} tone={build.upload.failed ? 'bad' : 'muted'}>
+                      {build.upload.text}
+                    </T>
+                  ) : null}
+                </View>
+                <Button
+                  title={t('Open')}
+                  accessibilityLabel={t('Open {0}', { 0: build.detail })}
+                  icon={ExternalLink}
+                  kind="secondary"
+                  onPress={() => open(build.page)}
+                />
+              </View>
+            ))}
+            {!stores.builds.length && !stores.blocked ? (
+              <T size={font.caption} tone="muted">
+                {t('No store builds yet.')}
+              </T>
+            ) : null}
+          </View>
         </>
       ) : null}
     </Sheet>

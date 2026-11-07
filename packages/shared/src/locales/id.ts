@@ -6047,4 +6047,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Edit as rich text': 'Sunting sebagai teks berformat',
   'This doc has footnotes or HTML, which only Markdown keeps.':
     'Dokumen ini punya catatan kaki atau HTML, yang hanya tersimpan di Markdown.',
+  'Which stores?': 'Toko yang mana?',
+  'Connect Expo on the computer running the host to release.': 'Hubungkan Expo di komputer yang menjalankan host untuk merilis.',
+  'Finish what the stores need in the Deploy sheet on a computer first.': 'Selesaikan dulu yang dibutuhkan toko di lembar Deploy di komputer.',
 }

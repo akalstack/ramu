@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { deploymentsView, rollbackConfirmation } from '../src/runtime/deployments.ts'
+import { deploymentsView, rollbackConfirmation, storeView } from '../src/runtime/deployments.ts'
 
 const t = (key, values = {}) => key.replace(/\{(\d+)\}/g, (_, index) => values[index] ?? '')
 const time = (at) => `t${at}`
@@ -150,4 +150,45 @@ test('lists custom domains with where each is, and only a live one opens', () =>
     { name: 'new.shop.com', state: 'Waiting for DNS', live: false },
   ])
   assert.deepEqual(deploymentsView(status(), null, [], t, time).domains, [])
+})
+
+test('shows store builds with their upload, and says why Release cannot start yet', () => {
+  const build = {
+    id: 'b1',
+    platform: 'android',
+    state: 'ready',
+    profile: 'production',
+    version: '1.2.0',
+    buildNumber: '7',
+    commit: 'abc',
+    message: 'Add booking',
+    error: null,
+    createdAt: 5,
+    page: 'https://expo.dev/b1',
+    submission: { id: 's1', state: 'failed', track: null, error: 'No service account' },
+  }
+  const release = {
+    app: { name: 'Shop', projectId: 'p', page: null },
+    connected: true,
+    account: 'me',
+    checks: [{ id: 'android-package', state: 'ok', detail: 'com.shop' }],
+    builds: [build],
+    error: null,
+  }
+  const view = storeView(release, t, time)
+  assert.equal(view.canRelease, true)
+  assert.equal(view.blocked, null)
+  assert.deepEqual(view.builds[0], {
+    id: 'b1',
+    state: 'Ready',
+    failed: false,
+    detail: 'Android · 1.2.0 (7) · t5',
+    message: 'Add booking',
+    error: null,
+    upload: { text: 'Upload to Play’s internal track: Failed · No service account', failed: true },
+    page: 'https://expo.dev/b1',
+  })
+  assert.equal(storeView({ ...release, connected: false }, t, time).canRelease, false)
+  assert.match(storeView({ ...release, app: { ...release.app, projectId: null } }, t, time).blocked, /Deploy sheet/)
+  assert.equal(storeView({ ...release, app: null }, t, time), null)
 })

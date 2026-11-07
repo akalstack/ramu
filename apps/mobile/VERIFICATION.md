@@ -36,6 +36,8 @@ Only checks that still need a physical phone, an account or a live provider. Tes
 ## Deployments
 
 - [ ] With a project linked to Vercel and one linked to Netlify: **Deployments** in the project menu lists the latest deployments with their state and **Open**, the live address, the uptime watch (including an open incident) and usage figures; **Roll back** on an earlier production deployment asks with the address, and the live site changes; a viewer pairing does not offer **Deployments**. The branch's pull request card shows **Preview building…**, then **Preview at …**, which opens the preview.
+- [ ] The uptime switch turns the watch off and on, and custom domains show where each is with **Open** once live.
+- [ ] For an Expo project: the store builds show with their upload state; **Release** asks which stores, confirms, and the build appears in the list.
 
 ## Push, Live Activities and limits
 

@@ -9,7 +9,15 @@ import {
   nearLimit,
 } from '@ramu/shared/deployText'
 import type { Translate } from '@ramu/shared/forgeStatus'
-import type { Deployment, DomainStatus, ProjectDeployment, UptimeStatus, UsageReport } from '@ramu/shared/types/deploy'
+import type {
+  Deployment,
+  DomainStatus,
+  ProjectDeployment,
+  StoreRelease,
+  UptimeStatus,
+  UsageReport,
+} from '@ramu/shared/types/deploy'
+import { blockingChecks } from '@ramu/shared/storeRelease'
 
 export interface DeploymentRow {
   id: string
@@ -128,5 +136,62 @@ export function rollbackConfirmation(
   return {
     title: t('Roll back'),
     message: `${detail}\n\n${t('{0} will show this version until the next deploy.', { 0: address })}`,
+  }
+}
+
+export interface StoreBuildRow {
+  id: string
+  state: string
+  failed: boolean
+  detail: string
+  message: string | null
+  error: string | null
+  upload: { text: string; failed: boolean } | null
+  page: string
+}
+
+/** A project's Expo app on the phone: its latest store builds, and whether Release can start now. */
+export function storeView(
+  release: StoreRelease | null,
+  t: Translate,
+  time: (at: number) => string,
+): { builds: StoreBuildRow[]; canRelease: boolean; blocked: string | null } | null {
+  if (!release?.app) return null
+  const blocking = blockingChecks(release.checks, 'all')
+  return {
+    builds: release.builds.map((build) => ({
+      id: build.id,
+      state: t(DEPLOYMENT_STATE[build.state]),
+      failed: build.state === 'failed',
+      detail: [
+        build.platform === 'ios' ? 'iOS' : 'Android',
+        build.version && build.buildNumber ? `${build.version} (${build.buildNumber})` : build.version,
+        time(build.createdAt),
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      message: build.message,
+      error: build.error,
+      upload: build.submission
+        ? {
+            text:
+              t('Upload to {0}: {1}', {
+                0:
+                  build.platform === 'ios'
+                    ? 'TestFlight'
+                    : t('Play’s {0} track', { 0: build.submission.track ?? 'internal' }),
+                1: t(DEPLOYMENT_STATE[build.submission.state]),
+              }) + (build.submission.error ? ` · ${build.submission.error}` : ''),
+            failed: build.submission.state === 'failed',
+          }
+        : null,
+      page: build.page,
+    })),
+    canRelease: release.connected && !!release.app.projectId && !blocking.length,
+    blocked: !release.connected
+      ? t('Connect Expo on the computer running the host to release.')
+      : !release.app.projectId || blocking.length
+        ? t('Finish what the stores need in the Deploy sheet on a computer first.')
+        : null,
   }
 }
