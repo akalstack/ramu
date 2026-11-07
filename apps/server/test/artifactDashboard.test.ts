@@ -190,6 +190,39 @@ it('reads an App’s records as a live table, also for a dashboard in no project
   )
 })
 
+it('takes the columns of the threads, pull requests and activity sources, and reads activity without a project', async () => {
+  const parsed = parseArtifactSource({
+    kind: 'dashboard',
+    datasets: [
+      { id: 'threads', source: 'threads' },
+      { id: 'prs', source: 'pullRequests' },
+      { id: 'work', source: 'activity' },
+    ],
+    figures: [
+      { label: 'Done', dataset: 'threads', column: 'done' },
+      { label: 'Cost', dataset: 'work', column: 'cost', unit: ' USD' },
+    ],
+    charts: [{ title: 'Turns', type: 'bar', dataset: 'work', x: 'provider', y: ['turns'] }],
+  })
+  if (parsed.kind !== 'dashboard') throw new Error('not a dashboard')
+  expect(parsed.datasets.map((table) => table.columns)).toEqual([
+    ['title', 'status', 'done', 'lastActive'],
+    ['thread', 'number', 'title', 'state', 'stage', 'url'],
+    ['day', 'provider', 'turns', 'cost', 'tokens'],
+  ])
+  const drawn = renderDashboard(parsed, 'Work')
+  const document = {
+    reference: { id: 'w', version: 1, kind: 'dashboard', title: 'Work' },
+    html: drawn.html,
+    files: drawn.files,
+  } as unknown as InteractiveDocument
+  const read = vi.fn<ReadDashboardSource>(async (_project, table) =>
+    table.source === 'activity' ? [['2026-11-06', 'claude', 4, 1.5, 9000]] : [],
+  )
+  expect((await new LiveDashboards(read).serve(document, null)).html).toContain('<strong>1.5 USD</strong>')
+  expect(read.mock.calls.map((call) => call[1].source)).toEqual(['activity'])
+})
+
 it('cuts dated tables to the dashboard’s range when drawn, leaving undated ones whole', () => {
   const parsed = parseArtifactSource({
     kind: 'dashboard',

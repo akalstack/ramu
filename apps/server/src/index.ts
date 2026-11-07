@@ -799,7 +799,24 @@ const liveDashboards = new LiveDashboards(async (projectId, { source, file, reco
       }),
     )
   }
+  if (source === 'activity') {
+    const since = new Date()
+    since.setHours(0, 0, 0, 0)
+    since.setDate(since.getDate() - 29)
+    return agents
+      .activity(since.getTime())
+      .map((row) => [row.day, row.provider, row.turns, row.costUsd, row.tokens ?? null])
+  }
   if (!projectId) return []
+  if (source === 'threads' || source === 'pullRequests') {
+    const tasks = workspace.listTasks(projectId).slice(0, 500)
+    if (source === 'threads')
+      return tasks.map((task) => [task.title, task.status, task.doneAt ? 1 : 0, isoTime(task.lastActiveAt)])
+    return tasks.flatMap((task) => {
+      const pull = pullRequestIndex.forTask(task)
+      return pull ? [[task.title, pull.number, pull.title, pull.state, pull.stage, pull.url]] : []
+    })
+  }
   if (file) {
     const root = workspace.listProjects().find((project) => project.id === projectId)?.root
     if (!root) return []

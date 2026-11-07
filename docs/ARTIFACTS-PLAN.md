@@ -71,7 +71,8 @@ A Doc's Markdown and a Mermaid diagram's source (desktop and phone) a deck's sli
 
 - **Built:** a Dashboard's table can read its project's deployments, usage or uptime, again on every open (at most every five minutes), with "As of" ([Kinds](guide/artifacts.md#kinds)).
 - **Built:** a table can also read a CSV or JSON file in its project's folder, or an App artifact's records in the same project, read-only.
-- **More sources** are the ones a page can already be granted: Ramu data (read-only) and Shared MCP servers allowed one by one.
+- **Built:** Ramu data as live tables: the project's threads and pull requests, and the host's agent activity.
+- **More sources:** Shared MCP servers allowed one by one, as a page can be granted them.
 - **Built:** watched figures on a kept dashboard's live tables are read every ten minutes and a change is told to the person's devices ([Kinds](guide/artifacts.md#kinds)). A dashboard's refresh rule (`refreshMinutes`) sets how often, and the phone's saved copy shows the "As of" of its last read when offline. **Refresh** in the desktop toolbar changes it.
 - **Live** is a Dashboard or App whose refresh runs on the host through the existing page schedules. It can raise a notification when a declared value changes, using the existing triggers. MCP calls that only read run without asking each time once the person allowed that server for that artifact. Anything that writes still asks in the toolbar.
 

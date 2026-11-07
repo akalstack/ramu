@@ -10,11 +10,11 @@ type Cell = string | number | null
 type LiveTable = Pick<DashboardSource['datasets'][number], 'source' | 'file' | 'records' | 'columns'>
 /**
  * Reads one live table, its rows in the table's column order: a project's deploys or file, or an App's records. A
- * dashboard in no project (`projectId` null) reads only records of an App in no project.
+ * dashboard in no project (`projectId` null) reads only the host's agent activity and records of an App in no project.
  */
 export type ReadDashboardSource = (projectId: string | null, table: LiveTable) => Promise<Cell[][]>
 const isLive = (table: LiveTable, projectId: string | null) =>
-  !!table.records || (!!projectId && !!(table.source || table.file))
+  !!table.records || table.source === 'activity' || (!!projectId && !!(table.source || table.file))
 
 const REFRESH_MS = 5 * 60_000
 
