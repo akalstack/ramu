@@ -8,6 +8,8 @@ import type { Chat } from '../runtime/types'
 import { font, radius, space, useTheme } from '../theme'
 import { T, tap } from './ui'
 import { Shimmer } from './Motion'
+import { helperActive } from '@ramu/shared/chat/helperPresentation'
+import { mobileThreadActivity } from '../runtime/threadActivity'
 
 /**
  * The turn's live status. As a pill in the composer's activity row it says what the agent is doing (the running
@@ -40,6 +42,24 @@ export function WorkingLine({
     const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
   }, [running, since])
+  // The lead finished its turn but sub-agents it started are still at work: the thread is waiting on them, not done,
+  // as T3 Code shows it. Background commands such as a dev server are not waited on; their own pill shows them.
+  const waitingOn =
+    !running && !sending && online
+      ? mobileThreadActivity(chat, online).helpers.filter(
+          (task) => helperActive(task) && task.taskType !== 'local_bash' && task.taskType !== 'advisor',
+        )
+      : []
+  if (inline && waitingOn.length)
+    return (
+      <View accessibilityRole="text" accessibilityLiveRegion="polite" style={{ height: 24, justifyContent: 'center' }}>
+        <Shimmer size={font.control} singleLine>
+          {waitingOn.length === 1
+            ? translate(store.language, 'Waiting on {0}', { 0: waitingOn[0]!.name })
+            : translate(store.language, 'Waiting on {0} agents', { 0: String(waitingOn.length) })}
+        </Shimmer>
+      </View>
+    )
   // From the moment a message is sent, so the pill does not wait for the host to report the turn.
   if (!running && !(sending && online)) return null
   const step = chat.compacting

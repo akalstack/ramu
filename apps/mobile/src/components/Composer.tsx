@@ -465,6 +465,8 @@ export function GoalQueueTray({
   verifyOffered,
   onRemove,
   onSendNow,
+  onSteer,
+  onEdit,
   running,
 }: {
   goal: ChatGoal | null
@@ -480,6 +482,10 @@ export function GoalQueueTray({
   onRemove?: (id: string) => void
   /** Sends a queued message now; while a turn runs, the host stops it first. */
   onSendNow?: (id: string) => void
+  /** Steers a queued message into the running turn once its active tools finish, without stopping it. */
+  onSteer?: (id: string) => void
+  /** Takes a queued message back into the composer to change it. */
+  onEdit?: (message: QueuedMessage) => void
   running?: boolean
 }) {
   const say = useSay()
@@ -562,31 +568,67 @@ export function GoalQueueTray({
           ) : null}
         </View>
       ) : null}
-      {queue.map((q) => (
-        <View key={q.id} style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}>
-          {q.mode === 'steer' ? (
-            <CornerDownRight size={14} color={c.warn} strokeWidth={1.8} />
-          ) : (
-            <ListPlus size={14} color={c.muted} strokeWidth={1.8} />
-          )}
-          <T size={font.control} tone="soft" numberOfLines={1} style={{ flex: 1 }}>
-            {q.text}
-          </T>
-          <T size={font.caption} tone="muted">
-            {q.mode === 'steer' ? t.steer : t.queued}
-          </T>
-          {onSendNow ? (
-            <IconButton
-              icon={Send}
-              label={say(running ? 'Stop turn and send now' : 'Send now')}
-              size={28}
-              tone="muted"
-              onPress={() => onSendNow(q.id)}
-            />
-          ) : null}
-          <IconButton icon={X} label={say('Remove')} size={28} tone="muted" onPress={() => onRemove?.(q.id)} />
-        </View>
-      ))}
+      {queue.map((q) => {
+        // While a turn runs the quick action steers (it waits for active tools and keeps the turn); idle, it sends.
+        const steerable = running && !!onSteer && q.mode !== 'steer'
+        const actions = [
+          ...(steerable ? [{ id: 'steer', title: t.steer, image: 'arrow.turn.down.right' }] : []),
+          ...(onSendNow
+            ? [{ id: 'send', title: say(running ? 'Stop turn and send now' : 'Send now'), image: 'paperplane' }]
+            : []),
+          ...(onEdit ? [{ id: 'edit', title: say('Edit message'), image: 'pencil' }] : []),
+          ...(onRemove
+            ? [{ id: 'remove', title: say('Remove'), image: 'trash', attributes: { destructive: true } }]
+            : []),
+        ].map((action) => (Platform.OS === 'ios' ? action : { ...action, image: undefined }))
+        return (
+          <View key={q.id} style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}>
+            <MenuView
+              title={q.text}
+              actions={actions}
+              style={{ flex: 1 }}
+              onPressAction={({ nativeEvent }) => {
+                const choice = nativeEvent.event
+                if (choice === 'steer') onSteer?.(q.id)
+                else if (choice === 'send') onSendNow?.(q.id)
+                else if (choice === 'edit') onEdit?.(q)
+                else if (choice === 'remove') onRemove?.(q.id)
+              }}
+            >
+              <View
+                accessible
+                accessibilityRole="button"
+                accessibilityHint={say('Queued message actions')}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
+              >
+                {q.mode === 'steer' ? (
+                  <CornerDownRight size={14} color={c.warn} strokeWidth={1.8} />
+                ) : (
+                  <ListPlus size={14} color={c.muted} strokeWidth={1.8} />
+                )}
+                <T size={font.control} tone="soft" numberOfLines={1} style={{ flex: 1 }}>
+                  {q.text}
+                </T>
+                <T size={font.caption} tone="muted">
+                  {q.mode === 'steer' ? t.steer : t.queued}
+                </T>
+              </View>
+            </MenuView>
+            {steerable ? (
+              <IconButton
+                icon={CornerDownRight}
+                label={t.steer}
+                size={28}
+                tone="muted"
+                onPress={() => onSteer?.(q.id)}
+              />
+            ) : onSendNow && !running ? (
+              <IconButton icon={Send} label={say('Send now')} size={28} tone="muted" onPress={() => onSendNow(q.id)} />
+            ) : null}
+            <IconButton icon={X} label={say('Remove')} size={28} tone="muted" onPress={() => onRemove?.(q.id)} />
+          </View>
+        )
+      })}
     </View>
   )
 }
@@ -609,6 +651,8 @@ export function Composer({
   onVerifyGoal,
   onRemoveQueued,
   onSendQueuedNow,
+  onSteerQueued,
+  onEditQueued,
   placeholder,
   autoFocus,
   header,
@@ -657,6 +701,8 @@ export function Composer({
   onVerifyGoal?: (command: string | null) => Promise<void>
   onRemoveQueued?: (id: string) => void
   onSendQueuedNow?: (id: string) => void
+  onSteerQueued?: (id: string) => void
+  onEditQueued?: (message: QueuedMessage) => void
   placeholder?: string
   autoFocus?: boolean
   /** Extra controls above the input, e.g. the project and checkout pickers. */
@@ -1093,6 +1139,8 @@ export function Composer({
           verifyOffered={canEditVerify(goal)}
           onRemove={onRemoveQueued}
           onSendNow={onSendQueuedNow}
+          onSteer={onSteerQueued}
+          onEdit={onEditQueued}
           running={running}
         />
       )}

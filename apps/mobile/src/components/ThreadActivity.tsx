@@ -4,6 +4,7 @@ import { helperActive } from '@ramu/shared/chat/helperPresentation'
 import { mobileThreadActivity } from '../runtime/threadActivity'
 import { goalActivityLabel, type ActivityKind } from '@ramu/shared/chat/threadActivity'
 import type { Chat } from '../runtime/types'
+import type { QueuedMessage } from '@ramu/shared/types'
 import { useStore } from '../runtime/store'
 import { space } from '../theme'
 import { Sheet, T, type Icon } from './ui'
@@ -33,8 +34,11 @@ export function ThreadActivity({
   leading,
   children,
   inlineStatus,
+  onEditQueued,
 }: {
   chat: Chat
+  /** Takes a queued message back into the composer to change it. */
+  onEditQueued?: (message: QueuedMessage) => void
   children?: ReactNode
   /** The screen shows the turn's status at the end of the transcript, as the desktop does, so the row leaves it out. */
   inlineStatus?: boolean
@@ -116,15 +120,19 @@ export function ThreadActivity({
   const secondary = activity.model.secondary
     .filter((kind) => kind === 'connection' || kind === 'input' || kind === 'provider')
     .slice(0, 1)
+  const shown: (ActivityKind | 'more')[] = [...(primary && primary !== 'working' ? [primaryKind] : []), ...secondary]
+  const rest = [
+    ...new Set<ActivityKind>([
+      ...activity.model.secondary.filter((kind) => kind !== 'working' && !shown.includes(kind)),
+      ...(activity.groups.length && !shown.includes('helpers') ? ['helpers' as const] : []),
+    ]),
+  ]
+  // "More" only gathers two or more things; a single one (a goal, the queue) gets its own pill, which says what it is.
   const kinds = [
     ...new Set<ActivityKind | 'more'>([
       // The working line before these pills says what the agent is doing, compaction included.
-      ...(primary && primary !== 'working' ? [primaryKind] : []),
-      ...secondary,
-      ...(activity.groups.length ||
-      activity.model.secondary.some((kind) => kind !== 'working' && !(secondary as ActivityKind[]).includes(kind))
-        ? ['more' as const]
-        : []),
+      ...shown,
+      ...(rest.length === 1 ? rest : rest.length ? ['more' as const] : []),
     ]),
   ]
   return (
@@ -254,6 +262,15 @@ export function ThreadActivity({
             onVerifyGoal={online ? (command) => store.setGoalVerify(chat.id, command) : undefined}
             onRemove={online ? (message) => store.removeQueued(chat.id, message) : undefined}
             onSendNow={online ? (message) => store.sendQueuedNow(chat.id, message) : undefined}
+            onSteer={online ? (message) => store.steerQueued(chat.id, message) : undefined}
+            onEdit={
+              online && onEditQueued
+                ? (message) => {
+                    setOpened(null)
+                    onEditQueued(message)
+                  }
+                : undefined
+            }
             running={chat.status === 'running'}
             onResumeQueue={
               online && chat.sessionId

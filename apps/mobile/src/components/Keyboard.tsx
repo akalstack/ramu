@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Dimensions,
   Keyboard,
@@ -190,81 +190,53 @@ function NativeLift({
   )
 }
 
-/** Whether the keyboard is up or on its way, for content that changes with it; the motion itself is KeyboardPadding's. */
-export function useKeyboardOpen() {
-  const [open, setOpen] = useState(false)
-  useEffect(() => {
-    const [show, hide] =
-      Platform.OS === 'ios' ? ['keyboardWillShow', 'keyboardWillHide'] : ['keyboardDidShow', 'keyboardDidHide']
-    const up = Keyboard.addListener(show as 'keyboardWillShow', () => setOpen(true))
-    const down = Keyboard.addListener(hide as 'keyboardWillHide', () => setOpen(false))
-    return () => {
-      up.remove()
-      down.remove()
-    }
-  }, [])
-  return open
-}
-
 /**
- * In-flow content kept snug above the keyboard, padded frame by frame with the keyboard's own animation. The
- * home-indicator padding the content carries is taken back out, as useKeyboardInset does.
+ * In-flow content kept snug above the keyboard. Its bottom padding follows the keyboard's own frame on the UI thread,
+ * every frame, so the content and anything centred in it move with the keys and never run ahead or snap back. The
+ * home-indicator padding the content carries is taken back out, as useKeyboardInset does. `gap` is the space kept
+ * below the content while the keyboard is down; the rising keyboard takes it over instead of the two adding up.
  */
-export function KeyboardPadding({ style, children }: { style?: StyleProp<ViewStyle>; children: ReactNode }) {
+export function KeyboardPadding({
+  style,
+  gap = 0,
+  children,
+}: {
+  style?: StyleProp<ViewStyle>
+  gap?: number
+  children: ReactNode
+}) {
   const insets = useSafeAreaInsets()
   const slack = Platform.OS === 'android' ? 0 : Math.max(0, insets.bottom - space.s)
   return Platform.OS === 'web' ? (
-    <WebPadding style={style}>{children}</WebPadding>
+    <WebPadding style={style} gap={gap}>
+      {children}
+    </WebPadding>
   ) : (
-    <NativePadding slack={slack} style={style}>
+    <NativePadding slack={slack} gap={gap} style={style}>
       {children}
     </NativePadding>
   )
 }
 
-function WebPadding({ style, children }: { style?: StyleProp<ViewStyle>; children: ReactNode }) {
-  return <View style={[style, { paddingBottom: useKeyboardInset() }]}>{children}</View>
+function WebPadding({ style, gap, children }: { style?: StyleProp<ViewStyle>; gap: number; children: ReactNode }) {
+  return <View style={[style, { paddingBottom: Math.max(gap, useKeyboardInset()) }]}>{children}</View>
 }
 
 function NativePadding({
   slack,
+  gap,
   style,
   children,
 }: {
   slack: number
+  gap: number
   style?: StyleProp<ViewStyle>
   children: ReactNode
 }) {
-  // As in NativeLift: the padding is where the keyboard will rest, and a translate covers what is left of its travel.
-  const rest = useKeyboardHeight().height
-  const padding = rest ? Math.max(0, rest - slack) : 0
   const height = useKeyboardFrame()
-  // What the keyboard has yet to travel, on the UI thread: the padded content is pushed back by it.
-  const travel = useDerivedValue(() => padding - Math.max(0, height.value - slack))
-  const following = useAnimatedStyle(() => ({ transform: [{ translateY: travel.value }] }))
-  return (
-    <KeyboardTravel.Provider value={travel}>
-      <Reanimated.View style={[style, { paddingBottom: padding }, following]}>{children}</Reanimated.View>
-    </KeyboardTravel.Provider>
-  )
-}
-
-const KeyboardTravel = createContext<SharedValue<number> | null>(null)
-
-/**
- * Content centred in the space above the keyboard (the new-thread mark and question). Centring moves it half as far
- * as the keyboard, but the padding around it jumps to the keyboard's resting height at once; without this it ran
- * ahead of the keys for a few frames and snapped back. It takes back half the remaining travel, on the UI thread.
- */
-export function KeyboardCentered({ children }: { children: ReactNode }) {
-  const travel = useContext(KeyboardTravel)
-  if (!travel) return <View>{children}</View>
-  return <CenteredInTravel travel={travel}>{children}</CenteredInTravel>
-}
-
-function CenteredInTravel({ travel, children }: { travel: SharedValue<number>; children: ReactNode }) {
-  const half = useAnimatedStyle(() => ({ transform: [{ translateY: -travel.value / 2 }] }))
-  return <Reanimated.View style={half}>{children}</Reanimated.View>
+  // Layout, not a transform, so a button above the keys is measured where it is drawn and its taps are not cancelled.
+  const padding = useAnimatedStyle(() => ({ paddingBottom: Math.max(gap, height.value - slack) }))
+  return <Reanimated.View style={[style, padding]}>{children}</Reanimated.View>
 }
 
 /** Shared floating input surface for threads and side questions. Keep keyboard lift and safe-area padding in one place. */

@@ -1,23 +1,18 @@
 import { CHAT_MOTION, TOOL_MOTION } from '@ramu/shared/chat/presentation'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import {
-  AccessibilityInfo,
-  Animated,
-  Easing,
-  LayoutAnimation,
-  View,
-  type StyleProp,
-  type TextStyle,
-  type ViewStyle,
-} from 'react-native'
+import { AccessibilityInfo, LayoutAnimation, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native'
 import Reanimated, {
   cancelAnimation,
   Easing as ReEasing,
+  Extrapolation,
   interpolate,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
+  withRepeat,
+  withSequence,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated'
 import { scheduleOnRN } from 'react-native-worklets'
 import { font, useTheme } from '../theme'
@@ -59,23 +54,19 @@ export function Shimmer({
   style?: StyleProp<TextStyle>
 }) {
   const reduced = useReducedMotion()
-  const sweep = useRef(new Animated.Value(-WINDOW)).current
+  const sweep = useSharedValue(-WINDOW)
   useEffect(() => {
     if (reduced) return
     // Each pass rests off the end before the next, like the desktop's highlight that slides past the text.
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(sweep, {
-          toValue: 1 + WINDOW,
-          duration: TOOL_MOTION.sweepMs,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.delay(TOOL_MOTION.restMs),
-      ]),
+    sweep.value = -WINDOW
+    sweep.value = withRepeat(
+      withSequence(
+        withTiming(1 + WINDOW, { duration: TOOL_MOTION.sweepMs, easing: ReEasing.inOut(ReEasing.quad) }),
+        withDelay(TOOL_MOTION.restMs, withTiming(-WINDOW, { duration: 0 })),
+      ),
+      -1,
     )
-    loop.start()
-    return () => loop.stop()
+    return () => cancelAnimation(sweep)
   }, [reduced, sweep])
   const characters = useMemo(() => [...children], [children])
   const { c } = useTheme()
@@ -92,24 +83,39 @@ export function Shimmer({
       accessibilityLabel={children}
       style={{ flexDirection: 'row', flexWrap: singleLine ? 'nowrap' : 'wrap' }}
     >
-      {characters.map((character, index) => {
-        const at = characters.length > 1 ? index / (characters.length - 1) : 0
-        const opacity = sweep.interpolate({
-          inputRange: [at - WINDOW, at, at + WINDOW],
-          outputRange: [0.45, 1, 0.45],
-          extrapolate: 'clamp',
-        })
-        return (
-          <Animated.Text
-            key={index}
-            importantForAccessibility="no"
-            style={[{ fontSize: size, color: c.text, opacity, fontVariant: ['tabular-nums'] }, style]}
-          >
-            {character === ' ' ? ' ' : character}
-          </Animated.Text>
-        )
-      })}
+      {characters.map((character, index) => (
+        <ShimmerCharacter
+          key={index}
+          sweep={sweep}
+          at={characters.length > 1 ? index / (characters.length - 1) : 0}
+          style={[{ fontSize: size, color: c.text, fontVariant: ['tabular-nums'] }, style]}
+        >
+          {character === ' ' ? '\u00a0' : character}
+        </ShimmerCharacter>
+      ))}
     </View>
+  )
+}
+
+/** One character of the shimmer, brightened on the UI thread as the sweep passes it. */
+function ShimmerCharacter({
+  sweep,
+  at,
+  style,
+  children,
+}: {
+  sweep: SharedValue<number>
+  at: number
+  style: StyleProp<TextStyle>
+  children: string
+}) {
+  const animated = useAnimatedStyle(() => ({
+    opacity: interpolate(sweep.value, [at - WINDOW, at, at + WINDOW], [0.45, 1, 0.45], Extrapolation.CLAMP),
+  }))
+  return (
+    <Reanimated.Text importantForAccessibility="no" style={[style, animated]}>
+      {children}
+    </Reanimated.Text>
   )
 }
 
@@ -186,26 +192,26 @@ export function Arrive({ animate, identity, children }: { animate: boolean; iden
   const reduced = useReducedMotion()
   const enter = useRef(animate).current
   const previousIdentity = useRef(identity)
-  const progress = useRef(new Animated.Value(enter && !reduced ? 0 : 1)).current
+  const progress = useSharedValue(enter && !reduced ? 0 : 1)
   useEffect(() => {
     const changed = previousIdentity.current !== identity
     previousIdentity.current = identity
     if ((!enter && !changed) || reduced) {
-      progress.setValue(1)
+      progress.value = 1
       return
     }
-    progress.setValue(0)
-    const animation = Animated.timing(progress, {
-      toValue: 1,
+    progress.value = 0
+    progress.value = withTiming(1, {
       duration: CHAT_MOTION.durationMs,
-      easing: Easing.bezier(...CHAT_MOTION.easing),
-      useNativeDriver: true,
+      easing: ReEasing.bezier(...CHAT_MOTION.easing),
     })
-    animation.start()
-    return () => animation.stop()
+    return () => cancelAnimation(progress)
   }, [enter, identity, reduced, progress])
-  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [CHAT_MOTION.rise, 0] })
-  return <Animated.View style={{ opacity: progress, transform: [{ translateY }] }}>{children}</Animated.View>
+  const style = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{ translateY: (1 - progress.value) * CHAT_MOTION.rise }],
+  }))
+  return <Reanimated.View style={style}>{children}</Reanimated.View>
 }
 
 /** Height and opacity disclosure motion, shared by every expandable transcript block. */
@@ -250,37 +256,18 @@ export function Collapse({ open, children }: { open: boolean; children: ReactNod
 /** A soft breathing pulse while `active` (a tool still running), settling back to full opacity when it stops. */
 export function Breathe({ active, children }: { active: boolean; children: ReactNode }) {
   const reduced = useReducedMotion()
-  const opacity = useRef(new Animated.Value(1)).current
+  const opacity = useSharedValue(1)
   useEffect(() => {
     if (!active || reduced) {
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: reduced ? 0 : 220,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }).start()
+      opacity.value = withTiming(1, { duration: reduced ? 0 : 220, easing: ReEasing.out(ReEasing.quad) })
       return
     }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, {
-          toValue: 0.4,
-          duration: 700,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 700,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ]),
-    )
-    loop.start()
-    return () => loop.stop()
+    const half = { duration: 700, easing: ReEasing.inOut(ReEasing.sin) }
+    opacity.value = withRepeat(withSequence(withTiming(0.4, half), withTiming(1, half)), -1)
+    return () => cancelAnimation(opacity)
   }, [active, reduced, opacity])
-  return <Animated.View style={{ opacity }}>{children}</Animated.View>
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value }))
+  return <Reanimated.View style={style}>{children}</Reanimated.View>
 }
 
 // Read synchronously by one-shot animations (expand/collapse) that run outside a component's render.
@@ -317,24 +304,19 @@ export function animateLayout(duration = 220) {
 /** A disclosure chevron that turns from right to down, as in iOS lists and Android expandable rows. */
 export function Disclosure({ open, size = 14, color }: { open: boolean; size?: number; color: string }) {
   const reduced = useReducedMotion()
-  const turn = useRef(new Animated.Value(open ? 1 : 0)).current
+  const turn = useSharedValue(open ? 1 : 0)
   useEffect(() => {
-    if (reduced) {
-      turn.setValue(open ? 1 : 0)
-      return
-    }
-    Animated.timing(turn, {
-      toValue: open ? 1 : 0,
-      duration: 200,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
-    }).start()
+    turn.value = reduced
+      ? open
+        ? 1
+        : 0
+      : withTiming(open ? 1 : 0, { duration: 200, easing: ReEasing.out(ReEasing.quad) })
   }, [open, reduced, turn])
-  const rotate = turn.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] })
+  const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${turn.value * 90}deg` }] }))
   return (
-    <Animated.View style={{ transform: [{ rotate }] }}>
+    <Reanimated.View style={style}>
       <ChevronRight size={size} color={color} />
-    </Animated.View>
+    </Reanimated.View>
   )
 }
 
@@ -352,32 +334,26 @@ export function Presence({
   fade?: boolean
 }) {
   const [mounted, setMounted] = useState(visible)
-  const progress = useRef(new Animated.Value(visible ? 1 : 0)).current
+  const progress = useSharedValue(visible ? 1 : 0)
   useEffect(() => {
     if (visible) setMounted(true)
-    Animated.timing(progress, {
-      toValue: visible ? 1 : 0,
-      duration: reduceMotion ? 0 : visible ? 180 : 140,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (finished && !visible) setMounted(false)
-    })
+    progress.value = withTiming(
+      visible ? 1 : 0,
+      { duration: reduceMotion ? 0 : visible ? 180 : 140, easing: ReEasing.out(ReEasing.quad) },
+      (finished) => {
+        if (finished && !visible) scheduleOnRN(setMounted, false)
+      },
+    )
   }, [visible, progress])
+  const animated = useAnimatedStyle(() => ({
+    ...(fade ? { opacity: progress.value } : {}),
+    transform: [{ scale: interpolate(progress.value, [0, 1], [fade ? 0.92 : 0.01, 1]) }],
+  }))
   if (!mounted) return null
   return (
-    <Animated.View
-      pointerEvents={visible ? 'box-none' : 'none'}
-      style={[
-        style,
-        {
-          ...(fade ? { opacity: progress } : {}),
-          transform: [{ scale: progress.interpolate({ inputRange: [0, 1], outputRange: [fade ? 0.92 : 0.01, 1] }) }],
-        },
-      ]}
-    >
+    <Reanimated.View pointerEvents={visible ? 'box-none' : 'none'} style={[style, animated]}>
       {children}
-    </Animated.View>
+    </Reanimated.View>
   )
 }
 

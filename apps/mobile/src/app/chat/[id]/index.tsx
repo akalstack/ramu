@@ -8,7 +8,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } 
 import {
   ActivityIndicator,
   Alert,
-  Animated,
   Platform,
   Pressable,
   ScrollView,
@@ -60,6 +59,8 @@ import { commitAndPush, pushBranch } from '../../../runtime/gitQuick'
 import { STANDALONE } from '../../../runtime/types'
 import { Header, HeaderButton, HeaderMenu, Screen, PageLegendList } from '../../../components/Screen'
 import type { LegendListRef } from '@legendapp/list/react-native'
+import Reanimated, { cancelAnimation, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
+import { scheduleOnRN } from 'react-native-worklets'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { ThreadActivity } from '../../../components/ThreadActivity'
 import { WorkingLine } from '../../../components/WorkingLine'
@@ -85,7 +86,7 @@ import {
 import type { CustomAgent } from '@ramu/shared/customAgents'
 import type { Chat, TranscriptItem } from '../../../runtime/types'
 import { sameAgentSettings } from '@ramu/shared/chat/settingsChanges'
-import type { AgentSettings, TeammateMode } from '@ramu/shared/types'
+import type { AgentSettings, QueuedMessage, TeammateMode } from '@ramu/shared/types'
 import {
   CancelPendingSettings,
   ChatMentions,
@@ -276,6 +277,13 @@ export default function ChatScreen() {
     held.current = Date.now()
   }, [])
   const [restore, setRestore] = useState<{ text: string; n: number }>()
+  const [exchangeStarted, setExchangeStarted] = useState(false)
+  // The move that brings a sent message to the top animates; the size changes right after it must not cut it short.
+  const exchangeScroll = useRef(0)
+  const startExchange = () => {
+    setExchangeStarted(true)
+    exchangeScroll.current = Date.now()
+  }
   const computer = store.computers.find((x) => x.id === chat?.computerId)
   const viewOnly = computer?.access === 'viewer'
   const viewerNow = () =>
@@ -591,8 +599,8 @@ export default function ChatScreen() {
         chat={chat!}
         date={itemMeta.get(item.id)?.date}
         footer={itemMeta.get(item.id)?.footer}
-        // Only reasoning is drawn live; a reply's text settles block by block on its own.
-        streaming={item.kind === 'thinking' && running && item === rows.at(-1)}
+        // The newest reasoning or reply of a running turn is live: reasoning streams, and a reply fades in block by block.
+        streaming={(item.kind === 'thinking' || item.kind === 'text') && running && item === rows.at(-1)}
         fresh={fresh && item.kind !== 'user'}
         visible={contentScreenFocused && visibleContentRows.has(item.id)}
       />
@@ -701,6 +709,7 @@ export default function ChatScreen() {
     const keep = editing.files.map((file) => file.id).filter((id) => !attachments?.includes(id))
     setEditing(null)
     following.current = true
+    if (mode === 'send') startExchange()
     await store.send(chat.id, text, mode, [...keep, ...(attachments ?? [])], context)
   }
   const offline = !store.isOnline(chat.computerId)
@@ -721,7 +730,18 @@ export default function ChatScreen() {
   const listRows: ListRow[] = pending.length
     ? [...pageRows, ...pending.map((outbox) => ({ kind: 'pending' as const, id: `pending:${outbox.id}`, outbox }))]
     : pageRows
+  // As in ChatGPT: once you send, your message moves to the top and space opens below it for the reply. The reply
+  // fills that space instead of growing the list, so the end stays put while it streams, folds or finishes, and the
+  // view never jumps. Only messages sent from this screen do this; opening a thread shows its end as before.
+  const anchorIndex = exchangeStarted
+    ? listRows.findLastIndex((row) => row.kind === 'user' || row.kind === 'pending')
+    : -1
   const editPending = (text: string) => setRestore((r) => ({ text, n: (r?.n ?? 0) + 1 }))
+  // Editing a queued message takes it out of the queue first, so it is not sent while being changed.
+  const editQueued = (message: QueuedMessage) => {
+    store.removeQueued(chat.id, message.id)
+    editPending(visibleText(message.text))
+  }
   const openScm = () => router.push({ pathname: '/chat/[id]/scm', params: { id: chat.id } })
   const openChanges = () => router.push({ pathname: '/chat/[id]/changes', params: { id: chat.id } })
   const say = (text: string) => {
@@ -1286,6 +1306,19 @@ export default function ChatScreen() {
                 initialScrollAtEnd
                 ItemSeparatorComponent={RowSeparator}
                 style={{ flex: 1 }}
+                anchoredEndSpace={
+                  anchorIndex >= 0
+                    ? {
+                        anchorIndex,
+                        // The list's end sits under the composer (an inset on iOS, padding elsewhere), so the anchor's
+                        // distance from the top counts that cover too; at the end it then rests just under the header.
+                        anchorOffset:
+                          topInset +
+                          space.m +
+                          (ios ? cover : (floatingChrome ? composerHeight + space.l : space.l) + keyboard.height),
+                      }
+                    : undefined
+                }
                 contentInset={ios ? { bottom: cover } : undefined}
                 scrollIndicatorInsets={ios ? { bottom: cover } : undefined}
                 contentContainerStyle={{
@@ -1330,7 +1363,10 @@ export default function ChatScreen() {
                   // Pinned to the end without animating, as the desktop's transcript is: sending changes the content several
                   // times in a row (sending, the sent message, the reply), and an animated scroll interrupted by each one
                   // moved the view up and down.
-                  if (following.current && !settling.current && Date.now() - held.current > 600) toEnd(false)
+                  if (!following.current || settling.current || Date.now() - held.current <= 600) return
+                  const sinceSend = Date.now() - exchangeScroll.current
+                  if (sinceSend < 120) toEnd(true)
+                  else if (sinceSend > 450) toEnd(false)
                 }}
                 keyboardDismissMode="on-drag"
                 keyboardShouldPersistTaps="handled"
@@ -1399,6 +1435,7 @@ export default function ChatScreen() {
                           <ThreadActivity
                             inlineStatus
                             chat={chat}
+                            onEditQueued={offline ? undefined : editQueued}
                             leading={
                               <>
                                 <ComputerUseNotice chat={chat} onOpen={() => setTool('computer')} />
@@ -1497,6 +1534,7 @@ export default function ChatScreen() {
                             .then((joined) => setRecipientId(joined.agentId))
                         }
                         following.current = true
+                        if (mode === 'send') startExchange()
                         return store.send(chat.id, text, mode, attachments, context)
                       }}
                       taskId={chat.taskId || undefined}
@@ -1593,6 +1631,8 @@ export default function ChatScreen() {
                       onVerifyGoal={chat.sessionId ? (command) => store.setGoalVerify(chat.id, command) : undefined}
                       onRemoveQueued={(q) => store.removeQueued(chat.id, q)}
                       onSendQueuedNow={offline ? undefined : (q) => store.sendQueuedNow(chat.id, q)}
+                      onSteerQueued={offline ? undefined : (q) => store.steerQueued(chat.id, q)}
+                      onEditQueued={offline ? undefined : editQueued}
                       offline={offline}
                       restore={restore}
                       limited={!!limit && !running}
@@ -1838,25 +1878,27 @@ function OpeningCover({
   const cover = useRef<ComponentRef<typeof View>>(null)
   // The cover's own top in the window: it is not the screen's, and the cover runs past the bottom edge.
   const [offset, setOffset] = useState<number | null>(null)
-  const opacity = useRef(new Animated.Value(visible ? 1 : 0)).current
+  const opacity = useSharedValue(visible ? 1 : 0)
   const [mounted, setMounted] = useState(visible)
   useEffect(() => {
     if (visible) {
-      opacity.setValue(1)
+      opacity.value = 1
       setMounted(true)
       return
     }
-    const fade = Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true })
-    fade.start(({ finished }) => finished && setMounted(false))
-    return () => fade.stop()
+    opacity.value = withTiming(0, { duration: 200 }, (finished) => {
+      if (finished) scheduleOnRN(setMounted, false)
+    })
+    return () => cancelAnimation(opacity)
   }, [visible, opacity])
+  const fade = useAnimatedStyle(() => ({ opacity: opacity.value }))
   if (!mounted) return null
   return (
-    <Animated.View
+    <Reanimated.View
       ref={cover}
       pointerEvents="none"
       onLayout={() => cover.current?.measureInWindow((_, y) => setOffset(y))}
-      style={[StyleSheet.absoluteFill, { backgroundColor: color, opacity }]}
+      style={[StyleSheet.absoluteFill, { backgroundColor: color }, fade]}
     >
       {offset === null ? null : (
         // Centered in what is visible between the floating header and the composer.
@@ -1874,6 +1916,6 @@ function OpeningCover({
           <LoadingMark color={spinner} label={say('Loading conversation')} />
         </View>
       )}
-    </Animated.View>
+    </Reanimated.View>
   )
 }

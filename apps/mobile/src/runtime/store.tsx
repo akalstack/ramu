@@ -233,6 +233,8 @@ interface Store extends State {
   removeQueued(id: string, message: string): void
   /** Sends one queued message now, stopping a running turn first. */
   sendQueuedNow(id: string, message: string): void
+  /** Steers one queued message into the running turn once its active tools finish, without stopping it. */
+  steerQueued(id: string, message: string): void
   /** Resolves once the computer has applied it (or refused, which restores the old values and reports why). */
   setModel(
     id: string,
@@ -1897,6 +1899,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       sessionAction(id, (pc, session) => invoke(pc, 'agent.removeQueued', session, message)),
     sendQueuedNow: (id, message) =>
       sessionAction(id, (pc, session) => invoke(pc, 'agent.sendQueuedNow', session, message, true)),
+    steerQueued: (id, message) =>
+      sessionAction(id, (pc, session) => invoke(pc, 'agent.sendQueuedNow', session, message)),
     toggleGoal: (id) =>
       sessionAction(id, (pc, session) =>
         invoke(

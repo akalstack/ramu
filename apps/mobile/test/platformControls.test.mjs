@@ -1102,22 +1102,16 @@ test('new thread switches projects and composer in one flow without losing the d
   )
   asTab = true
   keyboard = 0
-  const spacing = () =>
-    nodes(render()).find(
-      (node) =>
-        node.type === 'View' &&
-        typeof node.props?.style?.paddingBottom === 'number' &&
-        node.props.style.flex === undefined &&
-        nodes(node).some((child) => child.type === 'Composer'),
-    ).props.style.paddingBottom
-  const tabSpacing = spacing()
-  keyboard = 300
-  const keyboardSpacing = spacing()
+  // The gap above the tab bar belongs to the keyboard padding, which the rising keyboard takes over (on the UI thread)
+  // instead of adding to it, so the composer never lifts farther from the keys.
   assert.equal(
-    tabSpacing,
-    keyboardSpacing + theme.space.m,
+    find(render(), 'KeyboardPadding').props.gap,
+    theme.space.m,
     'the composer has an extra gap above the tab bar, without lifting farther from the keyboard',
   )
+  asTab = false
+  assert.equal(find(render(), 'KeyboardPadding').props.gap, 0)
+  asTab = true
   const close = find(render(), 'Header').props.right
   close.props.onPress()
   assert.deepEqual(destinations, ['/'])

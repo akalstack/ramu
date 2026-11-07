@@ -42,7 +42,7 @@ import { useStore } from '../runtime/store'
 import { STANDALONE } from '../runtime/types'
 import { useT, useSay } from '../i18n'
 import { Header, HeaderButton, PageScrollView, Screen } from '../components/Screen'
-import { KeyboardCentered, KeyboardPadding, useKeyboardOpen } from '../components/Keyboard'
+import { KeyboardPadding } from '../components/Keyboard'
 import { AnimatedMark } from '../components/AnimatedMark'
 import { Composer, type ModelChoice } from '../components/Composer'
 import { Row, Sheet, T, tap } from '../components/ui'
@@ -90,7 +90,6 @@ function TrayButton({
 
 export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
   const say = useSay()
-  const keyboardOpen = useKeyboardOpen()
   const { c } = useTheme()
   const t = useT()
   const router = useRouter()
@@ -637,7 +636,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
           {projectPicker}
         </PageScrollView>
       ) : null}
-      <KeyboardPadding style={{ flex: 1, display: picker === 'project' ? 'none' : 'flex' }}>
+      <KeyboardPadding gap={asTab ? space.m : 0} style={{ flex: 1, display: picker === 'project' ? 'none' : 'flex' }}>
         {/* Nothing here scrolls: the hero simply centers in the space above the composer. */}
         {routing ? (
           <View
@@ -668,19 +667,17 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
           <View style={{ flex: 1, justifyContent: 'center', padding: space.l }}>
             {/* The desktop's start screen: the animated mark (tap it) over the same question, centred. One size with the
                 keyboard up or down: only its place moves, with the space the keyboard leaves, so nothing flickers. */}
-            <KeyboardCentered>
-              <View style={{ alignItems: 'center', gap: space.s }}>
-                <View style={{ marginBottom: space.s }}>
-                  <AnimatedMark size={48} />
-                </View>
-                <T size={font.hero - 4} weight="600" style={{ letterSpacing: -0.5, textAlign: 'center' }}>
-                  {project ? `What should we work on in ${project.name}?` : 'What should we work on?'}
-                </T>
+            <View style={{ alignItems: 'center', gap: space.s }}>
+              <View style={{ marginBottom: space.s }}>
+                <AnimatedMark size={48} />
               </View>
-            </KeyboardCentered>
+              <T size={font.hero - 4} weight="600" style={{ letterSpacing: -0.5, textAlign: 'center' }}>
+                {project ? `What should we work on in ${project.name}?` : 'What should we work on?'}
+              </T>
+            </View>
           </View>
         )}
-        <View style={{ paddingBottom: Math.max(insets.bottom, space.s) + (asTab && !keyboardOpen ? space.m : 0) }}>
+        <View style={{ paddingBottom: Math.max(insets.bottom, space.s) }}>
           <Composer
             key={composerKey}
             running={false}

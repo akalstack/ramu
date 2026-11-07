@@ -164,7 +164,7 @@ test('streaming rerenders do not restart or cancel a new block’s arrival', () 
 test('recycled history blocks remain fully visible without replaying arrival motion', () => {
   const h = harness()
   const tree = h.render(h.Arrive, { animate: false, children: 'History' })
-  assert.equal(tree.props.style.opacity.value, 1)
+  assert.equal(tree.props.style.opacity, 1)
   assert.equal(h.timings.length, 0)
 })
 
@@ -195,6 +195,6 @@ test('reduced motion skips both status entrances and state changes', async () =>
   await Promise.resolve()
   h.timings.length = 0
   const tree = h.render(h.Arrive, { animate: true, identity: 'Working', children: 'Working' })
-  assert.equal(tree.props.style.opacity.value, 1)
+  assert.equal(tree.props.style.opacity, 1)
   assert.equal(h.timings.length, 0)
 })

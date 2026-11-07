@@ -1,5 +1,6 @@
-import { useEffect, useRef, type ReactNode } from 'react'
-import { Animated, Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
+import { useEffect, type ReactNode } from 'react'
+import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
+import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { BlurView } from 'expo-blur'
 import { GlassView, isLiquidGlassAvailable, isGlassEffectAPIAvailable } from 'expo-glass-effect'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -110,22 +111,16 @@ export function BottomFade({ height, color }: { height: number; color?: string }
 export function TopFade({ visible, color }: { visible: boolean; color?: string }) {
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
-  const opacity = useRef(new Animated.Value(0)).current
+  const opacity = useSharedValue(0)
   useEffect(() => {
-    Animated.timing(opacity, { toValue: visible ? 1 : 0, duration: 180, useNativeDriver: true }).start()
+    opacity.value = withTiming(visible ? 1 : 0, { duration: 180 })
   }, [visible, opacity])
+  const fade = useAnimatedStyle(() => ({ opacity: opacity.value }))
   const steps = 12
   return (
-    <Animated.View
+    <Reanimated.View
       pointerEvents="none"
-      style={{
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        top: 0,
-        height: insets.top + 44 + 20,
-        opacity,
-      }}
+      style={[{ position: 'absolute', left: 0, right: 0, top: 0, height: insets.top + 44 + 20 }, fade]}
     >
       {Array.from({ length: steps }, (_, i) => (
         <View
@@ -137,6 +132,6 @@ export function TopFade({ visible, color }: { visible: boolean; color?: string }
           }}
         />
       ))}
-    </Animated.View>
+    </Reanimated.View>
   )
 }
