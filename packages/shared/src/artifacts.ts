@@ -363,8 +363,15 @@ export interface ArtifactTemplate {
   createdAt: number
 }
 
-/** Where the host keeps which design artifact is its design system. */
+/** Where the host keeps which design artifact is its design system; a project's own adds `:<projectId>`. */
 export const DESIGN_SYSTEM_KEY = 'design-system'
+export const designSystemKey = (projectId: string | null) =>
+  projectId ? `${DESIGN_SYSTEM_KEY}:${projectId}` : DESIGN_SYSTEM_KEY
+
+/** The design system that applies to a project: its own, else the host's; null when neither is chosen. */
+export function appliedDesignSystem(read: (key: string) => string | null, projectId: string | null): string | null {
+  return (projectId ? read(designSystemKey(projectId)) : null) ?? read(DESIGN_SYSTEM_KEY)
+}
 
 /** A design version's tokens, when it sets them; only such a design can be the design system. */
 export function designTokensOf(document: {

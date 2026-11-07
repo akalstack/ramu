@@ -53,7 +53,7 @@ import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools
 import { createDeploys } from './workspace/deploy/deploys'
 import { LocalApps } from './workspace/deploy/localApp'
 import { LiveDashboards, watchDashboards } from './interactive/liveDashboard'
-import { DESIGN_SYSTEM_KEY, designTokensOf } from '@ramu/shared/artifacts'
+import { appliedDesignSystem, designTokensOf } from '@ramu/shared/artifacts'
 import { registerDeployTools, registerReleaseTools } from './workspace/deploy/tools'
 import { registerCiTools } from './workspace/ci/tools'
 import { setAcpTerminalService } from './providers/acpTerminals'
@@ -812,10 +812,18 @@ const dashboardWatch = setInterval(
 )
 dashboardWatch.unref()
 // New Design, Slides and Dashboard artifacts are drawn with the host's design system, when one is chosen.
-interactive.designSystem = () => {
-  const artifactId = workspace.getAppState<string | null>(DESIGN_SYSTEM_KEY, null)
-  if (!artifactId || !pages.has(artifactId)) return null
-  return designTokensOf(pages.document(artifactId))
+interactive.designSystem = (sessionId) => {
+  let projectId: string | null = null
+  try {
+    projectId = workspace.getTask(agents.get(sessionId).taskId).projectId
+  } catch {
+    // A thread without a project follows the host's design system.
+  }
+  const artifactId = appliedDesignSystem(
+    (key) => workspace.getAppState<string | null>(key, null),
+    projectId && projectId !== NO_PROJECT ? projectId : null,
+  )
+  return artifactId && pages.has(artifactId) ? designTokensOf(pages.document(artifactId)) : null
 }
 // Apps published from this computer get tunnels of their own, of the same kind as pages opened to anyone.
 const localApps = new LocalApps({

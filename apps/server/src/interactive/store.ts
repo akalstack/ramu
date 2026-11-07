@@ -225,8 +225,11 @@ const entryFirst = <T extends { path: string }>(files: T[], entry = 'index.html'
   ...files.filter((file) => file.path !== entry),
 ]
 export class InteractiveStore {
-  /** The host's design system, when one is chosen: Design, Slides and Dashboard artifacts are drawn with its tokens. */
-  designSystem: () => DesignTokens | null = () => null
+  /**
+   * The design system for a thread, when one is chosen: its project's own, else the host's. New visual artifacts and
+   * apps from that thread are drawn with its tokens.
+   */
+  designSystem: (session: string) => DesignTokens | null = () => null
 
   constructor(
     private readonly db: Db,
@@ -284,7 +287,7 @@ export class InteractiveStore {
       ? resolveInteractiveKit(await compileInteractive(input.files, input.entry ?? 'index.html'))
       : interactiveDocumentHtml(input)
     // Apps follow the host's design system too: its tokens take the place of the theme's in the page.
-    const system = this.designSystem()
+    const system = this.designSystem(session)
     const html = system ? withDesignTokens(compiled, designTokenCss(system)) : compiled
     if (Buffer.byteLength(html) > INTERACTIVE_MAX_ARTIFACT)
       throw new Error('Compiled interactive content exceeds 1.5 MB.')
@@ -321,7 +324,7 @@ export class InteractiveStore {
     // A design that sets its own tokens keeps them; the other visual kinds follow the host's design system.
     const system =
       (source.kind === 'slides' || source.kind === 'dashboard' || (source.kind === 'design' && !source.tokens)) &&
-      this.designSystem()
+      this.designSystem(session)
     if (system) rendered.html = designTokenCss(system) + rendered.html
     if (signal?.aborted) throw new Error('Preview cancelled')
     if (Buffer.byteLength(rendered.html) > INTERACTIVE_MAX_ARTIFACT)

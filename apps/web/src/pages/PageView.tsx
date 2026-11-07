@@ -102,9 +102,10 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   const [savingEdit, setSavingEdit] = useState(false)
   // Which design this host draws new visual artifacts with, for a design's menu.
   const [designSystem, setDesignSystem] = useState<string | null>(null)
+  const projectId = page?.projectId ?? null
   useEffect(() => {
-    void invoke('artifacts.designSystem').then(setDesignSystem, () => {})
-  }, [invoke])
+    void invoke('artifacts.designSystem', projectId).then(setDesignSystem, () => {})
+  }, [invoke, projectId])
   const state = useRef<InteractiveState | null>(null)
   const revision = useRef(0)
   const frame = useRef<HTMLIFrameElement>(null)
@@ -271,7 +272,8 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
             disabled: viewOnly,
             onSelect: () => {
               const next = designSystem === artifactId ? null : artifactId
-              void invoke('artifacts.setDesignSystem', next)
+              // A design kept in a project becomes that project's design system; otherwise the host's.
+              void invoke('artifacts.setDesignSystem', next, page.projectId)
                 .then(() => setDesignSystem(next))
                 .catch((e) => notifyError(message(e)))
             },

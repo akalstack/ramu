@@ -18,7 +18,14 @@ import {
   type Slide,
   type SlideTextEdit,
 } from '@ramu/shared/artifactSource'
-import { ARTIFACT_SOURCE_FILES, DESIGN_SYSTEM_KEY, designTokensOf, editableSource } from '@ramu/shared/artifacts'
+import {
+  ARTIFACT_SOURCE_FILES,
+  DESIGN_SYSTEM_KEY,
+  appliedDesignSystem,
+  designSystemKey,
+  designTokensOf,
+  editableSource,
+} from '@ramu/shared/artifacts'
 import { STARTER_TEMPLATES } from '@ramu/shared/starterTemplates'
 import { renderArtifactSource } from '../../interactive/kinds'
 import { restyleArtifact } from '../../interactive/restyle'
@@ -257,6 +264,7 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       (key, fallback) => ctx.workspace.getAppState(key, fallback),
       (key, value) => ctx.workspace.setAppState(key, value),
     ))
+  const stateOf = (key: string) => ctx.workspace.getAppState<string | null>(key, null)
   const need = () => {
     if (!ctx.pages || !ctx.pageAi) throw new Error('Update this host for Artifacts.')
     return { pages: ctx.pages, ai: ctx.pageAi }
@@ -293,12 +301,13 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       },
     },
     'artifacts.designSystem': {
-      args: z.tuple([]),
-      run: () => ctx.workspace.getAppState<string | null>(DESIGN_SYSTEM_KEY, null),
+      args: z.tuple([id.nullable().optional()]),
+      // The design system that applies: the project's own, else the host's.
+      run: (projectId?: string | null) => appliedDesignSystem(stateOf, projectId ?? null),
     },
     'artifacts.setDesignSystem': {
-      args: z.tuple([id.nullable()]),
-      run: (artifactId: string | null) => {
+      args: z.tuple([id.nullable(), id.nullable().optional()]),
+      run: (artifactId: string | null, projectId?: string | null) => {
         if (artifactId !== null) {
           const { pages } = need()
           if (!designTokensOf(pages.document(artifactId)))
@@ -306,18 +315,19 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
               'Only a design with tokens (colors, type, radius) can be the design system. Ask the agent to add them.',
             )
         }
-        ctx.workspace.setAppState(DESIGN_SYSTEM_KEY, artifactId)
+        const own = projectId ? ctx.workspace.getAppState<string | null>(designSystemKey(projectId), null) : null
+        ctx.workspace.setAppState(designSystemKey(projectId ?? null), artifactId)
+        // Stopping in a project that only followed the host's system stops the host's, which is the one that applied.
+        if (artifactId === null && projectId && own === null) ctx.workspace.setAppState(DESIGN_SYSTEM_KEY, null)
       },
     },
     'artifacts.restyle': {
       args: z.tuple([id, z.number().int().positive()]),
-      run: (artifactId: string, base: number) =>
-        restyleArtifact(
-          need().pages,
-          artifactId,
-          base,
-          ctx.workspace.getAppState<string | null>(DESIGN_SYSTEM_KEY, null),
-        ),
+      run: (artifactId: string, base: number) => {
+        const { pages } = need()
+        // The artifact's project's own design system first, else the host's.
+        return restyleArtifact(pages, artifactId, base, appliedDesignSystem(stateOf, pages.get(artifactId).projectId))
+      },
     },
     'artifacts.saveTemplate': {
       args: z.tuple([id]),

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { parseArtifactSource } from '../src/artifactSource'
-import { artifactKind } from '../src/artifacts'
+import { appliedDesignSystem, artifactKind } from '../src/artifacts'
 
 it('reads a doc or diagram source and says what is wrong with one that does not fit', () => {
   expect(parseArtifactSource({ kind: 'doc', source: '# Plan', format: 'svg' })).toEqual({
@@ -61,4 +61,14 @@ it('reads a deck, filling in the theme, and names the slide and field of the fir
     'Give the accent as a hex color such as #7652d4.',
   )
   expect(deck([])).toThrow('Write the deck as a list of slides in slides.')
+})
+
+it('applies a project’s own design system before the host’s', () => {
+  const state: Record<string, string | null> = { 'design-system': 'host-brand' }
+  const read = (key: string) => state[key] ?? null
+  expect(appliedDesignSystem(read, null)).toBe('host-brand')
+  expect(appliedDesignSystem(read, 'p1')).toBe('host-brand')
+  state['design-system:p1'] = 'client-brand'
+  expect(appliedDesignSystem(read, 'p1')).toBe('client-brand')
+  expect(appliedDesignSystem(read, 'p2')).toBe('host-brand')
 })
