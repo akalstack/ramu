@@ -39,7 +39,7 @@
     "@noble/hashes": "1.8.0",
     "@opencode/client": "2.0.30",
     "chart.js": "4.6.1",
-    "docx": "9.15.3",
+    "docx": "9.13.0",
     "editorconfig": "^3.0.2",
     "esbuild": "0.28.2",
     "jszip": "3.10.1",
