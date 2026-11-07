@@ -1,3 +1,4 @@
+import { interactiveExport } from '@ramu/shared/interactiveExport'
 import { existsSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -24,7 +25,18 @@ export async function makePageProject(ctx: HandlerContext, artifactId: string, n
   let folder = join(parent, slug(name ?? page.title))
   for (let n = 2; existsSync(folder); n++) folder = join(parent, `${slug(name ?? page.title)}-${n}`)
   await mkdir(folder)
-  const files = document.files ?? [{ path: 'index.html', content: document.html, encoding: 'utf8' as const }]
+  // A design hands the project its frames to look at and its source to build from; later screens follow it too.
+  const design = page.kind === 'design'
+  const files = design
+    ? [
+        {
+          path: 'design/frames.html',
+          content: interactiveExport(document, null, true).html,
+          encoding: 'utf8' as const,
+        },
+        ...(document.files ?? []).map((file) => ({ ...file, path: `design/${file.path}` })),
+      ]
+    : (document.files ?? [{ path: 'index.html', content: document.html, encoding: 'utf8' as const }])
   for (const file of files) {
     const target = normalize(join(folder, file.path))
     if (!target.startsWith(folder + sep)) continue
@@ -40,7 +52,7 @@ export async function makePageProject(ctx: HandlerContext, artifactId: string, n
   const react = files.some((file) => /\.(tsx|jsx)$/.test(file.path)) || /from ['"]react['"]/.test(document.html)
   await writeFile(
     join(folder, 'README.md'),
-    `# ${page.title}\n\nStarted from the Ramu page "${page.title}" (version ${page.version}).\n${page.capabilities.records ? '\n`data/schema.json` holds the record collections the page kept and `data/seed.json` its records.\n' : ''}`,
+    `# ${page.title}\n\nStarted from the Ramu ${design ? 'design' : 'page'} "${page.title}" (version ${page.version}).${design ? ' `design/` is the design reference.' : ''}\n${page.capabilities.records ? '\n`data/schema.json` holds the record collections the page kept and `data/seed.json` its records.\n' : ''}`,
   )
   const { project } = await ctx.workspace.addProjectFromFolder(folder)
   const settings = ctx.pageAi.settingsFor('smart')
@@ -48,20 +60,27 @@ export async function makePageProject(ctx: HandlerContext, artifactId: string, n
   const thread = await ctx.agentThreads.startInProject(
     {
       projectId: project.id,
-      title: `Grow ${page.title} into an app`,
-      prompt: [
-        `This folder holds the sources of my Ramu page "${page.title}". Turn it into a project that builds and runs with the same behavior.`,
-        react
-          ? 'It uses React: set it up as a Vite + React + TypeScript app.'
-          : 'It is a static page: set it up as a static site with a small build or none.',
-        page.capabilities.records
-          ? 'The page kept records on the Ramu host (data/schema.json, data/seed.json). Replace ramuContent.records with a small local data layer that reads the seed, and say what a real database would need.'
-          : '',
-        page.capabilities.ai
-          ? 'The page used ramuContent.ai, which only exists inside Ramu. Move those calls behind one function and say which server-side model call would replace it.'
-          : '',
-        'Run it in a background terminal, open it in the browser panel, and check it matches the page. Then tell me how to deploy it.',
-      ]
+      title: design ? `Build ${page.title}` : `Grow ${page.title} into an app`,
+      prompt: (design
+        ? [
+            `design/ holds my Ramu design "${page.title}": design/frames.html shows its frames and design/design.json has each frame's HTML and CSS.`,
+            'Start the app from it: choose a stack that fits (ask me at most one question if it is unclear), build the screens these frames show so they match, and keep design/ as the design reference so later screens follow it.',
+            'Run it in a background terminal, open it in the browser panel, compare it with design/frames.html, then tell me how to deploy it.',
+          ]
+        : [
+            `This folder holds the sources of my Ramu page "${page.title}". Turn it into a project that builds and runs with the same behavior.`,
+            react
+              ? 'It uses React: set it up as a Vite + React + TypeScript app.'
+              : 'It is a static page: set it up as a static site with a small build or none.',
+            page.capabilities.records
+              ? 'The page kept records on the Ramu host (data/schema.json, data/seed.json). Replace ramuContent.records with a small local data layer that reads the seed, and say what a real database would need.'
+              : '',
+            page.capabilities.ai
+              ? 'The page used ramuContent.ai, which only exists inside Ramu. Move those calls behind one function and say which server-side model call would replace it.'
+              : '',
+            'Run it in a background terminal, open it in the browser panel, and check it matches the page. Then tell me how to deploy it.',
+          ]
+      )
         .filter(Boolean)
         .join('\n'),
     },
