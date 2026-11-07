@@ -421,7 +421,7 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
         const cwd = gitCwdOf(taskId, repoId)
         // The base is read before merging, while the pull request is still listed as open.
         const base =
-          action.kind === 'merge' && ctx.deploys && ctx.pullRequestIndex
+          action.kind === 'merge' && (ctx.deploys || ctx.pullRequestWatches) && ctx.pullRequestIndex
             ? (
                 await ctx.pullRequestIndex.list(cwd, repoId, { includeClosed: false, force: false }).catch(() => null)
               )?.pullRequests.find((pr) => pr.url === url)?.baseBranch
@@ -429,11 +429,25 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
         await redacted(() => forge.pullRequestAction(cwd, url, action))
         ctx.pullRequestIndex?.invalidate(repoId)
         void ctx.pullRequestIndex?.tick()
-        // A merge into the production branch deploys it: the thread working on the pull request hears how it went.
+        // A merge into the production branch deploys it, and CI runs on the merge commit: the thread working on the
+        // pull request hears how both went.
+        const thread = ctx.pullRequestIndex?.threadsFor(url).at(-1) ?? null
         if (base)
           void ctx.deploys
-            ?.pushed(repoId, base, null, ctx.pullRequestIndex?.threadsFor(url).at(-1) ?? null)
+            ?.pushed(repoId, base, null, thread)
             .catch((error: unknown) => console.error('Could not follow the deployment of the merge:', error))
+        if (base && thread) {
+          let checkout: string | null = null
+          try {
+            checkout = gitCwdOf(thread, repoId)
+          } catch {
+            // The linked thread no longer has this repository; nothing to wake.
+          }
+          if (checkout)
+            void ctx.pullRequestWatches
+              ?.watchMerge(thread, checkout, repoId, base)
+              .catch((error: unknown) => console.error('Could not follow CI on the merge:', error))
+        }
       },
     },
     'forge.updateBranch': {

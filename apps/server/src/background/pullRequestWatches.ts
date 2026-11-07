@@ -9,7 +9,7 @@ import type {
 import type { Db } from '../db'
 import type { Workspace } from '../workspace/workspace'
 import type { AgentService } from '../agent'
-import { commitBranchInfo, currentBranch, headOid } from '../workspace/git'
+import { commitBranchInfo, currentBranch, git, headOid } from '../workspace/git'
 import {
   commitChecks,
   commitChecksFeedback,
@@ -258,8 +258,26 @@ export class PullRequestWatchService {
     const { branch, defaultBranch } = await commitBranchInfo(cwd)
     if (!branch || branch !== defaultBranch) return
     const sha = await headOid(cwd)
+    if (sha) this.follow(taskId, cwd, repoId, branch, sha)
+  }
+
+  /**
+   * After a pull request is merged into the default branch from Ramu, follow the merge commit's CI the same way: a
+   * failure wakes the thread working on that pull request. The commit is read from the remote, since the merge
+   * happened on the service and the thread's checkout is still on its own branch.
+   */
+  async watchMerge(taskId: string, cwd: string, repoId: string, base: string): Promise<void> {
+    if (this.stopping) return
+    const { defaultBranch } = await commitBranchInfo(cwd)
+    if (base !== defaultBranch) return
+    const listed = await git(cwd, ['ls-remote', '--heads', 'origin', `refs/heads/${base}`])
+    const sha = listed.split(/\s/)[0] ?? ''
+    if (/^[0-9a-f]{40,64}$/.test(sha)) this.follow(taskId, cwd, repoId, base, sha)
+  }
+
+  private follow(taskId: string, cwd: string, repoId: string, branch: string, sha: string): void {
     const session = this.agents.list(taskId).findLast((entry) => !entry.parentId && entry.covers.includes(cwd))
-    if (!sha || !session || session.state === 'stopped') return
+    if (!session || session.state === 'stopped') return
     const push: PushWatch = { id: randomUUID(), cwd, repoId, branch, sha, sessionId: session.id, since: Date.now() }
     this.workspace.setAppState(PUSHES, [
       ...this.pushes().filter((entry) => entry.repoId !== repoId || entry.branch !== branch),

@@ -4,7 +4,7 @@ import { openDb, type Db } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
 import type { AgentService } from '../src/agent'
 import { PullRequestWatchService } from '../src/background/pullRequestWatches'
-import { commitBranchInfo, currentBranch, headOid } from '../src/workspace/git'
+import { commitBranchInfo, currentBranch, git, headOid } from '../src/workspace/git'
 import {
   commitChecks,
   commitChecksFeedback,
@@ -14,7 +14,12 @@ import {
   reviewThreads,
 } from '../src/workspace/forge'
 
-vi.mock('../src/workspace/git', () => ({ currentBranch: vi.fn(), commitBranchInfo: vi.fn(), headOid: vi.fn() }))
+vi.mock('../src/workspace/git', () => ({
+  currentBranch: vi.fn(),
+  commitBranchInfo: vi.fn(),
+  headOid: vi.fn(),
+  git: vi.fn(),
+}))
 vi.mock('../src/workspace/forge', () => ({
   commitChecks: vi.fn(),
   commitChecksFeedback: vi.fn(),
@@ -326,6 +331,21 @@ describe('pushes to the default branch', () => {
     await service.stop()
     service = createService()
     await service.tick(120_000)
+    expect(enqueue).toHaveBeenCalledOnce()
+  })
+
+  it('wakes the pull request’s thread when CI fails on the commit a merge made, and only for the default branch', async () => {
+    const sha = 'f'.repeat(40)
+    vi.mocked(currentBranch).mockResolvedValue('feature')
+    vi.mocked(commitBranchInfo).mockResolvedValue({ branch: 'feature', defaultBranch: 'main' })
+    vi.mocked(git).mockResolvedValue(`${sha}\trefs/heads/main\n`)
+    await service.watchMerge('task', '/repo', 'repo', 'release')
+    expect(vi.mocked(git)).not.toHaveBeenCalled()
+    await service.watchMerge('task', '/repo', 'repo', 'main')
+    expect(vi.mocked(git)).toHaveBeenCalledWith('/repo', ['ls-remote', '--heads', 'origin', 'refs/heads/main'])
+    vi.mocked(commitChecks).mockResolvedValue(failing)
+    await service.tick(0)
+    expect(vi.mocked(commitChecks)).toHaveBeenCalledWith('/repo', sha)
     expect(enqueue).toHaveBeenCalledOnce()
   })
 
