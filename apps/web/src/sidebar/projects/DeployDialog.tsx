@@ -21,6 +21,7 @@ import { CiSetupSection } from './CiSetup'
 import { DatabaseSection } from './Database'
 import { DomainsSection } from './Domains'
 import { EnvSyncSection } from './EnvSync'
+import { UptimeSection } from './Uptime'
 
 const STATE: Record<DeploymentState, string> = {
   queued: 'Queued',
@@ -297,6 +298,7 @@ export function DeployDialog({
               <li className="text-caption text-muted-foreground">{t('No deployments yet.')}</li>
             )}
           </ul>
+          <UptimeSection projectId={project.id} />
           {status.capabilities.includes('domains') && (
             <DomainsSection projectId={project.id} platform={account?.name ?? binding.platform} />
           )}

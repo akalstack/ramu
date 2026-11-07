@@ -91,8 +91,7 @@ For someone who has a VPS or wants the app on the Ramu host:
 
 ### 9. Uptime
 
-- **Watch the live URL** (on by default after the first production deploy) checks the production URL and one health path every five minutes from the host, using the schedule runner. Two failed checks in a row open a thread in the project with the status code, the response time, the last deployment and its logs, and send a phone notification.
-- The thread's first step is reading the logs and offering **Roll back** when the last deploy is the likely cause; the person decides. Recovery closes the incident with a recap. A host that is asleep reports the gap as unknown, not as downtime.
+**Watch the live address**, incident threads after two failed checks, the recap on recovery and unknown spans while the host sleeps are built ([Uptime](guide/deploy.md#uptime)). What remains: the watch's state on the phone beside the project's Deployments, when those land there (§3 UI).
 
 ### 10. Mobile store releases
 

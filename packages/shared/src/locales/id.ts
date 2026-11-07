@@ -5819,4 +5819,22 @@ export const indonesian: Readonly<Record<string, string>> = {
   Provision: 'Sediakan',
   'Postgres on your account’s plan; the free plan includes 0.5 GB and sleeps when idle.':
     'Postgres sesuai paket akun Anda; paket gratis mencakup 0,5 GB dan tidur saat tidak dipakai.',
+  'HTTP {0} in {1} ms': 'HTTP {0} dalam {1} md',
+  'no answer within 10 seconds': 'tidak ada jawaban dalam 10 detik',
+  'too many redirects': 'terlalu banyak pengalihan',
+  'could not connect': 'tidak bisa terhubung',
+  'Up · {0} · checked {1}': 'Aktif · {0} · dicek {1}',
+  'Not answering · {0} · checked {1}': 'Tidak menjawab · {0} · dicek {1}',
+  'Unknown · this computer was offline or asleep at {0}':
+    'Tidak diketahui · komputer ini offline atau tidur pada {0}',
+  Uptime: 'Ketersediaan',
+  'Watch the live address': 'Pantau alamat live',
+  'This computer checks {0} every five minutes. Two failed checks in a row open a thread here and notify your phone.':
+    'Komputer ini mengecek {0} setiap lima menit. Dua pengecekan gagal berturut-turut membuka utas di sini dan memberi tahu ponsel Anda.',
+  'Checks start once the app has a live production deployment.':
+    'Pengecekan dimulai setelah aplikasi punya deployment produksi yang live.',
+  'Failing since {0}': 'Gagal sejak {0}',
+  'An incident thread is open in this project since {0}.': 'Utas insiden terbuka di proyek ini sejak {0}.',
+  'Unknown from {0} to {1}: this computer was asleep or Ramu was not running.':
+    'Tidak diketahui dari {0} sampai {1}: komputer ini sedang tidur atau Ramu tidak berjalan.',
 }

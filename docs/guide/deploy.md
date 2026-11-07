@@ -35,6 +35,17 @@ The same accounts publish artifacts with **Publish to the web** ([Artifacts](art
   - Ramu checks a newly added domain every minute for up to three days, and when it serves HTTPS it wakes the project's most recent thread with one message, through the same queue as pull request feedback.
 - **Checks** says whether the repository has CI and offers **Set up CI** when it has none ([Set up CI](git-hosting.md#set-up-ci)).
 
+## Uptime
+
+Once a project has a live production deployment, **Watch the live address** in the deploy sheet is on. Untick it to stop the checks.
+
+- **What is checked:** every five minutes, the host sends one `GET` to the production address and the project's health path (`"healthPath"` in the stack of `ramu.json`, such as `"/api/health"`; `/` by default). An answer within 10 seconds that is a success, a redirect, or a sign-in or rate-limit page counts as up. Redirects are followed on the same host name only; a redirect to another host is an answer and is not followed. The sheet shows the last check with its status code and response time.
+- **Incidents:** two failed checks in a row open a thread in the project titled **Down: …**, with the status code or the reason there was no answer, the response time, the last production deployment and the end of its build log, and notify your phones (the phone's **Failed** notifications). The thread uses the model of the project's most recent thread, with at most Auto access. Its agent reads the logs first and, when the last deploy is the likely cause, offers **Roll back** through `deploy_rollback`, whose card always asks you. A project has at most one open incident.
+- **Recovery:** the first good check after an incident posts into the same thread, which answers with a short recap of what failed and what was done. The incident is then closed.
+- **When the host cannot tell:** checks run only while this computer is awake and Ramu is running. A gap of more than eleven minutes between checks is shown as **Unknown** with its start and end, not as downtime, and failed checks before and after it are not counted together. A check with no answer while the hosting platform's API cannot be reached either means this computer is offline, and is counted as unknown too.
+
+Turning the watch off forgets its checks and closes an open incident without a recap.
+
 ## Databases
 
 The deploy sheet shows **Database** when the project needs one: its stack stores data (`"database": true` in `ramu.json`, set for the Next.js, Django and Rails stacks), or its code reads `DATABASE_URL`.

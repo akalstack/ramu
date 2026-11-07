@@ -200,6 +200,14 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
           return updated
         }),
     },
+    'deploy.uptime': {
+      args: z.tuple([id]),
+      run: (projectId: string) => deploys().uptime.status(project(projectId)),
+    },
+    'deploy.setUptime': {
+      args: z.tuple([id, z.boolean()]),
+      run: (projectId: string, enabled: boolean) => deploys().uptime.setEnabled(project(projectId), enabled),
+    },
     'deploy.rollback': {
       args: z.tuple([id, deploymentId]),
       run: (projectId: string, deployment: string) =>

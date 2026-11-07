@@ -171,3 +171,34 @@ export interface DomainStatus {
   /** The DNS is hosted by the platform itself, so Ramu can create the records through the same account. */
   managedDns: boolean
 }
+
+/** How one uptime check of the live address came out. `unknown` means the host itself could not tell. */
+export type UptimeResult = 'up' | 'down' | 'unknown'
+
+/** Why a check got no usable answer, in words the clients translate. */
+export type UptimeFailure = 'timeout' | 'unreachable' | 'redirects'
+
+export interface UptimeCheck {
+  at: number
+  result: UptimeResult
+  /** The HTTP status the address answered with, when it answered. */
+  status: number | null
+  /** How long the answer took, in milliseconds. */
+  ms: number | null
+  failure: UptimeFailure | null
+}
+
+/** The live address watch of a project, as the Deploy sheet shows it. */
+export interface UptimeStatus {
+  /** On unless the person turned it off; checks start once the project has a live production deployment. */
+  enabled: boolean
+  /** The address checked: the production address and the health path from `ramu.json`. */
+  url: string | null
+  last: UptimeCheck | null
+  /** When the current run of failed checks began. */
+  downSince: number | null
+  /** The latest span the host was asleep or not running, reported as unknown rather than as downtime. */
+  gap: { from: number; to: number } | null
+  /** The open incident's thread, while the address is down. */
+  incident: { taskId: string; openedAt: number } | null
+}

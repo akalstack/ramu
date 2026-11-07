@@ -134,6 +134,15 @@ export class MobilePush {
       }),
     )
   }
+  /** A watched live address stopped answering and an incident thread opened. Generic text; the tap opens the thread. */
+  async deliverIncident(thread: { taskId: string; sessionId: string }) {
+    await this.send('failed', 'Your live app stopped answering. Ramu opened a thread about it.', (registration) => ({
+      computerId: registration.computerId,
+      taskId: thread.taskId,
+      sessionId: thread.sessionId,
+      kind: 'failed',
+    }))
+  }
   /** A scheduled run gave up before any thread existed, so there is nothing to open but the schedules. Generic text only. */
   async deliverScheduleFailure() {
     await this.send('scheduled', 'A scheduled run could not start.', (registration) => ({

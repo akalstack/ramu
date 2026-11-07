@@ -30,6 +30,7 @@ import type {
   AccountPlatform,
   ProjectResources,
   ResourceProvider,
+  UptimeStatus,
 } from './types/deploy'
 import type { LimitRetryResult } from './chat/providerWait'
 import type { CiPreview, CiSetupResult } from './ciWorkflow'
@@ -1212,6 +1213,10 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.resources'(projectId: string, repoId: string): ProjectResources
   /** Creates the project's database on the connected account; its variables join secrets sync. */
   'deploy.provision'(projectId: string, repoId: string, provider: ResourceProvider, plan: string): ProjectResources
+  /** The live address watch: the address checked, the last check, any unknown span and the open incident. */
+  'deploy.uptime'(projectId: string): UptimeStatus
+  /** Turns the live address watch on or off; off forgets its checks and closes an open incident without a recap. */
+  'deploy.setUptime'(projectId: string, enabled: boolean): UptimeStatus
   /** What Set up CI would add to a repository of the project, from its last fetched default branch. */
   'ci.preview'(projectId: string, repoId: string): CiPreview
   /**

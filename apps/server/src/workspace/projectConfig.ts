@@ -50,6 +50,12 @@ export const projectConfigSchema = z.object({
       database: z.boolean().optional(),
       /** An argument list, run before each production deploy from Ramu. */
       migrate: z.array(z.string().min(1).max(1000)).min(1).max(50).optional(),
+      /** The path the uptime watch checks on the live address, such as `/api/health`. */
+      healthPath: z
+        .string()
+        .max(200)
+        .regex(/^\/(?!\/)[^\s\\#]*$/, 'A path on the live address, starting with one /')
+        .optional(),
     })
     .optional(),
   commit: z

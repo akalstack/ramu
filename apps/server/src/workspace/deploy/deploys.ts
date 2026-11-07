@@ -1,3 +1,4 @@
+import { DEFAULT_AGENT_SETTINGS, type AgentSettings } from '@ramu/shared/types'
 import type { AgentService } from '../../agent'
 import { HostCredentialStore } from '../../credentials/store'
 import type { Db } from '../../db'
@@ -9,6 +10,7 @@ import { DomainWatches } from './domainWatch'
 import { ResourceService } from './resources'
 import { DeployService } from './service'
 import { HostingSignIns } from './signIn'
+import { UptimeWatches } from './uptime'
 import { ProjectWake } from './wake'
 
 /** The deploy pieces one host shares between IPC, agent tools and Publish to the web. */
@@ -17,6 +19,7 @@ export interface Deploys {
   service: DeployService
   signIns: HostingSignIns
   domains: DomainWatches
+  uptime: UptimeWatches
   resources: ResourceService
   wake: ProjectWake
 }
@@ -25,6 +28,8 @@ export function createDeploys(
   workspace: Workspace,
   db: Db,
   agents: AgentService,
+  /** An incident thread opened: the phones are told and the thread lists refresh. */
+  incidentOpened: (thread: { taskId: string; sessionId: string }) => void,
   credentials = new HostCredentialStore(),
 ): Deploys {
   const getState = <T>(key: string, fallback: T) => workspace.getAppState(key, fallback)
@@ -73,11 +78,35 @@ export function createDeploys(
     accounts,
   )
   const wake = new ProjectWake(db, workspace, agents)
+  const uptime = new UptimeWatches(
+    {
+      getState,
+      setState,
+      projectIds: () => workspace.listProjects().map((project) => project.id),
+      healthPath: (projectId) => stack(projectId)?.healthPath ?? null,
+      async openThread(projectId, title, brief, requestId) {
+        const task = await workspace.createTask({ projectId, title, mode: 'current', requestId })
+        // The project's latest thread's model, with no more than Auto access: nobody asked for this thread, and its
+        // one consequential action, a rollback, asks the person whatever the access.
+        const latest = wake.latestThread(projectId)
+        const settings: AgentSettings = latest ? agents.get(latest).settings : DEFAULT_AGENT_SETTINGS
+        const session = await agents.startReviewed(task.id, workspace.agentScope(task.id), brief, {
+          ...settings,
+          access: settings.access === 'full' ? 'auto' : settings.access,
+        })
+        return { taskId: task.id, sessionId: session.id }
+      },
+      notify: incidentOpened,
+    },
+    wake,
+    service,
+  )
   return {
     accounts,
     service,
     signIns: new HostingSignIns(accounts),
     domains: new DomainWatches(workspace, wake, service),
+    uptime,
     resources,
     wake,
   }

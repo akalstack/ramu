@@ -46,6 +46,8 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 
 - **Databases with real accounts:** a Neon API key in Settings → Hosting accounts, **Provision** for a Next.js app linked to Vercel and one linked to Netlify (a Neon project and its `preview` branch; **Sync** writing the main branch's address to production and the preview branch's to preview and GitHub Actions; a preview deployment reading the preview branch), the storage figure in the sheet, a Django project's `migrate` running before **Deploy to production**, and a failing migration stopping the deploy and waking the project's thread with its output.
 
+- **Uptime with real accounts:** a Vercel and a Netlify app with the watch on after its first production deploy (with and without a `healthPath`); a deploy that breaks the health path opening one **Down:** thread within ten minutes with the status, deployment and log tail and a phone notification, its agent offering **Roll back** through the approval card, and recovery posting a recap into the same thread; a laptop that sleeps through an outage showing the span as **Unknown**.
+
 Representative tasks to run once the above is available:
 
 - Ask an agent to open Calculator on one computer and compute `(125 * 8) + 42` (expect `1042`) while watching and stopping it from a phone and a second desktop.

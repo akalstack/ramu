@@ -31,7 +31,7 @@ A viewer pairing can read and answer requests but change nothing. A device's acc
 
 ## Notifications
 
-Opt in under **Settings → Notifications**, with a switch per kind: needs you, failed, finished, scheduled runs, a daily recap and pages. Pushes never carry prompts or transcript text; a page's notification carries the words that page sends, and only from a page you allowed to notify.
+Opt in under **Settings → Notifications**, with a switch per kind: needs you, failed (including a deployed app that stopped answering), finished, scheduled runs, a daily recap and pages. Pushes never carry prompts or transcript text; a page's notification carries the words that page sends, and only from a page you allowed to notify.
 
 On iOS, **Settings → Live Activity** shows running and waiting counts on the Lock Screen and in the Dynamic Island.
 
