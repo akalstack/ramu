@@ -9,6 +9,7 @@ import {
   type Ability,
   type AbilityCheck,
   type AbilityChoice,
+  type AbilityMcpCheck,
   type AbilityMcpTool,
   type AbilityMcpToolOption,
   type AbilityPreferences,
@@ -48,6 +49,7 @@ export function AbilitySettings({
   const invoke = useSettingsInvoke()
   const { catalogs } = useModelSets()
   const [checks, setChecks] = useState<AbilityCheck[] | null>(null)
+  const [mcpChecks, setMcpChecks] = useState<AbilityMcpCheck[]>([])
   const [running, setRunning] = useState(false)
   // Approved Shared MCP tools an image or search ability can run on instead of a provider.
   const [mcpTools, setMcpTools] = useState<AbilityMcpToolOption[]>([])
@@ -62,6 +64,7 @@ export function AbilitySettings({
         (status) => {
           if (!active) return
           setChecks(status.checks)
+          setMcpChecks(status.mcpChecks)
           setRunning(status.running)
         },
         () => active && setChecks([]),
@@ -76,6 +79,19 @@ export function AbilitySettings({
   }, [invoke])
   const set = (ability: Ability, choice: AbilityChoice) =>
     onChange({ ...value, abilities: { ...abilities, choices: { ...abilities.choices, [ability]: choice } } })
+  const setAutoMcp = (ability: Ability, tool: AbilityMcpTool | undefined) =>
+    onChange({ ...value, abilities: { ...abilities, autoMcp: { ...abilities.autoMcp, [ability]: tool } } })
+  /** What Auto's Shared MCP tool for an ability is: unchecked until a thread first needs it, then its result. */
+  const autoMcpText = (ability: Ability, tool: AbilityMcpTool) => {
+    const check = mcpChecks.find(
+      (entry) => entry.ability === ability && entry.connectionId === tool.connectionId && entry.tool === tool.tool,
+    )
+    if (!check) return t('Checked through the first thread that needs it, before Auto uses it.')
+    if (!check.ok) return `${t('Not available')}${check.detail ? `: ${check.detail}` : ''}`
+    return check.score === undefined
+      ? t('Available')
+      : `${t('Available')} · ${t('{0}% on the sample tasks', { '0': String(Math.round(check.score * 100)) })}`
+  }
   const modelName = (provider: AbilityCheck['provider'], id: string) =>
     modelDisplayName(
       catalogs.find((catalog) => catalog.provider === provider)?.models.find((model) => model.id === id)?.name ?? id,
@@ -143,6 +159,37 @@ export function AbilitySettings({
           </SettingsRow>
         )
       })}
+      {MCP_ABILITIES.filter((ability) => mcpTools.length && (abilities.choices[ability] ?? 'auto') === 'auto').map(
+        (ability) => {
+          const tool = abilities.autoMcp?.[ability]
+          return (
+            <SettingsRow key={`auto-mcp-${ability}`}>
+              <span>
+                <SettingsTitle>{t('{0}: also try in Auto', { '0': t(ABILITY_LABELS[ability]) })}</SettingsTitle>
+                <span className="muted text-muted-foreground block small text-caption">
+                  {tool
+                    ? autoMcpText(ability, tool)
+                    : t('A Shared MCP tool Auto tries after your signed-in providers.')}
+                </span>
+              </span>
+              <Dropdown
+                label={t('{0}: also try in Auto', { '0': t(ABILITY_LABELS[ability]) })}
+                value={tool ? mcpValue(tool) : 'none'}
+                disabled={busy}
+                keepOptions
+                options={[
+                  { value: 'none', label: t('None') },
+                  ...mcpTools.map((entry) => ({ value: mcpValue(entry), label: `${entry.tool} · ${entry.server}` })),
+                ]}
+                onChange={(next) => {
+                  const picked = mcpTools.find((entry) => mcpValue(entry) === next)
+                  setAutoMcp(ability, picked ? { connectionId: picked.connectionId, tool: picked.tool } : undefined)
+                }}
+              />
+            </SettingsRow>
+          )
+        },
+      )}
       <SettingsRow setting="abilities.askBeforeOtherProvider" className="settings-toggle">
         <span>
           <SettingsTitle>{t('Ask before using another provider')}</SettingsTitle>

@@ -4,7 +4,7 @@ Abilities let a thread's agent ask Ramu for something its provider cannot do (an
 
 ## The need
 
-- **Abilities beyond the providers' own.** An image, speech or search service connected as a Shared MCP server cannot stand in for a provider.
+- **Abilities beyond the providers' own.** A speech service, or one that edits images or reads long files, connected as a Shared MCP server cannot stand in for a provider yet.
 
 ## Delivery
 
@@ -31,9 +31,8 @@ Scored samples for web search, long documents and images, subscription-before-AP
 
 ### 4. Abilities from Shared MCP servers
 
-Image generation and web search can be mapped to an approved Shared MCP tool (see [Abilities](guide/agents.md#abilities)). Remaining:
+Image generation and web search can be mapped to an approved Shared MCP tool, or offered to Auto after the providers once its check passes (see [Abilities](guide/agents.md#abilities)). Remaining:
 
-- An MCP-provided ability is listed beside providers in Auto, with the same live check and quality score before it is used automatically.
 - Speech, image editing and long reads on an MCP tool, once a way to pass files and audio to a generic tool is settled.
 
 ### 5. Music and sound effects

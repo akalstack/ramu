@@ -741,6 +741,8 @@ const abilities = new AbilityService(
     },
     readChecks: () => workspace.getAppState<unknown>('ability-checks', []),
     writeChecks: (checks) => workspace.setAppState('ability-checks', checks),
+    readMcpChecks: () => workspace.getAppState<unknown>('ability-mcp-checks', []),
+    writeMcpChecks: (checks) => workspace.setAppState('ability-mcp-checks', checks),
   },
   abilityRunner(fake?.fakeQuery ?? query),
 )

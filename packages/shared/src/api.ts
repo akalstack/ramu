@@ -18,7 +18,13 @@ import type { AppUpdateStatus } from './updates'
 import type { NearbyHostsState } from './discovery/tracker'
 import type { AgentSetupSnapshot } from './agentSetup'
 import type { AccountLogin, ProviderConfiguration, ProviderStatus } from './providers/providers'
-import type { AbilityCall, AbilityCheck, AbilityHandle, AbilityMcpToolOption } from './providers/abilities'
+import type {
+  AbilityCall,
+  AbilityCheck,
+  AbilityHandle,
+  AbilityMcpCheck,
+  AbilityMcpToolOption,
+} from './providers/abilities'
 import type {
   HostingAccount,
   HostingAccountsSummary,
@@ -1089,7 +1095,7 @@ export interface RamuMethods extends ArtifactMethods {
   ): Promise<void>
   'providers.update'(provider: ProviderStatus['provider']): Promise<ProviderStatus>
   /** Live ability checks for each provider's chosen login on its installed version, plus whether checks are running. */
-  'abilities.checks'(): { checks: AbilityCheck[]; running: boolean }
+  'abilities.checks'(): { checks: AbilityCheck[]; mcpChecks: AbilityMcpCheck[]; running: boolean }
   /** Runs one provider's ability checks again (one small request per ability). */
   'abilities.check'(provider: ProviderStatus['provider']): Promise<AbilityCheck[]>
   /** The model `@images`, `@search` and `@long` bring in as a teammate, for each handle a provider here can serve. */

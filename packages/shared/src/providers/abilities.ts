@@ -99,8 +99,23 @@ export interface AbilityMcpToolOption extends AbilityMcpTool {
 export const isMcpChoice = (choice: AbilityChoice | undefined): choice is AbilityMcpTool =>
   typeof choice === 'object' && 'connectionId' in choice
 
+/** A Shared MCP tool's live check, run through the first thread that would use it in Auto. */
+export interface AbilityMcpCheck extends AbilityMcpTool {
+  ability: Ability
+  ok: boolean
+  checkedAt: string
+  /** The share of the check's sample tasks answered right, where they can be checked. */
+  score?: number
+  detail?: string
+}
+
 export interface AbilityPreferences {
   choices: Partial<Record<Ability, AbilityChoice>>
+  /**
+   * A Shared MCP tool Auto also tries, after the signed-in providers, for an ability a tool can stand in for. It is
+   * used only once its live check passed.
+   */
+  autoMcp?: Partial<Record<Ability, AbilityMcpTool>>
   /** Each call routed to a provider other than the thread's own waits for the person's approval. */
   askBeforeOtherProvider: boolean
 }

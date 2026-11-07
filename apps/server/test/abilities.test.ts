@@ -394,6 +394,49 @@ describe('ability calls', () => {
 })
 
 describe('abilities on a Shared MCP tool', () => {
+  it('with Auto, tries the offered Shared MCP tool after the providers, once its check through the thread passed', async () => {
+    const mcp = vi.fn<NonNullable<AbilityHost['mcp']>>(async (_session, _connection, tool, build) => {
+      const args = build({ properties: { prompt: { type: 'string' } } })
+      return tool === 'make'
+        ? {
+            server: 'Pictures',
+            result: {
+              content: [
+                { type: 'text', text: `Made ${String(args.prompt)}` },
+                { type: 'image', data: PNG.toString('base64'), mimeType: 'image/png' },
+              ],
+            },
+          }
+        : { server: 'Pictures', result: { content: [{ type: 'text', text: 'Nothing here.' }] } }
+    })
+    let checks: unknown = []
+    const mcpTools = () => [
+      { connectionId: 'c1', tool: 'make', server: 'Pictures' },
+      { connectionId: 'c1', tool: 'text', server: 'Pictures' },
+    ]
+    // No provider here makes images, so Auto reaches the tool.
+    const abilities = service(working, 'claude-code', undefined, {
+      mcp,
+      mcpTools,
+      login: async () => null,
+      readMcpChecks: () => checks,
+      writeMcpChecks: (next) => void (checks = next),
+    })
+    withAbilities({ autoMcp: { image_generation: { connectionId: 'c1', tool: 'make' } } })
+    expect(await abilities.call('thread', 'generate_image', { prompt: 'a red apple' })).toMatchObject({
+      status: 'done',
+    })
+    // The sample image first, then the call itself; the passed check is kept and not run again.
+    expect(mcp).toHaveBeenCalledTimes(2)
+    expect(abilities.status().mcpChecks).toMatchObject([{ ability: 'image_generation', tool: 'make', ok: true }])
+    await abilities.call('thread', 'generate_image', { prompt: 'a pear' })
+    expect(mcp).toHaveBeenCalledTimes(3)
+    // A tool whose check fails is never used: the call is refused as before.
+    withAbilities({ autoMcp: { image_generation: { connectionId: 'c1', tool: 'text' } } })
+    expect(await abilities.call('thread', 'generate_image', { prompt: 'x' })).toMatchObject({ status: 'refused' })
+    expect(abilities.status().mcpChecks.find((check) => check.tool === 'text')).toMatchObject({ ok: false })
+  })
+
   it('fills the tool’s prompt or query, else its first required text', () => {
     expect(mcpArguments({ properties: { size: { type: 'number' }, prompt: { type: 'string' } } }, 'apple')).toEqual({
       prompt: 'apple',

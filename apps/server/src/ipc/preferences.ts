@@ -13,7 +13,12 @@ import {
   SIDEBAR_WIDTH_RANGE,
 } from '@ramu/shared/types'
 import { agentSettings, id, pullMode, providerId } from './schemas'
-import { ABILITIES, DEFAULT_ABILITY_PREFERENCES, type AbilityPreferences } from '@ramu/shared/providers/abilities'
+import {
+  ABILITIES,
+  DEFAULT_ABILITY_PREFERENCES,
+  MCP_ABILITIES,
+  type AbilityPreferences,
+} from '@ramu/shared/providers/abilities'
 
 export const providerBinaries = z
   .object(
@@ -110,8 +115,10 @@ const abilityChoice = z.union([
 export const abilityChoices = z.object(
   Object.fromEntries(ABILITIES.map((ability) => [ability, abilityChoice.optional()])),
 ) as z.ZodType<AbilityPreferences['choices']>
+const mcpTool = z.object({ connectionId: z.string().min(1).max(200), tool: z.string().min(1).max(200) })
 const abilityPreferences = z.object({
   choices: abilityChoices.default({}),
+  autoMcp: z.object(Object.fromEntries(MCP_ABILITIES.map((ability) => [ability, mcpTool.optional()]))).optional(),
   askBeforeOtherProvider: z.boolean().default(false),
 })
 const advisorPreferences = z.object({

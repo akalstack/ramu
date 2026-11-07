@@ -17,6 +17,7 @@ import {
   type AbilityCheck,
   type AbilityHandle,
   type AbilityListing,
+  type AbilityMcpCheck,
   type AbilityMcpTool,
   type AbilityMcpToolOption,
   type AbilityRoute,
@@ -69,6 +70,9 @@ export interface AbilityHost {
   /** Checks' kept results. */
   readChecks(): unknown
   writeChecks(checks: unknown[]): void
+  /** Kept checks of Shared MCP tools offered to Auto. */
+  readMcpChecks?(): unknown
+  writeMcpChecks?(checks: AbilityMcpCheck[]): void
 }
 
 /** Input bounds per tool, enforced again on every call. */
@@ -224,9 +228,26 @@ export class AbilityService {
     return abilityListing(this.preferences(), this.passed(), this.order(), providerAccountId)
   }
 
-  status(): { checks: AbilityCheck[]; running: boolean } {
+  status(): { checks: AbilityCheck[]; mcpChecks: AbilityMcpCheck[]; running: boolean } {
     void this.refresh()
-    return { checks: this.checks.list(), running: this.checks.running() || !!this.refreshing }
+    return {
+      checks: this.checks.list(),
+      mcpChecks: this.mcpChecks(),
+      running: this.checks.running() || !!this.refreshing,
+    }
+  }
+
+  private mcpChecks(): AbilityMcpCheck[] {
+    const value = this.host.readMcpChecks?.()
+    return Array.isArray(value)
+      ? value.filter(
+          (entry): entry is AbilityMcpCheck =>
+            !!entry &&
+            typeof entry === 'object' &&
+            typeof entry.connectionId === 'string' &&
+            typeof entry.ok === 'boolean',
+        )
+      : []
   }
 
   /**
@@ -582,6 +603,10 @@ export class AbilityService {
       }
     }
     const choice = this.preferences().choices[base.ability] ?? 'auto'
+    if (choice === 'auto') {
+      const viaTool = await this.autoMcp(session, base, prepared, started, signal)
+      if (viaTool) return viaTool
+    }
     if (base.ability === 'web_search' && choice === 'auto') return this.keylessSearch(base, prepared, signal, started)
     if (limited.length)
       throw new Refusal(
@@ -599,6 +624,91 @@ export class AbilityService {
     return this.host.mcpTools?.() ?? []
   }
 
+  /** One call to a Shared MCP tool through the thread's own access, with its text and images. */
+  private async mcpCall(session: AgentSessionInfo, tool: AbilityMcpTool, text: string, signal?: AbortSignal) {
+    if (!this.host.mcp) throw new Error('Shared MCP is not available on this host.')
+    const { server, result } = await this.host.mcp(
+      session.id,
+      tool.connectionId,
+      tool.tool,
+      (schema) => mcpArguments(schema, text),
+      signal ?? new AbortController().signal,
+    )
+    const content = (Array.isArray(result.content) ? result.content : []) as {
+      type?: unknown
+      text?: unknown
+      data?: unknown
+      mimeType?: unknown
+    }[]
+    const texts = content.flatMap((part) => (part.type === 'text' && typeof part.text === 'string' ? [part.text] : []))
+    if (result.isError) throw new Error(`${server} returned an error. ${clip(texts.join(' '), 300)}`.trim())
+    const images = content.flatMap((part) => {
+      const extension = typeof part.mimeType === 'string' ? IMAGE_TYPES[part.mimeType] : undefined
+      return part.type === 'image' && typeof part.data === 'string' && extension
+        ? [{ bytes: Buffer.from(part.data, 'base64'), extension }]
+        : []
+    })
+    return { server, texts, images }
+  }
+
+  /**
+   * The Shared MCP tool Auto also tries once no provider could run the call: checked first with the ability's sample
+   * through this thread's own access (its grant and approval apply as to any call), and used only when that passed.
+   */
+  private async autoMcp(
+    session: AgentSessionInfo,
+    base: Pick<AbilityCall, 'id' | 'ability' | 'tool' | 'args'>,
+    prepared: Prepared,
+    started: number,
+    signal: AbortSignal,
+  ): Promise<AbilityCall | null> {
+    const tool = this.preferences().autoMcp?.[base.ability]
+    if (!tool || !MCP_ABILITIES.includes(base.ability) || !this.host.mcp) return null
+    if (!this.mcpTools().some((entry) => entry.connectionId === tool.connectionId && entry.tool === tool.tool))
+      return null
+    const same = (entry: AbilityMcpCheck) =>
+      entry.ability === base.ability && entry.connectionId === tool.connectionId && entry.tool === tool.tool
+    let check = this.mcpChecks().find(same)
+    // A failed check is tried again a day later, since the server behind the tool may have been fixed.
+    if (check && !check.ok && Date.now() - Date.parse(check.checkedAt) > 24 * 60 * 60_000) check = undefined
+    if (!check) {
+      check = await this.checkMcp(session, base.ability, tool, signal)
+      this.host.writeMcpChecks?.([...this.mcpChecks().filter((entry) => !same(entry)), check].slice(-50))
+    }
+    return check.ok ? this.viaMcp(session, base, prepared, tool, started, signal) : null
+  }
+
+  private async checkMcp(
+    session: AgentSessionInfo,
+    ability: Ability,
+    tool: AbilityMcpTool,
+    signal: AbortSignal,
+  ): Promise<AbilityMcpCheck> {
+    const base = { ...tool, ability, checkedAt: new Date().toISOString() }
+    try {
+      if (ability === 'image_generation') {
+        const { images, texts } = await this.mcpCall(session, tool, IMAGE_SAMPLES[0]!.prompt, signal)
+        return images.length
+          ? { ...base, ok: true }
+          : { ...base, ok: false, detail: `No image came back. ${clip(texts.join(' '), 200)}`.trim() }
+      }
+      const { texts } = await this.mcpCall(
+        session,
+        tool,
+        SEARCH_SAMPLES.map((sample) => sample.question).join(' '),
+        signal,
+      )
+      const found = texts.join('\n').toLowerCase()
+      const score = SEARCH_SAMPLES.filter((sample) => found.includes(sample.domain)).length / SEARCH_SAMPLES.length
+      return score
+        ? { ...base, ok: true, score }
+        : { ...base, ok: false, detail: 'The results named none of the sample sites.' }
+    } catch (error) {
+      if (signal.aborted) throw error
+      return { ...base, ok: false, detail: clip(error instanceof Error ? error.message : String(error), 300) }
+    }
+  }
+
   /** Runs an ability on the Shared MCP tool it is mapped to, with the same grant and approval as any call to it. */
   private async viaMcp(
     session: AgentSessionInfo,
@@ -614,27 +724,10 @@ export class AbilityService {
         `${ABILITY_LABELS[base.ability]} cannot run on a Shared MCP tool. Choose a provider for it in Settings → Models → Abilities.`,
       )
     const text = String(base.args.prompt ?? base.args.query ?? prepared.sent.prompt)
-    const { server, result } = await this.host.mcp(
-      session.id,
-      choice.connectionId,
-      choice.tool,
-      (schema) => mcpArguments(schema, text),
-      signal ?? new AbortController().signal,
+    const { server, texts, images } = await this.mcpCall(session, choice, text, signal)
+    const attachments = images.map((image, index) =>
+      this.host.attachments.add(`${slug(text)}-${index + 1}.${image.extension}`, image.bytes),
     )
-    const content = (Array.isArray(result.content) ? result.content : []) as {
-      type?: unknown
-      text?: unknown
-      data?: unknown
-      mimeType?: unknown
-    }[]
-    const texts = content.flatMap((part) => (part.type === 'text' && typeof part.text === 'string' ? [part.text] : []))
-    if (result.isError) throw new Error(`${server} returned an error. ${clip(texts.join(' '), 300)}`.trim())
-    const attachments = content.flatMap((part, index) => {
-      const extension = typeof part.mimeType === 'string' ? IMAGE_TYPES[part.mimeType] : undefined
-      return part.type === 'image' && typeof part.data === 'string' && extension
-        ? [this.host.attachments.add(`${slug(text)}-${index + 1}.${extension}`, Buffer.from(part.data, 'base64'))]
-        : []
-    })
     if (base.ability === 'image_generation' && !attachments.length)
       throw new Error(`${server} returned no image. ${clip(texts.join(' '), 300)}`.trim())
     return {

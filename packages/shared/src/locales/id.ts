@@ -6156,4 +6156,10 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Buat Developer API key, lalu tempel email akun Anda dan key yang digabung dengan titik dua (anda@example.com:key). Key ini menjangkau setiap database di akun',
   'Create a key with Full access, which creating sending keys needs; the app gets sending-only keys, never this one':
     'Buat key dengan Full access, yang diperlukan untuk membuat key pengiriman; aplikasi mendapat key khusus pengiriman, bukan key ini',
+  'Checked through the first thread that needs it, before Auto uses it.':
+    'Diperiksa lewat thread pertama yang membutuhkannya, sebelum Auto memakainya.',
+  '{0}: also try in Auto':
+    '{0}: coba juga di Auto',
+  'A Shared MCP tool Auto tries after your signed-in providers.':
+    'Alat Shared MCP yang dicoba Auto setelah penyedia yang Anda masuki.',
 }
