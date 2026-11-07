@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Image, Share, TextInput, View, useWindowDimensions } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { MoreHorizontal } from 'lucide-react-native'
+import { ArrowDown, ArrowUp, MoreHorizontal } from 'lucide-react-native'
+import type { Slide } from '@ramu/shared/artifactSource'
 import {
   interactiveHtml,
   readInteractiveState,
@@ -22,7 +23,7 @@ import { useStore } from '../../../runtime/store'
 import { useSay } from '../../../i18n'
 import { contentStorage } from '../../../storage'
 import { Header, HeaderButton, Screen } from '../../../components/Screen'
-import { Button, Card, Row, Sheet, T } from '../../../components/ui'
+import { Button, Card, IconButton, Row, Sheet, T } from '../../../components/ui'
 import InteractiveFrame from '../../../components/InteractiveFrame'
 import { hostShareLabel, SHARE_LABELS } from '../../../components/ArtifactKindMark'
 import { shareFile } from '../../../components/interactiveShare'
@@ -87,6 +88,18 @@ export default function PageScreen() {
   // A doc's Markdown while the person edits it on the phone, and the version that edit started from.
   const [editing, setEditing] = useState<{ base: number; text: string } | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
+  const field = {
+    color: c.text,
+    fontSize: font.control,
+    backgroundColor: c.fill,
+    borderRadius: 10,
+    paddingHorizontal: space.m,
+    paddingVertical: space.s,
+  } as const
+  // A deck's slide text and order while the person edits it on the phone, and the version it started from.
+  const [editingSlides, setEditingSlides] = useState<{ base: number; slides: (Slide & { from: number })[] } | null>(
+    null,
+  )
   const [frameError, setFrameError] = useState('')
   const [generation, setGeneration] = useState(0)
   const state = useRef<InteractiveState | null>(null)
@@ -675,6 +688,24 @@ export default function PageScreen() {
                 <T>{say('Edit text')}</T>
               </Row>
             ) : null}
+            {page?.kind === 'slides' && document && online && !shared && !viewer ? (
+              <Row
+                onPress={() => {
+                  setMenu(false)
+                  const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.slides)?.content
+                  if (stored)
+                    setEditingSlides({
+                      base: document.reference.version,
+                      slides: (JSON.parse(stored) as { slides: Slide[] }).slides.map((slide, from) => ({
+                        ...slide,
+                        from,
+                      })),
+                    })
+                }}
+              >
+                <T>{say('Edit text')}</T>
+              </Row>
+            ) : null}
             {(document ? kindExports(document, theme) : []).map(({ format, file }) => (
               <Row
                 key={format}
@@ -768,6 +799,104 @@ export default function PageScreen() {
                     void load()
                   })
                   // A newer version or a problem in the text keeps the edit open, so nothing typed is lost.
+                  .catch((failure) => Alert.alert(say('That didn’t work'), reason(failure)))
+                  .finally(() => setSavingEdit(false))
+              }}
+            />
+          </View>
+        ) : null}
+      </Sheet>
+      <Sheet
+        presentation="screen"
+        open={!!editingSlides}
+        onClose={() => setEditingSlides(null)}
+        title={say('Edit text')}
+      >
+        {editingSlides ? (
+          <View style={{ padding: space.l, gap: space.l }}>
+            {editingSlides.slides.map((slide, index) => {
+              const change = (patch: Partial<Slide>) =>
+                setEditingSlides({
+                  ...editingSlides,
+                  slides: editingSlides.slides.map((entry, at) => (at === index ? { ...entry, ...patch } : entry)),
+                })
+              const move = (by: number) => {
+                const slides = [...editingSlides.slides]
+                const [moved] = slides.splice(index, 1)
+                slides.splice(index + by, 0, moved!)
+                setEditingSlides({ ...editingSlides, slides })
+              }
+              return (
+                <View key={slide.from} style={{ gap: space.s }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+                    <T size={font.caption} tone="muted" style={{ flex: 1 }}>
+                      {say('Slide {number}', { number: index + 1 })}
+                    </T>
+                    <IconButton
+                      icon={ArrowUp}
+                      label={say('Move slide {number} up', { number: index + 1 })}
+                      disabled={index === 0}
+                      onPress={() => move(-1)}
+                    />
+                    <IconButton
+                      icon={ArrowDown}
+                      label={say('Move slide {number} down', { number: index + 1 })}
+                      disabled={index === editingSlides.slides.length - 1}
+                      onPress={() => move(1)}
+                    />
+                  </View>
+                  {slide.layout !== 'quote' ? (
+                    <TextInput
+                      accessibilityLabel={say('Title of slide {number}', { number: index + 1 })}
+                      value={slide.title ?? ''}
+                      onChangeText={(title) => change({ title })}
+                      style={field}
+                    />
+                  ) : null}
+                  {slide.layout === 'two-columns' && slide.columns ? null : (
+                    <TextInput
+                      accessibilityLabel={say('Text of slide {number}', { number: index + 1 })}
+                      multiline
+                      value={slide.body ?? ''}
+                      onChangeText={(body) => change({ body })}
+                      style={[field, { minHeight: 72 }]}
+                    />
+                  )}
+                  <TextInput
+                    accessibilityLabel={say('Speaker notes of slide {number}', { number: index + 1 })}
+                    placeholder={say('Speaker notes')}
+                    placeholderTextColor={c.muted}
+                    multiline
+                    value={slide.notes ?? ''}
+                    onChangeText={(notes) => change({ notes })}
+                    style={[field, { minHeight: 56 }]}
+                  />
+                </View>
+              )
+            })}
+            <T size={font.caption} tone="muted">
+              {say('Saving makes v{version}, marked Edited by you.', { version: editingSlides.base + 1 })}
+            </T>
+            <Button
+              title={say('Save')}
+              disabled={savingEdit}
+              onPress={() => {
+                setSavingEdit(true)
+                // Columns and quote attribution are edited on the desktop; here they are sent back as they were.
+                const edits = editingSlides.slides.map(({ from, title, body, columns, by, notes }) => ({
+                  from,
+                  title: title ?? '',
+                  body: body ?? '',
+                  by: by ?? '',
+                  notes: notes ?? '',
+                  ...(columns ? { columns } : {}),
+                }))
+                store
+                  .invoke(computerId, 'artifacts.editSlides', artifactId, editingSlides.base, edits)
+                  .then(() => {
+                    setEditingSlides(null)
+                    void load()
+                  })
                   .catch((failure) => Alert.alert(say('That didn’t work'), reason(failure)))
                   .finally(() => setSavingEdit(false))
               }}
