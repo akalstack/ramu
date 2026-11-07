@@ -59,6 +59,7 @@ export const registerProviderHandlers: RegisterHandlers = ({
       run: (provider: ProviderStatus['provider']) => ability().recheck(provider),
     },
     'abilities.teammateModels': { args: z.tuple([]), run: () => ability().teammateModels() },
+    'abilities.mcpTools': { args: z.tuple([]), run: () => ability().mcpTools() },
     'abilities.again': {
       args: z.tuple([z.string().min(1).max(200), z.string().uuid(), z.boolean()]),
       run: (sessionId: string, callId: string, otherProvider: boolean) =>

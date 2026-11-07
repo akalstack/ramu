@@ -10,11 +10,15 @@ import {
   DEFAULT_ABILITY_PREFERENCES,
   abilityListing,
   abilityRoutes,
+  isMcpChoice,
+  MCP_ABILITIES,
   type Ability,
   type AbilityCall,
   type AbilityCheck,
   type AbilityHandle,
   type AbilityListing,
+  type AbilityMcpTool,
+  type AbilityMcpToolOption,
   type AbilityRoute,
   type AbilitySource,
   type AbilityTool,
@@ -52,6 +56,16 @@ export interface AbilityHost {
   search(query: string, signal: AbortSignal): Promise<JsonValue>
   /** The chosen login of a provider, its installed version and who is signed in; null when it cannot run now. */
   login(provider: AgentProvider): Promise<Omit<AbilityLogin, 'models'> | null>
+  /** Calls a Shared MCP tool mapped to an ability, through the thread's own Shared MCP access and approval. */
+  mcp?(
+    sessionId: string,
+    connectionId: string,
+    tool: string,
+    build: (inputSchema: Record<string, unknown>) => Record<string, unknown>,
+    signal: AbortSignal,
+  ): Promise<{ server: string; result: { content?: unknown[]; isError?: boolean } }>
+  /** Shared MCP tools approved on this host, which an ability can be mapped to. */
+  mcpTools?(): AbilityMcpToolOption[]
   /** Checks' kept results. */
   readChecks(): unknown
   writeChecks(checks: unknown[]): void
@@ -87,6 +101,33 @@ const TIMEOUT_MS: Record<AbilityTool, number> = {
 const LONG_READ_CHARS = 1_200_000
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif'])
 const REFRESH_EVERY_MS = 10 * 60_000
+
+/** A Shared MCP image's file extension, from the media type it reports. */
+const IMAGE_TYPES: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+}
+
+/**
+ * Arguments for a Shared MCP tool from the one text an ability passes: the property named like a prompt or query, else
+ * the first required text property, else the first text property.
+ */
+export function mcpArguments(schema: Record<string, unknown>, text: string): Record<string, unknown> {
+  const properties = (schema.properties ?? {}) as Record<string, { type?: unknown }>
+  const textual = Object.keys(properties).filter((key) => {
+    const type = properties[key]?.type
+    return type === undefined || type === 'string'
+  })
+  const required = Array.isArray(schema.required) ? (schema.required as unknown[]) : []
+  const key =
+    textual.find((name) => /^(prompt|query|q|text|input|description|search)$/i.test(name)) ??
+    textual.find((name) => required.includes(name)) ??
+    textual[0]
+  if (!key) throw new Error('This Shared MCP tool takes no text to send. Map the ability to another tool.')
+  return { [key]: text }
+}
 
 const clip = (text: string, n: number) => (text.length > n ? `${text.slice(0, n - 1)}…` : text)
 const slug = (text: string) =>
@@ -316,7 +357,7 @@ export class AbilityService {
       )
     const fixed = needs.flatMap((ability) => {
       const choice = abilities.choices[ability]
-      return choice && typeof choice === 'object' ? [choice.provider] : []
+      return choice && typeof choice === 'object' && 'provider' in choice ? [choice.provider] : []
     })
     const routing = prefs.subagents.model === 'pick' && prefs.subagents.step ? [prefs.subagents.step.provider] : []
     const candidates = [...new Set([...fixed, ...routing, ...this.order()])]
@@ -332,7 +373,9 @@ export class AbilityService {
     const models = (await this.host.catalog()).find((catalog) => catalog.provider === provider)?.models ?? []
     const chosen = needs.flatMap((ability) => {
       const choice = abilities.choices[ability]
-      return choice && typeof choice === 'object' && choice.provider === provider ? [choice.model] : []
+      return choice && typeof choice === 'object' && 'provider' in choice && choice.provider === provider
+        ? [choice.model]
+        : []
     })[0]
     const checked = passed.find((check) => check.provider === provider && check.ability === needs[0])?.model
     const model =
@@ -384,6 +427,11 @@ export class AbilityService {
       // The thread's project can narrow the host's choices in its ramu.json, such as keeping a client to one provider.
       const project = loadProjectConfig(session.cwd).config.abilities ?? {}
       const choices = { ...host.choices, ...project }
+      const mapped = choices[ability]
+      if (isMcpChoice(mapped))
+        return await this.track(ABILITY_LABELS[ability], clip(done.sent.prompt, 80), () =>
+          this.viaMcp(session, base, done, mapped, started, signal),
+        )
       const routes = abilityRoutes(
         ability,
         { ...host, choices },
@@ -501,6 +549,60 @@ export class AbilityService {
       'unavailable',
       `No signed-in provider here has ${ABILITY_LABELS[base.ability].toLowerCase()}. Continue without it and tell the person; they can set one up in Settings → Providers. Do not make a placeholder without saying so.`,
     )
+  }
+
+  /** Shared MCP tools approved on this host, for mapping an ability to one in Settings → Models → Abilities. */
+  mcpTools(): AbilityMcpToolOption[] {
+    return this.host.mcpTools?.() ?? []
+  }
+
+  /** Runs an ability on the Shared MCP tool it is mapped to, with the same grant and approval as any call to it. */
+  private async viaMcp(
+    session: AgentSessionInfo,
+    base: Pick<AbilityCall, 'id' | 'ability' | 'tool' | 'args'>,
+    prepared: Prepared,
+    choice: AbilityMcpTool,
+    started: number,
+    signal?: AbortSignal,
+  ): Promise<AbilityCall> {
+    if (!MCP_ABILITIES.includes(base.ability) || !this.host.mcp)
+      throw new Refusal(
+        'unavailable',
+        `${ABILITY_LABELS[base.ability]} cannot run on a Shared MCP tool. Choose a provider for it in Settings → Models → Abilities.`,
+      )
+    const text = String(base.args.prompt ?? base.args.query ?? prepared.sent.prompt)
+    const { server, result } = await this.host.mcp(
+      session.id,
+      choice.connectionId,
+      choice.tool,
+      (schema) => mcpArguments(schema, text),
+      signal ?? new AbortController().signal,
+    )
+    const content = (Array.isArray(result.content) ? result.content : []) as {
+      type?: unknown
+      text?: unknown
+      data?: unknown
+      mimeType?: unknown
+    }[]
+    const texts = content.flatMap((part) => (part.type === 'text' && typeof part.text === 'string' ? [part.text] : []))
+    if (result.isError) throw new Error(`${server} returned an error. ${clip(texts.join(' '), 300)}`.trim())
+    const attachments = content.flatMap((part, index) => {
+      const extension = typeof part.mimeType === 'string' ? IMAGE_TYPES[part.mimeType] : undefined
+      return part.type === 'image' && typeof part.data === 'string' && extension
+        ? [this.host.attachments.add(`${slug(text)}-${index + 1}.${extension}`, Buffer.from(part.data, 'base64'))]
+        : []
+    })
+    if (base.ability === 'image_generation' && !attachments.length)
+      throw new Error(`${server} returned no image. ${clip(texts.join(' '), 300)}`.trim())
+    return {
+      ...base,
+      status: 'done',
+      mcp: { server, tool: choice.tool },
+      sent: prepared.sent,
+      summary: clip(texts.join('\n\n'), 6_000),
+      ...(attachments.length ? { attachments } : {}),
+      durationMs: Date.now() - started,
+    }
   }
 
   private async keylessSearch(

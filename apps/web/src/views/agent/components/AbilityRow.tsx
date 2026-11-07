@@ -14,7 +14,13 @@ const ICONS = { image_generation: ImageIcon, image_edit: ImageIcon, web_search: 
 
 /** Who ran the call, as the row's headline says it. */
 const abilityRunner = (call: AbilityCall) =>
-  call.provider === 'ramu' ? t("Ramu's search") : call.provider ? providerName(call.provider) : ''
+  call.mcp
+    ? call.mcp.server
+    : call.provider === 'ramu'
+      ? t("Ramu's search")
+      : call.provider
+        ? providerName(call.provider)
+        : ''
 
 /** One ability call in the thread: what ran where, what was sent, the result, and how to run it again. */
 export function AbilityRow({ call, sessionId, live }: { call: AbilityCall; sessionId: string; live: boolean }) {
@@ -90,7 +96,7 @@ export function AbilityRow({ call, sessionId, live }: { call: AbilityCall; sessi
               {running === 'same' ? t('Making another…') : t('Make another')}
             </Button>
           )}
-          {done && call.provider !== 'ramu' && (
+          {done && call.provider !== 'ramu' && !call.mcp && (
             <Button
               variant="ghost"
               size="sm"

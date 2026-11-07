@@ -208,6 +208,36 @@ export class ExternalSessionTools {
     return entries
   }
 
+  /**
+   * One approved tool called for Ramu itself (an ability mapped to it), through the chat's own gateway: the same grant,
+   * catalog and approval checks as when the agent calls it. `build` turns the tool's input schema into its arguments.
+   */
+  async callTool(
+    source: ExternalSessionSource,
+    connectionId: string,
+    toolName: string,
+    build: (inputSchema: Record<string, unknown>) => Record<string, unknown>,
+    signal?: AbortSignal,
+  ) {
+    const entry = (await this.list(source, signal)).find(
+      (item) => item.connectionId === connectionId && item.tool.name === toolName,
+    )
+    if (!entry)
+      throw new Error('That Shared MCP tool is not approved for this thread. Review access in Settings → Agent setup.')
+    const server =
+      this.service()
+        .policy.snapshot()
+        .connections.find((connection) => connection.id === connectionId)?.name ?? 'Shared MCP'
+    const result = await this.gateway(source).invoke(
+      connectionId,
+      entry.catalogRevision,
+      toolName,
+      build(entry.tool.inputSchema as Record<string, unknown>),
+      signal,
+    )
+    return { server, result }
+  }
+
   private build(source: ExternalSessionSource) {
     const server = new Server({ name: EXTERNAL_MCP_SERVER, version: '0.1.0' }, { capabilities: { tools: {} } })
     server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => ({

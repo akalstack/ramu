@@ -698,6 +698,23 @@ const abilities = new AbilityService(
     attachments: abilityAttachments,
     search: (query, signal) => webSearch(query, signal),
     login: (provider) => providerLogin(provider, abilityPreferences().providerBinaries),
+    // Defined below; an ability call only reaches these after start-up.
+    mcp: (sessionId, connectionId, tool, build, signal) =>
+      externalTools.callTool(externalSource(agents.get(sessionId)), connectionId, tool, build, signal),
+    mcpTools: () => {
+      const { connections, grants } = getSharedMcp().policy.snapshot()
+      const seen = new Set<string>()
+      return grants.flatMap((grant) => {
+        const connection = connections.find((entry) => entry.id === grant.connectionId && entry.enabled)
+        if (!connection) return []
+        return grant.tools.flatMap((tool) => {
+          const key = `${connection.id}\u0000${tool.name}`
+          if (seen.has(key)) return []
+          seen.add(key)
+          return [{ connectionId: connection.id, tool: tool.name, server: connection.name }]
+        })
+      })
+    },
     readChecks: () => workspace.getAppState<unknown>('ability-checks', []),
     writeChecks: (checks) => workspace.setAppState('ability-checks', checks),
   },

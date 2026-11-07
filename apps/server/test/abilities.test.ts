@@ -12,7 +12,7 @@ import {
   type ProviderCatalog,
 } from '@ramu/shared/types'
 import type { AbilityCall, AbilityPreferences } from '@ramu/shared/providers/abilities'
-import { AbilityService, type AbilityHost } from '../src/agent/abilities'
+import { AbilityService, mcpArguments, type AbilityHost } from '../src/agent/abilities'
 import type { AbilityRun } from '../src/agent/abilityRuns'
 import type { AbilityDeclaration } from '../src/providers/adapter'
 import { AttachmentStore } from '../src/attachments'
@@ -84,8 +84,10 @@ function service(
   run: AbilityRun,
   provider: AgentProvider = 'claude-code',
   versions = { codex: '1.0.0', 'claude-code': '2.0.0' },
+  extra: Partial<AbilityHost> = {},
 ) {
   const host: AbilityHost = {
+    ...extra,
     preferences: () => preferences,
     catalog: async () => catalogs,
     session: () => session(provider),
@@ -332,6 +334,56 @@ describe('ability calls', () => {
     expect(first.provider).toBe('claude-code')
     const again = await abilities.again('thread', first.id, true)
     expect(again).toMatchObject({ status: 'done', provider: 'codex' })
+  })
+})
+
+describe('abilities on a Shared MCP tool', () => {
+  it('fills the tool’s prompt or query, else its first required text', () => {
+    expect(mcpArguments({ properties: { size: { type: 'number' }, prompt: { type: 'string' } } }, 'apple')).toEqual({
+      prompt: 'apple',
+    })
+    expect(
+      mcpArguments({ properties: { a: { type: 'string' }, b: { type: 'string' } }, required: ['b'] }, 'x'),
+    ).toEqual({
+      b: 'x',
+    })
+    expect(() => mcpArguments({ properties: { n: { type: 'number' } } }, 'x')).toThrow('takes no text')
+  })
+
+  it('runs a mapped ability on the tool through the thread’s own MCP access, and names the server', async () => {
+    const mcp = vi.fn<NonNullable<AbilityHost['mcp']>>(async (_session, _connection, tool, build) => {
+      const args = build({ properties: { prompt: { type: 'string' } } })
+      return tool === 'make'
+        ? {
+            server: 'Pictures',
+            result: {
+              content: [
+                { type: 'text', text: `Made ${String(args.prompt)}` },
+                { type: 'image', data: PNG.toString('base64'), mimeType: 'image/png' },
+              ],
+            },
+          }
+        : { server: 'Pictures', result: { isError: true, content: [{ type: 'text', text: 'quota' }] } }
+    })
+    const abilities = service(working, 'claude-code', undefined, { mcp })
+    withAbilities({ choices: { image_generation: { connectionId: 'c1', tool: 'make' } } })
+    const call = await abilities.call('thread', 'generate_image', { prompt: 'a red apple' })
+    expect(call).toMatchObject({ status: 'done', summary: 'Made a red apple' })
+    const recorded = (events.at(-1) as { call: AbilityCall }).call
+    expect(recorded.mcp).toEqual({ server: 'Pictures', tool: 'make' })
+    expect(recorded.attachments).toHaveLength(1)
+    expect(mcp).toHaveBeenCalledWith('thread', 'c1', 'make', expect.any(Function), expect.any(AbortSignal))
+    withAbilities({ choices: { image_generation: { connectionId: 'c1', tool: 'broken' } } })
+    expect(await abilities.call('thread', 'generate_image', { prompt: 'x' })).toMatchObject({
+      status: 'failed',
+      message: expect.stringContaining('Pictures returned an error. quota'),
+    })
+    withAbilities({ choices: { long_context: { connectionId: 'c1', tool: 'make' } } })
+    writeFileSync(join(cwd, 'notes.md'), 'Tuesday.')
+    expect(await abilities.call('thread', 'read_long', { question: 'When?', files: ['notes.md'] })).toMatchObject({
+      status: 'refused',
+      message: expect.stringContaining('cannot run on a Shared MCP tool'),
+    })
   })
 })
 

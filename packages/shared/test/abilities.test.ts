@@ -3,6 +3,7 @@ import {
   DEFAULT_ABILITY_PREFERENCES,
   abilityListing,
   abilityRoutes,
+  isMcpChoice,
   type AbilityCheck,
 } from '../src/providers/abilities'
 
@@ -17,6 +18,12 @@ const chosen = () => 'default'
 
 describe('ability routing', () => {
   const checks = [check('codex', 'web_search'), check('claude-code', 'web_search'), check('codex', 'image_generation')]
+
+  it('sends an ability mapped to a Shared MCP tool to no provider', () => {
+    const mapped = { choices: { web_search: { connectionId: 'c1', tool: 'search' } }, askBeforeOtherProvider: false }
+    expect(isMcpChoice(mapped.choices.web_search)).toBe(true)
+    expect(abilityRoutes('web_search', mapped, checks, ['codex'], chosen)).toEqual([])
+  })
 
   it('tries every provider whose check passed, in the fallback order', () => {
     const routes = abilityRoutes('web_search', DEFAULT_ABILITY_PREFERENCES, checks, ['claude-code', 'codex'], chosen)

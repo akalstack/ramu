@@ -448,7 +448,13 @@ function AbilityCard({ call, chat }: { call: AbilityCall; chat: Chat }) {
   const [running, setRunning] = useState(false)
   const done = call.status === 'done'
   const image = call.ability === 'image_generation' || call.ability === 'image_edit'
-  const runner = call.provider === 'ramu' ? say("Ramu's search") : call.provider ? providerName(call.provider) : ''
+  const runner = call.mcp
+    ? call.mcp.server
+    : call.provider === 'ramu'
+      ? say("Ramu's search")
+      : call.provider
+        ? providerName(call.provider)
+        : ''
   const headline = done
     ? say(ABILITY_DONE[call.ability], { '0': runner })
     : say(call.status === 'refused' ? '{0} not used' : '{0} failed', { '0': say(ABILITY_LABELS[call.ability]) })
@@ -493,7 +499,7 @@ function AbilityCard({ call, chat }: { call: AbilityCall; chat: Chat }) {
           {done && image ? (
             <Button kind="secondary" title={say('Make another')} disabled={running} onPress={() => again(false)} />
           ) : null}
-          {done && call.provider !== 'ramu' ? (
+          {done && call.provider !== 'ramu' && !call.mcp ? (
             <Button kind="ghost" title={say('Use another provider')} disabled={running} onPress={() => again(true)} />
           ) : null}
           {call.refusal === 'unavailable' ? (

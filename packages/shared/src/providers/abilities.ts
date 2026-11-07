@@ -70,8 +70,28 @@ export interface AbilityCheck {
   detail?: string
 }
 
-/** Auto picks the best signed-in provider; a fixed choice names one provider and model; Off refuses the ability. */
-export type AbilityChoice = 'auto' | 'off' | { provider: AgentProvider; model: string }
+/** A Shared MCP server's tool the person mapped to an ability, called through the thread's own Shared MCP access. */
+export interface AbilityMcpTool {
+  connectionId: string
+  tool: string
+}
+
+/**
+ * Auto picks the best signed-in provider; a fixed choice names one provider and model, or a Shared MCP tool; Off
+ * refuses the ability.
+ */
+export type AbilityChoice = 'auto' | 'off' | { provider: AgentProvider; model: string } | AbilityMcpTool
+
+/** Abilities a Shared MCP tool can stand in for: the ones that take only text, so any such tool can be given it. */
+export const MCP_ABILITIES: readonly Ability[] = ['image_generation', 'web_search']
+
+/** A Shared MCP tool offered for mapping, with its server's name for the menu. */
+export interface AbilityMcpToolOption extends AbilityMcpTool {
+  server: string
+}
+
+export const isMcpChoice = (choice: AbilityChoice | undefined): choice is AbilityMcpTool =>
+  typeof choice === 'object' && 'connectionId' in choice
 
 export interface AbilityPreferences {
   choices: Partial<Record<Ability, AbilityChoice>>
@@ -109,6 +129,8 @@ export function abilityRoutes(
       check.accountId === currentAccount(check.provider) &&
       !exclude.has(check.provider),
   )
+  // A Shared MCP tool runs through the thread's own MCP access, never on a provider.
+  if (isMcpChoice(choice)) return []
   if (typeof choice === 'object') {
     const check = passed.find((entry) => entry.provider === choice.provider)
     return check ? [{ provider: choice.provider, model: choice.model || check.model, accountId: check.accountId }] : []
@@ -175,6 +197,8 @@ export interface AbilityCall {
   status: 'done' | 'failed' | 'refused'
   provider?: AgentProvider | 'ramu'
   model?: string
+  /** The Shared MCP server and tool that ran it, when the ability is mapped to one. */
+  mcp?: { server: string; tool: string }
   sent: { prompt: string; inputs: string[] }
   /** The caller's arguments, so the person can run the same call again. */
   args: Record<string, unknown>

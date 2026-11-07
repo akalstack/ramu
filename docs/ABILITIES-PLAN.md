@@ -35,8 +35,10 @@ Abilities let a thread's agent ask Ramu for something its provider cannot do (an
 
 ### 4. Abilities from Shared MCP servers
 
-- A Shared MCP server the person connected (an image, speech or search service) can provide an ability. The person maps one of its tools to an ability in **Settings → Models → Abilities** ("generate_image uses Replicate's `create_prediction`"). Ramu then calls that tool through the existing Shared MCP gateway, with the same approval rules as any MCP call.
+Image generation and web search can be mapped to an approved Shared MCP tool (see [Abilities](guide/agents.md#abilities)). Remaining:
+
 - An MCP-provided ability is listed beside providers in Auto, with the same live check and quality score before it is used automatically.
+- Speech, image editing and long reads on an MCP tool, once a way to pass files and audio to a generic tool is settled.
 
 ### 5. Music and sound effects
 
@@ -46,6 +48,5 @@ Abilities let a thread's agent ask Ramu for something its provider cannot do (an
 ## Acceptance
 
 - **Cost-aware Auto:** with two providers that can make images, Auto picks the cheaper one whose score is within the margin, and the row says why.
-- **MCP ability:** an image service connected as a Shared MCP server and mapped to `generate_image` makes the hero image, with its call recorded like any MCP call.
 - **Music:** a Motion explainer gets background music from a provider that offers it, and the exported MP4 has it mixed under the narration.
 - Checks that need live providers are listed under [Acceptance](roadmap.md#acceptance) until run.

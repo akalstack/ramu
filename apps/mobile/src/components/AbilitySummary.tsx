@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { View } from 'react-native'
-import { ABILITIES, ABILITY_LABELS, type AbilityCheck, type AbilityChoice } from '@ramu/shared/providers/abilities'
+import {
+  ABILITIES,
+  ABILITY_LABELS,
+  isMcpChoice,
+  type AbilityCheck,
+  type AbilityChoice,
+} from '@ramu/shared/providers/abilities'
 import { providerName } from '@ramu/shared/providers/providers'
 import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
@@ -31,7 +37,9 @@ export function AbilitySummary({ hostId }: { hostId: string }) {
       ? say('Auto')
       : choice === 'off'
         ? say('Off')
-        : `${choice.model} · ${providerName(choice.provider)}`
+        : isMcpChoice(choice)
+          ? `${choice.tool} · ${say('Shared MCP')}`
+          : `${choice.model} · ${providerName(choice.provider)}`
   return (
     <>
       <SectionLabel>{say('Abilities')}</SectionLabel>

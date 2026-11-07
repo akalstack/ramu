@@ -4,9 +4,13 @@ import {
   ABILITIES,
   ABILITY_LABELS,
   DEFAULT_ABILITY_PREFERENCES,
+  MCP_ABILITIES,
+  isMcpChoice,
   type Ability,
   type AbilityCheck,
   type AbilityChoice,
+  type AbilityMcpTool,
+  type AbilityMcpToolOption,
   type AbilityPreferences,
 } from '@ramu/shared/providers/abilities'
 import { providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
@@ -20,8 +24,15 @@ import { errorText } from '../lib/errors'
 import { modelDisplayName, useModelSets } from '../models/ModelSets'
 import { useSettingsInvoke } from './SettingsScope'
 
+const mcpValue = (tool: AbilityMcpTool) => `mcp:${tool.connectionId}:${tool.tool}`
 const choiceValue = (choice: AbilityChoice | undefined) =>
-  !choice || choice === 'auto' ? 'auto' : choice === 'off' ? 'off' : `${choice.provider}:${choice.model}`
+  !choice || choice === 'auto'
+    ? 'auto'
+    : choice === 'off'
+      ? 'off'
+      : isMcpChoice(choice)
+        ? mcpValue(choice)
+        : `${choice.provider}:${choice.model}`
 
 /** Settings › Models › Abilities: which provider runs each ability for threads whose own provider lacks it. */
 export function AbilitySettings({
@@ -38,6 +49,11 @@ export function AbilitySettings({
   const { catalogs } = useModelSets()
   const [checks, setChecks] = useState<AbilityCheck[] | null>(null)
   const [running, setRunning] = useState(false)
+  // Approved Shared MCP tools an image or search ability can run on instead of a provider.
+  const [mcpTools, setMcpTools] = useState<AbilityMcpToolOption[]>([])
+  useEffect(() => {
+    void invoke('abilities.mcpTools').then(setMcpTools, () => setMcpTools([]))
+  }, [invoke])
   const abilities: AbilityPreferences = { ...DEFAULT_ABILITY_PREFERENCES, ...value.abilities }
   useEffect(() => {
     let active = true
@@ -83,12 +99,17 @@ export function AbilitySettings({
             value: `${check.provider}:${check.model}`,
             label: `${modelName(check.provider, check.model)} · ${providerName(check.provider)}`,
           })),
+          ...(MCP_ABILITIES.includes(ability)
+            ? mcpTools.map((tool) => ({ value: mcpValue(tool), label: `${tool.tool} · ${tool.server}` }))
+            : []),
           { value: 'off', label: t('Off') },
         ]
         if (typeof choice === 'object' && !options.some((option) => option.value === current))
           options.splice(1, 0, {
             value: current,
-            label: `${modelName(choice.provider, choice.model)} · ${providerName(choice.provider)}`,
+            label: isMcpChoice(choice)
+              ? `${choice.tool} · ${t('Shared MCP')}`
+              : `${modelName(choice.provider, choice.model)} · ${providerName(choice.provider)}`,
           })
         return (
           <SettingsRow key={ability}>
@@ -112,6 +133,8 @@ export function AbilitySettings({
               options={options}
               onChange={(next) => {
                 if (next === 'auto' || next === 'off') return set(ability, next)
+                const tool = mcpTools.find((entry) => mcpValue(entry) === next)
+                if (tool) return set(ability, { connectionId: tool.connectionId, tool: tool.tool })
                 const [provider, ...model] = next.split(':')
                 const check = passed.find((entry) => entry.provider === provider)
                 if (check) set(ability, { provider: check.provider, model: model.join(':') })

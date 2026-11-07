@@ -101,7 +101,11 @@ const subagentPreferences = z.preprocess(
     codexHook: z.boolean().default(false),
   }),
 )
-const abilityChoice = z.union([z.enum(['auto', 'off']), z.object({ provider: providerId, model: z.string().max(200) })])
+const abilityChoice = z.union([
+  z.enum(['auto', 'off']),
+  z.object({ provider: providerId, model: z.string().max(200) }),
+  z.object({ connectionId: z.string().min(1).max(200), tool: z.string().min(1).max(200) }),
+])
 /** Auto, Off or one provider and model per ability; a project's `ramu.json` can set these over the host's. */
 export const abilityChoices = z.object(
   Object.fromEntries(ABILITIES.map((ability) => [ability, abilityChoice.optional()])),
