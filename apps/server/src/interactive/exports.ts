@@ -23,7 +23,7 @@ const KEPT_EXPORTS = 40
 const MIME: Record<HostExportFormat, string> = {
   pdf: 'application/pdf',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  png: 'application/zip',
+  png: 'image/png',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 }
 
@@ -108,6 +108,13 @@ function printPdf(document: InteractiveDocument): Promise<Buffer> {
   )
 }
 
+/** A diagram as one PNG at twice its drawn size, on the page's own background. */
+function diagramImage(document: InteractiveDocument): Promise<Buffer> {
+  return withPage(document, { width: 1200, height: 900 }, 2, (page) =>
+    page.locator('.ramu-diagram').first().screenshot({ type: 'png', animations: 'disabled' }),
+  )
+}
+
 /** One 1920 × 1080 PNG per slide, numbered in order, in one zip. */
 function slideImages(document: InteractiveDocument): Promise<Buffer> {
   return withPage(document, { width: 1280, height: 720 }, 1.5, async (page) => {
@@ -142,7 +149,10 @@ export class ArtifactExports {
     private readonly makers: {
       pdf(document: InteractiveDocument): Promise<Buffer>
       png(document: InteractiveDocument): Promise<Buffer>
-    } = { pdf: printPdf, png: slideImages },
+    } = {
+      pdf: printPdf,
+      png: (document) => (document.reference.kind === 'diagram' ? diagramImage(document) : slideImages(document)),
+    },
   ) {}
 
   async make(document: InteractiveDocument, format: HostExportFormat): Promise<ExportedFile> {
@@ -153,13 +163,16 @@ export class ArtifactExports {
       .update(document.html)
       .update(JSON.stringify(document.files ?? null))
       .digest('hex')
-    const name = `${exportFileName(document.reference.title)}${format === 'png' ? ' slides.zip' : `.${format}`}`
+    const slidesZip = format === 'png' && kind === 'slides'
+    const name = `${exportFileName(document.reference.title)}${slidesZip ? ' slides.zip' : `.${format}`}`
+    // A deck's slide images travel as one zip; a diagram's image is a single PNG.
+    const mime = slidesZip ? 'application/zip' : MIME[format]
     const kept = this.db
       .prepare('SELECT data FROM interactive_exports WHERE id=? AND version=? AND format=? AND digest=?')
       .get(id, version, format, digest) as { data: Uint8Array } | undefined
     const file = (bytes: Uint8Array): ExportedFile => ({
       name,
-      mimeType: MIME[format],
+      mimeType: mime,
       content: Buffer.from(bytes).toString('base64'),
       encoding: 'base64',
     })
@@ -183,7 +196,7 @@ export class ArtifactExports {
       .prepare(
         'INSERT OR REPLACE INTO interactive_exports(id,version,format,digest,name,mime,data,created_at) VALUES(?,?,?,?,?,?,?,?)',
       )
-      .run(id, version, format, digest, name, MIME[format], bytes, Date.now())
+      .run(id, version, format, digest, name, mime, bytes, Date.now())
     this.db
       .prepare(
         'DELETE FROM interactive_exports WHERE rowid NOT IN (SELECT rowid FROM interactive_exports ORDER BY created_at DESC LIMIT ?)',

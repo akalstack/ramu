@@ -82,4 +82,5 @@ it('exports a deck as HTML on the device and asks the host for PowerPoint, PDF a
   expect(hostExportFormats('slides')).toEqual(['pptx', 'pdf', 'png'])
   expect(hostExportFormats('app')).toEqual(['pdf'])
   expect(hostExportFormats('doc')).toEqual(['docx', 'pdf'])
+  expect(hostExportFormats('diagram')).toEqual(['png', 'pdf'])
 })

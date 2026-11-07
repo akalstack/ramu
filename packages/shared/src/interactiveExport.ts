@@ -40,11 +40,17 @@ export interface ExportedFile {
 export type HostExportFormat = 'pdf' | 'pptx' | 'png' | 'docx'
 
 /**
- * What the host can make for a kind: every kind prints to PDF, a deck also writes PowerPoint and slide images, and a doc
- * a Word file.
+ * What the host can make for a kind: every kind prints to PDF, a deck also writes PowerPoint and slide images, a doc
+ * a Word file and a diagram a PNG.
  */
 export function hostExportFormats(kind: ArtifactKind): HostExportFormat[] {
-  return kind === 'slides' ? ['pptx', 'pdf', 'png'] : kind === 'doc' ? ['docx', 'pdf'] : ['pdf']
+  return kind === 'slides'
+    ? ['pptx', 'pdf', 'png']
+    : kind === 'doc'
+      ? ['docx', 'pdf']
+      : kind === 'diagram'
+        ? ['png', 'pdf']
+        : ['pdf']
 }
 
 /** How many slides a deck version has, read from the slide list it keeps; 0 for every other kind. */

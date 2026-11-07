@@ -88,7 +88,7 @@ const HOST_EXPORT_LABELS: Record<HostExportFormat, () => string> = {
 }
 
 /**
- * The files the host makes for a kind (PDF for every kind, PowerPoint and slide images for a deck, Word for a doc) for a menu. Making
+ * The files the host makes for a kind (PDF for every kind, PowerPoint and slide images for a deck, Word for a doc, PNG for a diagram) for a menu. Making
  * one can take a few seconds the first time, so a toast says so until it is saved.
  */
 export function hostExportEntries(
@@ -99,7 +99,7 @@ export function hostExportEntries(
 ): MenuEntry[] {
   return hostExportFormats(kind).map((format) => ({
     key: `export-${format}`,
-    label: HOST_EXPORT_LABELS[format](),
+    label: format === 'png' && kind === 'diagram' ? t('Export PNG') : HOST_EXPORT_LABELS[format](),
     disabled,
     onSelect: () => {
       const toast = notify.add({ type: 'loading', title: t('Making the export…'), description: title, timeout: 0 })

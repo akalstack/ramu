@@ -1,6 +1,6 @@
 import { InteractiveFollowupPicker } from './InteractiveFollowupPicker'
 import { shareFile } from './interactiveShare'
-import { ArtifactKindMark, HOST_SHARE_LABELS, SHARE_LABELS } from './ArtifactKindMark'
+import { ArtifactKindMark, hostShareLabel, SHARE_LABELS } from './ArtifactKindMark'
 import {
   hostExportFormats,
   interactiveExport,
@@ -517,7 +517,7 @@ export function InteractiveDocumentCard({
                 {hostExportFormats(artifactKind(reference.kind)).map((format) => (
                   <ContentAction
                     key={format}
-                    title={t(HOST_SHARE_LABELS[format])}
+                    title={t(hostShareLabel(format, artifactKind(reference.kind)))}
                     disabled={sharing}
                     onPress={() => shareMade(format)}
                   />

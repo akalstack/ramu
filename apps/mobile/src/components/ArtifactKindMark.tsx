@@ -19,13 +19,15 @@ export const SHARE_LABELS: Record<KindExportFormat, string> = {
   svg: 'Share SVG',
   mermaid: 'Share Mermaid',
 }
-/** Exports the host makes and the phone hands to the share sheet once they arrive. */
-export const HOST_SHARE_LABELS: Record<HostExportFormat, string> = {
+const HOST_SHARE_LABELS: Record<HostExportFormat, string> = {
   pptx: 'Share PowerPoint',
   pdf: 'Share PDF',
   png: 'Share slide images',
   docx: 'Share Word',
 }
+/** An export the host makes and the phone hands to the share sheet once it arrives; a diagram's PNG is one image. */
+export const hostShareLabel = (format: HostExportFormat, kind: ArtifactKind) =>
+  format === 'png' && kind === 'diagram' ? 'Share PNG' : HOST_SHARE_LABELS[format]
 
 /** The small mark rows and cards show for what an artifact is, named for screen readers. */
 export function ArtifactKindMark({ kind, size = 14, color }: { kind: ArtifactKind; size?: number; color: string }) {

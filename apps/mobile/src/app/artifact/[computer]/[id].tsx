@@ -23,7 +23,7 @@ import { contentStorage } from '../../../storage'
 import { Header, HeaderButton, Screen } from '../../../components/Screen'
 import { Button, Card, Row, Sheet, T } from '../../../components/ui'
 import InteractiveFrame from '../../../components/InteractiveFrame'
-import { HOST_SHARE_LABELS, SHARE_LABELS } from '../../../components/ArtifactKindMark'
+import { hostShareLabel, SHARE_LABELS } from '../../../components/ArtifactKindMark'
 import { shareFile } from '../../../components/interactiveShare'
 import { hostExportFormats, kindExports } from '@ramu/shared/interactiveExport'
 import { pageRunActivity } from '../../../runtime/pageRunActivity'
@@ -683,7 +683,7 @@ export default function PageScreen() {
                         .catch(() => setError(say('Could not share this content. Try again.')))
                     }}
                   >
-                    <T>{say(HOST_SHARE_LABELS[format])}</T>
+                    <T>{say(hostShareLabel(format, page.kind))}</T>
                   </Row>
                 ))
               : null}

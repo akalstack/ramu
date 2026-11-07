@@ -205,3 +205,52 @@ it.skipIf(!interactiveBrowserPath())(
   },
   60_000,
 )
+
+it('exports a doc as Word and a diagram as one PNG image', async () => {
+  const { db, interactive } = setup()
+  const png = vi.fn(async () => Buffer.from('\x89PNG made'))
+  const exports = new ArtifactExports(db, { pdf: vi.fn(), png })
+  const doc = await interactive.preview('s', {
+    kind: 'doc',
+    source: '# Plan\n\n- one',
+    title: 'Plan',
+    summary: 'P',
+    checks: [],
+  })
+  const docx = await exports.make(interactive.get('s', interactive.publish('s', doc.id, 'r1').id, 1), 'docx')
+  expect(docx).toMatchObject({
+    name: 'Plan.docx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  })
+  expect(Object.keys((await JSZip.loadAsync(Buffer.from(docx.content, 'base64'))).files)).toContain('word/document.xml')
+  const diagram = await interactive.preview('s', {
+    kind: 'diagram',
+    format: 'mermaid',
+    source: 'flowchart LR\n  A --> B',
+    title: 'Flow',
+    summary: 'F',
+    checks: [],
+  })
+  const image = await exports.make(interactive.get('s', interactive.publish('s', diagram.id, 'r2').id, 1), 'png')
+  expect(image).toMatchObject({ name: 'Flow.png', mimeType: 'image/png' })
+  expect(png).toHaveBeenCalledTimes(1)
+})
+
+it.skipIf(!interactiveBrowserPath())(
+  'draws a diagram’s PNG in the host’s browser',
+  async () => {
+    const { db, interactive } = setup(previewInteractive)
+    const diagram = await interactive.preview('s', {
+      kind: 'diagram',
+      format: 'mermaid',
+      source: 'flowchart LR\n  A --> B',
+      title: 'Flow',
+      summary: 'F',
+      checks: [],
+    })
+    const document = interactive.get('s', interactive.publish('s', diagram.id, 'r1').id, 1)
+    const png = Buffer.from((await new ArtifactExports(db).make(document, 'png')).content, 'base64')
+    expect(png.subarray(1, 4).toString()).toBe('PNG')
+  },
+  60_000,
+)
