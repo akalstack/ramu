@@ -6063,4 +6063,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Change the words on the diagram without its Mermaid source': 'Ubah kata-kata pada diagram tanpa sumber Mermaid-nya',
   'Play as video': 'Putar sebagai video',
   'Making the video…': 'Menyiapkan video…',
+  'Run {server}’s read-only tools without asking, so scheduled runs keep going':
+    'Jalankan alat baca-saja {server} tanpa bertanya, agar run terjadwal tetap berjalan',
 }

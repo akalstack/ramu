@@ -93,6 +93,7 @@ const grants = z
           daily: z.number().int().min(1).max(500),
           web: z.boolean().optional(),
           mcp: z.array(z.string().max(80)).max(8).optional(),
+          mcpReads: z.array(z.string().max(80)).max(8).optional(),
         }),
         z.literal(false),
       ])

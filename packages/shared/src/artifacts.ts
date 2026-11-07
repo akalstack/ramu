@@ -81,7 +81,8 @@ export type ArtifactCapability =
 export interface ArtifactGrants {
   records?: boolean
   /** False when the person said no; absent until they answer. */
-  ai?: { model: 'fast' | 'smart'; daily: number; web?: boolean; mcp?: string[] } | false
+  /** `mcpReads`: servers whose tools marked read-only run without asking each time; every other call still asks. */
+  ai?: { model: 'fast' | 'smart'; daily: number; web?: boolean; mcp?: string[]; mcpReads?: string[] } | false
   camera?: boolean
   notify?: boolean
   schedules?: boolean

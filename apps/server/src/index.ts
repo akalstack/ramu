@@ -688,6 +688,7 @@ const pageExternal: PageExternal = {
             server: connection.name,
             description: tool.description ?? tool.name,
             inputSchema: tool.inputSchema,
+            readOnly: tool.annotations?.readOnlyHint === true,
             call: async (args, callSignal) => {
               const result = await gateway.invoke(connection.id, found.catalogRevision, tool.name, args, callSignal)
               return JSON.parse(JSON.stringify(result.content ?? [])).slice(0, 20) as JsonValue

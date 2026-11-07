@@ -86,7 +86,12 @@ function grantsOf(
             daily,
             ...(page.capabilities.ai?.web ? { web: !!chosen['ai:web'] } : {}),
             ...(page.capabilities.ai?.mcp?.length
-              ? { mcp: page.capabilities.ai.mcp.filter((server) => chosen[`ai:mcp:${server}`]) }
+              ? {
+                  mcp: page.capabilities.ai.mcp.filter((server) => chosen[`ai:mcp:${server}`]),
+                  mcpReads: page.capabilities.ai.mcp.filter(
+                    (server) => chosen[`ai:mcp:${server}`] && chosen[`ai:mcpReads:${server}`],
+                  ),
+                }
               : {}),
           }
         : false
@@ -173,6 +178,17 @@ function GrantChoices({
               {t('Let its runs use {server}; each call asks you first', { server })}
             </label>
           ))}
+          {(page.capabilities.ai?.mcp ?? [])
+            .filter((server) => chosen[`ai:mcp:${server}`])
+            .map((server) => (
+              <label key={`reads:${server}`} className="ml-6 flex basis-full items-center gap-2">
+                <Checkbox
+                  checked={!!chosen[`ai:mcpReads:${server}`]}
+                  onCheckedChange={(checked) => setChosen({ ...chosen, [`ai:mcpReads:${server}`]: checked === true })}
+                />
+                {t('Run {server}’s read-only tools without asking, so scheduled runs keep going', { server })}
+              </label>
+            ))}
         </div>
       )}
       {names.includes('ramu') && chosen.ramu && (
@@ -260,6 +276,9 @@ export function PageSettings({ page, onClose }: { page: ArtifactInfo; onClose():
     ...Object.fromEntries(names.map((name) => [name, !!page.grants[name]])),
     'ai:web': !!(page.grants.ai && page.grants.ai.web),
     ...Object.fromEntries(((page.grants.ai && page.grants.ai.mcp) || []).map((server) => [`ai:mcp:${server}`, true])),
+    ...Object.fromEntries(
+      ((page.grants.ai && page.grants.ai.mcpReads) || []).map((server) => [`ai:mcpReads:${server}`, true]),
+    ),
   }))
   const [model, setModel] = useState<'fast' | 'smart'>((page.grants.ai && page.grants.ai.model) || 'fast')
   const [daily, setDaily] = useState((page.grants.ai && page.grants.ai.daily) || 200)

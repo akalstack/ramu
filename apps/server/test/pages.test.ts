@@ -358,7 +358,9 @@ it('gives page runs web search and only the Shared MCP servers granted, each cal
     open: vi.fn(async (_page: unknown, _settings: unknown, servers: string[]) => {
       opened(servers)
       return {
-        tools: [{ name: 'find', server: 'mail', description: 'Find mail', inputSchema: {}, call: mailCall }],
+        tools: [
+          { name: 'find', server: 'mail', description: 'Find mail', inputSchema: {}, readOnly: false, call: mailCall },
+        ],
         close: async () => {},
       }
     }),
@@ -387,6 +389,55 @@ it('gives page runs web search and only the Shared MCP servers granted, each cal
   expect(opened).toHaveBeenCalledWith(['mail'])
   expect(external.search).toHaveBeenCalledWith('usd idr', expect.anything())
   expect(mailCall).toHaveBeenCalledWith({ q: 'bank statement' }, expect.anything())
+})
+
+it('runs a server’s read-only tools without asking once allowed, and still asks for anything else', async () => {
+  const { pages, page } = await setup()
+  const db = (pages as unknown as { db: Db }).db
+  db.prepare('UPDATE artifacts SET data=json_set(data, ?, json(?)) WHERE id=?').run(
+    '$.capabilities',
+    JSON.stringify({ ai: { purpose: 'Bank summary', mcp: ['bank'] } }),
+    page.id,
+  )
+  pages.grant(page.id, { ai: { model: 'fast', daily: 20, mcp: ['bank'], mcpReads: ['bank'] } })
+  const read = vi.fn(async () => [{ type: 'text', text: 'balance 10' }])
+  const pay = vi.fn(async () => [{ type: 'text', text: 'paid' }])
+  const external = {
+    search: vi.fn(),
+    open: vi.fn(async () => ({
+      tools: [
+        { name: 'balance', server: 'bank', description: 'Balance', inputSchema: {}, readOnly: true, call: read },
+        { name: 'pay', server: 'bank', description: 'Pay', inputSchema: {}, readOnly: false, call: pay },
+      ],
+      close: async () => {},
+    })),
+  }
+  const steps = [{ tool: 'mcp_0', input: {} }, { tool: 'mcp_1', input: { to: 'x' } }, { answer: 'done' }]
+  const prompts: string[] = []
+  const ai = new PageAi(
+    pages,
+    async (prompt) => {
+      prompts.push(prompt)
+      return { message: JSON.stringify(steps.shift()), provider: 'codex', model: 'm' }
+    },
+    () => DEFAULT_AGENT_SETTINGS,
+    external as never,
+  )
+  const asked: string[] = []
+  const save = vi.spyOn(pages, 'saveRun').mockImplementation(function (this: PageStore, run) {
+    if (run.confirm && !asked.includes(run.confirm.id)) {
+      asked.push(run.confirm.id)
+      queueMicrotask(() => ai.answer(run.confirm!.id, false))
+    }
+    return PageStore.prototype.saveRun.call(this, run)
+  })
+  const run = await ai.run(page.id, 'Pay rent', { source: 'artifact' })
+  save.mockRestore()
+  expect(run.status).toBe('done')
+  expect(prompts[0]).toContain('reads; runs without asking')
+  expect(read).toHaveBeenCalled()
+  expect(asked).toHaveLength(1)
+  expect(pay).not.toHaveBeenCalled()
 })
 
 it.skipIf(!interactiveBrowserPath())(

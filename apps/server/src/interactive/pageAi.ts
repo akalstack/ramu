@@ -42,6 +42,8 @@ export interface PageExternalTool {
   server: string
   description: string
   inputSchema: unknown
+  /** The server marks the tool as only reading (MCP's readOnlyHint). */
+  readOnly: boolean
   call(args: Record<string, unknown>, signal: AbortSignal): Promise<JsonValue>
 }
 
@@ -264,6 +266,7 @@ export class PageAi {
             .catch(() => ({ tools: [] as PageExternalTool[], close: async () => {} }))
         : null
     const external = (opened?.tools ?? []).slice(0, 40)
+    const unasked = (entry: PageExternalTool) => entry.readOnly && !!ai?.mcpReads?.includes(entry.server)
     const tools = [
       ...(collections.length
         ? [
@@ -285,7 +288,7 @@ export class PageAi {
       ...(web ? ['web_search {query}: search the web; returns titles, links and snippets.'] : []),
       ...external.map(
         (entry, index) =>
-          `mcp_${index} ${JSON.stringify(entry.inputSchema).slice(0, 1500)}: [${entry.server}] ${entry.description.slice(0, 300)} (the person confirms each call)`,
+          `mcp_${index} ${JSON.stringify(entry.inputSchema).slice(0, 1500)}: [${entry.server}] ${entry.description.slice(0, 300)} (${unasked(entry) ? 'reads; runs without asking' : 'the person confirms each call'})`,
       ),
     ]
     const history: string[] = []
@@ -347,11 +350,13 @@ export class PageAi {
             result = await this.external!.search(String(input.query ?? '').slice(0, 300), controller.signal)
           } else if (/^mcp_\d+$/.test(tool) && external[Number(tool.slice(4))]) {
             const entry = external[Number(tool.slice(4))]!
-            // Anything that leaves the host through a server asks the person, whatever the grant.
-            const allowed = await this.confirm(
-              run,
-              `Use ${entry.server}: ${entry.name} with ${JSON.stringify(input).slice(0, 200)}?`,
-            )
+            // A call through a server asks the person, unless they let this artifact's reads of it run unasked.
+            const allowed =
+              unasked(entry) ||
+              (await this.confirm(
+                run,
+                `Use ${entry.server}: ${entry.name} with ${JSON.stringify(input).slice(0, 200)}?`,
+              ))
             result = allowed
               ? await entry.call(input as Record<string, unknown>, controller.signal)
               : { declined: true, note: 'The person did not allow this call.' }
