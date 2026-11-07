@@ -38,13 +38,13 @@ A developer can enter at any step: **Deploy** on an existing project, or **Set u
 Vercel, Netlify and the person's own server are built ([Deploying an app](guide/deploy.md)): `HostingAdapter` and its registry in `workspace/deploy/`, the shared shapes in `packages/shared/src/types/deploy.ts`, hosting accounts connected by the platform's CLI sign-in or a guided token page, the contract suite (`apps/server/test/deployAdapters.test.ts`), `deploy.*` IPC, the deploy tools and the Deploy sheet. A new platform is one adapter file, its sign-in and a contract entry. What remains:
 
 - **Capabilities still to declare:** the resource kinds a platform provisions. Netlify previews come from pull requests; a branch preview through its API is not declared.
-- **`ResourceAdapter`** (`workspace/deploy/resource.ts`, Neon, Supabase and Cloudflare D1, KV and R2 built, §2): a hosting platform that provisions through its marketplace implements it too (Vercel Marketplace, Netlify DB); a standalone provider (Upstash and Resend, built) implements only this one. Deleting a resource is not on the interface.
+- **`ResourceAdapter`** (`workspace/deploy/resource.ts`, Neon, Supabase and Cloudflare D1, KV and R2 built, §2): a hosting platform that provisions through its marketplace implements it too (the Vercel Marketplace, built); a standalone provider (Upstash and Resend, built) implements only this one. Deleting a resource is not on the interface.
 
 ### 2. Databases and storage
 
-`ResourceAdapter` with Neon (**Sign in with Neon**, or an API key on the guided token page), Supabase (access token, a second project for previews), Cloudflare D1, KV and R2 for Workers projects, Upstash Redis and Resend email, **Provision** in the deploy sheet for stacks or code that need a database, a `preview` branch for previews, this host and CI, connection variables in secrets sync, migrations before a production deploy from Ramu, and an opt-in hold that runs them before each production build goes live are built ([Databases](guide/deploy.md#databases)). What remains:
+`ResourceAdapter` with Neon (**Sign in with Neon**, or an API key on the guided token page), Supabase (access token, a second project for previews), Cloudflare D1, KV and R2 for Workers projects, Vercel Marketplace databases, a pointer to Netlify Database, Upstash Redis and Resend email, **Provision** in the deploy sheet for stacks or code that need a database, a `preview` branch for previews, this host and CI, connection variables in secrets sync, migrations before a production deploy from Ramu, and an opt-in hold that runs them before each production build goes live are built ([Databases](guide/deploy.md#databases)). What remains:
 
-- **More providers:** the platforms' own options (Vercel Marketplace, Netlify DB) and file storage outside Workers, each a `ResourceAdapter` with its `BrandId`, and the stack choice naming storage and email needs.
+- **More providers:** file storage outside Workers (Vercel Blob, Supabase Storage, R2 through its S3 API), each a `ResourceAdapter` with its `BrandId`, and the stack choice naming storage and email needs.
 
 ### 3. Cost and usage
 

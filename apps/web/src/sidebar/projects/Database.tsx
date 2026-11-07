@@ -147,13 +147,17 @@ function KindSection({
               </Button>
             </span>
             <span className="text-muted-foreground">
-              {resource.provider.startsWith('cloudflare-')
+              {resource.provider === 'vercel-marketplace'
                 ? t(
-                    'Bound to the Worker by a pull request, named as the code reads it; wrangler dev uses a separate preview copy.',
+                    'Vercel set its variables on the project for production, previews and development, and keeps the values; Ramu does not see them.',
                   )
-                : resource.previewBranch
-                  ? t(words.preview, { 0: resource.variables.join(', ') })
-                  : t('Sync below sets {0}.', { 0: resource.variables.join(', ') })}
+                : resource.provider.startsWith('cloudflare-')
+                  ? t(
+                      'Bound to the Worker by a pull request, named as the code reads it; wrangler dev uses a separate preview copy.',
+                    )
+                  : resource.previewBranch
+                    ? t(words.preview, { 0: resource.variables.join(', ') })
+                    : t('Sync below sets {0}.', { 0: resource.variables.join(', ') })}
             </span>
             {resource.provider === 'cloudflare-d1' && (
               <span className="text-muted-foreground">
@@ -172,6 +176,13 @@ function KindSection({
       ) : (
         <>
           <p className="text-caption text-muted-foreground">{t(words.offer)}</p>
+          {kind === 'database' && shown.platform === 'netlify' && (
+            <p className="text-caption text-muted-foreground">
+              {t(
+                'Or use Netlify Database: add @netlify/database to the app (netlify database init does it), and Netlify creates the database on the next deploy, gives each deploy preview its own branch and applies the migrations in netlify/database/migrations/.',
+              )}
+            </p>
+          )}
           <div role="radiogroup" aria-label={t('Provider')} className="flex flex-col gap-0.5">
             {providers.map((entry) => (
               <RowButton

@@ -8,6 +8,7 @@ import {
   RESOURCE_PROVIDERS,
   type ProjectResource,
   type ProjectResources,
+  type HostingPlatform,
   type ResourceKind,
   type ResourceProvider,
   type UsageReport,
@@ -53,13 +54,17 @@ export interface ResourceHost {
   setState(key: string, value: unknown): void
   /** The project's `ramu.json` stack facts. */
   stack(projectId: string): { database: boolean; migrate: string[] | null }
-  /** The platform the project deploys to, which decides whether D1 is offered. */
+  /** The platform the project deploys to, which decides whether D1, KV, R2 and the Vercel Marketplace are offered. */
   platform?(projectId: string): string | null
+  /** The project's id on that platform, and the team or account it is in there. */
+  site?(projectId: string): { id: string; scope: string | null } | null
 }
 
 /** D1, KV and R2 are reached through a Worker's binding, so they are offered only for a project on Cloudflare Workers. */
 const offered = (provider: ResourceProvider, platform: string | null | undefined) =>
-  !isWorkerProvider(provider) || platform === 'cloudflare-workers'
+  isWorkerProvider(provider)
+    ? platform === 'cloudflare-workers'
+    : provider !== 'vercel-marketplace' || platform === 'vercel'
 
 /** A migration that failed: its output tail, for the person and the thread. */
 export class MigrationError extends Error {
@@ -248,6 +253,7 @@ export class ResourceService {
             ? stack.database || appVariables.includes('DATABASE_URL')
             : NEEDS[kind].some((name) => appVariables.includes(name))),
       ),
+      platform: (this.host.platform?.(projectId) ?? null) as HostingPlatform | null,
       providers: RESOURCE_PROVIDERS.filter((provider) => offered(provider, this.host.platform?.(projectId))).map(
         (provider) => {
           const adapter = this.adapter(provider)
@@ -280,14 +286,17 @@ export class ResourceService {
     if (!adapter.plans.some((entry) => entry.id === plan)) throw new Error('Choose one of the offered plans.')
     if (!offered(provider, this.host.platform?.(projectId)))
       throw new Error(
-        `${adapter.name} is for a project deployed to Cloudflare Workers. Link the project to Workers first.`,
+        `${adapter.name} is for a project deployed to ${provider === 'vercel-marketplace' ? 'Vercel' : 'Cloudflare Workers'}. Link the project there first.`,
       )
     if (this.bindings(projectId).some((binding) => binding.kind === adapter.kind))
       throw new Error(`This project already has ${KIND_NAMES[adapter.kind]}. Manage it on the provider’s page.`)
     const { auth, accountId } = await this.auth(provider)
     let made
     try {
-      made = await adapter.provision(auth, { name }, plan)
+      // A platform's own marketplace works in the team the project is linked in.
+      const site = this.host.site?.(projectId) ?? null
+      const scoped = provider === 'vercel-marketplace' && site ? { ...auth, scope: site.scope } : auth
+      made = await adapter.provision(scoped, { name, ...(site ? { site: site.id } : {}) }, plan)
     } catch (error) {
       if (!(error instanceof ReplyLostError)) throw error
       made = await adapter.find(auth, name)

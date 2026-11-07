@@ -6172,4 +6172,10 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Penyimpanan file',
   'This Worker stores files. Provision creates an R2 bucket on your Cloudflare account, with a second one for wrangler dev.':
     'Worker ini menyimpan file. Provision membuat bucket R2 di akun Cloudflare Anda, dengan bucket kedua untuk wrangler dev.',
+  'Vercel set its variables on the project for production, previews and development, and keeps the values; Ramu does not see them.':
+    'Vercel mengatur variabelnya di proyek untuk produksi, preview, dan pengembangan, serta menyimpan nilainya; Ramu tidak melihatnya.',
+  'Postgres from a database integration your Vercel team installed, billed through Vercel; Vercel sets its variables on the project.':
+    'Postgres dari integrasi database yang dipasang tim Vercel Anda, ditagih lewat Vercel; Vercel mengatur variabelnya di proyek.',
+  'Or use Netlify Database: add @netlify/database to the app (netlify database init does it), and Netlify creates the database on the next deploy, gives each deploy preview its own branch and applies the migrations in netlify/database/migrations/.':
+    'Atau pakai Netlify Database: tambahkan @netlify/database ke aplikasi (netlify database init melakukannya), dan Netlify membuat database pada deploy berikutnya, memberi setiap deploy preview branch sendiri, dan menerapkan migrasi di netlify/database/migrations/.',
 }

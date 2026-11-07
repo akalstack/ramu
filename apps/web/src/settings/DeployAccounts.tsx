@@ -14,7 +14,10 @@ import { ServerConnect } from './ServerConnect'
 import { useSettingsInvoke } from './SettingsScope'
 
 /** What to pick on each platform's token page: the smallest scope it offers. */
-const SCOPE_HINT: Record<Exclude<AccountPlatform, 'server' | 'github-pages' | `cloudflare-${string}`>, string> = {
+const SCOPE_HINT: Record<
+  Exclude<AccountPlatform, 'server' | 'github-pages' | 'vercel-marketplace' | `cloudflare-${string}`>,
+  string
+> = {
   vercel: 'Scope: the team your projects are in, not Full Account',
   netlify: 'Netlify tokens reach every team you belong to, so choose an expiry',
   railway: 'Pick the workspace your projects are in, so the token reaches only that workspace',
@@ -84,8 +87,13 @@ export function DeployAccounts() {
     <>
       {/* GitHub Pages uses the repository's GitHub sign-in, listed under GitHub; there is nothing to connect. */}
       {summary?.accounts
-        // Workers and D1 use the Cloudflare row's token; GitHub Pages uses the repository's GitHub account.
-        .filter((account) => account.platform !== 'github-pages' && !account.platform.startsWith('cloudflare-'))
+        // Workers, D1, KV and R2 use the Cloudflare row's token and the Marketplace the Vercel row's; GitHub Pages uses
+        // the repository's GitHub account.
+        .filter(
+          (account) =>
+            !['github-pages', 'vercel-marketplace'].includes(account.platform) &&
+            !account.platform.startsWith('cloudflare-'),
+        )
         .map((account) => (
           <DeployAccountRow
             key={account.platform}
@@ -224,6 +232,7 @@ function DeployAccountRow({
       {open &&
         account.platform !== 'server' &&
         account.platform !== 'github-pages' &&
+        account.platform !== 'vercel-marketplace' &&
         !account.platform.startsWith('cloudflare-') && (
           <div className="mb-3 flex flex-col gap-3 rounded-(--radius-m) bg-fill p-4 text-caption">
             {cliPlatform && (

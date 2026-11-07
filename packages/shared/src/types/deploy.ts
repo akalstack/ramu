@@ -30,6 +30,7 @@ export const RESOURCE_PROVIDERS = [
   'cloudflare-kv',
   'cloudflare-r2',
   'resend',
+  'vercel-marketplace',
 ] as const
 export type ResourceProvider = (typeof RESOURCE_PROVIDERS)[number]
 
@@ -114,6 +115,8 @@ export interface ProjectResource {
 export interface ProjectResources {
   /** What the project's stack, or the variables its code reads, show it needs, in the sheet's order. */
   needs: ResourceKind[]
+  /** The platform the project deploys to, whose own database the sheet can point to. */
+  platform: HostingPlatform | null
   /** Providers that can create one, with their plans and whether an account is connected. */
   providers: {
     provider: ResourceProvider

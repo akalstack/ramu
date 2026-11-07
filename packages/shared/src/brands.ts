@@ -48,7 +48,8 @@ export function forgeBrand(service: ForgeService): BrandId {
 export function accountBrand(platform: AccountPlatform): BrandId {
   if (platform === 'server') return 'docker'
   if (platform === 'github-pages') return 'github'
+  if (platform === 'vercel-marketplace') return 'vercel'
   return platform.startsWith('cloudflare')
     ? 'cloudflare'
-    : (platform as Exclude<AccountPlatform, `cloudflare-${string}` | 'server' | 'github-pages'>)
+    : (platform as Exclude<AccountPlatform, `cloudflare-${string}` | 'server' | 'github-pages' | 'vercel-marketplace'>)
 }

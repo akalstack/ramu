@@ -25,6 +25,7 @@ import './supabase'
 import './upstash'
 import './resend'
 import './workerResources'
+import './vercelMarketplace'
 
 /** What an account needs from its platform's adapter: a name, a token page and who a token belongs to. */
 type AccountAdapter = Pick<HostingAdapter, 'name' | 'tokenPage' | 'account'> & { kind: HostingAccount['kind'] }
@@ -118,6 +119,8 @@ export class HostingAccounts {
       supabase: saved('supabase'),
       upstash: saved('upstash'),
       resend: saved('resend'),
+      // The Marketplace uses the Vercel sign-in; `auth` reads it as Vercel's so a CLI session renews as one.
+      'vercel-marketplace': saved('vercel'),
       expo: saved('expo'),
     }
   }
@@ -255,6 +258,7 @@ export class HostingAccounts {
     platform: AccountPlatform,
     accountId?: string | null,
   ): Promise<{ auth: HostingAuth; accountId: string | null; defaultScope: string | null }> {
+    if (platform === 'vercel-marketplace') return this.auth('vercel', accountId)
     let value = await this.saved[platform].read()
     if (KEPT.includes(platform) && accountId && value?.accountId !== accountId)
       value = (await this.keptCredential(platform, accountId).read()) ?? value

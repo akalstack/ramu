@@ -91,6 +91,10 @@ export function createDeploys(
         migrate: stack(projectId)?.migrate ?? null,
       }),
       platform: (projectId): string | null => service.binding(projectId)?.platform ?? null,
+      site: (projectId): { id: string; scope: string | null } | null => {
+        const binding: DeployBinding | null = service.binding(projectId)
+        return binding ? { id: binding.siteId, scope: binding.scope ?? null } : null
+      },
     },
     accounts,
     credentials,
