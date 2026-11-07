@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { NAMED_SERVICES } from '@ramu/shared/types/deploy'
 import type { ArtifactCapabilities } from '@ramu/shared/artifacts'
 import type { InteractiveInput } from './store'
 
@@ -97,6 +98,12 @@ export const pageCapabilitiesSchema = z
           .array(z.enum(['activity', 'threads', 'pullRequests']))
           .min(1)
           .max(3),
+      })
+      .optional(),
+    services: z
+      .object({
+        purpose: z.string().trim().min(3).max(200),
+        services: z.array(z.enum(NAMED_SERVICES)).min(1).max(NAMED_SERVICES.length),
       })
       .optional(),
   })

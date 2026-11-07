@@ -82,7 +82,6 @@ Between the person's own devices, an edit of a doc, a Mermaid diagram or a deck'
 Grafana and Amplitude are built: their accounts in Settings, a table naming its data source and query, and a grant per dashboard and service, reviewed in [SECURITY.md](../SECURITY.md) ([Dashboards](guide/artifacts.md#kinds)). Remaining:
 
 - **Salesforce:** a connector beside `interactive/grafana.ts` signing in through OAuth with the person's own connected app (they register it in their org and Settings takes its consumer key; the refresh token stays in the credential store), with its own `service.id`, added only after its sign-in and the data it can read are written up in SECURITY.md.
-- **Live (App) artifacts:** reading a named service from an App's own code, declared as a capability and asked once on first open like its other grants, with **Page settings** taking it back.
 
 ### 6. Voice-over for Motion
 

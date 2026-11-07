@@ -6195,4 +6195,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Stop reading {0}': 'Berhenti membaca {0}',
   'Copy the project’s API key and secret key from its settings and paste them joined by a colon (key:secret), with eu| before them for an EU project. Dashboards read it only where you allow it':
     'Salin API key dan secret key proyek dari pengaturannya lalu tempel dengan titik dua di antaranya (key:secret), dengan eu| di depannya untuk proyek EU. Dashboard membacanya hanya jika Anda mengizinkan',
+  'Reads {services} with your accounts in Settings, read-only: {purpose}':
+    'Membaca {services} dengan akun Anda di Pengaturan, hanya baca: {purpose}',
 }

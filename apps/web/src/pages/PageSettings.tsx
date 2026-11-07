@@ -8,6 +8,7 @@ import type {
   ArtifactUsage,
 } from '@ramu/shared/artifacts'
 import { artifactLink, declaredCapabilities } from '@ramu/shared/artifacts'
+import { NAMED_SERVICE_NAMES } from '@ramu/shared/types/deploy'
 import { Button } from '../components/desktop-button'
 import { Checkbox } from '../components/desktop-checkbox'
 import { Input } from '../components/desktop-input'
@@ -54,6 +55,11 @@ export function capabilityLine(name: ArtifactCapability, page: Pick<ArtifactInfo
       return t('Reads one project folder: {path}', { path: c.folder?.path ?? '' })
     case 'ramu':
       return t('Reads what you see in Ramu, read-only: {purpose}', { purpose: c.ramu?.purpose ?? '' })
+    case 'services':
+      return t('Reads {services} with your accounts in Settings, read-only: {purpose}', {
+        services: (c.services?.services ?? []).map((service) => NAMED_SERVICE_NAMES[service]).join(', '),
+        purpose: c.services?.purpose ?? '',
+      })
   }
 }
 
@@ -98,6 +104,11 @@ function grantsOf(
     else if (name === 'webhook') grants.webhook = on ? { token: '' } : false
     else if (name === 'ramu')
       grants.ramu = on ? (page.capabilities.ramu?.sources ?? []).filter((source) => chosen[`ramu:${source}`]) : false
+    // Each declared service is allowed unless its box was cleared.
+    else if (name === 'services')
+      grants.services = on
+        ? (page.capabilities.services?.services ?? []).filter((service) => chosen[`services:${service}`] !== false)
+        : false
     else grants[name] = on
   }
   return grants
@@ -191,6 +202,19 @@ function GrantChoices({
             ))}
         </div>
       )}
+      {names.includes('services') && chosen.services && (
+        <div className="ml-6 flex flex-col gap-1 text-caption">
+          {(page.capabilities.services?.services ?? []).map((service) => (
+            <label key={service} className="flex items-center gap-2">
+              <Checkbox
+                checked={chosen[`services:${service}`] !== false}
+                onCheckedChange={(checked) => setChosen({ ...chosen, [`services:${service}`]: checked === true })}
+              />
+              {NAMED_SERVICE_NAMES[service]}
+            </label>
+          ))}
+        </div>
+      )}
       {names.includes('ramu') && chosen.ramu && (
         <div className="ml-6 flex flex-col gap-1 text-caption">
           {(page.capabilities.ramu?.sources ?? []).map((source) => (
@@ -278,6 +302,12 @@ export function PageSettings({ page, onClose }: { page: ArtifactInfo; onClose():
     ...Object.fromEntries(((page.grants.ai && page.grants.ai.mcp) || []).map((server) => [`ai:mcp:${server}`, true])),
     ...Object.fromEntries(
       ((page.grants.ai && page.grants.ai.mcpReads) || []).map((server) => [`ai:mcpReads:${server}`, true]),
+    ),
+    ...Object.fromEntries(
+      (page.capabilities.services?.services ?? []).map((service) => [
+        `services:${service}`,
+        !!(page.grants.services && page.grants.services.includes(service)),
+      ]),
     ),
   }))
   const [model, setModel] = useState<'fast' | 'smart'>((page.grants.ai && page.grants.ai.model) || 'fast')

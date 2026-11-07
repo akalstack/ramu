@@ -1,3 +1,4 @@
+import type { NamedService } from './types/deploy'
 import type { InteractiveReference, InteractiveState, JsonValue } from './interactive'
 
 /** A field type in an artifact's record schema; a trailing `?` makes the field optional. */
@@ -69,13 +70,15 @@ export interface ArtifactCapabilities {
   folder?: { path: string }
   /** Figures the person already sees in Ramu, read-only, each source granted on its own. */
   ramu?: { purpose: string; sources: RamuDataSource[] }
+  /** Named services the page's code queries with the accounts in Settings, read-only, each granted on its own. */
+  services?: { purpose: string; services: NamedService[] }
 }
 
 /** Ramu's own figures an artifact may read: token activity by day, thread titles and states, and pull requests. */
 export type RamuDataSource = 'activity' | 'threads' | 'pullRequests'
 
 export type ArtifactCapability =
-  'records' | 'ai' | 'camera' | 'notify' | 'schedules' | 'triggers' | 'webhook' | 'folder' | 'ramu'
+  'records' | 'ai' | 'camera' | 'notify' | 'schedules' | 'triggers' | 'webhook' | 'folder' | 'ramu' | 'services'
 
 /** What the person allowed. A capability the artifact declares and is not granted fails with a clear error. */
 export interface ArtifactGrants {
@@ -91,6 +94,8 @@ export interface ArtifactGrants {
   folder?: boolean
   /** The Ramu data sources allowed, or false when the person said no. */
   ramu?: RamuDataSource[] | false
+  /** The named services allowed, or false when the person said no. */
+  services?: NamedService[] | false
 }
 
 export interface ArtifactError {
@@ -269,6 +274,7 @@ export function declaredCapabilities(capabilities: ArtifactCapabilities): Artifa
   if (capabilities.webhook) list.push('webhook')
   if (capabilities.folder) list.push('folder')
   if (capabilities.ramu?.sources.length) list.push('ramu')
+  if (capabilities.services?.services.length) list.push('services')
   return list
 }
 

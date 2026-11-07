@@ -1,3 +1,4 @@
+import { NAMED_SERVICE_NAMES } from '@ramu/shared/types/deploy'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Image, PanResponder, Pressable, Share, Text, TextInput, View, useWindowDimensions } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -1350,6 +1351,11 @@ function grantText(say: ReturnType<typeof useSay>, name: string, page: ArtifactI
       return say('Reads one project folder: {path}', { path: c.folder?.path ?? '' })
     case 'ramu':
       return say('Reads what you see in Ramu, read-only: {purpose}', { purpose: c.ramu?.purpose ?? '' })
+    case 'services':
+      return say('Reads {services} with your accounts in Settings, read-only: {purpose}', {
+        services: (c.services?.services ?? []).map((service) => NAMED_SERVICE_NAMES[service]).join(', '),
+        purpose: c.services?.purpose ?? '',
+      })
     case 'schedules':
       return say('Runs on its own: {list}', { list: (c.schedules ?? []).map((s) => s.run).join(', ') })
     default:
@@ -1374,7 +1380,9 @@ function allowAll(page: ArtifactInfo) {
           ? { token: '' }
           : name === 'ramu'
             ? (page.capabilities.ramu?.sources ?? [])
-            : true,
+            : name === 'services'
+              ? (page.capabilities.services?.services ?? [])
+              : true,
     ]),
   )
 }

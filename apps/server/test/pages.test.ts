@@ -579,6 +579,37 @@ it('reads Ramu data only for the sources declared and allowed, scoped to the pag
   expect(() => read('pullRequests')).toThrow('did not declare')
 })
 
+it('queries a named service only when the page declared it and the person allowed it', async () => {
+  const { registerArtifactHandlers } = await import('../src/ipc/handlers/artifacts')
+  const { interactive, pages } = await setup()
+  const declared = { services: { purpose: 'Signups beside errors', services: ['grafana'] } }
+  const v = interactive.publish('s', (await interactive.preview('s', { ...input, html: html(declared) })).id, 'sv')
+  const page = pages.keep('s', v.id, { projectId: 'p' })
+  const auth = vi.fn(async () => {
+    throw new Error('Connect Grafana in Settings → Git → Hosting accounts first.')
+  })
+  const methods = registerArtifactHandlers({
+    pages,
+    pageAi: new PageAi(
+      pages,
+      async () => ({ message: '', provider: 'codex', model: 'm' }),
+      () => DEFAULT_AGENT_SETTINGS,
+    ),
+    deploys: { accounts: { auth } },
+    activity: { run: (_l: string, _d: string, work: () => unknown) => work() },
+  } as never)
+  const query = (spec: Record<string, unknown>) => methods['artifacts.call']!.run(page.id, 'services.query', [spec])
+  const grafana = { id: 'grafana', datasource: 'prom1', query: { expr: 'up' }, columns: ['Value'] }
+  await expect(query(grafana)).rejects.toThrow('not allowed to read Grafana')
+  await expect(query({ id: 'amplitude', event: 'Signed up', columns: ['value'] })).rejects.toThrow(
+    'did not declare Amplitude',
+  )
+  pages.grant(page.id, { services: ['grafana'] })
+  // Allowed, the query reaches the account in Settings, which is not connected here.
+  await expect(query(grafana)).rejects.toThrow('Connect Grafana')
+  expect(auth).toHaveBeenCalledWith('grafana')
+})
+
 it('opens a page to people without Ramu on its own listener that serves only that page', async () => {
   const { PublicPages } = await import('../src/interactive/publicPages')
   const { interactive, pages, page } = await setup()
