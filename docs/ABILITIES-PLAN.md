@@ -23,19 +23,13 @@ Abilities let a thread's agent ask Ramu for something its provider cannot do (an
   - "Research the best hosting for this" is a `web_search` call when the thread's provider has no search.
 - **Fallback and teammates:** abilities reuse the fallback router and the accounts list, so usage limits, switch-back and "never move to another subscription on its own" apply unchanged.
 
-### 3. Cost-aware Auto
-
-Scored samples for web search, long documents and images, subscription-before-API-key ordering, typical cost from reported costs, the score and cost in Settings and **chosen as the cheapest good enough** on the row are built ([Abilities](guide/agents.md#abilities)). Remaining:
-
-- **Codex costs:** Codex reports tokens but no cost, so a Codex API key ranks after keys with a reported cost until Ramu prices its tokens.
-
-### 4. Abilities from Shared MCP servers
+### 3. Abilities from Shared MCP servers
 
 Image generation and web search can be mapped to an approved Shared MCP tool, or offered to Auto after the providers once its check passes (see [Abilities](guide/agents.md#abilities)). Remaining:
 
 - Speech, image editing and long reads on an MCP tool, once a way to pass files and audio to a generic tool is settled.
 
-### 5. Music and sound effects
+### 4. Music and sound effects
 
 - `music` and `sound_effect` abilities, offered where a provider or a mapped MCP server provides them, for Motion artifacts' background music and cues. Each comes with the license terms its provider states, shown on the row and kept with the artifact.
 - The host mixes them into the MP4 with the voice-over, and **Sound** in the Motion toolbar adjusts levels or removes a track.
