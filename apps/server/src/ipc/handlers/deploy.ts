@@ -304,6 +304,20 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
       run: (projectId: string, repoId: string, mode?: 'container' | 'process') =>
         localApps().publish(project(projectId), repositoryOf(projectId, repoId).root, mode),
     },
+    'deploy.localAddress': {
+      args: z.tuple([id, z.string().trim().min(3).max(253), z.string().trim().min(20).max(400)]),
+      run: (projectId: string, hostname: string, token: string) => {
+        administrate()
+        return localApps().setLasting(project(projectId), { hostname, token })
+      },
+    },
+    'deploy.removeLocalAddress': {
+      args: z.tuple([id]),
+      run: (projectId: string) => {
+        administrate()
+        return localApps().removeLasting(project(projectId))
+      },
+    },
     'deploy.localStop': {
       args: z.tuple([id]),
       run: (projectId: string) => localApps().stop(project(projectId)),

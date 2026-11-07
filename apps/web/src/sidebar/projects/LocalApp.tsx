@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { LocalAppStatus } from '@ramu/shared/types/deploy'
 import { Button } from '@/components/desktop-button'
+import { Input } from '@/components/desktop-input'
 import { t, useLanguage } from '../../i18n'
 import { errorText } from '../../lib/errors'
 import { useHost } from '../../workspace/HostProvider'
@@ -17,6 +18,10 @@ export function LocalAppSection({ projectId, repoId }: { projectId: string; repo
   const [error, setError] = useState<string | null>(null)
   // Running without Docker is a second, explicit choice: the sheet first says what it means.
   const [withoutDocker, setWithoutDocker] = useState(false)
+  // A lasting hostname on the person's Cloudflare account, instead of a new quick-tunnel address each time.
+  const [lastingOpen, setLastingOpen] = useState(false)
+  const [hostname, setHostname] = useState('')
+  const [token, setToken] = useState('')
   useEffect(() => {
     let current = true
     const read = () =>
@@ -79,6 +84,69 @@ export function LocalAppSection({ projectId, repoId }: { projectId: string; repo
             'Without Docker, Ramu runs the app’s start script (a Node app) as a program on this computer. It has your own permissions: it can read your files and anything else you can. Run only code you trust.',
           )}
         </p>
+      )}
+      {status?.lasting ? (
+        <p className="m-0 flex items-center gap-2 text-caption">
+          <span className="flex-1">{t('Lasting address: https://{0}', { 0: status.lasting })}</span>
+          {!on && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={() => void act(() => host.invoke('deploy.removeLocalAddress', projectId))}
+            >
+              {t('Remove')}
+            </Button>
+          )}
+        </p>
+      ) : (
+        !on &&
+        (lastingOpen ? (
+          <form
+            className="flex flex-col gap-1.5 text-caption"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void act(async () => {
+                const next = await host.invoke('deploy.localAddress', projectId, hostname.trim(), token.trim())
+                setToken('')
+                setLastingOpen(false)
+                return next
+              })
+            }}
+          >
+            <p className="m-0 text-muted-foreground">
+              {t(
+                'A hostname on a domain in your Cloudflare account, such as demo.example.com. Ramu makes a tunnel that answers only that hostname, at one port of this computer, and its DNS record. The token needs Account → Cloudflare Tunnel → Edit and Zone → DNS → Edit; it stays in this computer’s credential store.',
+              )}
+            </p>
+            <Input
+              aria-label={t('Hostname')}
+              placeholder="demo.example.com"
+              value={hostname}
+              onChange={(event) => setHostname(event.target.value)}
+            />
+            <Input
+              type="password"
+              autoComplete="off"
+              aria-label={t('Cloudflare token')}
+              placeholder={t('Cloudflare token')}
+              value={token}
+              onChange={(event) => setToken(event.target.value)}
+            />
+            <span className="flex gap-2">
+              <Button type="submit" size="sm" disabled={busy || !hostname.trim() || token.trim().length < 20}>
+                {t('Make the address')}
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setLastingOpen(false)}>
+                {t('Cancel')}
+              </Button>
+            </span>
+          </form>
+        ) : (
+          <Button className="self-start" variant="ghost" size="sm" onClick={() => setLastingOpen(true)}>
+            {t('Give it a lasting address…')}
+          </Button>
+        ))
       )}
       {error && <p className="m-0 text-caption text-bad">{error}</p>}
       <div className="flex gap-2">

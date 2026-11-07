@@ -364,6 +364,8 @@ export type LocalAppMode = 'container' | 'process'
 export interface LocalAppStatus {
   state: 'off' | 'building' | 'running' | 'failed'
   mode: LocalAppMode | null
+  /** The lasting hostname the app runs at, when one is set; a quick tunnel's changing address otherwise. */
+  lasting: string | null
   /** The app's own public address once its tunnel is up. */
   url: string | null
   error: string | null

@@ -12,6 +12,7 @@ import type { TunnelChoice } from '@ramu/shared/types'
 import { DOCKER_MANIFESTS, exposedPort, serverDockerfile } from '@ramu/shared/serverDeploy'
 import type { LocalAppMode, LocalAppStatus } from '@ramu/shared/types/deploy'
 import { TunnelManager } from '../../remote/tunnel'
+import { NamedTunnel, type LastingAddress, type LastingAddresses } from './namedTunnel'
 
 const BUILD_TIMEOUT_MS = 15 * 60_000
 const OUTPUT_TAIL = 2000
@@ -150,8 +151,13 @@ function packageManager(root: string): string {
   return 'npm'
 }
 
+/** What runs the app's public address: a quick tunnel, or the named tunnel of its lasting address. */
+type AppTunnel = Pick<TunnelManager, 'use' | 'stop' | 'address'> & {
+  status(): { state: string; error: string | null }
+}
+
 interface Running {
-  tunnel: TunnelManager
+  tunnel: AppTunnel
   since: number
   error: string | null
   state: LocalAppStatus['state']
@@ -182,6 +188,8 @@ export class LocalApps {
       changed?: (projectId: string) => void
       freePort?: () => Promise<number>
       start?: typeof startLocalProcess
+      /** Lasting addresses: a project with one runs at its fixed port and hostname instead of a quick tunnel. */
+      addresses?: Pick<LastingAddresses, 'address' | 'hostname' | 'set' | 'remove'>
       listening?: (port: number, timeout: number) => Promise<void>
     },
   ) {}
@@ -199,12 +207,13 @@ export class LocalApps {
 
   async publish(projectId: string, root: string, mode: LocalAppMode = 'container'): Promise<LocalAppStatus> {
     const choice = this.deps.choice()
-    if (choice.kind === 'tailscale')
+    const lasting = (await this.deps.addresses?.address(projectId)) ?? null
+    if (!lasting && choice.kind === 'tailscale')
       throw new Error('Tailscale Funnel would serve the app on this computer’s own name. Choose Cloudflare or ngrok.')
-    if (choice.kind === 'ngrok' && choice.domain)
+    if (!lasting && choice.kind === 'ngrok' && choice.domain)
       throw new Error('A fixed ngrok domain belongs to this computer. Use ngrok without a domain or Cloudflare.')
     if (this.apps.has(projectId)) return this.status(projectId)
-    if (mode === 'process') return this.publishProcess(projectId, root, choice)
+    if (mode === 'process') return this.publishProcess(projectId, root, choice, lasting)
     try {
       await this.run(['docker', 'version', '--format', '{{.Server.Version}}'], { timeout: 15_000 })
     } catch {
@@ -215,7 +224,7 @@ export class LocalApps {
     const { dockerfile, port } = this.dockerfile(root)
     const name = localAppName(projectId)
     const app: Running = {
-      tunnel: this.tunnel(projectId),
+      tunnel: this.tunnel(projectId, lasting),
       since: Date.now(),
       error: null,
       state: 'building',
@@ -230,7 +239,7 @@ export class LocalApps {
         ...(dockerfile === null ? {} : { input: dockerfile }),
       })
       await this.run(['docker', 'rm', '--force', name]).catch(() => {})
-      const hostPort = await (this.deps.freePort ?? freeLoopbackPort)()
+      const hostPort = lasting?.port ?? (await (this.deps.freePort ?? freeLoopbackPort)())
       // Names docker itself relies on are never taken from the app's variables.
       const variables = Object.fromEntries(
         Object.entries(await this.variables(root)).filter(([key]) => !RESERVED.has(key)),
@@ -253,14 +262,19 @@ export class LocalApps {
    * A Node app run as a program: installed when it has no node_modules, built when it has a build script, then started
    * with its start script on a loopback port, which the tunnel names once something answers there.
    */
-  private async publishProcess(projectId: string, root: string, choice: TunnelChoice): Promise<LocalAppStatus> {
+  private async publishProcess(
+    projectId: string,
+    root: string,
+    choice: TunnelChoice,
+    lasting: (LastingAddress & { tunnelToken: string }) | null,
+  ): Promise<LocalAppStatus> {
     const manifest = existsSync(join(root, 'package.json'))
       ? (JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { scripts?: Record<string, string> })
       : null
     if (!manifest?.scripts?.start)
       throw new Error('Without Docker, Ramu runs a Node app with a start script. Use Docker for other apps.')
     const app: Running = {
-      tunnel: this.tunnel(projectId),
+      tunnel: this.tunnel(projectId, lasting),
       since: Date.now(),
       error: null,
       state: 'building',
@@ -281,7 +295,7 @@ export class LocalApps {
           timeout: BUILD_TIMEOUT_MS,
           env: { ...variables, NODE_ENV: 'production' },
         })
-      const port = await (this.deps.freePort ?? freeLoopbackPort)()
+      const port = lasting?.port ?? (await (this.deps.freePort ?? freeLoopbackPort)())
       const started = (this.deps.start ?? startLocalProcess)([pm, 'run', 'start'], {
         cwd: root,
         env: {
@@ -318,6 +332,21 @@ export class LocalApps {
     return this.status(projectId)
   }
 
+  /** Gives the project a lasting address on the person's Cloudflare account; it applies from the next publish. */
+  async setLasting(projectId: string, input: { hostname: string; token: string }): Promise<LocalAppStatus> {
+    if (!this.deps.addresses) throw new Error('Update this host for lasting addresses.')
+    if (this.apps.has(projectId)) throw new Error('Stop the app first, then give it a lasting address.')
+    await this.deps.addresses.set(projectId, input)
+    return this.status(projectId)
+  }
+
+  /** Removes the lasting address's tunnel and DNS record; the app goes back to a quick tunnel. */
+  async removeLasting(projectId: string): Promise<LocalAppStatus> {
+    if (this.apps.has(projectId)) throw new Error('Stop the app first.')
+    await this.deps.addresses?.remove(projectId)
+    return this.status(projectId)
+  }
+
   /** Takes the app off the internet first, then stops its container or program. */
   async stop(projectId: string) {
     const app = this.apps.get(projectId)
@@ -333,11 +362,13 @@ export class LocalApps {
 
   status(projectId: string): LocalAppStatus {
     const app = this.apps.get(projectId)
-    if (!app) return { state: 'off', mode: null, url: null, error: null, since: null }
+    const hostname = this.deps.addresses?.hostname(projectId) ?? null
+    if (!app) return { state: 'off', mode: null, url: null, error: null, since: null, lasting: hostname }
     const tunnel = app.tunnel.status()
     return {
       state: app.state === 'running' && tunnel.state === 'failed' ? 'failed' : app.state,
       mode: app.mode,
+      lasting: hostname,
       url: app.tunnel.address(),
       error: app.error ?? tunnel.error,
       since: app.since,
@@ -353,8 +384,9 @@ export class LocalApps {
     this.apps.clear()
   }
 
-  private tunnel(projectId: string) {
+  private tunnel(projectId: string, lasting: (LastingAddress & { tunnelToken: string }) | null = null): AppTunnel {
     const changed = () => this.deps.changed?.(projectId)
+    if (lasting) return new NamedTunnel(lasting, changed)
     return this.deps.tunnels ? this.deps.tunnels(changed) : new TunnelManager({ changed })
   }
 

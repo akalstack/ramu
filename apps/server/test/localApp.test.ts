@@ -179,4 +179,33 @@ describe('apps published from this computer', () => {
     expect(silent.program.stop).toHaveBeenCalled()
     expect(silent.calls.map((call) => call.argv)).toEqual([['npm', 'install']])
   })
+
+  it('runs an app with a lasting address at its fixed port, behind its hostname instead of a quick tunnel', async () => {
+    const { calls } = setup()
+    const root = project()
+    const apps = new LocalApps({
+      run: async (argv) => {
+        calls.push({ argv })
+        return ''
+      },
+      tunnels: () => {
+        throw new Error('no quick tunnel for a lasting address')
+      },
+      saved: { read: () => ({}), write: () => {} },
+      choice: () => ({ kind: 'tailscale' }),
+      freePort: async () => 1,
+      addresses: {
+        address: async () => ({ hostname: 'demo.example.com', port: 5555, tunnelToken: 't' }),
+        hostname: () => 'demo.example.com',
+        set: async () => ({ hostname: 'demo.example.com', port: 5555 }),
+        remove: async () => {},
+      },
+    })
+    const status = await apps.publish('demo', root)
+    expect(calls.find((call) => call.argv[1] === 'run')?.argv.some((arg) => arg.startsWith('127.0.0.1:5555:'))).toBe(
+      true,
+    )
+    expect(status).toMatchObject({ url: 'https://demo.example.com', lasting: 'demo.example.com' })
+    apps.close()
+  })
 })

@@ -6079,4 +6079,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0}, kept for the projects set up on it': '{0}, disimpan untuk proyek yang disiapkan di sana',
   'Use for new setups': 'Pakai untuk penyiapan baru',
   'Add another server': 'Tambah server lain',
+  'Lasting address: https://{0}': 'Alamat tetap: https://{0}',
+  'Hostname': 'Nama host',
+  'Cloudflare token': 'Token Cloudflare',
+  'Make the address': 'Buat alamatnya',
+  'Give it a lasting address…': 'Beri alamat tetap…',
+  'A hostname on a domain in your Cloudflare account, such as demo.example.com. Ramu makes a tunnel that answers only that hostname, at one port of this computer, and its DNS record. The token needs Account → Cloudflare Tunnel → Edit and Zone → DNS → Edit; it stays in this computer’s credential store.': 'Nama host pada domain di akun Cloudflare Anda, misalnya demo.example.com. Ramu membuat tunnel yang hanya menjawab nama host itu, di satu port komputer ini, beserta record DNS-nya. Token perlu Account → Cloudflare Tunnel → Edit dan Zone → DNS → Edit; token tetap di penyimpanan kredensial komputer ini.',
 }

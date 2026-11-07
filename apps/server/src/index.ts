@@ -1,3 +1,4 @@
+import { LastingAddresses } from './workspace/deploy/namedTunnel'
 import { ShellPushes } from './agent/shellPushes'
 import { followPush } from './workspace/followPush'
 import { terminalThreadRequest } from './background/agentThreads'
@@ -901,7 +902,14 @@ interactive.designSystem = (sessionId) => {
   return artifactId && pages.has(artifactId) ? designTokensOf(pages.document(artifactId)) : null
 }
 // Apps published from this computer get tunnels of their own, of the same kind as pages opened to anyone.
+// A lasting address: a named Cloudflare Tunnel that never reaches Ramu's own port.
+const lastingAddresses = new LastingAddresses({
+  getState: (key, fallback) => workspace.getAppState(key, fallback),
+  setState: (key, value) => workspace.setAppState(key, value),
+  reserved: () => [network.port],
+})
 const localApps = new LocalApps({
+  addresses: lastingAddresses,
   saved: {
     read: () => workspace.getAppState<Record<string, SavedApp>>('local-apps', {}),
     write: (apps) => workspace.setAppState('local-apps', apps),

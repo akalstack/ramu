@@ -34,6 +34,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 - **Physical iOS and Android devices:** everything in [apps/mobile/VERIFICATION.md](../apps/mobile/VERIFICATION.md), the Inbox Brief's one-tap rows, from pairing and permissions to the viewers, keyboards, push and Live Activities.
 - **Linux desktop:** CI installs the x64 `.deb` and runs the startup smoke under a virtual display, without Chromium's sandbox. Still to run by hand: the installed app on a real GNOME or KDE desktop (Wayland and X11), with the sandbox, on Ubuntu 24.04.
 - **Publishing from this computer:** Run on this computer with Docker Desktop on a Mac, opened from a phone on another network, then stopped, with the address gone before the container. **Run without Docker** with a Next.js app the same way.
+- **Lasting address:** an app run on this computer given a hostname on a real Cloudflare zone answers there after Ramu restarts, and **Remove** leaves no tunnel or record behind.
 - **Presenting on two displays:** **Present** on a Mac with an external display puts the deck there and **Presenter notes** on the laptop, following each slide, and both close with Escape.
 - **Static hosting:** a Vite site set up on GitHub Pages and on Cloudflare Pages from the deploy sheet, deployed by merging the pull request, with a Cloudflare preview for the next pull request and a rollback on each.
 - **Database branches per pull request:** with Neon and Vercel or Netlify, opening a pull request makes its branch and redeploys its preview with it; closing it removes both.

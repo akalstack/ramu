@@ -1309,6 +1309,10 @@ export interface RamuMethods extends ArtifactMethods {
    * with the person's own permissions) and publishes it through a tunnel of its own.
    */
   'deploy.localPublish'(projectId: string, repoId: string, mode?: import('./types/deploy').LocalAppMode): LocalAppStatus
+  /** Gives the app a lasting hostname through a Cloudflare Tunnel on the person's account; host only. */
+  'deploy.localAddress'(projectId: string, hostname: string, token: string): LocalAppStatus
+  /** Removes the lasting hostname's tunnel and DNS record; host only. */
+  'deploy.removeLocalAddress'(projectId: string): LocalAppStatus
   /** Takes the app off the internet, then stops its container. */
   'deploy.localStop'(projectId: string): void
   /** The live address watch: the address checked, the last check, any unknown span and the open incident. */

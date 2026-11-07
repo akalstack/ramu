@@ -91,6 +91,8 @@ For demos and home use, **Run on this computer** in the Deploy sheet publishes t
 
 Without Docker, **Run without Docker…** says first what it means, then runs a Node app with a `start` script as a program here: it installs dependencies when there is no `node_modules`, runs the `build` script if there is one, and starts the app with `PORT` and `HOST` set to a loopback port, which the tunnel names once the app answers there. The program gets the project's variables and none of Ramu's environment, but it has your own permissions, so use it only for code you trust. **Stop** ends its whole process group, and a program that exits takes its address down and shows the end of its output.
 
+**Give it a lasting address…** keeps one hostname across restarts instead of a new quick-tunnel address each time. Enter a hostname on a domain in your Cloudflare account and a Cloudflare token with **Account → Cloudflare Tunnel → Edit** and **Zone → DNS → Edit**. Ramu creates a Cloudflare Tunnel whose only route is that hostname to one fixed port on this computer (anything else gets 404), adds its DNS record, and runs `cloudflared` with the tunnel's own token whenever the app is published. It cannot reach Ramu's own port, and a wildcard hostname is refused. **Remove** deletes the record and the tunnel.
+
 ## When a deployment finishes
 
 Ramu follows a deployment until the platform finishes it, then wakes one thread with one message, through the same queue as pull request feedback:
