@@ -367,3 +367,35 @@ describe('release tools', () => {
     expect(approved.watch.followRelease).toHaveBeenCalledWith('p1', BUILD, 's1')
   })
 })
+
+describe('an app.config app', () => {
+  it('checks the configuration its code computes once the person asks Ramu to run expo config', async () => {
+    const root = expoApp()
+    writeFileSync(join(root, 'app.config.js'), 'module.exports = ({ config }) => ({ ...config, ios: {} })')
+    const config = vi.fn(
+      async () =>
+        'Some log line\n' + JSON.stringify({ name: 'Barber', ios: { bundleIdentifier: 'com.barber.dynamic' } }),
+    )
+    const service = new StoreReleases(
+      { roots: () => [root] },
+      {
+        auth: async () => ({ auth: { token: 'expo_token_1' }, accountId: 'r1', defaultScope: null }),
+        accountName: () => 'ramu-bot',
+      },
+      {
+        build: vi.fn(),
+        builds: vi.fn(async () => []),
+        app: vi.fn(async () => ({ name: 'Barber', page: '' })),
+      } as never,
+      vi.fn(),
+      config,
+    )
+    const before = await service.status('p1')
+    expect(before.checks.find((check) => check.id === 'dynamic-config')).toMatchObject({ state: 'warning' })
+    expect(config).not.toHaveBeenCalled()
+    const after = await service.resolveConfig('p1')
+    expect(config).toHaveBeenCalledWith(root)
+    expect(after.checks.find((check) => check.id === 'dynamic-config')).toBeUndefined()
+    expect(after.checks.find((check) => check.id === 'ios-bundle')).toMatchObject({ detail: 'com.barber.dynamic' })
+  })
+})

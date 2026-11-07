@@ -342,6 +342,14 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id]),
       run: (projectId: string) => deploys().releases.status(project(projectId)),
     },
+    'deploy.resolveExpoConfig': {
+      args: z.tuple([id]),
+      // It runs the project's own code, so only on the host and only when the person asks.
+      run: (projectId: string) => {
+        administrate()
+        return deploys().releases.resolveConfig(project(projectId))
+      },
+    },
     'deploy.startRelease': {
       args: z.tuple([id, storeTarget]),
       run: (projectId: string, target: StoreTarget) =>

@@ -1321,6 +1321,8 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.setUptime'(projectId: string, enabled: boolean): UptimeStatus
   /** The project's Expo app: what the stores need, checked from app.json and eas.json, and its latest store builds. */
   'deploy.release'(projectId: string): StoreRelease
+  /** Reads the app's resolved configuration by running its own `expo config` (its app.config code); host only. */
+  'deploy.resolveExpoConfig'(projectId: string): StoreRelease
   /**
    * Builds the app on EAS and submits each build to TestFlight or Play's internal track, never for review; pressing
    * Release in the sheet is the person's approval. The project's latest thread hears how it finished.

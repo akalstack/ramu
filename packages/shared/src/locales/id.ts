@@ -6085,4 +6085,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Make the address': 'Buat alamatnya',
   'Give it a lasting address…': 'Beri alamat tetap…',
   'A hostname on a domain in your Cloudflare account, such as demo.example.com. Ramu makes a tunnel that answers only that hostname, at one port of this computer, and its DNS record. The token needs Account → Cloudflare Tunnel → Edit and Zone → DNS → Edit; it stays in this computer’s credential store.': 'Nama host pada domain di akun Cloudflare Anda, misalnya demo.example.com. Ramu membuat tunnel yang hanya menjawab nama host itu, di satu port komputer ini, beserta record DNS-nya. Token perlu Account → Cloudflare Tunnel → Edit dan Zone → DNS → Edit; token tetap di penyimpanan kredensial komputer ini.',
+  'Read it by running expo config': 'Baca dengan menjalankan expo config',
+  'Runs the project’s own app.config code on this computer to read the configuration it computes':
+    'Menjalankan kode app.config proyek di komputer ini untuk membaca konfigurasi yang dihitungnya',
 }

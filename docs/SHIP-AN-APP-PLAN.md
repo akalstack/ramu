@@ -65,7 +65,6 @@ Usage figures for Vercel, Netlify and Neon beside the limits their APIs report, 
 
 - **Previews per pull request with EAS Update:** publish each pull request's branch to its own update channel and show a QR code on the pull request card and in the thread that opens it in Expo Go. It needs `expo-updates` and a runtime version in the app, a channel per branch, and works in Expo Go only for apps without custom native code, so the sheet must say when a development build is needed instead.
 - **Expo's CLI sign-in:** `eas login --device --non-interactive` signs in through a browser on any device and saves a session secret in `~/.expo/state.json` (eas-cli 27); a sign-in can ask the person to pick the number their browser shows. Ramu would run it with a private `HOME`, exchange the session for an access token named Ramu (Expo's `createAccessToken` mutation), then end the session, which needs the number choice in Settings' sign-in.
-- **Dynamic configuration:** an `app.config.*` app is checked from `app.json` only; reading its resolved configuration needs `expo config --json`, which runs the project's code.
 
 ### 6. The site
 

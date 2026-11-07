@@ -92,6 +92,21 @@ export function ReleaseSection({ projectId }: { projectId: string }) {
           >
             <span aria-hidden="true">{CHECK_MARK[check.state]} </span>
             {storeCheckText(t, check)}
+            {check.id === 'dynamic-config' && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                title={t(
+                  'Runs the project’s own app.config code on this computer to read the configuration it computes',
+                )}
+                onClick={() =>
+                  void run(async () => setStatus(await host.invoke('deploy.resolveExpoConfig', projectId)))
+                }
+              >
+                {t('Read it by running expo config')}
+              </Button>
+            )}
             {check.id === 'eas-json' && check.state === 'missing' && !check.detail && !proposed && (
               <Button
                 size="sm"

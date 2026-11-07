@@ -93,6 +93,33 @@ const DYNAMIC = ['app.config.ts', 'app.config.js', 'app.config.mjs', 'app.config
 const isExpoApp = (root: string) =>
   existsSync(join(root, 'app.json')) || DYNAMIC.some((name) => existsSync(join(root, name)))
 
+/** Runs the project's own `expo config`, which executes its app.config.*; only when the person asks. */
+export type ConfigRunner = (cwd: string) => Promise<string>
+
+const runExpoConfig: ConfigRunner = (cwd) =>
+  new Promise((done, fail) => {
+    execFile(
+      platformCli('npx') ?? 'npx',
+      ['--no-install', 'expo', 'config', '--json', '--type', 'public'],
+      { cwd, env: cliEnvironment(process.env.HOME ?? cwd), timeout: 60_000, maxBuffer: 4 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (!error) return done(stdout)
+        const output = redactSecrets(
+          String(stderr || stdout)
+            .split('\n')
+            .slice(-12)
+            .join('\n')
+            .trim(),
+        )
+        fail(
+          new Error(
+            `expo config did not finish. Install the project’s dependencies first.${output ? `\n\n${output}` : ''}`,
+          ),
+        )
+      },
+    )
+  })
+
 export interface ReleaseHost {
   /** The project's repository checkouts, in order. */
   roots(projectId: string): string[]
@@ -104,7 +131,30 @@ export class StoreReleases {
     private readonly accounts: Pick<HostingAccounts, 'auth' | 'accountName'>,
     private readonly client: ExpoClient = expoClient(),
     private readonly run: EasRunner = runEas,
+    private readonly config: ConfigRunner = runExpoConfig,
   ) {}
+
+  /** The resolved configuration read from each app's `app.config.*`, by checkout, until that file changes. */
+  private readonly resolved = new Map<string, { file: string; mtime: number; expo: unknown }>()
+
+  /**
+   * Reads the app's resolved configuration by running its own `expo config`, which runs the project's code, so it
+   * happens only when the person asks; the checks then use it instead of app.json.
+   */
+  async resolveConfig(projectId: string): Promise<StoreRelease> {
+    const root = this.root(projectId)
+    const file = root ? DYNAMIC.find((name) => existsSync(join(root, name))) : undefined
+    if (!root || !file) throw new Error('This app has no app.config file to read.')
+    const output = await this.config(root)
+    let expo: unknown
+    try {
+      expo = JSON.parse(output.slice(output.indexOf('{')))
+    } catch {
+      throw new Error('expo config did not print a configuration Ramu could read.')
+    }
+    this.resolved.set(root, { file, mtime: (await lstat(join(root, file))).mtimeMs, expo })
+    return this.status(projectId)
+  }
 
   /** The first repository of the project with an Expo app at its root. */
   root(projectId: string): string | null {
@@ -128,10 +178,19 @@ export class StoreReleases {
       iconExists =
         !!inside && !inside.startsWith('..') && !isAbsolute(inside) && !!(await lstat(path).catch(() => null))?.isFile()
     }
+    const dynamicConfig = DYNAMIC.find((name) => existsSync(join(root, name))) ?? null
+    // A configuration read from app.config.* stands in for app.json until that file changes.
+    const kept = this.resolved.get(root)
+    const resolved =
+      kept &&
+      dynamicConfig === kept.file &&
+      (await lstat(join(root, kept.file)).catch(() => null))?.mtimeMs === kept.mtime
+        ? kept.expo
+        : null
     return {
-      appJson,
+      appJson: resolved ? { expo: resolved } : appJson,
       easJson: await readJson(root, 'eas.json'),
-      dynamicConfig: DYNAMIC.find((name) => existsSync(join(root, name))) ?? null,
+      dynamicConfig: resolved ? null : dynamicConfig,
       dependencies: Object.keys({ ...pkg?.dependencies, ...pkg?.devDependencies }),
       iconExists,
     }
