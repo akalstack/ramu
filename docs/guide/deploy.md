@@ -20,7 +20,7 @@ A token with an end date shows it in Settings, and a week before it runs out eac
 
 Agents never create tokens by driving your browser: a signed-in dashboard gives full account power, and a new token would end up in screenshots and the transcript.
 
-Hosting accounts are added, replaced and removed only on the computer running the host. Paired devices see their status: the phone shows each platform's account under **GitHub on this host**, and a project's deployments under **Deployments** ([On the phone](#on-the-phone)). **Disconnect** deletes Ramu's copy only; to revoke the token itself, delete it on the platform.
+Hosting accounts are added, replaced and removed on the computer running the host; from a paired owner device, **Sign in with Vercel**, **Netlify** or **Railway** also works, since their sign-in runs on the host, keeps the token there and only shows the device its link. Paired devices see their status: the phone shows each platform's account under **GitHub on this host**, and a project's deployments under **Deployments** ([On the phone](#on-the-phone)). **Disconnect** deletes Ramu's copy only; to revoke the token itself, delete it on the platform.
 
 The same accounts publish artifacts with **Publish to the web** ([Artifacts](artifacts.md)).
 

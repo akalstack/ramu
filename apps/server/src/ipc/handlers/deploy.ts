@@ -3,6 +3,7 @@ import type { StoreTarget } from '@ramu/shared/types/deploy'
 import {
   ACCOUNT_PLATFORMS,
   CLI_SIGN_IN_PLATFORMS,
+  REMOTE_SIGN_IN_PLATFORMS,
   HOSTING_PLATFORMS,
   RESOURCE_PROVIDERS,
   type AccountPlatform,
@@ -119,7 +120,11 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
     'deploy.signIn': {
       args: z.tuple([cliPlatform]),
       run: (name: CliSignInPlatform) => {
-        administrate()
+        // A sign-in whose link opens on any device may be started from a paired owner device: the CLI runs and keeps
+        // the token on the host, and the device only shows the link. Fly.io's opens a browser on the host itself.
+        const device = ctx.host.browserDevice?.()
+        const owner = !!device && device !== 'local' && !!ctx.host.browserGrantEligible?.(device)
+        if (!administrator() && !(owner && REMOTE_SIGN_IN_PLATFORMS.includes(name))) administrate()
         return deploys().signIns.start(name)
       },
     },

@@ -18,6 +18,8 @@ export type HostingPlatform = (typeof HOSTING_PLATFORMS)[number]
 /** Hosting platforms whose own CLI can sign in on the host. */
 export const CLI_SIGN_IN_PLATFORMS = ['vercel', 'netlify', 'railway', 'fly'] as const
 export type CliSignInPlatform = (typeof CLI_SIGN_IN_PLATFORMS)[number]
+/** Sign-ins whose link works from any device, so a paired owner device can start them for a remote host. */
+export const REMOTE_SIGN_IN_PLATFORMS: readonly CliSignInPlatform[] = ['vercel', 'netlify', 'railway']
 
 /** Database and storage providers with a resource adapter on the server. */
 export const RESOURCE_PROVIDERS = ['neon'] as const
