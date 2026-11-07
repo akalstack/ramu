@@ -1,6 +1,7 @@
 // Secrets sync: the variables an app reads, where each one is set, and copying the missing ones from this host to the
 // other places. Every place is an `EnvTarget`, so syncing is one loop over targets. Values travel only from this
 // host's credential store to a target's API; they are never returned to a client.
+import { workerBindings, type WorkerBindingType } from '@ramu/shared/cloudflareDeploy'
 import { gitlabVariableNames, setGitlabVariables } from '../forge/gitlab'
 import { lstat, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -77,7 +78,8 @@ const FILE_BYTES = 512 * 1024
 const TOTAL_BYTES = 32 * 1024 * 1024
 
 /** The app's variables, from the files Git would track (ignored folders such as node_modules are skipped). */
-export async function readAppVariables(root: string): Promise<string[]> {
+/** The repository's code and example env files, bounded in count and size; links are skipped. */
+async function readCodeFiles(root: string): Promise<{ path: string; text: string }[]> {
   const paths = (await git(root, ['ls-files', '-z', '--cached', '--others', '--exclude-standard']))
     .split('\0')
     .filter((path) => path && (ENV_CODE_EXTENSIONS.test(path) || ENV_EXAMPLE_FILES.includes(path.split('/').pop()!)))
@@ -91,7 +93,16 @@ export async function readAppVariables(root: string): Promise<string[]> {
     total += info.size
     files.push({ path, text: await readFile(join(root, path), 'utf8').catch(() => '') })
   }
-  return appVariables(files)
+  return files
+}
+
+export async function readAppVariables(root: string): Promise<string[]> {
+  return appVariables(await readCodeFiles(root))
+}
+
+/** The Worker binding types the code uses, with the name it gives each. */
+export async function readWorkerBindings(root: string): Promise<Partial<Record<WorkerBindingType, string>>> {
+  return workerBindings(await readCodeFiles(root))
 }
 
 async function columnsOf(targets: EnvTarget[]): Promise<EnvColumn[]> {

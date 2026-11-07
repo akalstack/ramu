@@ -134,43 +134,85 @@ export function workersWorkflow(facts: {
   ].join('\n')
 }
 
-/** The binding name a Worker reads its D1 database through, as `env.DB`. */
-export const D1_BINDING = 'DB'
+/** The Worker types that show which Cloudflare resources its code reads, as in `interface Env { DB: D1Database }`. */
+export const WORKER_BINDING_TYPES = ['D1Database', 'KVNamespace', 'R2Bucket'] as const
+export type WorkerBindingType = (typeof WORKER_BINDING_TYPES)[number]
 
-export interface D1Databases {
+/** The binding name used when the code names none. */
+export const DEFAULT_BINDING: Record<WorkerBindingType, string> = {
+  D1Database: 'DB',
+  KVNamespace: 'KV',
+  R2Bucket: 'BUCKET',
+}
+
+/** The first binding name the code gives each type, from fields typed as one (`DB: D1Database`, `CACHE?: KVNamespace`). */
+export function workerBindings(files: readonly { text: string }[]): Partial<Record<WorkerBindingType, string>> {
+  const found: Partial<Record<WorkerBindingType, string>> = {}
+  for (const { text } of files)
+    for (const match of text.matchAll(
+      /\b([A-Za-z_][A-Za-z0-9_]{0,62})\s*\??\s*:\s*(D1Database|KVNamespace|R2Bucket)\b/g,
+    ))
+      found[match[2] as WorkerBindingType] ??= match[1]!
+  return found
+}
+
+/** A resource and its preview copy, which `wrangler dev` uses so local work never changes production's. */
+export interface WorkerPair {
   name: string
+  /** D1's and KV's id, or R2's bucket name. */
   id: string
-  /** The database `wrangler dev` uses, so local development never changes production data. */
   previewId: string
 }
 
+const TABLES: Record<WorkerBindingType, string> = {
+  D1Database: 'd1_databases',
+  KVNamespace: 'kv_namespaces',
+  R2Bucket: 'r2_buckets',
+}
+
+function bindingEntry(type: WorkerBindingType, binding: string, pair: WorkerPair): Record<string, string> {
+  if (type === 'D1Database')
+    return {
+      binding,
+      database_name: pair.name,
+      database_id: pair.id,
+      preview_database_id: pair.previewId,
+      migrations_dir: 'migrations',
+    }
+  if (type === 'KVNamespace') return { binding, id: pair.id, preview_id: pair.previewId }
+  return { binding, bucket_name: pair.id, preview_bucket_name: pair.previewId }
+}
+
 /**
- * The Worker's wrangler config with its D1 binding added: a `[[d1_databases]]` table in wrangler.toml, or a
- * `d1_databases` entry in wrangler.json. Refused when the config already binds a D1 database, and for wrangler.jsonc,
- * whose comments a rewrite would lose.
+ * The Worker's wrangler config with one binding added: a `[[d1_databases]]`, `[[kv_namespaces]]` or `[[r2_buckets]]`
+ * table in wrangler.toml, or an entry in wrangler.json. Refused when the config already has a binding of that name,
+ * and for wrangler.jsonc, whose comments a rewrite would lose.
  */
-export function withD1Binding(file: string, config: string, d1: D1Databases): string {
-  if (/d1_databases/.test(config)) throw new Error(`${file} already binds a D1 database. Change it there instead.`)
-  const entry = {
-    binding: D1_BINDING,
-    database_name: d1.name,
-    database_id: d1.id,
-    preview_database_id: d1.previewId,
-    migrations_dir: 'migrations',
-  }
+export function withWorkerBinding(
+  file: string,
+  config: string,
+  type: WorkerBindingType,
+  binding: string,
+  pair: WorkerPair,
+): string {
+  const table = TABLES[type]
+  const entry = bindingEntry(type, binding, pair)
+  if (new RegExp(`["']?binding["']?\\s*[=:]\\s*["']${binding}["']`).test(config))
+    throw new Error(`${file} already has a binding named ${binding}. Change it there instead.`)
   if (file.endsWith('.toml'))
     return [
       config.replace(/\s*$/, ''),
       '',
-      '[[d1_databases]]',
+      `[[${table}]]`,
       ...Object.entries(entry).map(([key, value]) => `${key} = ${JSON.stringify(value)}`),
       '',
     ].join('\n')
   if (file.endsWith('.json')) {
     const parsed = JSON.parse(config) as Record<string, unknown>
-    return `${JSON.stringify({ ...parsed, d1_databases: [entry] }, null, 2)}\n`
+    const list = Array.isArray(parsed[table]) ? (parsed[table] as unknown[]) : []
+    return `${JSON.stringify({ ...parsed, [table]: [...list, entry] }, null, 2)}\n`
   }
   throw new Error(
-    `Add this to ${file} yourself, since rewriting it would lose its comments: "d1_databases": [${JSON.stringify(entry)}]`,
+    `Add this to ${file} yourself, since rewriting it would lose its comments: "${table}": [${JSON.stringify(entry)}]`,
   )
 }

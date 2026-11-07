@@ -19,6 +19,8 @@ import { currentBranch, git } from '../git'
 import { DeployError, ReplyLostError, tail } from './adapter'
 import type { HostingAccounts } from './accounts'
 import { resourceAdapter, type ResourceAdapter } from './resource'
+import { isWorkerProvider } from './workerResources'
+import type { WorkerBindingType } from '@ramu/shared/cloudflareDeploy'
 import { usageReport } from './usage'
 
 /** The variable names a database's connection uses, which a project's code reading them also signals. */
@@ -55,9 +57,9 @@ export interface ResourceHost {
   platform?(projectId: string): string | null
 }
 
-/** D1 is reached through a Worker's binding, so it is offered only for a project deployed to Cloudflare Workers. */
+/** D1, KV and R2 are reached through a Worker's binding, so they are offered only for a project on Cloudflare Workers. */
 const offered = (provider: ResourceProvider, platform: string | null | undefined) =>
-  provider !== 'cloudflare-d1' || platform === 'cloudflare-workers'
+  !isWorkerProvider(provider) || platform === 'cloudflare-workers'
 
 /** A migration that failed: its output tail, for the person and the thread. */
 export class MigrationError extends Error {
@@ -94,9 +96,21 @@ export const runMigration: MigrationRunner = (argv, cwd, variables) =>
 /** Variables whose use in the code shows the app needs a kind of resource. */
 const NEEDS: Record<Exclude<ResourceKind, 'database'>, string[]> = {
   cache: ['REDIS_URL', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'],
+  storage: [],
   email: ['RESEND_API_KEY'],
 }
-const KIND_NAMES: Record<ResourceKind, string> = { database: 'a database', cache: 'a cache', email: 'email sending' }
+/** The Worker types whose use in the code shows a Workers project needs a kind of resource. */
+const WORKER_NEEDS: Partial<Record<ResourceKind, WorkerBindingType>> = {
+  database: 'D1Database',
+  cache: 'KVNamespace',
+  storage: 'R2Bucket',
+}
+const KIND_NAMES: Record<ResourceKind, string> = {
+  database: 'a database',
+  cache: 'a cache',
+  storage: 'file storage',
+  email: 'email sending',
+}
 
 const key = (projectId: string) => `resources:${projectId}`
 const branchKey = (projectId: string) => `resource-branches:${projectId}`
@@ -197,7 +211,17 @@ export class ResourceService {
     return Object.keys(secrets?.preview ?? {})
   }
 
-  async status(projectId: string, appVariables: string[]): Promise<ProjectResources> {
+  /** `workerTypes` are the Worker types the code uses, such as `KVNamespace`; they count only for a Workers project. */
+  async status(
+    projectId: string,
+    appVariables: string[],
+    workerTypes: readonly WorkerBindingType[] = [],
+  ): Promise<ProjectResources> {
+    const workers = this.host.platform?.(projectId) === 'cloudflare-workers'
+    const usesWorker = (kind: ResourceKind) => {
+      const type = WORKER_NEEDS[kind]
+      return workers && !!type && workerTypes.includes(type)
+    }
     const stack = this.host.stack(projectId)
     const resources = await Promise.all(
       this.bindings(projectId).map(async (binding): Promise<ProjectResource> => {
@@ -217,10 +241,12 @@ export class ResourceService {
       }),
     )
     return {
-      needs: RESOURCE_KINDS.filter((kind) =>
-        kind === 'database'
-          ? stack.database || appVariables.includes('DATABASE_URL')
-          : NEEDS[kind].some((name) => appVariables.includes(name)),
+      needs: RESOURCE_KINDS.filter(
+        (kind) =>
+          usesWorker(kind) ||
+          (kind === 'database'
+            ? stack.database || appVariables.includes('DATABASE_URL')
+            : NEEDS[kind].some((name) => appVariables.includes(name))),
       ),
       providers: RESOURCE_PROVIDERS.filter((provider) => offered(provider, this.host.platform?.(projectId))).map(
         (provider) => {
@@ -253,7 +279,9 @@ export class ResourceService {
     const adapter = this.adapter(provider)
     if (!adapter.plans.some((entry) => entry.id === plan)) throw new Error('Choose one of the offered plans.')
     if (!offered(provider, this.host.platform?.(projectId)))
-      throw new Error('D1 is for a project deployed to Cloudflare Workers. Link the project to Workers first.')
+      throw new Error(
+        `${adapter.name} is for a project deployed to Cloudflare Workers. Link the project to Workers first.`,
+      )
     if (this.bindings(projectId).some((binding) => binding.kind === adapter.kind))
       throw new Error(`This project already has ${KIND_NAMES[adapter.kind]}. Manage it on the provider’s page.`)
     const { auth, accountId } = await this.auth(provider)
@@ -328,7 +356,7 @@ export class ResourceService {
     const argv = this.host.stack(projectId).migrate
     const binding = this.bindings(projectId).find((entry) => entry.kind === 'database')
     // D1's migrations run in the Worker's deploy job, against the database it binds.
-    if (!argv || !binding || binding.provider === 'cloudflare-d1') return
+    if (!argv || !binding || isWorkerProvider(binding.provider)) return
     const secrets = await this.secrets(projectId, binding.kind).read()
     if (!secrets) throw new Error('This host lost the database’s connection values. Provision it again on this host.')
     if ((await currentBranch(root)) !== branch)

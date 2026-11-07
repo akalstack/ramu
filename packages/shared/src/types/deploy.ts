@@ -22,7 +22,15 @@ export type CliSignInPlatform = (typeof CLI_SIGN_IN_PLATFORMS)[number]
 export const REMOTE_SIGN_IN_PLATFORMS: readonly CliSignInPlatform[] = ['vercel', 'netlify', 'railway', 'expo']
 
 /** Database and storage providers with a resource adapter on the server. */
-export const RESOURCE_PROVIDERS = ['neon', 'supabase', 'cloudflare-d1', 'upstash', 'resend'] as const
+export const RESOURCE_PROVIDERS = [
+  'neon',
+  'supabase',
+  'cloudflare-d1',
+  'upstash',
+  'cloudflare-kv',
+  'cloudflare-r2',
+  'resend',
+] as const
 export type ResourceProvider = (typeof RESOURCE_PROVIDERS)[number]
 
 /** Services that build an app and hand it to the app stores. */
@@ -76,8 +84,8 @@ export interface HostingAccountsSummary {
   canAdminister: boolean
 }
 
-/** What a resource adapter provides: Postgres, a Redis cache, or sending email. */
-export const RESOURCE_KINDS = ['database', 'cache', 'email'] as const
+/** What a resource adapter provides: a database, a cache, file storage, or sending email. */
+export const RESOURCE_KINDS = ['database', 'cache', 'storage', 'email'] as const
 export type ResourceKind = (typeof RESOURCE_KINDS)[number]
 
 /** A size or tier a provider offers when creating a resource. */

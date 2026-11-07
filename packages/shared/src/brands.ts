@@ -43,10 +43,12 @@ export function forgeBrand(service: ForgeService): BrandId {
 
 /**
  * The mark beside a hosting account: the platform's own, Docker's for the person's own server, which runs it, and
- * GitHub's for GitHub Pages and Cloudflare's for Workers.
+ * GitHub's for GitHub Pages and Cloudflare's for Workers, D1, KV and R2.
  */
 export function accountBrand(platform: AccountPlatform): BrandId {
   if (platform === 'server') return 'docker'
   if (platform === 'github-pages') return 'github'
-  return platform === 'cloudflare-workers' || platform === 'cloudflare-d1' ? 'cloudflare' : platform
+  return platform.startsWith('cloudflare')
+    ? 'cloudflare'
+    : (platform as Exclude<AccountPlatform, `cloudflare-${string}` | 'server' | 'github-pages'>)
 }

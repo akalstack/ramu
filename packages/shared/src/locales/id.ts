@@ -5889,7 +5889,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Not connected. Databases for your projects need an account.':
     'Belum terhubung. Database untuk proyek Anda memerlukan akun.',
   Database: 'Database',
-  'Postgres on {0} · {1}': 'Postgres di {0} · {1}',
   'Production has its own database. Previews, this host and CI use a separate preview copy (a Neon branch, or a second Supabase project), so they never change production data. Sync below sets {0}.':
     'Produksi punya database sendiri. Preview, host ini, dan CI memakai salinan preview terpisah (branch Neon, atau proyek Supabase kedua), sehingga tidak pernah mengubah data produksi. Sinkronkan di bawah mengatur {0}.',
   'Sync below sets {0}.': 'Sinkronisasi di bawah mengatur {0}.',
@@ -6073,8 +6072,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Set up Cloudflare Pages': 'Siapkan Cloudflare Pages',
   'For a static site: Ramu creates the Pages project, keeps your Pages token and account id in the repository’s GitHub Actions secrets, and opens a pull request with a deploy job that builds the site and uploads it with wrangler. Every merge to the default branch deploys, and each pull request gets a preview.':
     'Untuk situs statis: Ramu membuat proyek Pages, menyimpan token Pages dan id akun Anda di secret GitHub Actions repositori, dan membuka pull request berisi job deploy yang membangun situs dan mengunggahnya dengan wrangler. Setiap penggabungan ke cabang default men-deploy, dan setiap pull request mendapat preview.',
-  'Create a custom token for the one account your sites go in, with Account → Cloudflare Pages → Edit (add Workers Scripts → Edit for Workers and D1 → Edit for D1 databases); it is kept in each linked repository’s Actions secrets':
-    'Buat token kustom untuk satu akun tempat situs Anda berada, dengan Account → Cloudflare Pages → Edit (tambahkan Workers Scripts → Edit untuk Workers dan D1 → Edit untuk database D1); token disimpan di Actions secrets setiap repositori yang ditautkan',
+  'Create a custom token for the one account your sites go in, with Account → Cloudflare Pages → Edit (add Workers Scripts → Edit for Workers, and D1, Workers KV Storage or R2 → Edit for those); it is kept in each linked repository’s Actions secrets':
+    'Buat token kustom untuk satu akun tempat situs Anda berada, dengan Account → Cloudflare Pages → Edit (tambahkan Workers Scripts → Edit untuk Workers, dan D1, Workers KV Storage, atau R2 → Edit untuk itu); token disimpan di Actions secrets setiap repositori yang ditautkan',
   'Other servers': 'Server lain',
   '{0}, kept for the projects set up on it': '{0}, disimpan untuk proyek yang disiapkan di sana',
   'Use for new setups': 'Pakai untuk penyiapan baru',
@@ -6136,10 +6135,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Cache',
   'Email':
     'Email',
-  'Redis on {0} · {1}':
-    'Redis di {0} · {1}',
-  'Email sending on {0} · {1}':
-    'Pengiriman email di {0} · {1}',
   'Production has its own Redis database. Previews, this host and CI use a second one, so they never read or clear production’s keys. Sync below sets {0}.':
     'Produksi punya database Redis sendiri. Preview, host ini, dan CI memakai database kedua, sehingga tidak pernah membaca atau menghapus key produksi. Sinkronkan di bawah mengatur {0}.',
   'This app uses Redis. Provision creates a Redis database on your own account, with a second one for previews and development.':
@@ -6163,8 +6158,18 @@ export const indonesian: Readonly<Record<string, string>> = {
   'A Shared MCP tool Auto tries after your signed-in providers.':
     'Alat Shared MCP yang dicoba Auto setelah penyedia yang Anda masuki.',
   'The number the sign-in page shows': 'Angka yang ditampilkan halaman masuk',
-  'Bound to the Worker as env.DB by a pull request; wrangler dev uses a separate preview database, and the deploy job applies the migrations in migrations/.':
-    'Diikat ke Worker sebagai env.DB lewat pull request; wrangler dev memakai database preview terpisah, dan job deploy menerapkan migrasi di migrations/.',
-  'SQLite on your Cloudflare account, bound to the Worker as DB, with a second database for wrangler dev.':
-    'SQLite di akun Cloudflare Anda, diikat ke Worker sebagai DB, dengan database kedua untuk wrangler dev.',
+  'SQLite on your Cloudflare account, bound to the Worker, with a second database for wrangler dev.':
+    'SQLite di akun Cloudflare Anda, diikat ke Worker, dengan database kedua untuk wrangler dev.',
+  'A KV namespace on your Cloudflare account, bound to the Worker, with a second one for wrangler dev.':
+    'Namespace KV di akun Cloudflare Anda, diikat ke Worker, dengan namespace kedua untuk wrangler dev.',
+  'An R2 bucket on your Cloudflare account, bound to the Worker, with a second one for wrangler dev.':
+    'Bucket R2 di akun Cloudflare Anda, diikat ke Worker, dengan bucket kedua untuk wrangler dev.',
+  'Bound to the Worker by a pull request, named as the code reads it; wrangler dev uses a separate preview copy.':
+    'Diikat ke Worker lewat pull request, dengan nama seperti yang dibaca kode; wrangler dev memakai salinan preview terpisah.',
+  'The deploy job applies the migrations in migrations/ before each deploy.':
+    'Job deploy menerapkan migrasi di migrations/ sebelum setiap deploy.',
+  'File storage':
+    'Penyimpanan file',
+  'This Worker stores files. Provision creates an R2 bucket on your Cloudflare account, with a second one for wrangler dev.':
+    'Worker ini menyimpan file. Provision membuat bucket R2 di akun Cloudflare Anda, dengan bucket kedua untuk wrangler dev.',
 }

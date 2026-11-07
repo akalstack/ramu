@@ -14,12 +14,16 @@ import {
 } from '@ramu/shared/types/deploy'
 import { DATABASE_VARIABLES, MigrationError } from '../../workspace/deploy/resources'
 import { signInCli } from '../../workspace/deploy/signIn'
+import { resourceAdapter } from '../../workspace/deploy/resource'
+import { isWorkerProvider, WORKER_TYPE } from '../../workspace/deploy/workerResources'
+import { DEFAULT_BINDING, type WorkerBindingType } from '@ramu/shared/cloudflareDeploy'
 import {
   envStatus,
   githubActionsTarget,
   gitlabCiTarget,
   hostTarget,
   readAppVariables,
+  readWorkerBindings,
   syncEnv,
   type EnvTarget,
 } from '../../workspace/deploy/envSync'
@@ -261,8 +265,14 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
     },
     'deploy.resources': {
       args: z.tuple([id, id]),
-      run: async (projectId: string, repoId: string) =>
-        deploys().resources.status(project(projectId), await readAppVariables(repositoryOf(projectId, repoId).root)),
+      run: async (projectId: string, repoId: string) => {
+        const root = repositoryOf(projectId, repoId).root
+        return deploys().resources.status(
+          project(projectId),
+          await readAppVariables(root),
+          Object.keys(await readWorkerBindings(root)) as WorkerBindingType[],
+        )
+      },
     },
     'deploy.provision': {
       args: z.tuple([id, id, provider, plan]),
@@ -277,10 +287,25 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
           )
           // Development on this host uses the preview branch, never production's data.
           await hostTarget(ctx.environment).set('development', values)
-          // A Worker reaches D1 through its wrangler config, which a pull request binds.
-          const d1 = name === 'cloudflare-d1' ? deploys().resources.binding(project(projectId), 'database') : null
-          if (d1) await deploys().workers.proposeD1(project(projectId), repoId, d1.id)
-          return deploys().resources.status(projectId, [...(await readAppVariables(root)), ...DATABASE_VARIABLES])
+          // A Worker reaches D1, KV and R2 through its wrangler config, which a pull request binds by the name its code reads.
+          const bindings = await readWorkerBindings(root)
+          if (isWorkerProvider(name)) {
+            const made = deploys().resources.binding(project(projectId), resourceAdapter(name).kind)
+            const type = WORKER_TYPE[name]
+            if (made)
+              await deploys().workers.proposeBinding(
+                project(projectId),
+                repoId,
+                name,
+                made.id,
+                bindings[type] ?? DEFAULT_BINDING[type],
+              )
+          }
+          return deploys().resources.status(
+            projectId,
+            [...(await readAppVariables(root)), ...DATABASE_VARIABLES],
+            Object.keys(bindings) as WorkerBindingType[],
+          )
         }),
     },
     'deploy.domains': {

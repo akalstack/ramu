@@ -24,7 +24,7 @@ import './neon'
 import './supabase'
 import './upstash'
 import './resend'
-import './d1'
+import './workerResources'
 
 /** What an account needs from its platform's adapter: a name, a token page and who a token belongs to. */
 type AccountAdapter = Pick<HostingAdapter, 'name' | 'tokenPage' | 'account'> & { kind: HostingAccount['kind'] }
@@ -112,6 +112,8 @@ export class HostingAccounts {
       cloudflare,
       'cloudflare-workers': cloudflare,
       'cloudflare-d1': cloudflare,
+      'cloudflare-kv': cloudflare,
+      'cloudflare-r2': cloudflare,
       neon: saved('neon'),
       supabase: saved('supabase'),
       upstash: saved('upstash'),

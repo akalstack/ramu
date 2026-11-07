@@ -1,25 +1,47 @@
-// Binding a D1 database into a Worker's wrangler config, and the deploy job's migrations step.
+// Binding Cloudflare resources into a Worker's wrangler config, found from the Worker's own types, and the deploy job's
+// migrations step.
 import { describe, expect, it } from 'vitest'
-import { withD1Binding, workersWorkflow } from '../src/cloudflareDeploy'
+import { withWorkerBinding, workerBindings, workersWorkflow } from '../src/cloudflareDeploy'
 
-describe('binding D1 to a Worker', () => {
-  const d1 = { name: 'shop', id: 'prod-uuid', previewId: 'preview-uuid' }
+describe('binding Cloudflare resources to a Worker', () => {
+  const pair = { name: 'shop', id: 'prod-id', previewId: 'preview-id' }
 
-  it('adds a d1_databases table to wrangler.toml and an entry to wrangler.json, with the preview database', () => {
-    const toml = withD1Binding('wrangler.toml', 'name = "shop"\nmain = "src/index.ts"\n', d1)
-    expect(toml).toContain('[[d1_databases]]\nbinding = "DB"\ndatabase_name = "shop"\ndatabase_id = "prod-uuid"')
-    expect(toml).toContain('preview_database_id = "preview-uuid"')
-    expect(toml.startsWith('name = "shop"\nmain = "src/index.ts"\n\n')).toBe(true)
-    const json = JSON.parse(withD1Binding('wrangler.json', '{"name":"shop"}', d1)) as Record<string, unknown>
-    expect(json).toMatchObject({ name: 'shop', d1_databases: [{ binding: 'DB', database_id: 'prod-uuid' }] })
+  it('finds the binding names the code types as D1, KV and R2', () => {
+    const code = 'export interface Env {\n  DB: D1Database\n  CACHE?: KVNamespace\n  FILES: R2Bucket\n}'
+    expect(workerBindings([{ text: code }])).toEqual({ D1Database: 'DB', KVNamespace: 'CACHE', R2Bucket: 'FILES' })
+    expect(workerBindings([{ text: 'const x = 1' }])).toEqual({})
   })
 
-  it('refuses a config that already binds D1, and a wrangler.jsonc whose comments it would lose', () => {
-    expect(() => withD1Binding('wrangler.toml', '[[d1_databases]]\n', d1)).toThrow('already binds')
-    expect(() => withD1Binding('wrangler.jsonc', '// note\n{"name":"shop"}', d1)).toThrow('yourself')
+  it('adds each kind of table to wrangler.toml with its preview copy, next to tables already there', () => {
+    const toml = withWorkerBinding('wrangler.toml', 'name = "shop"\n', 'D1Database', 'DB', pair)
+    expect(toml).toContain('[[d1_databases]]\nbinding = "DB"\ndatabase_name = "shop"\ndatabase_id = "prod-id"')
+    expect(toml).toContain('preview_database_id = "preview-id"')
+    const kv = withWorkerBinding('wrangler.toml', toml, 'KVNamespace', 'CACHE', pair)
+    expect(kv).toContain('[[kv_namespaces]]\nbinding = "CACHE"\nid = "prod-id"\npreview_id = "preview-id"')
+    const r2 = withWorkerBinding('wrangler.toml', kv, 'R2Bucket', 'FILES', pair)
+    expect(r2).toContain(
+      '[[r2_buckets]]\nbinding = "FILES"\nbucket_name = "prod-id"\npreview_bucket_name = "preview-id"',
+    )
   })
 
-  it('applies the migrations before deploying when the job knows the binding', () => {
+  it('appends to wrangler.json, and refuses a taken name and a wrangler.jsonc', () => {
+    const json = JSON.parse(
+      withWorkerBinding(
+        'wrangler.json',
+        '{"name":"shop","kv_namespaces":[{"binding":"OTHER","id":"x"}]}',
+        'KVNamespace',
+        'KV',
+        pair,
+      ),
+    ) as { kv_namespaces: unknown[] }
+    expect(json.kv_namespaces).toHaveLength(2)
+    expect(() => withWorkerBinding('wrangler.toml', 'binding = "DB"\n', 'D1Database', 'DB', pair)).toThrow(
+      'already has',
+    )
+    expect(() => withWorkerBinding('wrangler.jsonc', '// note\n{}', 'D1Database', 'DB', pair)).toThrow('yourself')
+  })
+
+  it('applies the migrations before deploying when the job knows the D1 binding', () => {
     const job = workersWorkflow({ defaultBranch: 'main', afterCi: false, manager: 'npm', d1: 'DB' })
     expect(job).toContain('command: d1 migrations apply DB --remote')
     expect(job.indexOf('d1 migrations apply')).toBeLessThan(job.indexOf('command: deploy'))

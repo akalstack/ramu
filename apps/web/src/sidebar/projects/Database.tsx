@@ -10,10 +10,9 @@ import { errorText } from '../../lib/errors'
 import { useHost } from '../../workspace/HostProvider'
 
 /** Each kind's words, as translation keys. */
-const WORDS: Record<ResourceKind, { title: string; made: string; preview: string; offer: string }> = {
+const WORDS: Record<ResourceKind, { title: string; preview: string; offer: string }> = {
   database: {
     title: 'Database',
-    made: 'Postgres on {0} · {1}',
     preview:
       'Production has its own database. Previews, this host and CI use a separate preview copy (a Neon branch, or a second Supabase project), so they never change production data. Sync below sets {0}.',
     offer:
@@ -21,15 +20,19 @@ const WORDS: Record<ResourceKind, { title: string; made: string; preview: string
   },
   cache: {
     title: 'Cache',
-    made: 'Redis on {0} · {1}',
     preview:
       'Production has its own Redis database. Previews, this host and CI use a second one, so they never read or clear production’s keys. Sync below sets {0}.',
     offer:
       'This app uses Redis. Provision creates a Redis database on your own account, with a second one for previews and development.',
   },
+  storage: {
+    title: 'File storage',
+    preview: 'Sync below sets {0}.',
+    offer:
+      'This Worker stores files. Provision creates an R2 bucket on your Cloudflare account, with a second one for wrangler dev.',
+  },
   email: {
     title: 'Email',
-    made: 'Email sending on {0} · {1}',
     preview:
       'Production and previews each get their own sending-only key, so neither can manage the account. Sync below sets {0}.',
     offer:
@@ -133,10 +136,7 @@ function KindSection({
             <span className="flex items-center gap-2">
               <BrandIcon brand={accountBrand(resource.provider)} />
               <span className="flex-1 text-foreground">
-                {t(words.made, {
-                  0: shown.providers.find((entry) => entry.provider === resource.provider)?.name ?? resource.provider,
-                  1: resource.name,
-                })}
+                {`${shown.providers.find((entry) => entry.provider === resource.provider)?.name ?? resource.provider} · ${resource.name}`}
               </span>
               <Button
                 size="sm"
@@ -147,15 +147,20 @@ function KindSection({
               </Button>
             </span>
             <span className="text-muted-foreground">
-              {resource.provider === 'cloudflare-d1'
+              {resource.provider.startsWith('cloudflare-')
                 ? t(
-                    'Bound to the Worker as env.DB by a pull request; wrangler dev uses a separate preview database, and the deploy job applies the migrations in migrations/.',
+                    'Bound to the Worker by a pull request, named as the code reads it; wrangler dev uses a separate preview copy.',
                   )
                 : resource.previewBranch
                   ? t(words.preview, { 0: resource.variables.join(', ') })
                   : t('Sync below sets {0}.', { 0: resource.variables.join(', ') })}
             </span>
-            {kind === 'database' && shown.migrate && (
+            {resource.provider === 'cloudflare-d1' && (
+              <span className="text-muted-foreground">
+                {t('The deploy job applies the migrations in migrations/ before each deploy.')}
+              </span>
+            )}
+            {kind === 'database' && shown.migrate && resource.provider !== 'cloudflare-d1' && (
               <span className="text-muted-foreground">
                 {t('Before each production deploy from Ramu, {0} runs against the production database.', {
                   0: shown.migrate,
