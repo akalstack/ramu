@@ -43,6 +43,18 @@ export interface DeployWatchHost {
   setState(key: string, value: unknown): void
   /** The migrate command from the project's `ramu.json`, if it names one. */
   migrate(projectId: string): string | null
+  /** Every project on this host, for the scan that catches production deploys started outside Ramu. */
+  projects?(): string[]
+}
+
+const SCAN_KEY = 'deploy-scan'
+const SCAN_EVERY = 10 * 60_000
+const SEEN_KEEP = 200
+
+/** What the scan remembers: when it last looked at each project, and the deployments already told or followed. */
+interface Scan {
+  at: Record<string, number>
+  seen: string[]
 }
 
 const finished = (deployment: Deployment) => ['ready', 'failed', 'canceled'].includes(deployment.state)
@@ -254,7 +266,62 @@ export class DeployWatches {
   }
 
   private async deliver(watch: DeployWatch, deployment: Deployment): Promise<void> {
+    this.remember(deployment.id)
     await this.send(watch, await this.message(watch, deployment))
+  }
+
+  private scanState(): Scan {
+    return { at: {}, seen: [], ...this.host.getState<Partial<Scan>>(SCAN_KEY, {}) }
+  }
+
+  private remember(deploymentId: string): void {
+    const scan = this.scanState()
+    if (!scan.seen.includes(deploymentId))
+      this.host.setState(SCAN_KEY, { ...scan, seen: [...scan.seen, deploymentId].slice(-SEEN_KEEP) })
+  }
+
+  private nextScan = 0
+
+  /**
+   * Catches production deployments that failed although Ramu did not start or follow them (a push from another
+   * computer, a merge on the website): each wakes the project's latest thread once with the end of its log. The first
+   * look at a project only records the time, so earlier failures are not told.
+   */
+  async scan(now = Date.now()): Promise<void> {
+    if (this.stopping || now < this.nextScan || !this.host.projects) return
+    this.nextScan = now + SCAN_EVERY
+    for (const projectId of this.host.projects()) {
+      if (this.stopping || !this.service.binding(projectId)) continue
+      const scan = this.scanState()
+      const since = scan.at[projectId]
+      this.host.setState(SCAN_KEY, { ...scan, at: { ...scan.at, [projectId]: now } })
+      if (since === undefined) continue
+      const followed = new Set(
+        this.list().flatMap((watch) => (watch.kind === 'deployment' ? [watch.deploymentId] : [])),
+      )
+      try {
+        const { deployments } = await this.service.project(projectId)
+        for (const deployment of deployments) {
+          if (!deployment.production || deployment.state !== 'failed' || deployment.createdAt < since - CLOCK_SLACK)
+            continue
+          if (followed.has(deployment.id) || this.scanState().seen.includes(deployment.id)) continue
+          this.remember(deployment.id)
+          const watch: DeployWatch = {
+            id: randomUUID(),
+            kind: 'deployment',
+            deploymentId: deployment.id,
+            production: true,
+            projectId,
+            sessionId: this.wake.latestThread(projectId),
+            since: now,
+          }
+          await this.send(watch, await this.message(watch, deployment))
+        }
+      } catch (error) {
+        // A sign-in or network failure is tried again on the next scan.
+        console.error('Deploy scan:', projectId, error)
+      }
+    }
   }
 
   private async send(watch: DeployWatch, text: string): Promise<void> {

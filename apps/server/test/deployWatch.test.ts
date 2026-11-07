@@ -166,6 +166,25 @@ describe('deploy watches', () => {
     expect(text).not.toContain('migrate')
   })
 
+  it('tells the latest thread once about a production deploy that failed outside Ramu, after a first look', async () => {
+    const outside = deployment({ id: 'ext', state: 'failed', createdAt: Date.now() })
+    const { watches, enqueueBackground } = setup({
+      lists: [[outside], [outside], [outside]],
+      log: 'Error: build broke',
+    })
+    const host = watches as unknown as { host: { projects?: () => string[] } }
+    host.host.projects = () => ['p1']
+    // The first look records the time, so a failure from before it is not told.
+    await watches.scan(Date.now() - 60 * 60_000)
+    expect(enqueueBackground).not.toHaveBeenCalled()
+    await watches.scan(Date.now() + 11 * 60_000)
+    expect(enqueueBackground).toHaveBeenCalledTimes(1)
+    expect(enqueueBackground.mock.calls[0]?.[0]).toBe('recent')
+    expect(enqueueBackground.mock.calls[0]?.[1]).toContain('Error: build broke')
+    await watches.scan(Date.now() + 22 * 60_000)
+    expect(enqueueBackground).toHaveBeenCalledTimes(1)
+  })
+
   it('wakes the project’s latest thread when the one that deployed was stopped', async () => {
     const { watches, enqueueBackground, sessions } = setup({ statuses: [deployment({ state: 'ready' })] })
     watches.follow('p1', { id: 'd1', production: true }, 'pusher')

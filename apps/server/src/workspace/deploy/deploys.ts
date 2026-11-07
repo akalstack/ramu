@@ -142,7 +142,12 @@ export function createDeploys(
     accounts,
   )
   const deployWatch = new DeployWatches(
-    { getState, setState, migrate: (projectId) => commandOf(stack(projectId)?.migrate) },
+    {
+      getState,
+      setState,
+      migrate: (projectId) => commandOf(stack(projectId)?.migrate),
+      projects: () => workspace.listProjects().map((project) => project.id),
+    },
     wake,
     service,
     releases,

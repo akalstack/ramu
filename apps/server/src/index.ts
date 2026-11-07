@@ -2307,6 +2307,7 @@ const tick = setInterval(() => {
   void pullRequestWatches.tick().catch(console.error)
   void deploys.domains.tick().catch(console.error)
   void deploys.deployWatch.tick().catch(console.error)
+  void deploys.deployWatch.scan().catch(console.error)
   void deploys.uptime.tick().catch(console.error)
   void deploys.usageNotices.tick().catch(console.error)
   void deploys.tokenExpiry.tick().catch(console.error)
