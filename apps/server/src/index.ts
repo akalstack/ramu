@@ -53,6 +53,7 @@ import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools
 import { createDeploys } from './workspace/deploy/deploys'
 import { LocalApps } from './workspace/deploy/localApp'
 import { LiveDashboards, watchDashboards } from './interactive/liveDashboard'
+import { DESIGN_SYSTEM_KEY, designTokensOf } from '@ramu/shared/artifacts'
 import { registerDeployTools, registerReleaseTools } from './workspace/deploy/tools'
 import { registerCiTools } from './workspace/ci/tools'
 import { setAcpTerminalService } from './providers/acpTerminals'
@@ -810,6 +811,12 @@ const dashboardWatch = setInterval(
   10 * 60_000,
 )
 dashboardWatch.unref()
+// New Design, Slides and Dashboard artifacts are drawn with the host's design system, when one is chosen.
+interactive.designSystem = () => {
+  const artifactId = workspace.getAppState<string | null>(DESIGN_SYSTEM_KEY, null)
+  if (!artifactId || !pages.has(artifactId)) return null
+  return designTokensOf(pages.document(artifactId))
+}
 // Apps published from this computer get tunnels of their own, of the same kind as pages opened to anyone.
 const localApps = new LocalApps({
   saved: {

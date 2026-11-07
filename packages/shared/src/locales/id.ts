@@ -5682,6 +5682,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Every {count} minutes': 'Setiap {count} menit',
   Templates: 'Template',
   'Save as template': 'Simpan sebagai template',
+  'Use as design system': 'Gunakan sebagai sistem desain',
+  'Stop using as design system': 'Berhenti gunakan sebagai sistem desain',
   'Saved as a template': 'Disimpan sebagai template',
   'Start from a template': 'Mulai dari template',
   'Ask an agent for something new': 'Minta agen membuat sesuatu yang baru',

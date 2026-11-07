@@ -362,3 +362,19 @@ export interface ArtifactTemplate {
   icon: string
   createdAt: number
 }
+
+/** Where the host keeps which design artifact is its design system. */
+export const DESIGN_SYSTEM_KEY = 'design-system'
+
+/** A design version's tokens, when it sets them; only such a design can be the design system. */
+export function designTokensOf(document: {
+  reference: { kind?: ArtifactKind }
+  files?: { path: string; content: string }[]
+}): import('./artifactSource').DesignTokens | null {
+  if (document.reference.kind !== 'design') return null
+  const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.design)?.content
+  const tokens = stored
+    ? (JSON.parse(stored) as { tokens?: import('./artifactSource').DesignTokens }).tokens
+    : undefined
+  return tokens ?? null
+}

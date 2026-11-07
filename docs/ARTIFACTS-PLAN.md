@@ -80,8 +80,10 @@ A Doc's Markdown and a Mermaid diagram's source (desktop and phone) and a deck's
 
 ### 4. Design systems
 
-- A **design system** is itself an artifact (kind Design) holding tokens (colors, type, radii, spacing), components as HTML and CSS, and its fonts as files. A project or the person picks one as default.
-- Design, Slides and App artifacts made after that use its tokens, and **Restyle** applies another system to an existing artifact as a new version.
+A Design with tokens (colors, type, radius) can be the host's design system, chosen with **Use as design system**; new Designs, decks and dashboards are drawn with its tokens ([Kinds](guide/artifacts.md#kinds)). Remaining:
+
+- A design system per project instead of per host, its fonts as files, and spacing tokens.
+- App artifacts following it too, and **Restyle** applying another system to an existing artifact as a new version.
 - From a codebase, the agent can draft a design system from the project's own CSS variables and components. The person reviews it before it is used.
 
 ### 5. Desktop

@@ -2,7 +2,7 @@
 // A frame's styles are scoped to it with @scope, so one frame cannot restyle another; content that spills past a
 // frame's edges is clipped and reported by the preview's fit check.
 import { ARTIFACT_SOURCE_FILES } from '@ramu/shared/artifacts'
-import type { DesignSource } from '@ramu/shared/artifactSource'
+import { designTokenCss, type DesignSource } from '@ramu/shared/artifactSource'
 import type { RenderedKind } from './kinds'
 
 const escapeHtml = (text: string) =>
@@ -27,8 +27,13 @@ export function renderDesign(design: DesignSource, title: string): RenderedKind 
     )
   })
   return {
-    html: `<style>${DESIGN_CSS}</style><div class="ramu-canvas" role="region" aria-label="${escapeHtml(title)}">${frames.join('')}</div>`,
-    files: [{ path: ARTIFACT_SOURCE_FILES.design, content: JSON.stringify({ frames: design.frames }) }],
+    html: `${design.tokens ? designTokenCss(design.tokens) : ''}<style>${DESIGN_CSS}</style><div class="ramu-canvas" role="region" aria-label="${escapeHtml(title)}">${frames.join('')}</div>`,
+    files: [
+      {
+        path: ARTIFACT_SOURCE_FILES.design,
+        content: JSON.stringify({ frames: design.frames, ...(design.tokens ? { tokens: design.tokens } : {}) }),
+      },
+    ],
     problems: [],
   }
 }

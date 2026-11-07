@@ -18,6 +18,7 @@ import {
 import type { InteractiveDocument, InteractiveState } from '@ramu/shared/interactive'
 import {
   ARTIFACT_SOURCE_FILES,
+  designTokensOf,
   editableSource,
   type ArtifactInfo,
   type ArtifactRun,
@@ -99,6 +100,11 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
     null,
   )
   const [savingEdit, setSavingEdit] = useState(false)
+  // Which design this host draws new visual artifacts with, for a design's menu.
+  const [designSystem, setDesignSystem] = useState<string | null>(null)
+  useEffect(() => {
+    void invoke('artifacts.designSystem').then(setDesignSystem, () => {})
+  }, [invoke])
   const state = useRef<InteractiveState | null>(null)
   const revision = useRef(0)
   const frame = useRef<HTMLIFrameElement>(null)
@@ -257,6 +263,21 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           .then((copy) => openPage(copy.id))
           .catch((e) => notifyError(message(e))),
     },
+    ...(page.kind === 'design' && document && designTokensOf(document)
+      ? [
+          {
+            key: 'design-system',
+            label: designSystem === artifactId ? t('Stop using as design system') : t('Use as design system'),
+            disabled: viewOnly,
+            onSelect: () => {
+              const next = designSystem === artifactId ? null : artifactId
+              void invoke('artifacts.setDesignSystem', next)
+                .then(() => setDesignSystem(next))
+                .catch((e) => notifyError(message(e)))
+            },
+          },
+        ]
+      : []),
     {
       key: 'template',
       label: t('Save as template'),

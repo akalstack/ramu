@@ -18,7 +18,7 @@ import {
   type Slide,
   type SlideTextEdit,
 } from '@ramu/shared/artifactSource'
-import { ARTIFACT_SOURCE_FILES, editableSource } from '@ramu/shared/artifacts'
+import { ARTIFACT_SOURCE_FILES, DESIGN_SYSTEM_KEY, designTokensOf, editableSource } from '@ramu/shared/artifacts'
 import { STARTER_TEMPLATES } from '@ramu/shared/starterTemplates'
 import { renderArtifactSource } from '../../interactive/kinds'
 import { HOST_EXPORT_FORMATS, type HostExportFormat } from '@ramu/shared/interactiveExport'
@@ -289,6 +289,23 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
         const drawn = await renderArtifactSource(source, artifact.title)
         if (drawn.problems.length) throw new Error(drawn.problems[0])
         return pages.saveEdit(artifactId, base, drawn)
+      },
+    },
+    'artifacts.designSystem': {
+      args: z.tuple([]),
+      run: () => ctx.workspace.getAppState<string | null>(DESIGN_SYSTEM_KEY, null),
+    },
+    'artifacts.setDesignSystem': {
+      args: z.tuple([id.nullable()]),
+      run: (artifactId: string | null) => {
+        if (artifactId !== null) {
+          const { pages } = need()
+          if (!designTokensOf(pages.document(artifactId)))
+            throw new Error(
+              'Only a design with tokens (colors, type, radius) can be the design system. Ask the agent to add them.',
+            )
+        }
+        ctx.workspace.setAppState(DESIGN_SYSTEM_KEY, artifactId)
       },
     },
     'artifacts.saveTemplate': {

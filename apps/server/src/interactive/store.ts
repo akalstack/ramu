@@ -26,6 +26,9 @@ import {
   designFrameSchema,
   motionSceneSchema,
   dashboardChartSchema,
+  designTokenCss,
+  designTokensSchema,
+  type DesignTokens,
   dashboardDatasetSchema,
   dashboardFigureSchema,
   parseArtifactSource,
@@ -65,6 +68,11 @@ export const interactiveInput = z.object({
     .max(12)
     .optional()
     .describe('Headline numbers of a dashboard: one column of one table, summed, averaged, counted, min, max or last.'),
+  tokens: designTokensSchema
+    .optional()
+    .describe(
+      'A design system’s colors, type and radius (kind design); a design with tokens can be chosen as the design system.',
+    ),
   frames: z
     .array(designFrameSchema)
     .max(DESIGN_FRAMES_MAX)
@@ -208,6 +216,9 @@ const entryFirst = <T extends { path: string }>(files: T[], entry = 'index.html'
   ...files.filter((file) => file.path !== entry),
 ]
 export class InteractiveStore {
+  /** The host's design system, when one is chosen: Design, Slides and Dashboard artifacts are drawn with its tokens. */
+  designSystem: () => DesignTokens | null = () => null
+
   constructor(
     private readonly db: Db,
     private readonly record: (session: string, ref: InteractiveReference) => void,
@@ -295,6 +306,11 @@ export class InteractiveStore {
     const source = parseArtifactSource({ ...input, kind: input.kind ?? 'app' })
     const offline = { ...input, network: OFFLINE_NETWORK }
     const rendered = await renderArtifactSource(source, input.title, input.files)
+    // A design that sets its own tokens keeps them; the other visual kinds follow the host's design system.
+    const system =
+      (source.kind === 'slides' || source.kind === 'dashboard' || (source.kind === 'design' && !source.tokens)) &&
+      this.designSystem()
+    if (system) rendered.html = designTokenCss(system) + rendered.html
     if (signal?.aborted) throw new Error('Preview cancelled')
     if (Buffer.byteLength(rendered.html) > INTERACTIVE_MAX_ARTIFACT)
       throw new Error(`This ${input.kind} draws to more than 1.5 MB. Split it or simplify its diagrams.`)

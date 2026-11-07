@@ -247,6 +247,10 @@ interface ArtifactMethods {
    * refused if another came since.
    */
   'artifacts.editSource'(artifactId: string, base: number, text: string): import('./artifacts').ArtifactInfo
+  /** The design artifact this host draws Design, Slides and Dashboard artifacts with, or null. */
+  'artifacts.designSystem'(): string | null
+  /** Makes a design with tokens the host's design system, or stops using one with null. */
+  'artifacts.setDesignSystem'(artifactId: string | null): void
   /** Keeps an artifact's current version as a template, without its records, values, grants or history. */
   'artifacts.saveTemplate'(artifactId: string): import('./artifacts').ArtifactTemplate
   'artifacts.templates'(): import('./artifacts').ArtifactTemplate[]

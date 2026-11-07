@@ -296,8 +296,48 @@ export const designFrameSchema = z.object({
   html: z.string().max(200_000).describe('The frame’s markup; it fills the frame and is clipped to it.'),
   css: z.string().max(100_000).optional().describe('Styles for this frame only; they cannot reach other frames.'),
 })
+/** The theme tokens a design system sets; every artifact drawn with it uses them instead of the app's own. */
+export const DESIGN_TOKEN_COLORS = [
+  'background',
+  'foreground',
+  'muted',
+  'primary',
+  'surface',
+  'border',
+  'chart-1',
+  'chart-2',
+  'chart-3',
+  'chart-4',
+  'chart-5',
+  'chart-6',
+] as const
+const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Give colors as hex, such as #7652d4.')
+export const designTokensSchema = z
+  .object({
+    colors: z.partialRecord(z.enum(DESIGN_TOKEN_COLORS), hex).default({}),
+    fontSans: z
+      .string()
+      .max(200)
+      .regex(/^[\w\s,'"-]+$/, 'Name fonts as a CSS font list, such as "Inter, sans-serif".')
+      .optional(),
+    radius: z.number().min(0).max(32).optional().describe('Corner radius in pixels.'),
+  })
+  .describe('Colors, type and corner radius that make this design a design system other artifacts can follow.')
+export type DesignTokens = z.infer<typeof designTokensSchema>
+
+/** The CSS that puts a design system's tokens in place of the theme's, for the frame every artifact is drawn in. */
+export function designTokenCss(tokens: DesignTokens): string {
+  const lines = [
+    ...Object.entries(tokens.colors).map(([name, value]) => `--${name}:${value}`),
+    ...(tokens.fontSans ? [`--font-sans:${tokens.fontSans}`] : []),
+    ...(tokens.radius !== undefined ? [`--radius:${tokens.radius}px`] : []),
+  ]
+  return lines.length ? `<style>:root{${lines.join(';')}}</style>` : ''
+}
+
 const designSource = z.object({
   kind: z.literal('design'),
+  tokens: designTokensSchema.optional(),
   frames: z
     .array(designFrameSchema)
     .min(1, 'A design needs at least one frame in frames.')
@@ -354,6 +394,7 @@ export function parseArtifactSource(input: {
   refreshMinutes?: unknown
   frames?: unknown
   scenes?: unknown
+  tokens?: unknown
 }): ArtifactSource {
   const result = artifactSourceSchema.safeParse(input)
   if (result.success) return result.data
