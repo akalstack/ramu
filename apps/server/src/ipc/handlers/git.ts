@@ -1,3 +1,4 @@
+import { followPush as followThreadPush } from '../../workspace/followPush'
 import { rm } from 'node:fs/promises'
 import type { SyncApproval } from '@ramu/shared/protectedBranch'
 import { z } from 'zod'
@@ -33,24 +34,7 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
   /** Pull and Sync follow the saved preference, so every entry point integrates the same way. */
   const savedPullMode = (): PullMode => storedPreferences().pullMode ?? DEFAULT_APP_PREFERENCES.pullMode
 
-  /**
-   * A push from a thread is followed: CI failing on the default branch, the production deployment of that branch, or the
-   * preview deployment of another, wakes that thread.
-   */
-  const followPush = (taskId: string, cwd: string, repoId: string) => {
-    void ctx.pullRequestWatches?.watchPush(taskId, cwd, repoId).catch((error: unknown) => {
-      console.error('Could not follow the push:', error)
-    })
-    const deploys = ctx.deploys
-    if (deploys)
-      void (async () => {
-        const { branch } = await git.commitBranchInfo(cwd)
-        const sha = await git.headOid(cwd)
-        if (branch && sha) await deploys.pushed(repoId, branch, sha, taskId)
-      })().catch((error: unknown) => {
-        console.error('Could not follow the deployment of the push:', error)
-      })
-  }
+  const followPush = (taskId: string, cwd: string, repoId: string) => followThreadPush(ctx, taskId, cwd, repoId)
 
   const autoPull = (t: string, r: string) =>
     gitExclusive(ctx, t, r, async (cwd) => {

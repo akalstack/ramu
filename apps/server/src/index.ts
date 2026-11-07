@@ -1,3 +1,5 @@
+import { ShellPushes } from './agent/shellPushes'
+import { followPush } from './workspace/followPush'
 import { terminalThreadRequest } from './background/agentThreads'
 import { NO_PROJECT_GUIDE, projectFactsText } from './workspace/projectCreate'
 import { HELPER_ROLES } from '@ramu/shared/chat/helperRoles'
@@ -399,6 +401,7 @@ const agents = new AgentService(
       } catch {}
     }
     threadTitles?.observe(sessionId, event)
+    shellPushes?.observe(sessionId, event)
     queueMicrotask(() => {
       try {
         const session = agents.get(sessionId)
@@ -415,6 +418,13 @@ const agents = new AgentService(
   fake?.fakeQuery ?? query,
   fake?.fakeCodex,
 )
+// A `git push` an agent runs itself is followed from the checkout it ran in, as Source Control's push is.
+const shellPushes = new ShellPushes((sessionId) => {
+  const session = agents.get(sessionId)
+  for (const binding of workspace.listBindings(session.taskId))
+    if (!binding.folderOnly && binding.cwd === session.cwd)
+      followPush({ pullRequestWatches, deploys }, session.taskId, binding.cwd, binding.repoId)
+})
 const threadTitles = new ThreadTitles(
   db,
   workspace,
