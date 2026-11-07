@@ -120,6 +120,7 @@ export function renderDashboard(board: DashboardSource, title: string): Rendered
           figures: board.figures,
           charts: board.charts,
           theme: board.theme,
+          ...(board.refreshMinutes ? { refreshMinutes: board.refreshMinutes } : {}),
         }),
       },
     ],

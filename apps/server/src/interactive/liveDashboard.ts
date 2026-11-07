@@ -11,6 +11,13 @@ type Cell = string | number | null
 export type ReadDashboardSource = (projectId: string, source: DashboardSourceKind) => Promise<Cell[][]>
 
 const REFRESH_MS = 5 * 60_000
+
+/** How long a dashboard's live read stays current: its own refresh rule, or five minutes. */
+export function refreshMs(document: InteractiveDocument): number {
+  const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.dashboard)?.content
+  const minutes = stored ? (JSON.parse(stored) as { refreshMinutes?: number }).refreshMinutes : undefined
+  return minutes ? minutes * 60_000 : REFRESH_MS
+}
 const KEEP = 200
 
 export class LiveDashboards {
@@ -49,7 +56,7 @@ export class LiveDashboards {
   async serve(document: InteractiveDocument, projectId: string | null): Promise<InteractiveDocument> {
     const key = `${document.reference.id}:${document.reference.version}:${projectId}`
     const kept = this.drawn.get(key)
-    if (kept && this.now() - kept.at < REFRESH_MS) return kept.document
+    if (kept && this.now() - kept.at < refreshMs(document)) return kept.document
     const source = await this.fresh(document, projectId)
     if (!source) return document
     const refreshed = { ...document, html: renderDashboard(source, document.reference.title).html }
@@ -84,6 +91,7 @@ export class LiveDashboards {
 }
 
 type Watched = Record<string, { value: number | null; unit: string }>
+type WatchedRead = { at: number; values: Watched }
 const shown = ({ value, unit }: { value: number | null; unit: string }) =>
   value === null ? '—' : `${value.toLocaleString('en', { maximumFractionDigits: 2 })}${unit}`
 
@@ -95,20 +103,29 @@ export async function watchDashboards(deps: {
   dashboards: () => { id: string; title: string; projectId: string | null }[]
   document: (artifactId: string) => InteractiveDocument
   live: LiveDashboards
-  memory: { read(): Record<string, Watched>; write(values: Record<string, Watched>): void }
+  memory: { read(): Record<string, WatchedRead>; write(values: Record<string, WatchedRead>): void }
   notify: (artifactId: string, body: string) => void
+  now?: () => number
 }) {
+  const now = (deps.now ?? Date.now)()
   const before = deps.memory.read()
-  const after: Record<string, Watched> = {}
+  const after: Record<string, WatchedRead> = {}
   for (const page of deps.dashboards()) {
-    const values = await deps.live.watched(deps.document(page.id), page.projectId).catch(() => null)
-    if (!values) continue
-    after[page.id] = values
-    const was = before[page.id]
+    const document = deps.document(page.id)
+    const last = before[page.id]
+    // A dashboard read again more slowly than the watch runs keeps its last values until its own interval passes.
+    if (last && now - last.at < refreshMs(document)) {
+      after[page.id] = last
+      continue
+    }
+    const read = await deps.live.watched(document, page.projectId).catch(() => null)
+    if (!read) continue
+    after[page.id] = { at: now, values: read }
+    const was = last?.values
     if (!was) continue
-    const changes = Object.entries(values)
-      .filter(([label, now]) => was[label] && was[label].value !== now.value)
-      .map(([label, now]) => `${label}: ${shown(was[label]!)} → ${shown(now)}`)
+    const changes = Object.entries(read)
+      .filter(([label, current]) => was[label] && was[label].value !== current.value)
+      .map(([label, current]) => `${label}: ${shown(was[label]!)} → ${shown(current)}`)
     if (changes.length) deps.notify(page.id, changes.join(' · ').slice(0, 240))
   }
   deps.memory.write(after)

@@ -61,6 +61,15 @@ export const interactiveInput = z.object({
     .max(12)
     .optional()
     .describe('Headline numbers of a dashboard: one column of one table, summed, averaged, counted, min, max or last.'),
+  refreshMinutes: z
+    .number()
+    .int()
+    .min(5)
+    .max(1440)
+    .optional()
+    .describe(
+      'How often a dashboard with live tables reads them again: on opening and for watched figures (default 5).',
+    ),
   charts: z
     .array(dashboardChartSchema)
     .max(12)

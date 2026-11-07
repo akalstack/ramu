@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import type { InteractiveDocument } from '@ramu/shared/interactive'
-import { LiveDashboards, watchDashboards, type ReadDashboardSource } from '../src/interactive/liveDashboard'
+import { LiveDashboards, refreshMs, watchDashboards, type ReadDashboardSource } from '../src/interactive/liveDashboard'
 import { parseArtifactSource } from '@ramu/shared/artifactSource'
 import { dashboardCsv } from '@ramu/shared/interactiveExport'
 import { aggregate, dashboardChart, renderDashboard } from '../src/interactive/dashboard'
@@ -132,9 +132,11 @@ it('tells the person’s devices when a watched figure changes, remembering valu
   let used = 40
   const live = new LiveDashboards(async () => [['vercel', 'transfer', null, used, 100, 'GB']])
   let memory = {}
+  let now = 0
   const notify = vi.fn()
   const round = () =>
     watchDashboards({
+      now: () => (now += 6 * 60_000),
       dashboards: () => [{ id: 'a', title: 'Costs', projectId: 'p1' }],
       document: () => document,
       live,
@@ -148,4 +150,38 @@ it('tells the person’s devices when a watched figure changes, remembering valu
   expect(notify).toHaveBeenCalledWith('a', 'Used: 40 GB → 55 GB')
   await round()
   expect(notify).toHaveBeenCalledTimes(1)
+})
+
+it('reads a dashboard again only as often as its refresh rule says', async () => {
+  const source = parseArtifactSource({
+    kind: 'dashboard',
+    datasets: [{ id: 'usage', source: 'usage' }],
+    figures: [{ label: 'Used', dataset: 'usage', column: 'used', notify: true }],
+    refreshMinutes: 60,
+  })
+  if (source.kind !== 'dashboard') throw new Error('not a dashboard')
+  const drawn = renderDashboard(source, 'Costs')
+  const document = {
+    reference: { id: 'a', version: 1, kind: 'dashboard', title: 'Costs' },
+    html: drawn.html,
+    files: drawn.files,
+  } as unknown as InteractiveDocument
+  expect(refreshMs(document)).toBe(60 * 60_000)
+  const read = vi.fn<ReadDashboardSource>(async () => [['vercel', 'transfer', null, 1, 100, 'GB']])
+  const live = new LiveDashboards(read)
+  let memory = {}
+  let now = 0
+  const round = () =>
+    watchDashboards({
+      now: () => (now += 10 * 60_000),
+      dashboards: () => [{ id: 'a', title: 'Costs', projectId: 'p1' }],
+      document: () => document,
+      live,
+      memory: { read: () => memory, write: (values) => void (memory = values) },
+      notify: () => {},
+    })
+  for (let i = 0; i < 6; i++) await round()
+  expect(read).toHaveBeenCalledTimes(1)
+  await round()
+  expect(read).toHaveBeenCalledTimes(2)
 })

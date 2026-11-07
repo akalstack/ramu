@@ -245,6 +245,7 @@ const dashboardSource = z
     figures: z.array(dashboardFigureSchema).max(12).default([]),
     charts: z.array(dashboardChartSchema).max(12).default([]),
     theme: slideThemeSchema.default({ appearance: 'auto' }),
+    refreshMinutes: z.number().int().min(5).max(1440).optional(),
   })
   .superRefine((board, ctx) => {
     const tables = new Map(board.datasets.map((table) => [table.id, table]))
