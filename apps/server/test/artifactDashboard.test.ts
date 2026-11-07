@@ -4,6 +4,7 @@ import { LiveDashboards, refreshMs, watchDashboards, type ReadDashboardSource } 
 import { parseArtifactSource } from '@ramu/shared/artifactSource'
 import { dashboardCsv } from '@ramu/shared/interactiveExport'
 import { aggregate, dashboardChart, renderDashboard } from '../src/interactive/dashboard'
+import { tableFromFile } from '../src/interactive/dashboardFile'
 
 const SIGNUPS = {
   id: 'signups',
@@ -111,6 +112,42 @@ it('reads live tables again when opened, at most every five minutes, and only wi
   now += 5 * 60_000
   expect((await live.serve(document, 'p1')).html).toContain('<strong>55</strong>')
   expect(read).toHaveBeenCalledTimes(2)
+})
+
+it('reads a table from a project file, by header or key, and refuses paths outside the project', async () => {
+  const csv = 'Day,Count,Note\r\nMon,4,"first, ""big"" day"\nTue,,\n\nWed,6.5,x\n'
+  expect(tableFromFile('data/s.csv', csv, ['day', 'count', 'missing'])).toEqual([
+    ['Mon', 4, null],
+    ['Tue', null, null],
+    ['Wed', 6.5, null],
+  ])
+  expect(tableFromFile('data/s.csv', csv, ['note'])[0]).toEqual(['first, "big" day'])
+  expect(tableFromFile('s.json', '[{"day":"Mon","count":"3"},{"day":true},7]', ['day', 'count'])).toEqual([
+    ['Mon', 3],
+    ['true', null],
+  ])
+  expect(() => tableFromFile('s.json', '{}', ['day'])).toThrow('not a JSON array')
+
+  const table = { id: 'signups', file: 'data/s.csv', columns: ['day', 'count'] }
+  const parsed = parseArtifactSource({
+    kind: 'dashboard',
+    datasets: [table],
+    figures: [{ label: 'Signups', dataset: 'signups', column: 'count' }],
+  })
+  if (parsed.kind !== 'dashboard') throw new Error('not a dashboard')
+  for (const file of ['../secrets.csv', '/etc/x.csv', 'data/s.txt'])
+    expect(() =>
+      parseArtifactSource({ kind: 'dashboard', datasets: [{ ...table, file }], figures: parsed.figures }),
+    ).toThrow('inside the project')
+  const drawn = renderDashboard(parsed, 'Signups')
+  const document = {
+    reference: { id: 'f', version: 1, kind: 'dashboard', title: 'Signups' },
+    html: drawn.html,
+    files: drawn.files,
+  } as unknown as InteractiveDocument
+  const read = vi.fn<ReadDashboardSource>(async (_project, { file, columns }) => tableFromFile(file!, csv, columns))
+  expect((await new LiveDashboards(read).serve(document, 'p1')).html).toContain('<strong>10.5</strong>')
+  expect(read).toHaveBeenCalledWith('p1', expect.objectContaining({ file: 'data/s.csv' }))
 })
 
 it('tells the person’s devices when a watched figure changes, remembering values between rounds', async () => {

@@ -53,6 +53,8 @@ import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools
 import { createDeploys } from './workspace/deploy/deploys'
 import { LocalApps } from './workspace/deploy/localApp'
 import { LiveDashboards, watchDashboards } from './interactive/liveDashboard'
+import { tableFromFile } from './interactive/dashboardFile'
+import { readText } from './workspace/files'
 import { appliedDesignSystem, designTokensOf } from '@ramu/shared/artifacts'
 import { registerDeployTools, registerReleaseTools } from './workspace/deploy/tools'
 import { registerCiTools } from './workspace/ci/tools'
@@ -769,9 +771,15 @@ const publicPages = new PublicPages(
   (artifactId) => send('artifacts:changed', { artifactId }),
 )
 void publicPages.restore(publicPageTunnel())
-// A dashboard's live tables, read from its own project's deploys in each source's fixed column order.
+// A dashboard's live tables, read from its own project: its deploys in each source's fixed column order, or a file in
+// its folder, read only.
 const isoTime = (at: number) => new Date(at).toISOString()
-const liveDashboards = new LiveDashboards(async (projectId, source) => {
+const liveDashboards = new LiveDashboards(async (projectId, { source, file, columns }) => {
+  if (file) {
+    const root = workspace.listProjects().find((project) => project.id === projectId)?.root
+    if (!root) return []
+    return tableFromFile(file, (await readText(root, file)).content, columns)
+  }
   if (source === 'deployments')
     return (await deploys.service.project(projectId)).deployments.map((deployment) => [
       isoTime(deployment.createdAt),

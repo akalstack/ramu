@@ -58,10 +58,7 @@ The kind is chosen by the agent from the request, shown as a small mark on every
 
 App, Doc, Diagram, Slides, Dashboard (over tables the agent fills in), Design (fixed-size frames of HTML and CSS) and Motion (timed scenes played by CSS) are in the engine, with PDF for every kind, PowerPoint and slide images for decks, Word for docs and PNG for diagrams, kept per version (see [Kinds](guide/artifacts.md#kinds)). The remaining kinds and exports follow the same path: `artifact_publish` and `artifact_preview` take the kind and its source, validated by a zod schema per kind in `packages/shared/src/artifactSource.ts`, and the host draws the source into HTML for the sandboxed frame in `apps/server/src/interactive/kinds.ts`.
 
-- **Kinds and their preview checks:**
-- **Renderers** share `ramu:kit` and the theme tokens, so every kind looks like Ramu in light and dark. Rendering stays offline unless the artifact declares sources.
-- **Exports run on the host:**
-  - **Narration in video:** MP4 and WebM are made today (frames stepped with the Web Animations API, encoded with the browser's WebCodecs and packaged by Mediabunny); narration still to be mixed in.
+- **Narration in video:** MP4 and WebM are made today (frames stepped with the Web Animations API, encoded with the browser's WebCodecs and packaged by Mediabunny); narration still to be mixed in.
 
 ### 2. Editing in place
 
@@ -74,7 +71,8 @@ A Doc's Markdown and a Mermaid diagram's source (desktop and phone) and a deck's
 ### 3. Dashboards and Live artifacts
 
 - **Built:** a Dashboard's table can read its project's deployments, usage or uptime, again on every open (at most every five minutes), with "As of" ([Kinds](guide/artifacts.md#kinds)).
-- **More sources** are the ones a page can already be granted: its own records, one project folder (read-only), Ramu data (read-only) and Shared MCP servers allowed one by one.
+- **Built:** a table can also read a CSV or JSON file in its project's folder, read-only.
+- **More sources** are the ones a page can already be granted: its own records, Ramu data (read-only) and Shared MCP servers allowed one by one.
 - **Built:** watched figures on a kept dashboard's live tables are read every ten minutes and a change is told to the person's devices ([Kinds](guide/artifacts.md#kinds)). A dashboard's refresh rule (`refreshMinutes`) sets how often, and the phone's saved copy shows the "As of" of its last read when offline. **Refresh** in the desktop toolbar changes it.
 - **Live** is a Dashboard or App whose refresh runs on the host through the existing page schedules. It can raise a notification when a declared value changes, using the existing triggers. MCP calls that only read run without asking each time once the person allowed that server for that artifact. Anything that writes still asks in the toolbar.
 
@@ -88,7 +86,7 @@ A Doc's Markdown and a Mermaid diagram's source (desktop and phone) and a deck's
 
 ### 5. Phone
 
-- The **Artifacts** tab gets kind filters beside the host filter. Each kind has a viewer that fits the phone:
+- The **Artifacts** tab filters by kind beside the host filter (built). Each kind gets a viewer that fits the phone:
   - Slides: swipe, with Present when the phone is connected to a display.
   - Doc: reading width, with editing.
   - Motion: native video for the exported MP4.

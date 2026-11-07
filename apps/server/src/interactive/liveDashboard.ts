@@ -1,14 +1,15 @@
-// Dashboards whose tables name a live source: when one is opened, the host reads those tables again from the
+// Dashboards whose tables name a live source or a project file: when one is opened, the host reads those tables again from the
 // dashboard's own project and draws it anew, stamped with the time it read them. A version's stored HTML stays as it
 // was published; only what is shown is refreshed, at most once per interval.
 import { ARTIFACT_SOURCE_FILES } from '@ramu/shared/artifacts'
-import { parseArtifactSource, type DashboardSource, type DashboardSourceKind } from '@ramu/shared/artifactSource'
+import { parseArtifactSource, type DashboardSource } from '@ramu/shared/artifactSource'
 import type { InteractiveDocument } from '@ramu/shared/interactive'
 import { figureValues, renderDashboard } from './dashboard'
 
 type Cell = string | number | null
-/** Reads one live table of a project, its rows in the source's fixed column order. */
-export type ReadDashboardSource = (projectId: string, source: DashboardSourceKind) => Promise<Cell[][]>
+type LiveTable = Pick<DashboardSource['datasets'][number], 'source' | 'file' | 'columns'>
+/** Reads one live table of a project, its rows in the table's column order. */
+export type ReadDashboardSource = (projectId: string, table: LiveTable) => Promise<Cell[][]>
 
 const REFRESH_MS = 5 * 60_000
 
@@ -33,16 +34,16 @@ export class LiveDashboards {
     if (document.reference.kind !== 'dashboard' || !projectId) return null
     const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.dashboard)?.content
     if (!stored) return null
-    const board = JSON.parse(stored) as { datasets: { source?: DashboardSourceKind }[] }
-    if (!board.datasets.some((table) => table.source)) return null
+    const board = JSON.parse(stored) as { datasets: LiveTable[] }
+    if (!board.datasets.some((table) => table.source || table.file)) return null
     const at = new Date(this.now()).toISOString()
     const datasets = await Promise.all(
       board.datasets.map(async (table) =>
-        table.source
+        table.source || table.file
           ? {
               ...table,
               // A source that cannot be read now shows empty rather than the published rows passing for current.
-              rows: await this.read(projectId, table.source).catch(() => []),
+              rows: await this.read(projectId, table).catch(() => []),
               asOf: at,
             }
           : table,

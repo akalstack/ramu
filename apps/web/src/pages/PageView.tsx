@@ -146,9 +146,9 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   // A dashboard with live tables offers its refresh rule; the default read interval is five minutes.
   const dashboardSource = document?.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.dashboard)?.content
   const dashboardBoard = dashboardSource
-    ? (JSON.parse(dashboardSource) as { datasets: { source?: string }[]; refreshMinutes?: number })
+    ? (JSON.parse(dashboardSource) as { datasets: { source?: string; file?: string }[]; refreshMinutes?: number })
     : null
-  const liveRefresh = dashboardBoard?.datasets.some((table) => table.source)
+  const liveRefresh = dashboardBoard?.datasets.some((table) => table.source || table.file)
     ? (dashboardBoard.refreshMinutes ?? 5)
     : null
   // A motion's length, from the scenes its version keeps, for the toolbar's scrub bar.

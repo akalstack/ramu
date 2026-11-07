@@ -209,8 +209,24 @@ export const dashboardDatasetSchema = z
       .describe(
         "A live table from the dashboard's project, read again when it is opened: deployments (created, state, production, branch, message, url), usage (platform, metric, service, used, limit, unit) or uptime (checked, result, status, ms). Leave columns and rows out.",
       ),
+    file: z
+      .string()
+      .trim()
+      .max(260)
+      .regex(
+        /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$)).+\.(?:csv|json)$/i,
+        'A file is a .csv or .json path inside the project.',
+      )
+      .optional()
+      .describe(
+        "A CSV (with a header row) or JSON (an array of objects) file in the dashboard's project folder, read again when it is opened and never written. columns names which of its columns to show, by header or key. Leave rows out.",
+      ),
   })
   .transform((table, ctx) => {
+    if (table.source && table.file) {
+      ctx.addIssue({ code: 'custom', message: `Give ${table.id} a source or a file, not both.` })
+      return z.NEVER
+    }
     if (table.source) return { ...table, columns: [...DASHBOARD_SOURCES[table.source]], rows: table.rows }
     if (!table.columns) {
       ctx.addIssue({ code: 'custom', message: `Give ${table.id} its columns, or a source.` })
