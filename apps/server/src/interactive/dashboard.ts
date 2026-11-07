@@ -61,7 +61,18 @@ export function dashboardChart(table: Table, chart: DashboardSource['charts'][nu
   }
 }
 
-const formatFigure = (value: number | null, unit = '') =>
+/** Each figure's value, by its label: what a watched figure is compared on. */
+export function figureValues(board: DashboardSource): Record<string, number | null> {
+  const tables = new Map(board.datasets.map((table) => [table.id, table]))
+  return Object.fromEntries(
+    board.figures.map((figure) => [
+      figure.label,
+      aggregate(column(tables.get(figure.dataset)!, figure.column), figure.aggregate),
+    ]),
+  )
+}
+
+export const formatFigure = (value: number | null, unit = '') =>
   value === null ? '—' : `${value.toLocaleString('en', { maximumFractionDigits: 2 })}${unit}`
 
 /** The newest time any table was read, for "As of"; null when none says. */

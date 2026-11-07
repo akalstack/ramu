@@ -2,9 +2,9 @@
 // dashboard's own project and draws it anew, stamped with the time it read them. A version's stored HTML stays as it
 // was published; only what is shown is refreshed, at most once per interval.
 import { ARTIFACT_SOURCE_FILES } from '@ramu/shared/artifacts'
-import { parseArtifactSource, type DashboardSourceKind } from '@ramu/shared/artifactSource'
+import { parseArtifactSource, type DashboardSource, type DashboardSourceKind } from '@ramu/shared/artifactSource'
 import type { InteractiveDocument } from '@ramu/shared/interactive'
-import { renderDashboard } from './dashboard'
+import { figureValues, renderDashboard } from './dashboard'
 
 type Cell = string | number | null
 /** Reads one live table of a project, its rows in the source's fixed column order. */
@@ -21,16 +21,13 @@ export class LiveDashboards {
     private readonly now: () => number = Date.now,
   ) {}
 
-  /** The document as it should show now: unchanged unless it is a dashboard with live tables and a project. */
-  async serve(document: InteractiveDocument, projectId: string | null): Promise<InteractiveDocument> {
-    if (document.reference.kind !== 'dashboard' || !projectId) return document
+  /** The dashboard's source with its live tables read now; null when it has none, or no project to read them from. */
+  private async fresh(document: InteractiveDocument, projectId: string | null): Promise<DashboardSource | null> {
+    if (document.reference.kind !== 'dashboard' || !projectId) return null
     const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.dashboard)?.content
-    if (!stored) return document
+    if (!stored) return null
     const board = JSON.parse(stored) as { datasets: { source?: DashboardSourceKind }[] }
-    if (!board.datasets.some((table) => table.source)) return document
-    const key = `${document.reference.id}:${document.reference.version}:${projectId}`
-    const kept = this.drawn.get(key)
-    if (kept && this.now() - kept.at < REFRESH_MS) return kept.document
+    if (!board.datasets.some((table) => table.source)) return null
     const at = new Date(this.now()).toISOString()
     const datasets = await Promise.all(
       board.datasets.map(async (table) =>
@@ -45,10 +42,74 @@ export class LiveDashboards {
       ),
     )
     const source = parseArtifactSource({ kind: 'dashboard', ...board, datasets })
-    if (source.kind !== 'dashboard') return document
+    return source.kind === 'dashboard' ? source : null
+  }
+
+  /** The document as it should show now: unchanged unless it is a dashboard with live tables and a project. */
+  async serve(document: InteractiveDocument, projectId: string | null): Promise<InteractiveDocument> {
+    const key = `${document.reference.id}:${document.reference.version}:${projectId}`
+    const kept = this.drawn.get(key)
+    if (kept && this.now() - kept.at < REFRESH_MS) return kept.document
+    const source = await this.fresh(document, projectId)
+    if (!source) return document
     const refreshed = { ...document, html: renderDashboard(source, document.reference.title).html }
     this.drawn.set(key, { at: this.now(), document: refreshed })
     if (this.drawn.size > KEEP) this.drawn.delete(this.drawn.keys().next().value!)
     return refreshed
   }
+
+  /**
+   * The watched figures' values read now, by label, with their units; null when the dashboard watches none. The host
+   * compares them with the last read to tell the person's devices what changed.
+   */
+  async watched(
+    document: InteractiveDocument,
+    projectId: string | null,
+  ): Promise<Record<string, { value: number | null; unit: string }> | null> {
+    const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.dashboard)?.content
+    if (
+      !stored ||
+      !(JSON.parse(stored) as { figures?: { notify?: boolean }[] }).figures?.some((figure) => figure.notify)
+    )
+      return null
+    const source = await this.fresh(document, projectId)
+    if (!source) return null
+    const values = figureValues(source)
+    return Object.fromEntries(
+      source.figures
+        .filter((figure) => figure.notify)
+        .map((figure) => [figure.label, { value: values[figure.label] ?? null, unit: figure.unit ?? '' }]),
+    )
+  }
+}
+
+type Watched = Record<string, { value: number | null; unit: string }>
+const shown = ({ value, unit }: { value: number | null; unit: string }) =>
+  value === null ? '—' : `${value.toLocaleString('en', { maximumFractionDigits: 2 })}${unit}`
+
+/**
+ * One round of watching: every kept dashboard with watched figures is read again from its project, and each figure
+ * that changed since the last round is told to the person's devices. The first round only remembers the values.
+ */
+export async function watchDashboards(deps: {
+  dashboards: () => { id: string; title: string; projectId: string | null }[]
+  document: (artifactId: string) => InteractiveDocument
+  live: LiveDashboards
+  memory: { read(): Record<string, Watched>; write(values: Record<string, Watched>): void }
+  notify: (artifactId: string, body: string) => void
+}) {
+  const before = deps.memory.read()
+  const after: Record<string, Watched> = {}
+  for (const page of deps.dashboards()) {
+    const values = await deps.live.watched(deps.document(page.id), page.projectId).catch(() => null)
+    if (!values) continue
+    after[page.id] = values
+    const was = before[page.id]
+    if (!was) continue
+    const changes = Object.entries(values)
+      .filter(([label, now]) => was[label] && was[label].value !== now.value)
+      .map(([label, now]) => `${label}: ${shown(was[label]!)} → ${shown(now)}`)
+    if (changes.length) deps.notify(page.id, changes.join(' · ').slice(0, 240))
+  }
+  deps.memory.write(after)
 }

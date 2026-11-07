@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import type { InteractiveDocument } from '@ramu/shared/interactive'
-import { LiveDashboards, type ReadDashboardSource } from '../src/interactive/liveDashboard'
+import { LiveDashboards, watchDashboards, type ReadDashboardSource } from '../src/interactive/liveDashboard'
 import { parseArtifactSource } from '@ramu/shared/artifactSource'
 import { dashboardCsv } from '@ramu/shared/interactiveExport'
 import { aggregate, dashboardChart, renderDashboard } from '../src/interactive/dashboard'
@@ -111,4 +111,41 @@ it('reads live tables again when opened, at most every five minutes, and only wi
   now += 5 * 60_000
   expect((await live.serve(document, 'p1')).html).toContain('<strong>55</strong>')
   expect(read).toHaveBeenCalledTimes(2)
+})
+
+it('tells the person’s devices when a watched figure changes, remembering values between rounds', async () => {
+  const source = parseArtifactSource({
+    kind: 'dashboard',
+    datasets: [{ id: 'usage', source: 'usage' }],
+    figures: [
+      { label: 'Used', dataset: 'usage', column: 'used', notify: true, unit: ' GB' },
+      { label: 'Rows', dataset: 'usage', column: 'used', aggregate: 'count' },
+    ],
+  })
+  if (source.kind !== 'dashboard') throw new Error('not a dashboard')
+  const drawn = renderDashboard(source, 'Costs')
+  const document = {
+    reference: { id: 'a', version: 1, kind: 'dashboard', title: 'Costs' },
+    html: drawn.html,
+    files: drawn.files,
+  } as unknown as InteractiveDocument
+  let used = 40
+  const live = new LiveDashboards(async () => [['vercel', 'transfer', null, used, 100, 'GB']])
+  let memory = {}
+  const notify = vi.fn()
+  const round = () =>
+    watchDashboards({
+      dashboards: () => [{ id: 'a', title: 'Costs', projectId: 'p1' }],
+      document: () => document,
+      live,
+      memory: { read: () => memory, write: (values) => void (memory = values) },
+      notify,
+    })
+  await round()
+  expect(notify).not.toHaveBeenCalled()
+  used = 55
+  await round()
+  expect(notify).toHaveBeenCalledWith('a', 'Used: 40 GB → 55 GB')
+  await round()
+  expect(notify).toHaveBeenCalledTimes(1)
 })

@@ -225,6 +225,10 @@ export const dashboardFigureSchema = z.object({
   column: columnName,
   aggregate: z.enum(DASHBOARD_AGGREGATES).default('sum'),
   unit: z.string().max(12).optional(),
+  notify: z
+    .boolean()
+    .optional()
+    .describe("Tell the person's devices when this number changes; for figures over a live table."),
 })
 export const dashboardChartSchema = z.object({
   title: z.string().trim().min(1).max(100),

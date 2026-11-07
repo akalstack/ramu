@@ -52,7 +52,7 @@ import { registerThemeTools } from './themeTools'
 import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
 import { createDeploys } from './workspace/deploy/deploys'
 import { LocalApps } from './workspace/deploy/localApp'
-import { LiveDashboards } from './interactive/liveDashboard'
+import { LiveDashboards, watchDashboards } from './interactive/liveDashboard'
 import { registerDeployTools, registerReleaseTools } from './workspace/deploy/tools'
 import { registerCiTools } from './workspace/ci/tools'
 import { setAcpTerminalService } from './providers/acpTerminals'
@@ -794,6 +794,22 @@ const liveDashboards = new LiveDashboards(async (projectId, source) => {
   const last = deploys.uptime.status(projectId).last
   return last ? [[isoTime(last.at), last.result, last.status, last.ms]] : []
 })
+// Dashboards with watched figures are read again every ten minutes; a change is told to the person's devices.
+const dashboardWatch = setInterval(
+  () =>
+    void watchDashboards({
+      dashboards: () => pages.list().filter((page) => page.kind === 'dashboard'),
+      document: (artifactId) => pages.document(artifactId),
+      live: liveDashboards,
+      memory: {
+        read: () => workspace.getAppState('dashboard-watch', {}),
+        write: (values) => workspace.setAppState('dashboard-watch', values),
+      },
+      notify: (artifactId, body) => notifyPage(pages.get(artifactId), pages.get(artifactId).title, body),
+    }).catch(() => {}),
+  10 * 60_000,
+)
+dashboardWatch.unref()
 // Apps published from this computer get tunnels of their own, of the same kind as pages opened to anyone.
 const localApps = new LocalApps({
   saved: {
