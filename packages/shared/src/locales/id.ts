@@ -6053,4 +6053,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'previews use their own branch': 'preview memakai cabangnya sendiri',
   Databases: 'Basis data',
   'Put {0} online, or see where it is deployed': 'Online-kan {0}, atau lihat di mana ia di-deploy',
+  'Running without Docker, with your permissions.': 'Berjalan tanpa Docker, dengan izin Anda.',
+  'Without Docker, Ramu runs the app’s start script (a Node app) as a program on this computer. It has your own permissions: it can read your files and anything else you can. Run only code you trust.':
+    'Tanpa Docker, Ramu menjalankan skrip start aplikasi (aplikasi Node) sebagai program di komputer ini. Program itu punya izin Anda sendiri: bisa membaca berkas Anda dan apa pun yang bisa Anda akses. Jalankan hanya kode yang Anda percaya.',
+  'Run without Docker': 'Jalankan tanpa Docker',
+  'Run without Docker…': 'Jalankan tanpa Docker…',
 }

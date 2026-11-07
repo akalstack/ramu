@@ -53,7 +53,7 @@ import type { TunnelChoice } from '@ramu/shared/types'
 import { registerThemeTools } from './themeTools'
 import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
 import { createDeploys } from './workspace/deploy/deploys'
-import { LocalApps } from './workspace/deploy/localApp'
+import { LocalApps, type SavedApp } from './workspace/deploy/localApp'
 import { LiveDashboards, watchDashboards } from './interactive/liveDashboard'
 import { tableFromFile } from './interactive/dashboardFile'
 import { readText } from './workspace/files'
@@ -878,7 +878,7 @@ interactive.designSystem = (sessionId) => {
 // Apps published from this computer get tunnels of their own, of the same kind as pages opened to anyone.
 const localApps = new LocalApps({
   saved: {
-    read: () => workspace.getAppState<Record<string, string>>('local-apps', {}),
+    read: () => workspace.getAppState<Record<string, SavedApp>>('local-apps', {}),
     write: (apps) => workspace.setAppState('local-apps', apps),
   },
   choice: publicPageTunnel,

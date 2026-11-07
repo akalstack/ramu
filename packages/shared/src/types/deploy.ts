@@ -348,8 +348,12 @@ export interface DeployLinkResult {
 }
 
 /** An app published from this computer through a tunnel of its own (Deploy → Run on this computer). */
+/** How an app runs on this computer: in a Docker container, or as a program with the person's own permissions. */
+export type LocalAppMode = 'container' | 'process'
+
 export interface LocalAppStatus {
   state: 'off' | 'building' | 'running' | 'failed'
+  mode: LocalAppMode | null
   /** The app's own public address once its tunnel is up. */
   url: string | null
   error: string | null

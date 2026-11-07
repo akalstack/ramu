@@ -1302,8 +1302,11 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.usage'(projectId: string): UsageReport[]
   /** The app published from this computer, if any: its state and its own public address. */
   'deploy.localStatus'(projectId: string): LocalAppStatus
-  /** Builds the repository's app into a container on this computer and publishes it through a tunnel of its own. */
-  'deploy.localPublish'(projectId: string, repoId: string): LocalAppStatus
+  /**
+   * Builds the repository's app into a container on this computer (or, with `process`, runs a Node app as a program
+   * with the person's own permissions) and publishes it through a tunnel of its own.
+   */
+  'deploy.localPublish'(projectId: string, repoId: string, mode?: import('./types/deploy').LocalAppMode): LocalAppStatus
   /** Takes the app off the internet, then stops its container. */
   'deploy.localStop'(projectId: string): void
   /** The live address watch: the address checked, the last check, any unknown span and the open incident. */

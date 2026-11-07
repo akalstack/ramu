@@ -280,9 +280,9 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
       run: (projectId: string) => localApps().status(project(projectId)),
     },
     'deploy.localPublish': {
-      args: z.tuple([id, id]),
-      run: (projectId: string, repoId: string) =>
-        localApps().publish(project(projectId), repositoryOf(projectId, repoId).root),
+      args: z.tuple([id, id, z.enum(['container', 'process']).optional()]),
+      run: (projectId: string, repoId: string, mode?: 'container' | 'process') =>
+        localApps().publish(project(projectId), repositoryOf(projectId, repoId).root, mode),
     },
     'deploy.localStop': {
       args: z.tuple([id]),

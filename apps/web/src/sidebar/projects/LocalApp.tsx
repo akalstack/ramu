@@ -15,6 +15,8 @@ export function LocalAppSection({ projectId, repoId }: { projectId: string; repo
   const [status, setStatus] = useState<LocalAppStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Running without Docker is a second, explicit choice: the sheet first says what it means.
+  const [withoutDocker, setWithoutDocker] = useState(false)
   useEffect(() => {
     let current = true
     const read = () =>
@@ -68,6 +70,16 @@ export function LocalAppSection({ projectId, repoId }: { projectId: string; repo
           )}
         </div>
       )}
+      {on && status.mode === 'process' && (
+        <p className="m-0 text-caption text-muted-foreground">{t('Running without Docker, with your permissions.')}</p>
+      )}
+      {withoutDocker && !on && (
+        <p role="alert" className="m-0 text-caption">
+          {t(
+            'Without Docker, Ramu runs the app’s start script (a Node app) as a program on this computer. It has your own permissions: it can read your files and anything else you can. Run only code you trust.',
+          )}
+        </p>
+      )}
       {error && <p className="m-0 text-caption text-bad">{error}</p>}
       <div className="flex gap-2">
         {on ? (
@@ -87,6 +99,29 @@ export function LocalAppSection({ projectId, repoId }: { projectId: string; repo
             onClick={() => repoId && void act(() => host.invoke('deploy.localPublish', projectId, repoId))}
           >
             {busy ? t('Building the app…') : t('Publish from this computer')}
+          </Button>
+        )}
+        {!on && (
+          <Button
+            variant={withoutDocker ? 'default' : 'ghost'}
+            size="sm"
+            disabled={busy || !repoId}
+            onClick={() => {
+              if (!withoutDocker) return setWithoutDocker(true)
+              if (repoId)
+                void act(async () => {
+                  const next = await host.invoke('deploy.localPublish', projectId, repoId, 'process')
+                  setWithoutDocker(false)
+                  return next
+                })
+            }}
+          >
+            {withoutDocker ? t('Run without Docker') : t('Run without Docker…')}
+          </Button>
+        )}
+        {withoutDocker && !on && (
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => setWithoutDocker(false)}>
+            {t('Cancel')}
           </Button>
         )}
       </div>

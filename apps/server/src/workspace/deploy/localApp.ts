@@ -1,20 +1,25 @@
 // An app run on this computer for demos and home use, reachable from the internet through a tunnel of its own.
-// The review in docs/SHIP-AN-APP-PLAN.md holds here: the app runs in a Docker container with only its port published to
-// loopback (no host network, no Ramu environment), the tunnel names exactly that port, and it gets a hostname of its
-// own that shares nothing with Ramu's address or the artifacts' pages.
-import { execFile } from 'node:child_process'
+// The review in docs/SHIP-AN-APP-PLAN.md holds here: by default the app runs in a Docker container with only its port
+// published to loopback (no host network, no Ramu environment), the tunnel names exactly that port, and it gets a
+// hostname of its own that shares nothing with Ramu's address or the artifacts' pages. Without Docker, and only when the
+// person chooses it, a Node app runs as a program in its own process group, with none of Ramu's environment, on a
+// loopback port; it has the person's own permissions, which the sheet says before it starts.
+import { execFile, spawn } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { createServer, type AddressInfo } from 'node:net'
+import { connect, createServer, type AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import type { TunnelChoice } from '@ramu/shared/types'
 import { DOCKER_MANIFESTS, exposedPort, serverDockerfile } from '@ramu/shared/serverDeploy'
-import type { LocalAppStatus } from '@ramu/shared/types/deploy'
+import type { LocalAppMode, LocalAppStatus } from '@ramu/shared/types/deploy'
 import { TunnelManager } from '../../remote/tunnel'
 
 const BUILD_TIMEOUT_MS = 15 * 60_000
 const OUTPUT_TAIL = 2000
 const MANIFEST_MAX_BYTES = 256 * 1024
 const RESERVED = new Set(['PATH', 'HOME', 'DOCKER_HOST', 'DOCKER_CONFIG', 'DOCKER_CONTEXT'])
+/** Set by Ramu for a program run without Docker, so the app listens where the tunnel goes. */
+const PROCESS_RESERVED = new Set(['PATH', 'HOME', 'PORT', 'HOST', 'HOSTNAME', 'NODE_ENV'])
+const START_TIMEOUT_MS = 90_000
 
 /** Runs one command with no shell; `input` goes to its standard input. Resolves with its output. */
 export type LocalRun = (
@@ -79,14 +84,88 @@ export function localRunArgs(name: string, hostPort: number, appPort: number, va
   ]
 }
 
+/** A program started without Docker: stopped with its whole process group. */
+export interface LocalProcess {
+  stop(): void
+  /** Resolves when it exits, with the end of what it printed. */
+  exited: Promise<string>
+}
+
+/** Starts one program with no shell in its own process group; nothing of Ramu's environment beyond `env` reaches it. */
+export function startLocalProcess(argv: string[], options: { cwd: string; env: Record<string, string> }): LocalProcess {
+  const child = spawn(argv[0]!, argv.slice(1), {
+    cwd: options.cwd,
+    env: options.env,
+    detached: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let output = ''
+  const keep = (chunk: Buffer) => (output = (output + chunk.toString()).slice(-OUTPUT_TAIL))
+  child.stdout?.on('data', keep)
+  child.stderr?.on('data', keep)
+  const signal = (name: NodeJS.Signals) => {
+    try {
+      if (child.pid) process.kill(-child.pid, name)
+    } catch {
+      // Already gone.
+    }
+  }
+  return {
+    exited: new Promise((resolve) => {
+      child.once('error', (error) => resolve(`${output}${error.message}`.slice(-OUTPUT_TAIL)))
+      child.once('exit', () => resolve(output))
+    }),
+    stop: () => {
+      signal('SIGTERM')
+      setTimeout(() => signal('SIGKILL'), 5_000).unref()
+    },
+  }
+}
+
+/** Resolves once something answers on the loopback port, or rejects after `timeout`. */
+function waitForPort(port: number, timeout: number): Promise<void> {
+  const deadline = Date.now() + timeout
+  return new Promise((resolve, reject) => {
+    const attempt = () => {
+      const socket = connect({ host: '127.0.0.1', port })
+      socket.once('connect', () => {
+        socket.destroy()
+        resolve()
+      })
+      socket.once('error', () => {
+        socket.destroy()
+        if (Date.now() > deadline) reject(new Error(`The app did not start listening on port ${port}.`))
+        else setTimeout(attempt, 500)
+      })
+    }
+    attempt()
+  })
+}
+
+/** The package manager a Node app's lockfile names. */
+function packageManager(root: string): string {
+  if (existsSync(join(root, 'pnpm-lock.yaml'))) return 'pnpm'
+  if (existsSync(join(root, 'yarn.lock'))) return 'yarn'
+  if (existsSync(join(root, 'bun.lock')) || existsSync(join(root, 'bun.lockb'))) return 'bun'
+  return 'npm'
+}
+
 interface Running {
   tunnel: TunnelManager
   since: number
   error: string | null
   state: LocalAppStatus['state']
+  mode: LocalAppMode
+  process?: LocalProcess
 }
 
-/** Apps the person published from this computer, each in its own container behind its own tunnel. */
+/** Where a published app's folder is and how it ran, kept so it starts again with Ramu. */
+export interface SavedApp {
+  root: string
+  mode: LocalAppMode
+}
+
+/** Apps the person published from this computer, each in its own container (or program) behind its own tunnel. */
 export class LocalApps {
   private readonly apps = new Map<string, Running>()
   /** The project's own variables the app reads, from this host's Environment variables; none until set. */
@@ -96,12 +175,14 @@ export class LocalApps {
     private readonly deps: {
       run?: LocalRun
       tunnels?: (changed: () => void) => TunnelManager
-      /** Projects left published, with their folders, so they start again with Ramu. */
-      saved: { read(): Record<string, string>; write(apps: Record<string, string>): void }
+      /** Projects left published, with their folders and how they ran, so they start again with Ramu. */
+      saved: { read(): Record<string, SavedApp>; write(apps: Record<string, SavedApp>): void }
       /** The tunnel kind this computer's pages opened to anyone use; never Ramu's own tunnel. */
       choice: () => TunnelChoice
       changed?: (projectId: string) => void
       freePort?: () => Promise<number>
+      start?: typeof startLocalProcess
+      listening?: (port: number, timeout: number) => Promise<void>
     },
   ) {}
 
@@ -112,17 +193,18 @@ export class LocalApps {
   /** Reads the app's variables with `variables` from now on, then starts the apps left published. */
   async start(variables: (root: string) => Promise<Record<string, string>>) {
     this.variables = variables
-    for (const [projectId, root] of Object.entries(this.deps.saved.read()))
-      await this.publish(projectId, root).catch(() => {})
+    for (const [projectId, { root, mode }] of Object.entries(this.deps.saved.read()))
+      await this.publish(projectId, root, mode).catch(() => {})
   }
 
-  async publish(projectId: string, root: string): Promise<LocalAppStatus> {
+  async publish(projectId: string, root: string, mode: LocalAppMode = 'container'): Promise<LocalAppStatus> {
     const choice = this.deps.choice()
     if (choice.kind === 'tailscale')
       throw new Error('Tailscale Funnel would serve the app on this computer’s own name. Choose Cloudflare or ngrok.')
     if (choice.kind === 'ngrok' && choice.domain)
       throw new Error('A fixed ngrok domain belongs to this computer. Use ngrok without a domain or Cloudflare.')
     if (this.apps.has(projectId)) return this.status(projectId)
+    if (mode === 'process') return this.publishProcess(projectId, root, choice)
     try {
       await this.run(['docker', 'version', '--format', '{{.Server.Version}}'], { timeout: 15_000 })
     } catch {
@@ -132,7 +214,13 @@ export class LocalApps {
     }
     const { dockerfile, port } = this.dockerfile(root)
     const name = localAppName(projectId)
-    const app: Running = { tunnel: this.tunnel(projectId), since: Date.now(), error: null, state: 'building' }
+    const app: Running = {
+      tunnel: this.tunnel(projectId),
+      since: Date.now(),
+      error: null,
+      state: 'building',
+      mode: 'container',
+    }
     this.apps.set(projectId, app)
     this.deps.changed?.(projectId)
     try {
@@ -152,7 +240,7 @@ export class LocalApps {
       app.state = 'running'
       // The tunnel goes to the container's loopback port and nothing else.
       app.tunnel.use(choice, `http://127.0.0.1:${hostPort}`)
-      this.deps.saved.write({ ...this.deps.saved.read(), [projectId]: root })
+      this.deps.saved.write({ ...this.deps.saved.read(), [projectId]: { root, mode: 'container' } })
     } catch (error) {
       app.state = 'failed'
       app.error = error instanceof Error ? error.message.slice(-OUTPUT_TAIL) : String(error)
@@ -161,7 +249,76 @@ export class LocalApps {
     return this.status(projectId)
   }
 
-  /** Takes the app off the internet first, then stops its container. */
+  /**
+   * A Node app run as a program: installed when it has no node_modules, built when it has a build script, then started
+   * with its start script on a loopback port, which the tunnel names once something answers there.
+   */
+  private async publishProcess(projectId: string, root: string, choice: TunnelChoice): Promise<LocalAppStatus> {
+    const manifest = existsSync(join(root, 'package.json'))
+      ? (JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { scripts?: Record<string, string> })
+      : null
+    if (!manifest?.scripts?.start)
+      throw new Error('Without Docker, Ramu runs a Node app with a start script. Use Docker for other apps.')
+    const app: Running = {
+      tunnel: this.tunnel(projectId),
+      since: Date.now(),
+      error: null,
+      state: 'building',
+      mode: 'process',
+    }
+    this.apps.set(projectId, app)
+    this.deps.changed?.(projectId)
+    const pm = packageManager(root)
+    try {
+      const variables = Object.fromEntries(
+        Object.entries(await this.variables(root)).filter(([key]) => !PROCESS_RESERVED.has(key)),
+      )
+      if (!existsSync(join(root, 'node_modules')))
+        await this.run([pm, 'install'], { cwd: root, timeout: BUILD_TIMEOUT_MS })
+      if (manifest.scripts.build)
+        await this.run([pm, 'run', 'build'], {
+          cwd: root,
+          timeout: BUILD_TIMEOUT_MS,
+          env: { ...variables, NODE_ENV: 'production' },
+        })
+      const port = await (this.deps.freePort ?? freeLoopbackPort)()
+      const started = (this.deps.start ?? startLocalProcess)([pm, 'run', 'start'], {
+        cwd: root,
+        env: {
+          ...variables,
+          PATH: process.env.PATH ?? '',
+          HOME: process.env.HOME ?? '',
+          PORT: String(port),
+          HOST: '127.0.0.1',
+          HOSTNAME: '127.0.0.1',
+          NODE_ENV: 'production',
+        },
+      })
+      app.process = started
+      void started.exited.then((output) => {
+        if (this.apps.get(projectId) !== app) return
+        app.state = 'failed'
+        app.error = output.trim() || 'The app stopped.'
+        app.tunnel.stop()
+        this.deps.changed?.(projectId)
+      })
+      await Promise.race([
+        (this.deps.listening ?? waitForPort)(port, START_TIMEOUT_MS),
+        started.exited.then((output) => Promise.reject(new Error(output.trim() || 'The app stopped.'))),
+      ])
+      app.state = 'running'
+      app.tunnel.use(choice, `http://127.0.0.1:${port}`)
+      this.deps.saved.write({ ...this.deps.saved.read(), [projectId]: { root, mode: 'process' } })
+    } catch (error) {
+      app.process?.stop()
+      app.state = 'failed'
+      app.error = error instanceof Error ? error.message.slice(-OUTPUT_TAIL) : String(error)
+    }
+    this.deps.changed?.(projectId)
+    return this.status(projectId)
+  }
+
+  /** Takes the app off the internet first, then stops its container or program. */
   async stop(projectId: string) {
     const app = this.apps.get(projectId)
     this.apps.delete(projectId)
@@ -169,16 +326,18 @@ export class LocalApps {
     const saved = this.deps.saved.read()
     delete saved[projectId]
     this.deps.saved.write(saved)
-    await this.run(['docker', 'rm', '--force', localAppName(projectId)]).catch(() => {})
+    if (app?.process) app.process.stop()
+    else await this.run(['docker', 'rm', '--force', localAppName(projectId)]).catch(() => {})
     this.deps.changed?.(projectId)
   }
 
   status(projectId: string): LocalAppStatus {
     const app = this.apps.get(projectId)
-    if (!app) return { state: 'off', url: null, error: null, since: null }
+    if (!app) return { state: 'off', mode: null, url: null, error: null, since: null }
     const tunnel = app.tunnel.status()
     return {
       state: app.state === 'running' && tunnel.state === 'failed' ? 'failed' : app.state,
+      mode: app.mode,
       url: app.tunnel.address(),
       error: app.error ?? tunnel.error,
       since: app.since,
@@ -188,7 +347,8 @@ export class LocalApps {
   close() {
     for (const [projectId, app] of this.apps) {
       app.tunnel.stop()
-      void this.run(['docker', 'stop', localAppName(projectId)]).catch(() => {})
+      if (app.process) app.process.stop()
+      else void this.run(['docker', 'stop', localAppName(projectId)]).catch(() => {})
     }
     this.apps.clear()
   }
