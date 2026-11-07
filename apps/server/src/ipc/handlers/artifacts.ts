@@ -19,6 +19,7 @@ import {
   type SlideTextEdit,
 } from '@ramu/shared/artifactSource'
 import { ARTIFACT_SOURCE_FILES, editableSource } from '@ramu/shared/artifacts'
+import { STARTER_TEMPLATES } from '@ramu/shared/starterTemplates'
 import { renderArtifactSource } from '../../interactive/kinds'
 import { HOST_EXPORT_FORMATS, type HostExportFormat } from '@ramu/shared/interactiveExport'
 import { id } from '../schemas'
@@ -294,10 +295,43 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id]),
       run: (artifactId: string) => need().pages.saveTemplate(artifactId),
     },
-    'artifacts.templates': { args: z.tuple([]), run: () => need().pages.templates() },
+    // The person's own templates first, then the starting set Ramu ships.
+    'artifacts.templates': {
+      args: z.tuple([]),
+      run: () => [
+        ...need().pages.templates(),
+        ...STARTER_TEMPLATES.map(({ id, kind, title, icon }) => ({ id, kind, title, icon, createdAt: 0 })),
+      ],
+    },
     'artifacts.fromTemplate': {
-      args: z.tuple([z.string().uuid()]),
-      run: (templateId: string) => need().pages.fromTemplate(templateId),
+      args: z.tuple([z.string().min(1).max(80)]),
+      run: async (templateId: string) => {
+        const { pages } = need()
+        const starter = STARTER_TEMPLATES.find((entry) => entry.id === templateId)
+        if (!starter) return pages.fromTemplate(templateId)
+        const drawn = await renderArtifactSource(
+          parseArtifactSource({ kind: starter.kind, ...starter.source }),
+          starter.title,
+        )
+        const document: InteractiveDocument = {
+          reference: {
+            id: '',
+            version: 1,
+            sessionId: '',
+            title: starter.title,
+            summary: starter.title,
+            digest: '',
+            createdAt: Date.now(),
+            checked: true,
+            network: { resources: [], connect: [] },
+            kind: starter.kind,
+          },
+          html: drawn.html,
+          preview: null,
+          files: drawn.files,
+        }
+        return pages.importPage(document, { title: starter.title, icon: starter.icon })
+      },
     },
     'artifacts.removeTemplate': {
       args: z.tuple([z.string().uuid()]),

@@ -140,7 +140,7 @@ Ramu is one person across devices today, so versions are enough. A household or 
 
 - **New** offering the templates for the chosen kind beside the blank start, the phone's list, and a template's design system once design systems exist.
 - Templates travel between hosts the way **Import an artifact** does now: a template share link opens on another connected host as a copy.
-- Ramu ships a small starting set per kind (a report, a 6-slide deck, a landing page, a metrics dashboard, a 30-second explainer, a flowchart). It is kept in the repository and checked by the same previews as any artifact.
+- Starting points for the kinds still to come (a landing page for Design, a 30-second explainer for Motion); the report, deck, dashboard and flowchart ship today.
 
 ### 11. Dashboards from named services
 

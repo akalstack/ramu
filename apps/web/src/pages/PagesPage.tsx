@@ -165,13 +165,16 @@ export function PagesPage() {
                   >
                     {t('Use')}
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => void invoke('artifacts.removeTemplate', template.id).then(loadTemplates)}
-                  >
-                    {t('Remove')}
-                  </Button>
+                  {/* The starting set Ramu ships stays; only the person's own templates can be removed. */}
+                  {!template.id.startsWith('starter:') && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void invoke('artifacts.removeTemplate', template.id).then(loadTemplates)}
+                    >
+                      {t('Remove')}
+                    </Button>
+                  )}
                 </li>
               ))}
             </ul>

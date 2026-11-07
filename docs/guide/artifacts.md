@@ -27,7 +27,7 @@ Below, an App's **page** is the web page it shows, as in **Page settings**. Reco
 
 ## Templates
 
-**Save as template** in an artifact's menu on the desktop keeps its current version as a starting point: its code or source only, never its records, values, grants or history. Templates are listed above your artifacts; **Use** makes a new artifact from one, with a history of its own, and **Remove** deletes the template, not anything made from it.
+**Save as template** in an artifact's menu on the desktop keeps its current version as a starting point: its code or source only, never its records, values, grants or history. Templates are listed above your artifacts, after which come the starting points Ramu ships: a weekly report, a pitch deck, a metrics dashboard and a flowchart; **Use** makes a new artifact from one, with a history of its own, and **Remove** deletes the template, not anything made from it.
 
 ## In a thread
 

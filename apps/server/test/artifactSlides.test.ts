@@ -1,6 +1,7 @@
 import JSZip from 'jszip'
 import { afterEach, expect, it, vi } from 'vitest'
 import { editSlideText, parseArtifactSource, type Slide } from '@ramu/shared/artifactSource'
+import { STARTER_TEMPLATES } from '@ramu/shared/starterTemplates'
 import { openDb, type Db } from '../src/db'
 import { ArtifactExports } from '../src/interactive/exports'
 import { PageStore } from '../src/interactive/pages'
@@ -317,3 +318,21 @@ it('puts the person’s slide text into each slide, keeping its layout, chart an
     }),
   ).toThrow('needs title')
 })
+
+it.skipIf(!interactiveBrowserPath())(
+  'the starter deck and dashboard pass their previews',
+  async () => {
+    const { interactive } = setup(previewInteractive)
+    for (const template of STARTER_TEMPLATES.filter((entry) => entry.kind === 'slides' || entry.kind === 'dashboard')) {
+      const preview = await interactive.preview('s', {
+        kind: template.kind,
+        ...template.source,
+        title: template.title,
+        summary: template.title,
+        checks: [],
+      } as never)
+      expect(preview.errors, template.id).toEqual([])
+    }
+  },
+  120_000,
+)
