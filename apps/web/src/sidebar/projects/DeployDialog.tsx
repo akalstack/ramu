@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
+import { canRollBackTo, DEPLOYMENT_STATE, deployText } from '@ramu/shared/deployText'
 import type {
   Deployment,
-  DeploymentState,
   HostingAccount,
   HostingPlatform,
   ProjectDeployment,
@@ -23,14 +23,6 @@ import { DomainsSection } from './Domains'
 import { EnvSyncSection } from './EnvSync'
 import { UptimeSection } from './Uptime'
 import { UsageSection } from './Usage'
-
-const STATE: Record<DeploymentState, string> = {
-  queued: 'Queued',
-  building: 'Building',
-  ready: 'Ready',
-  failed: 'Failed',
-  canceled: 'Canceled',
-}
 
 const open = (url: string) => void openOnThisComputer('app.openExternal', url)
 
@@ -95,8 +87,6 @@ export function DeployDialog({
   const binding = status?.binding ?? null
   const account = accounts.find((entry) => entry.platform === (binding?.platform ?? platform))
   const canDeploy = !!binding && !!status?.capabilities.includes('deployProduction')
-  const canRollBack = !!status?.capabilities.includes('rollback')
-  const live = status?.deployments.find((deployment) => deployment.production && deployment.state === 'ready')
   const recommended = accounts.find((entry) => entry.platform === status?.recommended)
 
   const confirm = () => {
@@ -224,10 +214,9 @@ export function DeployDialog({
             {status.deployments.map((deployment) => (
               <li key={deployment.id} className="flex flex-col gap-1 text-caption">
                 <span className="flex items-center gap-2">
-                  <strong>{t(STATE[deployment.state])}</strong>
+                  <strong>{t(DEPLOYMENT_STATE[deployment.state])}</strong>
                   <span className="text-muted-foreground">
-                    {deployment.production ? t('Production') : t('Preview')}
-                    {deployment.ref ? ` · ${deployment.ref}` : ''} · {new Date(deployment.createdAt).toLocaleString()}
+                    {deployText(t, (at) => new Date(at).toLocaleString()).deploymentDetail(deployment)}
                   </span>
                 </span>
                 {deployment.message && <span className="truncate">{deployment.message}</span>}
@@ -254,15 +243,11 @@ export function DeployDialog({
                   >
                     {t('Logs')}
                   </Button>
-                  {canRollBack &&
-                    deployment.production &&
-                    deployment.state === 'ready' &&
-                    live &&
-                    deployment.id !== live.id && (
-                      <Button size="sm" variant="ghost" onClick={() => setRollback(deployment)}>
-                        {t('Roll back')}
-                      </Button>
-                    )}
+                  {canRollBackTo(status, deployment) && (
+                    <Button size="sm" variant="ghost" onClick={() => setRollback(deployment)}>
+                      {t('Roll back')}
+                    </Button>
+                  )}
                 </span>
                 {rollback?.id === deployment.id && (
                   <span className="flex flex-wrap items-center gap-2" role="status">

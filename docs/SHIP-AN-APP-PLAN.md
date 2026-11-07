@@ -51,7 +51,7 @@ Vercel and Netlify are built ([Deploying an app](guide/deploy.md)): `HostingAdap
 - **Connecting an account, still to do:** the same CLI sign-in for `gh`, `wrangler`, `fly`, `railway` and `eas` as those platforms land; starting a sign-in from a paired device for a remote host, with the link shown there (hosting accounts change only on the host today); token links prefilled where the platform allows it (GitHub's fine-grained token form, Cloudflare's templates); and offering an expiring token again before it runs out (Settings shows the date today).
 - **Deploy watch, still to do:** deploys, pushes and merges from Ramu are followed ([When a deployment finishes](guide/deploy.md#when-a-deployment-finishes), `workspace/deploy/deployWatch.ts`), and **Deployment failed** webhook presets cover Vercel and Netlify. Pushes an agent makes with `git push` in its shell are not followed yet, nor are pushes from outside Ramu without a webhook schedule.
 - **Marks:** each resource kind names its `BrandId` (`packages/shared/src/brands.ts`) and shows its `BrandIcon` beside its name, as the hosting platforms do.
-- **UI:** the preview URL on the pull request card when it is ready; the sheet's remaining steps from [the person's path](#the-persons-path) (create the GitHub repository when there is none, set the variables, push and wait for the first deployment); **Deploy** suggested when a goal is met; and on the phone, the project's Deployments read-only plus **Roll back** with confirmation (the phone shows each platform's account today).
+- **UI:** the preview URL on the pull request card when it is ready; the sheet's remaining steps from [the person's path](#the-persons-path) (create the GitHub repository when there is none, set the variables, push and wait for the first deployment); and **Deploy** suggested when a goal is met. The phone shows a project's deployments, uptime and usage with **Roll back** ([On the phone](guide/deploy.md#on-the-phone)); domains and databases are not on the phone yet.
 - **Publish to the web:** Netlify and Vercel use the hosting accounts; the static upload in `hosting/staticSite.ts` moves onto the adapters as a capability, with Cloudflare Pages and GitHub Pages, as those adapters land.
 
 ### 4. CI/CD
@@ -89,7 +89,7 @@ Usage figures for Vercel, Netlify and Neon beside the limits their APIs report, 
 
 ### 9. Uptime
 
-**Watch the live address**, incident threads after two failed checks, the recap on recovery and unknown spans while the host sleeps are built ([Uptime](guide/deploy.md#uptime)). What remains: the watch's state on the phone beside the project's Deployments, when those land there (§3 UI).
+**Watch the live address**, incident threads after two failed checks, the recap on recovery and unknown spans while the host sleeps are built ([Uptime](guide/deploy.md#uptime)), and the phone shows the watch's state beside the project's deployments. What remains: turning the watch on and off from the phone.
 
 ### 10. Mobile store releases
 

@@ -33,6 +33,10 @@ Only checks that still need a physical phone, an account or a live provider. Tes
 - [ ] Approvals, questions, attachments, folders, Git and undo, and schedules act on the correct host.
 - [ ] Interactive cards: rendering, reload after a renderer failure, saved scenarios, sharing, offline use and memory with three live WebViews.
 
+## Deployments
+
+- [ ] With a project linked to Vercel and one linked to Netlify: **Deployments** in the project menu lists the latest deployments with their state and **Open**, the live address, the uptime watch (including an open incident) and usage figures; **Roll back** on an earlier production deployment asks with the address, and the live site changes; a viewer pairing does not offer **Deployments**.
+
 ## Push, Live Activities and limits
 
 - [ ] Background push from two hosts to a suspended phone opens the right thread once, including from a stopped app; revoked registrations stop.

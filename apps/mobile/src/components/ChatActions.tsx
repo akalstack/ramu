@@ -11,6 +11,7 @@ import {
   Archive,
   ArchiveRestore,
   Copy,
+  Rocket,
   FolderSearch,
   ListChecks,
   Pencil,
@@ -31,6 +32,7 @@ import { VIEW_ONLY_WRITE_NOTICE } from '../runtime/viewerAccess'
 import { useT } from '../i18n'
 import { Button, Sheet, T, type Icon } from './ui'
 import { ProjectCommandSettings } from './ProjectCommandSettings'
+import { ProjectDeployments } from './ProjectDeployments'
 import { ProjectRoutingSettings } from './ProjectRoutingSettings'
 import { useBulkThreadActions } from './BulkThreadActions'
 
@@ -439,6 +441,7 @@ export function ProjectActionsSheet({
   const router = useRouter()
   const [managingActions, setManagingActions] = useState(false)
   const [routing, setRouting] = useState(false)
+  const [deployments, setDeployments] = useState(false)
   const bulk = useBulkThreadActions()
   // As on the desktop: the project's open threads, leaving pinned and done ones where they are. Undo is on the toast.
   const archivable = store.chats.filter(
@@ -455,6 +458,7 @@ export function ProjectActionsSheet({
     if (open) {
       setManagingActions(false)
       setRouting(false)
+      setDeployments(false)
       setRenaming(false)
       setName(project.name)
     }
@@ -519,6 +523,15 @@ export function ProjectActionsSheet({
         later(() =>
           router.push({ pathname: '/terminal', params: { computer: project.computerId, ctx: `project:${raw}` } }),
         ),
+    },
+    {
+      key: 'deployments',
+      group: 'work',
+      icon: Rocket,
+      label: say('Deployments'),
+      onPress: () => {
+        if (writable()) setDeployments(true)
+      },
     },
     {
       key: 'rename',
@@ -599,6 +612,17 @@ export function ProjectActionsSheet({
   ]
   if (routing)
     return <ProjectRoutingSettings key={`${project.computerId}:${raw}`} project={project} onClose={onClose} />
+  if (deployments)
+    return (
+      <ProjectDeployments
+        key={`${project.computerId}:${raw}`}
+        hostId={project.computerId}
+        projectId={raw}
+        projectName={project.name}
+        open={open}
+        onClose={onClose}
+      />
+    )
   if (managingActions)
     return (
       <ProjectCommandSettings

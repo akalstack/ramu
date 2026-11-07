@@ -5858,4 +5858,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Open billing': 'Buka tagihan',
   '{0}’s API reports no plan limits; Open billing shows them.':
     'API {0} tidak melaporkan batas paket; Buka tagihan untuk melihatnya.',
+  'Deployments': 'Deployment',
+  'Could not roll back': 'Tidak bisa mengembalikan',
+  'Reconnect to see this project’s deployments.': 'Sambungkan ulang untuk melihat deployment proyek ini.',
+  'This project has no deploy target yet. Open Deploy… on the project on a computer.':
+    'Proyek ini belum punya target deploy. Buka Deploy… pada proyek di komputer.',
+  'The live address is not watched. Turn it on in the Deploy sheet on a computer.':
+    'Alamat live tidak dipantau. Aktifkan di lembar Deploy di komputer.',
+  'The host checks {0} every five minutes.': 'Host memeriksa {0} setiap lima menit.',
 }

@@ -1,43 +1,12 @@
 import { useEffect, useState } from 'react'
-import type { UsageFigure, UsageReport } from '@ramu/shared/types'
+import { deployText, nearLimit } from '@ramu/shared/deployText'
+import type { UsageReport } from '@ramu/shared/types'
 import { BrandIcon } from '@/components/brand-icon'
 import { Button } from '@/components/desktop-button'
 import { t, useLanguage } from '../../i18n'
 import { invoke as openOnThisComputer } from '../../ipc'
 import { errorText } from '../../lib/errors'
 import { useHost } from '../../workspace/HostProvider'
-
-const METRIC: Record<Exclude<UsageFigure['metric'], 'service'>, string> = {
-  'build-minutes': 'Build minutes',
-  storage: 'Database storage',
-  compute: 'Database compute',
-  transfer: 'Data transfer',
-}
-
-const number = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 1 })
-
-/** A figure in the unit a person reads: bytes as MB or GB, seconds as hours. */
-function amount(value: number, unit: string): string {
-  if (unit === 'bytes')
-    return value >= 1024 ** 3
-      ? t('{0} GB', { 0: number(value / 1024 ** 3) })
-      : t('{0} MB', { 0: number(value / 1024 ** 2) })
-  if (unit === 'seconds') return t('{0} hours', { 0: number(value / 3600) })
-  if (unit === 'minutes') return t('{0} minutes', { 0: number(value) })
-  return `${number(value)} ${unit}`.trim()
-}
-
-function figureText(figure: UsageFigure): string {
-  const name = figure.metric === 'service' ? (figure.service ?? '') : t(METRIC[figure.metric])
-  const used = amount(figure.used, figure.unit)
-  if (!figure.limit) return t('{0}: {1}', { 0: name, 1: used })
-  return t('{0}: {1} of {2} ({3}%)', {
-    0: name,
-    1: used,
-    2: amount(figure.limit, figure.unit),
-    3: Math.round((figure.used / figure.limit) * 100),
-  })
-}
 
 /**
  * The Deploy sheet's usage: what each platform reports for the current billing period, beside the plan's limit when
@@ -82,11 +51,9 @@ export function UsageSection({ projectId }: { projectId: string }) {
           {report.figures.map((figure) => (
             <span
               key={`${figure.metric}:${figure.service ?? ''}:${figure.unit}`}
-              className={
-                figure.limit && figure.used >= figure.limit * 0.8 ? 'text-destructive' : 'text-muted-foreground'
-              }
+              className={nearLimit(figure) ? 'text-destructive' : 'text-muted-foreground'}
             >
-              {figureText(figure)}
+              {deployText(t, (at) => new Date(at).toLocaleString()).usageFigure(figure)}
             </span>
           ))}
           {report.figures.length > 0 && report.figures.every((figure) => !figure.limit) && (

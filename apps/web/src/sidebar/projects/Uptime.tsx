@@ -1,25 +1,13 @@
 import { useEffect, useState } from 'react'
-import type { UptimeCheck, UptimeStatus } from '@ramu/shared/types'
+import { deployText } from '@ramu/shared/deployText'
+import type { UptimeStatus } from '@ramu/shared/types'
 import { Checkbox } from '@/components/desktop-checkbox'
 import { t, useLanguage } from '../../i18n'
 import { errorText } from '../../lib/errors'
 import { useHost } from '../../workspace/HostProvider'
 
 const time = (at: number) => new Date(at).toLocaleString()
-
-function lastCheck(check: UptimeCheck): string {
-  const answer =
-    check.status !== null
-      ? t('HTTP {0} in {1} ms', { 0: check.status, 1: check.ms ?? 0 })
-      : check.failure === 'timeout'
-        ? t('no answer within 10 seconds')
-        : check.failure === 'redirects'
-          ? t('too many redirects')
-          : t('could not connect')
-  if (check.result === 'up') return t('Up · {0} · checked {1}', { 0: answer, 1: time(check.at) })
-  if (check.result === 'down') return t('Not answering · {0} · checked {1}', { 0: answer, 1: time(check.at) })
-  return t('Unknown · this computer was offline or asleep at {0}', { 0: time(check.at) })
-}
+const words = () => deployText(t, time)
 
 /**
  * The Deploy sheet's live address watch: on by default, checked from this host every five minutes, with the last
@@ -75,7 +63,7 @@ export function UptimeSection({ projectId }: { projectId: string }) {
           </span>
           {status.last && (
             <span className={status.last.result === 'down' ? 'text-destructive' : undefined}>
-              {lastCheck(status.last)}
+              {words().uptimeCheck(status.last)}
             </span>
           )}
           {status.downSince !== null && (

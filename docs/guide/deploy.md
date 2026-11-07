@@ -14,7 +14,7 @@ Neon connects with an API key only: create a personal key named Ramu on Neon's A
 
 Agents never create tokens by driving your browser: a signed-in dashboard gives full account power, and a new token would end up in screenshots and the transcript.
 
-Hosting accounts are added, replaced and removed only on the computer running the host. Paired devices see their status: the phone shows each platform's account under **GitHub on this host**. **Disconnect** deletes Ramu's copy only; to revoke the token itself, delete it on the platform.
+Hosting accounts are added, replaced and removed only on the computer running the host. Paired devices see their status: the phone shows each platform's account under **GitHub on this host**, and a project's deployments under **Deployments** ([On the phone](#on-the-phone)). **Disconnect** deletes Ramu's copy only; to revoke the token itself, delete it on the platform.
 
 The same accounts publish artifacts with **Publish to the web** ([Artifacts](artifacts.md)).
 
@@ -46,6 +46,10 @@ Ramu follows a deployment until the platform finishes it, then wakes one thread 
 - A push the platform has not started deploying within 20 minutes, or a deployment still building after two hours, is no longer followed. A push replaced by a newer one is followed through the newer push.
 
 Pushes made outside Ramu, such as from a terminal or GitHub's website, are not followed. For those, a **Deployment failed** [webhook schedule](background-work.md#when-a-request-arrives) for Vercel or Netlify starts a thread instead.
+
+## On the phone
+
+**Deployments** in a project's menu on the phone shows the platform and repository, the live address with **Open**, the latest deployments with their state, branch, time and **Open**, the [uptime](#uptime) watch with any open incident, and [usage](#usage) with **Open billing**. **Roll back** on an earlier production deployment asks first, naming the version and the address that changes, as in the deploy sheet. Linking, deploying, domains, databases and the watch's switch are on a computer. Viewer pairings do not see deployments.
 
 ## Usage
 
