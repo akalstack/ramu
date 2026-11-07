@@ -20,7 +20,7 @@ Instead of sleeping and checking again, an agent waits on a command: until it ex
 
 Schedules run once, daily, weekly, monthly or every few minutes (at least five). **Run now** runs one immediately; **Pause** stops future runs. Missed runs either run once or are skipped. Each run records how it ended: completed, failed, needs input, cancelled, interrupted or missed. Three failed runs in a row pause the schedule so a broken task stops spending tokens.
 
-The host also follows deployed apps without a schedule: it wakes a thread when a deployment it started, or one of a push or merge from Ramu, finishes ([When a deployment finishes](deploy.md#when-a-deployment-finishes)), and it checks each watched live address every five minutes and opens an incident thread when it stops answering ([Uptime](deploy.md#uptime)).
+The host also follows deployed apps without a schedule: it wakes a thread when a deployment it started, or one of a push or merge from Ramu, finishes ([When a deployment finishes](deploy.md#when-a-deployment-finishes)), and when a store build and its upload finish ([Store releases](deploy.md#store-releases)); it checks each watched live address every five minutes and opens an incident thread when it stops answering ([Uptime](deploy.md#uptime)).
 
 With several hosts connected, **Runs on** saves a schedule on another host, and Schedules lists each host's schedules. A schedule always runs on its own host.
 

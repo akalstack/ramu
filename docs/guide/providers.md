@@ -52,7 +52,7 @@ An artifact you allow to use AI calls the host's signed-in providers, never a ke
 
 ## Environment variables
 
-**Settings → Environment variables** adds variables to every provider process on the host, for all providers or one. Paste `.env` text to fill several rows. Values stay in the host's OS credential store and paired devices see only names. `RAMU_*` names are reserved.
+**Settings → Environment variables** adds variables to every provider process on the host, for all providers or one. Paste `.env` text to fill several rows. Values stay in the host's OS credential store and paired devices see only names. `RAMU_*` names are reserved. For a deployed project, **Sync** in the deploy sheet copies these values to the repository's GitHub Actions secrets and the hosting platform's preview and production variables, or your own server's ([Deploy a project](deploy.md#deploy-a-project)).
 
 ## Access modes
 

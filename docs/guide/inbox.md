@@ -6,7 +6,7 @@ Home is for starting work: the message box and, when something needs you, one li
 
 With **Auto**, a request that fits no project asks where to start. **New project** starts in No project and asks the agent to create one: it asks at most three questions, names the stack in one line, then creates the folder, runs the framework's own generator, commits, and the thread moves into the new project and continues there with a goal checked by its build and tests ([Agents](agents.md#threads-started-by-agents)). **No project** (on the phone, **Standalone**) is for something that needs no project yet, such as a page or a question.
 
-On the desktop, **New project…** in the Project picker does the same, and a host with no projects shows **Start something new** beside **Open a folder**. Both also show a project name and stack: with a name, Ramu creates the project itself (the stack's generator, `ramu.json` and a first commit, beside your other repositories) and the thread starts in it with your message, with no agent turn spent on setup. On the phone, the project list has **New project**, shown as **Start something new** when the host has no projects; it starts the agent-led way, and the choice stays with the draft.
+On the desktop, **New project…** in the Project picker does the same, and a host with no projects shows **Start something new** beside **Open a folder**. Both also show a project name and stack: with a name, Ramu creates the project itself (the stack's generator, `ramu.json` and a first commit, beside your other repositories) and the thread starts in it with your message, with no agent turn spent on setup. On the phone, the project list has **New project**, shown as **Start something new** when the host has no projects; it starts the agent-led way, and the choice stays with the draft. The rest of the path, from there to a live app, is in [Shipping an app](shipping.md).
 
 ## Inbox
 
@@ -23,6 +23,8 @@ The Brief lists what needs you, most urgent first, without a model call:
 5. Recaps that need a decision
 
 The usual next step is one tap: **Allow once** for an approval, an option for a single-choice question, **Retry** or **Mark done** for a failure, **Stop idle** for a host low on memory. Other questions expand in place. Opening an approval or question on desktop goes to the session that asked, a helper's own included, scrolled to the request. Five rows show, then **See all**. Viewer devices see rows without buttons. A thread's hover card says what lets it continue when that is up to you, such as resuming a goal at its turn limit.
+
+Deployed apps reach you as notifications instead of Brief rows: a usage notice at 80% or 100% of a plan's limit opens the project's most recent thread ([Usage](deploy.md#usage)), and a live address that stops answering opens a **Down:** thread in the project and notifies your phone ([Uptime](deploy.md#uptime)).
 
 ### Running and Resources
 

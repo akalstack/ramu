@@ -1,12 +1,12 @@
 # From an idea to a deployed app
 
-A person who has never written code describes an app, and Ramu takes it from an empty folder to a live URL, with CI that keeps it working and deploys every change. A developer gets the same path with fewer steps: a new project, a deploy target and a pipeline in one flow instead of three dashboards. Remove work as it lands, document shipped behavior in the guide (a new **Shipping an app** page beside [GitHub, GitLab, Bitbucket and Azure DevOps](guide/git-hosting.md)), and delete this plan when implementation and acceptance are finished.
+A person who has never written code describes an app, and Ramu takes it from an empty folder to a live URL, with CI that keeps it working and deploys every change. A developer gets the same path with fewer steps: a new project, a deploy target and a pipeline in one flow instead of three dashboards. Remove work as it lands, document shipped behavior in the guide ([Shipping an app](guide/shipping.md) and the pages it links to), and delete this plan and its roadmap line when implementation and acceptance are finished.
 
 ## The need
 
-Today an agent in Ramu can write the app, run it in a background terminal, check it in the browser and fix failing checks on a pull request. Everything before and after that is manual:
+Most of the path is built ([Shipping an app](guide/shipping.md)). What is still manual or missing:
 
-- **Starting:** `project_add` only clones a repository or registers a folder. Someone with an idea and no repository has to create a folder, run `git init` and pick a framework first, which a non-coder cannot do.
+- **Starting:** `project_create` and **New project** start a project from one sentence, but the deploy sheet does not yet create the GitHub repository and push it, so a non-coder still meets **Publish to GitHub** first.
 - **Deploying:** a project can be linked to Vercel or Netlify or set up on the person's own server, with status, logs, production deploys and rollback, and an Expo app released to TestFlight and Play's internal track ([Deploying an app](guide/deploy.md)). Other platforms have no target yet: `railway`, `cloudflared` and `docker` are on the risky-command list (`agent/autoCommandRules.ts`), so an agent can run them, but each run is a one-off approval.
 - **CI/CD:** Ramu adds a CI workflow through a pull request ([Set up CI](guide/git-hosting.md#set-up-ci)), wakes the thread whose push breaks the default branch, and can require CI before merge on GitHub.
 - **Secrets:** `request_secret` and **Environment variables** put a token on the host, and **Sync** in the deploy sheet copies it to GitHub Actions and the platform's variables; GitLab CI variables are not covered yet.
@@ -33,28 +33,24 @@ A developer can enter at any step: **Deploy** on an existing project, or **Set u
 
 ## Delivery
 
-### 1. Orchestration
+### 1. Artifacts as the smaller start
 
-Per-call `model`, `isolation` and `role` on `ramu_agent`, `agent_models`, `ramu_agent_status` and `ramu_agent_stop`, `requestId` replay on `ramu_agent`, `thread_start` and `project_add`, and the `next` line on background results are built ([Agents](guide/agents.md#sub-agents)). `project_create` below takes `requestId` too.
+A request that needs no backend, shared data or domain becomes an artifact instead of a project ([Artifacts](ARTIFACTS-PLAN.md), today's [Apps](guide/artifacts.md)): the stack choice sends "a page that adds up my monthly costs" to an App artifact and "a pitch deck" to Slides, so the smallest thing that works is made first, and a Design artifact can be the starting point of a new project. A page that outgrows itself arrives here through **Make it a project**, which already writes its sources, record fields and records to a new project and starts a thread; **Publish to the web** uses the same hosting accounts as deploys; its upload moves onto the adapters with §2.
 
-### 2. New project from scratch
-
-A request that needs no backend, shared data or domain becomes an artifact instead of a project ([Artifacts](ARTIFACTS-PLAN.md), today's [Apps](guide/artifacts.md)): the stack choice sends "a page that adds up my monthly costs" to an App artifact and "a pitch deck" to Slides, so the smallest thing that works is made first, and a Design artifact can be the starting point of a new project. A page that outgrows itself arrives here through **Make it a project**, which already writes its sources, record fields and records to a new project and starts a thread; **Publish to the web** uses the same hosting accounts as deploys; its upload moves onto the adapters with §3.
-
-### 3. Deploy targets
+### 2. Deploy targets
 
 Vercel, Netlify and the person's own server are built ([Deploying an app](guide/deploy.md)): `HostingAdapter` and its registry in `workspace/deploy/`, the shared shapes in `packages/shared/src/types/deploy.ts`, hosting accounts connected by the platform's CLI sign-in or a guided token page, the contract suite (`apps/server/test/deployAdapters.test.ts`), `deploy.*` IPC, the deploy tools and the Deploy sheet. A new platform is one adapter file, its sign-in and a contract entry. What remains:
 
-- **More platforms, in order:** Cloudflare (Pages and Workers, signed in with `wrangler login`), GitHub Pages (through the forge's GitHub account, deployed by a GitHub Actions job), then Fly and Railway. Each is a REST client using a token from `credentials/`; a platform CLI is only for its browser sign-in.
+- **More platforms, in order:** Cloudflare (Pages and Workers, signed in with `wrangler login`), GitHub Pages (through the forge's GitHub account, deployed by a GitHub Actions job), then Fly and Railway. Each is a REST client using a token from `credentials/`; a platform CLI is only for its browser sign-in ([Adding a platform](contributing/architecture.md#adding-a-platform)). Until Railway and Fly land, the Node API, Django and FastAPI stacks name Railway and the Rails and Go stacks name Fly, so the deploy sheet recommends no platform for them.
 - **Capabilities still to declare:** `promote` and the resource kinds a platform provisions. Netlify previews come from pull requests; a branch preview through its API is not declared.
-- **`ResourceAdapter`** (`workspace/deploy/resource.ts`, Neon built, §7): a hosting platform that provisions through its marketplace implements it too (Vercel Marketplace, Cloudflare D1, KV and R2, Netlify DB); a standalone provider (Supabase, Upstash, Resend) implements only this one. Deleting a resource is not on the interface.
+- **`ResourceAdapter`** (`workspace/deploy/resource.ts`, Neon built, §6): a hosting platform that provisions through its marketplace implements it too (Vercel Marketplace, Cloudflare D1, KV and R2, Netlify DB); a standalone provider (Supabase, Upstash, Resend) implements only this one. Deleting a resource is not on the interface.
 - **Connecting an account, still to do:** the same CLI sign-in for `gh`, `wrangler`, `fly`, `railway` and `eas` as those platforms land; starting a sign-in from a paired device for a remote host, with the link shown there (hosting accounts change only on the host today); token links prefilled where the platform allows it (GitHub's fine-grained token form, Cloudflare's templates); and offering an expiring token again before it runs out (Settings shows the date today).
 - **Deploy watch, still to do:** deploys, pushes and merges from Ramu are followed ([When a deployment finishes](guide/deploy.md#when-a-deployment-finishes), `workspace/deploy/deployWatch.ts`), and **Deployment failed** webhook presets cover Vercel and Netlify. Pushes an agent makes with `git push` in its shell are not followed yet, nor are pushes from outside Ramu without a webhook schedule.
 - **Marks:** each resource kind names its `BrandId` (`packages/shared/src/brands.ts`) and shows its `BrandIcon` beside its name, as the hosting platforms do.
 - **UI:** the sheet's remaining steps from [the person's path](#the-persons-path) (create the GitHub repository when there is none, set the variables, push and wait for the first deployment), and **Deploy** suggested when a goal is met. The pull request card shows the preview, and the phone a project's deployments, uptime and usage with **Roll back** ([Deploying an app](guide/deploy.md#on-the-phone)); domains and databases are not on the phone yet, and the agent does not post the preview address in the thread by itself.
 - **Publish to the web:** Netlify and Vercel use the hosting accounts; the static upload in `hosting/staticSite.ts` moves onto the adapters as a capability, with Cloudflare Pages and GitHub Pages, as those adapters land.
 
-### 4. CI/CD
+### 3. CI/CD
 
 **Set up CI**, requiring CI before merge on GitHub, and following pushes to the default branch are built ([Set up CI](guide/git-hosting.md#set-up-ci)): the generator in `packages/shared/src/ciWorkflow.ts`, the pull request from a temporary worktree in `apps/server/src/workspace/ci/`, `ci_setup`, and push watches beside pull request watches in `background/pullRequestWatches.ts`. What remains:
 
@@ -63,7 +59,7 @@ Vercel, Netlify and the person's own server are built ([Deploying an app](guide/
 - **Branch protection on GitLab:** GitHub is built; GitLab's "Pipelines must succeed" project setting is not set yet, and repositories created by the deploy sheet should join the ones it is checked by default for.
 - **Keeping it green:** a push of the default branch from a thread wakes it when CI fails ([Set up CI](guide/git-hosting.md#set-up-ci)); a merge through **Merge…** that breaks the default branch should wake the thread linked to the pull request too.
 
-### 5. Own server
+### 4. Own server
 
 A VPS over SSH is built ([Your own server](guide/deploy.md#your-own-server), `workspace/deploy/server.ts`, `serverSetup.ts` and `ssh.ts`). What remains:
 
@@ -75,11 +71,11 @@ A VPS over SSH is built ([Your own server](guide/deploy.md#your-own-server), `wo
   - **Process isolation.** The app is code the agent wrote, now reachable from the internet. It runs with an environment limited to the path, home, user and locale variables plus the project's own variables, never Ramu's secrets, device tokens or `RAMU_*` values, in its own process group so stopping it stops its children. Any process running as the person's OS user can reach Ramu's local socket with owner access, so the app runs in a Docker container (no host network, only its port published to loopback) when Docker is present; without Docker the sheet says the app runs with the person's own permissions.
   - **Sleep and stopping.** The sheet says the app is offline while the computer sleeps or Ramu is not running, the [uptime](guide/deploy.md#uptime) watch shows those spans as unknown, and nothing keeps the computer awake unless the person turns that on. Stopping the app removes its tunnel route before the process; it starts again with Ramu only when the person left it published.
 
-### 6. Domains
+### 5. Domains
 
 **Add domain**, the records in plain words, **Create records** in Vercel DNS and Netlify DNS, the domain tools and the watch that wakes a thread when a domain is live are built ([Deploying an app](guide/deploy.md#deploy-a-project)). What remains: **Create records** at Cloudflare DNS with a token that can edit DNS (the artifacts' Cloudflare Pages token cannot), domains for each new platform's adapter, and the domains list on the phone.
 
-### 7. Databases and storage
+### 6. Databases and storage
 
 `ResourceAdapter` with Neon (API key on the guided token page), **Provision** in the deploy sheet for stacks or code that need a database, a `preview` branch for previews, this host and CI, connection variables in secrets sync, and migrations before a production deploy from Ramu are built ([Databases](guide/deploy.md#databases)). What remains:
 
@@ -88,15 +84,15 @@ A VPS over SSH is built ([Your own server](guide/deploy.md#your-own-server), `wo
 - **A branch per pull request** instead of one shared `preview` branch, created when the preview deployment starts and removed when the pull request closes. The deploy watch finds deployments by commit, so it can tell when a pull request's preview starts.
 - **Migrations on every production deploy:** a push to the default branch that the platform deploys itself runs no migration from Ramu; the deploy watch tells the thread so. A safe way to run them: turn off the platform's automatic promotion for linked projects (Vercel's staged production deployments, with auto-assigned production domains off; Netlify's locked auto publishing), let the deploy watch see the production build finish, run `migrate` from the host against production at that commit, and only then promote the deployment (Vercel's promote endpoint, Netlify's restore endpoint), declared as the `promote` capability. A failed migration leaves the old deployment live and wakes the thread. It needs the host awake for every production deploy and migrations that the running version tolerates (add columns before the code uses them), so it is opt-in per project.
 
-### 8. Cost and usage
+### 7. Cost and usage
 
 Usage figures for Vercel, Netlify and Neon beside the limits their APIs report, **Open billing**, notices at 80% and 100%, and `deploy_usage` are built ([Usage](guide/deploy.md#usage)). What remains: figures for each new platform's adapter as it lands, and Netlify bandwidth or credits if Netlify's API starts reporting them.
 
-### 9. Uptime
+### 8. Uptime
 
 **Watch the live address**, incident threads after two failed checks, the recap on recovery and unknown spans while the host sleeps are built ([Uptime](guide/deploy.md#uptime)), and the phone shows the watch's state beside the project's deployments. What remains: turning the watch on and off from the phone.
 
-### 10. Mobile store releases
+### 9. Mobile store releases
 
 **Store releases** in the deploy sheet (checks from `app.json` and `eas.json`, the person's store steps, **Add eas.json in a pull request**, **Release** through `eas build --auto-submit-with-profile` to TestFlight and Play's internal track), the Expo access token in Settings, the deploy watch through each build and its upload, and `release_status`, `release_logs` and `release_start` are built ([Store releases](guide/deploy.md#store-releases), `workspace/deploy/release.ts` and `expo.ts`). What remains:
 
@@ -105,17 +101,7 @@ Usage figures for Vercel, Netlify and Neon beside the limits their APIs report, 
 - **On the phone:** the store builds and their uploads beside a project's deployments, and **Release** with the same confirmation.
 - **Dynamic configuration:** an `app.config.*` app is checked from `app.json` only; reading its resolved configuration needs `expo config --json`, which runs the project's code.
 
-### 11. Documentation and clean-up
-
-Each section updates the docs it changes when it lands. When the last one lands, one pass makes the whole set read as one product:
-
-- **New guide page** `docs/guide/shipping.md`: starting something new from Home, the questions and the stack, **Deploy** and each target, previews and CI, secrets sync, databases, domains, usage notices, uptime incidents, store releases and your own server. Linked from [docs/README.md](README.md) and the root README's **What it does**, which gets a **From idea to live app** group.
-- **Pages that change:** [Agents](guide/agents.md) (per-call model, isolation and role, helper status and stop, `project_create`), [Home and Inbox](guide/inbox.md) (New project choices, usage and uptime notices), [Git hosting](guide/git-hosting.md) (Set up CI, branch protection, CI secrets), [Background work](guide/background-work.md) (deploy watch, **Deployment failed** presets, uptime checks), [Remote hosts](guide/remote-hosts.md) (publishing an app through your tunnel, kept apart from Ramu's own port), [Providers](guide/providers.md#environment-variables) (where each variable is synced), [Configuration](guide/configuration.md) (project facts), the [mobile README](../apps/mobile/README.md) and [VERIFICATION.md](../apps/mobile/VERIFICATION.md) (Deployments on the phone), and [SECURITY.md](../SECURITY.md) (deploy tokens, the actions that always ask, tunnel isolation).
-- **Contributors:** [Architecture](contributing/architecture.md) gets the deploy boundary beside the forge one and **Adding a platform**: the adapter, its credentials file, its capabilities and the contract suite it must pass.
-- **Every string** goes through `t()` with its Indonesian translation ([Localization](contributing/localization.md)), and plain-language copy is reviewed as a whole for one voice.
-- **Clean-up:** agents use the deploy tools rather than running `vercel` or `netlify` as one-off risky commands, so the deploy-specific guidance in `agent/autoCommandRules.ts` points at the tools; any helper, type or doc text the new paths replaced is removed, with no unused exports left; docs pass the format and link checks; the live checks still to run move to [Acceptance](roadmap.md#acceptance); this plan and its roadmap line are deleted.
-
-### 12. The site
+### 10. The site
 
 The site (`apps/site`, one Astro page) is about keeping coding agents moving. With this plan, Ramu also takes someone from an idea to a live app, so the site gets new copy throughout, written once the features ship and only claiming what they do:
 
@@ -140,6 +126,5 @@ The site (`apps/site`, one Astro page) is about keeping coding agents moving. Wi
 - **Data and uptime:** a booking app gets a Postgres database from the deploy sheet, preview deployments use their own branch, and stopping the database's endpoint opens an incident thread within ten minutes that recovers with a recap.
 - **Mobile:** an Expo app goes from **Release** to TestFlight and Play's internal track with only the store steps done by hand.
 - **Docs and site:** someone new to Ramu goes from the site to a deployed app using only the site and the guide, and every doc link and screenshot matches the shipped app.
-- **Orchestration:** a lead splits a task into a worktree helper on another model and a read-only reviewer, stops one that goes off track, and a resent tool call does not start a second helper.
 - Live checks for each platform with real accounts, and the VPS path on a real Ubuntu server, are listed under [Acceptance](roadmap.md#acceptance) until run.
 

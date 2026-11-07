@@ -41,7 +41,7 @@ The same accounts publish artifacts with **Publish to the web** ([Artifacts](art
 
 **Own server** in the deploy sheet runs the app on a Linux server you rent (Ubuntu or Debian), as a Docker container behind [Caddy](https://caddyserver.com), which serves your domain over HTTPS with certificates it gets and renews itself. Deploys run in the repository's GitHub Actions, so the server never needs Ramu running.
 
-1. **Connect the server**, in the sheet or in Settings → Hosting accounts: its address, SSH port and the user Ramu signs in as. **Create a key for this server** makes an ed25519 key pair on the host and shows its public line; add that line to `~/.ssh/authorized_keys` of that user on the server, then press **Connect**. **Use a key I already have** takes a private key without a passphrase instead. The private key goes to the host's credential store and is never shown again.
+1. **Connect the server**, in the sheet or in **Settings → Git → Hosting accounts**: its address, SSH port and the user Ramu signs in as. **Create a key for this server** makes an ed25519 key pair on the host and shows its public line; add that line to `~/.ssh/authorized_keys` of that user on the server, then press **Connect**. **Use a key I already have** takes a private key without a passphrase instead. The private key goes to the host's credential store and is never shown again.
 2. **The server's own key is pinned.** The first connection remembers the server's host key and shows its fingerprint; every later connection, from Ramu and from the deploy job, refuses a different one. After rebuilding a server, **Disconnect** it and connect again.
 3. **Docker.** Ramu checks that the user can run Docker and that nothing else holds ports 80 and 443. When Docker is missing, the sheet shows Docker's own install steps to run on the server yourself; Ramu never installs software there or runs anything as root. **Check again** reads the server once more.
 4. **Set up the server** with a domain such as `app.example.com` (point it at the server with an A record; the sheet's **Domains** shows the record). Ramu then:
@@ -52,6 +52,7 @@ The same accounts publish artifacts with **Publish to the web** ([Artifacts](art
 
 Once set up, the sheet works as for the platforms: the deploy job's runs are the deployments, **Logs** shows a run's log (and the app's own output for the version running now), **Deploy to production** starts the job on the default branch, and **Roll back** starts it with an earlier deployment's commit, deploying that image again without building. The [deploy watch](#when-a-deployment-finishes), [uptime](#uptime) and **Domains** (adding one updates the Caddy site; the records go at your domain provider) work the same way. **Environment variables** syncs to the server's production variables, kept in a file on the server readable only by that user and passed to the container, never baked into the image; writing them restarts the container. There is no usage report: the server's host bills for it.
 
+## When a deployment finishes
 
 Ramu follows a deployment until the platform finishes it, then wakes one thread with one message, through the same queue as pull request feedback:
 
