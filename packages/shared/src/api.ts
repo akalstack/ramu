@@ -1266,6 +1266,8 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.accounts'(check: boolean): HostingAccountsSummary
   /** Starts the platform CLI's browser sign-in on the host. Host only. */
   'deploy.signIn'(platform: CliSignInPlatform): HostingSignIn
+  /** Starts Salesforce's sign-in through the person's connected app, by its consumer key; production or a sandbox. */
+  'deploy.salesforceSignIn'(clientId: string, sandbox: boolean): HostingSignIn
   'deploy.signInStatus'(id: string): HostingSignIn
   /** Sends the number the platform's sign-in page shows, for a sign-in that asks for one. */
   'deploy.signInMatch'(id: string, number: string): HostingSignIn

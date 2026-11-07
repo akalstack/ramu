@@ -1,6 +1,7 @@
 import { ServiceGrants } from './interactive/serviceGrants'
 import { grafana } from './interactive/grafana'
 import { amplitude } from './interactive/amplitude'
+import { salesforce } from './interactive/salesforce'
 import { DASHBOARD_ROWS_MAX } from '@ramu/shared/artifactSource'
 import { LastingAddresses } from './workspace/deploy/namedTunnel'
 import { ShellPushes } from './agent/shellPushes'
@@ -811,7 +812,9 @@ const liveDashboards = new LiveDashboards(
       const { auth } = await deploys.accounts.auth(service.id)
       return service.id === 'grafana'
         ? grafana.query(auth, service, columns, DASHBOARD_ROWS_MAX)
-        : amplitude.query(auth, service, columns, DASHBOARD_ROWS_MAX)
+        : service.id === 'amplitude'
+          ? amplitude.query(auth, service, columns, DASHBOARD_ROWS_MAX)
+          : salesforce.query(auth, service, columns, DASHBOARD_ROWS_MAX)
     }
     if (mcp && projectId) {
       // Only a tool the server marks read-only, on a server Shared MCP approved for this project, is called.

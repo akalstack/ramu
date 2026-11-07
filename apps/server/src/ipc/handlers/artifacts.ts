@@ -3,6 +3,7 @@ import { NAMED_SERVICE_NAMES, NAMED_SERVICES, type NamedService } from '@ramu/sh
 import { DASHBOARD_ROWS_MAX } from '@ramu/shared/artifactSource'
 import { amplitude } from '../../interactive/amplitude'
 import { grafana } from '../../interactive/grafana'
+import { salesforce } from '../../interactive/salesforce'
 import { EditingPresence } from '../../interactive/editing'
 import { formatFigure } from '../../interactive/dashboard'
 import { designTextEdit, withDesignTexts, type DesignTextEdit } from '@ramu/shared/designText'
@@ -138,6 +139,15 @@ const serviceQuery = z.discriminatedUnion('id', [
     interval: z.union([z.literal(1), z.literal(7), z.literal(30)]).optional(),
     columns: columnsOf,
   }),
+  z.object({
+    id: z.literal('salesforce'),
+    soql: z
+      .string()
+      .trim()
+      .max(4000)
+      .regex(/^select\s/i, 'A Salesforce query is a SOQL SELECT.'),
+    columns: columnsOf,
+  }),
 ])
 
 /** One call from a page's frame: what ramuContent asked for, checked against the page's grants on the host. */
@@ -268,7 +278,9 @@ async function queryNamedService(ctx: HandlerContext, artifactId: string, spec: 
   const rows =
     spec.id === 'grafana'
       ? await grafana.query(auth, spec, spec.columns, DASHBOARD_ROWS_MAX)
-      : await amplitude.query(auth, spec, spec.columns, DASHBOARD_ROWS_MAX)
+      : spec.id === 'amplitude'
+        ? await amplitude.query(auth, spec, spec.columns, DASHBOARD_ROWS_MAX)
+        : await salesforce.query(auth, spec, spec.columns, DASHBOARD_ROWS_MAX)
   return rows.map((row) => Object.fromEntries(spec.columns.map((column, index) => [column, row[index] ?? null])))
 }
 

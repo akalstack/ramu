@@ -133,6 +133,22 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
         return deploys().signIns.start(name)
       },
     },
+    'deploy.salesforceSignIn': {
+      args: z.tuple([
+        z
+          .string()
+          .trim()
+          .min(10)
+          .max(300)
+          .regex(/^[\w.]+$/, 'Paste the consumer key alone'),
+        z.boolean(),
+      ]),
+      run: (clientId: string, sandbox: boolean) => {
+        // The callback reaches this computer's loopback, so the browser must be here too.
+        administrate()
+        return deploys().signIns.startSalesforce(clientId, sandbox)
+      },
+    },
     'deploy.signInStatus': { args: z.tuple([signIn]), run: (signInId: string) => deploys().signIns.status(signInId) },
     'deploy.signInMatch': {
       args: z.tuple([signIn, z.string().regex(/^\d{1,4}$/)]),

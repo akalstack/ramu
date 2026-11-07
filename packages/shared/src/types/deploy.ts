@@ -45,9 +45,17 @@ export type StoreService = (typeof STORE_SERVICES)[number]
  * store services.
  */
 /** Services a Dashboard artifact reads from, each its own grant on the dashboard. */
-export const NAMED_SERVICES = ['grafana', 'amplitude'] as const
+/** The loopback callback a Salesforce connected app registers; the host listens there only during a sign-in. */
+export const SALESFORCE_CALLBACK_PORT = 7417
+export const SALESFORCE_CALLBACK = `http://localhost:${SALESFORCE_CALLBACK_PORT}/salesforce/callback`
+
+export const NAMED_SERVICES = ['grafana', 'amplitude', 'salesforce'] as const
 export type NamedService = (typeof NAMED_SERVICES)[number]
-export const NAMED_SERVICE_NAMES: Record<NamedService, string> = { grafana: 'Grafana', amplitude: 'Amplitude' }
+export const NAMED_SERVICE_NAMES: Record<NamedService, string> = {
+  grafana: 'Grafana',
+  amplitude: 'Amplitude',
+  salesforce: 'Salesforce',
+}
 
 export const ACCOUNT_PLATFORMS = [
   ...HOSTING_PLATFORMS,
@@ -145,7 +153,8 @@ export interface ProjectResources {
 /** A platform CLI sign-in running on the host: the link and code to show, then the result. */
 export interface HostingSignIn {
   id: string
-  platform: CliSignInPlatform
+  /** A platform's CLI sign-in, or Salesforce's browser sign-in through the person's connected app. */
+  platform: CliSignInPlatform | 'salesforce'
   state: 'starting' | 'waiting' | 'connected' | 'failed'
   url: string | null
   code: string | null

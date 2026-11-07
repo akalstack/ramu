@@ -25,6 +25,7 @@ import './supabase'
 import './upstash'
 import './resend'
 import { amplitude } from '../../interactive/amplitude'
+import { salesforce } from '../../interactive/salesforce'
 import { grafana } from '../../interactive/grafana'
 import './workerResources'
 import './vercelMarketplace'
@@ -40,6 +41,7 @@ function accountAdapter(platform: AccountPlatform): AccountAdapter {
   if (platform === 'expo') return expo
   if (platform === 'grafana') return grafana
   if (platform === 'amplitude') return amplitude
+  if (platform === 'salesforce') return salesforce
   if (!isHostingPlatform(platform)) return resourceAdapter(platform)
   const adapter = hostingAdapter(platform)
   return { name: adapter.name, tokenPage: adapter.tokenPage, account: (auth) => adapter.account(auth), kind: 'hosting' }
@@ -57,6 +59,8 @@ interface SavedHosting {
   refreshToken?: string
   /** Milliseconds. */
   expiresAt?: number
+  /** The OAuth client and token address a session renews with, when it is the person's own (Salesforce). */
+  oauthClient?: { url: string; client: string }
 }
 
 /** What a CLI sign-in or a pasted token hands over before it is checked. */
@@ -64,6 +68,7 @@ export interface HostingSecret {
   token: string
   refreshToken?: string
   expiresAt?: number
+  oauthClient?: { url: string; client: string }
 }
 
 /** Where a platform's CLI session is renewed, and the CLI's OAuth client it was issued to. */
@@ -132,6 +137,7 @@ export class HostingAccounts {
       'supabase-storage': saved('supabase'),
       grafana: saved('grafana'),
       amplitude: saved('amplitude'),
+      salesforce: saved('salesforce'),
       expo: saved('expo'),
     }
   }
@@ -199,6 +205,7 @@ export class HostingAccounts {
       defaultScope: identity.defaultScope,
       broadScope: identity.broadScope,
       ...(secret.refreshToken ? { refreshToken: secret.refreshToken } : {}),
+      ...(secret.oauthClient ? { oauthClient: secret.oauthClient } : {}),
       ...((secret.expiresAt ?? identity.expiresAt) ? { expiresAt: secret.expiresAt ?? identity.expiresAt! } : {}),
     })
     this.errors.delete(platform)
@@ -289,7 +296,7 @@ export class HostingAccounts {
 
   private async renew(platform: AccountPlatform, value: SavedHosting): Promise<SavedHosting> {
     const name = this.adapter(platform).name
-    const oauth = this.oauth[platform]
+    const oauth = value.oauthClient ?? this.oauth[platform]
     if (!oauth)
       throw new DeployError(
         `The ${name} sign-in ended. Connect ${name} again in Settings → Git → Hosting accounts.`,
@@ -318,9 +325,11 @@ export class HostingAccounts {
       )
     const renewed = (await response.json()) as { access_token?: string; refresh_token?: string; expires_in?: number }
     if (!renewed.access_token) throw new DeployError(`${name} sent no new sign-in.`, 'signed-out')
+    // A token saved with its address (`address|token`) keeps the address.
+    const address = value.token.includes('|') ? value.token.slice(0, value.token.lastIndexOf('|') + 1) : ''
     const next: SavedHosting = {
       ...value,
-      token: renewed.access_token,
+      token: `${address}${renewed.access_token}`,
       // Refresh tokens rotate: the old one stops working once a new one is issued.
       refreshToken: renewed.refresh_token ?? value.refreshToken,
       expiresAt: Date.now() + (renewed.expires_in ?? 3600) * 1000,

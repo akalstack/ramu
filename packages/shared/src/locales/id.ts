@@ -6197,4 +6197,9 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Salin API key dan secret key proyek dari pengaturannya lalu tempel dengan titik dua di antaranya (key:secret), dengan eu| di depannya untuk proyek EU. Dashboard membacanya hanya jika Anda mengizinkan',
   'Reads {services} with your accounts in Settings, read-only: {purpose}':
     'Membaca {services} dengan akun Anda di Pengaturan, hanya baca: {purpose}',
+  'Create a connected app in your org with OAuth on, the api and refresh_token scopes, PKCE required and no secret for the web server flow, and the callback below; then paste its consumer key here':
+    'Buat connected app di org Anda dengan OAuth aktif, scope api dan refresh_token, PKCE wajib dan tanpa secret untuk web server flow, serta callback di bawah; lalu tempel consumer key-nya di sini',
+  'Callback URL': 'URL callback',
+  'Consumer key': 'Consumer key',
+  'A sandbox org': 'Org sandbox',
 }

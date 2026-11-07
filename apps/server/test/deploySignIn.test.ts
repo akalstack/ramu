@@ -396,6 +396,38 @@ it('keeps a checked token in the credential store, shows only the account, and r
   await expect(accounts.auth('vercel')).rejects.toMatchObject({ kind: 'signed-out' })
 })
 
+it('renews a Salesforce session through the person’s own connected app, keeping the org’s address', async () => {
+  const { state, credentials } = store()
+  const calls: { url: string; body: string }[] = []
+  const fetcher = (async (url: string, init: RequestInit) => {
+    calls.push({ url, body: String(init.body) })
+    return new Response(JSON.stringify({ access_token: 'access-2' }))
+  }) as typeof fetch
+  const accounts = new HostingAccounts(
+    (key, fallback) => (state.get(key) ?? fallback) as never,
+    (key, value) => void state.set(key, value),
+    credentials,
+    fetcher,
+    {},
+    () => ({ ...adapter(() => true), kind: 'service' }),
+  )
+  await accounts.save(
+    'salesforce',
+    {
+      token: 'https://acme.my.salesforce.com|access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: Date.now() + 1000,
+      oauthClient: { url: 'https://login.salesforce.com/services/oauth2/token', client: 'consumer-key-1' },
+    },
+    'token',
+  )
+  expect((await accounts.auth('salesforce')).auth.token).toBe('https://acme.my.salesforce.com|access-2')
+  expect(calls[0]?.url).toBe('https://login.salesforce.com/services/oauth2/token')
+  expect(calls[0]?.body).toContain('client_id=consumer-key-1')
+  // Salesforce sends no new refresh token; the first one is kept.
+  expect(calls[0]?.body).toContain('refresh_token=refresh-1')
+})
+
 it('renews an expiring Vercel CLI session with its refresh token, keeping the rotated one', async () => {
   const { state, credentials } = store()
   const bodies: string[] = []

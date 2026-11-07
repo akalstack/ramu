@@ -34,6 +34,7 @@ const BILLING_PAGES: Record<AccountPlatform, string> = {
   // A Grafana account is read by dashboards, not billed through Ramu, so no report is made for it.
   grafana: '',
   amplitude: '',
+  salesforce: '',
   expo: 'https://expo.dev/settings/billing',
 }
 

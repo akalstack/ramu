@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import type { CliSignInPlatform, HostingSignIn } from '@ramu/shared/types/deploy'
 import { findExecutable } from '../../providers/providerBinaries'
+import { startSalesforceSignIn } from '../../interactive/salesforce'
 import type { HostingAccounts, HostingSecret } from './accounts'
 
 const TIMEOUT_MS = 10 * 60_000
@@ -192,6 +193,8 @@ interface Running {
   folder: string | null
   /** The number the person picked on the platform's page, for a sign-in that asks for one. */
   match?: string
+  /** Stops a sign-in that runs no CLI (Salesforce's loopback callback). */
+  stop?: () => void
 }
 
 type Spawn = typeof spawn
@@ -205,6 +208,7 @@ export class HostingSignIns {
     private readonly spawner: Spawn = spawn,
     private readonly pollMs = POLL_MS,
     private readonly expoToken: (session: string) => Promise<HostingSecret> = expoSessionToken,
+    private readonly salesforce: typeof startSalesforceSignIn = startSalesforceSignIn,
   ) {}
 
   start(platform: CliSignInPlatform): HostingSignIn {
@@ -251,6 +255,40 @@ export class HostingSignIns {
     return entry.view
   }
 
+  /**
+   * Salesforce's browser sign-in through the person's connected app: the link opens in this computer's browser, whose
+   * redirect reaches the loopback callback; the tokens it brings are checked and saved like any sign-in.
+   */
+  async startSalesforce(clientId: string, sandbox: boolean): Promise<HostingSignIn> {
+    for (const [id, entry] of this.running) if (entry.view.platform === 'salesforce') this.cancel(id)
+    const flow = await this.salesforce({ clientId, sandbox })
+    const entry: Running = {
+      view: {
+        id: randomUUID(),
+        platform: 'salesforce',
+        state: 'waiting',
+        url: flow.url,
+        code: null,
+        account: null,
+        error: null,
+      },
+      children: new Set(),
+      stopped: false,
+      folder: null,
+      stop: flow.stop,
+    }
+    this.running.set(entry.view.id, entry)
+    void flow.done
+      .then(async (grant) => {
+        if (entry.stopped) return
+        const account = await this.accounts.save('salesforce', grant, 'token')
+        entry.view = { ...entry.view, state: 'connected', account: account.account, error: null }
+      })
+      .catch((error: unknown) => this.fail(entry, error instanceof Error ? error.message : String(error)))
+      .finally(() => setTimeout(() => this.running.delete(entry.view.id), 60_000).unref())
+    return entry.view
+  }
+
   status(id: string): HostingSignIn {
     const entry = this.running.get(id)
     if (!entry) throw new Error('That sign-in is no longer running. Start it again.')
@@ -276,6 +314,7 @@ export class HostingSignIns {
     if (entry.view.state === 'connected' || entry.view.state === 'failed') return
     entry.stopped = true
     for (const child of entry.children) child.kill()
+    entry.stop?.()
     entry.view = { ...entry.view, state: 'failed', error: message }
   }
 

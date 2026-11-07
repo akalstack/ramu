@@ -77,13 +77,7 @@ Between the person's own devices, an edit of a doc, a Mermaid diagram or a deck'
 - **Live merging:** a Doc's and a deck's text kept as a CRDT (Yjs) on the host, so two people typing at once see each other's words as they type. A version is still saved when either stops editing for a minute, so Restore and Compare keep working.
 - **Presence by part:** on which slide or heading each person is.
 
-### 5. Dashboards from named services
-
-Grafana and Amplitude are built: their accounts in Settings, a table naming its data source and query, and a grant per dashboard and service, reviewed in [SECURITY.md](../SECURITY.md) ([Dashboards](guide/artifacts.md#kinds)). Remaining:
-
-- **Salesforce:** a connector beside `interactive/grafana.ts` signing in through OAuth with the person's own connected app (they register it in their org and Settings takes its consumer key; the refresh token stays in the credential store), with its own `service.id`, added only after its sign-in and the data it can read are written up in SECURITY.md.
-
-### 6. Voice-over for Motion
+### 5. Voice-over for Motion
 
 - A Motion artifact can have narration: the agent writes a script per scene, and the **speech** ability ([Abilities](ABILITIES-PLAN.md)) turns it into audio on a signed-in provider that offers it. The host mixes the audio into the MP4 with the browser's own audio encoder, timed to the scenes.
 - **Narration** in the artifact's toolbar previews, re-records one scene, or removes the narration. The grant sheet says which provider receives the script, and no other content leaves the host.

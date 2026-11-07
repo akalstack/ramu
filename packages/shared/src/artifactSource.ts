@@ -265,6 +265,15 @@ export const dashboardDatasetSchema = z
           days: z.number().int().min(1).max(365).optional().describe('Days back from today; 30 when absent.'),
           interval: z.union([z.literal(1), z.literal(7), z.literal(30)]).optional(),
         }),
+        z.object({
+          id: z.literal('salesforce'),
+          soql: z
+            .string()
+            .trim()
+            .max(4000)
+            .regex(/^select\s/i, 'A Salesforce query is a SOQL SELECT.')
+            .describe('A SOQL SELECT, such as SELECT StageName, Amount FROM Opportunity WHERE IsClosed = false.'),
+        }),
       ])
       .optional()
       .describe(

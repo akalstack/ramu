@@ -2,10 +2,16 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { accountBrand } from '@ramu/shared/brands'
 import { accountName } from '@ramu/shared/deployText'
 import type { AccountPlatform, HostingAccount, HostingAccountsSummary, HostingSignIn } from '@ramu/shared/types'
-import { CLI_SIGN_IN_PLATFORMS, REMOTE_SIGN_IN_PLATFORMS, type CliSignInPlatform } from '@ramu/shared/types/deploy'
+import {
+  CLI_SIGN_IN_PLATFORMS,
+  REMOTE_SIGN_IN_PLATFORMS,
+  SALESFORCE_CALLBACK,
+  type CliSignInPlatform,
+} from '@ramu/shared/types/deploy'
 import { BrandIcon } from '@/components/brand-icon'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
+import { Checkbox } from '@/components/desktop-checkbox'
 import { SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { t } from '../i18n'
 import { invoke as openOnThisComputer } from '../ipc'
@@ -38,6 +44,8 @@ const SCOPE_HINT: Record<
     'Create a service account with the Viewer role and a token for it, then paste your Grafana address and the token joined by | (https://acme.grafana.net|glsa_…). Dashboards read it only where you allow it',
   amplitude:
     'Copy the project’s API key and secret key from its settings and paste them joined by a colon (key:secret), with eu| before them for an EU project. Dashboards read it only where you allow it',
+  salesforce:
+    'Create a connected app in your org with OAuth on, the api and refresh_token scopes, PKCE required and no secret for the web server flow, and the callback below; then paste its consumer key here',
   expo: 'Create it for a robot user with the Developer role on the account that owns the app; a personal token reaches every account you belong to',
 }
 
@@ -136,6 +144,7 @@ function DeployAccountRow({
   const [signIn, setSignIn] = useState<HostingSignIn | null>(null)
   const [token, setToken] = useState('')
   const [number, setNumber] = useState('')
+  const [sandbox, setSandbox] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const tokenId = useId()
@@ -312,7 +321,60 @@ function DeployAccountRow({
                 )}
               </section>
             )}
-            {canAdminister && (
+            {canAdminister && account.platform === 'salesforce' && (
+              <form
+                className="flex flex-col gap-2"
+                aria-label={t('Sign in with {0}', { 0: account.name })}
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void run(async () => setSignIn(await invoke('deploy.salesforceSignIn', token.trim(), sandbox)))
+                }}
+              >
+                <strong>{t('Sign in with {0}', { 0: account.name })}</strong>
+                <p className="m-0 text-muted-foreground">{t(SCOPE_HINT.salesforce)}</p>
+                <p className="m-0 text-muted-foreground">
+                  {t('Callback URL')} <code className="font-mono">{SALESFORCE_CALLBACK}</code>
+                </p>
+                <label htmlFor={tokenId} className="flex flex-col gap-1">
+                  {t('Consumer key')}
+                  <Input
+                    id={tokenId}
+                    value={token}
+                    autoComplete="off"
+                    onChange={(event) => setToken(event.target.value)}
+                  />
+                </label>
+                <label className="flex items-center gap-2">
+                  <Checkbox checked={sandbox} onCheckedChange={(checked) => setSandbox(checked === true)} />
+                  {t('A sandbox org')}
+                </label>
+                {signIn?.state === 'waiting' && signIn.url && (
+                  <span className="flex flex-wrap items-center gap-2" role="status">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => void openOnThisComputer('app.openExternal', signIn.url!)}
+                    >
+                      {t('Open the sign-in page')}
+                    </Button>
+                    <span className="text-muted-foreground">{t('Waiting for you to authorize…')}</span>
+                  </span>
+                )}
+                {signIn?.state === 'failed' && signIn.error && (
+                  <p role="alert" className="m-0 text-destructive">
+                    {signIn.error}
+                  </p>
+                )}
+                {!waiting && (
+                  <span>
+                    <Button type="submit" size="sm" disabled={busy || token.trim().length < 10}>
+                      {t('Sign in with {0}', { 0: account.name })}
+                    </Button>
+                  </span>
+                )}
+              </form>
+            )}
+            {canAdminister && account.platform !== 'salesforce' && (
               <form
                 className="flex flex-col gap-2"
                 onSubmit={(event) => {

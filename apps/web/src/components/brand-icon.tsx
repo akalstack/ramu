@@ -18,6 +18,7 @@ import resend from '../assets/brands/resend.svg'
 import postgres from '../assets/brands/postgres.svg'
 import sentry from '../assets/brands/sentry.svg'
 import grafana from '../assets/brands/grafana.svg'
+import salesforce from '../assets/brands/salesforce.svg'
 import expo from '../assets/brands/expo.svg'
 import appstore from '../assets/brands/appstore.svg'
 import googleplay from '../assets/brands/googleplay.svg'
@@ -40,6 +41,7 @@ const MARKS: Record<BrandId, string> = {
   postgres,
   sentry,
   grafana,
+  salesforce,
   expo,
   appstore,
   googleplay,

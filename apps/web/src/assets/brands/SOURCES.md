@@ -18,6 +18,7 @@ Brand marks for forges, hosting platforms, databases and services, drawn as mask
 | `resend.svg` | Simple Icons (CC0 1.0) | https://resend.com/brand |
 | `postgres.svg` | Simple Icons (CC0 1.0) | https://www.postgresql.org/about/policies/trademarks/ |
 | `sentry.svg` | Simple Icons (CC0 1.0) | https://sentry.io/branding/ |
+| `salesforce.svg` | Simple Icons 13.21 (CC0 1.0) | https://www.salesforce.com/company/legal/trademarks/ |
 | `grafana.svg` | Simple Icons 13.21 (CC0 1.0) | https://grafana.com/legal/grafana-labs-trademark-policy/ |
 | `expo.svg` | Simple Icons (CC0 1.0) | https://expo.dev/brand/ |
 | `appstore.svg` | Simple Icons (CC0 1.0) | https://developer.apple.com/app-store/marketing/guidelines/ |

@@ -2,10 +2,12 @@
 // query's first frame turned into the table's rows, and a grant per dashboard.
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { afterEach, expect, it } from 'vitest'
+import { createHash } from 'node:crypto'
+import { afterEach, expect, it, vi } from 'vitest'
 import { parseArtifactSource } from '@ramu/shared/artifactSource'
 import { amplitudeAuth, amplitudeConnector } from '../src/interactive/amplitude'
 import { grafanaAuth, grafanaConnector } from '../src/interactive/grafana'
+import { salesforceConnector, startSalesforceSignIn } from '../src/interactive/salesforce'
 import { ServiceGrants } from '../src/interactive/serviceGrants'
 
 const servers: Server[] = []
@@ -154,4 +156,85 @@ it('reads an Amplitude event’s daily uniques as date, series and value rows, w
   expect(requests[0]?.auth).toBe(`Basic ${Buffer.from('key1:secret1').toString('base64')}`)
   expect(amplitudeAuth({ token: 'eu|k:s' }).origin).toBe('https://analytics.eu.amplitude.com')
   expect(() => amplitudeAuth({ token: 'only-a-key' })).toThrow('joined by a colon')
+})
+
+it('signs in to Salesforce with PKCE through the person’s connected app, and queries with SOQL', async () => {
+  const exchanges: URLSearchParams[] = []
+  const queries: string[] = []
+  const org = createServer((req, res) => {
+    let text = ''
+    req.on('data', (chunk: Buffer) => (text += chunk.toString('utf8')))
+    req.on('end', () => {
+      const send = (value: unknown) =>
+        void res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(value))
+      expect(req.headers.authorization).toBe('Bearer access-1')
+      if (req.url === '/services/data/') return send([])
+      if (req.url === '/services/oauth2/userinfo')
+        return send({ user_id: 'u1', organization_id: 'o1', preferred_username: 'ana@acme.com' })
+      if (req.url?.startsWith('/services/data/v62.0/query?')) {
+        queries.push(req.url)
+        return send({
+          records: [{ attributes: {}, StageName: 'Prospecting', Amount: 1200, Account: { Name: 'Acme' } }],
+          nextRecordsUrl: queries.length === 1 ? '/services/data/v62.0/query/01g-2000' : undefined,
+        })
+      }
+      if (req.url === '/services/data/v62.0/query/01g-2000') {
+        queries.push(req.url)
+        return send({ records: [{ StageName: 'Closed Won', Amount: 900, Account: null }] })
+      }
+      res.writeHead(404).end(text)
+    })
+  })
+  servers.push(org)
+  await new Promise<void>((resolve) => org.listen(0, '127.0.0.1', resolve))
+  const instance = `http://127.0.0.1:${(org.address() as AddressInfo).port}`
+  // Salesforce's token endpoint, faked: it checks the PKCE verifier against the challenge sent with the link.
+  let challenge = ''
+  const fetcher = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+    const body = new URLSearchParams(String(init?.body))
+    exchanges.push(body)
+    const verified = createHash('sha256').update(body.get('code_verifier')!).digest('base64url') === challenge
+    return new Response(
+      JSON.stringify(
+        verified ? { access_token: 'access-1', refresh_token: 'refresh-1', instance_url: instance } : { error: 'bad' },
+      ),
+      { status: verified ? 200 : 400 },
+    )
+  })
+  const flow = await startSalesforceSignIn({
+    clientId: 'consumer-key-1',
+    sandbox: true,
+    fetch: fetcher as never,
+    port: 0,
+  })
+  const link = new URL(flow.url)
+  expect(link.origin).toBe('https://test.salesforce.com')
+  expect(link.searchParams.get('client_id')).toBe('consumer-key-1')
+  expect(link.searchParams.get('scope')).toBe('api refresh_token')
+  challenge = link.searchParams.get('code_challenge')!
+  const callback = new URL(link.searchParams.get('redirect_uri')!)
+  // The browser comes back with the code; a callback with another state is refused.
+  const wrong = await fetch(`${callback.origin}${callback.pathname}?code=c&state=other`)
+  expect(wrong.status).toBe(400)
+  await fetch(`${callback.origin}${callback.pathname}?code=code-1&state=${link.searchParams.get('state')}`)
+  const grant = await flow.done
+  expect(grant).toMatchObject({
+    token: `${instance}|access-1`,
+    refreshToken: 'refresh-1',
+    oauthClient: { url: 'https://test.salesforce.com/services/oauth2/token', client: 'consumer-key-1' },
+  })
+  expect(exchanges[0]?.get('grant_type')).toBe('authorization_code')
+  const connector = salesforceConnector()
+  expect(await connector.account({ token: grant.token })).toMatchObject({ id: 'o1:u1', name: 'ana@acme.com' })
+  const rows = await connector.query(
+    { token: grant.token },
+    { soql: 'SELECT StageName, Amount, Account.Name FROM Opportunity' },
+    ['StageName', 'Amount', 'Account.Name'],
+    10,
+  )
+  expect(rows).toEqual([
+    ['Prospecting', 1200, 'Acme'],
+    ['Closed Won', 900, null],
+  ])
+  await expect(connector.query({ token: grant.token }, { soql: 'DELETE FROM x' }, ['Id'], 1)).rejects.toThrow('SELECT')
 })
