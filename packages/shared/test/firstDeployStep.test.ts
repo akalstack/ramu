@@ -17,6 +17,7 @@ const status = (deployments: Partial<Deployment>[]): ProjectDeployment =>
     binding,
     capabilities: [],
     productionUrl: null,
+    heldForMigrations: false,
     error: null,
     deployments: deployments.map((entry, index) => ({
       id: String(index),

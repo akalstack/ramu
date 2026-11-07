@@ -404,6 +404,27 @@ export function netlifyAdapter(options: { api?: string; github?: string; fetch?:
           { method: 'POST' },
         )
       },
+      // Locked publishing: the live deploy stays live until another is published by hand.
+      async hold(auth, target, on) {
+        const live = await call<{ published_deploy?: { id?: string } }>(site(target.siteId), auth, 'reading the site')
+        const id = live.published_deploy?.id
+        if (!id) return
+        await call(`/deploys/${encodeURIComponent(id)}/${on ? 'lock' : 'unlock'}`, auth, 'changing auto publishing', {
+          method: 'POST',
+        })
+      },
+      async promote(auth, target, deploymentId) {
+        await call(
+          `${site(target.siteId)}/deploys/${encodeURIComponent(deploymentId)}/restore`,
+          auth,
+          'publishing the deployment',
+          { method: 'POST' },
+        )
+        // Publishing by hand moves the lock to the new deploy, so the next build waits too.
+        await call(`/deploys/${encodeURIComponent(deploymentId)}/lock`, auth, 'keeping auto publishing locked', {
+          method: 'POST',
+        })
+      },
       async usage(auth, target) {
         // Netlify's API reports a team's build minutes against its plan; bandwidth and credits are on its dashboard only.
         const { account_id: account, account_slug: slug } = await call<{ account_id: string; account_slug?: string }>(

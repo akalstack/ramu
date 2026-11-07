@@ -1294,6 +1294,8 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.domains'(projectId: string): DomainStatus[]
   /** Adds a custom domain and watches it until it serves HTTPS, then wakes the project's latest thread. */
   'deploy.addDomain'(projectId: string, domain: string): DomainStatus
+  /** Holds production builds until Ramu has run the project's migrations and made them live, or stops holding them. */
+  'deploy.holdForMigrations'(projectId: string, on: boolean): ProjectDeployment
   /** Creates the domain's records in the platform's own DNS; confirming in the sheet is the person's approval. */
   'deploy.createRecords'(projectId: string, domain: string): DomainStatus
   /** Adds a domain's records at Cloudflare DNS with a token pasted for this action, which is not kept; host only. */

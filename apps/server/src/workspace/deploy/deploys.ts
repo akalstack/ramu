@@ -148,6 +148,15 @@ export function createDeploys(
       setState,
       migrate: (projectId) => commandOf(stack(projectId)?.migrate),
       projects: () => workspace.listProjects().map((project) => project.id),
+      gated: (projectId) => service.gated(projectId),
+      async release(projectId, deployment) {
+        const binding = service.binding(projectId)
+        const root = binding?.repository ? await checkoutOf(projectId, binding.repository) : null
+        if (!binding || !root)
+          throw new Error('This host has no checkout of the repository to run the migrations from.')
+        await resources.migrateProduction(projectId, root, binding.productionBranch, deployment.commit)
+        await service.promote(projectId, deployment.id)
+      },
     },
     wake,
     service,

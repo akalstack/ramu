@@ -106,7 +106,7 @@ const contracts: Contract[] = [
     platform: 'vercel',
     make: (url) => vercelAdapter({ api: url }),
     site: { siteId: 'prj_1', siteName: 'shop' },
-    capabilities: ['linkRepository', 'deployPreview', 'deployProduction', 'rollback', 'domains', 'usage'],
+    capabilities: ['linkRepository', 'deployPreview', 'deployProduction', 'rollback', 'promote', 'domains', 'usage'],
     first: {
       uid: 'dpl_1',
       url: 'shop-abc.vercel.app',
@@ -185,6 +185,8 @@ const contracts: Contract[] = [
         effect: () => list.unshift(created),
       },
       { method: 'POST', path: /^\/v9\/projects\/prj_1\/rollback\/dpl_1$/, body: {} },
+      { method: 'PATCH', path: /^\/v9\/projects\/prj_1$/, body: {} },
+      { method: 'POST', path: /^\/v10\/projects\/prj_1\/promote\/dpl_2$/, body: {} },
     ],
   },
   {
@@ -192,7 +194,7 @@ const contracts: Contract[] = [
     platform: 'netlify',
     make: (url) => netlifyAdapter({ api: url, github: `${url}/gh` }),
     site: { siteId: 'site_1', siteName: 'shop' },
-    capabilities: ['linkRepository', 'deployProduction', 'rollback', 'domains', 'usage'],
+    capabilities: ['linkRepository', 'deployProduction', 'rollback', 'promote', 'domains', 'usage'],
     first: {
       id: 'd1',
       state: 'ready',
@@ -276,6 +278,10 @@ const contracts: Contract[] = [
         effect: () => list.unshift(created),
       },
       { method: 'POST', path: /^\/sites\/site_1\/deploys\/d1\/restore$/, body: {} },
+      { method: 'GET', path: /^\/sites\/site_1$/, body: { id: 'site_1', published_deploy: { id: 'd1' } } },
+      { method: 'POST', path: /^\/deploys\/d1\/lock$/, body: {} },
+      { method: 'POST', path: /^\/sites\/site_1\/deploys\/d2\/restore$/, body: {} },
+      { method: 'POST', path: /^\/deploys\/d2\/lock$/, body: {} },
     ],
   },
   {
@@ -399,6 +405,13 @@ describe.each(contracts)('$name hosting adapter', (contract) => {
     const deployed: Deployment = await adapter.capabilities.deployProduction!(auth, bound, 'main')
     expect(deployed).toMatchObject({ id: contract.createdId, production: true })
     await adapter.capabilities.rollback!(auth, site, contract.firstId)
+    if (adapter.capabilities.promote) {
+      // Holding production keeps the live build until Ramu promotes the new one after its migrations.
+      await adapter.capabilities.hold!(auth, site, true)
+      await adapter.capabilities.promote(auth, site, contract.createdId)
+      const held = server.requests.slice(-2).join('\n')
+      expect(held).toContain(contract.createdId)
+    }
     // Tokens go only in the Authorization header, never in a URL.
     expect(server.requests.join('\n')).not.toContain('tok_123')
   })

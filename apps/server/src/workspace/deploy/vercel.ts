@@ -375,6 +375,21 @@ export function vercelAdapter(options: { api?: string; fetch?: typeof fetch } = 
           method: 'POST',
         })
       },
+      // Staged production: builds of the production branch stop taking the production domains by themselves.
+      async hold(auth, site, on) {
+        await call(`/v9/projects/${project(site)}`, auth, 'changing how production goes live', {
+          method: 'PATCH',
+          body: JSON.stringify({ autoAssignCustomDomains: !on }),
+        })
+      },
+      async promote(auth, site, deploymentId) {
+        await call(
+          `/v10/projects/${project(site)}/promote/${encodeURIComponent(deploymentId)}`,
+          auth,
+          'making the deployment live',
+          { method: 'POST' },
+        )
+      },
       async usage(auth) {
         // Vercel reports charges (FOCUS rows, one JSON object per line) per service and day, but no plan limits; the
         // calendar month stands in for the billing period, which its API does not name.

@@ -91,6 +91,8 @@ export class DeployService {
   /** Remembers a binding made outside `link`, such as setting up the person's own server. */
   bind(projectId: string, binding: DeployBinding): void {
     this.host.setState(key(projectId), binding)
+    // A new site is not held, whatever the previous one was.
+    this.host.setState(`migration-gate:${projectId}`, false)
   }
 
   async project(projectId: string): Promise<ProjectDeployment> {
@@ -101,6 +103,7 @@ export class DeployService {
       capabilities: binding ? capabilityNames(this.adapter(binding.platform)) : [],
       productionUrl: null,
       deployments: [],
+      heldForMigrations: this.gated(projectId),
       error: null,
     }
     if (!binding) return empty
@@ -133,7 +136,7 @@ export class DeployService {
     const { auth, accountId, defaultScope } = await this.accounts.auth(platform)
     const scoped = { ...auth, scope: defaultScope }
     const site = await link(scoped, name, repository)
-    this.host.setState(key(projectId), {
+    this.bind(projectId, {
       platform,
       siteId: site.siteId,
       siteName: site.siteName,
@@ -141,7 +144,7 @@ export class DeployService {
       productionBranch: repository.productionBranch,
       accountId: accountId ?? (await adapter.account(auth)).id,
       scope: defaultScope,
-    } satisfies DeployBinding)
+    })
     return this.project(projectId)
   }
 
@@ -215,6 +218,32 @@ export class DeployService {
       remove: async (branch, keys) =>
         environment.removeBranch!((await this.bound(projectId)).auth, binding, branch, keys),
     }
+  }
+
+  /** Whether production builds of the project wait for its migrations before going live. */
+  gated(projectId: string): boolean {
+    return !!this.binding(projectId) && this.host.getState<boolean>(`migration-gate:${projectId}`, false)
+  }
+
+  /**
+   * Turns the wait on or off: the platform then holds finished production builds until Ramu has run the migrations
+   * and promotes them, or makes them live by itself again.
+   */
+  async setGated(projectId: string, on: boolean): Promise<void> {
+    const { binding, auth } = await this.bound(projectId)
+    const adapter = this.adapter(binding.platform)
+    if (!adapter.capabilities.hold || !adapter.capabilities.promote)
+      throw new Error(`${adapter.name} cannot hold a production build until migrations have run.`)
+    await adapter.capabilities.hold(auth, binding, on)
+    this.host.setState(`migration-gate:${projectId}`, on)
+  }
+
+  /** Makes a finished production build live. */
+  async promote(projectId: string, deploymentId: string): Promise<void> {
+    const { binding, auth } = await this.bound(projectId)
+    const promote = this.adapter(binding.platform).capabilities.promote
+    if (!promote) throw new Error('This platform makes production builds live by itself.')
+    await promote(auth, binding, deploymentId)
   }
 
   async deployment(projectId: string, deploymentId: string): Promise<Deployment> {

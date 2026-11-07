@@ -289,6 +289,14 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
           return added
         }),
     },
+    'deploy.holdForMigrations': {
+      args: z.tuple([id, z.boolean()]),
+      run: (projectId: string, on: boolean) =>
+        exclusive(projectId, async () => {
+          await deploys().service.setGated(project(projectId), on)
+          return deploys().service.project(project(projectId))
+        }),
+    },
     'deploy.createCloudflareRecords': {
       args: z.tuple([id, domain, z.string().trim().min(20).max(400)]),
       // The token is used for this one action and not kept.

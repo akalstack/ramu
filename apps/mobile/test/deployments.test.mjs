@@ -30,6 +30,7 @@ const status = (patch = {}) => ({
   },
   capabilities: ['rollback'],
   productionUrl: 'https://shop.example.com',
+  heldForMigrations: false,
   deployments: [
     deployment({ id: 'preview', production: false, ref: 'fix', createdAt: 4 }),
     deployment({ id: 'live', createdAt: 3 }),

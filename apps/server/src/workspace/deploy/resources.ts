@@ -297,7 +297,7 @@ export class ResourceService {
    * Runs the project's migrate command against production's database before a production deploy, in the repository's
    * checkout of the production branch at the commit the platform will build. Nothing to migrate is not a failure.
    */
-  async migrateProduction(projectId: string, root: string, branch: string): Promise<void> {
+  async migrateProduction(projectId: string, root: string, branch: string, commit?: string | null): Promise<void> {
     const argv = this.host.stack(projectId).migrate
     const binding = this.bindings(projectId).find((entry) => entry.kind === 'database')
     if (!argv || !binding) return
@@ -312,6 +312,9 @@ export class ResourceService {
     ])
     if (local.trim() !== remote.trim())
       throw new Error(`Push or pull ${branch} first, so the migrations that run match what deploys.`)
+    // A held build is made live only with the migrations of its own commit; a newer push has its own build.
+    if (commit && local.trim().toLowerCase() !== commit.toLowerCase())
+      throw new Error(`The checkout of ${branch} is not at ${commit.slice(0, 7)}, the commit this build is from.`)
     const result = await this.migrate(argv, root, secrets.production)
     if (!result.ok) {
       const output = tail(result.output, OUTPUT_LINES)

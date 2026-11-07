@@ -24,6 +24,7 @@ function setup(options: { deployments?: Deployment[]; healthPath?: string | null
     binding: null,
     capabilities: [],
     productionUrl: 'https://shop.example',
+    heldForMigrations: false,
     deployments: options.deployments ?? [live],
     error: options.offline?.() ? { kind: null, message: 'Vercel did not answer.' } : null,
   }))

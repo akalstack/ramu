@@ -37,16 +37,15 @@ A developer can enter at any step: **Deploy** on an existing project, or **Set u
 
 Vercel, Netlify and the person's own server are built ([Deploying an app](guide/deploy.md)): `HostingAdapter` and its registry in `workspace/deploy/`, the shared shapes in `packages/shared/src/types/deploy.ts`, hosting accounts connected by the platform's CLI sign-in or a guided token page, the contract suite (`apps/server/test/deployAdapters.test.ts`), `deploy.*` IPC, the deploy tools and the Deploy sheet. A new platform is one adapter file, its sign-in and a contract entry. What remains:
 
-- **Capabilities still to declare:** `promote` and the resource kinds a platform provisions. Netlify previews come from pull requests; a branch preview through its API is not declared.
+- **Capabilities still to declare:** the resource kinds a platform provisions. Netlify previews come from pull requests; a branch preview through its API is not declared.
 - **`ResourceAdapter`** (`workspace/deploy/resource.ts`, Neon built, §2): a hosting platform that provisions through its marketplace implements it too (Vercel Marketplace, Cloudflare D1, KV and R2, Netlify DB); a standalone provider (Supabase, Upstash, Resend) implements only this one. Deleting a resource is not on the interface.
 
 ### 2. Databases and storage
 
-`ResourceAdapter` with Neon (API key on the guided token page), **Provision** in the deploy sheet for stacks or code that need a database, a `preview` branch for previews, this host and CI, connection variables in secrets sync, and migrations before a production deploy from Ramu are built ([Databases](guide/deploy.md#databases)). What remains:
+`ResourceAdapter` with Neon (API key on the guided token page), **Provision** in the deploy sheet for stacks or code that need a database, a `preview` branch for previews, this host and CI, connection variables in secrets sync, migrations before a production deploy from Ramu, and an opt-in hold that runs them before each production build goes live are built ([Databases](guide/deploy.md#databases)). What remains:
 
 - **More providers:** the platforms' own options (Vercel Marketplace, Cloudflare D1, KV and R2, Netlify DB), Supabase, file storage and email (Resend), each a `ResourceAdapter` with its `BrandId`, and the stack choice naming storage and email needs.
 - **Neon's CLI sign-in:** `neonctl auth` signs in through a browser on the host and saves an hourly token renewed through Neon's OAuth client; Ramu uses an API key until that renewal is built.
-- **Migrations on every production deploy:** a push to the default branch that the platform deploys itself runs no migration from Ramu; the deploy watch tells the thread so. A safe way to run them: turn off the platform's automatic promotion for linked projects (Vercel's staged production deployments, with auto-assigned production domains off; Netlify's locked auto publishing), let the deploy watch see the production build finish, run `migrate` from the host against production at that commit, and only then promote the deployment (Vercel's promote endpoint, Netlify's restore endpoint), declared as the `promote` capability. A failed migration leaves the old deployment live and wakes the thread. It needs the host awake for every production deploy and migrations that the running version tolerates (add columns before the code uses them), so it is opt-in per project.
 
 ### 3. Cost and usage
 

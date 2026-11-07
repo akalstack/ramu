@@ -41,7 +41,7 @@ export const isHostingPlatform = (platform: AccountPlatform): platform is Hostin
 
 /** What a platform can do beyond the required reads. The UI and agent tools hide what a target lacks. */
 export type HostingCapability =
-  'linkRepository' | 'deployPreview' | 'deployProduction' | 'rollback' | 'domains' | 'usage'
+  'linkRepository' | 'deployPreview' | 'deployProduction' | 'rollback' | 'promote' | 'domains' | 'usage'
 
 /** Why a platform refused a call, in the words every platform shares. */
 export type DeployFailureKind = 'signed-out' | 'missing-permission' | 'plan-limit' | 'not-found'
@@ -166,6 +166,8 @@ export interface ProjectDeployment {
   capabilities: HostingCapability[]
   productionUrl: string | null
   deployments: Deployment[]
+  /** Production builds wait for the project's migrations, which Ramu runs before making each one live. */
+  heldForMigrations: boolean
   /** Why the platform could not be read, with the shared kind when it is one. */
   error: { kind: DeployFailureKind | null; message: string } | null
 }

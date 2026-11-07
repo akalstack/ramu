@@ -57,6 +57,13 @@ export interface HostingCapabilities {
   deployProduction?(auth: HostingAuth, site: HostingSite & { repository: string }, ref: string): Promise<Deployment>
   /** Makes an earlier production deployment live again. */
   rollback?(auth: HostingAuth, site: HostingSite, deploymentId: string): Promise<void>
+  /**
+   * Holds production builds back (`on`), so a finished one goes live only when promoted, or lets the platform make them
+   * live by itself again.
+   */
+  hold?(auth: HostingAuth, site: HostingSite, on: boolean): Promise<void>
+  /** Makes a finished production build live. */
+  promote?(auth: HostingAuth, site: HostingSite, deploymentId: string): Promise<void>
   /** The project's environment variables: names only when listing; values are written, never read back. */
   environment?: {
     /** The environments the platform keeps variables for. */
@@ -123,6 +130,7 @@ export function capabilityNames(adapter: HostingAdapter): HostingCapability[] {
     'deployPreview',
     'deployProduction',
     'rollback',
+    'promote',
     'domains',
     'usage',
   ]

@@ -23,6 +23,7 @@ function setup(approve: boolean) {
     project: vi.fn(async () => ({
       binding: { siteName: 'shop', productionBranch: 'main' },
       productionUrl: 'https://shop.vercel.app',
+      heldForMigrations: false,
       deployments: [],
     })),
     deploy: vi.fn(async (_project: string, _ref: string | null, production: boolean) => ({ id: 'd1', production })),

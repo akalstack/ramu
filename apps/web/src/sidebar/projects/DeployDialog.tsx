@@ -13,6 +13,7 @@ import { isHostingPlatform } from '@ramu/shared/types/deploy'
 import { BrandIcon } from '@/components/brand-icon'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
+import { Checkbox } from '@/components/desktop-checkbox'
 import { RowButton } from '@/components/row-button'
 import { Dialog } from '../../Menu'
 import { t, useLanguage } from '../../i18n'
@@ -357,6 +358,24 @@ export function DeployDialog({
                 {t('Open pull request')}
               </Button>
             </p>
+          )}
+          {status.capabilities.includes('promote') && (
+            <label className="flex items-start gap-2 text-caption">
+              <Checkbox
+                checked={status.heldForMigrations}
+                disabled={busy}
+                onCheckedChange={(checked) =>
+                  void run(async () =>
+                    setStatus(await host.invoke('deploy.holdForMigrations', project.id, checked === true)),
+                  )
+                }
+              />
+              <span>
+                {t(
+                  'Run the migrations before each production build goes live: the platform holds every finished build, Ramu runs the migrate command from ramu.json against production at that commit, and only then makes it live. A failed migration leaves the previous build live. This computer must be awake for production deploys.',
+                )}
+              </span>
+            </label>
           )}
           {!pullRequest && firstStep && (
             <p role="status" className="text-caption">

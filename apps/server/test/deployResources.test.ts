@@ -245,6 +245,16 @@ describe('migrations before a production deploy', () => {
     await expect(resources.migrateProduction('p1', work, 'main')).rejects.toThrow('Check out main')
     expect(runner).not.toHaveBeenCalled()
   })
+
+  it('runs a held build’s migrations only at that build’s own commit', async () => {
+    const server = await fake(neonRoutes([]))
+    const runner = vi.fn<MigrationRunner>(async () => ({ ok: true, output: '' }))
+    const { resources } = service(server.url, ['bin/rails', 'db:migrate'], runner)
+    await resources.provision('p1', 'neon', 'default', 'shop')
+    const { work } = repository()
+    await expect(resources.migrateProduction('p1', work, 'main', 'f'.repeat(40))).rejects.toThrow('is not at fffffff')
+    expect(runner).not.toHaveBeenCalled()
+  })
 })
 
 describe('a database branch per pull request', () => {

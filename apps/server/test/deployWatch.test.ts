@@ -33,7 +33,13 @@ const deployment = (patch: Partial<Deployment>): Deployment => ({
   ...patch,
 })
 
-function setup(options: { lists?: Deployment[][]; statuses?: Deployment[]; log?: string; migrate?: string | null }) {
+function setup(options: {
+  lists?: Deployment[][]
+  statuses?: Deployment[]
+  log?: string
+  migrate?: string | null
+  release?: () => Promise<void>
+}) {
   const cwd = checkout()
   const state = new Map<string, unknown>()
   const sessions = [
@@ -64,6 +70,7 @@ function setup(options: { lists?: Deployment[][]; statuses?: Deployment[]; log?:
     binding: () => ({ platform: 'vercel' }) as never,
     project: vi.fn(async () => ({
       productionUrl: 'https://shop.example.com',
+      heldForMigrations: false,
       deployments: options.lists?.length ? options.lists.shift()! : [],
     })) as never,
     deployment: vi.fn(async () => options.statuses?.shift() ?? deployment({})),
@@ -74,6 +81,8 @@ function setup(options: { lists?: Deployment[][]; statuses?: Deployment[]; log?:
       getState: workspace.getAppState,
       setState: workspace.setAppState,
       migrate: () => options.migrate ?? null,
+      gated: () => !!options.release,
+      release: options.release,
     },
     wake,
     service,
@@ -191,5 +200,35 @@ describe('deploy watches', () => {
     sessions[0]!.state = 'stopped'
     await poll(watches, 1)
     expect(enqueueBackground.mock.calls.map((call) => call[0])).toEqual(['recent'])
+  })
+
+  it('runs the migrations of a held production build, then makes it live', async () => {
+    const release = vi.fn(async () => {})
+    const { watches, enqueueBackground } = setup({ statuses: [deployment({ state: 'ready' })], release })
+    watches.follow('p1', { id: 'd1', production: true }, 'pusher')
+    await poll(watches, 1)
+    expect(release).toHaveBeenCalledWith('p1', expect.objectContaining({ id: 'd1' }))
+    expect(enqueueBackground.mock.calls[0]?.[1]).toContain('ran the migrations against production')
+  })
+
+  it('leaves the previous build live when a held build’s migration fails, and says so with the output', async () => {
+    const release = vi.fn(async () => {
+      throw new Error('relation "orders" already exists DATABASE_URL=postgres://u:hunter2secretpassword@db/x')
+    })
+    const { watches, enqueueBackground } = setup({ statuses: [deployment({ state: 'ready' })], release })
+    watches.follow('p1', { id: 'd1', production: true }, 'pusher')
+    await poll(watches, 1)
+    const text = enqueueBackground.mock.calls[0]?.[1] as string
+    expect(text).toContain('its migration failed, so Ramu did not make it live')
+    expect(text).toContain('relation "orders" already exists')
+    expect(text).not.toContain('hunter2secretpassword')
+  })
+
+  it('never holds a preview build for migrations', async () => {
+    const release = vi.fn(async () => {})
+    const { watches } = setup({ statuses: [deployment({ state: 'ready', production: false })], release })
+    watches.follow('p1', { id: 'd1', production: false }, 'pusher')
+    await poll(watches, 1)
+    expect(release).not.toHaveBeenCalled()
   })
 })
