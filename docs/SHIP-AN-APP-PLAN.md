@@ -60,7 +60,6 @@ Vercel, Netlify and the person's own server are built ([Deploying an app](guide/
 
 A VPS over SSH is built ([Your own server](guide/deploy.md#your-own-server), `workspace/deploy/server.ts`, `serverSetup.ts` and `ssh.ts`). What remains:
 
-- **Apps that are not one container:** a database or worker beside the app (a Compose file). Each deploy already checks the app's health path before the old container is let go.
 - **The Ramu host itself** is built, in Docker or as a program without it ([On this computer](guide/deploy.md#on-this-computer)), behind a quick tunnel whose address changes when Ramu restarts. Remaining:
   - A lasting hostname: a named Cloudflare Tunnel Ramu configures itself, with an ingress naming exactly the app's hostname and port and ending in a catch-all 404, checked before it starts and refusing Ramu's own port, a wildcard hostname or a Unix socket.
   - The uptime watch following the published address, once it lasts across restarts.

@@ -64,7 +64,7 @@ const FIXTURE_KEY = 'AAAAC3NzaC1lZDI1NTE5AAAAIPVMG+ElpEM04bD0eMCEH8mLSZUO4Dp0Z2t
 
 describe('the deploy script on the server', () => {
   // Stand-ins for docker and sleep: docker logs each call, and the app answers its health path with $CODE.
-  const run = (code: string) => {
+  const run = (code: string, services = '') => {
     const home = mkdtempSync(join(tmpdir(), 'ramu-deploy-'))
     const bin = join(home, 'bin')
     mkdirSync(bin)
@@ -91,11 +91,15 @@ describe('the deploy script on the server', () => {
     const b64 = (value: string) => `v${Buffer.from(value).toString('base64')}`
     let failed = ''
     try {
-      execFileSync('sh', ['-c', SERVER_DEPLOY_SCRIPT, 'ramu', b64('shop'), b64('ghcr.io/me/shop:new'), b64('me')], {
-        env: { HOME: home, PATH: `${bin}:${process.env.PATH}`, CODE: code },
-        input: '',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      })
+      execFileSync(
+        'sh',
+        ['-c', SERVER_DEPLOY_SCRIPT, 'ramu', b64('shop'), b64('ghcr.io/me/shop:new'), b64('me'), b64(services)],
+        {
+          env: { HOME: home, PATH: `${bin}:${process.env.PATH}`, CODE: code },
+          input: '',
+          stdio: ['pipe', 'pipe', 'pipe'],
+        },
+      )
     } catch (error) {
       failed = String((error as { stderr?: Buffer }).stderr ?? error)
     }
@@ -107,6 +111,14 @@ describe('the deploy script on the server', () => {
     expect(failed).toBe('')
     expect(calls).toContain('exec ramu-caddy wget -S -q -T 5 -O /dev/null http://ramu-shop:3000/api/health')
     expect(image).toBe('ghcr.io/me/shop:new\n')
+  })
+
+  it('runs the services beside the app under its own Compose project, and joins the app to their network', () => {
+    const { failed, calls } = run('200', 'services:\n  db:\n    image: postgres:17\n')
+    expect(failed).toBe('')
+    expect(calls).toMatch(/compose -p ramu-shop -f .*\/ramu\/apps\/shop\/services\.yml up -d --remove-orphans/)
+    expect(calls).toContain('network connect ramu-shop_default ramu-shop')
+    expect(run('200').calls).not.toContain('compose')
   })
 
   it('puts the previous version back when the new one keeps failing its health path', () => {

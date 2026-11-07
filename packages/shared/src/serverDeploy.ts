@@ -241,7 +241,7 @@ export function exposedPort(dockerfile: string): number | null {
 export const SERVER_DEPLOY_SCRIPT = [
   'set -eu',
   'd() { printf %s "${1#v}" | base64 -d; }',
-  'app=$(d "$1"); image=$(d "$2"); user=$(d "${3:-v}")',
+  'app=$(d "$1"); image=$(d "$2"); user=$(d "${3:-v}"); services=$(d "${4:-v}")',
   'case "$app" in ""|*[!a-z0-9-]*) echo "Unexpected app name." >&2; exit 2;; esac',
   'case "$image" in ""|*[!a-z0-9./:_@-]*) echo "Unexpected image name." >&2; exit 2;; esac',
   'dir="$HOME/ramu/apps/$app"',
@@ -254,10 +254,13 @@ export const SERVER_DEPLOY_SCRIPT = [
   'if [ -n "$token" ]; then docker logout ghcr.io >/dev/null 2>&1 || true; fi',
   'if [ "$pulled" = 0 ] && ! docker image inspect "$image" >/dev/null 2>&1; then echo "Could not pull $image." >&2; exit 1; fi',
   'docker network inspect ramu >/dev/null 2>&1 || docker network create ramu >/dev/null',
+  // Services beside the app (a database, a cache) run under the app's own Compose project, on their own network.
+  'if [ -n "$services" ]; then printf "%s\\n" "$services" > "$dir/services.yml"; docker compose -p "ramu-$app" -f "$dir/services.yml" up -d --remove-orphans >/dev/null; fi',
   'current=$(cat "$dir/image" 2>/dev/null || true)',
   'start() {',
   '  docker rm -f "ramu-$app" >/dev/null 2>&1 || true',
   '  docker run -d --name "ramu-$app" --network ramu --restart unless-stopped --env-file "$dir/env" --label "dev.ramu.app=$app" "$1" >/dev/null',
+  '  if [ -f "$dir/services.yml" ]; then docker network connect "ramu-${app}_default" "ramu-$app" >/dev/null 2>&1 || true; fi',
   '}',
   'start "$image"',
   'sleep 10',
@@ -403,7 +406,7 @@ export function serverWorkflow(facts: ServerWorkflowFacts): string {
     '          printf \'%s\\n\' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts',
     '          b64() { printf \'v%s\' "$(printf \'%s\' "$1" | base64 -w0)"; }',
     '          printf \'%s\' "$REGISTRY_TOKEN" | ssh -i ~/.ssh/ramu -p "$SSH_PORT" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o BatchMode=yes -l "$SSH_USER" -- "$SSH_HOST" \\',
-    '            "sh -c \'$DEPLOY_SCRIPT\' ramu $(b64 "$APP") $(b64 "$IMAGE") $(b64 "$GITHUB_ACTOR")"',
+    '            "sh -c \'$DEPLOY_SCRIPT\' ramu $(b64 "$APP") $(b64 "$IMAGE") $(b64 "$GITHUB_ACTOR") $(b64 "$(cat deploy/services.yml 2>/dev/null || true)")"',
     '',
   ].join('\n')
 }

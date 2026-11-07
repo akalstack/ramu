@@ -2,6 +2,7 @@
 // one the person pastes), pins the server's host key on that first contact and keeps both in the host's credential
 // store. Setting up checks Docker, writes the app's Caddy site, puts the SSH details in the repository's GitHub Actions
 // secrets and opens one pull request with the Dockerfile and deploy job the repository lacks.
+import { COMPOSE_FILES, composeServices, SERVICES_PATH } from './composeServices'
 import { loadProjectConfig } from '../projectConfig'
 import { domainName } from '@ramu/shared/domains'
 import {
@@ -227,6 +228,17 @@ export class ServerSetup {
         files.push({ path: '.dockerignore', content: DOCKERIGNORE })
         notes.push('`.dockerignore` keeps `.env` files and installed dependencies out of the image.')
       }
+    }
+    // A database or cache in the Compose file runs beside the app on the server.
+    const compose = COMPOSE_FILES.find((name) => facts.files.includes(name))
+    const services = compose
+      ? composeServices(await git(root, ['cat-file', 'blob', `${ref}:${compose}`]).catch(() => ''))
+      : null
+    if (services && !(await existsAt(root, ref, SERVICES_PATH))) {
+      files.push({ path: SERVICES_PATH, content: services.yaml })
+      notes.push(
+        `\`${SERVICES_PATH}\` runs ${services.names.map((name) => `\`${name}\``).join(', ')} from \`${compose}\` beside the app on the server, reachable by the app under those names and not from the internet. Change it to change what runs there.`,
+      )
     }
     const workflow = await git(root, ['cat-file', 'blob', `${ref}:${SERVER_WORKFLOW_PATH}`]).catch(() => null)
     if (workflow === null) {
