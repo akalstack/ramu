@@ -27,6 +27,10 @@ The same accounts publish artifacts with **Publish to the web** ([Artifacts](art
 - **Deploy to production** builds the default branch. It asks once more, naming the address that changes, before anything starts.
 - **Roll back** on an earlier production deployment makes it live again, after a confirmation naming the address.
 - **Environment variables** lists the variables the app reads (names in `.env.example`, `.env.sample` or `.env.template`, and code that reads `process.env`, `import.meta.env`, `os.environ`, `ENV` or `os.Getenv`) next to where each is set: this host's **Environment variables** ([Providers](providers.md#environment-variables)), GitHub Actions repository secrets, and the platform's preview and production variables. **Sync** copies each value this host has to the places that lack it; values already set elsewhere are not changed. A variable this host has no value for is named, so you can add it in Settings (or an agent can ask for it with `request_secret` and keep it), then sync again. Values are never shown, only names, on this computer and on paired devices.
+- **Domains** lists the project's custom domains (Vercel and Netlify). Type a name such as `www.example.com` and press **Add domain**: Ramu asks the platform to add it and shows, in plain words, each DNS record to create ("At your domain provider, add a CNAME record named www pointing to …"), including the ownership record Vercel asks for when the domain is used elsewhere. A domain itself (`example.com`) gets an A record named `@`.
+  - When the domain's DNS is hosted by the same platform (Vercel DNS or Netlify DNS, on the connected account), **Create records** makes them after one confirmation naming the change.
+  - Each domain shows **Waiting for DNS**, **Waiting for the HTTPS certificate** or **Live over HTTPS**. Where the platform does not report a step, Ramu checks it from the host: public DNS for the records, then an HTTPS request to the domain once the DNS points at the platform.
+  - Ramu checks a newly added domain every minute for up to three days, and when it serves HTTPS it wakes the project's most recent thread with one message, through the same queue as pull request feedback.
 - **Checks** says whether the repository has CI and offers **Set up CI** when it has none ([Set up CI](git-hosting.md#set-up-ci)).
 
 The project stays linked to the account that linked it. If you connect a different account later, deploy actions are refused until you connect that account again or link the project again.
@@ -38,6 +42,8 @@ Threads in a project get deploy tools for that project, on its linked platform a
 - `deploy_status`: the target, live address, what the platform can do, and the latest deployments.
 - `deploy_logs`: the end of a deployment's build log.
 - `deploy_preview`: a preview deployment of the thread's current branch (Vercel; Netlify builds previews from pull requests). Outside Full access it asks first.
+- `deploy_domains`: the project's domains, the records each needs and whether it is live.
+- `deploy_domain_add` and `deploy_domain_records`: add a domain, or create its records in the platform's DNS. They always ask you with a card naming the domain and each record, in every access mode, and the thread is woken when the domain is live.
 - `deploy_production` and `deploy_rollback`: always ask you with an approval card naming the address and what changes, in every access mode. A refusal is final for that request.
 
 A deploy whose reply never arrives is not retried: Ramu reads the deployment list again and reports the deployment it finds, so a retry never deploys twice.

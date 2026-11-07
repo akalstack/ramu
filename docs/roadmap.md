@@ -42,6 +42,8 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 
 - **Secrets sync with real accounts:** a Next.js app with `.env.example` linked to Vercel and to Netlify: the sheet lists each variable against this host, GitHub Actions and the platform's preview and production; **Sync** writes the missing ones (a GitHub secret a workflow can read, Vercel encrypted variables, a Netlify variable already set for production getting a preview value), and a paired phone sees names only.
 
+- **Domains with real accounts:** on Vercel and on Netlify, **Add domain** for a subdomain and a domain itself at an outside DNS provider (the records shown match what the platform's dashboard asks for, including Vercel's ownership TXT record for a domain used elsewhere), **Create records** for a domain on Vercel DNS and on Netlify DNS, the states moving from **Waiting for DNS** to **Live over HTTPS**, the thread woken once, and `deploy_domain_add` and `deploy_domain_records` approval cards from a phone.
+
 Representative tasks to run once the above is available:
 
 - Ask an agent to open Calculator on one computer and compute `(125 * 8) + 42` (expect `1042`) while watching and stopping it from a phone and a second desktop.

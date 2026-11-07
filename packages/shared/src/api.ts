@@ -26,6 +26,7 @@ import type {
   HostingSignIn,
   ProjectDeployment,
   Deployment,
+  DomainStatus,
 } from './types/deploy'
 import type { LimitRetryResult } from './chat/providerWait'
 import type { CiPreview, CiSetupResult } from './ciWorkflow'
@@ -1198,6 +1199,12 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.environment'(projectId: string, repoId: string): EnvSyncStatus
   /** Copies the variables this host has values for to every place that lacks them. Values never come back. */
   'deploy.syncEnvironment'(projectId: string, repoId: string): EnvSyncStatus
+  /** The project's custom domains: the DNS records each needs and whether it serves HTTPS yet. */
+  'deploy.domains'(projectId: string): DomainStatus[]
+  /** Adds a custom domain and watches it until it serves HTTPS, then wakes the project's latest thread. */
+  'deploy.addDomain'(projectId: string, domain: string): DomainStatus
+  /** Creates the domain's records in the platform's own DNS; confirming in the sheet is the person's approval. */
+  'deploy.createRecords'(projectId: string, domain: string): DomainStatus
   /** What Set up CI would add to a repository of the project, from its last fetched default branch. */
   'ci.preview'(projectId: string, repoId: string): CiPreview
   /**

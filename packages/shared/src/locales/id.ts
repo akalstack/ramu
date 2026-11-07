@@ -5776,4 +5776,27 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Aplikasi ini tidak membaca variabel lingkungan di .env.example atau kodenya.',
   'This host has no value for {0}. Add it in Settings → Environment variables, then sync.':
     'Host ini belum punya nilai untuk {0}. Tambahkan di Pengaturan → Variabel lingkungan, lalu sinkronkan.',
+  'At your domain provider, add a TXT record named {0} with the value {1}.':
+    'Di penyedia domain Anda, tambahkan record TXT bernama {0} dengan nilai {1}.',
+  'At your domain provider, add an {0} record for {1} itself (named @) pointing to {2}.':
+    'Di penyedia domain Anda, tambahkan record {0} untuk {1} itu sendiri (bernama @) yang mengarah ke {2}.',
+  'At your domain provider, add a {0} record named {1} pointing to {2}.':
+    'Di penyedia domain Anda, tambahkan record {0} bernama {1} yang mengarah ke {2}.',
+  'Live over HTTPS': 'Aktif melalui HTTPS',
+  'Waiting for the HTTPS certificate': 'Menunggu sertifikat HTTPS',
+  'Waiting for DNS': 'Menunggu DNS',
+  Domains: 'Domain',
+  'Ramu creates these records in {0} DNS, which changes where {1} points.':
+    'Ramu membuat record ini di DNS {0}, yang mengubah tujuan {1}.',
+  'Create records': 'Buat record',
+  'DNS changes can take up to a day to spread. Ramu checks every minute and tells the project’s thread when it is live.':
+    'Perubahan DNS bisa butuh hingga sehari untuk menyebar. Ramu memeriksa setiap menit dan memberi tahu thread proyek saat domain aktif.',
+  'Domain name': 'Nama domain',
+  'Add domain': 'Tambah domain',
+  'Checked domains': 'Memeriksa domain',
+  'Checking domains': 'Memeriksa domain',
+  'Added a domain': 'Menambahkan domain',
+  'Adding a domain': 'Menambahkan domain',
+  'Created DNS records': 'Membuat record DNS',
+  'Creating DNS records': 'Membuat record DNS',
 }

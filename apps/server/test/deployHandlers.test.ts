@@ -36,6 +36,9 @@ it('bounds every input and refuses an unknown platform or project', async () => 
   expect(args('deploy.saveToken', ['vercel', 'x'.repeat(4001)])).toBe(false)
   expect(args('deploy.signInStatus', ['not-a-uuid'])).toBe(false)
   expect(args('deploy.logs', ['p1', 'x'.repeat(201)])).toBe(false)
+  expect(args('deploy.addDomain', ['p1', 'www.shop.id'])).toBe(true)
+  expect(args('deploy.addDomain', ['p1', 'x'.repeat(261)])).toBe(false)
+  expect(args('deploy.createRecords', ['p1', ''])).toBe(false)
   expect(() => methods['deploy.project']!.run('other')).toThrow('not on this host')
   await methods['deploy.link']!.run('p1', 'vercel', 'r1')
   // The platform project is named after the Ramu project.

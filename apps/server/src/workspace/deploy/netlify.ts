@@ -1,7 +1,8 @@
 // Netlify's REST API with the person's own token. Linking sets up Netlify's continuous deployment the way its own
 // CLI does: a read-only deploy key on the repository and a webhook to the site's build hook, both through the
 // repository's existing GitHub account.
-import type { Deployment, DeploymentState } from '@ramu/shared/types/deploy'
+import { apexOf, recordName } from '@ramu/shared/domains'
+import type { Deployment, DeploymentState, DnsRecord } from '@ramu/shared/types/deploy'
 import {
   DeployError,
   platformCall,
@@ -9,6 +10,7 @@ import {
   tail,
   type HostingAdapter,
   type HostingAuth,
+  type PlatformDomain,
 } from './adapter'
 
 interface NetlifyDeploy {
@@ -54,6 +56,29 @@ function deployment(raw: NetlifyDeploy): Deployment {
   }
 }
 
+interface NetlifySite {
+  name?: string
+  default_domain?: string | null
+  custom_domain?: string | null
+  domain_aliases?: string[] | null
+}
+
+interface DnsZone {
+  id: string
+  name: string
+}
+
+/** The Netlify DNS zone a host name belongs to (the longest match), when its DNS is at Netlify. */
+const zoneFor = (zones: DnsZone[], host: string) =>
+  zones
+    .filter((zone) => host === zone.name || host.endsWith(`.${zone.name}`))
+    .sort((a, b) => b.name.length - a.name.length)[0] ?? null
+
+/** Netlify's documented load balancer address for a domain itself, where a CNAME is not allowed. */
+const NETLIFY_A = '75.2.60.5'
+/** Record types that point a name in Netlify DNS at a site. */
+const POINTING = new Set(['NETLIFY', 'NETLIFYv6', 'A', 'AAAA', 'CNAME', 'ALIAS'])
+
 /** Netlify's deploy contexts for the environments Ramu syncs. */
 const CONTEXT = { preview: 'deploy-preview', production: 'production' } as const
 
@@ -82,6 +107,7 @@ export function netlifyAdapter(options: { api?: string; github?: string; fetch?:
     const { account_id: account } = await call<{ account_id: string }>(site(siteId), auth, 'reading the site')
     return `/accounts/${encodeURIComponent(account)}/env?site_id=${encodeURIComponent(siteId)}`
   }
+  const zones = (auth: HostingAuth) => call<DnsZone[]>('/dns_zones', auth, 'reading the DNS zones')
   return {
     id: 'netlify',
     name: 'Netlify',
@@ -239,6 +265,83 @@ export function netlifyAdapter(options: { api?: string; github?: string; fetch?:
             await call(`${path}/${encodeURIComponent(key)}?${query}`, auth, 'setting an environment variable', {
               method: 'PATCH',
               body: JSON.stringify({ context, value }),
+            })
+        },
+      },
+      domains: {
+        async list(auth, target) {
+          const live = await call<NetlifySite>(site(target.siteId), auth, 'reading the site')
+          const names = [live.custom_domain, ...(live.domain_aliases ?? [])].filter((name): name is string => !!name)
+          if (!names.length) return []
+          const defaultDomain = live.default_domain ?? `${live.name ?? target.siteName}.netlify.app`
+          const [ssl, owned] = await Promise.all([
+            // A site without a certificate yet answers 404.
+            call<{ state?: string; domains?: string[] }>(
+              `${site(target.siteId)}/ssl`,
+              auth,
+              'reading the certificate',
+            ).catch(() => null),
+            zones(auth),
+          ])
+          return Promise.all(
+            names.map(async (name): Promise<PlatformDomain> => {
+              const zone = zoneFor(owned, name)
+              const apex = zone?.name ?? apexOf(name)
+              const record: DnsRecord =
+                name === apex
+                  ? { type: 'A', host: name, name: '@', value: NETLIFY_A }
+                  : { type: 'CNAME', host: name, name: recordName(name, apex), value: defaultDomain }
+              const pointed = zone
+                ? (
+                    await call<{ hostname?: string; type?: string }[]>(
+                      `/dns_zones/${encodeURIComponent(zone.id)}/dns_records`,
+                      auth,
+                      'reading the DNS records',
+                    )
+                  ).some((entry) => entry.hostname === name && POINTING.has(entry.type ?? ''))
+                : null
+              return {
+                name,
+                records: [record],
+                // Outside Netlify DNS, Netlify does not report whether the DNS points at it; the service checks.
+                configured: pointed,
+                certificate: ssl?.state === 'issued' && (ssl.domains ?? []).includes(name),
+                managedDns: !!zone,
+                zone: apex,
+              }
+            }),
+          )
+        },
+        async add(auth, target, name) {
+          const live = await call<NetlifySite>(site(target.siteId), auth, 'reading the site')
+          if (live.custom_domain === name || live.domain_aliases?.includes(name)) return
+          // The first domain becomes the site's primary one; later ones are aliases that serve the same site.
+          const change = live.custom_domain
+            ? { domain_aliases: [...(live.domain_aliases ?? []), name] }
+            : { custom_domain: name }
+          await call(site(target.siteId), auth, 'adding the domain', {
+            method: 'PATCH',
+            body: JSON.stringify(change),
+          }).catch((error: unknown) => {
+            if (error instanceof DeployError && error.status === 422)
+              throw new DeployError(
+                `${name} is already used by another Netlify site. Remove it there, then add it again.`,
+                'missing-permission',
+                422,
+              )
+            throw error
+          })
+        },
+        async createRecords(auth, _target, domain) {
+          const zone = zoneFor(await zones(auth), domain.name)
+          if (!zone) throw new DeployError(`${domain.name} does not use Netlify DNS.`, 'not-found')
+          for (const record of domain.records)
+            await call(`/dns_zones/${encodeURIComponent(zone.id)}/dns_records`, auth, 'creating a DNS record', {
+              method: 'POST',
+              body: JSON.stringify({ type: record.type, hostname: record.host, value: record.value, ttl: 3600 }),
+            }).catch((error: unknown) => {
+              // Netlify answers 422 for a record that is already there; creating records twice is not a failure.
+              if (!(error instanceof DeployError && error.status === 422)) throw error
             })
         },
       },

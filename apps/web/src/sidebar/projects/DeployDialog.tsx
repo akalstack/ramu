@@ -17,6 +17,7 @@ import { invoke as openOnThisComputer } from '../../ipc'
 import { errorText } from '../../lib/errors'
 import { useHost } from '../../workspace/HostProvider'
 import { CiSetupSection } from './CiSetup'
+import { DomainsSection } from './Domains'
 import { EnvSyncSection } from './EnvSync'
 
 const STATE: Record<DeploymentState, string> = {
@@ -289,6 +290,9 @@ export function DeployDialog({
               <li className="text-caption text-muted-foreground">{t('No deployments yet.')}</li>
             )}
           </ul>
+          {status.capabilities.includes('domains') && (
+            <DomainsSection projectId={project.id} platform={account?.name ?? binding.platform} />
+          )}
         </>
       )}
       <EnvSyncSection projectId={project.id} repoId={repoId} />

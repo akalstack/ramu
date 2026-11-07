@@ -7,7 +7,7 @@ export const HOSTING_PLATFORMS = ['vercel', 'netlify'] as const
 export type HostingPlatform = (typeof HOSTING_PLATFORMS)[number]
 
 /** What a platform can do beyond the required reads. The UI and agent tools hide what a target lacks. */
-export type HostingCapability = 'linkRepository' | 'deployPreview' | 'deployProduction' | 'rollback'
+export type HostingCapability = 'linkRepository' | 'deployPreview' | 'deployProduction' | 'rollback' | 'domains'
 
 /** Why a platform refused a call, in the words every platform shares. */
 export type DeployFailureKind = 'signed-out' | 'missing-permission' | 'plan-limit' | 'not-found'
@@ -90,4 +90,27 @@ export interface ProjectDeployment {
   deployments: Deployment[]
   /** Why the platform could not be read, with the shared kind when it is one. */
   error: { kind: DeployFailureKind | null; message: string } | null
+}
+
+/** A DNS record to create at the domain's DNS provider. */
+export interface DnsRecord {
+  type: 'A' | 'CNAME' | 'TXT'
+  /** The full host name the record is for. */
+  host: string
+  /** The same name relative to its zone, as DNS providers ask for it: `@` for the domain itself, `www` for www.… */
+  name: string
+  value: string
+}
+
+/** A custom domain on the project's platform, and how far it is from serving the app over HTTPS. */
+export interface DomainStatus {
+  name: string
+  /** What the domain's DNS needs, including an ownership record when the platform asks for one. */
+  records: DnsRecord[]
+  /** The DNS points at the platform (and ownership is verified where the platform checks it). */
+  configured: boolean
+  /** An HTTPS certificate is issued and served for the domain. */
+  certificate: boolean
+  /** The DNS is hosted by the platform itself, so Ramu can create the records through the same account. */
+  managedDns: boolean
 }

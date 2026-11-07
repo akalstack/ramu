@@ -1,18 +1,29 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AgentSessionInfo } from '@ramu/shared/types'
 import { z } from 'zod'
+import { domainName } from '@ramu/shared/domains'
+import type { DnsRecord } from '@ramu/shared/types/deploy'
 import { currentBranch } from '../git'
+import type { DomainWatches } from './domainWatch'
 import type { DeployService } from './service'
 
 const DEPLOY_GUIDE =
-  'Deploy tools work on the project this thread belongs to, on the platform and account linked in its Deploy sheet. Call deploy_status first: it names the platform, the live address, the latest deployments and the capabilities the platform has; never call an action it does not list. Never run vercel or netlify yourself to deploy. deploy_production and deploy_rollback always ask the person; a refusal is final for this request.'
+  'Deploy tools work on the project this thread belongs to, on the platform and account linked in its Deploy sheet. Call deploy_status first: it names the platform, the live address, the latest deployments and the capabilities the platform has; never call an action it does not list. Never run vercel or netlify yourself to deploy. deploy_production, deploy_rollback, deploy_domain_add and deploy_domain_records always ask the person; a refusal is final for this request.'
 
 const deploymentId = z.string().trim().min(1).max(200)
+const domain = z.string().trim().min(1).max(260)
+
+/** One record in plain words, as an approval card names it. */
+const recordText = (record: DnsRecord) =>
+  record.type === 'TXT'
+    ? `a TXT record named ${record.name} with the value ${record.value}`
+    : `${record.type === 'A' ? 'an' : 'a'} ${record.type} record named ${record.name} pointing to ${record.value}`
 
 /** The authenticated MCP connection supplies the session; arguments cannot choose another project or account. */
 export function registerDeployTools(
   server: McpServer,
   deploys: DeployService,
+  watches: Pick<DomainWatches, 'watch'>,
   source: AgentSessionInfo,
   projectId: string,
   current: () => AgentSessionInfo,
@@ -109,6 +120,62 @@ export function registerDeployTools(
       )
       await deploys.rollback(projectId, id)
       return result({ rolledBack: true, deploymentId: id, url })
+    },
+  )
+  server.registerTool(
+    'deploy_domains',
+    {
+      description:
+        'The project’s custom domains on its platform: the DNS records each needs, whether the DNS points there, whether HTTPS is live, and whether its DNS is at the platform (so deploy_domain_records can create the records).',
+      inputSchema: {},
+    },
+    async () => result({ domains: await deploys.domains(projectId) }),
+  )
+  server.registerTool(
+    'deploy_domain_add',
+    {
+      description:
+        'Adds a custom domain (such as www.example.com) to the project on its platform. Always asks the person with a card naming the domain; a refusal is final. Returns the DNS records to create; tell the person each one in plain words, or offer deploy_domain_records when its DNS is at the platform. This thread is woken once the domain serves HTTPS.',
+      inputSchema: { domain },
+    },
+    async ({ domain: input }, extra) => {
+      const name = domainName(input)
+      if (!name) throw new Error('Give a domain name such as www.example.com.')
+      const platform = deploys.platformName(projectId)
+      if (!platform) throw new Error('This project has no deploy target yet. Ask the person to open Deploy.')
+      await ask(
+        `Add the domain ${name} to ${projectName()} on ${platform}. Once its DNS points there, visitors to ${name} see this app.`,
+        extra.signal,
+        'The person declined adding the domain. Do not retry it without a new request.',
+      )
+      const added = await deploys.addDomain(projectId, name)
+      if (!(added.configured && added.certificate)) watches.watch(projectId, added.name, source.parentId ?? source.id)
+      return result({ domain: added })
+    },
+  )
+  server.registerTool(
+    'deploy_domain_records',
+    {
+      description:
+        'Creates the DNS records a project domain needs in the platform’s own DNS, for a domain deploy_domains lists with managedDns. Always asks the person with a card naming each record; a refusal is final.',
+      inputSchema: { domain },
+    },
+    async ({ domain: input }, extra) => {
+      const name = domainName(input)
+      const found = (await deploys.domains(projectId)).find((entry) => entry.name === name)
+      if (!found) throw new Error('That is not a domain of this project. Add it with deploy_domain_add first.')
+      const platform = deploys.platformName(projectId) ?? 'the platform'
+      if (!found.managedDns)
+        throw new Error(`${found.name} does not use ${platform} DNS. Tell the person which records to add instead.`)
+      await ask(
+        `Change the DNS of ${found.name} in ${platform} DNS: create ${found.records.map(recordText).join(', and ')}.`,
+        extra.signal,
+        'The person declined the DNS change. Do not retry it without a new request.',
+      )
+      const updated = await deploys.createRecords(projectId, found.name)
+      if (!(updated.configured && updated.certificate))
+        watches.watch(projectId, updated.name, source.parentId ?? source.id)
+      return result({ domain: updated })
     },
   )
 }

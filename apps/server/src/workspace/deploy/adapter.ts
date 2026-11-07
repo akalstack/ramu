@@ -1,7 +1,13 @@
 // Hosting platforms behind one small interface: the required reads every platform has, and the optional
 // capabilities a platform declares. Callers and the UI see only `@ramu/shared/types/deploy`, so a new platform is one
 // adapter file, its credentials and the contract suite, with no change to callers, IPC or UI.
-import type { Deployment, DeployFailureKind, HostingCapability, HostingPlatform } from '@ramu/shared/types/deploy'
+import type {
+  Deployment,
+  DeployFailureKind,
+  DomainStatus,
+  HostingCapability,
+  HostingPlatform,
+} from '@ramu/shared/types/deploy'
 
 /** The account a call runs as: the token and, for a team on Vercel, the team the project belongs to. */
 export interface HostingAuth {
@@ -55,6 +61,24 @@ export interface HostingCapabilities {
       values: Record<string, string>,
     ): Promise<void>
   }
+  /** Custom domains on the project: adding one, what its DNS needs, and how far it is from serving HTTPS. */
+  domains?: {
+    list(auth: HostingAuth, site: HostingSite): Promise<PlatformDomain[]>
+    add(auth: HostingAuth, site: HostingSite, name: string): Promise<void>
+    /** Creates the domain's records in the platform's own DNS; only for a domain listed with `managedDns`. */
+    createRecords(auth: HostingAuth, site: HostingSite, domain: PlatformDomain): Promise<void>
+  }
+}
+
+/**
+ * A domain as the platform reports it. `configured` and `certificate` are null when the platform does not say, and
+ * the service then checks the DNS and the HTTPS answer itself.
+ */
+export type PlatformDomain = Omit<DomainStatus, 'configured' | 'certificate'> & {
+  configured: boolean | null
+  certificate: boolean | null
+  /** The DNS zone the records belong to, such as `example.com` for `www.example.com`. */
+  zone: string
 }
 
 /** The environments a hosting platform keeps variables for. */
@@ -77,8 +101,8 @@ export interface HostingAdapter {
 
 /** The declared capabilities, by the names the shared types use. */
 export function capabilityNames(adapter: HostingAdapter): HostingCapability[] {
-  const names: HostingCapability[] = ['linkRepository', 'deployPreview', 'deployProduction', 'rollback']
-  return names.filter((name) => typeof adapter.capabilities[name] === 'function')
+  const names: HostingCapability[] = ['linkRepository', 'deployPreview', 'deployProduction', 'rollback', 'domains']
+  return names.filter((name) => !!adapter.capabilities[name])
 }
 
 /** A platform refusal in the shared kinds, or a plain failure (`kind` null) with the status only. */

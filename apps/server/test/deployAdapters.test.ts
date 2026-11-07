@@ -2,8 +2,8 @@
 // and failures mapped to the shared kinds. Each adapter runs against a local fake server with recorded replies.
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { afterEach, describe, expect, it } from 'vitest'
-import type { Deployment, DeployBinding, HostingCapability } from '@ramu/shared/types/deploy'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { Deployment, DeployBinding, DnsRecord, HostingCapability } from '@ramu/shared/types/deploy'
 import { capabilityNames, DeployError, type HostingAdapter, type HostingSite } from '../src/workspace/deploy/adapter'
 import { netlifyAdapter } from '../src/workspace/deploy/netlify'
 import { DeployService } from '../src/workspace/deploy/service'
@@ -74,7 +74,7 @@ const contracts: Contract[] = [
     name: 'Vercel',
     make: (url) => vercelAdapter({ api: url }),
     site: { siteId: 'prj_1', siteName: 'shop' },
-    capabilities: ['linkRepository', 'deployPreview', 'deployProduction', 'rollback'],
+    capabilities: ['linkRepository', 'deployPreview', 'deployProduction', 'rollback', 'domains'],
     first: {
       uid: 'dpl_1',
       url: 'shop-abc.vercel.app',
@@ -133,7 +133,7 @@ const contracts: Contract[] = [
     name: 'Netlify',
     make: (url) => netlifyAdapter({ api: url, github: `${url}/gh` }),
     site: { siteId: 'site_1', siteName: 'shop' },
-    capabilities: ['linkRepository', 'deployProduction', 'rollback'],
+    capabilities: ['linkRepository', 'deployProduction', 'rollback', 'domains'],
     first: {
       id: 'd1',
       state: 'ready',
@@ -300,5 +300,199 @@ describe.each(contracts)('$name hosting adapter', (contract) => {
     expect((failure as DeployError).kind).toBe(kind)
     // The platform's own error text is never passed on.
     expect((failure as Error).message).not.toContain('tok_123')
+  })
+})
+
+/** One adapter's recorded domain replies: www.shop.id on DNS elsewhere, shop.example.com on the platform's own DNS. */
+interface DomainContract {
+  name: string
+  make(url: string): HostingAdapter
+  site: HostingSite
+  routes(created: string[]): Route[]
+  /** The records the platform asks for, by domain. */
+  records: Record<string, DnsRecord[]>
+  external: { configured: boolean | null; certificate: boolean | null }
+  managed: { configured: boolean | null; certificate: boolean | null }
+}
+
+const domainContracts: DomainContract[] = [
+  {
+    name: 'Vercel',
+    make: (url) => vercelAdapter({ api: url }),
+    site: { siteId: 'prj_1', siteName: 'shop' },
+    routes: (created) => [
+      {
+        method: 'GET',
+        path: /^\/v9\/projects\/prj_1\/domains$/,
+        body: {
+          domains: [
+            { name: 'shop-ana.vercel.app', apexName: 'vercel.app', verified: true },
+            {
+              name: 'www.shop.id',
+              apexName: 'shop.id',
+              verified: false,
+              verification: [{ type: 'TXT', domain: '_vercel.shop.id', value: 'vc-domain-verify=www.shop.id,abc' }],
+            },
+            { name: 'shop.example.com', apexName: 'example.com', verified: true },
+          ],
+        },
+      },
+      {
+        method: 'GET',
+        path: /^\/v6\/domains\/www\.shop\.id\/config$/,
+        body: { misconfigured: true, recommendedCNAME: [{ rank: 1, value: 'abc123.vercel-dns-017.com.' }] },
+      },
+      {
+        method: 'GET',
+        path: /^\/v6\/domains\/shop\.example\.com\/config$/,
+        body: { misconfigured: false, recommendedCNAME: [{ rank: 1, value: 'cname.vercel-dns.com.' }] },
+      },
+      { method: 'GET', path: /^\/v5\/domains\/shop\.id$/, status: 404, body: { error: { code: 'not_found' } } },
+      { method: 'GET', path: /^\/v5\/domains\/example\.com$/, body: { domain: { serviceType: 'zeit.world' } } },
+      { method: 'POST', path: /^\/v10\/projects\/prj_1\/domains$/, body: { name: 'www.shop.id' } },
+      {
+        method: 'POST',
+        path: /^\/v2\/domains\/example\.com\/records$/,
+        body: { uid: 'rec_1' },
+        effect: () => created.push('example.com'),
+      },
+    ],
+    records: {
+      'www.shop.id': [
+        { type: 'CNAME', host: 'www.shop.id', name: 'www', value: 'abc123.vercel-dns-017.com' },
+        { type: 'TXT', host: '_vercel.shop.id', name: '_vercel', value: 'vc-domain-verify=www.shop.id,abc' },
+      ],
+      'shop.example.com': [{ type: 'CNAME', host: 'shop.example.com', name: 'shop', value: 'cname.vercel-dns.com' }],
+    },
+    external: { configured: false, certificate: null },
+    managed: { configured: true, certificate: null },
+  },
+  {
+    name: 'Netlify',
+    make: (url) => netlifyAdapter({ api: url }),
+    site: { siteId: 'site_1', siteName: 'shop' },
+    routes: (created) => [
+      {
+        method: 'GET',
+        path: /^\/sites\/site_1$/,
+        body: { name: 'shop', custom_domain: 'www.shop.id', domain_aliases: ['shop.example.com'] },
+      },
+      { method: 'GET', path: /^\/sites\/site_1\/ssl$/, body: { state: 'issued', domains: ['shop.example.com'] } },
+      { method: 'GET', path: /^\/dns_zones$/, body: [{ id: 'zone_1', name: 'example.com' }] },
+      {
+        method: 'GET',
+        path: /^\/dns_zones\/zone_1\/dns_records$/,
+        body: [{ hostname: 'shop.example.com', type: 'NETLIFY', value: 'shop.netlify.app' }],
+      },
+      { method: 'PATCH', path: /^\/sites\/site_1$/, body: {} },
+      {
+        method: 'POST',
+        path: /^\/dns_zones\/zone_1\/dns_records$/,
+        body: { id: 'rec_1' },
+        effect: () => created.push('example.com'),
+      },
+    ],
+    records: {
+      'www.shop.id': [{ type: 'CNAME', host: 'www.shop.id', name: 'www', value: 'shop.netlify.app' }],
+      'shop.example.com': [{ type: 'CNAME', host: 'shop.example.com', name: 'shop', value: 'shop.netlify.app' }],
+    },
+    external: { configured: null, certificate: false },
+    managed: { configured: true, certificate: true },
+  },
+]
+
+describe.each(domainContracts)('$name domains', (contract) => {
+  const setup = async () => {
+    const created: string[] = []
+    const server = await fake(contract.routes(created))
+    return { server, created, domains: contract.make(server.url).capabilities.domains! }
+  }
+
+  it('lists custom domains with the records their DNS needs, in the zone’s own names', async () => {
+    const { domains } = await setup()
+    const listed = await domains.list(auth, contract.site)
+    expect(listed.map((domain) => domain.name)).toEqual(['www.shop.id', 'shop.example.com'])
+    for (const domain of listed) expect(domain.records).toEqual(contract.records[domain.name])
+    expect(listed[0]).toMatchObject({ ...contract.external, managedDns: false, zone: 'shop.id' })
+    expect(listed[1]).toMatchObject({ ...contract.managed, managedDns: true, zone: 'example.com' })
+  })
+
+  it('adds a domain and creates records only through the platform’s DNS', async () => {
+    const { domains, server, created } = await setup()
+    await domains.add(auth, contract.site, 'shop.example.org')
+    expect(server.requests.some((line) => /^(POST|PATCH) /.test(line))).toBe(true)
+    const managed = (await domains.list(auth, contract.site))[1]!
+    await domains.createRecords(auth, contract.site, managed)
+    expect(created).toEqual(['example.com'])
+    expect(server.requests.join('\n')).not.toContain('tok_123')
+  })
+})
+
+describe('domain state the platform does not report', () => {
+  const probes = (resolves: boolean, https: boolean) => ({
+    resolves: vi.fn(async () => resolves),
+    https: vi.fn(async () => https),
+  })
+  const service = (adapter: HostingAdapter, checks: ReturnType<typeof probes>, siteId = 'site_1') =>
+    new DeployService(
+      {
+        getState: <T>() =>
+          ({
+            platform: adapter.id,
+            siteId,
+            siteName: 'shop',
+            repository: 'ana/shop',
+            productionBranch: 'main',
+            accountId: 'u1',
+            scope: null,
+          }) as T,
+        setState: () => {},
+        stackTarget: () => null,
+        githubRepository: async () => repository,
+      },
+      { auth: async () => ({ auth, accountId: 'u1', defaultScope: null }) } as never,
+      () => adapter,
+      checks,
+    )
+
+  it('checks public DNS, then HTTPS only once the DNS points at the platform', async () => {
+    const server = await fake(domainContracts[1]!.routes([]))
+    const adapter = netlifyAdapter({ api: server.url })
+    const pointing = probes(true, true)
+    const [external] = await service(adapter, pointing).domains('project')
+    expect(external).toMatchObject({ name: 'www.shop.id', configured: true, certificate: false })
+    // Netlify reports the certificate itself, so only the DNS was looked up.
+    expect(pointing.resolves).toHaveBeenCalledWith(domainContracts[1]!.records['www.shop.id']![0])
+    expect(pointing.https).not.toHaveBeenCalled()
+
+    const vercel = await fake(domainContracts[0]!.routes([]))
+    const unchecked = probes(false, true)
+    const listed = await service(vercelAdapter({ api: vercel.url }), unchecked, 'prj_1').domains('project')
+    expect(listed.map((domain) => [domain.name, domain.configured, domain.certificate])).toEqual([
+      ['www.shop.id', false, false],
+      ['shop.example.com', true, true],
+    ])
+    expect(unchecked.https).toHaveBeenCalledTimes(1)
+    expect(unchecked.https).toHaveBeenCalledWith('shop.example.com')
+  })
+
+  it('refuses a name that is not a domain, and Create records outside the platform’s DNS', async () => {
+    const server = await fake(domainContracts[1]!.routes([]))
+    const deploys = service(netlifyAdapter({ api: server.url }), probes(false, false))
+    await expect(deploys.addDomain('project', 'not a domain')).rejects.toThrow('domain name')
+    await expect(deploys.createRecords('project', 'www.shop.id')).rejects.toThrow('does not use Netlify DNS')
+    expect(server.requests.filter((line) => !line.startsWith('GET'))).toEqual([])
+  })
+
+  it('reports a domain the platform already lists instead of failing when adding it again', async () => {
+    const server = await fake([
+      { method: 'PATCH', path: /^\/sites\/site_1$/, drop: true },
+      ...domainContracts[1]!.routes([]),
+    ])
+    const added = await service(netlifyAdapter({ api: server.url }), probes(false, false)).addDomain(
+      'project',
+      'https://WWW.shop.id/',
+    )
+    expect(added.name).toBe('www.shop.id')
   })
 })

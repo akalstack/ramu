@@ -1,6 +1,7 @@
 // Vercel's REST API with the person's own token. Linking uses Vercel's GitHub integration, so every pull request gets
 // a preview and the default branch deploys to production without a token in CI.
-import type { Deployment, DeploymentState } from '@ramu/shared/types/deploy'
+import { recordName } from '@ramu/shared/domains'
+import type { Deployment, DeploymentState, DnsRecord } from '@ramu/shared/types/deploy'
 import {
   DeployError,
   platformCall,
@@ -9,6 +10,7 @@ import {
   type HostingAdapter,
   type HostingAuth,
   type HostingSite,
+  type PlatformDomain,
 } from './adapter'
 
 interface VercelDeployment {
@@ -22,6 +24,25 @@ interface VercelDeployment {
   createdAt?: number
   meta?: { githubCommitRef?: string; githubCommitSha?: string; githubCommitMessage?: string }
 }
+
+interface VercelDomain {
+  name: string
+  apexName?: string
+  verified?: boolean
+  verification?: { type?: string; domain?: string; value?: string }[]
+}
+
+interface VercelDomainConfig {
+  misconfigured?: boolean
+  recommendedIPv4?: { rank?: number; value?: string[] }[]
+  recommendedCNAME?: { rank?: number; value?: string }[]
+}
+
+/** Vercel's documented defaults, used when its recommendation is missing from the reply. */
+const VERCEL_A = '76.76.21.21'
+const VERCEL_CNAME = 'cname.vercel-dns.com'
+/** Domains read per project, so a project with many aliases cannot fan out into hundreds of calls. */
+const DOMAINS_READ = 20
 
 const STATES: Record<string, DeploymentState> = {
   QUEUED: 'queued',
@@ -75,6 +96,52 @@ export function vercelAdapter(options: { api?: string; fetch?: typeof fetch } = 
       }),
     })
     return deployment(created)
+  }
+  const readDomain = async (auth: HostingAuth, domain: VercelDomain): Promise<PlatformDomain> => {
+    const apex = domain.apexName ?? domain.name
+    const [config, owned] = await Promise.all([
+      call<VercelDomainConfig>(`/v6/domains/${encodeURIComponent(domain.name)}/config`, auth, 'reading the domain'),
+      // A domain bought elsewhere is not in the account at all; that only means its DNS is elsewhere.
+      call<{ domain?: { serviceType?: string } }>(
+        `/v5/domains/${encodeURIComponent(apex)}`,
+        auth,
+        'reading the domain',
+      ).catch((error: unknown) => {
+        if (error instanceof DeployError && (error.kind === 'not-found' || error.kind === 'missing-permission'))
+          return null
+        throw error
+      }),
+    ])
+    const best = <T extends { rank?: number }>(list: T[] | undefined) =>
+      [...(list ?? [])].sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0))[0]
+    const pointing: DnsRecord =
+      domain.name === apex
+        ? { type: 'A', host: apex, name: '@', value: best(config.recommendedIPv4)?.value?.[0] ?? VERCEL_A }
+        : {
+            type: 'CNAME',
+            host: domain.name,
+            name: recordName(domain.name, apex),
+            value: (best(config.recommendedCNAME)?.value ?? VERCEL_CNAME).replace(/\.$/, ''),
+          }
+    const ownership: DnsRecord[] = domain.verified
+      ? []
+      : (domain.verification ?? [])
+          .filter((entry) => entry.type === 'TXT' && entry.domain && entry.value)
+          .map((entry) => ({
+            type: 'TXT' as const,
+            host: entry.domain!,
+            name: recordName(entry.domain!, apex),
+            value: entry.value!,
+          }))
+    return {
+      name: domain.name,
+      records: [pointing, ...ownership],
+      configured: domain.verified !== false && config.misconfigured === false,
+      // Vercel issues the certificate on its own once the DNS is right, and does not report it per domain.
+      certificate: null,
+      managedDns: owned?.domain?.serviceType === 'zeit.world',
+      zone: apex,
+    }
   }
   return {
     id: 'vercel',
@@ -209,6 +276,47 @@ export function vercelAdapter(options: { api?: string; fetch?: typeof fetch } = 
             },
             { upsert: 'true' },
           )
+        },
+      },
+      domains: {
+        async list(auth, site) {
+          const { domains } = await call<{ domains?: VercelDomain[] }>(
+            `/v9/projects/${project(site)}/domains`,
+            auth,
+            'reading the project domains',
+          )
+          // Vercel's own `*.vercel.app` names need no DNS.
+          const custom = (domains ?? []).filter((domain) => !domain.name.endsWith('.vercel.app')).slice(0, DOMAINS_READ)
+          return Promise.all(custom.map((domain) => readDomain(auth, domain)))
+        },
+        async add(auth, site, name) {
+          await call(`/v10/projects/${project(site)}/domains`, auth, 'adding the domain', {
+            method: 'POST',
+            body: JSON.stringify({ name }),
+          }).catch((error: unknown) => {
+            if (error instanceof DeployError && error.status === 409)
+              throw new DeployError(
+                `${name} is already used by another Vercel project or account. Remove it there, then add it again.`,
+                'missing-permission',
+                409,
+              )
+            throw error
+          })
+        },
+        async createRecords(auth, _site, domain) {
+          for (const record of domain.records)
+            await call(`/v2/domains/${encodeURIComponent(domain.zone)}/records`, auth, 'creating a DNS record', {
+              method: 'POST',
+              body: JSON.stringify({
+                name: record.name === '@' ? '' : record.name,
+                type: record.type,
+                value: record.value,
+                ttl: 60,
+              }),
+            }).catch((error: unknown) => {
+              // Vercel answers 409 for a record that is already there; creating records twice is not a failure.
+              if (!(error instanceof DeployError && error.status === 409)) throw error
+            })
         },
       },
       async rollback(auth, site, deploymentId) {

@@ -1,8 +1,11 @@
+import type { AgentService } from '../../agent'
 import { HostCredentialStore } from '../../credentials/store'
+import type { Db } from '../../db'
 import { forgeRemoteOf, repositoryToken } from '../forge/github'
 import { commitBranchInfo } from '../git'
 import type { Workspace } from '../workspace'
 import { HostingAccounts } from './accounts'
+import { DomainWatches } from './domainWatch'
 import { DeployService } from './service'
 import { HostingSignIns } from './signIn'
 
@@ -11,9 +14,15 @@ export interface Deploys {
   accounts: HostingAccounts
   service: DeployService
   signIns: HostingSignIns
+  domains: DomainWatches
 }
 
-export function createDeploys(workspace: Workspace, credentials = new HostCredentialStore()): Deploys {
+export function createDeploys(
+  workspace: Workspace,
+  db: Db,
+  agents: AgentService,
+  credentials = new HostCredentialStore(),
+): Deploys {
   const getState = <T>(key: string, fallback: T) => workspace.getAppState(key, fallback)
   const setState = (key: string, value: unknown) => workspace.setAppState(key, value)
   const accounts = new HostingAccounts(getState, setState, credentials)
@@ -42,5 +51,10 @@ export function createDeploys(workspace: Workspace, credentials = new HostCreden
     },
     accounts,
   )
-  return { accounts, service, signIns: new HostingSignIns(accounts) }
+  return {
+    accounts,
+    service,
+    signIns: new HostingSignIns(accounts),
+    domains: new DomainWatches(db, workspace, agents, service),
+  }
 }

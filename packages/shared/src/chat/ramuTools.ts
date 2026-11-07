@@ -51,6 +51,9 @@ const KNOWN = new Set([
   'deploy_preview',
   'deploy_production',
   'deploy_rollback',
+  'deploy_domains',
+  'deploy_domain_add',
+  'deploy_domain_records',
   'ci_setup',
   'skill_update',
   'skill_archive',
@@ -262,6 +265,12 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
       return reply('Deployed to production', 'Deploying to production', 'wrench', text(data.url))
     case 'deploy_rollback':
       return reply('Rolled back production', 'Rolling back production', 'wrench', text(data.url))
+    case 'deploy_domains':
+      return reply('Checked domains', 'Checking domains', 'search')
+    case 'deploy_domain_add':
+      return reply('Added a domain', 'Adding a domain', 'wrench', text(args.domain))
+    case 'deploy_domain_records':
+      return reply('Created DNS records', 'Creating DNS records', 'wrench', text(args.domain))
     case 'ci_setup':
       return reply(
         data.written === false ? 'Read the CI workflow' : 'Wrote the CI workflow',

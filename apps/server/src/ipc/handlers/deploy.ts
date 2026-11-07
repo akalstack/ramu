@@ -17,6 +17,7 @@ import type { RegisterHandlers } from '../types'
 const platform = z.enum(HOSTING_PLATFORMS)
 const signIn = z.string().uuid()
 const deploymentId = z.string().trim().min(1).max(200)
+const domain = z.string().trim().min(1).max(260)
 
 /** A platform project name from the Ramu project's name: lowercase letters, digits and dashes. */
 const siteName = (name: string) =>
@@ -117,6 +118,28 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
         exclusive(projectId, async () => {
           const { variables, host, others } = await environment(projectId, repoId)
           return syncEnv(variables, host, others)
+        }),
+    },
+    'deploy.domains': {
+      args: z.tuple([id]),
+      run: (projectId: string) => deploys().service.domains(project(projectId)),
+    },
+    'deploy.addDomain': {
+      args: z.tuple([id, domain]),
+      run: (projectId: string, name: string) =>
+        exclusive(projectId, async () => {
+          const added = await deploys().service.addDomain(project(projectId), name)
+          if (!(added.configured && added.certificate)) deploys().domains.watch(projectId, added.name, null)
+          return added
+        }),
+    },
+    'deploy.createRecords': {
+      args: z.tuple([id, domain]),
+      run: (projectId: string, name: string) =>
+        exclusive(projectId, async () => {
+          const updated = await deploys().service.createRecords(project(projectId), name)
+          if (!(updated.configured && updated.certificate)) deploys().domains.watch(projectId, updated.name, null)
+          return updated
         }),
     },
     'deploy.rollback': {

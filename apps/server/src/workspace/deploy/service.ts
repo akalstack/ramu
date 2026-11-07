@@ -2,7 +2,14 @@
 // checks the binding against the account that is connected now, so a project linked under one account is never
 // deployed or rolled back with another.
 import { STACKS, type DeployTargetId, type StackId } from '@ramu/shared/stacks'
-import type { Deployment, DeployBinding, HostingPlatform, ProjectDeployment } from '@ramu/shared/types/deploy'
+import { domainName } from '@ramu/shared/domains'
+import type {
+  Deployment,
+  DeployBinding,
+  DomainStatus,
+  HostingPlatform,
+  ProjectDeployment,
+} from '@ramu/shared/types/deploy'
 import { HOSTING_PLATFORMS } from '@ramu/shared/types/deploy'
 import {
   capabilityNames,
@@ -11,9 +18,11 @@ import {
   ReplyLostError,
   type HostingAdapter,
   type HostingAuth,
+  type PlatformDomain,
   type RepositoryLink,
 } from './adapter'
 import type { HostingAccounts } from './accounts'
+import { liveProbes, type DomainProbes } from './domains'
 import type { EnvTarget } from './envSync'
 
 const LISTED = 10
@@ -36,6 +45,7 @@ export class DeployService {
     private readonly host: DeployHost,
     private readonly accounts: HostingAccounts,
     private readonly adapter: (platform: HostingPlatform) => HostingAdapter = hostingAdapter,
+    private readonly probes: DomainProbes = liveProbes,
   ) {}
 
   binding(projectId: string): DeployBinding | null {
@@ -190,5 +200,69 @@ export class DeployService {
         throw new Error(`${adapter.name} did not answer. Check the live site before trying again.`, { cause: error })
       throw error
     }
+  }
+
+  /** The bound platform's name, such as "Vercel", for cards that name where a change happens. */
+  platformName(projectId: string): string | null {
+    const binding = this.binding(projectId)
+    return binding ? this.adapter(binding.platform).name : null
+  }
+
+  private async domainAccess(projectId: string) {
+    const { binding, auth } = await this.bound(projectId)
+    const adapter = this.adapter(binding.platform)
+    const domains = adapter.capabilities.domains
+    if (!domains) throw new Error(`${adapter.name} cannot add domains from Ramu yet.`)
+    return { binding, auth, adapter, domains }
+  }
+
+  /** What the platform does not report is checked here: the DNS first, and HTTPS only once the DNS points there. */
+  private async settle({ zone: _zone, ...domain }: PlatformDomain): Promise<DomainStatus> {
+    const pointing = domain.records.filter((record) => record.type !== 'TXT')
+    const configured =
+      domain.configured ??
+      (domain.certificate === true ||
+        (pointing.length > 0 &&
+          (await Promise.all(pointing.map((record) => this.probes.resolves(record)))).every(Boolean)))
+    const certificate = domain.certificate ?? (configured && (await this.probes.https(domain.name)))
+    return { ...domain, configured, certificate }
+  }
+
+  async domains(projectId: string): Promise<DomainStatus[]> {
+    const { binding, auth, domains } = await this.domainAccess(projectId)
+    return Promise.all((await domains.list(auth, binding)).map((domain) => this.settle(domain)))
+  }
+
+  /**
+   * Adds a custom domain to the project. Adding one that is already there, or one whose reply was lost after the
+   * platform added it, reports the domain instead of failing.
+   */
+  async addDomain(projectId: string, input: string): Promise<DomainStatus> {
+    const name = domainName(input)
+    if (!name) throw new Error('Enter a domain name such as www.example.com.')
+    const { binding, auth, adapter, domains } = await this.domainAccess(projectId)
+    let failure: unknown = null
+    await domains.add(auth, binding, name).catch((error: unknown) => {
+      failure = error
+    })
+    const added = (await domains.list(auth, binding)).find((domain) => domain.name === name)
+    if (added) return this.settle(added)
+    if (failure instanceof ReplyLostError)
+      throw new Error(`${adapter.name} did not answer, and ${name} is not listed. Try adding it again.`, {
+        cause: failure,
+      })
+    throw failure ?? new Error(`${adapter.name} did not list ${name} after adding it.`)
+  }
+
+  /** Creates a domain's records in the platform's own DNS, for a domain whose DNS is hosted there. */
+  async createRecords(projectId: string, name: string): Promise<DomainStatus> {
+    const { binding, auth, adapter, domains } = await this.domainAccess(projectId)
+    const domain = (await domains.list(auth, binding)).find((entry) => entry.name === name)
+    if (!domain) throw new Error(`${name} is not a domain of this project. Add it first.`)
+    if (!domain.managedDns)
+      throw new Error(`${name} does not use ${adapter.name} DNS. Add the records at your domain provider.`)
+    await domains.createRecords(auth, binding, domain)
+    const after = (await domains.list(auth, binding)).find((entry) => entry.name === name)
+    return this.settle(after ?? domain)
   }
 }
