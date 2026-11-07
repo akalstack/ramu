@@ -181,3 +181,22 @@ it('knows who a draft brings in before its words are written, and how they start
     'take-over',
   )
 })
+
+it('brings in the model this host picks for an ability with @images, @search or @long', () => {
+  const images = model({ provider: 'codex', id: 'gpt-image', name: 'GPT Sol' })
+  const models = [model({ provider: 'claude-code', id: 'opus', name: 'Opus 5.5' })]
+  expect(resolveMention('@images draw the hero', [], models, [], { images })).toEqual({
+    kind: 'model',
+    model: images,
+    body: 'draw the hero',
+  })
+  // A handle no provider here can serve stays with the lead; a teammate already named that way still wins.
+  expect(resolveMention('@search find hosts', [], models, [], { images })).toBeNull()
+  expect(resolveMention('@images again', [task({ name: 'images' })], models, [], { images })?.kind).toBe('teammate')
+  expect(draftMention('@images ', [], models, [], { images })?.kind).toBe('model')
+  expect(draftMentions([], models, [], { images })).toContainEqual({
+    handle: 'images',
+    label: 'images · GPT Sol',
+    provider: 'codex',
+  })
+})

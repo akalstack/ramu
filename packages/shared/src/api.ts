@@ -18,7 +18,7 @@ import type { AppUpdateStatus } from './updates'
 import type { NearbyHostsState } from './discovery/tracker'
 import type { AgentSetupSnapshot } from './agentSetup'
 import type { AccountLogin, ProviderConfiguration, ProviderStatus } from './providers/providers'
-import type { AbilityCall, AbilityCheck } from './providers/abilities'
+import type { AbilityCall, AbilityCheck, AbilityHandle } from './providers/abilities'
 import type {
   HostingAccount,
   HostingAccountsSummary,
@@ -1053,6 +1053,8 @@ export interface RamuMethods extends ArtifactMethods {
   'abilities.checks'(): { checks: AbilityCheck[]; running: boolean }
   /** Runs one provider's ability checks again (one small request per ability). */
   'abilities.check'(provider: ProviderStatus['provider']): Promise<AbilityCheck[]>
+  /** The model `@images`, `@search` and `@long` bring in as a teammate, for each handle a provider here can serve. */
+  'abilities.teammateModels'(): Promise<Partial<Record<AbilityHandle, import('./types').AgentModel>>>
   /** Runs a finished ability call again with the same input, on any provider or only on one other than the first. */
   'abilities.again'(sessionId: string, callId: string, otherProvider: boolean): Promise<AbilityCall>
   'providers.updates'(): Promise<ProviderStatus[]>

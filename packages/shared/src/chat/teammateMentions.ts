@@ -4,6 +4,10 @@ import type { AgentModel, AgentSettings, AgentTask, TeammateMode } from '../type
 import type { CustomAgent } from '../customAgents'
 import { namesTeammate, teammateHandle } from './agentTasks'
 import type { DraftMention } from './composerDraft'
+import type { AbilityHandle } from '../providers/abilities'
+
+/** The model each `@ability` handle brings in on this host (from `abilities.teammateModels`). */
+export type AbilityModels = Partial<Record<AbilityHandle, AgentModel>>
 
 /** The handle a model is addressed by: its display name, as the model menu shows it, in lower case with dashes. */
 export const modelHandle = (model: Pick<AgentModel, 'id' | 'name'>) => teammateHandle(model.name || model.id)
@@ -23,9 +27,10 @@ export function resolveMention(
   teammates: readonly AgentTask[],
   models: readonly AgentModel[],
   agents: readonly CustomAgent[] = [],
+  byAbility: AbilityModels = {},
 ): MentionTarget | null {
   const match = /^@(\S+)\s+([\s\S]+)$/.exec(text.trim())
-  return match ? resolveHandle(match[1]!, match[2]!.trim(), teammates, models, agents) : null
+  return match ? resolveHandle(match[1]!, match[2]!.trim(), teammates, models, agents, byAbility) : null
 }
 
 /**
@@ -37,9 +42,10 @@ export function draftMention(
   teammates: readonly AgentTask[],
   models: readonly AgentModel[],
   agents: readonly CustomAgent[] = [],
+  byAbility: AbilityModels = {},
 ): MentionTarget | null {
   const match = /^@(\S+)\s([\s\S]*)$/.exec(text)
-  return match ? resolveHandle(match[1]!, match[2]!.trim(), teammates, models, agents) : null
+  return match ? resolveHandle(match[1]!, match[2]!.trim(), teammates, models, agents, byAbility) : null
 }
 
 /** Everyone a message can start with, for drawing `@handle` as who it is: teammates, custom agents, then models. */
@@ -47,6 +53,7 @@ export function draftMentions(
   teammates: readonly AgentTask[],
   models: readonly AgentModel[],
   agents: readonly CustomAgent[] = [],
+  byAbility: AbilityModels = {},
 ): DraftMention[] {
   const seen = new Set<string>()
   const mentions: DraftMention[] = []
@@ -67,6 +74,8 @@ export function draftMentions(
       label: agent.name,
       ...(agent.model ? { provider: agent.model.provider } : {}),
     })
+  for (const [handle, model] of Object.entries(byAbility) as [AbilityHandle, AgentModel][])
+    add({ handle, label: `${handle} · ${model.name || model.id}`, provider: model.provider })
   // A current model before a legacy one of the same name, matching how a message is routed.
   for (const model of [...models].sort((a, b) => Number(!!a.isLegacy) - Number(!!b.isLegacy)))
     add({ handle: modelHandle(model), label: model.name || model.id, provider: model.provider })
@@ -79,6 +88,7 @@ function resolveHandle(
   teammates: readonly AgentTask[],
   models: readonly AgentModel[],
   agents: readonly CustomAgent[],
+  byAbility: AbilityModels,
 ): MentionTarget | null {
   const handle = raw.toLowerCase()
   if (handle === 'teammate') return teammates.length === 1 ? { kind: 'teammate', task: teammates[0]!, body } : null
@@ -86,6 +96,9 @@ function resolveHandle(
   if (task) return { kind: 'teammate', task, body }
   const agent = agents.find((entry) => teammateHandle(entry.name) === handle)
   if (agent) return { kind: 'agent', agent, body }
+  // `@images` and the other ability handles join as the model this host picks for that ability.
+  const viaAbility = Object.hasOwn(byAbility, handle) ? byAbility[handle as AbilityHandle] : undefined
+  if (viaAbility) return { kind: 'model', model: viaAbility, body }
   const model =
     models.find((entry) => !entry.isLegacy && modelHandle(entry) === handle) ??
     models.find((entry) => modelHandle(entry) === handle || entry.id.toLowerCase() === handle)

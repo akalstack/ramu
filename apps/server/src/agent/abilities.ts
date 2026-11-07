@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { extname, isAbsolute, join, relative } from 'node:path'
 import { z } from 'zod'
 import {
+  ABILITY_HANDLES,
   ABILITY_LABELS,
   ABILITY_TOOLS,
   DEFAULT_ABILITY_PREFERENCES,
@@ -12,6 +13,7 @@ import {
   type Ability,
   type AbilityCall,
   type AbilityCheck,
+  type AbilityHandle,
   type AbilityListing,
   type AbilityRoute,
   type AbilitySource,
@@ -284,6 +286,16 @@ export class AbilityService {
       default:
         return { ok: false, detail: 'Ramu has no check for this ability yet.' }
     }
+  }
+
+  /** The model each `@ability` handle brings in as a teammate here; a handle no provider can serve is left out. */
+  async teammateModels(): Promise<Partial<Record<AbilityHandle, AgentModel>>> {
+    const models: Partial<Record<AbilityHandle, AgentModel>> = {}
+    for (const [handle, ability] of Object.entries(ABILITY_HANDLES) as [AbilityHandle, Ability][]) {
+      const model = await this.helperModel([ability]).catch(() => null)
+      if (model) models[handle] = model
+    }
+    return models
   }
 
   /** The provider and model for a helper whose job needs every listed ability, or an error naming what is missing. */

@@ -7,7 +7,13 @@ import { ProviderIcon } from '../../../models/ProviderIcon'
 import type { AgentModel, AgentSettings, AgentTask, TeammateMode } from '@ramu/shared/types'
 import { teammateHandle } from '@ramu/shared/chat/agentTasks'
 import { helperActive, helperStatusLabel } from '@ramu/shared/chat/helperPresentation'
-import { draftMention, joiningTeammate, modelHandle, type MentionTarget } from '@ramu/shared/chat/teammateMentions'
+import {
+  draftMention,
+  joiningTeammate,
+  modelHandle,
+  type AbilityModels,
+  type MentionTarget,
+} from '@ramu/shared/chat/teammateMentions'
 import type { CustomAgent } from '@ramu/shared/customAgents'
 import { Menu } from '../../../Menu'
 import { CHIP } from '../../../models/ProviderRoute'
@@ -40,6 +46,7 @@ export function useJoiningTeammate({
   teammates,
   models,
   agents,
+  abilityModels,
 }: {
   draft: string
   setDraft: (draft: string) => void
@@ -48,8 +55,9 @@ export function useJoiningTeammate({
   teammates: readonly AgentTask[]
   models: readonly AgentModel[]
   agents: readonly CustomAgent[]
+  abilityModels: AbilityModels
 }): JoiningTeammate | null {
-  const found = base ? draftMention(draft, teammates, models, agents) : null
+  const found = base ? draftMention(draft, teammates, models, agents, abilityModels) : null
   const target = found && found.kind !== 'teammate' ? found : null
   const start = target && base ? joiningTeammate(target, base) : null
   const key = start?.key ?? ''

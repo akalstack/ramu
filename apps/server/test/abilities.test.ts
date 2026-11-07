@@ -332,6 +332,15 @@ describe('helpers by ability', () => {
     await expect(abilities.helperModel(['image_generation', 'long_context'])).rejects.toThrow('No single provider')
     await expect(abilities.helperModel(['video_generation'])).rejects.toThrow('video generation')
   })
+
+  it('names the model each @ability handle brings in, routed like a helper that needs that ability', async () => {
+    const abilities = service(working)
+    await abilities.refresh()
+    const models = await abilities.teammateModels()
+    expect(models.images).toMatchObject({ provider: 'codex', id: 'gpt-x' })
+    expect(models.long?.provider).toBe('claude-code')
+    expect(Object.keys(models).sort()).toEqual(['images', 'long', 'search'])
+  })
 })
 
 describe('Codex ability runs', () => {

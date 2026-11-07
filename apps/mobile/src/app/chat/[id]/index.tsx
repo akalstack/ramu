@@ -82,6 +82,7 @@ import {
   joiningTeammate,
   modelHandle,
   resolveMention,
+  type AbilityModels,
 } from '@ramu/shared/chat/teammateMentions'
 import type { CustomAgent } from '@ramu/shared/customAgents'
 import type { Chat, TranscriptItem } from '../../../runtime/types'
@@ -387,6 +388,12 @@ export default function ChatScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [hostId, viewer] by design; the store is current as of that run
   }, [hostId, viewer])
   const agents = useMemo(() => (viewer ? [] : customAgents), [customAgents, viewer])
+  // `@images` and the other ability handles bring in whichever model the host picks for that ability.
+  const [abilityModels, setAbilityModels] = useState<AbilityModels>({})
+  useEffect(() => {
+    if (hostId && !viewer) void store.invoke(hostId, 'abilities.teammateModels').then(setAbilityModels, () => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [hostId, viewer] by design; the store is current as of that run
+  }, [hostId, viewer])
   const chatDraftKey = chat ? `${chat.computerId}:chat:${chat.taskId || chat.id}` : ''
   const draftText = (chatDraftKey && store.drafts[chatDraftKey]) || ''
   // Puts a draft in the box and the store at once, so who it brings in follows straight away.
@@ -408,11 +415,11 @@ export default function ChatScreen() {
       teammates: teammates.map((task) => ({ name: task.name, mode: task.teammate ?? ('review' as const) })),
       models,
       agents,
-      mentions: draftMentions(teammates, models, agents),
+      mentions: draftMentions(teammates, models, agents, abilityModels),
       ...(viewer ? {} : { onAdd: startTeammate }),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- startTeammate reads the draft and chat current at the tap
-    [teammates, models, agents, viewer],
+    [teammates, models, agents, abilityModels, viewer],
   )
   // Editing a sent message keeps its place with the draft text: leaving the chat or restarting does not drop it.
   const editDraftKey = chat ? `${chat.computerId}:chat:${chat.taskId || chat.id}:editing` : null
@@ -636,7 +643,9 @@ export default function ChatScreen() {
   const currentModel = { provider: chat.provider, model: chat.model, effort: chat.effort, settings: chat.settings }
   // While the draft starts with `@model` or `@custom-agent`, the composer's model chip and mode are that teammate's.
   const joinTarget =
-    chat.settings && chat.sessionId && !viewer ? draftMention(draftText, teammates, models, agents) : null
+    chat.settings && chat.sessionId && !viewer
+      ? draftMention(draftText, teammates, models, agents, abilityModels)
+      : null
   const joinStart = joinTarget && joinTarget.kind !== 'teammate' ? joiningTeammate(joinTarget, chat.settings!) : null
   const joinOwn = joinStart && joinEdits.key === joinStart.key ? joinEdits : null
   const joining = joinStart
@@ -1495,7 +1504,7 @@ export default function ChatScreen() {
                         if (lead) setRecipientId(null)
                         const mention =
                           chat.sessionId && chat.settings && !attachments?.length && !lead
-                            ? resolveMention(text, teammates, models, agents)
+                            ? resolveMention(text, teammates, models, agents, abilityModels)
                             : null
                         const target =
                           mention ??

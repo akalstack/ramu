@@ -49,7 +49,13 @@ import {
   parseTaskMessage,
   parseTaskStop,
 } from '@ramu/shared/chat/agentTasks'
-import { draftMentions, modelHandle, resolveMention, teammateSettings } from '@ramu/shared/chat/teammateMentions'
+import {
+  draftMentions,
+  modelHandle,
+  resolveMention,
+  teammateSettings,
+  type AbilityModels,
+} from '@ramu/shared/chat/teammateMentions'
 import type { CustomAgent } from '@ramu/shared/customAgents'
 import { useModelSets } from '../models/ModelSets'
 import type { AgentTask } from '@ramu/shared/types'
@@ -254,6 +260,11 @@ export const AgentView = memo(function AgentView({
   useEffect(() => {
     if (!viewOnly) void invoke('customAgents.list').then(setCustomAgents, () => {})
   }, [invoke, viewOnly])
+  // `@images` and the other ability handles bring in whichever model this host picks for that ability.
+  const [abilityModels, setAbilityModels] = useState<AbilityModels>({})
+  useEffect(() => {
+    if (!viewOnly) void invoke('abilities.teammateModels').then(setAbilityModels, () => {})
+  }, [invoke, viewOnly, view.sessionId])
   // A device that may only view can talk to no one, so it is offered nothing to bring in either.
   const models = useMemo(() => (viewOnly ? [] : catalogs.flatMap((catalog) => catalog.models)), [catalogs, viewOnly])
   const agents = useMemo(() => (viewOnly ? [] : customAgents), [customAgents, viewOnly])
@@ -273,11 +284,11 @@ export const AgentView = memo(function AgentView({
       teammates: teammates.map((task) => ({ name: task.name, mode: task.teammate ?? ('review' as const) })),
       models,
       agents,
-      mentions: draftMentions(teammates, models, agents),
+      mentions: draftMentions(teammates, models, agents, abilityModels),
       ...(viewOnly ? {} : { onAdd: startTeammate }),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- startTeammate reads the draft and session current at the click
-    [teammates, models, agents, viewOnly],
+    [teammates, models, agents, abilityModels, viewOnly],
   )
   const joining = useJoiningTeammate({
     draft,
@@ -286,6 +297,7 @@ export const AgentView = memo(function AgentView({
     teammates,
     models,
     agents,
+    abilityModels,
   })
   const commands = allTasks.filter(
     (task) => task.taskType === 'local_bash' && task.background && effectiveStatus(task, live) === 'running',
@@ -584,7 +596,8 @@ export const AgentView = memo(function AgentView({
     if (lead) setRecipientId(null)
     // `@name` at the start talks to a teammate here, or brings that model or custom agent in with this message;
     // without a mention, a teammate chosen as the recipient gets it.
-    const mention = session && !attachments.length && !lead ? resolveMention(draft, teammates, models, agents) : null
+    const mention =
+      session && !attachments.length && !lead ? resolveMention(draft, teammates, models, agents, abilityModels) : null
     const target =
       mention ??
       (session && recipient && !lead && !attachments.length && draft.trim() && !draft.trim().startsWith('/')

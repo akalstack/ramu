@@ -23,6 +23,14 @@ export const ABILITY_TOOLS = {
 } as const satisfies Record<string, Ability>
 export type AbilityTool = keyof typeof ABILITY_TOOLS
 
+/** `@images`, `@search` and `@long` bring in a teammate on a provider with that ability, whichever it is here. */
+export const ABILITY_HANDLES = {
+  images: 'image_generation',
+  search: 'web_search',
+  long: 'long_context',
+} as const satisfies Record<string, Ability>
+export type AbilityHandle = keyof typeof ABILITY_HANDLES
+
 export const isAbility = (value: unknown): value is Ability =>
   typeof value === 'string' && (ABILITIES as readonly string[]).includes(value)
 
