@@ -6050,4 +6050,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Which stores?': 'Toko yang mana?',
   'Connect Expo on the computer running the host to release.': 'Hubungkan Expo di komputer yang menjalankan host untuk merilis.',
   'Finish what the stores need in the Deploy sheet on a computer first.': 'Selesaikan dulu yang dibutuhkan toko di lembar Deploy di komputer.',
+  'previews use their own branch': 'preview memakai cabangnya sendiri',
+  Databases: 'Basis data',
 }

@@ -6,12 +6,13 @@ import { translate } from '@ramu/shared/i18n'
 import type {
   DomainStatus,
   ProjectDeployment,
+  ProjectResources,
   StoreRelease,
   StoreTarget,
   UptimeStatus,
   UsageReport,
 } from '@ramu/shared/types/deploy'
-import { deploymentsView, rollbackConfirmation, storeView } from '../runtime/deployments'
+import { deploymentsView, resourceRows, rollbackConfirmation, storeView } from '../runtime/deployments'
 import { useStore } from '../runtime/store'
 import { VIEW_ONLY_WRITE_NOTICE } from '../runtime/viewerAccess'
 import { font, space, useTheme } from '../theme'
@@ -27,6 +28,7 @@ interface Loaded {
   uptime?: UptimeStatus | null
   domains?: DomainStatus[]
   release?: StoreRelease | null
+  resources?: ProjectResources | null
   usage?: UsageReport[]
   error?: string
 }
@@ -69,15 +71,22 @@ export function ProjectDeployments({
   const read = useCallback(async () => {
     const mine = key
     try {
-      const [status, uptime, usage, domains, release] = await Promise.all([
+      const [status, uptime, usage, domains, release, resources] = await Promise.all([
         runtime.current.invoke(hostId, 'deploy.project', projectId),
         // A host whose platform cannot report these still shows its deployments.
         runtime.current.invoke(hostId, 'deploy.uptime', projectId).catch(() => null),
         runtime.current.invoke(hostId, 'deploy.usage', projectId).catch(() => []),
         runtime.current.invoke(hostId, 'deploy.domains', projectId).catch(() => []),
         runtime.current.invoke(hostId, 'deploy.release', projectId).catch(() => null),
+        // A project's databases are read through its first repository, whose code says what it needs.
+        runtime.current
+          .invoke(hostId, 'repos.list', projectId)
+          .then((repos) =>
+            repos[0] ? runtime.current.invoke(hostId, 'deploy.resources', projectId, repos[0].id) : null,
+          )
+          .catch(() => null),
       ])
-      if (active.current === mine) setData({ key: mine, status, uptime, usage, domains, release })
+      if (active.current === mine) setData({ key: mine, status, uptime, usage, domains, release, resources })
     } catch (reason) {
       if (active.current === mine)
         setData({ key: mine, error: reason instanceof Error ? reason.message : String(reason) })
@@ -112,6 +121,7 @@ export function ProjectDeployments({
   }
 
   const stores = storeView(loaded.release ?? null, t, time)
+  const databases = resourceRows(loaded.resources ?? null, t)
   // Release asks which stores, then says what happens; the second press is the approval, as on the desktop.
   const release = () => {
     if (!writable() || busy) return
@@ -334,6 +344,30 @@ export function ProjectDeployments({
               </View>
             </>
           ) : null}
+        </>
+      ) : null}
+      {databases.length ? (
+        <>
+          <SectionLabel>{t('Databases')}</SectionLabel>
+          <View style={{ paddingHorizontal: space.m, gap: space.s }}>
+            {databases.map((database) => (
+              <View key={database.id} style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+                <View style={{ flex: 1 }}>
+                  <T weight="600">{database.name}</T>
+                  <T size={font.caption} tone="muted">
+                    {database.detail}
+                  </T>
+                </View>
+                <Button
+                  title={t('Open')}
+                  accessibilityLabel={t('Open {0}', { 0: database.name })}
+                  icon={ExternalLink}
+                  kind="secondary"
+                  onPress={() => open(database.page)}
+                />
+              </View>
+            ))}
+          </View>
         </>
       ) : null}
       {stores ? (

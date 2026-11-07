@@ -13,6 +13,7 @@ import type {
   Deployment,
   DomainStatus,
   ProjectDeployment,
+  ProjectResources,
   StoreRelease,
   UptimeStatus,
   UsageReport,
@@ -194,4 +195,28 @@ export function storeView(
         ? t('Finish what the stores need in the Deploy sheet on a computer first.')
         : null,
   }
+}
+
+/** A project's databases and other resources on the phone: what each is, the variables it sets and its page. */
+export function resourceRows(
+  resources: ProjectResources | null,
+  t: Translate,
+): { id: string; name: string; detail: string; page: string }[] {
+  if (!resources) return []
+  return resources.resources.map((resource) => {
+    const provider =
+      resources.providers.find((entry) => entry.provider === resource.provider)?.name ?? resource.provider
+    return {
+      id: `${resource.provider}:${resource.id}`,
+      name: resource.name,
+      detail: [
+        provider,
+        resource.variables.join(', '),
+        resource.previewBranch ? t('previews use their own branch') : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      page: resource.page,
+    }
+  })
 }

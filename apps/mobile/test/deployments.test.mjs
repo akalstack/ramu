@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { deploymentsView, rollbackConfirmation, storeView } from '../src/runtime/deployments.ts'
+import { deploymentsView, resourceRows, rollbackConfirmation, storeView } from '../src/runtime/deployments.ts'
 
 const t = (key, values = {}) => key.replace(/\{(\d+)\}/g, (_, index) => values[index] ?? '')
 const time = (at) => `t${at}`
@@ -191,4 +191,35 @@ test('shows store builds with their upload, and says why Release cannot start ye
   assert.equal(storeView({ ...release, connected: false }, t, time).canRelease, false)
   assert.match(storeView({ ...release, app: { ...release.app, projectId: null } }, t, time).blocked, /Deploy sheet/)
   assert.equal(storeView({ ...release, app: null }, t, time), null)
+})
+
+test('lists a project’s databases with their provider, variables and preview branch', () => {
+  const rows = resourceRows(
+    {
+      needsDatabase: true,
+      providers: [{ provider: 'neon', name: 'Neon', kind: 'database', connected: true, plans: [] }],
+      resources: [
+        {
+          provider: 'neon',
+          kind: 'database',
+          id: 'n1',
+          name: 'shop',
+          variables: ['DATABASE_URL', 'DATABASE_URL_UNPOOLED'],
+          previewBranch: true,
+          page: 'https://console.neon.tech/app/projects/n1',
+        },
+      ],
+      migrate: null,
+    },
+    t,
+  )
+  assert.deepEqual(rows, [
+    {
+      id: 'neon:n1',
+      name: 'shop',
+      detail: 'Neon · DATABASE_URL, DATABASE_URL_UNPOOLED · previews use their own branch',
+      page: 'https://console.neon.tech/app/projects/n1',
+    },
+  ])
+  assert.deepEqual(resourceRows(null, t), [])
 })
