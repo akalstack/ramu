@@ -279,6 +279,26 @@ export function NewTask({
   const [startingNew, setStartingNew] = useState(false)
   // With a name, Ramu creates the project itself and the thread starts in it; without one the agent creates it.
   const [newProject, setNewProject] = useState<NewProjectDraft>({ name: '', stack: '' })
+  // Designs a new project can start from; its first screens are built to match the chosen one.
+  const [designs, setDesigns] = useState<{ id: string; title: string }[]>([])
+  useEffect(() => {
+    if (!startingNew) return
+    void host.invoke('artifacts.list').then(
+      (artifacts) => setDesigns(artifacts.filter((artifact) => artifact.kind === 'design')),
+      () => setDesigns([]),
+    )
+  }, [startingNew, host])
+  const fromDesign = (designId: string) => {
+    setBusy(true)
+    void host
+      .invoke('artifacts.makeProject', designId, newProject.name.trim() || undefined)
+      .then(async (made) => {
+        await ws.refresh()
+        ws.openTask(made.thread.taskId)
+      })
+      .catch((error) => notifyError(errorText(error)))
+      .finally(() => setBusy(false))
+  }
   // A project made for a send that then failed is reused by the retry instead of colliding with its own folder.
   const madeProject = useRef<{ name: string; projectId: string } | null>(null)
   const [routeNote, setRouteNote] = useState<string | null>(null)
@@ -860,7 +880,15 @@ export function NewTask({
             )}
           </NewWorktreeSummary>
         )}
-        {startingNew && !pending && <NewProjectFields value={newProject} onChange={setNewProject} disabled={busy} />}
+        {startingNew && !pending && (
+          <NewProjectFields
+            value={newProject}
+            onChange={setNewProject}
+            disabled={busy}
+            designs={designs}
+            onFromDesign={fromDesign}
+          />
+        )}
         {pending && (
           <div className="flex flex-col items-end gap-1.5 px-2" role="status" aria-live="polite">
             {pending.text && (

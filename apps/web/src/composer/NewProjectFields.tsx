@@ -16,14 +16,33 @@ export function NewProjectFields({
   value,
   onChange,
   disabled,
+  designs = [],
+  onFromDesign,
 }: {
   value: NewProjectDraft
   onChange: (value: NewProjectDraft) => void
   disabled: boolean
+  /** Design artifacts a project can start from: its first screens are built to match. */
+  designs?: { id: string; title: string }[]
+  onFromDesign?: (designId: string) => void
 }) {
   const named = !!value.name.trim()
   return (
     <div className="flex flex-wrap items-center gap-2 px-2" role="group" aria-label={t('New project')}>
+      {designs.length > 0 && onFromDesign && (
+        <Combobox
+          label={t('Start from a design')}
+          className="min-h-7 w-[200px]"
+          disabled={disabled}
+          value=""
+          searchPlaceholder={t('Search designs…')}
+          options={[
+            { value: '', label: t('Start from a design…') },
+            ...designs.map((design) => ({ value: design.id, label: design.title })),
+          ]}
+          onChange={(designId) => designId && onFromDesign(designId)}
+        />
+      )}
       <Input
         className="h-7 w-[200px]"
         value={value.name}

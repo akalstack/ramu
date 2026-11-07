@@ -107,7 +107,6 @@ The [shipping plan](SHIP-AN-APP-PLAN.md) and this one share one rule: make the s
   - "a dashboard of our signups" becomes a Dashboard on the project's database once it has one.
 
   Only a request that needs a backend, data shared between people or its own domain becomes a project.
-- **Design to project:** **Make it a project** on a Design already starts a project from it with `design/` as the reference. Remaining: offering a Design as the starting point in Home's **New project** choices.
 - **App to project:** an App artifact grows into a project through **Make it a project** (built), and **Publish to the web** moves onto the shipping plan's `HostingAdapter` when it exists. The static GitHub Pages, Netlify, Vercel and Cloudflare Pages deploys built for pages are its first targets.
 - **Shipped apps feed dashboards:** a deployed project's deployments, usage and uptime (shipping plan sections 3, 8 and 9) become Dashboard and Live sources. "Show me this week's errors and deploys" is an artifact, not a page of the hosting dashboard.
 - **Launch artifacts:** **Make a release note** and **Make a launch deck** from a project's merged pull requests are Doc and Slides artifacts on the project, ready to export or publish with the site.
