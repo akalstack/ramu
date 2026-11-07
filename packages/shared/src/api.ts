@@ -244,6 +244,12 @@ interface ArtifactMethods {
   'artifacts.document'(artifactId: string, version?: number): import('./interactive').InteractiveDocument
   /** Saves the person's own edit of a doc's Markdown as a new version on top of `base`; refused if another came since. */
   'artifacts.editDoc'(artifactId: string, base: number, markdown: string): import('./artifacts').ArtifactInfo
+  /** Saves the person's text for each slide of a deck as a new version on top of `base`; refused if another came since. */
+  'artifacts.editSlides'(
+    artifactId: string,
+    base: number,
+    edits: import('./artifactSource').SlideTextEdit[],
+  ): import('./artifacts').ArtifactInfo
   /** A PDF, PowerPoint or slide images the host makes from a version (the current one when absent), kept with it. */
   'artifacts.export'(
     artifactId: string,

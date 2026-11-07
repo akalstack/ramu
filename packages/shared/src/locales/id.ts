@@ -5675,6 +5675,13 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Export Word': 'Ekspor Word',
   Markdown: 'Markdown',
   'Edit text': 'Edit teks',
+  'Slide {number}': 'Slide {number}',
+  'Title of slide {number}': 'Judul slide {number}',
+  'Column {column} of slide {number}': 'Kolom {column} slide {number}',
+  'Text of slide {number}': 'Teks slide {number}',
+  'Who said it, slide {number}': 'Siapa yang mengatakannya, slide {number}',
+  'Speaker notes of slide {number}': 'Catatan pembicara slide {number}',
+  'Speaker notes': 'Catatan pembicara',
   'Saving makes v{version}, marked Edited by you.': 'Menyimpan membuat v{version}, ditandai Diedit oleh Anda.',
   'Change the words yourself; the agent keeps your edit when it revises':
     'Ubah sendiri kata-katanya; agen mempertahankan suntingan Anda saat merevisi',

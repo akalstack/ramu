@@ -79,6 +79,34 @@ export const slideSchema = z.object({
     .describe('Speaker notes: kept in PowerPoint and Keynote, not shown on the slide.'),
 })
 export type Slide = z.infer<typeof slideSchema>
+
+/** The words of one slide a person can change in place; its layout, chart and image stay as the agent made them. */
+export const slideTextEdit = z.object({
+  title: slideText(200).optional(),
+  body: slideMarkdown.optional(),
+  columns: z.tuple([slideMarkdown, slideMarkdown]).optional(),
+  by: slideText(120).optional(),
+  notes: z.string().max(5000).optional(),
+})
+export type SlideTextEdit = z.infer<typeof slideTextEdit>
+
+/** A deck with the person's text put into each slide's existing fields, slide by slide in order. */
+export function editSlideText(slides: Slide[], edits: SlideTextEdit[]): Slide[] {
+  if (edits.length !== slides.length)
+    throw new Error('The deck changed while you were editing. Reopen it and edit again.')
+  return slides.map((slide, index) => {
+    const edit = edits[index]!
+    const next: Slide = { ...slide }
+    for (const key of ['title', 'body', 'by', 'notes'] as const) {
+      const value = edit[key]
+      if (value === undefined) continue
+      if (value.trim()) next[key] = value
+      else delete next[key]
+    }
+    if (edit.columns) next.columns = edit.columns
+    return next
+  })
+}
 export type SlideChart = z.infer<typeof slideChart>
 
 /** The deck's colors: Ramu's light or dark tokens, or the reader's own (auto), with an optional accent. */

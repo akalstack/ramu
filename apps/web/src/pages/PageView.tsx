@@ -21,6 +21,7 @@ import {
   type ArtifactVersion,
 } from '@ramu/shared/artifacts'
 import { interactiveExport, slideCount } from '@ramu/shared/interactiveExport'
+import type { Slide } from '@ramu/shared/artifactSource'
 import { Button } from '../components/desktop-button'
 import { Input } from '../components/desktop-input'
 import { Textarea } from '@/components/ui/textarea'
@@ -79,6 +80,8 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   const [status, setStatus] = useState('')
   // A doc's Markdown while the person edits it, and the version that edit started from.
   const [editing, setEditing] = useState<{ base: number; text: string } | null>(null)
+  // A deck's slide text while the person edits it, slide by slide, and the version it started from.
+  const [editingSlides, setEditingSlides] = useState<{ base: number; slides: Slide[] } | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
   const state = useRef<InteractiveState | null>(null)
   const revision = useRef(0)
@@ -269,6 +272,24 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
         )}
         <div className="ml-auto flex flex-none items-center gap-0.5">
           {slides > 0 && <SlideToolbar controls={slideControls} count={slides} disabled={!ready} />}
+          {page.kind === 'slides' && !editingSlides && (
+            <Button
+              variant="ghost"
+              className={GHOST_TEXT_BUTTON_CLASS}
+              disabled={viewOnly || !document}
+              title={t('Change the words yourself; the agent keeps your edit when it revises')}
+              onClick={() => {
+                const stored = document?.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.slides)?.content
+                if (document && stored)
+                  setEditingSlides({
+                    base: document.reference.version,
+                    slides: (JSON.parse(stored) as { slides: Slide[] }).slides,
+                  })
+              }}
+            >
+              <PenLine size={13} /> {t('Edit text')}
+            </Button>
+          )}
           {page.kind === 'doc' && !editing && (
             <Button
               variant="ghost"
@@ -538,8 +559,102 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           </div>
         </form>
       )}
+      {editingSlides && (
+        <form
+          aria-label={t('Edit text')}
+          className="flex min-h-0 flex-1 flex-col gap-2 p-3"
+          onSubmit={(event) => {
+            event.preventDefault()
+            setSavingEdit(true)
+            const edits = editingSlides.slides.map(({ title, body, columns, by, notes }) => ({
+              title: title ?? '',
+              body: body ?? '',
+              by: by ?? '',
+              notes: notes ?? '',
+              ...(columns ? { columns } : {}),
+            }))
+            invoke('artifacts.editSlides', artifactId, editingSlides.base, edits)
+              .then(() => {
+                setEditingSlides(null)
+                void load()
+              })
+              .catch((error) => notifyError(message(error), page.title))
+              .finally(() => setSavingEdit(false))
+          }}
+        >
+          <ol className="m-0 flex min-h-0 flex-1 list-none flex-col gap-4 overflow-auto p-0">
+            {editingSlides.slides.map((slide, index) => {
+              const change = (patch: Partial<Slide>) =>
+                setEditingSlides({
+                  ...editingSlides,
+                  slides: editingSlides.slides.map((entry, at) => (at === index ? { ...entry, ...patch } : entry)),
+                })
+              return (
+                <li key={index} className="flex flex-col gap-1.5">
+                  <strong className="text-caption text-muted-foreground">
+                    {t('Slide {number}', { number: index + 1 })}
+                  </strong>
+                  {slide.layout !== 'quote' && (
+                    <Input
+                      aria-label={t('Title of slide {number}', { number: index + 1 })}
+                      value={slide.title ?? ''}
+                      onChange={(event) => change({ title: event.target.value })}
+                    />
+                  )}
+                  {slide.layout === 'two-columns' && slide.columns ? (
+                    slide.columns.map((column, at) => (
+                      <Textarea
+                        key={at}
+                        aria-label={t('Column {column} of slide {number}', { column: at + 1, number: index + 1 })}
+                        value={column}
+                        onChange={(event) =>
+                          change({
+                            columns: (at === 0
+                              ? [event.target.value, slide.columns![1]]
+                              : [slide.columns![0], event.target.value]) as [string, string],
+                          })
+                        }
+                      />
+                    ))
+                  ) : (
+                    <Textarea
+                      aria-label={t('Text of slide {number}', { number: index + 1 })}
+                      value={slide.body ?? ''}
+                      onChange={(event) => change({ body: event.target.value })}
+                    />
+                  )}
+                  {slide.layout === 'quote' && (
+                    <Input
+                      aria-label={t('Who said it, slide {number}', { number: index + 1 })}
+                      value={slide.by ?? ''}
+                      onChange={(event) => change({ by: event.target.value })}
+                    />
+                  )}
+                  <Textarea
+                    aria-label={t('Speaker notes of slide {number}', { number: index + 1 })}
+                    placeholder={t('Speaker notes')}
+                    value={slide.notes ?? ''}
+                    onChange={(event) => change({ notes: event.target.value })}
+                  />
+                </li>
+              )
+            })}
+          </ol>
+          <div className="flex items-center justify-end gap-2">
+            <span className="mr-auto text-caption text-muted-foreground">
+              {t('Saving makes v{version}, marked Edited by you.', { version: editingSlides.base + 1 })}
+            </span>
+            <Button type="button" variant="ghost" disabled={savingEdit} onClick={() => setEditingSlides(null)}>
+              {t('Cancel')}
+            </Button>
+            <Button type="submit" variant="default" disabled={savingEdit}>
+              {t('Save')}
+            </Button>
+          </div>
+        </form>
+      )}
       <div
-        hidden={!!editing}
+        hidden={!!editing || !!editingSlides}
         className={`relative min-h-0 flex-1 overflow-auto ${width ? 'flex justify-center bg-fill px-3 py-4' : ''}`}
       >
         <div

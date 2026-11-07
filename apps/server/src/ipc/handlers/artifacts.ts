@@ -9,7 +9,16 @@ import {
   type RamuDataSource,
 } from '@ramu/shared/artifacts'
 import { NO_PROJECT } from '@ramu/shared/types'
-import { DOC_MAX_SOURCE, parseArtifactSource } from '@ramu/shared/artifactSource'
+import {
+  DOC_MAX_SOURCE,
+  SLIDES_MAX,
+  editSlideText,
+  parseArtifactSource,
+  slideTextEdit,
+  type Slide,
+  type SlideTextEdit,
+} from '@ramu/shared/artifactSource'
+import { ARTIFACT_SOURCE_FILES } from '@ramu/shared/artifacts'
 import { renderArtifactSource } from '../../interactive/kinds'
 import { HOST_EXPORT_FORMATS, type HostExportFormat } from '@ramu/shared/interactiveExport'
 import { id } from '../schemas'
@@ -272,6 +281,27 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
         if (artifact.kind !== 'doc') throw new Error('Only a doc is edited as text here; ask the agent to change this.')
         const source = parseArtifactSource({ kind: 'doc', source: markdown })
         const drawn = await renderArtifactSource(source, artifact.title)
+        if (drawn.problems.length) throw new Error(drawn.problems[0])
+        return pages.saveEdit(artifactId, base, drawn)
+      },
+    },
+    'artifacts.editSlides': {
+      args: z.tuple([id, z.number().int().positive(), z.array(slideTextEdit).max(SLIDES_MAX)]),
+      run: async (artifactId: string, base: number, edits: SlideTextEdit[]) => {
+        const { pages } = need()
+        const artifact = pages.get(artifactId)
+        if (artifact.kind !== 'slides') throw new Error('Only a deck’s slide text is edited here.')
+        const document = pages.document(artifactId, base)
+        const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.slides)?.content
+        if (!stored) throw new Error('This deck version has no slide list. Ask the agent to publish it again.')
+        const deck = JSON.parse(stored) as { slides: Slide[]; theme?: unknown }
+        const source = parseArtifactSource({
+          kind: 'slides',
+          slides: editSlideText(deck.slides, edits),
+          theme: deck.theme,
+        })
+        const images = (document.files ?? []).filter((file) => file.encoding === 'base64')
+        const drawn = await renderArtifactSource(source, artifact.title, images)
         if (drawn.problems.length) throw new Error(drawn.problems[0])
         return pages.saveEdit(artifactId, base, drawn)
       },

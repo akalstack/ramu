@@ -1,6 +1,6 @@
 import JSZip from 'jszip'
 import { afterEach, expect, it, vi } from 'vitest'
-import { parseArtifactSource, type Slide } from '@ramu/shared/artifactSource'
+import { editSlideText, parseArtifactSource, type Slide } from '@ramu/shared/artifactSource'
 import { openDb, type Db } from '../src/db'
 import { ArtifactExports } from '../src/interactive/exports'
 import { PageStore } from '../src/interactive/pages'
@@ -285,3 +285,24 @@ it.skipIf(!interactiveBrowserPath())(
   },
   60_000,
 )
+
+it('puts the person’s slide text into each slide, keeping its layout, chart and image', () => {
+  const slides = parseArtifactSource({ kind: 'slides', slides: SLIDES })
+  if (slides.kind !== 'slides') throw new Error('not a deck')
+  const edited = editSlideText(
+    slides.slides,
+    slides.slides.map((slide, index) => (index === 1 ? { title: 'Much faster', notes: 'Say the number.' } : {})),
+  )
+  expect(edited[1]).toMatchObject({ title: 'Much faster', notes: 'Say the number.', layout: slides.slides[1]!.layout })
+  expect(edited[2]).toEqual(slides.slides[2])
+  expect(() => editSlideText(slides.slides, [])).toThrow('The deck changed while you were editing')
+  expect(() =>
+    parseArtifactSource({
+      kind: 'slides',
+      slides: editSlideText(
+        slides.slides,
+        slides.slides.map((slide, index) => (index === 1 ? { title: '' } : {})),
+      ),
+    }),
+  ).toThrow('needs title')
+})
