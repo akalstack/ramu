@@ -9,13 +9,13 @@ The agent picks the kind from what you ask for. Each artifact's kind shows as a 
 | Kind | What it is | Exports |
 | --- | --- | --- |
 | **App** | Interactive web content: calculators, trackers, explorers, games | HTML, source, PDF |
-| **Doc** | Writing to keep: a report, plan, spec or notes, written in Markdown with tables, task lists, footnotes and Mermaid diagrams | Markdown, HTML, PDF |
+| **Doc** | Writing to keep: a report, plan, spec or notes, written in Markdown with tables, task lists, footnotes and Mermaid diagrams | Markdown, HTML, Word, PDF |
 | **Diagram** | A flowchart, sequence, state or concept diagram, written in Mermaid or SVG | SVG, PDF, and Mermaid when written in it |
 | **Slides** | A deck of up to 60 slides: title, content (with an optional image), two columns, image, chart (bar, line or pie) and quote layouts, with speaker notes and a light or dark theme | PowerPoint, PDF, slide images |
 
 Docs, diagrams and decks are drawn on the host into the same sandboxed frame as apps, in the app's colors for light and dark, with no script and nothing loaded from the network. Mermaid is drawn with [Pele](https://pele.run); an SVG keeps only drawing elements, so it cannot run script, follow links or load files. Versions, Compare, Restore, share links, **Open to anyone** and **Publish to the web** work for every kind. **Export** on the desktop downloads the kind's formats; on the phone the card's actions and the artifact's menu hand them to the share sheet.
 
-- **Made on the host:** PDF (every kind, printed by the host's headless browser with nothing reachable on the network; a deck prints one 16:9 slide per page), PowerPoint (written from the deck's source, speaker notes included) and slide images (one 1920 × 1080 PNG per slide, in a zip). Each is kept with the version it was made from, so exporting the same version again is instant. An export is at most 10 MB.
+- **Made on the host:** PDF (every kind, printed by the host's headless browser with nothing reachable on the network; a deck prints one 16:9 slide per page), PowerPoint (written from the deck's source, speaker notes included), Word (written from a doc's Markdown; images keep their description and only web and mail links stay links) and slide images (one 1920 × 1080 PNG per slide, in a zip). Each is kept with the version it was made from, so exporting the same version again is instant. An export is at most 10 MB.
 - **Decks:** a slide whose text does not fit fails the preview, naming the slide, so a published deck has no cut-off text. On the desktop the artifact's toolbar moves between slides and **Present** shows one slide at a time on the whole screen; the arrow keys, Space and Page Up or Down turn slides and Escape stops.
 
 Below, an App's **page** is the web page it shows, as in **Page settings**. Records, AI and the other capabilities are for apps.

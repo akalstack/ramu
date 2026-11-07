@@ -24,6 +24,7 @@ export const HOST_SHARE_LABELS: Record<HostExportFormat, string> = {
   pptx: 'Share PowerPoint',
   pdf: 'Share PDF',
   png: 'Share slide images',
+  docx: 'Share Word',
 }
 
 /** The small mark rows and cards show for what an artifact is, named for screen readers. */

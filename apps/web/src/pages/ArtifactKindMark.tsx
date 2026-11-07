@@ -84,10 +84,11 @@ const HOST_EXPORT_LABELS: Record<HostExportFormat, () => string> = {
   pptx: () => t('Export PowerPoint'),
   pdf: () => t('Export PDF'),
   png: () => t('Export slide images'),
+  docx: () => t('Export Word'),
 }
 
 /**
- * The files the host makes for a kind (PDF for every kind; PowerPoint and slide images for a deck) for a menu. Making
+ * The files the host makes for a kind (PDF for every kind, PowerPoint and slide images for a deck, Word for a doc) for a menu. Making
  * one can take a few seconds the first time, so a toast says so until it is saved.
  */
 export function hostExportEntries(

@@ -37,11 +37,14 @@ export interface ExportedFile {
 }
 
 /** Files the host makes in its headless browser or with a writer library, kept with the version they were made from. */
-export type HostExportFormat = 'pdf' | 'pptx' | 'png'
+export type HostExportFormat = 'pdf' | 'pptx' | 'png' | 'docx'
 
-/** What the host can make for a kind: every kind prints to PDF, and a deck also writes PowerPoint and slide images. */
+/**
+ * What the host can make for a kind: every kind prints to PDF, a deck also writes PowerPoint and slide images, and a doc
+ * a Word file.
+ */
 export function hostExportFormats(kind: ArtifactKind): HostExportFormat[] {
-  return kind === 'slides' ? ['pptx', 'pdf', 'png'] : ['pdf']
+  return kind === 'slides' ? ['pptx', 'pdf', 'png'] : kind === 'doc' ? ['docx', 'pdf'] : ['pdf']
 }
 
 /** How many slides a deck version has, read from the slide list it keeps; 0 for every other kind. */

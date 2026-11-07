@@ -12,6 +12,7 @@ import {
 } from '@ramu/shared/interactiveExport'
 import type { Db } from '../db'
 import { ensureInteractiveBrowser } from './browser'
+import { writeDocx } from './docx'
 import { writePptx } from './pptx'
 
 /** An export travels to the device in one message; past this it would not fit. */
@@ -23,6 +24,7 @@ const MIME: Record<HostExportFormat, string> = {
   pdf: 'application/pdf',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   png: 'application/zip',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 }
 
 function deckOf(document: InteractiveDocument): SlidesSource {
@@ -31,6 +33,13 @@ function deckOf(document: InteractiveDocument): SlidesSource {
   const deck = parseArtifactSource({ kind: 'slides', ...(JSON.parse(source) as object) })
   if (deck.kind !== 'slides') throw new Error('This version is not a deck.')
   return deck
+}
+
+function docOf(document: InteractiveDocument): string {
+  const source = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.doc)?.content
+  if (source === undefined)
+    throw new Error('This doc version has no Markdown source. Ask the agent to publish it again.')
+  return source
 }
 
 /**
@@ -121,7 +130,7 @@ function slideImages(document: InteractiveDocument): Promise<Buffer> {
 }
 
 /**
- * Files the host makes from a version: PDF for every kind, and PowerPoint and slide images for a deck. Each is kept
+ * Files the host makes from a version: PDF for every kind, PowerPoint and slide images for a deck, Word for a doc. Each is kept
  * with the version it was made from, so asking again for the same version returns it at once.
  */
 export class ArtifactExports {
@@ -156,13 +165,15 @@ export class ArtifactExports {
     })
     if (kept) return file(kept.data)
     const made = this.queue.then(() =>
-      format === 'pptx'
-        ? writePptx(
-            deckOf(document),
-            document.reference.title,
-            (document.files ?? []).filter((candidate) => candidate.encoding === 'base64'),
-          )
-        : this.makers[format](document),
+      format === 'docx'
+        ? writeDocx(docOf(document), document.reference.title)
+        : format === 'pptx'
+          ? writePptx(
+              deckOf(document),
+              document.reference.title,
+              (document.files ?? []).filter((candidate) => candidate.encoding === 'base64'),
+            )
+          : this.makers[format](document),
     )
     this.queue = made.catch(() => {})
     const bytes = await made
