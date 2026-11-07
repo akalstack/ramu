@@ -6052,4 +6052,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Finish what the stores need in the Deploy sheet on a computer first.': 'Selesaikan dulu yang dibutuhkan toko di lembar Deploy di komputer.',
   'previews use their own branch': 'preview memakai cabangnya sendiri',
   Databases: 'Basis data',
+  'Put {0} online, or see where it is deployed': 'Online-kan {0}, atau lihat di mana ia di-deploy',
 }

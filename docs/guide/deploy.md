@@ -26,7 +26,7 @@ The same accounts publish artifacts with **Publish to the web** ([Artifacts](art
 
 ## Deploy a project
 
-**Deploy…** in a project's menu opens the deploy sheet.
+**Deploy…** in a project's menu opens the deploy sheet. When a thread's [goal](goals.md) is met in a project with a repository, the same **Deploy…** sits under it in the thread.
 
 - **Link repository:** pick the platform (the one the project's stack names in `ramu.json` is recommended, see [Configuration](configuration.md)) and, with several, the repository. The repository must be on GitHub; one with no remote yet gets **Publish to GitHub…** in the sheet, which creates the repository (private by default) and pushes it. Ramu links them through the platform's Git integration: every pull request gets a preview deployment, shown on the pull request's card in Source Control and on the phone ([Pull requests in Source Control](git-hosting.md#pull-requests-in-source-control)), and pushes to the default branch deploy to production, with no deploy token in CI.
   - **Vercel** creates the project (named after the Ramu project) or links an existing one of that name. Vercel's GitHub app must be installed for the repository; the sheet says so when it is not.

@@ -9,7 +9,7 @@ A goal keeps a thread working toward an objective across turns, even across prov
 /goal clear
 ```
 
-The goal bar has Pause, Resume and Clear. **Stop** interrupts the current turn and pauses the goal.
+The goal bar has Pause, Resume and Clear. **Stop** interrupts the current turn and pauses the goal. A met goal stays in the transcript as **Goal completed**; in a project with a repository, **Deploy…** under it opens the project's [deploy sheet](deploy.md#deploy-a-project).
 
 ## Settings
 
