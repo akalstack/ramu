@@ -95,6 +95,27 @@ export default function PageScreen() {
   // A doc's or diagram's text while the person edits it; a doc's blocks when edited as formatted text.
   const [editing, setEditing] = useState<{ base: number; text: string; blocks?: DocBlock[] } | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
+  // The person's other devices editing this text too; saving merges edits that changed different lines.
+  const [alsoEditing, setAlsoEditing] = useState<string[]>([])
+  const editingText = !!editing
+  useEffect(() => {
+    if (!editingText) return
+    let live = true
+    const mark = () =>
+      void store.invoke(computerId, 'artifacts.editing', artifactId, true).then(
+        (others) => live && setAlsoEditing(others),
+        () => {},
+      )
+    mark()
+    const timer = setInterval(mark, 30_000)
+    return () => {
+      live = false
+      clearInterval(timer)
+      setAlsoEditing([])
+      void store.invoke(computerId, 'artifacts.editing', artifactId, false).catch(() => {})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- marks once per opened editor; the store object changes on every update
+  }, [editingText, computerId, artifactId])
   const field = {
     color: c.text,
     fontSize: font.control,
@@ -988,6 +1009,13 @@ export default function PageScreen() {
                 }}
               />
             )}
+            {alsoEditing.length ? (
+              <T size={font.caption} tone="muted">
+                {say('Also being edited on {0}. Saving keeps both edits where they changed different lines.', {
+                  0: alsoEditing.join(', '),
+                })}
+              </T>
+            ) : null}
             <T size={font.caption} tone="muted">
               {say('Saving makes v{version}, marked Edited by you.', { version: editing.base + 1 })}
             </T>

@@ -179,6 +179,49 @@ it('marks an edit with the device it was made on', async () => {
   expect(pages.document(kept.id).reference.changes).toBe('Edited by you')
 })
 
+it('merges an edit made from an earlier version on another device, and refuses one that changed the same lines', async () => {
+  const { registerArtifactHandlers } = await import('../src/ipc/handlers/artifacts')
+  const { interactive, pages } = setup()
+  const preview = await interactive.preview('s', doc('## Goals\n\nShip sync.\n\n## Owner\n\nAyu\n'))
+  const kept = pages.keep('s', interactive.publish('s', preview.id, 'r1').id, { title: 'Launch plan' })
+  let caller = 'Ayu’s iPhone'
+  const methods = registerArtifactHandlers({
+    pages,
+    pageAi: {},
+    activity: { run: () => {} },
+    host: { callerName: () => caller },
+  } as never)
+  // The phone saves first; the desktop's edit started from v1 too and changed another line.
+  await methods['artifacts.editSource']!.run(kept.id, 1, '## Goals\n\nShip sync on Friday.\n\n## Owner\n\nAyu\n')
+  caller = 'MacBook'
+  const merged = (await methods['artifacts.editSource']!.run(
+    kept.id,
+    1,
+    '## Goals\n\nShip sync.\n\n## Owner\n\nAyu and Bo\n',
+  )) as { version: number }
+  expect(merged.version).toBe(3)
+  const document = pages.document(kept.id)
+  expect(document.files?.[0]?.content).toBe('## Goals\n\nShip sync on Friday.\n\n## Owner\n\nAyu and Bo\n')
+  expect(document.reference.changes).toBe('Edited by you on MacBook, merged with v2')
+  await expect(
+    methods['artifacts.editSource']!.run(kept.id, 1, '## Goals\n\nShip sync on Monday.\n\n## Owner\n\nAyu\n'),
+  ).rejects.toThrow('in the same lines you changed')
+})
+
+it('tells each device which others are editing the same text, until they stop or go quiet', async () => {
+  const { EditingPresence } = await import('../src/interactive/editing')
+  let now = 0
+  const presence = new EditingPresence(() => now)
+  expect(presence.mark('a1', 'MacBook', true)).toEqual([])
+  expect(presence.mark('a1', 'iPhone', true)).toEqual(['MacBook'])
+  presence.mark('a1', 'MacBook', false)
+  expect(presence.mark('a1', 'iPhone', true)).toEqual([])
+  presence.mark('a1', 'MacBook', true)
+  now = 100_000
+  // The desktop said nothing for more than ninety seconds, so it no longer counts.
+  expect(presence.mark('a1', 'iPhone', true)).toEqual([])
+})
+
 it('saves the person’s words in a design’s frames, keeping its markup and styles', async () => {
   const { registerArtifactHandlers } = await import('../src/ipc/handlers/artifacts')
   const { interactive, pages } = setup()

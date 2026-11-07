@@ -117,6 +117,26 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
     null,
   )
   const [savingEdit, setSavingEdit] = useState(false)
+  // The person's other devices editing this text too; saving merges edits that changed different lines.
+  const [alsoEditing, setAlsoEditing] = useState<string[]>([])
+  const editingText = !!editing
+  useEffect(() => {
+    if (!editingText) return
+    let live = true
+    const mark = () =>
+      void invoke('artifacts.editing', artifactId, true).then(
+        (others) => live && setAlsoEditing(others),
+        () => {},
+      )
+    mark()
+    const timer = window.setInterval(mark, 30_000)
+    return () => {
+      live = false
+      window.clearInterval(timer)
+      setAlsoEditing([])
+      void Promise.resolve(invoke('artifacts.editing', artifactId, false)).catch(() => {})
+    }
+  }, [editingText, invoke, artifactId])
   // Which design this host draws new visual artifacts with, for a design's menu.
   const [designSystem, setDesignSystem] = useState<string | null>(null)
   const projectId = page?.projectId ?? null
@@ -772,6 +792,13 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
               .finally(() => setSavingEdit(false))
           }}
         >
+          {alsoEditing.length > 0 && (
+            <p role="status" className="m-0 text-caption text-muted-foreground">
+              {t('Also being edited on {0}. Saving keeps both edits where they changed different lines.', {
+                0: alsoEditing.join(', '),
+              })}
+            </p>
+          )}
           {editing.rich ? (
             <DocRichEditor
               artifactId={artifactId}

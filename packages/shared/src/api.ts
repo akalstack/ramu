@@ -269,6 +269,8 @@ interface ArtifactMethods {
   'artifacts.setRefresh'(artifactId: string, base: number, minutes: number): import('./artifacts').ArtifactInfo
   /** Shows only a dashboard's last `days` of dated rows (all of them when null), as a new version on top of `base`. */
   'artifacts.setRange'(artifactId: string, base: number, days: number | null): import('./artifacts').ArtifactInfo
+  /** Says this device is (or stopped) editing an artifact's text, and returns the other devices editing it now. */
+  'artifacts.editing'(artifactId: string, editing: boolean): string[]
   /** Tells this host's other devices which slide of a deck the person is on, so a desktop presenting it follows. */
   'artifacts.turnSlide'(artifactId: string, index: number): void
   /** Saves the person's text for each slide of a deck as a new version on top of `base`; refused if another came since. */

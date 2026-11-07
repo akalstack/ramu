@@ -1,3 +1,5 @@
+import { mergeText } from '@ramu/shared/textMerge'
+import { EditingPresence } from '../../interactive/editing'
 import { formatFigure } from '../../interactive/dashboard'
 import { designTextEdit, withDesignTexts, type DesignTextEdit } from '@ramu/shared/designText'
 import { readdir, readFile, realpath, stat } from 'node:fs/promises'
@@ -41,6 +43,9 @@ import { makePageProject } from '../../interactive/pageProject'
 import { openHeadlessPage } from '../../interactive/pageHeadless'
 import { PagePublisher } from '../../interactive/pagePublish'
 import type { StaticTarget } from '../../hosting/staticSite'
+
+/** Shared by every connection, so the desktop and the phone see each other editing. */
+const editingPresence = new EditingPresence()
 
 const field = z.enum([
   'string',
@@ -323,16 +328,35 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       run: async (artifactId: string, base: number, text: string) => {
         const { pages } = need()
         const artifact = pages.get(artifactId)
-        if (editableSource(pages.document(artifactId, base)) === null)
+        const started = editableSource(pages.document(artifactId, base))
+        if (started === null)
           throw new Error('Only a doc or a Mermaid diagram is edited as text here; ask the agent to change this.')
+        // An edit made from an earlier version (on another device, or while an agent saved one) merges onto the
+        // current one when the two changed different lines.
+        const current = artifact.version
+        let merged = text
+        if (current !== base) {
+          const latest = editableSource(pages.document(artifactId, current)) ?? ''
+          const result = mergeText(started, text, latest)
+          if (result === null)
+            throw new Error(
+              `This changed while you were editing (now v${current}), in the same lines you changed. Copy your text, reopen it to see v${current}, and edit that.`,
+            )
+          merged = result
+        }
         const source = parseArtifactSource(
           artifact.kind === 'diagram'
-            ? { kind: 'diagram', format: 'mermaid', source: text }
-            : { kind: 'doc', source: text },
+            ? { kind: 'diagram', format: 'mermaid', source: merged }
+            : { kind: 'doc', source: merged },
         )
         const drawn = await renderArtifactSource(source, artifact.title)
         if (drawn.problems.length) throw new Error(drawn.problems[0])
-        return pages.saveEdit(artifactId, base, drawn, editedBy())
+        return pages.saveEdit(
+          artifactId,
+          current,
+          drawn,
+          current === base ? editedBy() : `${editedBy()}, merged with v${current}`,
+        )
       },
     },
     'artifacts.designSystem': {
@@ -426,6 +450,13 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
           refreshMinutes: minutes,
         })
         return pages.saveEdit(artifactId, base, await renderArtifactSource(source, artifact.title), editedBy())
+      },
+    },
+    'artifacts.editing': {
+      args: z.tuple([id, z.boolean()]),
+      run: (artifactId: string, editing: boolean) => {
+        need().pages.get(artifactId)
+        return editingPresence.mark(artifactId, ctx.host.callerName?.()?.slice(0, 60) ?? 'this computer', editing)
       },
     },
     'artifacts.turnSlide': {

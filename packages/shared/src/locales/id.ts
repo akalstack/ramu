@@ -6184,4 +6184,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Store Blob privat yang terhubung ke proyek; Vercel mengatur BLOB_READ_WRITE_TOKEN di sana.',
   'A private bucket in the app’s Supabase project, and one in its preview project.':
     'Bucket privat di proyek Supabase aplikasi, dan satu di proyek preview-nya.',
+  'Also being edited on {0}. Saving keeps both edits where they changed different lines.':
+    'Juga sedang disunting di {0}. Menyimpan mempertahankan kedua suntingan jika mengubah baris yang berbeda.',
 }
