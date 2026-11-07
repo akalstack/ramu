@@ -46,7 +46,7 @@ A request that needs no backend, shared data or domain becomes an artifact inste
 Vercel and Netlify are built ([Deploying an app](guide/deploy.md)): `HostingAdapter` and its registry in `workspace/deploy/`, the shared shapes in `packages/shared/src/types/deploy.ts`, hosting accounts connected by the platform's CLI sign-in or a guided token page, the contract suite (`apps/server/test/deployAdapters.test.ts`), `deploy.*` IPC, the deploy tools and the Deploy sheet. A new platform is one adapter file, its sign-in and a contract entry. What remains:
 
 - **More platforms, in order:** Cloudflare (Pages and Workers, signed in with `wrangler login`), GitHub Pages (through the forge's GitHub account, deployed by a GitHub Actions job), then Fly and Railway, then **Own server** (below). Each is a REST client using a token from `credentials/`; a platform CLI is only for its browser sign-in.
-- **Capabilities still to declare:** `promote`, `usage` (§8) and the resource kinds a platform provisions. Netlify previews come from pull requests; a branch preview through its API is not declared.
+- **Capabilities still to declare:** `promote` and the resource kinds a platform provisions. Netlify previews come from pull requests; a branch preview through its API is not declared.
 - **`ResourceAdapter`** (`workspace/deploy/resource.ts`, Neon built, §7): a hosting platform that provisions through its marketplace implements it too (Vercel Marketplace, Cloudflare D1, KV and R2, Netlify DB); a standalone provider (Supabase, Upstash, Resend) implements only this one. Deleting a resource is not on the interface.
 - **Connecting an account, still to do:** the same CLI sign-in for `gh`, `wrangler`, `fly`, `railway` and `eas` as those platforms land; starting a sign-in from a paired device for a remote host, with the link shown there (hosting accounts change only on the host today); token links prefilled where the platform allows it (GitHub's fine-grained token form, Cloudflare's templates); and offering an expiring token again before it runs out (Settings shows the date today).
 - **Deploy watch:** after a deploy, and on every push to the default branch, the thread is woken once the deployment finishes: the URL on success, the log tail on failure. It reuses the pull request watch's wake and queue path (`background/pullRequestWatches.ts`) and adds **Deployment failed** presets for Vercel and Netlify to [webhook schedules](guide/background-work.md#when-a-request-arrives).
@@ -85,9 +85,7 @@ For someone who has a VPS or wants the app on the Ramu host:
 
 ### 8. Cost and usage
 
-- The Deployments section shows what the platform reports for the current billing period (bandwidth, function time, build minutes, database storage) beside the plan's limit, read through the deploy adapter.
-- A notice in Inbox before a free-tier limit runs out (at 80% and 100%), naming what grows and the cheapest fix (cache a page, shrink images, raise the plan). The agent can read the same figures with `deploy_usage` and propose a change as a pull request.
-- Ramu never changes a plan or adds a payment method; **Open billing** goes to the platform's page.
+Usage figures for Vercel, Netlify and Neon beside the limits their APIs report, **Open billing**, notices at 80% and 100%, and `deploy_usage` are built ([Usage](guide/deploy.md#usage)). What remains: figures for each new platform's adapter as it lands, and Netlify bandwidth or credits if Netlify's API starts reporting them.
 
 ### 9. Uptime
 

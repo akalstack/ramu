@@ -7,6 +7,7 @@ import type {
   DomainStatus,
   HostingCapability,
   HostingPlatform,
+  UsageReport,
 } from '@ramu/shared/types/deploy'
 
 /** The account a call runs as: the token and, for a team on Vercel, the team the project belongs to. */
@@ -68,7 +69,12 @@ export interface HostingCapabilities {
     /** Creates the domain's records in the platform's own DNS; only for a domain listed with `managedDns`. */
     createRecords(auth: HostingAuth, site: HostingSite, domain: PlatformDomain): Promise<void>
   }
+  /** What the account used in the current billing period, as far as the platform's API reports it. */
+  usage?(auth: HostingAuth, site: HostingSite): Promise<PlatformUsage>
 }
+
+/** A platform's usage reading: the figures it reports, the period they cover and where its billing page is. */
+export type PlatformUsage = Pick<UsageReport, 'period' | 'figures' | 'billingPage'>
 
 /**
  * A domain as the platform reports it. `configured` and `certificate` are null when the platform does not say, and
@@ -101,7 +107,14 @@ export interface HostingAdapter {
 
 /** The declared capabilities, by the names the shared types use. */
 export function capabilityNames(adapter: HostingAdapter): HostingCapability[] {
-  const names: HostingCapability[] = ['linkRepository', 'deployPreview', 'deployProduction', 'rollback', 'domains']
+  const names: HostingCapability[] = [
+    'linkRepository',
+    'deployPreview',
+    'deployProduction',
+    'rollback',
+    'domains',
+    'usage',
+  ]
   return names.filter((name) => !!adapter.capabilities[name])
 }
 
@@ -123,16 +136,16 @@ export class ReplyLostError extends Error {}
 const LIMIT = /limit|quota|plan|upgrade|payment|exceeded/i
 
 /**
- * One JSON call to a platform. Error bodies are read only to classify the failure; their text is never shown, since
- * platforms can echo request details back.
+ * One call to a platform, answering its body as text. Error bodies are read only to classify the failure; their text
+ * is never shown, since platforms can echo request details back.
  */
-export async function platformCall<T>(
+export async function platformRequest(
   name: string,
   fetcher: typeof fetch,
   url: string,
   init: RequestInit & { token: string },
   what: string,
-): Promise<T> {
+): Promise<string> {
   const { token, ...rest } = init
   let response: Response
   try {
@@ -152,12 +165,22 @@ export async function platformCall<T>(
     const body = await response.text().catch(() => '')
     throw failure(name, response.status, body, what)
   }
-  let text: string
   try {
-    text = await response.text()
+    return await response.text()
   } catch (error) {
     throw new ReplyLostError(`${name} stopped answering while ${what}.`, { cause: error })
   }
+}
+
+/** One JSON call to a platform. */
+export async function platformCall<T>(
+  name: string,
+  fetcher: typeof fetch,
+  url: string,
+  init: RequestInit & { token: string },
+  what: string,
+): Promise<T> {
+  const text = await platformRequest(name, fetcher, url, init, what)
   return (text ? JSON.parse(text) : {}) as T
 }
 

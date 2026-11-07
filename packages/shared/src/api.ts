@@ -31,6 +31,7 @@ import type {
   ProjectResources,
   ResourceProvider,
   UptimeStatus,
+  UsageReport,
 } from './types/deploy'
 import type { LimitRetryResult } from './chat/providerWait'
 import type { CiPreview, CiSetupResult } from './ciWorkflow'
@@ -1213,6 +1214,8 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.resources'(projectId: string, repoId: string): ProjectResources
   /** Creates the project's database on the connected account; its variables join secrets sync. */
   'deploy.provision'(projectId: string, repoId: string, provider: ResourceProvider, plan: string): ProjectResources
+  /** What the project's platforms report for the current billing period, beside the plan's limits they report. */
+  'deploy.usage'(projectId: string): UsageReport[]
   /** The live address watch: the address checked, the last check, any unknown span and the open incident. */
   'deploy.uptime'(projectId: string): UptimeStatus
   /** Turns the live address watch on or off; off forgets its checks and closes an open incident without a recap. */

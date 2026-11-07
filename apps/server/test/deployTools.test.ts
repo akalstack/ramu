@@ -28,6 +28,7 @@ function setup(approve: boolean) {
     server as never,
     deploys as never,
     watches,
+    async () => [],
     source as never,
     'p1',
     () => source as never,

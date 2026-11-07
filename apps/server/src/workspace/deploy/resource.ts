@@ -2,7 +2,7 @@
 // in. A provider creates a resource on the person's own account and hands back the variables the app connects with.
 // Deleting a resource is deliberately not here: it is done on the provider's own page.
 import type { ResourceKind, ResourcePlan, ResourceProvider } from '@ramu/shared/types/deploy'
-import type { HostingAuth, HostingIdentity } from './adapter'
+import type { HostingAuth, HostingIdentity, PlatformUsage } from './adapter'
 
 /** A resource at the provider, and the variables that connect to it. */
 export interface ProvisionedResource {
@@ -26,7 +26,8 @@ export interface ResourceAdapter {
   page(id: string): string
   /** A copy of the resource for previews and development, created once and reused, with its own variables. */
   branch?(auth: HostingAuth, id: string, name: string): Promise<Record<string, string>>
-  usage?(auth: HostingAuth, id: string): Promise<{ storageBytes: number | null; computeSeconds: number | null }>
+  /** What the resource used in the current billing period, as far as the provider's API reports it. */
+  usage?(auth: HostingAuth, id: string): Promise<PlatformUsage>
 }
 
 const adapters = new Map<ResourceProvider, ResourceAdapter>()

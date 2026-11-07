@@ -200,6 +200,10 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
           return updated
         }),
     },
+    'deploy.usage': {
+      args: z.tuple([id]),
+      run: (projectId: string) => deploys().usage(project(projectId)),
+    },
     'deploy.uptime': {
       args: z.tuple([id]),
       run: (projectId: string) => deploys().uptime.status(project(projectId)),

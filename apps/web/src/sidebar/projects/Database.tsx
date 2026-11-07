@@ -8,8 +8,6 @@ import { invoke as openOnThisComputer } from '../../ipc'
 import { errorText } from '../../lib/errors'
 import { useHost } from '../../workspace/HostProvider'
 
-const megabytes = (bytes: number) => `${Math.max(0.1, Math.round(bytes / 104_857.6) / 10)} MB`
-
 /**
  * The Deploy sheet's database: Provision when the project needs one, then where it lives and the variables it sets.
  * Deleting it is done on the provider's page, never here.
@@ -89,11 +87,6 @@ export function DatabaseSection({
                   )
                 : t('Sync below sets {0}.', { 0: resource.variables.join(', ') })}
             </span>
-            {resource.usage?.storageBytes != null && (
-              <span className="text-muted-foreground">
-                {t('Storage this period: {0}', { 0: megabytes(resource.usage.storageBytes) })}
-              </span>
-            )}
             {shown.migrate && (
               <span className="text-muted-foreground">
                 {t('Before each production deploy from Ramu, {0} runs against the production database.', {

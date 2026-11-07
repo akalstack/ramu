@@ -1,13 +1,17 @@
 // Neon's REST API with the person's own API key. A project is the database; production uses its default branch, and
 // previews and development share a `preview` branch, a copy-on-write copy that never touches production data.
 import { platformCall, ReplyLostError, type HostingAuth } from './adapter'
+import type { UsageFigure } from '@ramu/shared/types/deploy'
 import { registerResourceAdapter, type ProvisionedResource, type ResourceAdapter } from './resource'
 
 interface NeonProject {
   id: string
   name: string
-  synthetic_storage_size?: number | null
   compute_time_seconds?: number | null
+  data_transfer_bytes?: number | null
+  branch_logical_size_limit_bytes?: number | null
+  consumption_period_start?: string | null
+  consumption_period_end?: string | null
 }
 
 interface NeonBranch {
@@ -15,6 +19,7 @@ interface NeonBranch {
   name: string
   default?: boolean
   primary?: boolean
+  logical_size?: number | null
 }
 
 /** Neon, reached at `api` (the real API unless a test points it at a fake server). */
@@ -52,7 +57,7 @@ export function neonAdapter(options: { api?: string; fetch?: typeof fetch } = {}
     const [pooled, direct] = await Promise.all([uri(true), uri(false)])
     return { DATABASE_URL: pooled, DATABASE_URL_UNPOOLED: direct }
   }
-  const main = async (auth: HostingAuth, id: string) => {
+  const mainBranch = async (auth: HostingAuth, id: string) => {
     const list = await branches(auth, id)
     const found = list.find((branch) => branch.default ?? branch.primary) ?? list[0]
     if (!found) throw new Error('The Neon project has no branch yet. Try again in a moment.')
@@ -61,7 +66,7 @@ export function neonAdapter(options: { api?: string; fetch?: typeof fetch } = {}
   const resource = async (auth: HostingAuth, found: { id: string; name: string }): Promise<ProvisionedResource> => ({
     id: found.id,
     name: found.name,
-    variables: await connection(auth, found.id, await main(auth, found.id)),
+    variables: await connection(auth, found.id, await mainBranch(auth, found.id)),
   })
   return {
     id: 'neon',
@@ -125,10 +130,39 @@ export function neonAdapter(options: { api?: string; fetch?: typeof fetch } = {}
       }
     },
     async usage(auth, id) {
-      const { project: found } = await call<{ project: NeonProject }>(project(id), auth, 'reading usage')
+      // The project's own counters, which Neon keeps for every plan; its billing history endpoint is for paid plans.
+      const [{ project: found }, user, main] = await Promise.all([
+        call<{ project: NeonProject }>(project(id), auth, 'reading usage'),
+        call<{ compute_seconds_limit?: number | null }>('/users/me', auth, 'reading the plan'),
+        mainBranch(auth, id),
+      ])
+      const time = (value: string | null | undefined) => (value ? Date.parse(value) : NaN)
+      const start = time(found.consumption_period_start)
+      const end = time(found.consumption_period_end)
+      const positive = (value: number | null | undefined) => (value && value > 0 ? value : null)
+      const figures: UsageFigure[] = []
+      if (main.logical_size != null)
+        figures.push({
+          metric: 'storage',
+          service: null,
+          used: main.logical_size,
+          unit: 'bytes',
+          limit: positive(found.branch_logical_size_limit_bytes),
+        })
+      if (found.compute_time_seconds != null)
+        figures.push({
+          metric: 'compute',
+          service: null,
+          used: found.compute_time_seconds,
+          unit: 'seconds',
+          limit: positive(user.compute_seconds_limit),
+        })
+      if (found.data_transfer_bytes != null)
+        figures.push({ metric: 'transfer', service: null, used: found.data_transfer_bytes, unit: 'bytes', limit: null })
       return {
-        storageBytes: found.synthetic_storage_size ?? null,
-        computeSeconds: found.compute_time_seconds ?? null,
+        period: Number.isNaN(start) ? null : { start, end: Number.isNaN(end) ? null : end },
+        figures,
+        billingPage: 'https://console.neon.tech/app/billing',
       }
     },
   }

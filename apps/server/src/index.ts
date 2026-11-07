@@ -509,9 +509,12 @@ schedules.webhookBases = () =>
     ...(network.enabled ? candidateUrls(network.host, network.port, Boolean(config.tls)) : []),
   ].map((candidate) => ({ url: candidate.url, via: candidate.interface }))
 const pullRequestWatches = new PullRequestWatchService(db, workspace, agents, changed)
-const deploys = createDeploys(workspace, db, agents, (thread) => {
-  send('workspace:changed', {})
-  void mobilePush.deliverIncident(thread).catch(() => {})
+const deploys = createDeploys(workspace, db, agents, {
+  incidentOpened(thread) {
+    send('workspace:changed', {})
+    void mobilePush.deliverIncident(thread).catch(() => {})
+  },
+  notice: (notice) => inbox.raise(notice),
 })
 // Thread rows show their pull request, so a change there refreshes the thread lists.
 const pullRequestIndex = new PullRequestIndex(workspace, agents, () => send('workspace:changed', {}))
@@ -921,6 +924,7 @@ async function stop(intentional = false, exitCode = 0) {
   await pullRequestWatches.stop()
   await deploys.domains.stop()
   await deploys.uptime.stop()
+  await deploys.usageNotices.stop()
   await pullRequestIndex.stop()
   secretFiles.stop()
   abilities.stop()
@@ -1318,6 +1322,7 @@ const mcpHttp = createServer(async (req, res) => {
       server,
       deploys.service,
       deploys.domains,
+      deploys.usage,
       source,
       deployProject,
       () => agents.get(source.id),
@@ -2115,6 +2120,7 @@ const tick = setInterval(() => {
   void pullRequestWatches.tick().catch(console.error)
   void deploys.domains.tick().catch(console.error)
   void deploys.uptime.tick().catch(console.error)
+  void deploys.usageNotices.tick().catch(console.error)
   void pullRequestIndex.tick().catch(console.error)
   void agentThreads.tick().catch(console.error)
   void recaps.tick().catch(console.error)

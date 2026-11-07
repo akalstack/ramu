@@ -30,6 +30,7 @@ describe('Ramu tool calls', () => {
       'deploy_domains',
       'deploy_domain_add',
       'deploy_domain_records',
+      'deploy_usage',
     ]) {
       const call = ramuTool(use(`mcp__ramu__${name}`, {}))
       expect(call?.name, name).toBe(name)

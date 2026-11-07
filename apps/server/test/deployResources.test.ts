@@ -49,9 +49,13 @@ async function fake(routes: Route[]) {
 
 /** Neon's replies for one account: `projects` grows when one is created, as Neon's list would. */
 function neonRoutes(projects: { id: string; name: string }[]): Route[] {
-  const branches = [{ id: 'br_main', name: 'main', default: true }]
+  const branches = [{ id: 'br_main', name: 'main', default: true, logical_size: 31_457_280 }]
   return [
-    { method: 'GET', path: /^\/users\/me$/, body: { id: 'u1', email: 'ana@example.com' } },
+    {
+      method: 'GET',
+      path: /^\/users\/me$/,
+      body: { id: 'u1', email: 'ana@example.com', plan: 'free', compute_seconds_limit: 360_000 },
+    },
     {
       method: 'POST',
       path: /^\/projects$/,
@@ -64,7 +68,7 @@ function neonRoutes(projects: { id: string; name: string }[]): Route[] {
       method: 'POST',
       path: /^\/projects\/prj_1\/branches$/,
       body: { branch: { id: 'br_preview', name: 'preview' } },
-      effect: () => void branches.push({ id: 'br_preview', name: 'preview', default: false }),
+      effect: () => void branches.push({ id: 'br_preview', name: 'preview', default: false, logical_size: 0 }),
     },
     {
       method: 'GET',
@@ -81,7 +85,18 @@ function neonRoutes(projects: { id: string; name: string }[]): Route[] {
     {
       method: 'GET',
       path: /^\/projects\/prj_1$/,
-      body: { project: { id: 'prj_1', name: 'shop', synthetic_storage_size: 31_457_280, compute_time_seconds: 120 } },
+      body: {
+        project: {
+          id: 'prj_1',
+          name: 'shop',
+          synthetic_storage_size: 0,
+          compute_time_seconds: 120,
+          data_transfer_bytes: 2048,
+          branch_logical_size_limit_bytes: 536_870_912,
+          consumption_period_start: '2026-11-01T00:00:00Z',
+          consumption_period_end: '2026-12-01T00:00:00Z',
+        },
+      },
     },
   ]
 }
@@ -134,7 +149,16 @@ describe('Neon resource adapter', () => {
     // A second call reuses the branch instead of creating another.
     await neon.branch!(auth, 'prj_1', 'preview')
     expect(server.requests.filter((line) => line === 'POST /projects/prj_1/branches')).toHaveLength(1)
-    expect(await neon.usage!(auth, 'prj_1')).toEqual({ storageBytes: 31_457_280, computeSeconds: 120 })
+    // Storage is the main branch's size against Neon's per-branch limit; compute is measured against the plan's limit.
+    expect(await neon.usage!(auth, 'prj_1')).toEqual({
+      period: { start: Date.UTC(2026, 10, 1), end: Date.UTC(2026, 11, 1) },
+      figures: [
+        { metric: 'storage', service: null, used: 31_457_280, unit: 'bytes', limit: 536_870_912 },
+        { metric: 'compute', service: null, used: 120, unit: 'seconds', limit: 360_000 },
+        { metric: 'transfer', service: null, used: 2048, unit: 'bytes', limit: null },
+      ],
+      billingPage: 'https://console.neon.tech/app/billing',
+    })
     expect(server.requests.join('\n')).not.toContain('neon_key')
   })
 

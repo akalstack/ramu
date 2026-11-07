@@ -22,6 +22,7 @@ import { DatabaseSection } from './Database'
 import { DomainsSection } from './Domains'
 import { EnvSyncSection } from './EnvSync'
 import { UptimeSection } from './Uptime'
+import { UsageSection } from './Usage'
 
 const STATE: Record<DeploymentState, string> = {
   queued: 'Queued',
@@ -299,6 +300,7 @@ export function DeployDialog({
             )}
           </ul>
           <UptimeSection projectId={project.id} />
+          <UsageSection projectId={project.id} />
           {status.capabilities.includes('domains') && (
             <DomainsSection projectId={project.id} platform={account?.name ?? binding.platform} />
           )}

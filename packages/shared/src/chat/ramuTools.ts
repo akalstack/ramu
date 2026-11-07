@@ -54,6 +54,7 @@ const KNOWN = new Set([
   'deploy_domains',
   'deploy_domain_add',
   'deploy_domain_records',
+  'deploy_usage',
   'ci_setup',
   'skill_update',
   'skill_archive',
@@ -271,6 +272,8 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
       return reply('Added a domain', 'Adding a domain', 'wrench', text(args.domain))
     case 'deploy_domain_records':
       return reply('Created DNS records', 'Creating DNS records', 'wrench', text(args.domain))
+    case 'deploy_usage':
+      return reply('Checked usage', 'Checking usage', 'search')
     case 'ci_setup':
       return reply(
         data.written === false ? 'Read the CI workflow' : 'Wrote the CI workflow',

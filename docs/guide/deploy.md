@@ -35,6 +35,20 @@ The same accounts publish artifacts with **Publish to the web** ([Artifacts](art
   - Ramu checks a newly added domain every minute for up to three days, and when it serves HTTPS it wakes the project's most recent thread with one message, through the same queue as pull request feedback.
 - **Checks** says whether the repository has CI and offers **Set up CI** when it has none ([Set up CI](git-hosting.md#set-up-ci)).
 
+## Usage
+
+**Usage this billing period** in the deploy sheet shows what the project's platforms report through their APIs, next to the plan's limit when the API reports one. **Open billing** opens the platform's billing page. Ramu never changes a plan or adds a payment method, and neither can an agent.
+
+| Platform | Figures | Limit |
+| --- | --- | --- |
+| Vercel | Each service's usage this calendar month (such as data transfer and function invocations), summed from Vercel's billing charges, for the account or team the project is linked under | Not reported by Vercel's API; **Open billing** shows it |
+| Netlify | The team's build minutes for the billing period | The minutes included in the plan, with any add-on packs |
+| Neon | The main branch's size, compute time and data transfer for the billing period (Neon's own counters, which lag a little) | Storage against Neon's branch size limit; compute against the plan's compute time; transfer has none |
+
+When the API reports no figures for an account or plan (Vercel refuses billing data to some roles; Netlify plans billed in credits have no build minutes), the sheet says so instead of showing numbers.
+
+Every six hours the host reads the same figures. A figure with a reported limit that reaches 80%, and again at 100%, raises one notice per billing period in the notifications (on the phone, under **Missed**), naming what grows and the cheapest fix, such as building only when the app's files change, or deleting data and branches the app no longer needs. The notice opens the project's most recent thread, where an agent can read the figures with `deploy_usage` and propose a fix as a pull request.
+
 ## Uptime
 
 Once a project has a live production deployment, **Watch the live address** in the deploy sheet is on. Untick it to stop the checks.
@@ -52,7 +66,7 @@ The deploy sheet shows **Database** when the project needs one: its stack stores
 
 - **Provision** creates a Neon Postgres project named after the Ramu project on your connected Neon account, and a `preview` branch of it (a copy that shares storage until it changes). Production uses the main branch; preview deployments, this host and GitHub Actions use the `preview` branch, so they never change production data.
 - Ramu keeps both branches' connection values in the host's credential store and sets the preview branch's `DATABASE_URL` (pooled, for the app) and `DATABASE_URL_UNPOOLED` (direct, for migrations) in this host's Environment variables. **Sync** in **Environment variables** then copies them on: the main branch's values to the platform's production variables, the preview branch's to its preview variables and GitHub Actions. The sheet shows names only.
-- Once provisioned, the sheet shows the database, **Open** for its page on Neon, and the storage Neon reports for the period. Resizing and deleting it are done on Neon's page; neither the sheet nor an agent deletes a database.
+- Once provisioned, the sheet shows the database, and **Open** for its page on Neon; its size and compute time are under [Usage](#usage). Resizing and deleting it are done on Neon's page; neither the sheet nor an agent deletes a database.
 - **Migrations:** when `ramu.json` names a `migrate` command (the Django and Rails stacks fill it in), **Deploy to production** and `deploy_production` first run it on this host against the production database, in the repository's checkout of the production branch. The checkout must be on that branch at the commit pushed to GitHub, so the migrations match what deploys. A failed migration stops the deploy: the sheet shows its output, and the project's most recent thread is woken with it to find a fix. Pushes to the default branch that the platform deploys on its own do not run migrations from Ramu.
 
 The project stays linked to the account that linked it. If you connect a different account later, deploy actions are refused until you connect that account again or link the project again.
@@ -65,6 +79,7 @@ Threads in a project get deploy tools for that project, on its linked platform a
 - `deploy_logs`: the end of a deployment's build log.
 - `deploy_preview`: a preview deployment of the thread's current branch (Vercel; Netlify builds previews from pull requests). Outside Full access it asks first.
 - `deploy_domains`: the project's domains, the records each needs and whether it is live.
+- `deploy_usage`: what the platform and database report for the billing period, beside the plan's limits, and the billing page. Read-only.
 - `deploy_domain_add` and `deploy_domain_records`: add a domain, or create its records in the platform's DNS. They always ask you with a card naming the domain and each record, in every access mode, and the thread is woken when the domain is live.
 - `deploy_production` and `deploy_rollback`: always ask you with an approval card naming the address and what changes, in every access mode. A refusal is final for that request.
 

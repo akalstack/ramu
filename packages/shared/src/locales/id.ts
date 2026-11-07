@@ -5810,7 +5810,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Production uses the main branch. Previews, this host and CI use a preview branch, so they never change production data. Sync below sets {0}.':
     'Produksi memakai branch utama. Preview, host ini, dan CI memakai branch preview, jadi tidak pernah mengubah data produksi. Sinkronisasi di bawah mengatur {0}.',
   'Sync below sets {0}.': 'Sinkronisasi di bawah mengatur {0}.',
-  'Storage this period: {0}': 'Penyimpanan periode ini: {0}',
   'Before each production deploy from Ramu, {0} runs against the production database.':
     'Sebelum setiap deploy produksi dari Ramu, {0} dijalankan pada database produksi.',
   'This app stores data. Provision creates a Postgres database on your own account, with a separate branch for previews and development.':
@@ -5837,4 +5836,20 @@ export const indonesian: Readonly<Record<string, string>> = {
   'An incident thread is open in this project since {0}.': 'Utas insiden terbuka di proyek ini sejak {0}.',
   'Unknown from {0} to {1}: this computer was asleep or Ramu was not running.':
     'Tidak diketahui dari {0} sampai {1}: komputer ini sedang tidur atau Ramu tidak berjalan.',
+  'Checked usage': 'Memeriksa penggunaan',
+  'Checking usage': 'Memeriksa penggunaan',
+  'Build minutes': 'Menit build',
+  'Database storage': 'Penyimpanan database',
+  'Database compute': 'Komputasi database',
+  'Data transfer': 'Transfer data',
+  '{0} MB': '{0} MB',
+  '{0} hours': '{0} jam',
+  '{0} minutes': '{0} menit',
+  '{0}: {1}': '{0}: {1}',
+  '{0}: {1} of {2} ({3}%)': '{0}: {1} dari {2} ({3}%)',
+  'Usage this billing period': 'Penggunaan periode tagihan ini',
+  '{0} since {1}': '{0} sejak {1}',
+  'Open billing': 'Buka tagihan',
+  '{0}’s API reports no plan limits; Open billing shows them.':
+    'API {0} tidak melaporkan batas paket; Buka tagihan untuk melihatnya.',
 }

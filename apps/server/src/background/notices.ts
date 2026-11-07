@@ -64,6 +64,11 @@ export class NoticeInbox {
     )
   }
 
+  /** Adds a notice raised by the host itself rather than by a chat, such as a usage limit. */
+  raise(notice: InboxNotice): void {
+    this.set([notice, ...this.items.filter((item) => item.id !== notice.id)].slice(0, 50))
+  }
+
   dismiss(id: string): void {
     if (this.items.some((item) => item.id === id)) this.set(this.items.filter((item) => item.id !== id))
   }

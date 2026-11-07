@@ -18,7 +18,8 @@ export const isHostingPlatform = (platform: AccountPlatform): platform is Hostin
   (HOSTING_PLATFORMS as readonly string[]).includes(platform)
 
 /** What a platform can do beyond the required reads. The UI and agent tools hide what a target lacks. */
-export type HostingCapability = 'linkRepository' | 'deployPreview' | 'deployProduction' | 'rollback' | 'domains'
+export type HostingCapability =
+  'linkRepository' | 'deployPreview' | 'deployProduction' | 'rollback' | 'domains' | 'usage'
 
 /** Why a platform refused a call, in the words every platform shares. */
 export type DeployFailureKind = 'signed-out' | 'missing-permission' | 'plan-limit' | 'not-found'
@@ -77,8 +78,6 @@ export interface ProjectResource {
   previewBranch: boolean
   /** The provider's page for the resource, where it is resized or deleted. */
   page: string
-  /** What the provider reports for the current billing period, when it does. */
-  usage: { storageBytes: number | null; computeSeconds: number | null } | null
 }
 
 export interface ProjectResources {
@@ -201,4 +200,31 @@ export interface UptimeStatus {
   gap: { from: number; to: number } | null
   /** The open incident's thread, while the address is down. */
   incident: { taskId: string; openedAt: number } | null
+}
+
+/** What a usage figure measures: one Ramu names, or a platform service named in the platform's own words. */
+export type UsageMetric = 'build-minutes' | 'storage' | 'compute' | 'transfer' | 'service'
+
+export interface UsageFigure {
+  metric: UsageMetric
+  /** The platform's own name for a `service` figure, such as "Fast Data Transfer". */
+  service: string | null
+  used: number
+  /** `bytes`, `minutes` or `seconds`, or the platform's own unit for a `service` figure. */
+  unit: string
+  /** The plan's limit as the platform reports it; null when the platform reports none. */
+  limit: number | null
+}
+
+/** One platform's figures for the current billing period, as it reports them. */
+export interface UsageReport {
+  platform: AccountPlatform
+  name: string
+  /** The span the figures cover (milliseconds), when the platform says. */
+  period: { start: number; end: number | null } | null
+  figures: UsageFigure[]
+  /** Set when the platform reports no usage for this account, in plain words. */
+  unavailable: string | null
+  /** The platform's billing page. Ramu never changes a plan or adds a payment method. */
+  billingPage: string
 }

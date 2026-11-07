@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AgentSessionInfo } from '@ramu/shared/types'
 import { z } from 'zod'
 import { domainName } from '@ramu/shared/domains'
-import type { DnsRecord } from '@ramu/shared/types/deploy'
+import type { DnsRecord, UsageReport } from '@ramu/shared/types/deploy'
 import { currentBranch } from '../git'
 import type { DomainWatches } from './domainWatch'
 import type { DeployService } from './service'
@@ -24,6 +24,8 @@ export function registerDeployTools(
   server: McpServer,
   deploys: DeployService,
   watches: Pick<DomainWatches, 'watch'>,
+  /** The project's usage reports: its hosting platform's, then its resources'. */
+  usage: (projectId: string) => Promise<UsageReport[]>,
   source: AgentSessionInfo,
   projectId: string,
   current: () => AgentSessionInfo,
@@ -121,6 +123,15 @@ export function registerDeployTools(
       await deploys.rollback(projectId, id)
       return result({ rolledBack: true, deploymentId: id, url })
     },
+  )
+  server.registerTool(
+    'deploy_usage',
+    {
+      description:
+        'What the project’s hosting platform and database report for the current billing period, each figure beside the plan’s limit when the platform reports one, and the billing page. Read-only. When a figure nears its limit, propose the cheapest fix as a pull request (cache pages, shrink images, build less often, delete unused data); never change a plan or add a payment method, which is the person’s action on the billing page.',
+      inputSchema: {},
+    },
+    async () => result({ usage: await usage(projectId) }),
   )
   server.registerTool(
     'deploy_domains',

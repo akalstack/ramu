@@ -1,4 +1,6 @@
 import { DEFAULT_AGENT_SETTINGS, type AgentSettings } from '@ramu/shared/types'
+import type { InboxNotice } from '@ramu/shared/chat/notices'
+import type { UsageReport } from '@ramu/shared/types/deploy'
 import type { AgentService } from '../../agent'
 import { HostCredentialStore } from '../../credentials/store'
 import type { Db } from '../../db'
@@ -11,6 +13,7 @@ import { ResourceService } from './resources'
 import { DeployService } from './service'
 import { HostingSignIns } from './signIn'
 import { UptimeWatches } from './uptime'
+import { projectUsage, UsageNotices } from './usage'
 import { ProjectWake } from './wake'
 
 /** The deploy pieces one host shares between IPC, agent tools and Publish to the web. */
@@ -20,6 +23,9 @@ export interface Deploys {
   signIns: HostingSignIns
   domains: DomainWatches
   uptime: UptimeWatches
+  /** Every usage report of a project: its hosting platform's, then its resources'. */
+  usage(projectId: string): Promise<UsageReport[]>
+  usageNotices: UsageNotices
   resources: ResourceService
   wake: ProjectWake
 }
@@ -28,8 +34,12 @@ export function createDeploys(
   workspace: Workspace,
   db: Db,
   agents: AgentService,
-  /** An incident thread opened: the phones are told and the thread lists refresh. */
-  incidentOpened: (thread: { taskId: string; sessionId: string }) => void,
+  events: {
+    /** An incident thread opened: the phones are told and the thread lists refresh. */
+    incidentOpened(thread: { taskId: string; sessionId: string }): void
+    /** A usage figure neared its limit. */
+    notice(notice: InboxNotice): void
+  },
   credentials = new HostCredentialStore(),
 ): Deploys {
   const getState = <T>(key: string, fallback: T) => workspace.getAppState(key, fallback)
@@ -96,14 +106,30 @@ export function createDeploys(
         })
         return { taskId: task.id, sessionId: session.id }
       },
-      notify: incidentOpened,
+      notify: (thread) => events.incidentOpened(thread),
     },
     wake,
     service,
   )
+  const usage = (projectId: string) => projectUsage(service, resources, projectId)
+  const notices = new UsageNotices(
+    {
+      getState,
+      setState,
+      projects: () => workspace.listProjects(),
+      latestThread(projectId) {
+        const sessionId = wake.latestThread(projectId)
+        return sessionId ? { taskId: agents.get(sessionId).taskId, sessionId } : null
+      },
+      raise: (notice) => events.notice(notice),
+    },
+    usage,
+  )
   return {
     accounts,
     service,
+    usage,
+    usageNotices: notices,
     signIns: new HostingSignIns(accounts),
     domains: new DomainWatches(workspace, wake, service),
     uptime,

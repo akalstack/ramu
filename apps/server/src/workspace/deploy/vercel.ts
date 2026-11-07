@@ -1,10 +1,11 @@
 // Vercel's REST API with the person's own token. Linking uses Vercel's GitHub integration, so every pull request gets
 // a preview and the default branch deploys to production without a token in CI.
 import { recordName } from '@ramu/shared/domains'
-import type { Deployment, DeploymentState, DnsRecord } from '@ramu/shared/types/deploy'
+import type { Deployment, DeploymentState, DnsRecord, UsageFigure } from '@ramu/shared/types/deploy'
 import {
   DeployError,
   platformCall,
+  platformRequest,
   registerHostingAdapter,
   tail,
   type HostingAdapter,
@@ -12,6 +13,18 @@ import {
   type HostingSite,
   type PlatformDomain,
 } from './adapter'
+
+/** One FOCUS charge row from Vercel's billing API. */
+interface VercelCharge {
+  ChargeCategory?: string
+  ConsumedQuantity?: number | null
+  ConsumedUnit?: string | null
+  ServiceName?: string
+}
+
+/** Rows read from one charges reply: a month of daily rows per service, with room to spare. */
+const CHARGE_ROWS = 20_000
+const MAX_SERVICES = 20
 
 interface VercelDeployment {
   uid?: string
@@ -323,6 +336,44 @@ export function vercelAdapter(options: { api?: string; fetch?: typeof fetch } = 
         await call(`/v9/projects/${project(site)}/rollback/${encodeURIComponent(deploymentId)}`, auth, 'rolling back', {
           method: 'POST',
         })
+      },
+      async usage(auth) {
+        // Vercel reports charges (FOCUS rows, one JSON object per line) per service and day, but no plan limits; the
+        // calendar month stands in for the billing period, which its API does not name.
+        const today = new Date()
+        const start = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)
+        const end = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 1)
+        const text = await platformRequest(
+          'Vercel',
+          fetcher,
+          url('/v1/billing/charges', auth, {
+            from: new Date(start).toISOString(),
+            to: new Date(end).toISOString(),
+          }),
+          { token: auth.token },
+          'reading usage',
+        )
+        const totals = new Map<string, UsageFigure>()
+        for (const line of text.split('\n').slice(0, CHARGE_ROWS)) {
+          let row: VercelCharge
+          try {
+            row = JSON.parse(line) as VercelCharge
+          } catch {
+            continue
+          }
+          if (row.ChargeCategory !== 'Usage' || typeof row.ConsumedQuantity !== 'number' || !row.ServiceName) continue
+          const unit = row.ConsumedUnit ?? ''
+          const key = `${row.ServiceName}\u0000${unit}`
+          const figure = totals.get(key) ?? { metric: 'service', service: row.ServiceName, used: 0, unit, limit: null }
+          totals.set(key, { ...figure, used: figure.used + row.ConsumedQuantity })
+        }
+        return {
+          period: { start, end: null },
+          figures: [...totals.values()]
+            .sort((a, b) => (a.service ?? '').localeCompare(b.service ?? ''))
+            .slice(0, MAX_SERVICES),
+          billingPage: 'https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings%2Fbilling&title=Billing',
+        }
       },
     },
   }

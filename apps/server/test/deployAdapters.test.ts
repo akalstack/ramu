@@ -3,7 +3,7 @@
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Deployment, DeployBinding, DnsRecord, HostingCapability } from '@ramu/shared/types/deploy'
+import type { Deployment, DeployBinding, DnsRecord, HostingCapability, UsageFigure } from '@ramu/shared/types/deploy'
 import { capabilityNames, DeployError, type HostingAdapter, type HostingSite } from '../src/workspace/deploy/adapter'
 import { netlifyAdapter } from '../src/workspace/deploy/netlify'
 import { DeployService } from '../src/workspace/deploy/service'
@@ -20,6 +20,8 @@ interface Route {
   effect?: () => void
   /** Closes the connection instead of answering: the platform acted, the reply is lost. */
   drop?: boolean
+  /** A body sent as it is, for replies that are not one JSON document. */
+  raw?: string
 }
 
 interface Fake {
@@ -45,7 +47,9 @@ async function fake(routes: Route[]): Promise<Fake> {
       if (!route) return void res.writeHead(500).end(`no recorded reply for ${line}`)
       route.effect?.()
       if (route.drop) return void req.socket.destroy()
-      res.writeHead(route.status ?? 200, { 'Content-Type': 'application/json' }).end(JSON.stringify(route.body ?? {}))
+      res
+        .writeHead(route.status ?? 200, { 'Content-Type': 'application/json' })
+        .end(route.raw ?? JSON.stringify(route.body ?? {}))
     })
   })
   servers.push(server)
@@ -66,6 +70,8 @@ interface Contract {
   createdId: string
   productionUrl: string
   logTail: string
+  /** The usage the recorded replies report, figures and billing page. */
+  usage: { figures: UsageFigure[]; billingPage: RegExp }
 }
 
 const now = Date.now()
@@ -74,7 +80,7 @@ const contracts: Contract[] = [
     name: 'Vercel',
     make: (url) => vercelAdapter({ api: url }),
     site: { siteId: 'prj_1', siteName: 'shop' },
-    capabilities: ['linkRepository', 'deployPreview', 'deployProduction', 'rollback', 'domains'],
+    capabilities: ['linkRepository', 'deployPreview', 'deployProduction', 'rollback', 'domains', 'usage'],
     first: {
       uid: 'dpl_1',
       url: 'shop-abc.vercel.app',
@@ -94,7 +100,32 @@ const contracts: Contract[] = [
     createdId: 'dpl_2',
     productionUrl: 'https://shop.example.com',
     logTail: 'Error: build failed',
+    // Charges add up per service and unit; credits and purchases are not usage.
+    usage: {
+      figures: [
+        { metric: 'service', service: 'Fast Data Transfer', used: 1.5, unit: 'GB', limit: null },
+        { metric: 'service', service: 'Function Invocations', used: 3000, unit: 'Invocations', limit: null },
+      ],
+      billingPage: /^https:\/\/vercel\.com\//,
+    },
     routes: (list, created) => [
+      {
+        method: 'GET',
+        path: /^\/v1\/billing\/charges\?from=.*&to=/,
+        raw: [
+          { ChargeCategory: 'Usage', ServiceName: 'Fast Data Transfer', ConsumedQuantity: 1, ConsumedUnit: 'GB' },
+          { ChargeCategory: 'Usage', ServiceName: 'Fast Data Transfer', ConsumedQuantity: 0.5, ConsumedUnit: 'GB' },
+          {
+            ChargeCategory: 'Usage',
+            ServiceName: 'Function Invocations',
+            ConsumedQuantity: 3000,
+            ConsumedUnit: 'Invocations',
+          },
+          { ChargeCategory: 'Credit', ServiceName: 'Pro Plan', ConsumedQuantity: null, ConsumedUnit: null },
+        ]
+          .map((row) => JSON.stringify({ BilledCost: 0, BillingCurrency: 'USD', ...row }))
+          .join('\n'),
+      },
       { method: 'GET', path: /^\/v2\/user$/, body: { user: { id: 'u1', username: 'ana', defaultTeamId: 'team_1' } } },
       { method: 'GET', path: /^\/v5\/user\/tokens\/current$/, body: { token: { scopes: [{ type: 'user' }] } } },
       { method: 'GET', path: /^\/v6\/deployments\?projectId=prj_1/, body: { deployments: list } },
@@ -133,7 +164,7 @@ const contracts: Contract[] = [
     name: 'Netlify',
     make: (url) => netlifyAdapter({ api: url, github: `${url}/gh` }),
     site: { siteId: 'site_1', siteName: 'shop' },
-    capabilities: ['linkRepository', 'deployProduction', 'rollback', 'domains'],
+    capabilities: ['linkRepository', 'deployProduction', 'rollback', 'domains', 'usage'],
     first: {
       id: 'd1',
       state: 'ready',
@@ -156,13 +187,43 @@ const contracts: Contract[] = [
     createdId: 'd2',
     productionUrl: 'https://shop.netlify.app',
     logTail: 'Failed: exit 2',
+    usage: {
+      figures: [{ metric: 'build-minutes', service: null, used: 240, unit: 'minutes', limit: 300 }],
+      billingPage: /^https:\/\/app\.netlify\.com\/teams\/ana-team\/billing/,
+    },
     routes: (list, created) => [
+      {
+        method: 'GET',
+        path: /^\/acc_1\/builds\/status$/,
+        body: [
+          {
+            active: 0,
+            pending_concurrency: 0,
+            enqueued: 0,
+            build_count: 12,
+            minutes: {
+              current: 240,
+              current_average_sec: 60,
+              previous: 100,
+              period_start_date: '2026-11-01T00:00:00Z',
+              period_end_date: '2026-12-01T00:00:00Z',
+              last_updated_at: '2026-11-07T00:00:00Z',
+              included_minutes: '300',
+              included_minutes_with_packs: '300',
+            },
+          },
+        ],
+      },
       { method: 'GET', path: /^\/user$/, body: { id: 'u1', full_name: 'Ana' } },
       { method: 'GET', path: /^\/sites\/site_1\/deploys\?per_page=/, body: list },
       { method: 'GET', path: /^\/sites\/site_1\/deploys\/d1$/, body: list.at(-1) },
       { method: 'GET', path: /^\/sites\/site_1\/deploys\/d2$/, body: created },
       { method: 'GET', path: /^\/builds\/b1\/log$/, body: [{ message: 'Building' }, { message: 'Failed: exit 2' }] },
-      { method: 'GET', path: /^\/sites\/site_1$/, body: { ssl_url: 'https://shop.netlify.app' } },
+      {
+        method: 'GET',
+        path: /^\/sites\/site_1$/,
+        body: { ssl_url: 'https://shop.netlify.app', account_id: 'acc_1', account_slug: 'ana-team' },
+      },
       { method: 'GET', path: /^\/gh\/repos\/ana\/shop$/, body: { id: 7, full_name: 'ana/shop' } },
       { method: 'POST', path: /^\/deploy_keys$/, body: { id: 'k1', public_key: 'ssh-ed25519 AAAA' } },
       { method: 'POST', path: /^\/gh\/repos\/ana\/shop\/keys$/, status: 201, body: { id: 1 } },
@@ -228,6 +289,15 @@ describe.each(contracts)('$name hosting adapter', (contract) => {
     expect(deployed).toMatchObject({ id: contract.createdId, production: true })
     await adapter.capabilities.rollback!(auth, site, contract.name === 'Vercel' ? 'dpl_1' : 'd1')
     // Tokens go only in the Authorization header, never in a URL.
+    expect(server.requests.join('\n')).not.toContain('tok_123')
+  })
+
+  it('reports only the usage figures and limits the platform’s API returns', async () => {
+    const { adapter, server } = await setup()
+    const usage = await adapter.capabilities.usage!(auth, contract.site)
+    expect(usage.figures).toEqual(contract.usage.figures)
+    expect(usage.billingPage).toMatch(contract.usage.billingPage)
+    expect(usage.period?.start).toBeGreaterThan(0)
     expect(server.requests.join('\n')).not.toContain('tok_123')
   })
 

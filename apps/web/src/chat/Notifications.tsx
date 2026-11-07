@@ -337,11 +337,11 @@ export function Notifications() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [invoke, on] by design; the values it reads beyond these are current as of that run
   }, [invoke, on])
-  // A notice about a chat that is on screen is stale.
+  // A notice about a chat that is on screen is stale; a usage notice is about the app, not the chat, so it stays.
   const noticeList = notices.list()
   useEffect(() => {
     for (const entry of inbox.current)
-      if (watching.current(entry.taskId, entry.sessionId)) {
+      if (entry.kind !== 'usage' && watching.current(entry.taskId, entry.sessionId)) {
         notify.close(entry.id)
         dismissHost(entry.id)
       }

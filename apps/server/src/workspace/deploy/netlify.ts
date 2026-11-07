@@ -26,6 +26,17 @@ interface NetlifyDeploy {
   error_message?: string | null
 }
 
+/** A team's build status; the minutes are counted for the current billing period. */
+interface BuildStatus {
+  minutes?: {
+    current?: number
+    period_start_date?: string
+    period_end_date?: string
+    included_minutes?: string | number | null
+    included_minutes_with_packs?: string | number | null
+  }
+}
+
 const STATES: Record<string, DeploymentState> = {
   new: 'queued',
   pending_review: 'queued',
@@ -352,6 +363,41 @@ export function netlifyAdapter(options: { api?: string; github?: string; fetch?:
           'restoring the deployment',
           { method: 'POST' },
         )
+      },
+      async usage(auth, target) {
+        // Netlify's API reports a team's build minutes against its plan; bandwidth and credits are on its dashboard only.
+        const { account_id: account, account_slug: slug } = await call<{ account_id: string; account_slug?: string }>(
+          site(target.siteId),
+          auth,
+          'reading the site',
+        )
+        const reply = await call<BuildStatus | BuildStatus[]>(
+          `/${encodeURIComponent(account)}/builds/status`,
+          auth,
+          'reading build minutes',
+        )
+        const minutes = (Array.isArray(reply) ? reply[0] : reply)?.minutes
+        const included = Number(minutes?.included_minutes_with_packs ?? minutes?.included_minutes)
+        const start = minutes?.period_start_date ? Date.parse(minutes.period_start_date) : NaN
+        const end = minutes?.period_end_date ? Date.parse(minutes.period_end_date) : NaN
+        return {
+          period: Number.isNaN(start) ? null : { start, end: Number.isNaN(end) ? null : end },
+          figures:
+            typeof minutes?.current === 'number'
+              ? [
+                  {
+                    metric: 'build-minutes',
+                    service: null,
+                    used: minutes.current,
+                    unit: 'minutes',
+                    limit: Number.isFinite(included) && included > 0 ? included : null,
+                  },
+                ]
+              : [],
+          billingPage: slug
+            ? `https://app.netlify.com/teams/${encodeURIComponent(slug)}/billing/general`
+            : 'https://app.netlify.com/',
+        }
       },
     },
   }

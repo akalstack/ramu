@@ -9,6 +9,7 @@ import {
   type ProjectResources,
   type ResourceKind,
   type ResourceProvider,
+  type UsageReport,
 } from '@ramu/shared/types/deploy'
 import type { EnvEnvironment } from '@ramu/shared/envSync'
 import { HostCredentialStore } from '../../credentials/store'
@@ -17,6 +18,7 @@ import { currentBranch, git } from '../git'
 import { DeployError, ReplyLostError, tail } from './adapter'
 import type { HostingAccounts } from './accounts'
 import { resourceAdapter, type ResourceAdapter } from './resource'
+import { usageReport } from './usage'
 
 /** The variable names a database's connection uses, which a project's code reading them also signals. */
 export const DATABASE_VARIABLES = ['DATABASE_URL', 'DATABASE_URL_UNPOOLED']
@@ -125,11 +127,6 @@ export class ResourceService {
         const secrets = await this.secrets(projectId, binding.kind)
           .read()
           .catch(() => null)
-        const usage = adapter.usage
-          ? await this.auth(binding.provider, binding.accountId)
-              .then(({ auth }) => adapter.usage!(auth, binding.id))
-              .catch(() => null)
-          : null
         return {
           provider: binding.provider,
           kind: binding.kind,
@@ -138,7 +135,6 @@ export class ResourceService {
           variables: Object.keys(secrets?.production ?? {}),
           previewBranch: binding.previewBranch,
           page: adapter.page(binding.id),
-          usage,
         }
       }),
     )
@@ -205,6 +201,24 @@ export class ResourceService {
       } satisfies ResourceBinding,
     ])
     return preview
+  }
+
+  /** What each of the project's resources used this billing period, as far as its provider reports it. */
+  async usage(projectId: string): Promise<UsageReport[]> {
+    return Promise.all(
+      this.bindings(projectId).map(async (binding) => {
+        const adapter = this.adapter(binding.provider)
+        return usageReport(
+          binding.provider,
+          adapter.name,
+          adapter.usage &&
+            (async () => {
+              const { auth } = await this.auth(binding.provider, binding.accountId)
+              return adapter.usage!(auth, binding.id)
+            }),
+        )
+      }),
+    )
   }
 
   /** The variables each environment gets: production's values for production, the preview branch's elsewhere. */

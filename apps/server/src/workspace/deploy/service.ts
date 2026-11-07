@@ -9,6 +9,7 @@ import type {
   DomainStatus,
   HostingPlatform,
   ProjectDeployment,
+  UsageReport,
 } from '@ramu/shared/types/deploy'
 import { HOSTING_PLATFORMS } from '@ramu/shared/types/deploy'
 import {
@@ -24,6 +25,7 @@ import {
 import type { HostingAccounts } from './accounts'
 import { liveProbes, type DomainProbes } from './domains'
 import type { EnvTarget } from './envSync'
+import { usageReport } from './usage'
 
 const LISTED = 10
 const LOG_LINES = 200
@@ -203,6 +205,23 @@ export class DeployService {
         throw new Error(`${adapter.name} did not answer. Check the live site before trying again.`, { cause: error })
       throw error
     }
+  }
+
+  /** What the bound platform's account used this billing period, as far as its API reports it. */
+  async usage(projectId: string): Promise<UsageReport | null> {
+    const binding = this.binding(projectId)
+    if (!binding) return null
+    const adapter = this.adapter(binding.platform)
+    const read = adapter.capabilities.usage
+    return usageReport(
+      binding.platform,
+      adapter.name,
+      read &&
+        (async () => {
+          const { auth } = await this.bound(projectId)
+          return read(auth, binding)
+        }),
+    )
   }
 
   /** The bound platform's name, such as "Vercel", for cards that name where a change happens. */

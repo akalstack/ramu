@@ -48,6 +48,8 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 
 - **Uptime with real accounts:** a Vercel and a Netlify app with the watch on after its first production deploy (with and without a `healthPath`); a deploy that breaks the health path opening one **Down:** thread within ten minutes with the status, deployment and log tail and a phone notification, its agent offering **Roll back** through the approval card, and recovery posting a recap into the same thread; a laptop that sleeps through an outage showing the span as **Unknown**.
 
+- **Usage with real accounts:** the deploy sheet's figures on a Vercel Hobby account and a Pro team (or the plain-words note where Vercel refuses billing data), a Netlify team on a legacy plan with build minutes and one billed in credits, and a Neon free project, each matching the platform's own usage page; **Open billing** landing on the right page; an 80% notice for Netlify build minutes or Neon storage opening the project's thread, and `deploy_usage` read from a thread.
+
 Representative tasks to run once the above is available:
 
 - Ask an agent to open Calculator on one computer and compute `(125 * 8) + 42` (expect `1042`) while watching and stopping it from a phone and a second desktop.
