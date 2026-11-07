@@ -6067,4 +6067,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Jalankan alat baca-saja {server} tanpa bertanya, agar run terjadwal tetap berjalan',
   'Presenter notes': 'Catatan presenter',
   'No speaker notes on this slide.': 'Tidak ada catatan pembicara di slide ini.',
+  'Edit as formatted text': 'Sunting sebagai teks berformat',
+  'Block {number}': 'Blok {number}',
 }

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Image, PanResponder, Share, TextInput, View, useWindowDimensions } from 'react-native'
+import { Alert, Image, PanResponder, Pressable, Share, TextInput, View, useWindowDimensions } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react-native'
 import type { Slide } from '@ramu/shared/artifactSource'
 import { designTexts } from '@ramu/shared/designText'
 import { mermaidLabels, withMermaidLabels } from '@ramu/shared/mermaidLabels'
+import { docBlocks, withDocBlocks, type DocBlock } from '@ramu/shared/docBlocks'
 import {
   interactiveHtml,
   readInteractiveState,
@@ -90,7 +91,8 @@ export default function PageScreen() {
   const [answer, setAnswer] = useState<ArtifactRun | null>(null)
   const [conflicts, setConflicts] = useState<string[]>([])
   // A doc's Markdown while the person edits it on the phone, and the version that edit started from.
-  const [editing, setEditing] = useState<{ base: number; text: string } | null>(null)
+  // A doc's or diagram's text while the person edits it; a doc's blocks when edited as formatted text.
+  const [editing, setEditing] = useState<{ base: number; text: string; blocks?: DocBlock[] } | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
   const field = {
     color: c.text,
@@ -749,7 +751,12 @@ export default function PageScreen() {
                 onPress={() => {
                   setMenu(false)
                   const text = editableSource(document)
-                  if (text !== null) setEditing({ base: document.reference.version, text })
+                  if (text !== null)
+                    setEditing({
+                      base: document.reference.version,
+                      text,
+                      ...(page?.kind === 'doc' ? { blocks: docBlocks(text) } : {}),
+                    })
                 }}
               >
                 <T>{say('Edit text')}</T>
@@ -876,24 +883,90 @@ export default function PageScreen() {
       <Sheet presentation="screen" open={!!editing} onClose={() => setEditing(null)} title={say('Edit text')}>
         {editing ? (
           <View style={{ padding: space.l, gap: space.m, flex: 1 }}>
-            <TextInput
-              accessibilityLabel={say('Markdown')}
-              multiline
-              autoFocus
-              textAlignVertical="top"
-              value={editing.text}
-              onChangeText={(text) => setEditing({ ...editing, text })}
-              style={{
-                minHeight: 320,
-                flex: 1,
-                color: c.text,
-                fontSize: font.control,
-                fontFamily: 'Menlo',
-                backgroundColor: c.fill,
-                borderRadius: 10,
-                padding: space.m,
-              }}
-            />
+            {page?.kind === 'doc' ? (
+              <Button
+                title={editing.blocks ? say('Edit Markdown') : say('Edit as formatted text')}
+                kind="secondary"
+                onPress={() =>
+                  setEditing(
+                    editing.blocks
+                      ? { base: editing.base, text: withDocBlocks(editing.text, editing.blocks) }
+                      : { ...editing, blocks: docBlocks(editing.text) },
+                  )
+                }
+              />
+            ) : null}
+            {editing.blocks ? (
+              editing.blocks.map((block, index) => {
+                const change = (patch: Partial<DocBlock>) =>
+                  setEditing({
+                    ...editing,
+                    blocks: editing.blocks!.map((entry, at) => (at === index ? { ...entry, ...patch } : entry)),
+                  })
+                return (
+                  <View
+                    key={index}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'flex-start',
+                      gap: space.s,
+                      paddingLeft: block.level * 16,
+                      ...(block.kind === 'quote'
+                        ? { borderLeftWidth: 3, borderLeftColor: c.line, paddingLeft: space.s }
+                        : {}),
+                    }}
+                  >
+                    {block.kind === 'item' ? <T style={{ paddingTop: 10 }}>•</T> : null}
+                    {block.kind === 'task' ? (
+                      <Pressable
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: !!block.done }}
+                        accessibilityLabel={block.text}
+                        onPress={() => change({ done: !block.done })}
+                        hitSlop={8}
+                        style={{ paddingTop: 8 }}
+                      >
+                        <T>{block.done ? '☑' : '☐'}</T>
+                      </Pressable>
+                    ) : null}
+                    <TextInput
+                      accessibilityLabel={say('Block {number}', { number: index + 1 })}
+                      multiline
+                      value={block.text}
+                      onChangeText={(text) => change({ text })}
+                      style={{
+                        flex: 1,
+                        color: c.text,
+                        paddingVertical: 6,
+                        fontSize: block.kind === 'heading' ? Math.max(font.body, 26 - block.level * 2) : font.body,
+                        fontWeight: block.kind === 'heading' ? '700' : '400',
+                        fontStyle: block.kind === 'quote' ? 'italic' : 'normal',
+                        textDecorationLine: block.kind === 'task' && block.done ? 'line-through' : 'none',
+                      }}
+                    />
+                  </View>
+                )
+              })
+            ) : (
+              <TextInput
+                accessibilityLabel={say('Markdown')}
+                multiline
+                autoFocus
+                textAlignVertical="top"
+                value={editing.text}
+                onChangeText={(text) => setEditing({ ...editing, text })}
+                style={{
+                  minHeight: 320,
+                  flex: 1,
+                  color: c.text,
+                  fontSize: font.control,
+                  fontFamily: 'Menlo',
+                  backgroundColor: c.fill,
+                  borderRadius: 10,
+                  padding: space.m,
+                }}
+              />
+            )}
             <T size={font.caption} tone="muted">
               {say('Saving makes v{version}, marked Edited by you.', { version: editing.base + 1 })}
             </T>
@@ -902,8 +975,9 @@ export default function PageScreen() {
               disabled={savingEdit}
               onPress={() => {
                 setSavingEdit(true)
-                store
-                  .invoke(computerId, 'artifacts.editSource', artifactId, editing.base, editing.text)
+                Promise.resolve()
+                  .then(() => (editing.blocks ? withDocBlocks(editing.text, editing.blocks) : editing.text))
+                  .then((text) => store.invoke(computerId, 'artifacts.editSource', artifactId, editing.base, text))
                   .then(() => {
                     setEditing(null)
                     void load()
