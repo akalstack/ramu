@@ -50,6 +50,7 @@ import { MotionToolbar } from './MotionControls'
 import { DocOutline, docOutline } from './DocOutline'
 import { DocRichEditor, richTextFits } from './DocRichEditor'
 import { designTexts } from '@ramu/shared/designText'
+import { mermaidLabels, withMermaidLabels } from '@ramu/shared/mermaidLabels'
 
 const VIEWPORTS = [
   { id: 'fit', label: 'Fit to width', width: undefined, Icon: Monitor },
@@ -103,6 +104,8 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   // A doc's Markdown while the person edits it, and the version that edit started from.
   const [editing, setEditing] = useState<{ base: number; text: string; rich?: boolean } | null>(null)
   const editForm = useRef<HTMLFormElement>(null)
+  // A flowchart's labels while the person changes its words without its Mermaid syntax.
+  const [editingLabels, setEditingLabels] = useState<{ base: number; source: string; labels: string[] } | null>(null)
   // A deck's slide text while the person edits it, slide by slide, and the version it started from.
   const [editingDesign, setEditingDesign] = useState<{
     base: number
@@ -457,6 +460,23 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
               <PenLine size={13} /> {t('Edit text')}
             </Button>
           )}
+          {page.kind === 'diagram' &&
+            !editingLabels &&
+            document &&
+            mermaidLabels(editableSource(document) ?? '').length > 0 && (
+              <Button
+                variant="ghost"
+                className={GHOST_TEXT_BUTTON_CLASS}
+                disabled={viewOnly}
+                title={t('Change the words on the diagram without its Mermaid source')}
+                onClick={() => {
+                  const source = editableSource(document) ?? ''
+                  setEditingLabels({ base: document.reference.version, source, labels: mermaidLabels(source) })
+                }}
+              >
+                <PenLine size={13} /> {t('Edit labels')}
+              </Button>
+            )}
           {(page.kind === 'doc' || page.kind === 'diagram') &&
             !editing &&
             document &&
@@ -884,6 +904,53 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           </div>
         </form>
       )}
+      {editingLabels && (
+        <form
+          aria-label={t('Edit labels')}
+          className="flex min-h-0 flex-1 flex-col gap-2 p-3"
+          onSubmit={(event) => {
+            event.preventDefault()
+            setSavingEdit(true)
+            Promise.resolve()
+              .then(() => withMermaidLabels(editingLabels.source, editingLabels.labels))
+              .then((source) => invoke('artifacts.editSource', artifactId, editingLabels.base, source))
+              .then(() => {
+                setEditingLabels(null)
+                void load()
+              })
+              .catch((error) => notifyError(message(error), page.title))
+              .finally(() => setSavingEdit(false))
+          }}
+        >
+          <ol className="m-0 flex min-h-0 flex-1 list-none flex-col gap-1.5 overflow-auto p-0">
+            {editingLabels.labels.map((label, index) => (
+              <li key={index}>
+                <Input
+                  aria-label={t('Label {number}', { number: index + 1 })}
+                  value={label}
+                  onChange={(event) =>
+                    setEditingLabels({
+                      ...editingLabels,
+                      labels: editingLabels.labels.map((old, at) => (at === index ? event.target.value : old)),
+                    })
+                  }
+                />
+              </li>
+            ))}
+          </ol>
+          <div className="flex items-center gap-2">
+            <span className="mr-auto text-caption text-muted-foreground">
+              {t('Saving makes v{version}, marked Edited by you.', { version: editingLabels.base + 1 })}
+            </span>
+            <Button type="button" variant="ghost" disabled={savingEdit} onClick={() => setEditingLabels(null)}>
+              {t('Cancel')}
+            </Button>
+            <Button type="submit" variant="default" disabled={savingEdit}>
+              {t('Save')}
+            </Button>
+          </div>
+        </form>
+      )}
       {editingDesign && (
         <form
           aria-label={t('Edit text')}
@@ -957,7 +1024,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
         </form>
       )}
       <div
-        hidden={!!editing || !!editingSlides || !!editingDesign}
+        hidden={!!editing || !!editingSlides || !!editingDesign || !!editingLabels}
         className={`relative min-h-0 flex-1 overflow-auto ${width ? 'flex justify-center bg-fill px-3 py-4' : ''}`}
       >
         <div

@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react-native'
 import type { Slide } from '@ramu/shared/artifactSource'
 import { designTexts } from '@ramu/shared/designText'
+import { mermaidLabels, withMermaidLabels } from '@ramu/shared/mermaidLabels'
 import {
   interactiveHtml,
   readInteractiveState,
@@ -102,6 +103,8 @@ export default function PageScreen() {
   const [editingSlides, setEditingSlides] = useState<{ base: number; slides: (Slide & { from: number })[] } | null>(
     null,
   )
+  // A flowchart's labels while the person changes its words without its Mermaid syntax.
+  const [editingLabels, setEditingLabels] = useState<{ base: number; source: string; labels: string[] } | null>(null)
   // A design's frame words while the person edits them, one list per frame, and the version they started from.
   const [editingDesign, setEditingDesign] = useState<{
     base: number
@@ -767,6 +770,22 @@ export default function PageScreen() {
                 <T>{say('Edit text')}</T>
               </Row>
             ) : null}
+            {page?.kind === 'diagram' &&
+            document &&
+            online &&
+            !shared &&
+            !viewer &&
+            mermaidLabels(editableSource(document) ?? '').length > 0 ? (
+              <Row
+                onPress={() => {
+                  setMenu(false)
+                  const source = editableSource(document) ?? ''
+                  setEditingLabels({ base: document.reference.version, source, labels: mermaidLabels(source) })
+                }}
+              >
+                <T>{say('Edit labels')}</T>
+              </Row>
+            ) : null}
             {page?.kind === 'design' && document && online && !shared && !viewer ? (
               <Row
                 onPress={() => {
@@ -877,6 +896,52 @@ export default function PageScreen() {
                     void load()
                   })
                   // A newer version or a problem in the text keeps the edit open, so nothing typed is lost.
+                  .catch((failure) => Alert.alert(say('That didn’t work'), reason(failure)))
+                  .finally(() => setSavingEdit(false))
+              }}
+            />
+          </View>
+        ) : null}
+      </Sheet>
+      <Sheet
+        presentation="screen"
+        open={!!editingLabels}
+        onClose={() => setEditingLabels(null)}
+        title={say('Edit labels')}
+      >
+        {editingLabels ? (
+          <View style={{ padding: space.l, gap: space.m }}>
+            {editingLabels.labels.map((label, index) => (
+              <TextInput
+                key={index}
+                accessibilityLabel={say('Label {number}', { number: index + 1 })}
+                value={label}
+                onChangeText={(value) =>
+                  setEditingLabels({
+                    ...editingLabels,
+                    labels: editingLabels.labels.map((old, at) => (at === index ? value : old)),
+                  })
+                }
+                style={field}
+              />
+            ))}
+            <T size={font.caption} tone="muted">
+              {say('Saving makes v{version}, marked Edited by you.', { version: editingLabels.base + 1 })}
+            </T>
+            <Button
+              title={say('Save')}
+              disabled={savingEdit}
+              onPress={() => {
+                setSavingEdit(true)
+                Promise.resolve()
+                  .then(() => withMermaidLabels(editingLabels.source, editingLabels.labels))
+                  .then((source) =>
+                    store.invoke(computerId, 'artifacts.editSource', artifactId, editingLabels.base, source),
+                  )
+                  .then(() => {
+                    setEditingLabels(null)
+                    void load()
+                  })
                   .catch((failure) => Alert.alert(say('That didn’t work'), reason(failure)))
                   .finally(() => setSavingEdit(false))
               }}

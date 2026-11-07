@@ -6058,4 +6058,7 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Tanpa Docker, Ramu menjalankan skrip start aplikasi (aplikasi Node) sebagai program di komputer ini. Program itu punya izin Anda sendiri: bisa membaca berkas Anda dan apa pun yang bisa Anda akses. Jalankan hanya kode yang Anda percaya.',
   'Run without Docker': 'Jalankan tanpa Docker',
   'Run without Docker…': 'Jalankan tanpa Docker…',
+  'Edit labels': 'Sunting label',
+  'Label {number}': 'Label {number}',
+  'Change the words on the diagram without its Mermaid source': 'Ubah kata-kata pada diagram tanpa sumber Mermaid-nya',
 }
