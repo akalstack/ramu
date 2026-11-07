@@ -180,6 +180,37 @@ export function vercelAdapter(options: { api?: string; fetch?: typeof fetch } = 
       },
       deployPreview: (auth, site, ref) => deploy(auth, site, ref, false),
       deployProduction: (auth, site, ref) => deploy(auth, site, ref, true),
+      environment: {
+        async list(auth, site) {
+          const { envs } = await call<{ envs?: { key: string; target?: string[] | string }[] }>(
+            `/v10/projects/${project(site)}/env`,
+            auth,
+            'reading the environment variables',
+          )
+          const named = (target: string) =>
+            (envs ?? [])
+              .filter((env) => (Array.isArray(env.target) ? env.target : [env.target]).includes(target))
+              .map((env) => env.key)
+          return { preview: named('preview'), production: named('production') }
+        },
+        async set(auth, site, environment, values) {
+          const entries = Object.entries(values)
+          if (!entries.length) return
+          // Encrypted, so the value is not shown on Vercel's dashboard by default either.
+          await call(
+            `/v10/projects/${project(site)}/env`,
+            auth,
+            'setting environment variables',
+            {
+              method: 'POST',
+              body: JSON.stringify(
+                entries.map(([key, value]) => ({ key, value, type: 'encrypted', target: [environment] })),
+              ),
+            },
+            { upsert: 'true' },
+          )
+        },
+      },
       async rollback(auth, site, deploymentId) {
         await call(`/v9/projects/${project(site)}/rollback/${encodeURIComponent(deploymentId)}`, auth, 'rolling back', {
           method: 'POST',

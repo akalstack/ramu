@@ -454,6 +454,9 @@ importers:
       react-dom:
         specifier: 'catalog:'
         version: 19.3.0(react@19.3.0)
+      tweetnacl:
+        specifier: 1.0.3
+        version: 1.0.3
       undici:
         specifier: ^7.30.1
         version: 7.30.1

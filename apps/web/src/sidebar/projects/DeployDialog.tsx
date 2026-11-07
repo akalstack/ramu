@@ -17,6 +17,7 @@ import { invoke as openOnThisComputer } from '../../ipc'
 import { errorText } from '../../lib/errors'
 import { useHost } from '../../workspace/HostProvider'
 import { CiSetupSection } from './CiSetup'
+import { EnvSyncSection } from './EnvSync'
 
 const STATE: Record<DeploymentState, string> = {
   queued: 'Queued',
@@ -290,6 +291,7 @@ export function DeployDialog({
           </ul>
         </>
       )}
+      <EnvSyncSection projectId={project.id} repoId={repoId} />
       <CiSetupSection projectId={project.id} repoId={repoId} />
     </Dialog>
   )

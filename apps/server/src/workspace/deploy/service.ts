@@ -14,6 +14,7 @@ import {
   type RepositoryLink,
 } from './adapter'
 import type { HostingAccounts } from './accounts'
+import type { EnvTarget } from './envSync'
 
 const LISTED = 10
 const LOG_LINES = 200
@@ -145,6 +146,26 @@ export class DeployService {
         `${adapter.name} did not answer, and no new deployment is listed. Check the deployments before trying again.`,
         { cause: error },
       )
+    }
+  }
+
+  /** The bound platform's preview and production variables, when the platform keeps them. */
+  envTarget(projectId: string): EnvTarget | null {
+    const binding = this.binding(projectId)
+    if (!binding) return null
+    const adapter = this.adapter(binding.platform)
+    const environment = adapter.capabilities.environment
+    if (!environment) return null
+    return {
+      id: binding.platform,
+      name: adapter.name,
+      environments: ['preview', 'production'],
+      list: async () => environment.list((await this.bound(projectId)).auth, binding),
+      set: async (target, values) => {
+        if (target !== 'preview' && target !== 'production')
+          throw new Error(`${adapter.name} has no ${target} variables.`)
+        await environment.set((await this.bound(projectId)).auth, binding, target, values)
+      },
     }
   }
 

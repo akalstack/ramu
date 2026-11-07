@@ -5769,4 +5769,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Require the pipeline to succeed in the project’s merge request settings on GitLab.':
     'Wajibkan pipeline berhasil di pengaturan merge request proyek di GitLab.',
   'Require CI to pass before merging into {0}': 'Wajibkan CI lulus sebelum digabungkan ke {0}',
+  Development: 'Pengembangan',
+  CI: 'CI',
+  Set: 'Sudah diatur',
+  'The app reads no environment variables in .env.example or its code.':
+    'Aplikasi ini tidak membaca variabel lingkungan di .env.example atau kodenya.',
+  'This host has no value for {0}. Add it in Settings → Environment variables, then sync.':
+    'Host ini belum punya nilai untuk {0}. Tambahkan di Pengaturan → Variabel lingkungan, lalu sinkronkan.',
 }

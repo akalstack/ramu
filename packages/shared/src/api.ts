@@ -29,6 +29,7 @@ import type {
 } from './types/deploy'
 import type { LimitRetryResult } from './chat/providerWait'
 import type { CiPreview, CiSetupResult } from './ciWorkflow'
+import type { EnvSyncStatus } from './envSync'
 import type { VoiceBridge } from './voice/bridge'
 import type {
   SharedMcpConnection,
@@ -1193,6 +1194,10 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.logs'(projectId: string, deploymentId: string): string
   /** Makes an earlier production deployment live again. */
   'deploy.rollback'(projectId: string, deploymentId: string): void
+  /** The app's environment variables (names only) next to where each is set: this host, CI and the platform. */
+  'deploy.environment'(projectId: string, repoId: string): EnvSyncStatus
+  /** Copies the variables this host has values for to every place that lacks them. Values never come back. */
+  'deploy.syncEnvironment'(projectId: string, repoId: string): EnvSyncStatus
   /** What Set up CI would add to a repository of the project, from its last fetched default branch. */
   'ci.preview'(projectId: string, repoId: string): CiPreview
   /**

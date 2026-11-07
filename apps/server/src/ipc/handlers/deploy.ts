@@ -1,6 +1,16 @@
 import { z } from 'zod'
 import { HOSTING_PLATFORMS, type HostingPlatform } from '@ramu/shared/types/deploy'
 import { platformCli } from '../../workspace/deploy/signIn'
+import {
+  envStatus,
+  githubActionsTarget,
+  hostTarget,
+  readAppVariables,
+  syncEnv,
+  type EnvTarget,
+} from '../../workspace/deploy/envSync'
+import { forgeRemoteOf } from '../../workspace/forge'
+import { kindOfOrigin } from '../../workspace/forge/route'
 import { id } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
@@ -38,6 +48,17 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
     return found
   }
   const project = (projectId: string) => known(projectId).id
+  /** The app's variables and every place they can be set for one repository of the project. */
+  const environment = async (projectId: string, repoId: string) => {
+    const repository = ctx.workspace.getRepository(repoId)
+    if (repository.projectId !== project(projectId)) throw new Error('Choose a repository of this project.')
+    const remote = await forgeRemoteOf(repository.root)
+    const others: EnvTarget[] = []
+    if (remote && (await kindOfOrigin(remote.origin)) === 'github') others.push(githubActionsTarget(repository.root))
+    const hosting = deploys().service.envTarget(projectId)
+    if (hosting) others.push(hosting)
+    return { variables: await readAppVariables(repository.root), host: hostTarget(ctx.environment), others }
+  }
   return {
     'deploy.accounts': { args: z.tuple([z.boolean()]), run: (check: boolean) => summary(check) },
     'deploy.signIn': {
@@ -82,6 +103,21 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
     'deploy.logs': {
       args: z.tuple([id, deploymentId]),
       run: (projectId: string, deployment: string) => deploys().service.logs(project(projectId), deployment),
+    },
+    'deploy.environment': {
+      args: z.tuple([id, id]),
+      run: async (projectId: string, repoId: string) => {
+        const { variables, host, others } = await environment(projectId, repoId)
+        return envStatus(variables, [host, ...others])
+      },
+    },
+    'deploy.syncEnvironment': {
+      args: z.tuple([id, id]),
+      run: (projectId: string, repoId: string) =>
+        exclusive(projectId, async () => {
+          const { variables, host, others } = await environment(projectId, repoId)
+          return syncEnv(variables, host, others)
+        }),
     },
     'deploy.rollback': {
       args: z.tuple([id, deploymentId]),

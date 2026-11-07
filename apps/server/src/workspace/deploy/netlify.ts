@@ -54,6 +54,9 @@ function deployment(raw: NetlifyDeploy): Deployment {
   }
 }
 
+/** Netlify's deploy contexts for the environments Ramu syncs. */
+const CONTEXT = { preview: 'deploy-preview', production: 'production' } as const
+
 /** Netlify, reached at `api`, and GitHub at `github` (the real services unless a test points them at a fake server). */
 export function netlifyAdapter(options: { api?: string; github?: string; fetch?: typeof fetch } = {}): HostingAdapter {
   const api = options.api ?? 'https://api.netlify.com/api/v1'
@@ -74,6 +77,11 @@ export function netlifyAdapter(options: { api?: string; github?: string; fetch?:
       what,
     )
   const site = (id: string) => `/sites/${encodeURIComponent(id)}`
+  /** Netlify keeps variables on the team account, filtered to one site. */
+  const siteEnv = async (auth: HostingAuth, siteId: string) => {
+    const { account_id: account } = await call<{ account_id: string }>(site(siteId), auth, 'reading the site')
+    return `/accounts/${encodeURIComponent(account)}/env?site_id=${encodeURIComponent(siteId)}`
+  }
   return {
     id: 'netlify',
     name: 'Netlify',
@@ -199,6 +207,40 @@ export function netlifyAdapter(options: { api?: string; github?: string; fetch?:
             'reading the deployment',
           ),
         )
+      },
+      environment: {
+        async list(auth, target) {
+          const env = await call<{ key: string; values?: { context?: string }[] }[]>(
+            await siteEnv(auth, target.siteId),
+            auth,
+            'reading the environment variables',
+          )
+          const named = (context: string) =>
+            env
+              .filter((entry) => entry.values?.some((value) => value.context === 'all' || value.context === context))
+              .map((entry) => entry.key)
+          return { preview: named(CONTEXT.preview), production: named(CONTEXT.production) }
+        },
+        async set(auth, target, environment, values) {
+          const base = await siteEnv(auth, target.siteId)
+          const [path, query] = base.split('?') as [string, string]
+          const existing = new Set(
+            (await call<{ key: string }[]>(base, auth, 'reading the environment variables')).map((entry) => entry.key),
+          )
+          const context = CONTEXT[environment]
+          const added = Object.entries(values).filter(([key]) => !existing.has(key))
+          if (added.length)
+            await call(base, auth, 'adding environment variables', {
+              method: 'POST',
+              body: JSON.stringify(added.map(([key, value]) => ({ key, values: [{ context, value }] }))),
+            })
+          // A variable already set for another context gets a value for this one beside it.
+          for (const [key, value] of Object.entries(values).filter(([name]) => existing.has(name)))
+            await call(`${path}/${encodeURIComponent(key)}?${query}`, auth, 'setting an environment variable', {
+              method: 'PATCH',
+              body: JSON.stringify({ context, value }),
+            })
+        },
       },
       async rollback(auth, target, deploymentId) {
         await call(

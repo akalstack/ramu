@@ -49,6 +49,7 @@ import {
 } from './githubApi'
 import * as pulls from './githubPulls'
 import { brokenBranchPrompt } from './buildLogs'
+import { sealedBox } from './sealedBox'
 
 export class ForgeError extends Error {
   constructor(
@@ -1043,6 +1044,40 @@ export async function requireCheck(
     throw protectionRefusal(error)
   })
   return 'required'
+}
+
+const actionsPath = async (cwd: string) => {
+  const remote = await forgeRemoteOf(cwd)
+  if (!remote) throw new ForgeError('This repository has no GitHub remote.', 'no-remote')
+  return `/repos/${remote.owner}/${remote.repo}/actions/secrets`
+}
+
+/** The names of the repository's GitHub Actions secrets. GitHub never returns their values. */
+export async function actionsSecretNames(cwd: string): Promise<string[]> {
+  const path = await actionsPath(cwd)
+  const names: string[] = []
+  for (let page = 1; page <= 10; page++) {
+    const raw = await githubRest<{ secrets?: { name: string }[] } | null>(
+      cwd,
+      'GET',
+      `${path}?per_page=100&page=${page}`,
+    )
+    const batch = raw?.secrets ?? []
+    names.push(...batch.map((secret) => secret.name))
+    if (batch.length < 100) break
+  }
+  return names
+}
+
+/** Sets repository secrets, each sealed to the repository's public key before it leaves the host. */
+export async function setActionsSecrets(cwd: string, values: Record<string, string>): Promise<void> {
+  const path = await actionsPath(cwd)
+  const key = await githubRest<{ key_id: string; key: string }>(cwd, 'GET', `${path}/public-key`)
+  for (const [name, value] of Object.entries(values))
+    await githubRest(cwd, 'PUT', `${path}/${encodeURIComponent(name)}`, {
+      encrypted_value: sealedBox(value, key.key),
+      key_id: key.key_id,
+    })
 }
 
 /** A prompt that hands the pull request's failing checks to an agent. */

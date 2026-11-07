@@ -40,6 +40,8 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 
 - **Set up CI with real accounts:** on a GitHub repository signed in with `gh` (with and without the `workflow` scope) and on GitLab.com, for an npm, a pnpm, a uv and a Go project: the pull request opens from `ramu/set-up-ci`, its CI run passes, and `ci_setup` writes the same file in a thread; a push of a failing commit to the default branch from Source Control wakes that thread with the job log; **Require CI to pass before merging** on a public repository, a private one on a free plan (refused with its note), a branch with existing required checks, and an account without admin access.
 
+- **Secrets sync with real accounts:** a Next.js app with `.env.example` linked to Vercel and to Netlify: the sheet lists each variable against this host, GitHub Actions and the platform's preview and production; **Sync** writes the missing ones (a GitHub secret a workflow can read, Vercel encrypted variables, a Netlify variable already set for production getting a preview value), and a paired phone sees names only.
+
 Representative tasks to run once the above is available:
 
 - Ask an agent to open Calculator on one computer and compute `(125 * 8) + 42` (expect `1042`) while watching and stopping it from a phone and a second desktop.

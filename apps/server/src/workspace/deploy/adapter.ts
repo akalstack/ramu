@@ -45,7 +45,20 @@ export interface HostingCapabilities {
   deployProduction?(auth: HostingAuth, site: HostingSite & { repository: string }, ref: string): Promise<Deployment>
   /** Makes an earlier production deployment live again. */
   rollback?(auth: HostingAuth, site: HostingSite, deploymentId: string): Promise<void>
+  /** The project's environment variables: names only when listing; values are written, never read back. */
+  environment?: {
+    list(auth: HostingAuth, site: HostingSite): Promise<Record<PlatformEnvironment, string[]>>
+    set(
+      auth: HostingAuth,
+      site: HostingSite,
+      environment: PlatformEnvironment,
+      values: Record<string, string>,
+    ): Promise<void>
+  }
 }
+
+/** The environments a hosting platform keeps variables for. */
+export type PlatformEnvironment = 'preview' | 'production'
 
 export interface HostingAdapter {
   readonly id: HostingPlatform
