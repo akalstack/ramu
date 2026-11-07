@@ -34,6 +34,8 @@ export function ServerConnect({
   const [privateKey, setPrivateKey] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Connecting another server while one is connected; projects on the first keep deploying to it.
+  const [adding, setAdding] = useState(false)
   const ids = { host: useId(), port: useId(), user: useId(), key: useId() }
   const load = useCallback(
     (check: boolean) =>
@@ -59,7 +61,7 @@ export function ServerConnect({
   if (!status) return <p className="m-0 text-caption text-muted-foreground">{error ?? t('Checking…')}</p>
   return (
     <div className="flex flex-col gap-2 text-caption">
-      {connection ? (
+      {connection && !adding ? (
         <>
           <p className="m-0">
             {t('Signed in as {0} on {1}.', {
@@ -73,6 +75,42 @@ export function ServerConnect({
             </span>
           </p>
           <DockerState status={status} onCheck={() => load(true)} />
+          {status.others.length > 0 && (
+            <ul className="m-0 flex list-none flex-col gap-1 p-0" aria-label={t('Other servers')}>
+              {status.others.map((other) => (
+                <li key={other.id} className="flex items-center gap-2">
+                  <span className="flex-1 text-muted-foreground">
+                    {t('{0}, kept for the projects set up on it', { 0: other.name })}
+                  </span>
+                  {canAdminister && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => void run(async () => setStatus(await invoke('deploy.useServer', other.id)))}
+                      >
+                        {t('Use for new setups')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => void run(async () => setStatus(await invoke('deploy.forgetServer', other.id)))}
+                      >
+                        {t('Forget')}
+                      </Button>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {canAdminister && (
+            <Button className="self-start" size="sm" variant="ghost" onClick={() => setAdding(true)}>
+              {t('Add another server')}
+            </Button>
+          )}
         </>
       ) : !canAdminister ? (
         <p className="m-0 text-muted-foreground">{t('Connect your server on the machine running this host.')}</p>
@@ -90,6 +128,7 @@ export function ServerConnect({
               })
               setPrivateKey('')
               setStatus(next)
+              setAdding(false)
               onConnected?.(next)
             })
           }}

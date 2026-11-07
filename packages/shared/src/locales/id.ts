@@ -6075,4 +6075,8 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Untuk situs statis: Ramu membuat proyek Pages, menyimpan token Pages dan id akun Anda di secret GitHub Actions repositori, dan membuka pull request berisi job deploy yang membangun situs dan mengunggahnya dengan wrangler. Setiap penggabungan ke cabang default men-deploy, dan setiap pull request mendapat preview.',
   'Create a custom token with only Account → Cloudflare Pages → Edit, for the one account your sites go in; it is kept in each linked repository’s Actions secrets':
     'Buat token kustom dengan hanya Account → Cloudflare Pages → Edit, untuk satu akun tempat situs Anda; token disimpan di secret Actions setiap repositori yang ditautkan',
+  'Other servers': 'Server lain',
+  '{0}, kept for the projects set up on it': '{0}, disimpan untuk proyek yang disiapkan di sana',
+  'Use for new setups': 'Pakai untuk penyiapan baru',
+  'Add another server': 'Tambah server lain',
 }

@@ -161,6 +161,20 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
         return deploys().server.createKey()
       },
     },
+    'deploy.useServer': {
+      args: z.tuple([z.string().min(1).max(300)]),
+      run: (accountId: string) => {
+        administrate()
+        return deploys().server.use(accountId)
+      },
+    },
+    'deploy.forgetServer': {
+      args: z.tuple([z.string().min(1).max(300)]),
+      run: (accountId: string) => {
+        administrate()
+        return deploys().server.forget(accountId)
+      },
+    },
     'deploy.connectServer': {
       args: z.tuple([serverInput]),
       run: (input: z.infer<typeof serverInput>) => {

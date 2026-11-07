@@ -104,7 +104,11 @@ export class ServerSetup {
 
   /** The connected server, and with `check` whether Docker can run apps there. */
   async status(check: boolean): Promise<ServerStatus> {
+    const current = this.accounts.connected('server')
+      ? (await this.accounts.auth('server').catch(() => null))?.accountId
+      : null
     const base: ServerStatus = {
+      others: this.accounts.kept('server').filter((entry) => entry.id !== current),
       connection: null,
       pendingKey: this.pending.savedField()?.shown ?? null,
       docker: null,
@@ -136,6 +140,18 @@ export class ServerSetup {
     } catch (error) {
       return { ...shown, error: message(error) }
     }
+  }
+
+  /** Makes a kept server the one new setups use. */
+  async use(accountId: string): Promise<ServerStatus> {
+    await this.accounts.use('server', accountId)
+    return this.status(false)
+  }
+
+  /** Forgets a kept server; projects linked to it stop deploying from Ramu until linked again. */
+  async forget(accountId: string): Promise<ServerStatus> {
+    await this.accounts.forget('server', accountId)
+    return this.status(false)
   }
 
   /** The public line of a key pair for the server, made once and kept until a connection uses it. */
@@ -180,6 +196,8 @@ export class ServerSetup {
       knownHosts: first.knownHosts,
     }
     await this.accounts.save('server', { token: JSON.stringify(connection) }, 'token')
+    // Projects already deploying to another server keep it; this one becomes the server new setups use.
+    await this.accounts.keep('server')
     if (!input.privateKey) await this.pending.remove()
     return this.status(true)
   }

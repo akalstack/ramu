@@ -71,7 +71,7 @@ export class DeployService {
   private async bound(projectId: string): Promise<{ binding: DeployBinding; auth: HostingAuth }> {
     const binding = this.binding(projectId)
     if (!binding) throw new Error('This project has no deploy target yet. Open Deploy on the project to link one.')
-    const { auth, accountId } = await this.accounts.auth(binding.platform)
+    const { auth, accountId } = await this.accounts.auth(binding.platform, binding.accountId)
     if (accountId && accountId !== binding.accountId)
       throw new DeployError(
         `This project is linked under another ${this.adapter(binding.platform).name} account. Connect that account, or link the project again.`,

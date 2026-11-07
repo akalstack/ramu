@@ -260,6 +260,25 @@ describe('connecting a server', () => {
     )
   })
 
+  it('keeps every server connected, so projects stay on theirs while new setups use the latest', async () => {
+    const { server, accounts } = setup()
+    const { privateKey } = generateKeyPair()
+    await server.connect({ host: '203.0.113.10', port: 22, user: 'deploy', privateKey })
+    const second = await server.connect({ host: '198.51.100.7', port: 2222, user: 'ops', privateKey })
+    const first = 'deploy@203.0.113.10:22'
+    expect(second.others).toEqual([{ id: first, name: 'deploy@203.0.113.10' }])
+    // A project linked under the first server still reaches it; new setups use the second.
+    expect(serverConnection((await accounts.auth('server', first)).auth.token).host).toBe('203.0.113.10')
+    expect(serverConnection((await accounts.auth('server')).auth.token).host).toBe('198.51.100.7')
+    const switched = await server.use(first)
+    expect(serverConnection((await accounts.auth('server')).auth.token).host).toBe('203.0.113.10')
+    expect(switched.others).toEqual([{ id: 'ops@198.51.100.7:2222', name: 'ops@198.51.100.7:2222' }])
+    await expect(server.forget(first)).rejects.toThrow('new setups use')
+    expect((await server.forget('ops@198.51.100.7:2222')).others).toEqual([])
+    await accounts.disconnect('server')
+    expect(accounts.kept('server')).toEqual([])
+  })
+
   it('needs a key before connecting, and a valid address and user', async () => {
     const { server } = setup()
     await expect(server.connect({ host: '203.0.113.10', port: 22, user: 'deploy', privateKey: null })).rejects.toThrow(

@@ -325,6 +325,8 @@ export type ServerDocker = 'ready' | 'missing' | 'no-permission'
 
 /** The person's own server as Settings and the Deploy sheet show it. The private key never leaves the host. */
 export interface ServerStatus {
+  /** Other servers kept on this host; projects linked under one keep deploying to it. */
+  others: { id: string; name: string }[]
   connection: {
     host: string
     port: number
