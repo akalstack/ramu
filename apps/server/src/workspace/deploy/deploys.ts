@@ -1,6 +1,6 @@
 import { DEFAULT_AGENT_SETTINGS, type AgentSettings } from '@ramu/shared/types'
 import type { InboxNotice } from '@ramu/shared/chat/notices'
-import type { UsageReport } from '@ramu/shared/types/deploy'
+import type { DeployBinding, Deployment, UsageReport } from '@ramu/shared/types/deploy'
 import { commandLine } from '@ramu/shared/stacks'
 import type { AgentService } from '../../agent'
 import { HostCredentialStore } from '../../credentials/store'
@@ -33,6 +33,8 @@ export interface Deploys {
    * production branch of the repository the project's platform watches, the deployment it starts is followed.
    */
   pushed(repoId: string, branch: string, commit: string | null, taskId: string | null): Promise<void>
+  /** The newest preview deployment of a branch, when the repository is the one its project's platform watches. */
+  preview(repoId: string, branch: string): Promise<Deployment | null>
   uptime: UptimeWatches
   /** Every usage report of a project: its hosting platform's, then its resources'. */
   usage(projectId: string): Promise<UsageReport[]>
@@ -127,6 +129,15 @@ export function createDeploys(
     wake,
     service,
   )
+  /** The repository's project and binding, when the project's platform watches this repository on GitHub. */
+  const linkedTo = async (repoId: string): Promise<{ projectId: string; binding: DeployBinding } | null> => {
+    const repository = workspace.getRepository(repoId)
+    const binding = service.binding(repository.projectId)
+    if (!binding?.repository) return null
+    const remote = await forgeRemoteOf(repository.root)
+    if (remote?.origin !== 'github.com' || `${remote.owner}/${remote.repo}` !== binding.repository) return null
+    return { projectId: repository.projectId, binding }
+  }
   const usage = (projectId: string) => projectUsage(service, resources, projectId)
   const notices = new UsageNotices(
     {
@@ -150,15 +161,16 @@ export function createDeploys(
     domains: new DomainWatches(workspace, wake, service),
     deployWatch,
     async pushed(repoId, branch, commit, taskId) {
-      const repository = workspace.getRepository(repoId)
-      const binding = service.binding(repository.projectId)
-      if (!binding?.repository || binding.productionBranch !== branch) return
-      const remote = await forgeRemoteOf(repository.root)
-      if (remote?.origin !== 'github.com' || `${remote.owner}/${remote.repo}` !== binding.repository) return
+      const linked = await linkedTo(repoId)
+      if (!linked || linked.binding.productionBranch !== branch) return
       const session = taskId
         ? agents.list(taskId).findLast((entry) => !entry.parentId && entry.state !== 'stopped')
         : undefined
-      deployWatch.followPush(repository.projectId, commit, session?.id ?? null)
+      deployWatch.followPush(linked.projectId, commit, session?.id ?? null)
+    },
+    async preview(repoId, branch) {
+      const linked = await linkedTo(repoId)
+      return linked ? service.preview(linked.projectId, branch) : null
     },
     uptime,
     resources,

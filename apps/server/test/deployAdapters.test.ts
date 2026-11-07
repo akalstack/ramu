@@ -566,3 +566,38 @@ describe('domain state the platform does not report', () => {
     expect(added.name).toBe('www.shop.id')
   })
 })
+
+describe('pull request previews', () => {
+  it('finds the newest preview of a branch, never a production deployment of the same branch', async () => {
+    const listed = [
+      { id: 'prod', state: 'ready', url: 'https://shop.app', production: true, ref: 'fix' },
+      { id: 'new', state: 'building', url: null, production: false, ref: 'fix' },
+      { id: 'old', state: 'ready', url: 'https://old.app', production: false, ref: 'fix' },
+      { id: 'other', state: 'ready', url: 'https://other.app', production: false, ref: 'main' },
+    ]
+    const listDeployments = vi.fn(async () => listed)
+    const service = new DeployService(
+      {
+        getState: <T>() =>
+          ({
+            platform: 'vercel',
+            siteId: 's',
+            siteName: 'shop',
+            repository: 'ana/shop',
+            productionBranch: 'main',
+            accountId: 'u1',
+            scope: null,
+          }) as T,
+        setState: () => {},
+        stackTarget: () => null,
+        githubRepository: async () => {
+          throw new Error('unused')
+        },
+      },
+      { auth: async () => ({ auth: { token: 't' }, accountId: 'u1', defaultScope: null }) } as never,
+      () => ({ listDeployments }) as never,
+    )
+    expect((await service.preview('project', 'fix'))?.id).toBe('new')
+    expect(await service.preview('project', 'nothing')).toBeNull()
+  })
+})

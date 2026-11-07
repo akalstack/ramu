@@ -7,12 +7,17 @@ const setup = (local: boolean) => {
     accounts: { save: vi.fn(async () => ({})), disconnect: vi.fn(), list: vi.fn(async () => []) },
     signIns: { start: vi.fn(() => ({})) },
     service: { link: vi.fn(async () => ({})), deploy: vi.fn(async () => ({})), project: vi.fn(async () => ({})) },
+    preview: vi.fn(async () => null),
   }
   const methods = registerDeployHandlers({
     host: { canAdministerIntegrations: () => local },
     lock: new KeyedLock(),
     deploys,
     workspace: { listProjects: () => [{ id: 'p1', name: 'My Shop!' }] },
+    gitCwdOf: (taskId: string, repoId: string) => {
+      if (taskId !== 't1' || repoId !== 'r1') throw new Error('This thread has no such repository.')
+      return '/tmp/shop'
+    },
   } as never)
   return { methods, deploys }
 }
@@ -43,4 +48,12 @@ it('bounds every input and refuses an unknown platform or project', async () => 
   await methods['deploy.link']!.run('p1', 'vercel', 'r1')
   // The platform project is named after the Ramu project.
   expect(deploys.service.link).toHaveBeenCalledWith('p1', 'vercel', 'r1', 'my-shop')
+})
+
+it('reads a branch’s preview only for a repository of the thread’s own checkout', async () => {
+  const { methods, deploys } = setup(false)
+  expect(methods['deploy.preview']!.args.safeParse(['t1', 'r1', 'x'.repeat(201)]).success).toBe(false)
+  expect(() => methods['deploy.preview']!.run('t1', 'r2', 'fix')).toThrow('no such repository')
+  await methods['deploy.preview']!.run('t1', 'r1', 'fix')
+  expect(deploys.preview).toHaveBeenCalledWith('r1', 'fix')
 })

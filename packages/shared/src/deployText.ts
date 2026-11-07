@@ -88,3 +88,19 @@ export function deployText(t: Translate, time: (at: number) => string) {
     },
   }
 }
+
+/**
+ * The pull request card's preview line: the preview's address once it is ready, or how far its build got. Null when
+ * the platform lists none for the branch, or it was canceled.
+ */
+export function previewLine(
+  deployment: Deployment | null,
+  t: Translate,
+): { text: string; url: string | null; tone: 'ok' | 'pending' | 'bad' } | null {
+  if (!deployment || deployment.state === 'canceled') return null
+  if (deployment.state === 'failed') return { text: t('Preview failed'), url: null, tone: 'bad' }
+  if (deployment.state !== 'ready') return { text: t('Preview building…'), url: null, tone: 'pending' }
+  if (!deployment.url) return null
+  const host = deployment.url.replace(/^https?:\/\//i, '').replace(/[/?#].*$/, '')
+  return { text: t('Preview at {0}', { 0: host }), url: deployment.url, tone: 'ok' }
+}

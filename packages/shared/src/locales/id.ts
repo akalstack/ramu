@@ -5866,4 +5866,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'The live address is not watched. Turn it on in the Deploy sheet on a computer.':
     'Alamat live tidak dipantau. Aktifkan di lembar Deploy di komputer.',
   'The host checks {0} every five minutes.': 'Host memeriksa {0} setiap lima menit.',
+  'Preview failed': 'Preview gagal',
+  'Preview building…': 'Preview sedang di-build…',
+  'Preview at {0}': 'Preview di {0}',
 }

@@ -30,6 +30,7 @@ const plan = z.string().trim().min(1).max(60)
 const signIn = z.string().uuid()
 const deploymentId = z.string().trim().min(1).max(200)
 const domain = z.string().trim().min(1).max(260)
+const branch = z.string().trim().min(1).max(200)
 
 /** A platform project name from the Ramu project's name: lowercase letters, digits and dashes. */
 const siteName = (name: string) =>
@@ -213,6 +214,14 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
     'deploy.setUptime': {
       args: z.tuple([id, z.boolean()]),
       run: (projectId: string, enabled: boolean) => deploys().uptime.setEnabled(project(projectId), enabled),
+    },
+    'deploy.preview': {
+      args: z.tuple([id, id, branch]),
+      run: (taskId: string, repoId: string, name: string) => {
+        // The checkout's own repository: the task must have it bound.
+        ctx.gitCwdOf(taskId, repoId)
+        return ctx.deploys?.preview(repoId, name) ?? null
+      },
     },
     'deploy.rollback': {
       args: z.tuple([id, deploymentId]),

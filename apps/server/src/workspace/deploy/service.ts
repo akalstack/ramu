@@ -28,6 +28,8 @@ import type { EnvTarget } from './envSync'
 import { usageReport } from './usage'
 
 const LISTED = 10
+/** Previews of busy repositories crowd the list; a pull request's branch is looked for a little further back. */
+const PREVIEW_LISTED = 30
 const LOG_LINES = 200
 
 /** What the service needs from the workspace, so tests can give it a project without a database. */
@@ -187,6 +189,13 @@ export class DeployService {
   async deployment(projectId: string, deploymentId: string): Promise<Deployment> {
     const { binding, auth } = await this.bound(projectId)
     return this.adapter(binding.platform).deploymentStatus(auth, binding, deploymentId)
+  }
+
+  /** The newest preview deployment the platform lists for a branch. */
+  async preview(projectId: string, branch: string): Promise<Deployment | null> {
+    const { binding, auth } = await this.bound(projectId)
+    const listed = await this.adapter(binding.platform).listDeployments(auth, binding, PREVIEW_LISTED)
+    return listed.find((deployment) => !deployment.production && deployment.ref === branch) ?? null
   }
 
   async logs(projectId: string, deploymentId: string): Promise<string> {

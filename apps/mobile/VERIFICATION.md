@@ -35,7 +35,7 @@ Only checks that still need a physical phone, an account or a live provider. Tes
 
 ## Deployments
 
-- [ ] With a project linked to Vercel and one linked to Netlify: **Deployments** in the project menu lists the latest deployments with their state and **Open**, the live address, the uptime watch (including an open incident) and usage figures; **Roll back** on an earlier production deployment asks with the address, and the live site changes; a viewer pairing does not offer **Deployments**.
+- [ ] With a project linked to Vercel and one linked to Netlify: **Deployments** in the project menu lists the latest deployments with their state and **Open**, the live address, the uptime watch (including an open incident) and usage figures; **Roll back** on an earlier production deployment asks with the address, and the live site changes; a viewer pairing does not offer **Deployments**. The branch's pull request card shows **Preview building…**, then **Preview at …**, which opens the preview.
 
 ## Push, Live Activities and limits
 

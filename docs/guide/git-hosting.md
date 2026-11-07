@@ -15,6 +15,8 @@ Ramu uses the [GitHub CLI](https://cli.github.com) sign-ins you already have (`g
 
 Each pull request has one stage, shown in the same words on rows, in the thread list, in Inbox and on the phone: **Replies ready**, **Agent working**, **Has conflicts**, **Checks failing**, **Changes requested**, **Draft**, **Checks running**, **Waiting on review**, **Ready to merge**, **Merged** or **Closed**. Thread rows show the pull request icon with a dot when it needs attention. Inbox's Brief lists the pull requests whose next step is yours: replies to send, ready to merge, or conflicts.
 
+When the project is linked to Vercel or Netlify ([Deploying an app](deploy.md)), the card of the checked-out branch's pull request, in Source Control and on the phone, shows its preview deployment: **Preview at …** opens it once it is ready, and **Preview building…** or **Preview failed** show before that.
+
 Opening a pull request shows it in full, with these actions:
 
 - **Open thread** goes to the thread already working on it. **Open in thread** makes a worktree on its branch and starts a thread that catches up on it: what it does, what is left, and the next step.

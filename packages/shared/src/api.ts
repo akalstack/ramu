@@ -1200,6 +1200,11 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.logs'(projectId: string, deploymentId: string): string
   /** Makes an earlier production deployment live again. */
   'deploy.rollback'(projectId: string, deploymentId: string): void
+  /**
+   * The newest preview deployment the project's platform lists for a branch of this checkout's repository, or null
+   * when the project is not linked to that repository.
+   */
+  'deploy.preview'(taskId: string, repoId: string, branch: string): Deployment | null
   /** The app's environment variables (names only) next to where each is set: this host, CI and the platform. */
   'deploy.environment'(projectId: string, repoId: string): EnvSyncStatus
   /** Copies the variables this host has values for to every place that lacks them. Values never come back. */
