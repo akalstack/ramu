@@ -8,6 +8,7 @@ import { HostCredentialStore } from '../src/credentials/store'
 import { HostingAccounts } from '../src/workspace/deploy/accounts'
 import { DeployError, type HostingAdapter } from '../src/workspace/deploy/adapter'
 import {
+  expoSessionToken,
   flyCliToken,
   HostingSignIns,
   netlifyCliToken,
@@ -225,6 +226,83 @@ it('runs fly auth login in a private HOME and reads the token flyctl saved in .f
   expect(spawner.mock.calls[0]![1]).toEqual(['auth', 'login'])
   expect(home).not.toBe(process.env.HOME)
   expect(saved).toEqual([['fly', { token: 'fo1_abc' }, 'cli']])
+})
+
+it('runs eas login --device in a private HOME, sends the number the person picked, and keeps a token, not the session', async () => {
+  const saved: unknown[] = []
+  const accounts = { save: async (...args: unknown[]) => (saved.push(args), { account: 'ana' }) }
+  const request = 'e8a40de0-5db7-4b73-897c-3b74915c25e9'
+  let resumes = 0
+  let env: NodeJS.ProcessEnv = {}
+  const spawner = vi.fn((_file: string, args: string[], options: { env: NodeJS.ProcessEnv }) => {
+    env = options.env
+    const home = options.env.HOME!
+    if (!args.includes('--resume'))
+      return child(
+        `Open https://expo.dev/oauth/device?user_code=HVVZ-DMRD\nCode: HVVZ-DMRD\nThen run eas login --device --non-interactive --resume ${request}, adding --match NUMBER_FROM_USER if they saw a number.\n`,
+      )
+    resumes++
+    if (!args.includes('--match'))
+      return child(
+        resumes < 2
+          ? `Approval pending. Retry after 5 seconds:\n`
+          : `Ask the user for the number shown in their browser, then run:\n`,
+      )
+    return child('Logged in as ana\n', async () => {
+      await mkdir(join(home, '.expo'), { recursive: true })
+      await writeFile(join(home, '.expo', 'state.json'), JSON.stringify({ auth: { sessionSecret: 'session-1' } }))
+    })
+  })
+  const exchanged: string[] = []
+  const signIns = new HostingSignIns(
+    accounts as never,
+    () => '/usr/local/bin/npx',
+    spawner as never,
+    5,
+    async (session) => {
+      exchanged.push(session)
+      return { token: 'expo_token_1' }
+    },
+  )
+  const started = signIns.start('expo')
+  await until(() => !!signIns.status(started.id).asksNumber)
+  expect(signIns.status(started.id)).toMatchObject({
+    state: 'waiting',
+    url: 'https://expo.dev/oauth/device?user_code=HVVZ-DMRD',
+    code: 'HVVZ-DMRD',
+  })
+  signIns.match(started.id, '42')
+  await until(() => signIns.status(started.id).state === 'connected')
+  // Through npx, the published eas runs; the last resume carries the number.
+  expect(spawner.mock.calls[0]![1]).toEqual(['--yes', 'eas-cli@latest', 'login', '--device', '--non-interactive'])
+  expect(spawner.mock.calls.at(-1)![1].slice(-4)).toEqual(['--resume', request, '--match', '42'])
+  expect(env.npm_config_cache).toMatch(/\.npm$/)
+  expect(exchanged).toEqual(['session-1'])
+  expect(saved).toEqual([['expo', { token: 'expo_token_1' }, 'cli']])
+})
+
+it('exchanges an Expo session for a token named Ramu and ends the session either way', async () => {
+  const calls: { url: string; body: string; session: string | null }[] = []
+  const fetcher = vi.fn(async (url: string | URL, init?: RequestInit) => {
+    const body = String(init?.body ?? '')
+    calls.push({ url: String(url), body, session: new Headers(init?.headers).get('expo-session') })
+    if (String(url).endsWith('/v2/auth/logout')) return new Response('{}')
+    return new Response(
+      JSON.stringify(
+        body.includes('meActor')
+          ? { data: { meActor: { id: 'actor-1' } } }
+          : { data: { accessToken: { createAccessToken: { token: 'expo_token_1' } } } },
+      ),
+    )
+  })
+  expect(await expoSessionToken('session-1', fetcher as never, 'https://api.test')).toEqual({ token: 'expo_token_1' })
+  expect(JSON.parse(calls[1]!.body).variables).toEqual({ data: { actorID: 'actor-1', note: 'Ramu' } })
+  expect(calls.at(-1)).toMatchObject({ url: 'https://api.test/v2/auth/logout', session: 'session-1' })
+  const refused = vi.fn(async (url: string | URL) =>
+    String(url).endsWith('/logout') ? new Response('{}') : new Response(JSON.stringify({ errors: [{}] })),
+  )
+  await expect(expoSessionToken('session-2', refused as never, 'https://api.test')).rejects.toThrow('did not accept')
+  expect(refused.mock.calls.some(([url]) => String(url).endsWith('/v2/auth/logout'))).toBe(true)
 })
 
 it('reads a quoted flyctl token, and refuses a config without one', async () => {

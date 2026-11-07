@@ -1254,6 +1254,8 @@ export interface RamuMethods extends ArtifactMethods {
   /** Starts the platform CLI's browser sign-in on the host. Host only. */
   'deploy.signIn'(platform: CliSignInPlatform): HostingSignIn
   'deploy.signInStatus'(id: string): HostingSignIn
+  /** Sends the number the platform's sign-in page shows, for a sign-in that asks for one. */
+  'deploy.signInMatch'(id: string, number: string): HostingSignIn
   'deploy.cancelSignIn'(id: string): void
   /** Checks a token pasted on the guided token page and keeps it in the host's credential store. Host only. */
   'deploy.saveToken'(platform: AccountPlatform, token: string): HostingAccount

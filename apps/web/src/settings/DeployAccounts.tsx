@@ -117,6 +117,7 @@ function DeployAccountRow({
   const [open, setOpen] = useState(false)
   const [signIn, setSignIn] = useState<HostingSignIn | null>(null)
   const [token, setToken] = useState('')
+  const [number, setNumber] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const tokenId = useId()
@@ -245,6 +246,32 @@ function DeployAccountRow({
                     )}
                     <span className="text-muted-foreground">{t('Waiting for you to authorize…')}</span>
                   </span>
+                )}
+                {signIn?.state === 'waiting' && signIn.asksNumber && (
+                  <form
+                    className="flex flex-wrap items-center gap-2"
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      void run(async () => {
+                        setSignIn(await invoke('deploy.signInMatch', signIn.id, number.trim()))
+                        setNumber('')
+                      })
+                    }}
+                  >
+                    <label className="flex items-center gap-2">
+                      {t('The number the sign-in page shows')}
+                      <Input
+                        value={number}
+                        inputMode="numeric"
+                        maxLength={4}
+                        className="w-20"
+                        onChange={(event) => setNumber(event.target.value.replace(/\D/g, ''))}
+                      />
+                    </label>
+                    <Button type="submit" size="sm" disabled={busy || !number}>
+                      {t('Send')}
+                    </Button>
+                  </form>
                 )}
                 {signIn?.state === 'failed' && signIn.error && (
                   <p role="alert" className="m-0 text-destructive">

@@ -51,13 +51,7 @@ Vercel, Netlify and the person's own server are built ([Deploying an app](guide/
 
 Usage figures for Vercel, Netlify and Neon beside the limits their APIs report, **Open billing**, notices at 80% and 100%, and `deploy_usage` are built ([Usage](guide/deploy.md#usage)). What remains: figures for each new platform's adapter as it lands, and Netlify bandwidth or credits if Netlify's API starts reporting them.
 
-### 4. Mobile store releases
-
-**Store releases** in the deploy sheet (checks from `app.json` and `eas.json`, the person's store steps, **Add eas.json in a pull request**, **Release** through `eas build --auto-submit-with-profile` to TestFlight and Play's internal track), the Expo access token in Settings, the deploy watch through each build and its upload, `release_status`, `release_logs` and `release_start`, and EAS Update previews of pull requests with a QR code are built ([Store releases](guide/deploy.md#store-releases), `workspace/deploy/release.ts` and `expo.ts`). What remains:
-
-- **Expo's CLI sign-in:** `eas login --device --non-interactive` signs in through a browser on any device and saves a session secret in `~/.expo/state.json` (eas-cli 27); a sign-in can ask the person to pick the number their browser shows. Ramu would run it with a private `HOME`, exchange the session for an access token named Ramu (Expo's `createAccessToken` mutation), then end the session, which needs the number choice in Settings' sign-in.
-
-### 5. The site
+### 4. The site
 
 The site (`apps/site`, one Astro page) is about keeping coding agents moving. With this plan, Ramu also takes someone from an idea to a live app, so the site gets new copy throughout, written once the features ship and only claiming what they do:
 

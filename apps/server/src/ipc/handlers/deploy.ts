@@ -13,7 +13,7 @@ import {
   type ResourceProvider,
 } from '@ramu/shared/types/deploy'
 import { DATABASE_VARIABLES, MigrationError } from '../../workspace/deploy/resources'
-import { platformCli } from '../../workspace/deploy/signIn'
+import { signInCli } from '../../workspace/deploy/signIn'
 import {
   envStatus,
   githubActionsTarget,
@@ -83,7 +83,7 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
   const summary = async (check: boolean) => ({
     accounts: await deploys().accounts.list(
       check,
-      (name) => (CLI_SIGN_IN_PLATFORMS as readonly string[]).includes(name) && !!platformCli(name),
+      (name) => (CLI_SIGN_IN_PLATFORMS as readonly string[]).includes(name) && !!signInCli(name as CliSignInPlatform),
     ),
     canAdminister: administrator(),
   })
@@ -130,6 +130,10 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
       },
     },
     'deploy.signInStatus': { args: z.tuple([signIn]), run: (signInId: string) => deploys().signIns.status(signInId) },
+    'deploy.signInMatch': {
+      args: z.tuple([signIn, z.string().regex(/^\d{1,4}$/)]),
+      run: (signInId: string, number: string) => deploys().signIns.match(signInId, number),
+    },
     'deploy.cancelSignIn': { args: z.tuple([signIn]), run: (signInId: string) => deploys().signIns.cancel(signInId) },
     'deploy.saveToken': {
       args: z.tuple([

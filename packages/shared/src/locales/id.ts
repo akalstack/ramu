@@ -6162,4 +6162,5 @@ export const indonesian: Readonly<Record<string, string>> = {
     '{0}: coba juga di Auto',
   'A Shared MCP tool Auto tries after your signed-in providers.':
     'Alat Shared MCP yang dicoba Auto setelah penyedia yang Anda masuki.',
+  'The number the sign-in page shows': 'Angka yang ditampilkan halaman masuk',
 }

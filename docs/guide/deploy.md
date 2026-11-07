@@ -7,6 +7,7 @@ Ramu deploys a project to a hosting platform on your own account, or to your own
 **Settings → Git → Hosting accounts** lists Vercel, Netlify, Railway, Fly.io, your own server, Neon and Expo with their marks. Your own server connects with an SSH key instead ([Your own server](#your-own-server)). **Connect** offers two ways, in this order:
 
 1. **Sign in with Vercel**, **Sign in with Netlify**, **Sign in with Railway** or **Sign in with Fly.io**, when the platform's CLI (`vercel`, `netlify`, `railway` or `fly`) is installed on the host. Ramu runs the CLI's own browser sign-in on the host and shows its link (and the code, for Vercel and Railway) in Settings; **Open the sign-in page**, sign in and authorize. Ramu then reads the token the CLI saved, checks it with the platform and shows the account name. The CLI runs against a private configuration folder that is deleted afterwards, so your own CLI login is not read, changed or signed out.
+   - **Sign in with Expo** runs `eas login --device` (the `eas` CLI on the host, or the published one through `npx`) and shows Expo's link and code, which work from any device. If Expo's page shows a number to pick, type it into **The number the sign-in page shows** and press **Send**. Ramu then turns the Expo session into an access token named Ramu, ends the session and keeps only the token, which you can revoke on expo.dev.
    - Vercel's and Railway's sign-ins are sessions that renew themselves; Ramu renews them before they expire. A Vercel CLI that signs in with a key bound to the computer cannot be used; use a token instead.
    - A Railway sign-in reaches every workspace you belong to, and a Fly.io sign-in every organization; Settings says so. A Railway workspace token or a Fly.io organization token reaches one.
    - Fly.io's sign-in finishes in a browser on the computer running the host, which `fly auth login` opens there.
@@ -20,7 +21,7 @@ A token with an end date shows it in Settings, and a week before it runs out eac
 
 Agents never create tokens by driving your browser: a signed-in dashboard gives full account power, and a new token would end up in screenshots and the transcript.
 
-Hosting accounts are added, replaced and removed on the computer running the host; from a paired owner device, **Sign in with Vercel**, **Netlify** or **Railway** also works, since their sign-in runs on the host, keeps the token there and only shows the device its link. Paired devices see their status: the phone shows each platform's account under **GitHub on this host**, and a project's deployments under **Deployments** ([On the phone](#on-the-phone)). **Disconnect** deletes Ramu's copy only; to revoke the token itself, delete it on the platform.
+Hosting accounts are added, replaced and removed on the computer running the host; from a paired owner device, **Sign in with Vercel**, **Netlify**, **Railway** or **Expo** also works, since their sign-in runs on the host, keeps the token there and only shows the device its link. Paired devices see their status: the phone shows each platform's account under **GitHub on this host**, and a project's deployments under **Deployments** ([On the phone](#on-the-phone)). **Disconnect** deletes Ramu's copy only; to revoke the token itself, delete it on the platform.
 
 The same accounts publish artifacts with **Publish to the web** ([Artifacts](artifacts.md)).
 

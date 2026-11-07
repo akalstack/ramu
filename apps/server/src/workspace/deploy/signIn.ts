@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import type { CliSignInPlatform, HostingSignIn } from '@ramu/shared/types/deploy'
 import { findExecutable } from '../../providers/providerBinaries'
 import type { HostingAccounts, HostingSecret } from './accounts'
@@ -24,6 +24,47 @@ export function platformCli(name: string): string | null {
       .find((path) => existsSync(path)) ??
     null
   )
+}
+
+/** The CLI a platform's sign-in runs: its own, or for Expo the `eas` CLI, else the published one through npx. */
+export function signInCli(platform: CliSignInPlatform): string | null {
+  return platform === 'expo' ? (platformCli('eas') ?? platformCli('npx')) : platformCli(platform)
+}
+
+const EXPO_API = 'https://api.expo.dev'
+
+/**
+ * Turns the session `eas login` saved into an access token named Ramu, then ends the session, so only the token,
+ * which can be revoked on expo.dev, stays.
+ */
+export async function expoSessionToken(
+  session: string,
+  fetcher: typeof fetch = fetch,
+  api = EXPO_API,
+): Promise<HostingSecret> {
+  const headers = { 'content-type': 'application/json', 'expo-session': session }
+  const graphql = async <T>(query: string, variables: Record<string, unknown> = {}) => {
+    const response = await fetcher(`${api}/graphql`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ query, variables }),
+    })
+    const body = (await response.json().catch(() => ({}))) as { data?: T; errors?: unknown[] }
+    if (!response.ok || body.errors?.length || !body.data)
+      throw new Error('Expo did not accept the sign-in. Start it again.')
+    return body.data
+  }
+  try {
+    const { meActor } = await graphql<{ meActor: { id: string } | null }>('{ meActor { id } }')
+    if (!meActor) throw new Error('Expo did not accept the sign-in. Start it again.')
+    const created = await graphql<{ accessToken: { createAccessToken: { token: string } } }>(
+      'mutation ($data: CreateAccessTokenInput!) { accessToken { createAccessToken(createAccessTokenData: $data) { token } } }',
+      { data: { actorID: meActor.id, note: 'Ramu' } },
+    )
+    return { token: created.accessToken.createAccessToken.token }
+  } finally {
+    await fetcher(`${api}/v2/auth/logout`, { method: 'POST', headers, body: '{}' }).catch(() => {})
+  }
 }
 
 /** Only what a CLI needs to run: no agent markers (which switch CLIs to agent output), no Ramu secrets. */
@@ -138,6 +179,8 @@ interface Running {
   children: Set<ChildProcess>
   stopped: boolean
   folder: string | null
+  /** The number the person picked on the platform's page, for a sign-in that asks for one. */
+  match?: string
 }
 
 type Spawn = typeof spawn
@@ -147,9 +190,10 @@ export class HostingSignIns {
 
   constructor(
     private readonly accounts: HostingAccounts,
-    private readonly cli: (platform: CliSignInPlatform) => string | null = platformCli,
+    private readonly cli: (platform: CliSignInPlatform) => string | null = signInCli,
     private readonly spawner: Spawn = spawn,
     private readonly pollMs = POLL_MS,
+    private readonly expoToken: (session: string) => Promise<HostingSecret> = expoSessionToken,
   ) {}
 
   start(platform: CliSignInPlatform): HostingSignIn {
@@ -176,7 +220,9 @@ export class HostingSignIns {
               ? await this.netlify(entry, executable, entry.folder)
               : platform === 'railway'
                 ? await this.railway(entry, executable, entry.folder)
-                : await this.fly(entry, executable, entry.folder)
+                : platform === 'expo'
+                  ? await this.expo(entry, executable, entry.folder)
+                  : await this.fly(entry, executable, entry.folder)
         if (entry.stopped) return
         const account = await this.accounts.save(platform, secret, 'cli')
         entry.view = { ...entry.view, state: 'connected', account: account.account, error: null }
@@ -195,6 +241,15 @@ export class HostingSignIns {
   status(id: string): HostingSignIn {
     const entry = this.running.get(id)
     if (!entry) throw new Error('That sign-in is no longer running. Start it again.')
+    return entry.view
+  }
+
+  /** The number the person picked on the platform's page; the next check sends it. */
+  match(id: string, number: string): HostingSignIn {
+    const entry = this.running.get(id)
+    if (!entry || entry.view.state !== 'waiting') throw new Error('That sign-in is no longer waiting. Start it again.')
+    entry.match = number
+    entry.view = { ...entry.view, asksNumber: false }
     return entry.view
   }
 
@@ -304,5 +359,40 @@ export class HostingSignIns {
       if (check.status === 'authorized') return netlifyCliToken(folder)
       if (check.status === 'denied') throw new Error('Netlify declined the sign-in.')
     }
+  }
+
+  /**
+   * `eas login --device --non-interactive` starts Expo's device sign-in, whose link works from any device, and exits
+   * with a request id. Ramu then resumes it until the person approves; when Expo's page shows a number to pick, the
+   * person sends it back and the next resume passes it with `--match`. The session lands in the private HOME and is
+   * exchanged for an access token named Ramu.
+   */
+  private async expo(entry: Running, executable: string, folder: string): Promise<HostingSecret> {
+    const prefix = basename(executable).startsWith('npx') ? ['--yes', 'eas-cli@latest'] : []
+    // npm's cache stays the person's own, so npx does not fetch eas again; the Expo session goes to the private HOME.
+    const env = { ...cliEnvironment(folder), npm_config_cache: join(process.env.HOME ?? folder, '.npm') }
+    const login = [...prefix, 'login', '--device', '--non-interactive']
+    const started = await this.run(entry, executable, login, env)
+    const request = /--resume ([0-9a-f-]{36})/.exec(started)?.[1]
+    this.show(entry, started)
+    if (!request || !entry.view.url) throw new Error('EAS did not start a sign-in.')
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, this.pollMs))
+      if (entry.stopped) throw new Error('Cancelled.')
+      const out = await this.run(
+        entry,
+        executable,
+        [...login, '--resume', request, ...(entry.match ? ['--match', entry.match] : [])],
+        env,
+      )
+      if (/Logged in as/.test(out)) break
+      if (/number shown in their browser/.test(out) && !entry.match) entry.view = { ...entry.view, asksNumber: true }
+    }
+    const state = JSON.parse(await readFile(join(folder, '.expo', 'state.json'), 'utf8').catch(() => '{}')) as {
+      auth?: { sessionSecret?: unknown }
+    }
+    const session = state.auth?.sessionSecret
+    if (typeof session !== 'string' || !session) throw new Error('EAS finished without saving a sign-in.')
+    return this.expoToken(session)
   }
 }
