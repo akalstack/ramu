@@ -122,6 +122,7 @@ export async function withContext(
   prompt: string,
   context: FileContext[] = [],
   managedSkills: SkillInfo[] = [],
+  memoryHint = '',
 ): Promise<string> {
   if (context.length > 30) throw new Error('Include up to 30 context files')
   let total = 0
@@ -224,6 +225,6 @@ export async function withContext(
     repos.length && scope && (repos.length > 1 || repos[0]!.cwd !== scope.cwd)
       ? `This project's repositories are exactly: ${repos.map((b) => `${b.repoName} (${b.cwd})`).join('; ')}. Treat only these as the project; other folders in the working directory (for example worktree copies) are not part of it unless the user names them.`
       : ''
-  const all = [layout, extra].filter(Boolean).join('\n')
+  const all = [layout, extra, memoryHint].filter(Boolean).join('\n')
   return all ? `${prompt}\n\n<ramu-context>\n${all}\n</ramu-context>` : prompt
 }

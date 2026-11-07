@@ -80,8 +80,16 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
   configureGitlabCredentials(gitlab)
   const storedPreferences = () => workspace.getAppState<Partial<AppPreferences>>('app-preferences', {})
   const managedSkills = (taskId: string) => learning?.catalog(workspace.projectIdOf(taskId)) ?? []
+  // Memories that match the message ride along with it, so recall does not depend on the agent thinking to search.
+  const memoryHint = (ws: Workspace, taskId: string, prompt: string) => {
+    try {
+      return memory?.relevant(ws.projectIdOf(taskId), prompt) ?? ''
+    } catch {
+      return ''
+    }
+  }
   const withContext = (ws: Workspace, taskId: string, prompt: string, context?: FileContext[]) =>
-    withFileContext(ws, taskId, prompt, context, managedSkills(taskId))
+    withFileContext(ws, taskId, prompt, context, managedSkills(taskId), memoryHint(ws, taskId, prompt))
   const providers = new ProviderService(
     () => ({ ...DEFAULT_APP_PREFERENCES, ...storedPreferences() }),
     (key, fallback) => workspace.getAppState(key, fallback),

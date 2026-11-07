@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { openDb, type Db } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
-import { MemoryService, rank, registerMemoryTools, staleAt, strength } from '../src/memory/memory'
+import { MemoryService, memoryIndex, rank, registerMemoryTools, staleAt, strength } from '../src/memory/memory'
 import type { AgentService } from '../src/agent'
 import type { AgentSessionInfo, Memory } from '@ramu/shared/types'
 
@@ -186,7 +186,9 @@ it('gives every provider the same protocol and index; sub-agents get the protoco
   expect(top).toContain('with supersedes set to')
   expect(top).toContain('never pick one by date alone')
   expect(top).toContain('re-check anything that can change')
-  expect(top).toMatch(/user, global: Prefers Indonesian: Reply in Indonesian/)
+  expect(top).toMatch(
+    /<pinned-memories>\n- \[[\w-]+\] user, global: Prefers Indonesian\n {2}Reply in Indonesian\n<\/pinned-memories>/,
+  )
   expect(top).toMatch(/reference, global: Board\n/)
   // Agent-written text is never quoted into instructions, only pointed at.
   expect(top).toContain(`[${injected.id}] feedback, global: Deploy rule\n`)
@@ -194,6 +196,60 @@ it('gives every provider the same protocol and index; sub-agents get the protoco
   expect(memory.instructions(session({ parentId: 'parent' }), null)).not.toContain('<memory-index>')
   ws.setAppState('app-preferences', { memory: { enabled: false, dream: true, staleAfterDays: 90 } })
   expect(memory.instructions(session(), null)).toBe('')
+})
+
+it('pins long user preferences in full and lists every title while they fit, else the strongest', () => {
+  const now = Date.now()
+  const make = (i: number, extra: Partial<Memory> = {}): Memory => ({
+    id: `m${i}`,
+    projectId: null,
+    kind: 'project',
+    title: `Note number ${i} about the ingest pipeline`,
+    content: 'details',
+    tags: [],
+    importance: 3,
+    status: 'active',
+    archivedReason: null,
+    source: { actor: 'agent', provider: 'codex' },
+    createdAt: now,
+    updatedAt: now - i * DAY,
+    lastUsedAt: null,
+    useCount: 0,
+    expiresAt: null,
+    ...extra,
+  })
+  const long = `Reply in Indonesian. ${'Keep identifiers in English. '.repeat(20)}How to apply: every reply.`
+  const pref = make(999, { kind: 'user', title: 'Reply language', content: long, source: { actor: 'user' } })
+  const small = memoryIndex([pref, ...Array.from({ length: 40 }, (_, i) => make(i))], now)
+  expect(small.pinned).toEqual([`- [m999] user, global: Reply language\n  ${long}`]) // no silent cut
+  expect(small.index).toHaveLength(40)
+  const large = memoryIndex([pref, ...Array.from({ length: 400 }, (_, i) => make(i))], now)
+  expect(large.pinned).toHaveLength(1)
+  expect(large.index).toHaveLength(30)
+  expect(large.index[0]).toContain('[m0]') // the strongest
+  expect(large.shown.has('m999') && large.shown.has('m0') && !large.shown.has('m300')).toBe(true)
+})
+
+it('matches plurals and points a message at memories the index left out, without counting it as use', () => {
+  const bun = memory.save(
+    note('Package manager is bun', 'Add dependencies with bun add in the package folder', {
+      kind: 'project',
+      tags: ['dependencies'],
+    }),
+    agent,
+  ).memory
+  for (let i = 0; i < 400; i++)
+    db.prepare(
+      "INSERT INTO memories (id, project_id, kind, title, content, tags, importance, status, source, created_at, updated_at, use_count) VALUES (?, NULL, 'project', ?, 'details', '[]', 4, 'active', '{\"actor\":\"agent\"}', ?, ?, 5)",
+    ).run(`f${i}`, `Filler note ${i} about the dashboard layout`, Date.now(), Date.now())
+  expect(memory.search(null, 'dependency', 1).map((m) => m.id)).toEqual([bun.id])
+  expect(memory.instructions(session(), null)).not.toContain(bun.id)
+  const hint = memory.relevant(null, 'Give me the command to add zod as a dependency of apps/api')
+  expect(hint).toContain(`[${bun.id}] project, global: Package manager is bun`)
+  expect(memory.relevant(null, 'please look at the dashboard quickly')).toBe('') // one shared word is not a match
+  expect(memory.get(bun.id).useCount).toBe(1) // only the explicit search above counted
+  ws.setAppState('app-preferences', { memory: { enabled: false, dream: true, staleAfterDays: 90 } })
+  expect(memory.relevant(null, 'add a dependency with bun')).toBe('')
 })
 
 it('exposes MCP tools scoped to the session project', async () => {
@@ -264,7 +320,7 @@ it('essential is set only by the user: never forgotten, quoted for every agent, 
   age(rule.id, 1000)
   expect(memory.hygiene().stale).toBe(0)
   expect(memory.instructions(session(), null)).toContain(
-    `[${rule.id}] project, global: Golden rule: Never force-push shared branches`,
+    `[${rule.id}] project, global: Golden rule\n  Never force-push shared branches`,
   )
   expect(() =>
     memory.save(note('Golden rule', 'Force-push is fine', { kind: 'project', importance: 5 }), agent, rule.id),

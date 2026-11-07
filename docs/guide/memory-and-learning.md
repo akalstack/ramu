@@ -6,6 +6,8 @@ Ramu carries what your agents learn from one thread to the next, across every pr
 
 Agents read and save notes that apply to a project or to all projects. **Settings → Memory & skills → Shared memory** (on by default) lets you browse, search, edit, archive and restore them, with full history. Notes you wrote or confirmed are never rewritten or archived by an agent. Don't store credentials: memory can reach any provider you use.
 
+Every new thread starts with your own preferences and corrections, and any note marked essential, quoted in full, so they apply whatever the task is about. Other notes appear as titles the agent opens when needed: all of them while they fit (roughly 150), otherwise the most important and recently used. Each message you send also lists up to five notes whose titles or tags match it, so the agent finds them without having to think of a search.
+
 **Memory cleanup** runs daily when enough has changed, merging duplicates and archiving outdated notes. **Clean up memory** runs it now.
 
 ## Learning
