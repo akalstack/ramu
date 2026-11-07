@@ -1,3 +1,6 @@
+import { ServiceGrants } from './interactive/serviceGrants'
+import { grafana } from './interactive/grafana'
+import { DASHBOARD_ROWS_MAX } from '@ramu/shared/artifactSource'
 import { LastingAddresses } from './workspace/deploy/namedTunnel'
 import { ShellPushes } from './agent/shellPushes'
 import { followPush } from './workspace/followPush'
@@ -795,86 +798,98 @@ void publicPages.restore(publicPageTunnel())
 // A dashboard's live tables, read from its own project: its deploys in each source's fixed column order, or a file in
 // its folder, read only.
 const isoTime = (at: number) => new Date(at).toISOString()
-const liveDashboards = new LiveDashboards(async (projectId, { source, file, records, mcp, columns }) => {
-  if (mcp && projectId) {
-    // Only a tool the server marks read-only, on a server Shared MCP approved for this project, is called.
-    const signal = AbortSignal.timeout(30_000)
-    const opened = await pageExternal.open(
-      { id: `dashboard-${projectId}`, projectId } as ArtifactInfo,
-      pageSettings('fast'),
-      [mcp.server],
-      signal,
-    )
-    try {
-      const tool = opened.tools.find((entry) => entry.name === mcp.tool && entry.readOnly)
-      if (!tool) return []
-      const content = (await tool.call(mcp.arguments ?? {}, signal)) as { type?: string; text?: string }[]
-      const text = content.map((part) => (part.type === 'text' ? (part.text ?? '') : '')).join('')
-      return tableFromFile('result.json', text, columns)
-    } finally {
-      await opened.close()
+const serviceGrants = new ServiceGrants(
+  (key, fallback) => workspace.getAppState(key, fallback),
+  (key, value) => workspace.setAppState(key, value),
+)
+const liveDashboards = new LiveDashboards(
+  async (projectId, { source, file, records, mcp, service, columns }, artifactId) => {
+    if (service) {
+      // A named service is read only for a kept dashboard the person allowed to read it, with the account in Settings.
+      if (!artifactId || !serviceGrants.allowed(artifactId).includes(service.id)) return []
+      const { auth } = await deploys.accounts.auth(service.id)
+      return grafana.query(auth, service, columns, DASHBOARD_ROWS_MAX)
     }
-  }
-  if (records) {
-    // Only an App in the dashboard's own project (or, for a dashboard in no project, an App in none) is read.
-    if (!pages.has(records.artifact) || (pages.get(records.artifact).projectId ?? null) !== projectId) return []
-    return pages.records(records.artifact, records.collection).map((record) =>
-      columns.map((column) => {
-        if (column === 'createdAt') return isoTime(record.createdAt)
-        const value = column === 'id' ? record.id : record.data[column]
-        if (value === undefined || value === null) return null
-        if (typeof value === 'number' || typeof value === 'string')
-          return typeof value === 'string' ? value.slice(0, 200) : value
-        return JSON.stringify(value).slice(0, 200)
-      }),
-    )
-  }
-  if (source === 'activity') {
-    const since = new Date()
-    since.setHours(0, 0, 0, 0)
-    since.setDate(since.getDate() - 29)
-    return agents
-      .activity(since.getTime())
-      .map((row) => [row.day, row.provider, row.turns, row.costUsd, row.tokens ?? null])
-  }
-  if (!projectId) return []
-  if (source === 'threads' || source === 'pullRequests') {
-    const tasks = workspace.listTasks(projectId).slice(0, 500)
-    if (source === 'threads')
-      return tasks.map((task) => [task.title, task.status, task.doneAt ? 1 : 0, isoTime(task.lastActiveAt)])
-    return tasks.flatMap((task) => {
-      const pull = pullRequestIndex.forTask(task)
-      return pull ? [[task.title, pull.number, pull.title, pull.state, pull.stage, pull.url]] : []
-    })
-  }
-  if (file) {
-    const root = workspace.listProjects().find((project) => project.id === projectId)?.root
-    if (!root) return []
-    return tableFromFile(file, (await readText(root, file)).content, columns)
-  }
-  if (source === 'deployments')
-    return (await deploys.service.project(projectId)).deployments.map((deployment) => [
-      isoTime(deployment.createdAt),
-      deployment.state,
-      deployment.production ? 'production' : 'preview',
-      deployment.ref,
-      deployment.message,
-      deployment.url,
-    ])
-  if (source === 'usage')
-    return (await deploys.usage(projectId)).flatMap((report) =>
-      report.figures.map((figure) => [
-        report.platform,
-        figure.metric,
-        figure.service,
-        figure.used,
-        figure.limit,
-        figure.unit,
-      ]),
-    )
-  const last = deploys.uptime.status(projectId).last
-  return last ? [[isoTime(last.at), last.result, last.status, last.ms]] : []
-})
+    if (mcp && projectId) {
+      // Only a tool the server marks read-only, on a server Shared MCP approved for this project, is called.
+      const signal = AbortSignal.timeout(30_000)
+      const opened = await pageExternal.open(
+        { id: `dashboard-${projectId}`, projectId } as ArtifactInfo,
+        pageSettings('fast'),
+        [mcp.server],
+        signal,
+      )
+      try {
+        const tool = opened.tools.find((entry) => entry.name === mcp.tool && entry.readOnly)
+        if (!tool) return []
+        const content = (await tool.call(mcp.arguments ?? {}, signal)) as { type?: string; text?: string }[]
+        const text = content.map((part) => (part.type === 'text' ? (part.text ?? '') : '')).join('')
+        return tableFromFile('result.json', text, columns)
+      } finally {
+        await opened.close()
+      }
+    }
+    if (records) {
+      // Only an App in the dashboard's own project (or, for a dashboard in no project, an App in none) is read.
+      if (!pages.has(records.artifact) || (pages.get(records.artifact).projectId ?? null) !== projectId) return []
+      return pages.records(records.artifact, records.collection).map((record) =>
+        columns.map((column) => {
+          if (column === 'createdAt') return isoTime(record.createdAt)
+          const value = column === 'id' ? record.id : record.data[column]
+          if (value === undefined || value === null) return null
+          if (typeof value === 'number' || typeof value === 'string')
+            return typeof value === 'string' ? value.slice(0, 200) : value
+          return JSON.stringify(value).slice(0, 200)
+        }),
+      )
+    }
+    if (source === 'activity') {
+      const since = new Date()
+      since.setHours(0, 0, 0, 0)
+      since.setDate(since.getDate() - 29)
+      return agents
+        .activity(since.getTime())
+        .map((row) => [row.day, row.provider, row.turns, row.costUsd, row.tokens ?? null])
+    }
+    if (!projectId) return []
+    if (source === 'threads' || source === 'pullRequests') {
+      const tasks = workspace.listTasks(projectId).slice(0, 500)
+      if (source === 'threads')
+        return tasks.map((task) => [task.title, task.status, task.doneAt ? 1 : 0, isoTime(task.lastActiveAt)])
+      return tasks.flatMap((task) => {
+        const pull = pullRequestIndex.forTask(task)
+        return pull ? [[task.title, pull.number, pull.title, pull.state, pull.stage, pull.url]] : []
+      })
+    }
+    if (file) {
+      const root = workspace.listProjects().find((project) => project.id === projectId)?.root
+      if (!root) return []
+      return tableFromFile(file, (await readText(root, file)).content, columns)
+    }
+    if (source === 'deployments')
+      return (await deploys.service.project(projectId)).deployments.map((deployment) => [
+        isoTime(deployment.createdAt),
+        deployment.state,
+        deployment.production ? 'production' : 'preview',
+        deployment.ref,
+        deployment.message,
+        deployment.url,
+      ])
+    if (source === 'usage')
+      return (await deploys.usage(projectId)).flatMap((report) =>
+        report.figures.map((figure) => [
+          report.platform,
+          figure.metric,
+          figure.service,
+          figure.used,
+          figure.limit,
+          figure.unit,
+        ]),
+      )
+    const last = deploys.uptime.status(projectId).last
+    return last ? [[isoTime(last.at), last.result, last.status, last.ms]] : []
+  },
+)
 // Dashboards with watched figures are read again every ten minutes; a change is told to the person's devices.
 const dashboardWatch = setInterval(
   () =>
@@ -1068,6 +1083,7 @@ const dispatcher = createDispatcher(
     pages,
     artifactExports: new ArtifactExports(db),
     liveDashboards,
+    serviceGrants,
     pageAi,
     abilities,
     notifyPage,

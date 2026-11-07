@@ -34,6 +34,8 @@ const SCOPE_HINT: Record<
     'Create a Developer API key, then paste your account email and the key joined by a colon (you@example.com:key). The key reaches every database of the account',
   resend:
     'Create a key with Full access, which creating sending keys needs; the app gets sending-only keys, never this one',
+  grafana:
+    'Create a service account with the Viewer role and a token for it, then paste your Grafana address and the token joined by | (https://acme.grafana.net|glsa_…). Dashboards read it only where you allow it',
   expo: 'Create it for a robot user with the Developer role on the account that owns the app; a personal token reaches every account you belong to',
 }
 
@@ -44,7 +46,9 @@ function deployAccountHeadline(account: HostingAccount): string {
       ? t('Not connected. Deploys and Publish to the web need an account.')
       : account.kind === 'store'
         ? t('Not connected. Store releases of phone apps need an account.')
-        : t('Not connected. Databases for your projects need an account.')
+        : account.kind === 'service'
+          ? t('Not connected. Dashboards that read it need an account.')
+          : t('Not connected. Databases for your projects need an account.')
   if (account.error) return account.error
   if (account.platform === 'server')
     return t('Connected as {0} with an SSH key kept on this host', { 0: account.account ?? account.name })

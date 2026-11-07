@@ -23,6 +23,7 @@ export const BRAND_IDS = [
   'expo',
   'appstore',
   'googleplay',
+  'grafana',
 ] as const
 
 export type BrandId = (typeof BRAND_IDS)[number]

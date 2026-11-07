@@ -6186,4 +6186,11 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Bucket privat di proyek Supabase aplikasi, dan satu di proyek preview-nya.',
   'Also being edited on {0}. Saving keeps both edits where they changed different lines.':
     'Juga sedang disunting di {0}. Menyimpan mempertahankan kedua suntingan jika mengubah baris yang berbeda.',
+  'Create a service account with the Viewer role and a token for it, then paste your Grafana address and the token joined by | (https://acme.grafana.net|glsa_…). Dashboards read it only where you allow it':
+    'Buat service account dengan peran Viewer dan token untuknya, lalu tempel alamat Grafana Anda dan token yang digabung dengan | (https://acme.grafana.net|glsa_…). Dashboard membacanya hanya jika Anda mengizinkan',
+  'Not connected. Dashboards that read it need an account.':
+    'Belum terhubung. Dashboard yang membacanya memerlukan akun.',
+  'This dashboard reads {0} with the account in Settings → Git → Hosting accounts. Its tables stay empty until you allow it.':
+    'Dashboard ini membaca {0} dengan akun di Pengaturan → Git → Akun hosting. Tabelnya tetap kosong sampai Anda mengizinkannya.',
+  'Stop reading {0}': 'Berhenti membaca {0}',
 }

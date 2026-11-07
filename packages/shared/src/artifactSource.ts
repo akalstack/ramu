@@ -245,10 +245,29 @@ export const dashboardDatasetSchema = z
       .describe(
         "A read-only tool of a Shared MCP server approved for the dashboard's project, called again when it is opened; its JSON result (an array of objects) fills the table by the names in columns. Leave rows out.",
       ),
+    service: z
+      .object({
+        id: z.enum(['grafana']).describe('The named service, connected in Settings.'),
+        datasource: z.string().trim().min(1).max(120).describe("The Grafana data source's uid."),
+        query: z
+          .record(z.string().max(60), z.union([z.string().max(2000), z.number(), z.boolean()]))
+          .describe(
+            "The data source's own query fields, such as { expr } for Prometheus or { rawSql, format: 'table' } for SQL.",
+          ),
+        from: z.string().trim().max(40).optional().describe('The start, such as now-7d; now-24h when absent.'),
+        to: z.string().trim().max(40).optional(),
+      })
+      .optional()
+      .describe(
+        'A query to a named service the person connected, run again when the dashboard is opened and only after they allow this dashboard to read it; columns names the fields of its first result to show. Leave rows out.',
+      ),
   })
   .transform((table, ctx) => {
-    if ([table.source, table.file, table.records, table.mcp].filter(Boolean).length > 1) {
-      ctx.addIssue({ code: 'custom', message: `Give ${table.id} one of a source, a file, records or an MCP tool.` })
+    if ([table.source, table.file, table.records, table.mcp, table.service].filter(Boolean).length > 1) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `Give ${table.id} one of a source, a file, records, an MCP tool or a service.`,
+      })
       return z.NEVER
     }
     if (table.source) return { ...table, columns: [...DASHBOARD_SOURCES[table.source]], rows: table.rows }

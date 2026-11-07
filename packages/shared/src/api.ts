@@ -269,6 +269,17 @@ interface ArtifactMethods {
   'artifacts.setRefresh'(artifactId: string, base: number, minutes: number): import('./artifacts').ArtifactInfo
   /** Shows only a dashboard's last `days` of dated rows (all of them when null), as a new version on top of `base`. */
   'artifacts.setRange'(artifactId: string, base: number, days: number | null): import('./artifacts').ArtifactInfo
+  /** The named services a dashboard's tables read, and the ones the person allowed it to read. */
+  'artifacts.services'(artifactId: string): {
+    needed: import('./types/deploy').NamedService[]
+    allowed: import('./types/deploy').NamedService[]
+  }
+  /** Allows a dashboard to read a named service with the account in Settings, or stops it. */
+  'artifacts.allowService'(
+    artifactId: string,
+    service: import('./types/deploy').NamedService,
+    allowed: boolean,
+  ): { needed: import('./types/deploy').NamedService[]; allowed: import('./types/deploy').NamedService[] }
   /** Says this device is (or stopped) editing an artifact's text, and returns the other devices editing it now. */
   'artifacts.editing'(artifactId: string, editing: boolean): string[]
   /** Tells this host's other devices which slide of a deck the person is on, so a desktop presenting it follows. */

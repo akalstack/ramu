@@ -7,14 +7,25 @@ import type { InteractiveDocument } from '@ramu/shared/interactive'
 import { figureValues, renderDashboard } from './dashboard'
 
 type Cell = string | number | null
-type LiveTable = Pick<DashboardSource['datasets'][number], 'source' | 'file' | 'records' | 'mcp' | 'columns'>
+type LiveTable = Pick<
+  DashboardSource['datasets'][number],
+  'source' | 'file' | 'records' | 'mcp' | 'service' | 'columns'
+>
 /**
  * Reads one live table, its rows in the table's column order: a project's deploys or file, or an App's records. A
  * dashboard in no project (`projectId` null) reads only the host's agent activity and records of an App in no project.
  */
-export type ReadDashboardSource = (projectId: string | null, table: LiveTable) => Promise<Cell[][]>
+/** `artifactId` is the kept dashboard, null for one not kept; a named service is read only for a kept one it allows. */
+export type ReadDashboardSource = (
+  projectId: string | null,
+  table: LiveTable,
+  artifactId: string | null,
+) => Promise<Cell[][]>
 const isLive = (table: LiveTable, projectId: string | null) =>
-  !!table.records || table.source === 'activity' || (!!projectId && !!(table.source || table.file || table.mcp))
+  !!table.service ||
+  !!table.records ||
+  table.source === 'activity' ||
+  (!!projectId && !!(table.source || table.file || table.mcp))
 
 const REFRESH_MS = 5 * 60_000
 
@@ -48,7 +59,7 @@ export class LiveDashboards {
           ? {
               ...table,
               // A source that cannot be read now shows empty rather than the published rows passing for current.
-              rows: await this.read(projectId, table).catch(() => []),
+              rows: await this.read(projectId, table, document.reference.artifactId ?? null).catch(() => []),
               asOf: at,
             }
           : table,
@@ -56,6 +67,11 @@ export class LiveDashboards {
     )
     const source = parseArtifactSource({ kind: 'dashboard', ...board, datasets })
     return source.kind === 'dashboard' ? source : null
+  }
+
+  /** Drops every drawing kept between reads, so the next open reads again (after a grant changes what it may read). */
+  forget(): void {
+    this.drawn.clear()
   }
 
   /** The document as it should show now: unchanged unless it is a dashboard with live tables and a project. */

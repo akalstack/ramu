@@ -1,4 +1,5 @@
 import { mergeSlideText, mergeText } from '@ramu/shared/textMerge'
+import { NAMED_SERVICES, type NamedService } from '@ramu/shared/types/deploy'
 import { EditingPresence } from '../../interactive/editing'
 import { formatFigure } from '../../interactive/dashboard'
 import { designTextEdit, withDesignTexts, type DesignTextEdit } from '@ramu/shared/designText'
@@ -305,6 +306,16 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
     return device ? `Edited by you on ${device.slice(0, 60)}` : 'Edited by you'
   }
   const stateOf = (key: string) => ctx.workspace.getAppState<string | null>(key, null)
+  /** The named services a kept dashboard's tables read, and the ones it is allowed to. */
+  const namedServices = (artifactId: string): { needed: NamedService[]; allowed: NamedService[] } => {
+    const document = need().pages.document(artifactId)
+    const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.dashboard)?.content
+    const tables = stored
+      ? ((JSON.parse(stored) as { datasets?: { service?: { id?: unknown } }[] }).datasets ?? [])
+      : []
+    const needed = NAMED_SERVICES.filter((service) => tables.some((table) => table.service?.id === service))
+    return { needed, allowed: ctx.serviceGrants?.allowed(artifactId) ?? [] }
+  }
   const need = () => {
     if (!ctx.pages || !ctx.pageAi) throw new Error('Update this host for Artifacts.')
     return { pages: ctx.pages, ai: ctx.pageAi }
@@ -450,6 +461,19 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
           refreshMinutes: minutes,
         })
         return pages.saveEdit(artifactId, base, await renderArtifactSource(source, artifact.title), editedBy())
+      },
+    },
+    'artifacts.services': {
+      args: z.tuple([id]),
+      run: (artifactId: string) => namedServices(artifactId),
+    },
+    'artifacts.allowService': {
+      args: z.tuple([id, z.enum(NAMED_SERVICES), z.boolean()]),
+      run: (artifactId: string, service: NamedService, allowed: boolean) => {
+        if (!ctx.serviceGrants) throw new Error('Update this host for dashboards that read services.')
+        ctx.serviceGrants.set(artifactId, service, allowed)
+        ctx.liveDashboards?.forget()
+        return namedServices(artifactId)
       },
     },
     'artifacts.editing': {

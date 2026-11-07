@@ -44,7 +44,17 @@ export type StoreService = (typeof STORE_SERVICES)[number]
  * Every account connected in Settings → Git → Hosting accounts: the hosting platforms, the resource providers, then the
  * store services.
  */
-export const ACCOUNT_PLATFORMS = [...HOSTING_PLATFORMS, ...RESOURCE_PROVIDERS, ...STORE_SERVICES] as const
+/** Services a Dashboard artifact reads from, each its own grant on the dashboard. */
+export const NAMED_SERVICES = ['grafana'] as const
+export type NamedService = (typeof NAMED_SERVICES)[number]
+export const NAMED_SERVICE_NAMES: Record<NamedService, string> = { grafana: 'Grafana' }
+
+export const ACCOUNT_PLATFORMS = [
+  ...HOSTING_PLATFORMS,
+  ...RESOURCE_PROVIDERS,
+  ...STORE_SERVICES,
+  ...NAMED_SERVICES,
+] as const
 export type AccountPlatform = (typeof ACCOUNT_PLATFORMS)[number]
 
 export const isHostingPlatform = (platform: AccountPlatform): platform is HostingPlatform =>
@@ -61,7 +71,7 @@ export type DeployFailureKind = 'signed-out' | 'missing-permission' | 'plan-limi
 export interface HostingAccount {
   platform: AccountPlatform
   /** Whether it deploys apps, provides a resource such as a database, or releases phone apps to the stores. */
-  kind: 'hosting' | ResourceKind | 'store'
+  kind: 'hosting' | ResourceKind | 'store' | 'service'
   /** The platform's name, such as "Vercel". */
   name: string
   connected: boolean

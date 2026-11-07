@@ -147,7 +147,8 @@ it('reads a table from a project file, by header or key, and refuses paths outsi
   } as unknown as InteractiveDocument
   const read = vi.fn<ReadDashboardSource>(async (_project, { file, columns }) => tableFromFile(file!, csv, columns))
   expect((await new LiveDashboards(read).serve(document, 'p1')).html).toContain('<strong>10.5</strong>')
-  expect(read).toHaveBeenCalledWith('p1', expect.objectContaining({ file: 'data/s.csv' }))
+  // A dashboard not kept as an artifact has no artifact id, so it can read no named service.
+  expect(read).toHaveBeenCalledWith('p1', expect.objectContaining({ file: 'data/s.csv' }), null)
 })
 
 it('reads an App’s records as a live table, also for a dashboard in no project, and keeps other tables as published', async () => {
@@ -167,7 +168,7 @@ it('reads an App’s records as a live table, also for a dashboard in no project
       datasets: [{ id: 'x', records: { artifact: app, collection: 'e' }, file: 'a.csv', columns: ['a'] }],
       figures: [{ label: 'A', dataset: 'x', column: 'a', aggregate: 'count' }],
     }),
-  ).toThrow('one of a source, a file, records or an MCP tool')
+  ).toThrow('one of a source, a file, records, an MCP tool or a service')
   const drawn = renderDashboard(parsed, 'Spending')
   const document = {
     reference: { id: 'r', version: 1, kind: 'dashboard', title: 'Spending' },
@@ -187,6 +188,7 @@ it('reads an App’s records as a live table, also for a dashboard in no project
   expect(read).toHaveBeenCalledWith(
     null,
     expect.objectContaining({ records: { artifact: app, collection: 'expenses' } }),
+    null,
   )
 })
 
@@ -252,6 +254,7 @@ it('reads a table from a Shared MCP tool on open, only with a project', async ()
   expect(read).toHaveBeenCalledWith(
     'p1',
     expect.objectContaining({ mcp: { server: 'analytics', tool: 'signups_by_day', arguments: { days: 7 } } }),
+    null,
   )
 })
 

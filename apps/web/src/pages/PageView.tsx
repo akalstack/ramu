@@ -36,6 +36,7 @@ import { t, useLanguage } from '../i18n'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { notifyError } from '../chat/Notifications'
+import { NAMED_SERVICE_NAMES, type NamedService } from '@ramu/shared/types/deploy'
 import { useViewOnly } from '../composer/useViewOnly'
 import { ContentFrame } from '../interactive/ContentFrame'
 import { useContentDocument } from '../interactive/useContentDocument'
@@ -117,6 +118,21 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
     null,
   )
   const [savingEdit, setSavingEdit] = useState(false)
+  // Named services this dashboard reads, and the ones the person allowed it to.
+  const [services, setServices] = useState<{ needed: NamedService[]; allowed: NamedService[] } | null>(null)
+  const dashboardVersion = page?.kind === 'dashboard' ? page.version : null
+  useEffect(() => {
+    if (dashboardVersion === null) return
+    let live = true
+    void invoke('artifacts.services', artifactId).then(
+      (next) => live && setServices(next),
+      () => {},
+    )
+    return () => {
+      live = false
+    }
+  }, [dashboardVersion, invoke, artifactId])
+  const unallowed = services ? services.needed.filter((service) => !services.allowed.includes(service)) : []
   // The person's other devices editing this text too; saving merges edits that changed different lines.
   const [alsoEditing, setAlsoEditing] = useState<string[]>([])
   const editingText = !!editing
@@ -395,6 +411,18 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           },
         ]
       : []),
+    ...(services?.allowed ?? []).map((service) => ({
+      key: `service:${service}`,
+      label: t('Stop reading {0}', { 0: NAMED_SERVICE_NAMES[service] }),
+      disabled: viewOnly,
+      onSelect: () =>
+        void invoke('artifacts.allowService', artifactId, service, false)
+          .then((next) => {
+            setServices(next)
+            void load()
+          })
+          .catch((e) => notifyError(message(e))),
+    })),
     {
       key: 'template',
       label: t('Save as template'),
@@ -660,6 +688,30 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
               {t('Update live site')}
             </Button>
           )}
+        </div>
+      )}
+      {unallowed.length > 0 && (
+        <div role="status" className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-caption">
+          <span className="min-w-0 flex-1 text-muted-foreground">
+            {t(
+              'This dashboard reads {0} with the account in Settings → Git → Hosting accounts. Its tables stay empty until you allow it.',
+              { 0: unallowed.map((service) => NAMED_SERVICE_NAMES[service]).join(', ') },
+            )}
+          </span>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() =>
+              void Promise.all(unallowed.map((service) => invoke('artifacts.allowService', artifactId, service, true)))
+                .then((results) => {
+                  setServices(results.at(-1) ?? null)
+                  void load()
+                })
+                .catch((error) => notifyError(message(error), page.title))
+            }
+          >
+            {t('Allow')}
+          </Button>
         </div>
       )}
       {bridge.running && (

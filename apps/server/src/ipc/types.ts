@@ -39,6 +39,8 @@ export interface Services {
   interactive?: import('../interactive/store').InteractiveStore
   pages?: import('../interactive/pages').PageStore
   liveDashboards?: import('../interactive/liveDashboard').LiveDashboards
+  /** Which named services each kept dashboard may read. */
+  serviceGrants?: import('../interactive/serviceGrants').ServiceGrants
   /** PDF, PowerPoint and slide images made from a version and kept with it. */
   artifactExports?: import('../interactive/exports').ArtifactExports
   /** Hosting accounts, project deploy bindings and CLI sign-ins. */

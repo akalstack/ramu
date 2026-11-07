@@ -79,9 +79,10 @@ Between the person's own devices, an edit of a doc, a Mermaid diagram or a deck'
 
 ### 5. Dashboards from named services
 
-- Besides records, folders, Ramu data and Shared MCP servers, a Dashboard or Live artifact can read **named services** through connectors on the host: Salesforce, Amplitude and Grafana first.
-- Each connector is one file implementing `query(spec)` with that service's own sign-in, kept in `credentials/`. It is read-only, and each service is its own grant on the artifact, listed in plain words.
-- A connector is added only after its sign-in and the data it can read are reviewed and written up in SECURITY.md, the same bar as Shared MCP.
+Grafana is built: its account in Settings, a table naming its data source and query, and a grant per dashboard and service, reviewed in [SECURITY.md](../SECURITY.md) ([Dashboards](guide/artifacts.md#kinds)). Remaining:
+
+- **Salesforce and Amplitude:** each a connector beside `interactive/grafana.ts` with its own sign-in (Salesforce's OAuth for a connected app, Amplitude's API key and secret) and a `service.id`, added only after its sign-in and the data it can read are written up in SECURITY.md.
+- **Live (App) artifacts:** reading a named service from an App's own code, through the same per-artifact grant.
 
 ### 6. Voice-over for Motion
 

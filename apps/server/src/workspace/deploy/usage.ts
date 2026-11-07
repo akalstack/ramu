@@ -31,6 +31,8 @@ const BILLING_PAGES: Record<AccountPlatform, string> = {
   'vercel-marketplace': 'https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings%2Fbilling&title=Billing',
   'vercel-blob': 'https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings%2Fbilling&title=Billing',
   'supabase-storage': 'https://supabase.com/dashboard/org/_/billing',
+  // A Grafana account is read by dashboards, not billed through Ramu, so no report is made for it.
+  grafana: '',
   expo: 'https://expo.dev/settings/billing',
 }
 
