@@ -1,24 +1,15 @@
 import { reducedMotion } from './workspace/panelMotion'
 import { t, useLanguage } from './i18n'
 import { Button } from '@/components/desktop-button'
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import wordmark from '../../../assets/wordmark.svg'
 import { MARK, MARK_VIEW_BOX, MARK_WAKE, STARTUP_FADE, STARTUP_MARK_SIZE } from '@ramu/shared/brandMark'
-
-// Shared across screen mounts, reset when the app's renderer starts again.
-let markRevealed = false
 
 /** The same r + dot as the app icon, without its tile, for quiet empty states. */
 export function AnimatedMark({ size, className = '' }: { size: number; className?: string }) {
   useLanguage()
-  const [reveal, setReveal] = useState(false)
   const stem = useRef<SVGPathElement>(null)
   const dot = useRef<SVGCircleElement>(null)
-  useLayoutEffect(() => {
-    if (markRevealed) return
-    markRevealed = true
-    setReveal(true)
-  }, [])
 
   return (
     <Button
@@ -27,12 +18,11 @@ export function AnimatedMark({ size, className = '' }: { size: number; className
       type="button"
       aria-label={t('Animate Ramu logo')}
       onClick={() => {
-        setReveal(false)
         wakeMark(stem.current, dot.current)
       }}
     >
       <svg
-        className={`size-auto animated-mark [&.start-mark]:bg-transparent [&.start-mark]:[border-radius:0] [&.start-mark]:mb-3 overflow-visible shrink-0 ${reveal ? 'animated-mark-reveal' : ''} ${className}`}
+        className={`size-auto animated-mark [&.start-mark]:bg-transparent [&.start-mark]:[border-radius:0] [&.start-mark]:mb-3 overflow-visible shrink-0 ${className}`}
         width={size}
         height={size}
         viewBox="240 240 540 540"

@@ -1051,60 +1051,6 @@ kbd {
   @apply [background:rgba(0,_0,_0,_0.35)];
 }
 
-/* Draw the glyph once, then let the dot land; hold the finished logo. */
-.animated-mark-reveal .animated-mark-stem {
-  @apply [stroke-dasharray:1];
-  @apply [animation:ramu-stem_850ms_cubic-bezier(.22,_1,_.36,_1)_both];
-}
-.animated-mark-reveal .animated-mark-dot {
-  @apply [animation:ramu-dot_620ms_420ms_both];
-  @apply [transform-origin:664px_622px];
-}
-@keyframes ramu-stem {
-  0% {
-    opacity: 0;
-    stroke-dashoffset: 1;
-  }
-  12% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 1;
-    stroke-dashoffset: 0;
-  }
-}
-@keyframes ramu-dot {
-  0% {
-    opacity: 0;
-    transform: translateY(-130px) scale(0.45);
-    animation-timing-function: cubic-bezier(0.55, 0, 0.8, 0.45);
-  }
-  48% {
-    opacity: 1;
-    transform: translateY(8px) scale(1.16, 0.84);
-    animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1);
-  }
-  72% {
-    opacity: 1;
-    transform: translateY(-22px) scale(0.94, 1.06);
-    animation-timing-function: ease-in;
-  }
-  88% {
-    transform: translateY(3px) scale(1.03, 0.97);
-    animation-timing-function: ease-out;
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .animated-mark-reveal .animated-mark-stem,
-  .animated-mark-reveal .animated-mark-dot {
-    @apply [animation:none];
-  }
-}
-
 /* Preview controls share the app's compact toolbar and keep large images scrollable. */
 .attachment-open:focus-visible,
 [role='separator']:focus-visible {
