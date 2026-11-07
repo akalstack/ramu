@@ -532,6 +532,8 @@ const deploys = createDeploys(workspace, db, agents, {
     void mobilePush.deliverIncident(thread).catch(() => {})
   },
   notice: (notice) => inbox.raise(notice),
+  // The uptime watch follows an app published from this computer at its lasting address.
+  localAddress: (projectId) => localApps.lastingUrl(projectId),
 })
 // Thread rows show their pull request, so a change there refreshes the thread lists.
 const pullRequestIndex = new PullRequestIndex(workspace, agents, () => send('workspace:changed', {}))

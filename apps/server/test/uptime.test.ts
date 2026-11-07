@@ -171,3 +171,27 @@ describe('live probe', () => {
     }
   })
 })
+
+it('watches an app published from this computer at its lasting address, and nothing while it has none', async () => {
+  const probe = vi.fn(async (_url: string) => ({ status: 200, ms: 50, failure: null }))
+  let address: string | null = null
+  const watches = new UptimeWatches(
+    {
+      getState: () => ({}) as never,
+      setState: () => {},
+      projectIds: () => ['p1'],
+      healthPath: () => '/health',
+      openThread: vi.fn(),
+      notify: vi.fn(),
+      localAddress: () => address,
+    },
+    { send: vi.fn() },
+    { binding: () => null, project: vi.fn(), logs: vi.fn() },
+    probe,
+  )
+  await watches.tick(Date.UTC(2026, 10, 8, 10))
+  expect(probe).not.toHaveBeenCalled()
+  address = 'https://demo.example.com'
+  await watches.tick(Date.UTC(2026, 10, 8, 11))
+  expect(probe).toHaveBeenCalledWith('https://demo.example.com/health')
+})

@@ -72,6 +72,8 @@ export function createDeploys(
     incidentOpened(thread: { taskId: string; sessionId: string }): void
     /** A usage figure neared its limit. */
     notice(notice: InboxNotice): void
+    /** The lasting address of a project's app published from this computer, while it is published. */
+    localAddress?(projectId: string): string | null
   },
   credentials = new HostCredentialStore(),
 ): Deploys {
@@ -164,6 +166,7 @@ export function createDeploys(
         return { taskId: task.id, sessionId: session.id }
       },
       notify: (thread) => events.incidentOpened(thread),
+      localAddress: (projectId) => events.localAddress?.(projectId) ?? null,
     },
     wake,
     service,

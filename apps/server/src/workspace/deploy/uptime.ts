@@ -104,6 +104,8 @@ export interface UptimeHost {
   ): Promise<{ taskId: string; sessionId: string }>
   /** Tells the person's phones that an incident thread opened. */
   notify(thread: { taskId: string; sessionId: string }): void
+  /** The lasting address of the project's app published from this computer, while it is published. */
+  localAddress?(projectId: string): string | null
 }
 
 const key = (projectId: string) => `uptime:${projectId}`
@@ -179,7 +181,7 @@ export class UptimeWatches {
   private async poll(now: number): Promise<void> {
     for (const projectId of this.host.projectIds()) {
       if (this.stopping) return
-      if (!this.service.binding(projectId)) continue
+      if (!this.service.binding(projectId) && !this.host.localAddress?.(projectId)) continue
       const record = this.record(projectId)
       if (record.enabled === false) continue
       if (record.lastCheckAt !== null && now - record.lastCheckAt < UPTIME_INTERVAL) continue
@@ -194,6 +196,9 @@ export class UptimeWatches {
   private async check(projectId: string, record: UptimeRecord, now: number): Promise<void> {
     // The address is read from the platform until the first production deployment is live, then kept: the platform is
     // asked again only when a check fails, so a healthy app costs one request every five minutes.
+    // An app published from this computer at a lasting address is watched there.
+    const local = this.service.binding(projectId) ? null : (this.host.localAddress?.(projectId) ?? null)
+    if (local && record.url !== local) record = { ...record, url: local }
     if (!record.url) {
       const deployment = await this.service.project(projectId)
       const live = deployment.deployments.some((entry) => entry.production && entry.state === 'ready')

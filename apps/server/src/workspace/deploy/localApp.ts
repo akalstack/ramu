@@ -332,6 +332,12 @@ export class LocalApps {
     return this.status(projectId)
   }
 
+  /** The app's lasting address while it is published and running there; null for a quick tunnel or a stopped app. */
+  lastingUrl(projectId: string): string | null {
+    const hostname = this.deps.addresses?.hostname(projectId)
+    return hostname && this.apps.get(projectId)?.state === 'running' ? `https://${hostname}` : null
+  }
+
   /** Gives the project a lasting address on the person's Cloudflare account; it applies from the next publish. */
   async setLasting(projectId: string, input: { hostname: string; token: string }): Promise<LocalAppStatus> {
     if (!this.deps.addresses) throw new Error('Update this host for lasting addresses.')
