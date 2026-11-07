@@ -336,3 +336,32 @@ it.skipIf(!interactiveBrowserPath())(
   },
   120_000,
 )
+
+it.skipIf(!interactiveBrowserPath())(
+  'fails a design frame whose content spills past it, and exports one image per frame',
+  async () => {
+    const { db, interactive } = setup(previewInteractive)
+    const base = { kind: 'design' as const, title: 'Pricing', summary: 'P', checks: [] }
+    const tall = await interactive.preview('s', {
+      ...base,
+      frames: [{ name: 'Phone', width: 390, height: 300, html: '<div style="height:900px">Long</div>' }],
+    } as never)
+    expect(tall.errors).toEqual([
+      'Frame Phone has content past its edges. Make the content fit or give the frame more height.',
+    ])
+    const good = await interactive.preview('s', {
+      ...base,
+      frames: [
+        { name: 'Desktop', width: 1440, height: 600, html: '<h1>Plans</h1>', css: 'h1{margin:24px}' },
+        { name: 'Phone', width: 390, height: 600, html: '<h1>Plans</h1>' },
+      ],
+    } as never)
+    expect(good.errors).toEqual([])
+    const document = interactive.get('s', interactive.publish('s', good.id, 'r1').id, 1)
+    const exported = await new ArtifactExports(db).make(document, 'png')
+    expect(exported).toMatchObject({ name: 'Pricing frames.zip', mimeType: 'application/zip' })
+    const zip = await JSZip.loadAsync(Buffer.from(exported.content, 'base64'))
+    expect(Object.keys(zip.files)).toEqual(['1 Desktop.png', '2 Phone.png'])
+  },
+  120_000,
+)

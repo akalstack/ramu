@@ -185,7 +185,12 @@ export async function previewInteractive(
       '[...document.querySelectorAll("[data-ramu-fit]")].filter(e=>e.scrollHeight>e.clientHeight+1||e.scrollWidth>e.clientWidth+1).map(e=>e.getAttribute("data-ramu-fit")).slice(0,20)',
     )
     for (const label of spilled)
-      if (errors.length < 20) errors.push(`${label} does not fit on the slide. Shorten it or split the slide.`)
+      if (errors.length < 20)
+        errors.push(
+          label?.startsWith('Frame ')
+            ? `${label} has content past its edges. Make the content fit or give the frame more height.`
+            : `${label} does not fit on the slide. Shorten it or split the slide.`,
+        )
     for (const width of [320, 768]) {
       await page.setViewportSize({ width, height: 740 })
       await measure()

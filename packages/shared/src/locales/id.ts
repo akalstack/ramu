@@ -5694,6 +5694,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Change the words yourself; the agent keeps your edit when it revises':
     'Ubah sendiri kata-katanya; agen mempertahankan suntingan Anda saat merevisi',
   'Export CSV': 'Ekspor CSV',
+  Design: 'Desain',
+  'Export frame images': 'Ekspor gambar frame',
+  'Share frame images': 'Bagikan gambar frame',
   Dashboard: 'Dasbor',
   'Export PNG': 'Ekspor PNG',
   'Export PDF': 'Ekspor PDF',

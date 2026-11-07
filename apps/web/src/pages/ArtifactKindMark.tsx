@@ -1,4 +1,4 @@
-import { AppWindow, FileText, LayoutDashboard, Presentation, Workflow, type LucideIcon } from 'lucide-react'
+import { AppWindow, FileText, Frame, LayoutDashboard, Presentation, Workflow, type LucideIcon } from 'lucide-react'
 import type { ArtifactKind } from '@ramu/shared/artifacts'
 import type { InteractiveDocument } from '@ramu/shared/interactive'
 import {
@@ -20,6 +20,7 @@ const KIND_ICONS: Record<ArtifactKind, LucideIcon> = {
   diagram: Workflow,
   slides: Presentation,
   dashboard: LayoutDashboard,
+  design: Frame,
 }
 
 export function artifactKindLabel(kind: ArtifactKind): string {
@@ -31,7 +32,9 @@ export function artifactKindLabel(kind: ArtifactKind): string {
         ? t('Slides')
         : kind === 'dashboard'
           ? t('Dashboard')
-          : t('App')
+          : kind === 'design'
+            ? t('Design')
+            : t('App')
 }
 
 /**
@@ -109,7 +112,12 @@ export function hostExportEntries(
 ): MenuEntry[] {
   return hostExportFormats(kind).map((format) => ({
     key: `export-${format}`,
-    label: format === 'png' && kind !== 'slides' ? t('Export PNG') : HOST_EXPORT_LABELS[format](),
+    label:
+      format === 'png' && kind === 'design'
+        ? t('Export frame images')
+        : format === 'png' && kind !== 'slides'
+          ? t('Export PNG')
+          : HOST_EXPORT_LABELS[format](),
     disabled,
     onSelect: () => {
       const toast = notify.add({ type: 'loading', title: t('Making the export…'), description: title, timeout: 0 })

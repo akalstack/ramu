@@ -47,11 +47,13 @@ export type HostExportFormat = (typeof HOST_EXPORT_FORMATS)[number]
 export function hostExportFormats(kind: ArtifactKind): HostExportFormat[] {
   return kind === 'slides'
     ? ['pptx', 'pdf', 'png']
-    : kind === 'doc'
-      ? ['docx', 'pdf']
-      : kind === 'diagram' || kind === 'dashboard'
-        ? ['png', 'pdf']
-        : ['pdf']
+    : kind === 'design'
+      ? ['png', 'pdf']
+      : kind === 'doc'
+        ? ['docx', 'pdf']
+        : kind === 'diagram' || kind === 'dashboard'
+          ? ['png', 'pdf']
+          : ['pdf']
 }
 
 /** How many slides a deck version has, read from the slide list it keeps; 0 for every other kind. */
@@ -94,7 +96,7 @@ export function kindExports(
   if (document.reference.kind === 'doc') {
     add('markdown', 'md', 'text/markdown', source(ARTIFACT_SOURCE_FILES.doc))
     add('html', 'html', 'text/html', interactiveExport(document, null, true, theme).html)
-  } else if (document.reference.kind === 'slides') {
+  } else if (document.reference.kind === 'slides' || document.reference.kind === 'design') {
     add('html', 'html', 'text/html', interactiveExport(document, null, true, theme).html)
   } else if (document.reference.kind === 'diagram') {
     add('svg', 'svg', 'image/svg+xml', source(ARTIFACT_SOURCE_FILES.svg))

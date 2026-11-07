@@ -116,6 +116,27 @@ function pictureImage(document: InteractiveDocument): Promise<Buffer> {
   )
 }
 
+/** One PNG per design frame at twice its size, numbered and named, in one zip. */
+function frameImages(document: InteractiveDocument): Promise<Buffer> {
+  return withPage(document, { width: 1440, height: 900 }, 2, async (page) => {
+    const frames = page.locator('[data-ramu-frame]')
+    const count = await frames.count()
+    const zip = new JSZip()
+    const digits = String(count).length
+    for (let index = 0; index < count; index++) {
+      const name = ((await frames.nth(index).getAttribute('data-ramu-frame-name')) ?? '')
+        .replace(/[^\w .-]+/g, '')
+        .trim()
+        .slice(0, 60)
+      zip.file(
+        `${String(index + 1).padStart(digits, '0')}${name ? ` ${name}` : ''}.png`,
+        await frames.nth(index).screenshot({ animations: 'disabled' }),
+      )
+    }
+    return zip.generateAsync({ type: 'nodebuffer' })
+  })
+}
+
 /** One 1920 × 1080 PNG per slide, numbered in order, in one zip. */
 function slideImages(document: InteractiveDocument): Promise<Buffer> {
   return withPage(document, { width: 1280, height: 720 }, 1.5, async (page) => {
@@ -152,7 +173,12 @@ export class ArtifactExports {
       png(document: InteractiveDocument): Promise<Buffer>
     } = {
       pdf: printPdf,
-      png: (document) => (document.reference.kind === 'slides' ? slideImages(document) : pictureImage(document)),
+      png: (document) =>
+        document.reference.kind === 'slides'
+          ? slideImages(document)
+          : document.reference.kind === 'design'
+            ? frameImages(document)
+            : pictureImage(document),
     },
   ) {}
 
@@ -164,8 +190,8 @@ export class ArtifactExports {
       .update(document.html)
       .update(JSON.stringify(document.files ?? null))
       .digest('hex')
-    const slidesZip = format === 'png' && kind === 'slides'
-    const name = `${exportFileName(document.reference.title)}${slidesZip ? ' slides.zip' : `.${format}`}`
+    const slidesZip = format === 'png' && (kind === 'slides' || kind === 'design')
+    const name = `${exportFileName(document.reference.title)}${slidesZip ? ` ${kind === 'design' ? 'frames' : 'slides'}.zip` : `.${format}`}`
     // A deck's slide images travel as one zip; a diagram's image is a single PNG.
     const mime = slidesZip ? 'application/zip' : MIME[format]
     const kept = this.db

@@ -115,7 +115,7 @@ export interface ArtifactPublication {
  * What an artifact is: an App is interactive web content, a Doc is writing to keep, a Diagram is a drawing, Slides is a
  * deck.
  */
-export const ARTIFACT_KINDS = ['app', 'doc', 'diagram', 'slides', 'dashboard'] as const
+export const ARTIFACT_KINDS = ['app', 'doc', 'diagram', 'slides', 'dashboard', 'design'] as const
 export type ArtifactKind = (typeof ARTIFACT_KINDS)[number]
 
 /** A stored or received kind; anything this build does not know opens as the web page every kind renders as. */
@@ -136,6 +136,7 @@ export const ARTIFACT_SOURCE_FILES = {
   svg: 'diagram.svg',
   slides: 'slides.json',
   dashboard: 'dashboard.json',
+  design: 'design.json',
 } as const
 
 /**

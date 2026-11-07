@@ -21,6 +21,8 @@ import { pageCapabilitiesOf } from './capabilities'
 import { renderArtifactSource } from './kinds'
 import { ARTIFACT_KINDS } from '@ramu/shared/artifacts'
 import {
+  DESIGN_FRAMES_MAX,
+  designFrameSchema,
   dashboardChartSchema,
   dashboardDatasetSchema,
   dashboardFigureSchema,
@@ -35,7 +37,7 @@ export const interactiveInput = z.object({
     .enum(ARTIFACT_KINDS)
     .optional()
     .describe(
-      'app (default): interactive HTML in html or files. doc: writing to keep (a report, plan, spec, notes) as Markdown in source. diagram: a flowchart, sequence, state or concept diagram as Mermaid or SVG in source, with format. slides: a deck as slides and theme, with its images in files. dashboard: figures and charts over tables, in datasets, figures and charts.',
+      'app (default): interactive HTML in html or files. doc: writing to keep (a report, plan, spec, notes) as Markdown in source. diagram: a flowchart, sequence, state or concept diagram as Mermaid or SVG in source, with format. slides: a deck as slides and theme, with its images in files. dashboard: figures and charts over tables, in datasets, figures and charts. design: screens or mockups as fixed-size frames of HTML and CSS, in frames.',
     ),
   source: z
     .string()
@@ -61,6 +63,11 @@ export const interactiveInput = z.object({
     .max(12)
     .optional()
     .describe('Headline numbers of a dashboard: one column of one table, summed, averaged, counted, min, max or last.'),
+  frames: z
+    .array(designFrameSchema)
+    .max(DESIGN_FRAMES_MAX)
+    .optional()
+    .describe('The frames of a design (kind design): screens, mockups or a one-pager, each at a fixed size.'),
   refreshMinutes: z
     .number()
     .int()
@@ -228,7 +235,12 @@ export class InteractiveStore {
     const input = kept.length ? { ...parsed, checks: [...parsed.checks, ...kept].slice(0, 24) } : parsed
     if (signal?.aborted) throw new Error('Preview cancelled')
     if (input.kind && input.kind !== 'app') return this.previewKind(session, input, signal, kept)
-    if (input.source !== undefined || input.slides !== undefined || input.datasets !== undefined)
+    if (
+      input.source !== undefined ||
+      input.slides !== undefined ||
+      input.datasets !== undefined ||
+      input.frames !== undefined
+    )
       throw new Error(
         'Set kind to doc, diagram, slides or dashboard to publish source, slides or datasets; apps use html or files.',
       )
@@ -266,7 +278,9 @@ export class InteractiveStore {
           ? 'A deck is written in slides; html is for apps.'
           : input.kind === 'dashboard'
             ? 'A dashboard is written in datasets, figures and charts; html and files are for apps.'
-            : `A ${input.kind} is written in source; html and files are for apps.`,
+            : input.kind === 'design'
+              ? 'A design is written in frames, each with its own html and css; html and files are for apps.'
+              : `A ${input.kind} is written in source; html and files are for apps.`,
       )
     const source = parseArtifactSource({ ...input, kind: input.kind ?? 'app' })
     const offline = { ...input, network: OFFLINE_NETWORK }

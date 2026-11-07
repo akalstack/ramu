@@ -287,10 +287,33 @@ const dashboardSource = z
     }
   })
 export type DashboardSource = z.infer<typeof dashboardSource>
+
+export const DESIGN_FRAMES_MAX = 12
+export const designFrameSchema = z.object({
+  name: z.string().trim().min(1).max(60).describe('What the frame shows, such as "Pricing (desktop)".'),
+  width: z.number().int().min(240).max(2560).describe('The frame’s width in CSS pixels, such as 1440 or 390.'),
+  height: z.number().int().min(200).max(6000),
+  html: z.string().max(200_000).describe('The frame’s markup; it fills the frame and is clipped to it.'),
+  css: z.string().max(100_000).optional().describe('Styles for this frame only; they cannot reach other frames.'),
+})
+const designSource = z.object({
+  kind: z.literal('design'),
+  frames: z
+    .array(designFrameSchema)
+    .min(1, 'A design needs at least one frame in frames.')
+    .max(DESIGN_FRAMES_MAX, `A design has at most ${DESIGN_FRAMES_MAX} frames. Split it into two designs.`),
+})
+export type DesignSource = z.infer<typeof designSource>
 export type DashboardAggregate = (typeof DASHBOARD_AGGREGATES)[number]
 
 /** The source of an artifact that is not an App, checked per kind before anything is drawn. */
-const artifactSourceSchema = z.discriminatedUnion('kind', [docSource, diagramSource, slidesSource, dashboardSource])
+const artifactSourceSchema = z.discriminatedUnion('kind', [
+  docSource,
+  diagramSource,
+  slidesSource,
+  dashboardSource,
+  designSource,
+])
 export type ArtifactSource = z.infer<typeof artifactSourceSchema>
 
 /** Reads a kind's source from tool input, with the first problem as a sentence the author can act on. */
@@ -304,6 +327,7 @@ export function parseArtifactSource(input: {
   figures?: unknown
   charts?: unknown
   refreshMinutes?: unknown
+  frames?: unknown
 }): ArtifactSource {
   const result = artifactSourceSchema.safeParse(input)
   if (result.success) return result.data
