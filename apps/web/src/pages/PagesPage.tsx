@@ -8,7 +8,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { RowButton } from '../components/row-button'
 import { SearchInput } from '../SearchInput'
-import { timeAgo } from '../Menu'
+import { Menu, timeAgo } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
@@ -93,10 +93,39 @@ export function PagesPage() {
             <Button variant="outline" disabled={viewOnly} onClick={() => setImporting(true)}>
               {t('Import an artifact…')}
             </Button>
-            <Button disabled={viewOnly} onClick={newPage}>
-              <Plus size={14} />
-              {t('New')}
-            </Button>
+            {templates.length ? (
+              // With templates, New offers them beside asking an agent for something new.
+              <Menu
+                label={t('New')}
+                icon={
+                  <>
+                    <Plus size={14} />
+                    {t('New')}
+                  </>
+                }
+                className="gap-1.5 px-3"
+                align="end"
+                disabled={viewOnly}
+                items={[
+                  { key: 'ask', label: t('Ask an agent for something new'), onSelect: newPage },
+                  { key: 'sep', separator: true },
+                  ...templates.map((template) => ({
+                    key: template.id,
+                    label: `${template.icon} ${template.title}`,
+                    onSelect: () =>
+                      void invoke('artifacts.fromTemplate', template.id).then(
+                        (made) => setOpen(made.id),
+                        () => loadTemplates(),
+                      ),
+                  })),
+                ]}
+              />
+            ) : (
+              <Button disabled={viewOnly} onClick={newPage}>
+                <Plus size={14} />
+                {t('New')}
+              </Button>
+            )}
           </div>
         </header>
         {pages && pages.length > 0 && (
