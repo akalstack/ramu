@@ -392,6 +392,10 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
       run: (projectId: string, build: string, of: 'build' | 'submission') =>
         deploys().releases.logs(project(projectId), build, of),
     },
+    'deploy.proposeUpdatePreviews': {
+      args: z.tuple([id]),
+      run: (projectId: string) => exclusive(projectId, () => deploys().releases.proposePreviews(project(projectId))),
+    },
     'deploy.proposeEasJson': {
       args: z.tuple([id]),
       run: (projectId: string) => exclusive(projectId, () => deploys().releases.proposeEasJson(project(projectId))),

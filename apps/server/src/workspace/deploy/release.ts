@@ -5,7 +5,7 @@
 // action on each store.
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { lstat, readFile } from 'node:fs/promises'
+import { lstat, readdir, readFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import {
   blockingChecks,
@@ -14,8 +14,12 @@ import {
   RELEASE_PROFILE,
   storeCheckText,
   storeChecks,
+  UPDATE_PREVIEW_NEED_TEXT,
+  updatePreviewNeeds,
   type StoreFacts,
 } from '@ramu/shared/storeRelease'
+import { EAS_PREVIEW_WORKFLOW_PATH, easPreviewWorkflow, EXPO_TOKEN_SECRET } from '@ramu/shared/easPreview'
+import { packageManagerOf } from '@ramu/shared/pagesDeploy'
 import { translate } from '@ramu/shared/i18n'
 import type { StoreBuild, StoreRelease, StoreTarget } from '@ramu/shared/types/deploy'
 import { redactSecrets } from '../../memory/secrets'
@@ -23,6 +27,7 @@ import { commitBranchInfo } from '../git'
 import { proposeFile } from '../proposeFile'
 import { DeployError } from './adapter'
 import type { HostingAccounts } from './accounts'
+import type { EnvTarget } from './envSync'
 import { expoClient, type ExpoClient } from './expo'
 import { cliEnvironment, platformCli } from './signIn'
 
@@ -123,6 +128,8 @@ const runExpoConfig: ConfigRunner = (cwd) =>
 export interface ReleaseHost {
   /** The project's repository checkouts, in order. */
   roots(projectId: string): string[]
+  /** The repository's GitHub Actions secrets, where the preview job's Expo token goes. */
+  actionsSecrets(root: string): EnvTarget
 }
 
 export class StoreReleases {
@@ -199,7 +206,15 @@ export class StoreReleases {
   async status(projectId: string): Promise<StoreRelease> {
     const account = this.accounts.accountName('expo')
     const root = this.root(projectId)
-    const empty: StoreRelease = { app: null, connected: !!account, account, checks: [], builds: [], error: null }
+    const empty: StoreRelease = {
+      app: null,
+      connected: !!account,
+      account,
+      checks: [],
+      previews: null,
+      builds: [],
+      error: null,
+    }
     if (!root) return empty
     const facts = await this.facts(root)
     const easProject = easProjectId(facts.appJson)
@@ -210,6 +225,11 @@ export class StoreReleases {
       ...empty,
       app: { name, projectId: easProject, page: null },
       checks: storeChecks(facts),
+      previews: {
+        needs: updatePreviewNeeds(facts),
+        developmentBuild: facts.dependencies.includes('expo-dev-client'),
+        workflow: existsSync(join(root, EAS_PREVIEW_WORKFLOW_PATH)),
+      },
     }
     if (!account || !easProject) return status
     try {
@@ -298,6 +318,31 @@ export class StoreReleases {
       body: [
         `Adds \`eas.json\` with a \`${RELEASE_PROFILE}\` build profile whose build numbers EAS keeps and raises on every build, and a \`${RELEASE_PROFILE}\` submit profile that sends Android builds to Play’s internal testing track.`,
         'Before the first iOS release, add the app’s App Store Connect Apple ID as `submit.production.ios.ascAppId`.',
+      ].join('\n\n'),
+    }))
+    return { url }
+  }
+
+  /**
+   * Keeps the Expo token in the repository's Actions secrets and opens a pull request with the job that publishes
+   * each pull request as an EAS Update and comments its QR code. Refused while the app still lacks what updates need.
+   */
+  async proposePreviews(projectId: string): Promise<{ url: string | null }> {
+    const root = this.root(projectId)
+    if (!root) throw new Error('This project has no Expo app at the root of its repository.')
+    const needs = updatePreviewNeeds(await this.facts(root))
+    if (needs.length)
+      throw new Error(`Fix these first: ${needs.map((need) => UPDATE_PREVIEW_NEED_TEXT[need]).join('; ')}.`)
+    const { auth } = await this.accounts.auth('expo')
+    await this.host.actionsSecrets(root).set('ci', { [EXPO_TOKEN_SECRET]: auth.token })
+    const { url } = await proposeFile(root, 'ramu/eas-preview', async () => ({
+      files: [{ path: EAS_PREVIEW_WORKFLOW_PATH, content: easPreviewWorkflow(packageManagerOf(await readdir(root))) }],
+      commit: `ci: publish each pull request as an EAS Update\n\nAdds ${EAS_PREVIEW_WORKFLOW_PATH}.\n`,
+      title: 'Preview each pull request with EAS Update',
+      body: [
+        `\`${EAS_PREVIEW_WORKFLOW_PATH}\` publishes each pull request to its own EAS Update branch, \`pr-<number>\`, and comments a QR code on the pull request that opens it on a phone.`,
+        `The Expo token is in this repository’s Actions secrets (${EXPO_TOKEN_SECRET}). Pull requests from forks get no secrets, so they get no preview.`,
+        'An update carries JavaScript and assets only: a change to native code or to a library with native code needs a new build.',
       ].join('\n\n'),
     }))
     return { url }

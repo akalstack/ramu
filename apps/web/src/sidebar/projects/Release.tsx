@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { DEPLOYMENT_STATE } from '@ramu/shared/deployText'
-import { blockingChecks, STORE_PERSON_STEPS, storeCheckText } from '@ramu/shared/storeRelease'
+import { blockingChecks, STORE_PERSON_STEPS, storeCheckText, UPDATE_PREVIEW_NEED_TEXT } from '@ramu/shared/storeRelease'
 import type { StoreBuild, StoreRelease, StoreTarget } from '@ramu/shared/types'
 import { BrandIcon } from '@/components/brand-icon'
 import { Button } from '@/components/desktop-button'
@@ -35,6 +35,7 @@ export function ReleaseSection({ projectId }: { projectId: string }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [proposed, setProposed] = useState<string | null>(null)
+  const [previewProposed, setPreviewProposed] = useState<string | null>(null)
   const [logs, setLogs] = useState<{ key: string; text: string } | null>(null)
   const load = useCallback(() => {
     void host.invoke('deploy.release', projectId).then(setStatus, (reason) => setError(errorText(reason)))
@@ -134,6 +135,64 @@ export function ReleaseSection({ projectId }: { projectId: string }) {
             </Button>
           )}
         </p>
+      )}
+      {status.previews && (
+        <div className="flex flex-col gap-1 text-caption" aria-label={t('Pull request previews')}>
+          <span className="text-foreground">{t('Pull request previews')}</span>
+          {status.previews.workflow ? (
+            <span className="text-muted-foreground">
+              {t('Each pull request is published as an EAS Update, with a QR code on the pull request.')}
+            </span>
+          ) : status.previews.needs.length ? (
+            <>
+              <span className="text-muted-foreground">
+                {t(
+                  'Each pull request can be published as an EAS Update with a QR code to open it on a phone. The app needs these first:',
+                )}
+              </span>
+              <ul className="m-0 flex list-none flex-col gap-1 p-0">
+                {status.previews.needs.map((need) => (
+                  <li key={need} className="text-destructive">
+                    <span aria-hidden="true">{CHECK_MARK.missing} </span>
+                    {t(UPDATE_PREVIEW_NEED_TEXT[need])}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : previewProposed !== null ? (
+            <span role="status" className="flex items-center gap-2">
+              {t('The pull request adding the preview job is open. Merge it, and later pull requests get a QR code.')}
+              {previewProposed && (
+                <Button size="sm" variant="ghost" onClick={() => open(previewProposed)}>
+                  {t('Open')}
+                </Button>
+              )}
+            </span>
+          ) : (
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="text-muted-foreground">
+                {status.previews.developmentBuild
+                  ? t(
+                      'The QR code opens a development build of the app, since it uses expo-dev-client; install one on the phone first.',
+                    )
+                  : t('The QR code opens the update in Expo Go. A change to native code still needs a new build.')}
+              </span>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy || !status.connected}
+                onClick={() =>
+                  void run(async () => {
+                    const { url } = await host.invoke('deploy.proposeUpdatePreviews', projectId)
+                    setPreviewProposed(url ?? '')
+                  })
+                }
+              >
+                {t('Add previews in a pull request')}
+              </Button>
+            </span>
+          )}
+        </div>
       )}
       <span>
         <Button size="sm" variant="ghost" aria-expanded={steps} onClick={() => setSteps((shown) => !shown)}>

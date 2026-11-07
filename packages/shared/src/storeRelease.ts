@@ -1,7 +1,7 @@
 // What the app stores need from an Expo app before a release, read from app.json and eas.json, and the words both
 // clients use for it. Pure: the server reads the files and passes them in.
 import type { Translate } from './forgeStatus'
-import type { StoreCheck, StoreCheckId, StorePlatform, StoreTarget } from './types/deploy'
+import type { StoreCheck, StoreCheckId, StorePlatform, StoreTarget, UpdatePreviewNeed } from './types/deploy'
 
 /** The build and submit profile Release uses. */
 export const RELEASE_PROFILE = 'production'
@@ -148,6 +148,28 @@ export function storeChecks(facts: StoreFacts): StoreCheck[] {
   checks.push({ id: 'android-track', state: !track || track === 'internal' ? 'ok' : 'missing', detail: track })
   checks.push(privacy(expo, facts.dependencies))
   return checks
+}
+
+/**
+ * What publishing each pull request as an EAS Update needs: expo-updates in the app, a runtime version and the
+ * update URL (both written by `eas update:configure`), and the EAS project link.
+ */
+export function updatePreviewNeeds(facts: StoreFacts): UpdatePreviewNeed[] {
+  const expo = expoConfig(facts.appJson)
+  const needs: UpdatePreviewNeed[] = []
+  if (!facts.dependencies.includes('expo-updates')) needs.push('expo-updates')
+  if (!easProjectId(facts.appJson)) needs.push('eas-project')
+  if (!expo.runtimeVersion) needs.push('runtime-version')
+  if (!text(record(expo.updates).url)) needs.push('updates-url')
+  return needs
+}
+
+/** Words for a missing piece of update previews. English; pass through `t()`. */
+export const UPDATE_PREVIEW_NEED_TEXT: Record<UpdatePreviewNeed, string> = {
+  'expo-updates': 'expo-updates is not installed: npx expo install expo-updates',
+  'eas-project': 'Not linked to an EAS project: an agent can run eas init to link it',
+  'runtime-version': 'No runtimeVersion in app.json: eas update:configure sets it',
+  'updates-url': 'No updates.url in app.json: eas update:configure sets it',
 }
 
 /** The checks that stop a release of `target`: missing ones that matter for its platforms. */

@@ -1336,6 +1336,8 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.releaseLogs'(projectId: string, buildId: string, of: 'build' | 'submission'): string
   /** Opens a pull request that adds the eas.json a release needs. */
   'deploy.proposeEasJson'(projectId: string): { url: string | null }
+  /** Keeps the Expo token in the repository's Actions secrets and opens a pull request with the EAS Update preview job. */
+  'deploy.proposeUpdatePreviews'(projectId: string): { url: string | null }
   /** What Set up CI would add to a repository of the project, from its last fetched default branch. */
   'ci.preview'(projectId: string, repoId: string): CiPreview
   /**

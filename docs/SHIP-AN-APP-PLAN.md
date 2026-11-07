@@ -53,9 +53,8 @@ Usage figures for Vercel, Netlify and Neon beside the limits their APIs report, 
 
 ### 4. Mobile store releases
 
-**Store releases** in the deploy sheet (checks from `app.json` and `eas.json`, the person's store steps, **Add eas.json in a pull request**, **Release** through `eas build --auto-submit-with-profile` to TestFlight and Play's internal track), the Expo access token in Settings, the deploy watch through each build and its upload, and `release_status`, `release_logs` and `release_start` are built ([Store releases](guide/deploy.md#store-releases), `workspace/deploy/release.ts` and `expo.ts`). What remains:
+**Store releases** in the deploy sheet (checks from `app.json` and `eas.json`, the person's store steps, **Add eas.json in a pull request**, **Release** through `eas build --auto-submit-with-profile` to TestFlight and Play's internal track), the Expo access token in Settings, the deploy watch through each build and its upload, `release_status`, `release_logs` and `release_start`, and EAS Update previews of pull requests with a QR code are built ([Store releases](guide/deploy.md#store-releases), `workspace/deploy/release.ts` and `expo.ts`). What remains:
 
-- **Previews per pull request with EAS Update:** publish each pull request's branch to its own update channel and show a QR code on the pull request card and in the thread that opens it in Expo Go. It needs `expo-updates` and a runtime version in the app, a channel per branch, and works in Expo Go only for apps without custom native code, so the sheet must say when a development build is needed instead.
 - **Expo's CLI sign-in:** `eas login --device --non-interactive` signs in through a browser on any device and saves a session secret in `~/.expo/state.json` (eas-cli 27); a sign-in can ask the person to pick the number their browser shows. Ramu would run it with a private `HOME`, exchange the session for an access token named Ramu (Expo's `createAccessToken` mutation), then end the session, which needs the number choice in Settings' sign-in.
 
 ### 5. The site

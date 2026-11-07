@@ -6113,4 +6113,24 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Postgres pada paket organisasi Anda, dengan proyek kedua untuk preview; paket gratis mengizinkan dua proyek dan menjedanya setelah seminggu tidak dipakai.',
   'Create an access token with an expiry. Supabase tokens reach every organization you belong to, and Ramu creates projects in the first one':
     'Buat access token dengan masa berlaku. Token Supabase menjangkau setiap organisasi tempat Anda bergabung, dan Ramu membuat proyek di organisasi pertama',
+  'Pull request previews':
+    'Preview pull request',
+  'Each pull request is published as an EAS Update, with a QR code on the pull request.':
+    'Setiap pull request diterbitkan sebagai EAS Update, dengan kode QR di pull request.',
+  'Each pull request can be published as an EAS Update with a QR code to open it on a phone. The app needs these first:':
+    'Setiap pull request bisa diterbitkan sebagai EAS Update dengan kode QR untuk membukanya di ponsel. Aplikasi perlu ini dulu:',
+  'The pull request adding the preview job is open. Merge it, and later pull requests get a QR code.':
+    'Pull request yang menambahkan job preview sudah dibuka. Gabungkan, dan pull request berikutnya mendapat kode QR.',
+  'The QR code opens a development build of the app, since it uses expo-dev-client; install one on the phone first.':
+    'Kode QR membuka development build aplikasi, karena aplikasi memakai expo-dev-client; pasang dulu di ponsel.',
+  'The QR code opens the update in Expo Go. A change to native code still needs a new build.':
+    'Kode QR membuka update di Expo Go. Perubahan kode native tetap memerlukan build baru.',
+  'Add previews in a pull request':
+    'Tambahkan preview lewat pull request',
+  'expo-updates is not installed: npx expo install expo-updates':
+    'expo-updates belum dipasang: npx expo install expo-updates',
+  'No runtimeVersion in app.json: eas update:configure sets it':
+    'Tidak ada runtimeVersion di app.json: eas update:configure mengaturnya',
+  'No updates.url in app.json: eas update:configure sets it':
+    'Tidak ada updates.url di app.json: eas update:configure mengaturnya',
 }

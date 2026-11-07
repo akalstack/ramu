@@ -11,6 +11,7 @@ import { EAS_JSON } from '@ramu/shared/storeRelease'
 import type { StoreBuild } from '@ramu/shared/types/deploy'
 import { DeployError } from '../src/workspace/deploy/adapter'
 import { DeployWatches } from '../src/workspace/deploy/deployWatch'
+import type { EnvTarget } from '../src/workspace/deploy/envSync'
 import { expoClient } from '../src/workspace/deploy/expo'
 import { StoreReleases } from '../src/workspace/deploy/release'
 import { registerReleaseTools } from '../src/workspace/deploy/tools'
@@ -169,6 +170,8 @@ function expoApp(patch: Record<string, unknown> = {}, easJson: string | null = E
   return root
 }
 
+const secrets = { set: vi.fn(async () => {}) } as unknown as EnvTarget & { set: ReturnType<typeof vi.fn> }
+
 function releases(root: string, stdout = JSON.stringify([{ id: BUILD, platform: 'IOS' }])) {
   const run = vi.fn(async (_args: string[], _options: { cwd: string; token: string }) => stdout)
   const client = {
@@ -177,7 +180,7 @@ function releases(root: string, stdout = JSON.stringify([{ id: BUILD, platform: 
     app: vi.fn(async () => ({ name: 'Barber', page: 'https://expo.dev/accounts/barbershop/projects/barber' })),
   }
   const service = new StoreReleases(
-    { roots: () => [root] },
+    { roots: () => [root], actionsSecrets: () => secrets },
     {
       auth: async () => ({ auth: { token: 'expo_token_1' }, accountId: 'r1', defaultScope: null }),
       accountName: () => 'ramu-bot',
@@ -217,6 +220,28 @@ describe('Release', () => {
     // Android needs nothing iOS lacks.
     await expect(service.start('p1', 'android')).resolves.toHaveLength(1)
     expect(run).toHaveBeenCalledTimes(1)
+  })
+
+  it('says what update previews still need, and opens no pull request until the app has it', async () => {
+    const { service } = releases(expoApp())
+    const status = await service.status('p1')
+    expect(status.previews).toEqual({
+      needs: ['expo-updates', 'runtime-version', 'updates-url'],
+      developmentBuild: false,
+      workflow: false,
+    })
+    await expect(service.proposePreviews('p1')).rejects.toThrow('npx expo install expo-updates')
+    expect(secrets.set).not.toHaveBeenCalled()
+    const ready = expoApp({ runtimeVersion: { policy: 'appVersion' }, updates: { url: `https://u.expo.dev/${APP}` } })
+    writeFileSync(
+      join(ready, 'package.json'),
+      JSON.stringify({ dependencies: { expo: '54.0.0', 'expo-updates': '1.0.0', 'expo-dev-client': '1.0.0' } }),
+    )
+    expect((await releases(ready).service.status('p1')).previews).toEqual({
+      needs: [],
+      developmentBuild: true,
+      workflow: false,
+    })
   })
 
   it('says to check expo.dev when EAS does not report the builds it started', async () => {
@@ -333,6 +358,7 @@ describe('release tools', () => {
         connected: true,
         account: 'ramu-bot',
         checks: [{ id: 'version' as const, state: 'ok' as const, detail: '1.0.0' }],
+        previews: null,
         builds: [],
         error: null,
       })),
@@ -377,7 +403,7 @@ describe('an app.config app', () => {
         'Some log line\n' + JSON.stringify({ name: 'Barber', ios: { bundleIdentifier: 'com.barber.dynamic' } }),
     )
     const service = new StoreReleases(
-      { roots: () => [root] },
+      { roots: () => [root], actionsSecrets: () => secrets },
       {
         auth: async () => ({ auth: { token: 'expo_token_1' }, accountId: 'r1', defaultScope: null }),
         accountName: () => 'ramu-bot',

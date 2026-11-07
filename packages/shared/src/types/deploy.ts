@@ -313,6 +313,18 @@ export interface StoreCheck {
 }
 
 /** Store releases of a project's Expo app: what the stores need, and the latest builds and submissions. */
+/** What EAS Update previews of pull requests still need from the app. */
+export type UpdatePreviewNeed = 'expo-updates' | 'eas-project' | 'runtime-version' | 'updates-url'
+
+/** Previews of each pull request as an EAS Update, opened from a QR code the job comments on the pull request. */
+export interface UpdatePreview {
+  needs: UpdatePreviewNeed[]
+  /** The app uses expo-dev-client, so the QR code opens a development build rather than Expo Go. */
+  developmentBuild: boolean
+  /** The checkout already has Ramu's preview job. */
+  workflow: boolean
+}
+
 export interface StoreRelease {
   /** The Expo app at the repository root; null when the project has none. */
   app: { name: string; projectId: string | null; page: string | null } | null
@@ -320,6 +332,8 @@ export interface StoreRelease {
   connected: boolean
   account: string | null
   checks: StoreCheck[]
+  /** Update previews of pull requests; null when the project has no Expo app. */
+  previews: UpdatePreview | null
   builds: StoreBuild[]
   /** Why the builds could not be read, in plain words. */
   error: string | null

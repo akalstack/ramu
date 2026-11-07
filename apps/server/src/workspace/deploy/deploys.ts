@@ -139,7 +139,10 @@ export function createDeploys(
   )
   const wake = new ProjectWake(db, workspace, agents)
   const releases = new StoreReleases(
-    { roots: (projectId) => workspace.listRepositories(projectId).map((repository) => repository.root) },
+    {
+      roots: (projectId) => workspace.listRepositories(projectId).map((repository) => repository.root),
+      actionsSecrets: githubActionsTarget,
+    },
     accounts,
   )
   const deployWatch = new DeployWatches(
