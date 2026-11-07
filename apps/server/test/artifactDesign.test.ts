@@ -92,3 +92,36 @@ it('places a design system’s style inside an app’s head, never before its do
   expect(withDesignTokens('<div>app</div>', style)).toBe(`${style}<div>app</div>`)
   expect(withDesignTokens('<div>app</div>', '')).toBe('<div>app</div>')
 })
+
+it('keeps a design system’s own fonts as data it carries with it, and its spacing unit', () => {
+  const font = Buffer.from('wOF2fake').toString('base64')
+  const source = parseArtifactSource({
+    kind: 'design',
+    frames: [{ name: 'Type', width: 400, height: 300, html: '<p>Aa</p>' }],
+    tokens: {
+      fontSans: 'Brand Sans, sans-serif',
+      spacing: 8,
+      fonts: [{ family: 'Brand Sans', path: 'brand.woff2', weight: 600 }],
+    },
+  })
+  if (source.kind !== 'design') throw new Error('not a design')
+  const drawn = renderDesign(source, 'Brand', [{ path: 'brand.woff2', content: font, encoding: 'base64' }])
+  expect(drawn.problems).toEqual([])
+  expect(drawn.html).toContain(
+    `@font-face{font-family:"Brand Sans";src:url(data:font/woff2;base64,${font});font-weight:600`,
+  )
+  expect(drawn.html).toContain('--space:8px')
+  const stored = JSON.parse(drawn.files[0]!.content) as { tokens: { fonts: { data?: string; path?: string }[] } }
+  expect(stored.tokens.fonts[0]).toMatchObject({ data: `data:font/woff2;base64,${font}` })
+  expect(stored.tokens.fonts[0]!.path).toBeUndefined()
+  expect(renderDesign(source, 'Brand', []).problems).toEqual([
+    'brand.woff2 is not a WOFF2, WOFF, TTF or OTF file sent in files with encoding base64.',
+  ])
+  expect(() =>
+    parseArtifactSource({
+      kind: 'design',
+      frames: [{ name: 'A', width: 400, height: 300, html: '' }],
+      tokens: { fonts: [{ family: 'X', data: 'data:font/woff2;base64,AA);}body{' }] },
+    }),
+  ).toThrow()
+})

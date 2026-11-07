@@ -321,6 +321,28 @@ export const designTokensSchema = z
       .regex(/^[\w\s,'"-]+$/, 'Name fonts as a CSS font list, such as "Inter, sans-serif".')
       .optional(),
     radius: z.number().min(0).max(32).optional().describe('Corner radius in pixels.'),
+    spacing: z.number().min(2).max(32).optional().describe('The base spacing unit in pixels, as --space.'),
+    fonts: z
+      .array(
+        z.object({
+          family: z
+            .string()
+            .max(60)
+            .regex(/^[\w -]+$/, 'Name a font family with letters, digits, spaces and dashes.'),
+          weight: z.number().int().min(100).max(900).optional(),
+          style: z.enum(['normal', 'italic']).optional(),
+          /** A WOFF2, WOFF, TTF or OTF file sent in files with encoding base64. */
+          path: z.string().max(200).optional(),
+          /** The font itself, filled in from path when the design is drawn. */
+          data: z
+            .string()
+            .regex(/^data:font\/(woff2|woff|ttf|otf);base64,[A-Za-z0-9+/=]+$/)
+            .optional(),
+        }),
+      )
+      .max(4)
+      .optional()
+      .describe('The design system’s own fonts, each a file in files; name them in fontSans to use them.'),
   })
   .describe('Colors, type and corner radius that make this design a design system other artifacts can follow.')
 export type DesignTokens = z.infer<typeof designTokensSchema>
@@ -331,8 +353,15 @@ export function designTokenCss(tokens: DesignTokens): string {
     ...Object.entries(tokens.colors).map(([name, value]) => `--${name}:${value}`),
     ...(tokens.fontSans ? [`--font-sans:${tokens.fontSans}`] : []),
     ...(tokens.radius !== undefined ? [`--radius:${tokens.radius}px`] : []),
+    ...(tokens.spacing !== undefined ? [`--space:${tokens.spacing}px`] : []),
   ]
-  return lines.length ? `<style>:root{${lines.join(';')}}</style>` : ''
+  const faces = (tokens.fonts ?? [])
+    .filter((font) => font.data)
+    .map(
+      (font) =>
+        `@font-face{font-family:"${font.family}";src:url(${font.data});font-weight:${font.weight ?? 400};font-style:${font.style ?? 'normal'};font-display:swap}`,
+    )
+  return lines.length || faces.length ? `<style>${faces.join('')}:root{${lines.join(';')}}</style>` : ''
 }
 
 const designSource = z.object({

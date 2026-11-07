@@ -157,7 +157,7 @@ export async function renderArtifactSource(
 ): Promise<RenderedKind> {
   if (source.kind === 'slides') return renderSlides(source, title, files)
   if (source.kind === 'dashboard') return renderDashboard(source, title)
-  if (source.kind === 'design') return renderDesign(source, title)
+  if (source.kind === 'design') return renderDesign(source, title, files)
   if (source.kind === 'motion') return renderMotion(source, title)
   return source.kind === 'doc' ? renderDoc(source.source) : renderDiagram(source.format, source.source, title)
 }

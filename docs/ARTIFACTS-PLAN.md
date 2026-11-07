@@ -78,14 +78,7 @@ A Doc's Markdown and a Mermaid diagram's source (desktop and phone) and a deck's
 - **Built:** watched figures on a kept dashboard's live tables are read every ten minutes and a change is told to the person's devices ([Kinds](guide/artifacts.md#kinds)). A dashboard's refresh rule (`refreshMinutes`) sets how often, and the phone's saved copy shows the "As of" of its last read when offline. **Refresh** in the desktop toolbar changes it.
 - **Live** is a Dashboard or App whose refresh runs on the host through the existing page schedules. It can raise a notification when a declared value changes, using the existing triggers. MCP calls that only read run without asking each time once the person allowed that server for that artifact. Anything that writes still asks in the toolbar.
 
-### 4. Design systems
-
-A Design with tokens (colors, type, radius) can be the host's design system, chosen with **Use as design system**; new Designs, decks and dashboards are drawn with its tokens ([Kinds](guide/artifacts.md#kinds)). Remaining:
-
-- Its fonts as files, and spacing tokens. (A project can have its own design system before the host's today.)
-- From a codebase, the agent can draft a design system from the project's own CSS variables and components. The person reviews it before it is used.
-
-### 5. Desktop
+### 4. Desktop
 
 - The artifact view opens as a workspace tab beside the chat, with the toolbar each kind needs:
   - Doc: outline, edit.
@@ -94,7 +87,7 @@ A Design with tokens (colors, type, radius) can be the host's design system, cho
 - Thread cards for every kind show a live preview (the first slide, the doc's opening, the chart, the poster frame) with **Open**, **Keep as artifact** and the kind's export.
 - While presenting Slides, speaker notes show on a second display when there is one.
 
-### 6. Phone
+### 5. Phone
 
 - The **Artifacts** tab gets kind filters beside the host filter. Each kind has a viewer that fits the phone:
   - Slides: swipe, with Present when the phone is connected to a display.
@@ -104,7 +97,7 @@ A Design with tokens (colors, type, radius) can be the host's design system, cho
 - **Export** hands the file to the share sheet; **Add to Home Screen or share** and the home-screen widget work for every kind.
 - **Present from the phone:** the phone turns slides on the desktop's Present view of the same deck.
 
-### 7. Connection with shipping an app
+### 6. Connection with shipping an app
 
 The [shipping plan](SHIP-AN-APP-PLAN.md) and this one share one rule: make the smallest thing that does the job first, and grow it when it needs more.
 
@@ -119,12 +112,12 @@ The [shipping plan](SHIP-AN-APP-PLAN.md) and this one share one rule: make the s
 - **Shipped apps feed dashboards:** a deployed project's deployments, usage and uptime (shipping plan sections 3, 8 and 9) become Dashboard and Live sources. "Show me this week's errors and deploys" is an artifact, not a page of the hosting dashboard.
 - **Launch artifacts:** **Make a release note** and **Make a launch deck** from a project's merged pull requests are Doc and Slides artifacts on the project, ready to export or publish with the site.
 
-### 8. Documentation
+### 7. Documentation
 
 - [Artifacts](guide/artifacts.md) gets a section per kind, edit in place, exports, design systems, dashboards and live refresh. The mobile README, VERIFICATION.md, SECURITY.md (exports run on the host; live refresh and what each source can read), [Agents](guide/agents.md) (the `artifact_*` tools and `kind`) and the site's feature list are updated.
 - Every string goes through `t()` with its Indonesian translation.
 
-### 9. Two people editing one artifact
+### 8. Two people editing one artifact
 
 Ramu is one person across devices today, so versions are enough. A household or a small team sharing an artifact through a share link that can edit needs more:
 
@@ -132,7 +125,7 @@ Ramu is one person across devices today, so versions are enough. A household or 
 - **Merging:** a Doc's and a deck's text are kept as a CRDT (Yjs) on the host, so two people typing at once merge instead of making competing versions. A version is still saved when either stops editing for a minute, so Restore and Compare keep working.
 - **Access:** an editing share link names the person it is for and can be revoked like any share link. Kinds without text (Dashboard, Motion) stay one editor at a time, with "Being edited by …" shown to the other.
 
-### 10. Templates
+### 9. Templates
 
 **Save as template** (desktop) and starting a new artifact from one (desktop and phone) are built ([Templates](guide/artifacts.md#templates)). Remaining:
 
@@ -140,13 +133,13 @@ Ramu is one person across devices today, so versions are enough. A household or 
 - Templates travel between hosts the way **Import an artifact** does now: a template share link opens on another connected host as a copy.
 - Starting points for the kinds still to come (a landing page for Design, a 30-second explainer for Motion); the report, deck, dashboard and flowchart ship today.
 
-### 11. Dashboards from named services
+### 10. Dashboards from named services
 
 - Besides records, folders, Ramu data and Shared MCP servers, a Dashboard or Live artifact can read **named services** through connectors on the host: Salesforce, Amplitude and Grafana first.
 - Each connector is one file implementing `query(spec)` with that service's own sign-in, kept in `credentials/`. It is read-only, and each service is its own grant on the artifact, listed in plain words.
 - A connector is added only after its sign-in and the data it can read are reviewed and written up in SECURITY.md, the same bar as Shared MCP.
 
-### 12. Voice-over for Motion
+### 11. Voice-over for Motion
 
 - A Motion artifact can have narration: the agent writes a script per scene, and the **speech** ability ([Abilities](ABILITIES-PLAN.md)) turns it into audio on a signed-in provider that offers it. The host mixes the audio into the MP4 with the browser's own audio encoder, timed to the scenes.
 - **Narration** in the artifact's toolbar previews, re-records one scene, or removes the narration. The grant sheet says which provider receives the script, and no other content leaves the host.

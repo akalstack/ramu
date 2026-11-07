@@ -306,7 +306,7 @@ export class InteractiveStore {
     signal: AbortSignal | undefined,
     kept: InteractiveInput['checks'],
   ) {
-    if (input.html !== undefined || (input.files !== undefined && input.kind !== 'slides'))
+    if (input.html !== undefined || (input.files !== undefined && input.kind !== 'slides' && input.kind !== 'design'))
       throw new Error(
         input.kind === 'slides'
           ? 'A deck is written in slides; html is for apps.'
