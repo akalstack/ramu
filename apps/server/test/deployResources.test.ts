@@ -121,7 +121,7 @@ function service(url: string, migrate: string[] | null = null, runner?: Migratio
     {
       getState: <T>(name: string, fallback: T) => (state.get(name) as T) ?? fallback,
       setState: (name, value) => void state.set(name, value),
-      stack: () => ({ database: true, migrate }),
+      stack: () => ({ database: true, cache: false, storage: false, email: false, migrate }),
     },
     { auth: async () => ({ auth, accountId: 'u1', defaultScope: null }), connected: () => true } as never,
     store,
@@ -276,7 +276,7 @@ describe('a database branch per pull request', () => {
       {
         getState: <T>(name: string, fallback: T) => (state.get(name) as T) ?? fallback,
         setState: (name, value) => void state.set(name, value),
-        stack: () => ({ database: true, migrate: null }),
+        stack: () => ({ database: true, cache: false, storage: false, email: false, migrate: null }),
       },
       { auth: async () => ({ auth, accountId: 'u1', defaultScope: null }), connected: () => true } as never,
       store,

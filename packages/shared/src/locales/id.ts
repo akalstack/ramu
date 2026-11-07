@@ -6176,10 +6176,12 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Postgres dari integrasi database yang dipasang tim Vercel Anda, ditagih lewat Vercel; Vercel mengatur variabelnya di proyek.',
   'Or use Netlify Database: add @netlify/database to the app (netlify database init does it), and Netlify creates the database on the next deploy, gives each deploy preview its own branch and applies the migrations in netlify/database/migrations/.':
     'Atau pakai Netlify Database: tambahkan @netlify/database ke aplikasi (netlify database init melakukannya), dan Netlify membuat database pada deploy berikutnya, memberi setiap deploy preview branch sendiri, dan menerapkan migrasi di netlify/database/migrations/.',
-  'This app stores files. Provision creates storage on your own account: an R2 bucket for a Worker, or a Vercel Blob store for a Vercel project.':
-    'Aplikasi ini menyimpan file. Provision membuat penyimpanan di akun Anda sendiri: bucket R2 untuk Worker, atau store Vercel Blob untuk proyek Vercel.',
+  'This app stores files. Provision creates storage on your own account: an R2 bucket for a Worker, a Vercel Blob store for a Vercel project, or a bucket in the app’s Supabase project, each with a separate one for previews where the provider has it.':
+    'Aplikasi ini menyimpan file. Provision membuat penyimpanan di akun Anda sendiri: bucket R2 untuk Worker, store Vercel Blob untuk proyek Vercel, atau bucket di proyek Supabase aplikasi, masing-masing dengan yang terpisah untuk preview jika penyedianya mendukung.',
   'Vercel set BLOB_READ_WRITE_TOKEN on the project and keeps it; previews read and write the same store.':
     'Vercel mengatur BLOB_READ_WRITE_TOKEN di proyek dan menyimpannya; preview membaca dan menulis store yang sama.',
   'A private Blob store connected to the project; Vercel sets BLOB_READ_WRITE_TOKEN on it.':
     'Store Blob privat yang terhubung ke proyek; Vercel mengatur BLOB_READ_WRITE_TOKEN di sana.',
+  'A private bucket in the app’s Supabase project, and one in its preview project.':
+    'Bucket privat di proyek Supabase aplikasi, dan satu di proyek preview-nya.',
 }

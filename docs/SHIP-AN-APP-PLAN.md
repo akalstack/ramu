@@ -4,12 +4,10 @@ A person who has never written code describes an app, and Ramu takes it from an 
 
 ## The need
 
-Most of the path is built ([Shipping an app](guide/shipping.md)). What is still manual or missing:
+The path is built ([Shipping an app](guide/shipping.md)): a project from one sentence, the repository published from the deploy sheet, hosting on Vercel, Netlify, Railway, Fly.io, Cloudflare, GitHub Pages or the person's own server, databases, caches, file storage and email on their own accounts, CI that GitHub or GitLab requires before merge, variables synced to GitHub Actions, GitLab CI and the platform, and store releases of an Expo app. What is still missing:
 
-- **Starting:** `project_create` and **New project** start a project from one sentence, but the deploy sheet does not yet create the GitHub repository and push it, so a non-coder still meets **Publish to GitHub** first.
-- **Deploying:** a project can be linked to Vercel, Netlify or Railway, set up on Fly.io through a GitHub Actions deploy job, or set up on the person's own server, with status, logs, production deploys and rollback, and an Expo app released to TestFlight and Play's internal track ([Deploying an app](guide/deploy.md)). Other platforms have no target yet: `railway`, `cloudflared` and `docker` are on the risky-command list (`agent/autoCommandRules.ts`), so an agent can run them, but each run is a one-off approval.
-- **CI/CD:** Ramu adds a CI workflow through a pull request ([Set up CI](guide/git-hosting.md#set-up-ci)), wakes the thread whose push breaks the default branch, and can require CI before merge on GitHub.
-- **Secrets:** `request_secret` and **Environment variables** put a token on the host, and **Sync** in the deploy sheet copies it to GitHub Actions and the platform's variables; GitLab CI variables are not covered yet.
+- **Telling people:** the site still describes only keeping coding agents moving, not taking an idea to a live app.
+- **Usage for newer platforms:** the deploy sheet's usage figures cover Vercel, Netlify and Neon; others report none through their APIs yet.
 
 **Easier for the person:** one sentence becomes a running app. One action (**Deploy**) turns it into a public URL on an account they own. Every later change goes through a pull request with checks and a preview URL, and merging to the default branch deploys it. The agent knows the target, the live URL and the last deployment's result, so "it's broken in production" is a task it can act on: read the logs, fix the bug, open a pull request, watch the deploy.
 
@@ -33,24 +31,11 @@ A developer can enter at any step: **Deploy** on an existing project, or **Set u
 
 ## Delivery
 
-### 1. Deploy targets
-
-Vercel, Netlify and the person's own server are built ([Deploying an app](guide/deploy.md)): `HostingAdapter` and its registry in `workspace/deploy/`, the shared shapes in `packages/shared/src/types/deploy.ts`, hosting accounts connected by the platform's CLI sign-in or a guided token page, the contract suite (`apps/server/test/deployAdapters.test.ts`), `deploy.*` IPC, the deploy tools and the Deploy sheet. A new platform is one adapter file, its sign-in and a contract entry. What remains:
-
-- **Capabilities still to declare:** the resource kinds a platform provisions. Netlify previews come from pull requests; a branch preview through its API is not declared.
-- **`ResourceAdapter`** (`workspace/deploy/resource.ts`, Neon, Supabase and Cloudflare D1, KV and R2 built, §2): a hosting platform that provisions through its marketplace implements it too (the Vercel Marketplace, built); a standalone provider (Upstash and Resend, built) implements only this one. Deleting a resource is not on the interface.
-
-### 2. Databases and storage
-
-`ResourceAdapter` with Neon (**Sign in with Neon**, or an API key on the guided token page), Supabase (access token, a second project for previews), Cloudflare D1, KV and R2 for Workers projects, Vercel Marketplace databases, Vercel Blob, a pointer to Netlify Database, Upstash Redis and Resend email, **Provision** in the deploy sheet for stacks or code that need a database, a `preview` branch for previews, this host and CI, connection variables in secrets sync, migrations before a production deploy from Ramu, and an opt-in hold that runs them before each production build goes live are built ([Databases](guide/deploy.md#databases)). What remains:
-
-- **More providers:** file storage for apps outside Vercel and Workers (Supabase Storage, R2 through its S3 API), each a `ResourceAdapter` with its `BrandId`, and the stack choice naming storage and email needs.
-
-### 3. Cost and usage
+### 1. Cost and usage
 
 Usage figures for Vercel, Netlify and Neon beside the limits their APIs report, **Open billing**, notices at 80% and 100%, and `deploy_usage` are built ([Usage](guide/deploy.md#usage)). What remains: figures for each new platform's adapter as it lands, and Netlify bandwidth or credits if Netlify's API starts reporting them.
 
-### 4. The site
+### 2. The site
 
 The site (`apps/site`, one Astro page) is about keeping coding agents moving. With this plan, Ramu also takes someone from an idea to a live app, so the site gets new copy throughout, written once the features ship and only claiming what they do:
 

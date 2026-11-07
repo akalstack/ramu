@@ -27,6 +27,7 @@ import './resend'
 import './workerResources'
 import './vercelMarketplace'
 import './vercelBlob'
+import './supabaseStorage'
 
 /** What an account needs from its platform's adapter: a name, a token page and who a token belongs to. */
 type AccountAdapter = Pick<HostingAdapter, 'name' | 'tokenPage' | 'account'> & { kind: HostingAccount['kind'] }
@@ -123,6 +124,8 @@ export class HostingAccounts {
       // The Marketplace uses the Vercel sign-in; `auth` reads it as Vercel's so a CLI session renews as one.
       'vercel-marketplace': saved('vercel'),
       'vercel-blob': saved('vercel'),
+      // Storage goes in the Supabase project the database is in, on the same token.
+      'supabase-storage': saved('supabase'),
       expo: saved('expo'),
     }
   }

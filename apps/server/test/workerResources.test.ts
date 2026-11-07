@@ -80,12 +80,13 @@ describe('Cloudflare resources for Workers', () => {
 
   it('offers them only to a Workers project, and needs each when the code types a binding as one', async () => {
     let platform: string | null = 'vercel'
+    let stackStorage = false
     const state = new Map<string, unknown>()
     const resources = new ResourceService(
       {
         getState: <T>(key: string, fallback: T) => (state.get(key) as T) ?? fallback,
         setState: (key, value) => void state.set(key, value),
-        stack: () => ({ database: false, migrate: null }),
+        stack: () => ({ database: false, cache: false, storage: stackStorage, email: false, migrate: null }),
         platform: () => platform,
       },
       { connected: () => true, auth: async () => ({ auth, accountId: 'acc1' }) } as never,
@@ -103,5 +104,8 @@ describe('Cloudflare resources for Workers', () => {
       expect.arrayContaining(['cloudflare-d1', 'cloudflare-kv', 'cloudflare-r2']),
     )
     expect(workers.needs).toEqual(['cache', 'storage'])
+    // The stack in ramu.json can name a need the code does not show yet.
+    stackStorage = true
+    expect((await resources.status('p1', [], [])).needs).toEqual(['storage'])
   })
 })

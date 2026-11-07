@@ -18,8 +18,15 @@ export interface ResourceAdapter {
   readonly tokenPage: string
   readonly plans: ResourcePlan[]
   account(auth: HostingAuth): Promise<HostingIdentity>
-  /** Creates a resource named after the project; `site` is the project's id on the platform it deploys to. */
-  provision(auth: HostingAuth, project: { name: string; site?: string }, plan: string): Promise<ProvisionedResource>
+  /**
+   * Creates a resource named after the project; `site` is the project's id on the platform it deploys to, and
+   * `database` the project's database, for a resource that lives beside it.
+   */
+  provision(
+    auth: HostingAuth,
+    project: { name: string; site?: string; database?: { provider: ResourceProvider; id: string } },
+    plan: string,
+  ): Promise<ProvisionedResource>
   /** A resource of that name already on the account, for a provision whose reply was lost. */
   find(auth: HostingAuth, name: string): Promise<ProvisionedResource | null>
   /** The provider's page for a resource. */

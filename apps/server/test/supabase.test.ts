@@ -4,6 +4,7 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import { supabaseAdapter } from '../src/workspace/deploy/supabase'
+import { supabaseStorageAdapter } from '../src/workspace/deploy/supabaseStorage'
 
 interface Project {
   id: string
@@ -122,5 +123,76 @@ describe('Supabase', () => {
     )
     await expect(adapter.find(auth, 'shop')).rejects.toThrow('already exists')
     expect(requests.some((request) => request.line.startsWith('PATCH'))).toBe(false)
+  })
+})
+
+describe('Supabase Storage', () => {
+  async function storageFake() {
+    const buckets: { ref: string; id: string }[] = []
+    const requests: { line: string; auth: string | undefined }[] = []
+    const server = createServer((req, res) => {
+      let text = ''
+      req.on('data', (chunk: Buffer) => (text += chunk.toString('utf8')))
+      req.on('end', () => {
+        requests.push({ line: `${req.method} ${req.url}`, auth: req.headers.authorization })
+        const send = (status: number, value: unknown) =>
+          void res.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify(value))
+        if (req.url === '/projects')
+          return send(200, [
+            { id: 'ref1', ref: 'ref1', name: 'shop' },
+            { id: 'ref2', ref: 'ref2', name: 'shop-preview' },
+          ])
+        const keys = /^\/projects\/(\w+)\/api-keys\?reveal=true$/.exec(req.url ?? '')
+        if (keys)
+          return send(200, [
+            { name: 'anon', type: 'legacy', api_key: 'anon-key' },
+            { name: 'default', type: 'secret', api_key: `sb_secret_${keys[1]}` },
+          ])
+        const made = /^\/storage\/(\w+)\/bucket$/.exec(req.url ?? '')
+        if (made) {
+          const { id } = JSON.parse(text) as { id: string }
+          if (buckets.some((entry) => entry.ref === made[1] && entry.id === id))
+            return send(409, { message: 'The resource already exists' })
+          buckets.push({ ref: made[1]!, id })
+          return send(200, { name: id })
+        }
+        send(404, {})
+      })
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+    return {
+      adapter: supabaseStorageAdapter({ api: url, storage: (ref) => `${url}/storage/${ref}` }),
+      buckets,
+      requests,
+    }
+  }
+
+  it('makes a private bucket in the database’s project and its preview project, with the secret key', async () => {
+    const { adapter, buckets, requests } = await storageFake()
+    const made = await adapter.provision(
+      auth,
+      { name: 'Shop', database: { provider: 'supabase', id: 'ref1' } },
+      'default',
+    )
+    expect(made.variables).toEqual({
+      SUPABASE_URL: 'https://ref1.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_ref1',
+      SUPABASE_STORAGE_BUCKET: 'shop',
+    })
+    expect(requests.find((request) => request.line.includes('/bucket'))?.auth).toBe('Bearer sb_secret_ref1')
+    expect((await adapter.branch!(auth, 'ref1', 'preview')).SUPABASE_URL).toBe('https://ref2.supabase.co')
+    // Provisioning again reuses the bucket made before.
+    await adapter.provision(auth, { name: 'Shop', database: { provider: 'supabase', id: 'ref1' } }, 'default')
+    expect(buckets).toEqual([
+      { ref: 'ref1', id: 'shop' },
+      { ref: 'ref2', id: 'shop' },
+    ])
+  })
+
+  it('needs a Supabase database first', async () => {
+    const { adapter } = await storageFake()
+    await expect(adapter.provision(auth, { name: 'shop' }, 'default')).rejects.toThrow('Supabase database')
   })
 })

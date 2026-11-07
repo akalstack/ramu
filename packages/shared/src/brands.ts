@@ -49,10 +49,11 @@ export function accountBrand(platform: AccountPlatform): BrandId {
   if (platform === 'server') return 'docker'
   if (platform === 'github-pages') return 'github'
   if (platform === 'vercel-marketplace' || platform === 'vercel-blob') return 'vercel'
+  if (platform === 'supabase-storage') return 'supabase'
   return platform.startsWith('cloudflare')
     ? 'cloudflare'
     : (platform as Exclude<
         AccountPlatform,
-        `cloudflare-${string}` | 'server' | 'github-pages' | 'vercel-marketplace' | 'vercel-blob'
+        `cloudflare-${string}` | 'server' | 'github-pages' | 'vercel-marketplace' | 'vercel-blob' | 'supabase-storage'
       >)
 }

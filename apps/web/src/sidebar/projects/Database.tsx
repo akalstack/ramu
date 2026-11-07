@@ -29,7 +29,7 @@ const WORDS: Record<ResourceKind, { title: string; preview: string; offer: strin
     title: 'File storage',
     preview: 'Sync below sets {0}.',
     offer:
-      'This app stores files. Provision creates storage on your own account: an R2 bucket for a Worker, or a Vercel Blob store for a Vercel project.',
+      'This app stores files. Provision creates storage on your own account: an R2 bucket for a Worker, a Vercel Blob store for a Vercel project, or a bucket in the app’s Supabase project, each with a separate one for previews where the provider has it.',
   },
   email: {
     title: 'Email',

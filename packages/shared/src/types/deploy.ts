@@ -32,6 +32,7 @@ export const RESOURCE_PROVIDERS = [
   'resend',
   'vercel-marketplace',
   'vercel-blob',
+  'supabase-storage',
 ] as const
 export type ResourceProvider = (typeof RESOURCE_PROVIDERS)[number]
 

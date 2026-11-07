@@ -88,6 +88,9 @@ export function createDeploys(
       setState,
       stack: (projectId) => ({
         database: stack(projectId)?.database ?? false,
+        cache: stack(projectId)?.cache ?? false,
+        storage: stack(projectId)?.storage ?? false,
+        email: stack(projectId)?.email ?? false,
         migrate: stack(projectId)?.migrate ?? null,
       }),
       platform: (projectId): string | null => service.binding(projectId)?.platform ?? null,
