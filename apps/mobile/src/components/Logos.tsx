@@ -39,9 +39,11 @@ export function ProviderIcon({
 }
 
 /** A forge, hosting platform or service's mark beside its name, in the text color like the desktop's masks. */
-export function BrandIcon({ brand, size = 14 }: { brand: BrandId; size?: number }) {
+export function BrandIcon({ brand, size = 14 }: { brand: BrandId | undefined; size?: number }) {
   const { c } = useTheme()
-  const xml = useMemo(() => tinted(svgs[`brand:${brand}`], c.soft), [brand, c.soft])
+  const xml = useMemo(() => (brand ? tinted(svgs[`brand:${brand}`], c.soft) : null), [brand, c.soft])
+  // A service without a mark here shows none; its name sits beside the space.
+  if (!xml) return <View style={{ width: size, height: size }} />
   return (
     <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <SvgXml xml={xml} width={size} height={size} />

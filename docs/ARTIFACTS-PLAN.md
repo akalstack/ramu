@@ -79,9 +79,9 @@ Between the person's own devices, an edit of a doc, a Mermaid diagram or a deck'
 
 ### 5. Dashboards from named services
 
-Grafana is built: its account in Settings, a table naming its data source and query, and a grant per dashboard and service, reviewed in [SECURITY.md](../SECURITY.md) ([Dashboards](guide/artifacts.md#kinds)). Remaining:
+Grafana and Amplitude are built: their accounts in Settings, a table naming its data source and query, and a grant per dashboard and service, reviewed in [SECURITY.md](../SECURITY.md) ([Dashboards](guide/artifacts.md#kinds)). Remaining:
 
-- **Salesforce and Amplitude:** each a connector beside `interactive/grafana.ts` with its own sign-in (Salesforce's OAuth for a connected app, Amplitude's API key and secret) and a `service.id`, added only after its sign-in and the data it can read are written up in SECURITY.md.
+- **Salesforce:** a connector beside `interactive/grafana.ts` signing in through OAuth for a connected app, with its own `service.id`, added only after its sign-in and the data it can read are written up in SECURITY.md.
 - **Live (App) artifacts:** reading a named service from an App's own code, through the same per-artifact grant.
 
 ### 6. Voice-over for Motion

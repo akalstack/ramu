@@ -1,5 +1,6 @@
 import { ServiceGrants } from './interactive/serviceGrants'
 import { grafana } from './interactive/grafana'
+import { amplitude } from './interactive/amplitude'
 import { DASHBOARD_ROWS_MAX } from '@ramu/shared/artifactSource'
 import { LastingAddresses } from './workspace/deploy/namedTunnel'
 import { ShellPushes } from './agent/shellPushes'
@@ -808,7 +809,9 @@ const liveDashboards = new LiveDashboards(
       // A named service is read only for a kept dashboard the person allowed to read it, with the account in Settings.
       if (!artifactId || !serviceGrants.allowed(artifactId).includes(service.id)) return []
       const { auth } = await deploys.accounts.auth(service.id)
-      return grafana.query(auth, service, columns, DASHBOARD_ROWS_MAX)
+      return service.id === 'grafana'
+        ? grafana.query(auth, service, columns, DASHBOARD_ROWS_MAX)
+        : amplitude.query(auth, service, columns, DASHBOARD_ROWS_MAX)
     }
     if (mcp && projectId) {
       // Only a tool the server marks read-only, on a server Shared MCP approved for this project, is called.

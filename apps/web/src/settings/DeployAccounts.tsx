@@ -36,6 +36,8 @@ const SCOPE_HINT: Record<
     'Create a key with Full access, which creating sending keys needs; the app gets sending-only keys, never this one',
   grafana:
     'Create a service account with the Viewer role and a token for it, then paste your Grafana address and the token joined by | (https://acme.grafana.net|glsa_…). Dashboards read it only where you allow it',
+  amplitude:
+    'Copy the project’s API key and secret key from its settings and paste them joined by a colon (key:secret), with eu| before them for an EU project. Dashboards read it only where you allow it',
   expo: 'Create it for a robot user with the Developer role on the account that owns the app; a personal token reaches every account you belong to',
 }
 

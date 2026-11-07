@@ -246,17 +246,26 @@ export const dashboardDatasetSchema = z
         "A read-only tool of a Shared MCP server approved for the dashboard's project, called again when it is opened; its JSON result (an array of objects) fills the table by the names in columns. Leave rows out.",
       ),
     service: z
-      .object({
-        id: z.enum(['grafana']).describe('The named service, connected in Settings.'),
-        datasource: z.string().trim().min(1).max(120).describe("The Grafana data source's uid."),
-        query: z
-          .record(z.string().max(60), z.union([z.string().max(2000), z.number(), z.boolean()]))
-          .describe(
-            "The data source's own query fields, such as { expr } for Prometheus or { rawSql, format: 'table' } for SQL.",
-          ),
-        from: z.string().trim().max(40).optional().describe('The start, such as now-7d; now-24h when absent.'),
-        to: z.string().trim().max(40).optional(),
-      })
+      .discriminatedUnion('id', [
+        z.object({
+          id: z.literal('grafana'),
+          datasource: z.string().trim().min(1).max(120).describe("The Grafana data source's uid."),
+          query: z
+            .record(z.string().max(60), z.union([z.string().max(2000), z.number(), z.boolean()]))
+            .describe(
+              "The data source's own query fields, such as { expr } for Prometheus or { rawSql, format: 'table' } for SQL.",
+            ),
+          from: z.string().trim().max(40).optional().describe('The start, such as now-7d; now-24h when absent.'),
+          to: z.string().trim().max(40).optional(),
+        }),
+        z.object({
+          id: z.literal('amplitude'),
+          event: z.string().trim().min(1).max(200).describe('The event type, as Amplitude names it.'),
+          metric: z.enum(['uniques', 'totals', 'pct_dau', 'average']).optional(),
+          days: z.number().int().min(1).max(365).optional().describe('Days back from today; 30 when absent.'),
+          interval: z.union([z.literal(1), z.literal(7), z.literal(30)]).optional(),
+        }),
+      ])
       .optional()
       .describe(
         'A query to a named service the person connected, run again when the dashboard is opened and only after they allow this dashboard to read it; columns names the fields of its first result to show. Leave rows out.',

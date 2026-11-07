@@ -24,6 +24,7 @@ import './neon'
 import './supabase'
 import './upstash'
 import './resend'
+import { amplitude } from '../../interactive/amplitude'
 import { grafana } from '../../interactive/grafana'
 import './workerResources'
 import './vercelMarketplace'
@@ -38,6 +39,7 @@ const expo = expoClient()
 function accountAdapter(platform: AccountPlatform): AccountAdapter {
   if (platform === 'expo') return expo
   if (platform === 'grafana') return grafana
+  if (platform === 'amplitude') return amplitude
   if (!isHostingPlatform(platform)) return resourceAdapter(platform)
   const adapter = hostingAdapter(platform)
   return { name: adapter.name, tokenPage: adapter.tokenPage, account: (auth) => adapter.account(auth), kind: 'hosting' }
@@ -129,6 +131,7 @@ export class HostingAccounts {
       // Storage goes in the Supabase project the database is in, on the same token.
       'supabase-storage': saved('supabase'),
       grafana: saved('grafana'),
+      amplitude: saved('amplitude'),
       expo: saved('expo'),
     }
   }

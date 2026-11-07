@@ -33,6 +33,7 @@ const BILLING_PAGES: Record<AccountPlatform, string> = {
   'supabase-storage': 'https://supabase.com/dashboard/org/_/billing',
   // A Grafana account is read by dashboards, not billed through Ramu, so no report is made for it.
   grafana: '',
+  amplitude: '',
   expo: 'https://expo.dev/settings/billing',
 }
 

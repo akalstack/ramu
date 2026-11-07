@@ -6193,4 +6193,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'This dashboard reads {0} with the account in Settings → Git → Hosting accounts. Its tables stay empty until you allow it.':
     'Dashboard ini membaca {0} dengan akun di Pengaturan → Git → Akun hosting. Tabelnya tetap kosong sampai Anda mengizinkannya.',
   'Stop reading {0}': 'Berhenti membaca {0}',
+  'Copy the project’s API key and secret key from its settings and paste them joined by a colon (key:secret), with eu| before them for an EU project. Dashboards read it only where you allow it':
+    'Salin API key dan secret key proyek dari pengaturannya lalu tempel dengan titik dua di antaranya (key:secret), dengan eu| di depannya untuk proyek EU. Dashboard membacanya hanya jika Anda mengizinkan',
 }

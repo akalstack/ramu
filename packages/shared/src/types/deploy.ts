@@ -45,9 +45,9 @@ export type StoreService = (typeof STORE_SERVICES)[number]
  * store services.
  */
 /** Services a Dashboard artifact reads from, each its own grant on the dashboard. */
-export const NAMED_SERVICES = ['grafana'] as const
+export const NAMED_SERVICES = ['grafana', 'amplitude'] as const
 export type NamedService = (typeof NAMED_SERVICES)[number]
-export const NAMED_SERVICE_NAMES: Record<NamedService, string> = { grafana: 'Grafana' }
+export const NAMED_SERVICE_NAMES: Record<NamedService, string> = { grafana: 'Grafana', amplitude: 'Amplitude' }
 
 export const ACCOUNT_PLATFORMS = [
   ...HOSTING_PLATFORMS,

@@ -44,9 +44,11 @@ export function forgeBrand(service: ForgeService): BrandId {
 
 /**
  * The mark beside a hosting account: the platform's own, Docker's for the person's own server, which runs it, and
- * GitHub's for GitHub Pages and Cloudflare's for Workers, D1, KV and R2.
+ * GitHub's for GitHub Pages and Cloudflare's for Workers, D1, KV and R2; none for a service without a mark here.
  */
-export function accountBrand(platform: AccountPlatform): BrandId {
+export function accountBrand(platform: AccountPlatform): BrandId | undefined {
+  // Amplitude's mark is not in Simple Icons and its guidelines are for its partners, so it shows the generic shape.
+  if (platform === 'amplitude') return undefined
   if (platform === 'server') return 'docker'
   if (platform === 'github-pages') return 'github'
   if (platform === 'vercel-marketplace' || platform === 'vercel-blob') return 'vercel'
@@ -55,6 +57,12 @@ export function accountBrand(platform: AccountPlatform): BrandId {
     ? 'cloudflare'
     : (platform as Exclude<
         AccountPlatform,
-        `cloudflare-${string}` | 'server' | 'github-pages' | 'vercel-marketplace' | 'vercel-blob' | 'supabase-storage'
+        | `cloudflare-${string}`
+        | 'server'
+        | 'github-pages'
+        | 'vercel-marketplace'
+        | 'vercel-blob'
+        | 'supabase-storage'
+        | 'amplitude'
       >)
 }

@@ -1,9 +1,10 @@
-// Grafana as a named service for dashboards, against a local fake of its API: the token checked through search, a
+// Grafana and Amplitude as named services for dashboards, against local fakes of their APIs: the sign-in checked, a
 // query's first frame turned into the table's rows, and a grant per dashboard.
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, expect, it } from 'vitest'
 import { parseArtifactSource } from '@ramu/shared/artifactSource'
+import { amplitudeAuth, amplitudeConnector } from '../src/interactive/amplitude'
 import { grafanaAuth, grafanaConnector } from '../src/interactive/grafana'
 import { ServiceGrants } from '../src/interactive/serviceGrants'
 
@@ -113,4 +114,44 @@ it('keeps each dashboard’s grant on its own, and a table names one source only
       charts: [],
     }),
   ).toThrow('one of a source')
+})
+
+it('reads an Amplitude event’s daily uniques as date, series and value rows, with the project’s keys', async () => {
+  const requests: { url: string; auth: string | undefined }[] = []
+  const server = createServer((req, res) => {
+    requests.push({ url: req.url ?? '', auth: req.headers.authorization })
+    req.resume()
+    req.on('end', () => {
+      const send = (value: unknown) =>
+        void res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(value))
+      if (req.url === '/api/2/events/list') return send({ data: [] })
+      if (req.url?.startsWith('/api/2/events/segmentation'))
+        return send({ data: { series: [[4, 7]], xValues: ['2026-11-07', '2026-11-08'], seriesLabels: [0] } })
+      res.writeHead(404).end('{}')
+    })
+  })
+  servers.push(server)
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const connector = amplitudeConnector({
+    origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+    now: () => new Date('2026-11-08T12:00:00Z'),
+  })
+  const auth = { token: 'key1:secret1' }
+  expect(await connector.account(auth)).toMatchObject({ name: 'Amplitude project key1…' })
+  const rows = await connector.query(auth, { event: 'Signed up', days: 2 }, ['date', 'value', 'series'], 10)
+  expect(rows).toEqual([
+    ['2026-11-07', 4, 'Signed up'],
+    ['2026-11-08', 7, 'Signed up'],
+  ])
+  const segmentation = new URL(requests.find((request) => request.url.includes('segmentation'))!.url, 'http://x')
+  expect(Object.fromEntries(segmentation.searchParams)).toEqual({
+    e: '{"event_type":"Signed up"}',
+    start: '20261107',
+    end: '20261108',
+    m: 'uniques',
+    i: '1',
+  })
+  expect(requests[0]?.auth).toBe(`Basic ${Buffer.from('key1:secret1').toString('base64')}`)
+  expect(amplitudeAuth({ token: 'eu|k:s' }).origin).toBe('https://analytics.eu.amplitude.com')
+  expect(() => amplitudeAuth({ token: 'only-a-key' })).toThrow('joined by a colon')
 })
