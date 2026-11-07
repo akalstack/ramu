@@ -82,6 +82,13 @@ export type Slide = z.infer<typeof slideSchema>
 
 /** The words of one slide a person can change in place; its layout, chart and image stay as the agent made them. */
 export const slideTextEdit = z.object({
+  /** Where this slide was in the version being edited; the edits' order is the deck's new order. */
+  from: z
+    .number()
+    .int()
+    .min(0)
+    .max(SLIDES_MAX - 1)
+    .optional(),
   title: slideText(200).optional(),
   body: slideMarkdown.optional(),
   columns: z.tuple([slideMarkdown, slideMarkdown]).optional(),
@@ -90,12 +97,16 @@ export const slideTextEdit = z.object({
 })
 export type SlideTextEdit = z.infer<typeof slideTextEdit>
 
-/** A deck with the person's text put into each slide's existing fields, slide by slide in order. */
+/**
+ * A deck with the person's text put into each slide's existing fields, in the order of the edits: each edit names the
+ * slide it came from, so moving a slide keeps its layout, chart and image.
+ */
 export function editSlideText(slides: Slide[], edits: SlideTextEdit[]): Slide[] {
-  if (edits.length !== slides.length)
+  const from = edits.map((edit, index) => edit.from ?? index)
+  if (edits.length !== slides.length || new Set(from).size !== from.length || from.some((at) => !slides[at]))
     throw new Error('The deck changed while you were editing. Reopen it and edit again.')
-  return slides.map((slide, index) => {
-    const edit = edits[index]!
+  return edits.map((edit, index) => {
+    const slide = slides[from[index]!]!
     const next: Slide = { ...slide }
     for (const key of ['title', 'body', 'by', 'notes'] as const) {
       const value = edit[key]

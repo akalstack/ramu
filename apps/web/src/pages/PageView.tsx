@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
   Bug,
   MessageSquarePlus,
   Monitor,
@@ -81,7 +83,9 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   // A doc's Markdown while the person edits it, and the version that edit started from.
   const [editing, setEditing] = useState<{ base: number; text: string } | null>(null)
   // A deck's slide text while the person edits it, slide by slide, and the version it started from.
-  const [editingSlides, setEditingSlides] = useState<{ base: number; slides: Slide[] } | null>(null)
+  const [editingSlides, setEditingSlides] = useState<{ base: number; slides: (Slide & { from: number })[] } | null>(
+    null,
+  )
   const [savingEdit, setSavingEdit] = useState(false)
   const state = useRef<InteractiveState | null>(null)
   const revision = useRef(0)
@@ -283,7 +287,10 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
                 if (document && stored)
                   setEditingSlides({
                     base: document.reference.version,
-                    slides: (JSON.parse(stored) as { slides: Slide[] }).slides,
+                    slides: (JSON.parse(stored) as { slides: Slide[] }).slides.map((slide, from) => ({
+                      ...slide,
+                      from,
+                    })),
                   })
               }}
             >
@@ -566,7 +573,8 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           onSubmit={(event) => {
             event.preventDefault()
             setSavingEdit(true)
-            const edits = editingSlides.slides.map(({ title, body, columns, by, notes }) => ({
+            const edits = editingSlides.slides.map(({ from, title, body, columns, by, notes }) => ({
+              from,
               title: title ?? '',
               body: body ?? '',
               by: by ?? '',
@@ -584,16 +592,46 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
         >
           <ol className="m-0 flex min-h-0 flex-1 list-none flex-col gap-4 overflow-auto p-0">
             {editingSlides.slides.map((slide, index) => {
+              const move = (by: number) => {
+                const slides = [...editingSlides.slides]
+                const [moved] = slides.splice(index, 1)
+                slides.splice(index + by, 0, moved!)
+                setEditingSlides({ ...editingSlides, slides })
+              }
               const change = (patch: Partial<Slide>) =>
                 setEditingSlides({
                   ...editingSlides,
                   slides: editingSlides.slides.map((entry, at) => (at === index ? { ...entry, ...patch } : entry)),
                 })
               return (
-                <li key={index} className="flex flex-col gap-1.5">
-                  <strong className="text-caption text-muted-foreground">
-                    {t('Slide {number}', { number: index + 1 })}
-                  </strong>
+                <li key={slide.from} className="flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1">
+                    <strong className="flex-1 text-caption text-muted-foreground">
+                      {t('Slide {number}', { number: index + 1 })}
+                    </strong>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className={GHOST_ICON_BUTTON_CLASS}
+                      aria-label={t('Move slide {number} up', { number: index + 1 })}
+                      disabled={index === 0}
+                      onClick={() => move(-1)}
+                    >
+                      <ArrowUp size={13} />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className={GHOST_ICON_BUTTON_CLASS}
+                      aria-label={t('Move slide {number} down', { number: index + 1 })}
+                      disabled={index === editingSlides.slides.length - 1}
+                      onClick={() => move(1)}
+                    >
+                      <ArrowDown size={13} />
+                    </Button>
+                  </div>
                   {slide.layout !== 'quote' && (
                     <Input
                       aria-label={t('Title of slide {number}', { number: index + 1 })}

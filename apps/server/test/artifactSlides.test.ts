@@ -296,6 +296,17 @@ it('puts the person’s slide text into each slide, keeping its layout, chart an
   expect(edited[1]).toMatchObject({ title: 'Much faster', notes: 'Say the number.', layout: slides.slides[1]!.layout })
   expect(edited[2]).toEqual(slides.slides[2])
   expect(() => editSlideText(slides.slides, [])).toThrow('The deck changed while you were editing')
+  const reversed = editSlideText(
+    slides.slides,
+    slides.slides.map((_, index) => ({ from: slides.slides.length - 1 - index })),
+  )
+  expect(reversed).toEqual([...slides.slides].reverse())
+  expect(() =>
+    editSlideText(
+      slides.slides,
+      slides.slides.map(() => ({ from: 0 })),
+    ),
+  ).toThrow('The deck changed')
   expect(() =>
     parseArtifactSource({
       kind: 'slides',

@@ -5682,6 +5682,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Who said it, slide {number}': 'Siapa yang mengatakannya, slide {number}',
   'Speaker notes of slide {number}': 'Catatan pembicara slide {number}',
   'Speaker notes': 'Catatan pembicara',
+  'Move slide {number} up': 'Pindahkan slide {number} ke atas',
+  'Move slide {number} down': 'Pindahkan slide {number} ke bawah',
   'Saving makes v{version}, marked Edited by you.': 'Menyimpan membuat v{version}, ditandai Diedit oleh Anda.',
   'Change the words yourself; the agent keeps your edit when it revises':
     'Ubah sendiri kata-katanya; agen mempertahankan suntingan Anda saat merevisi',
