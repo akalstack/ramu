@@ -15,7 +15,7 @@ import { useSettingsInvoke } from './SettingsScope'
 
 /** What to pick on each platform's token page: the smallest scope it offers. */
 const SCOPE_HINT: Record<
-  Exclude<AccountPlatform, 'server' | 'github-pages' | 'vercel-marketplace' | `cloudflare-${string}`>,
+  Exclude<AccountPlatform, 'server' | 'github-pages' | 'vercel-marketplace' | 'vercel-blob' | `cloudflare-${string}`>,
   string
 > = {
   vercel: 'Scope: the team your projects are in, not Full Account',
@@ -91,7 +91,7 @@ export function DeployAccounts() {
         // the repository's GitHub account.
         .filter(
           (account) =>
-            !['github-pages', 'vercel-marketplace'].includes(account.platform) &&
+            !['github-pages', 'vercel-marketplace', 'vercel-blob'].includes(account.platform) &&
             !account.platform.startsWith('cloudflare-'),
         )
         .map((account) => (
@@ -233,6 +233,7 @@ function DeployAccountRow({
         account.platform !== 'server' &&
         account.platform !== 'github-pages' &&
         account.platform !== 'vercel-marketplace' &&
+        account.platform !== 'vercel-blob' &&
         !account.platform.startsWith('cloudflare-') && (
           <div className="mb-3 flex flex-col gap-3 rounded-(--radius-m) bg-fill p-4 text-caption">
             {cliPlatform && (

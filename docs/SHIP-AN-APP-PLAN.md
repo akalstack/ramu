@@ -42,9 +42,9 @@ Vercel, Netlify and the person's own server are built ([Deploying an app](guide/
 
 ### 2. Databases and storage
 
-`ResourceAdapter` with Neon (**Sign in with Neon**, or an API key on the guided token page), Supabase (access token, a second project for previews), Cloudflare D1, KV and R2 for Workers projects, Vercel Marketplace databases, a pointer to Netlify Database, Upstash Redis and Resend email, **Provision** in the deploy sheet for stacks or code that need a database, a `preview` branch for previews, this host and CI, connection variables in secrets sync, migrations before a production deploy from Ramu, and an opt-in hold that runs them before each production build goes live are built ([Databases](guide/deploy.md#databases)). What remains:
+`ResourceAdapter` with Neon (**Sign in with Neon**, or an API key on the guided token page), Supabase (access token, a second project for previews), Cloudflare D1, KV and R2 for Workers projects, Vercel Marketplace databases, Vercel Blob, a pointer to Netlify Database, Upstash Redis and Resend email, **Provision** in the deploy sheet for stacks or code that need a database, a `preview` branch for previews, this host and CI, connection variables in secrets sync, migrations before a production deploy from Ramu, and an opt-in hold that runs them before each production build goes live are built ([Databases](guide/deploy.md#databases)). What remains:
 
-- **More providers:** file storage outside Workers (Vercel Blob, Supabase Storage, R2 through its S3 API), each a `ResourceAdapter` with its `BrandId`, and the stack choice naming storage and email needs.
+- **More providers:** file storage for apps outside Vercel and Workers (Supabase Storage, R2 through its S3 API), each a `ResourceAdapter` with its `BrandId`, and the stack choice naming storage and email needs.
 
 ### 3. Cost and usage
 

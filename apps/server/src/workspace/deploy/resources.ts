@@ -60,11 +60,14 @@ export interface ResourceHost {
   site?(projectId: string): { id: string; scope: string | null } | null
 }
 
+/** The Vercel Marketplace and Vercel Blob connect to a Vercel project, so they are offered only for one. */
+const VERCEL_OWN: readonly ResourceProvider[] = ['vercel-marketplace', 'vercel-blob']
+
 /** D1, KV and R2 are reached through a Worker's binding, so they are offered only for a project on Cloudflare Workers. */
 const offered = (provider: ResourceProvider, platform: string | null | undefined) =>
   isWorkerProvider(provider)
     ? platform === 'cloudflare-workers'
-    : provider !== 'vercel-marketplace' || platform === 'vercel'
+    : !VERCEL_OWN.includes(provider) || platform === 'vercel'
 
 /** A migration that failed: its output tail, for the person and the thread. */
 export class MigrationError extends Error {
@@ -101,7 +104,7 @@ export const runMigration: MigrationRunner = (argv, cwd, variables) =>
 /** Variables whose use in the code shows the app needs a kind of resource. */
 const NEEDS: Record<Exclude<ResourceKind, 'database'>, string[]> = {
   cache: ['REDIS_URL', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'],
-  storage: [],
+  storage: ['BLOB_READ_WRITE_TOKEN'],
   email: ['RESEND_API_KEY'],
 }
 /** The Worker types whose use in the code shows a Workers project needs a kind of resource. */
@@ -286,7 +289,7 @@ export class ResourceService {
     if (!adapter.plans.some((entry) => entry.id === plan)) throw new Error('Choose one of the offered plans.')
     if (!offered(provider, this.host.platform?.(projectId)))
       throw new Error(
-        `${adapter.name} is for a project deployed to ${provider === 'vercel-marketplace' ? 'Vercel' : 'Cloudflare Workers'}. Link the project there first.`,
+        `${adapter.name} is for a project deployed to ${VERCEL_OWN.includes(provider) ? 'Vercel' : 'Cloudflare Workers'}. Link the project there first.`,
       )
     if (this.bindings(projectId).some((binding) => binding.kind === adapter.kind))
       throw new Error(`This project already has ${KIND_NAMES[adapter.kind]}. Manage it on the provider’s page.`)
@@ -295,7 +298,7 @@ export class ResourceService {
     try {
       // A platform's own marketplace works in the team the project is linked in.
       const site = this.host.site?.(projectId) ?? null
-      const scoped = provider === 'vercel-marketplace' && site ? { ...auth, scope: site.scope } : auth
+      const scoped = VERCEL_OWN.includes(provider) && site ? { ...auth, scope: site.scope } : auth
       made = await adapter.provision(scoped, { name, ...(site ? { site: site.id } : {}) }, plan)
     } catch (error) {
       if (!(error instanceof ReplyLostError)) throw error

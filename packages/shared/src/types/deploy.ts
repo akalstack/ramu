@@ -31,6 +31,7 @@ export const RESOURCE_PROVIDERS = [
   'cloudflare-r2',
   'resend',
   'vercel-marketplace',
+  'vercel-blob',
 ] as const
 export type ResourceProvider = (typeof RESOURCE_PROVIDERS)[number]
 

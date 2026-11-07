@@ -6170,12 +6170,16 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Job deploy menerapkan migrasi di migrations/ sebelum setiap deploy.',
   'File storage':
     'Penyimpanan file',
-  'This Worker stores files. Provision creates an R2 bucket on your Cloudflare account, with a second one for wrangler dev.':
-    'Worker ini menyimpan file. Provision membuat bucket R2 di akun Cloudflare Anda, dengan bucket kedua untuk wrangler dev.',
   'Vercel set its variables on the project for production, previews and development, and keeps the values; Ramu does not see them.':
     'Vercel mengatur variabelnya di proyek untuk produksi, preview, dan pengembangan, serta menyimpan nilainya; Ramu tidak melihatnya.',
   'Postgres from a database integration your Vercel team installed, billed through Vercel; Vercel sets its variables on the project.':
     'Postgres dari integrasi database yang dipasang tim Vercel Anda, ditagih lewat Vercel; Vercel mengatur variabelnya di proyek.',
   'Or use Netlify Database: add @netlify/database to the app (netlify database init does it), and Netlify creates the database on the next deploy, gives each deploy preview its own branch and applies the migrations in netlify/database/migrations/.':
     'Atau pakai Netlify Database: tambahkan @netlify/database ke aplikasi (netlify database init melakukannya), dan Netlify membuat database pada deploy berikutnya, memberi setiap deploy preview branch sendiri, dan menerapkan migrasi di netlify/database/migrations/.',
+  'This app stores files. Provision creates storage on your own account: an R2 bucket for a Worker, or a Vercel Blob store for a Vercel project.':
+    'Aplikasi ini menyimpan file. Provision membuat penyimpanan di akun Anda sendiri: bucket R2 untuk Worker, atau store Vercel Blob untuk proyek Vercel.',
+  'Vercel set BLOB_READ_WRITE_TOKEN on the project and keeps it; previews read and write the same store.':
+    'Vercel mengatur BLOB_READ_WRITE_TOKEN di proyek dan menyimpannya; preview membaca dan menulis store yang sama.',
+  'A private Blob store connected to the project; Vercel sets BLOB_READ_WRITE_TOKEN on it.':
+    'Store Blob privat yang terhubung ke proyek; Vercel mengatur BLOB_READ_WRITE_TOKEN di sana.',
 }

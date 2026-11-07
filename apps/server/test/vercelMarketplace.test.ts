@@ -2,7 +2,8 @@
 // product, created on its free plan in the project's team and connected to the project for every environment.
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { vercelBlobAdapter } from '../src/workspace/deploy/vercelBlob'
 import { vercelMarketplaceAdapter } from '../src/workspace/deploy/vercelMarketplace'
 
 const servers: Server[] = []
@@ -67,4 +68,56 @@ it('says to install a database integration first, and needs the project linked',
     'Install a database integration',
   )
   await expect(adapter.provision({ token: 't' }, { name: 'shop' }, 'default')).rejects.toThrow('Link the project')
+})
+
+describe('Vercel Blob', () => {
+  async function blob(connected: boolean) {
+    const requests: { line: string; body: Record<string, unknown> }[] = []
+    const server = createServer((req, res) => {
+      let text = ''
+      req.on('data', (chunk: Buffer) => (text += chunk.toString('utf8')))
+      req.on('end', () => {
+        requests.push({ line: `${req.method} ${req.url}`, body: text ? JSON.parse(text) : {} })
+        res.writeHead(200, { 'Content-Type': 'application/json' }).end(
+          JSON.stringify({
+            store: {
+              id: 'store_blob',
+              name: 'shop',
+              projectsMetadata: [
+                { projectId: 'prj_1', environmentVariables: connected ? ['BLOB_READ_WRITE_TOKEN'] : [] },
+              ],
+            },
+          }),
+        )
+      })
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    return {
+      adapter: vercelBlobAdapter({ api: `http://127.0.0.1:${(server.address() as AddressInfo).port}` }),
+      requests,
+    }
+  }
+
+  it('creates a private store for the project and checks Vercel gave the project its token', async () => {
+    const { adapter, requests } = await blob(true)
+    expect(
+      await adapter.provision({ token: 't', scope: 'team_1' }, { name: 'shop', site: 'prj_1' }, 'default'),
+    ).toEqual({
+      id: 'store_blob',
+      name: 'shop',
+      variables: {},
+    })
+    expect(requests[0]).toMatchObject({
+      line: 'POST /storage/stores/blob?teamId=team_1',
+      body: { name: 'shop', access: 'private', projectId: 'prj_1' },
+    })
+  })
+
+  it('says plainly when Vercel made the store without connecting it', async () => {
+    const { adapter } = await blob(false)
+    await expect(adapter.provision({ token: 't' }, { name: 'shop', site: 'prj_1' }, 'default')).rejects.toThrow(
+      'did not connect it to the project',
+    )
+  })
 })

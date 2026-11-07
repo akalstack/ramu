@@ -29,7 +29,7 @@ const WORDS: Record<ResourceKind, { title: string; preview: string; offer: strin
     title: 'File storage',
     preview: 'Sync below sets {0}.',
     offer:
-      'This Worker stores files. Provision creates an R2 bucket on your Cloudflare account, with a second one for wrangler dev.',
+      'This app stores files. Provision creates storage on your own account: an R2 bucket for a Worker, or a Vercel Blob store for a Vercel project.',
   },
   email: {
     title: 'Email',
@@ -147,17 +147,21 @@ function KindSection({
               </Button>
             </span>
             <span className="text-muted-foreground">
-              {resource.provider === 'vercel-marketplace'
+              {resource.provider === 'vercel-blob'
                 ? t(
-                    'Vercel set its variables on the project for production, previews and development, and keeps the values; Ramu does not see them.',
+                    'Vercel set BLOB_READ_WRITE_TOKEN on the project and keeps it; previews read and write the same store.',
                   )
-                : resource.provider.startsWith('cloudflare-')
+                : resource.provider === 'vercel-marketplace'
                   ? t(
-                      'Bound to the Worker by a pull request, named as the code reads it; wrangler dev uses a separate preview copy.',
+                      'Vercel set its variables on the project for production, previews and development, and keeps the values; Ramu does not see them.',
                     )
-                  : resource.previewBranch
-                    ? t(words.preview, { 0: resource.variables.join(', ') })
-                    : t('Sync below sets {0}.', { 0: resource.variables.join(', ') })}
+                  : resource.provider.startsWith('cloudflare-')
+                    ? t(
+                        'Bound to the Worker by a pull request, named as the code reads it; wrangler dev uses a separate preview copy.',
+                      )
+                    : resource.previewBranch
+                      ? t(words.preview, { 0: resource.variables.join(', ') })
+                      : t('Sync below sets {0}.', { 0: resource.variables.join(', ') })}
             </span>
             {resource.provider === 'cloudflare-d1' && (
               <span className="text-muted-foreground">
