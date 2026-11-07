@@ -1,3 +1,4 @@
+import { createCloudflareRecords } from '../../workspace/deploy/cloudflareDns'
 import { z } from 'zod'
 import type { StoreTarget } from '@ramu/shared/types/deploy'
 import {
@@ -286,6 +287,19 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
           const added = await deploys().service.addDomain(project(projectId), name)
           if (!(added.configured && added.certificate)) deploys().domains.watch(projectId, added.name, null)
           return added
+        }),
+    },
+    'deploy.createCloudflareRecords': {
+      args: z.tuple([id, domain, z.string().trim().min(20).max(400)]),
+      // The token is used for this one action and not kept.
+      run: (projectId: string, name: string, token: string) =>
+        exclusive(projectId, async () => {
+          administrate()
+          const found = (await deploys().service.domains(project(projectId))).find((entry) => entry.name === name)
+          if (!found) throw new Error('That domain is not on this project.')
+          await createCloudflareRecords(token, found.name, found.records)
+          deploys().domains.watch(projectId, found.name, null)
+          return found
         }),
     },
     'deploy.createRecords': {

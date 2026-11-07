@@ -1296,6 +1296,8 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.addDomain'(projectId: string, domain: string): DomainStatus
   /** Creates the domain's records in the platform's own DNS; confirming in the sheet is the person's approval. */
   'deploy.createRecords'(projectId: string, domain: string): DomainStatus
+  /** Adds a domain's records at Cloudflare DNS with a token pasted for this action, which is not kept; host only. */
+  'deploy.createCloudflareRecords'(projectId: string, domain: string, token: string): DomainStatus
   /** Whether the project needs a database, the providers that can make one, and the ones it has. */
   'deploy.resources'(projectId: string, repoId: string): ProjectResources
   /** Creates the project's database on the connected account; its variables join secrets sync. */

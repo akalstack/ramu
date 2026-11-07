@@ -37,6 +37,9 @@ export function DomainsSection({ projectId, platform }: { projectId: string; pla
   const [domains, setDomains] = useState<DomainStatus[] | null>(null)
   const [name, setName] = useState('')
   const [confirming, setConfirming] = useState<string | null>(null)
+  // A Cloudflare token pasted for one domain's records; it goes to the host for that action and is not kept.
+  const [cloudflareFor, setCloudflareFor] = useState<string | null>(null)
+  const [cloudflareToken, setCloudflareToken] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
@@ -111,6 +114,44 @@ export function DomainsSection({ projectId, platform }: { projectId: string; pla
                   <span>
                     <Button size="sm" variant="secondary" onClick={() => setConfirming(domain.name)}>
                       {t('Create records')}
+                    </Button>
+                  </span>
+                ))}
+              {!domain.managedDns &&
+                (cloudflareFor === domain.name ? (
+                  <form
+                    className="flex flex-wrap items-center gap-2"
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      void run(() =>
+                        host.invoke('deploy.createCloudflareRecords', projectId, domain.name, cloudflareToken.trim()),
+                      ).then((done) => {
+                        if (!done) return
+                        setCloudflareFor(null)
+                        setCloudflareToken('')
+                      })
+                    }}
+                  >
+                    <Input
+                      type="password"
+                      autoComplete="off"
+                      className="min-w-48 flex-1"
+                      aria-label={t('Cloudflare token with DNS edit, used once')}
+                      placeholder={t('Cloudflare token with DNS edit, used once')}
+                      value={cloudflareToken}
+                      onChange={(event) => setCloudflareToken(event.target.value)}
+                    />
+                    <Button type="submit" size="sm" disabled={busy || cloudflareToken.trim().length < 20}>
+                      {t('Create records')}
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setCloudflareFor(null)}>
+                      {t('Cancel')}
+                    </Button>
+                  </form>
+                ) : (
+                  <span>
+                    <Button size="sm" variant="ghost" onClick={() => setCloudflareFor(domain.name)}>
+                      {t('DNS at Cloudflare? Create them there…')}
                     </Button>
                   </span>
                 ))}

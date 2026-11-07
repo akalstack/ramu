@@ -38,14 +38,10 @@ A developer can enter at any step: **Deploy** on an existing project, or **Set u
 Vercel, Netlify and the person's own server are built ([Deploying an app](guide/deploy.md)): `HostingAdapter` and its registry in `workspace/deploy/`, the shared shapes in `packages/shared/src/types/deploy.ts`, hosting accounts connected by the platform's CLI sign-in or a guided token page, the contract suite (`apps/server/test/deployAdapters.test.ts`), `deploy.*` IPC, the deploy tools and the Deploy sheet. A new platform is one adapter file, its sign-in and a contract entry. What remains:
 
 - **Capabilities still to declare:** `promote` and the resource kinds a platform provisions. Netlify previews come from pull requests; a branch preview through its API is not declared.
-- **`ResourceAdapter`** (`workspace/deploy/resource.ts`, Neon built, §3): a hosting platform that provisions through its marketplace implements it too (Vercel Marketplace, Cloudflare D1, KV and R2, Netlify DB); a standalone provider (Supabase, Upstash, Resend) implements only this one. Deleting a resource is not on the interface.
+- **`ResourceAdapter`** (`workspace/deploy/resource.ts`, Neon built, §2): a hosting platform that provisions through its marketplace implements it too (Vercel Marketplace, Cloudflare D1, KV and R2, Netlify DB); a standalone provider (Supabase, Upstash, Resend) implements only this one. Deleting a resource is not on the interface.
 - **UI:** the sheet's remaining steps from [the person's path](#the-persons-path) (set the variables, push and wait for the first deployment). The pull request card shows the preview, and the phone a project's deployments, domains, databases, uptime, usage and store builds, with **Roll back** and **Release** ([Deploying an app](guide/deploy.md#on-the-phone)).
 
-### 2. Domains
-
-**Add domain**, the records in plain words, **Create records** in Vercel DNS and Netlify DNS, the domain tools and the watch that wakes a thread when a domain is live are built ([Deploying an app](guide/deploy.md#deploy-a-project)). What remains: **Create records** at Cloudflare DNS with a token that can edit DNS (the Cloudflare Pages token cannot). Cloudflare Pages adds custom domains through its own API (the CNAME is added by the person); GitHub Pages' custom domain is set on GitHub. The phone lists a project's domains; adding one is on a computer.
-
-### 3. Databases and storage
+### 2. Databases and storage
 
 `ResourceAdapter` with Neon (API key on the guided token page), **Provision** in the deploy sheet for stacks or code that need a database, a `preview` branch for previews, this host and CI, connection variables in secrets sync, and migrations before a production deploy from Ramu are built ([Databases](guide/deploy.md#databases)). What remains:
 
@@ -53,18 +49,18 @@ Vercel, Netlify and the person's own server are built ([Deploying an app](guide/
 - **Neon's CLI sign-in:** `neonctl auth` signs in through a browser on the host and saves an hourly token renewed through Neon's OAuth client; Ramu uses an API key until that renewal is built.
 - **Migrations on every production deploy:** a push to the default branch that the platform deploys itself runs no migration from Ramu; the deploy watch tells the thread so. A safe way to run them: turn off the platform's automatic promotion for linked projects (Vercel's staged production deployments, with auto-assigned production domains off; Netlify's locked auto publishing), let the deploy watch see the production build finish, run `migrate` from the host against production at that commit, and only then promote the deployment (Vercel's promote endpoint, Netlify's restore endpoint), declared as the `promote` capability. A failed migration leaves the old deployment live and wakes the thread. It needs the host awake for every production deploy and migrations that the running version tolerates (add columns before the code uses them), so it is opt-in per project.
 
-### 4. Cost and usage
+### 3. Cost and usage
 
 Usage figures for Vercel, Netlify and Neon beside the limits their APIs report, **Open billing**, notices at 80% and 100%, and `deploy_usage` are built ([Usage](guide/deploy.md#usage)). What remains: figures for each new platform's adapter as it lands, and Netlify bandwidth or credits if Netlify's API starts reporting them.
 
-### 5. Mobile store releases
+### 4. Mobile store releases
 
 **Store releases** in the deploy sheet (checks from `app.json` and `eas.json`, the person's store steps, **Add eas.json in a pull request**, **Release** through `eas build --auto-submit-with-profile` to TestFlight and Play's internal track), the Expo access token in Settings, the deploy watch through each build and its upload, and `release_status`, `release_logs` and `release_start` are built ([Store releases](guide/deploy.md#store-releases), `workspace/deploy/release.ts` and `expo.ts`). What remains:
 
 - **Previews per pull request with EAS Update:** publish each pull request's branch to its own update channel and show a QR code on the pull request card and in the thread that opens it in Expo Go. It needs `expo-updates` and a runtime version in the app, a channel per branch, and works in Expo Go only for apps without custom native code, so the sheet must say when a development build is needed instead.
 - **Expo's CLI sign-in:** `eas login --device --non-interactive` signs in through a browser on any device and saves a session secret in `~/.expo/state.json` (eas-cli 27); a sign-in can ask the person to pick the number their browser shows. Ramu would run it with a private `HOME`, exchange the session for an access token named Ramu (Expo's `createAccessToken` mutation), then end the session, which needs the number choice in Settings' sign-in.
 
-### 6. The site
+### 5. The site
 
 The site (`apps/site`, one Astro page) is about keeping coding agents moving. With this plan, Ramu also takes someone from an idea to a live app, so the site gets new copy throughout, written once the features ship and only claiming what they do:
 
