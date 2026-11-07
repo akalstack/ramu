@@ -100,8 +100,8 @@ The [shipping plan](SHIP-AN-APP-PLAN.md) and this one share one rule: make the s
 
 ### 7. Documentation
 
-- [Artifacts](guide/artifacts.md) gets a section per kind, edit in place, exports, design systems, dashboards and live refresh. The mobile README, VERIFICATION.md, SECURITY.md (exports run on the host; live refresh and what each source can read), [Agents](guide/agents.md) (the `artifact_*` tools and `kind`) and the site's feature list are updated.
-- Every string goes through `t()` with its Indonesian translation.
+- The site's feature list names the kinds, with the [shipping plan's](SHIP-AN-APP-PLAN.md) site rewrite.
+- Each new behavior above is described in [Artifacts](guide/artifacts.md), the mobile README and VERIFICATION.md as it lands.
 
 ### 8. Two people editing one artifact
 
