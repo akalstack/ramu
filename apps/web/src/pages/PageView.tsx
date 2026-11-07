@@ -48,6 +48,7 @@ import { ArtifactKindMark, hostExportEntries, kindExportEntries } from './Artifa
 import { SlideToolbar, useSlideControls } from './SlideControls'
 import { MotionToolbar } from './MotionControls'
 import { DocOutline, docOutline } from './DocOutline'
+import { DocRichEditor, richTextFits } from './DocRichEditor'
 import { designTexts } from '@ramu/shared/designText'
 
 const VIEWPORTS = [
@@ -100,7 +101,8 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   const [asking, setAsking] = useState(false)
   const [status, setStatus] = useState('')
   // A doc's Markdown while the person edits it, and the version that edit started from.
-  const [editing, setEditing] = useState<{ base: number; text: string } | null>(null)
+  const [editing, setEditing] = useState<{ base: number; text: string; rich?: boolean } | null>(null)
+  const editForm = useRef<HTMLFormElement>(null)
   // A deck's slide text while the person edits it, slide by slide, and the version it started from.
   const [editingDesign, setEditingDesign] = useState<{
     base: number
@@ -464,7 +466,12 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
                 title={t('Change the words yourself; the agent keeps your edit when it revises')}
                 onClick={() => {
                   const text = editableSource(document)
-                  if (text !== null) setEditing({ base: document.reference.version, text })
+                  if (text !== null)
+                    setEditing({
+                      base: document.reference.version,
+                      text,
+                      rich: page.kind === 'doc' && richTextFits(text),
+                    })
                 }}
               >
                 <PenLine size={13} /> {t('Edit text')}
@@ -691,6 +698,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
       )}
       {editing && (
         <form
+          ref={editForm}
           aria-label={t('Edit text')}
           className="flex min-h-0 flex-1 flex-col gap-2 p-3"
           onSubmit={(event) => {
@@ -706,16 +714,40 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
               .finally(() => setSavingEdit(false))
           }}
         >
-          <Textarea
-            aria-label={t('Markdown')}
-            className="min-h-0 flex-1 resize-none font-mono text-control"
-            value={editing.text}
-            onChange={(event) => setEditing({ ...editing, text: event.target.value })}
-          />
+          {editing.rich ? (
+            <DocRichEditor
+              artifactId={artifactId}
+              text={editing.text}
+              onChange={(text) => setEditing((current) => (current ? { ...current, text } : current))}
+              onSave={() => editForm.current?.requestSubmit()}
+            />
+          ) : (
+            <Textarea
+              aria-label={t('Markdown')}
+              className="min-h-0 flex-1 resize-none font-mono text-control"
+              value={editing.text}
+              onChange={(event) => setEditing({ ...editing, text: event.target.value })}
+            />
+          )}
           <div className="flex items-center justify-end gap-2">
             <span className="mr-auto text-caption text-muted-foreground">
               {t('Saving makes v{version}, marked Edited by you.', { version: editing.base + 1 })}
             </span>
+            {page.kind === 'doc' && (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={savingEdit || (!editing.rich && !richTextFits(editing.text))}
+                title={
+                  !editing.rich && !richTextFits(editing.text)
+                    ? t('This doc has footnotes or HTML, which only Markdown keeps.')
+                    : undefined
+                }
+                onClick={() => setEditing({ ...editing, rich: !editing.rich })}
+              >
+                {editing.rich ? t('Edit Markdown') : t('Edit as rich text')}
+              </Button>
+            )}
             <Button type="button" variant="ghost" disabled={savingEdit} onClick={() => setEditing(null)}>
               {t('Cancel')}
             </Button>

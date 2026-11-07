@@ -6043,4 +6043,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Publish to GitHub…': 'Publikasikan ke GitHub…',
   'This repository is not on GitHub yet. Publish it, then link it here.':
     'Repositori ini belum ada di GitHub. Publikasikan dulu, lalu tautkan di sini.',
+  'Edit Markdown': 'Sunting Markdown',
+  'Edit as rich text': 'Sunting sebagai teks berformat',
+  'This doc has footnotes or HTML, which only Markdown keeps.':
+    'Dokumen ini punya catatan kaki atau HTML, yang hanya tersimpan di Markdown.',
 }
