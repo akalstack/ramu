@@ -154,6 +154,20 @@ describe('secrets sync', () => {
     )
   })
 
+  it('sends a database’s production address only to production, and the host’s value elsewhere', async () => {
+    const host = hostTarget(hostStore({ DATABASE_URL: 'preview-branch' }))
+    const ci = memory('github', ['ci'], {})
+    const platform = memory('vercel', ['preview', 'production'], {})
+    await syncEnv(['DATABASE_URL'], host, [ci.target, platform.target], {
+      production: { DATABASE_URL: 'main-branch' },
+    })
+    expect(ci.written).toEqual([{ environment: 'ci', values: { DATABASE_URL: 'preview-branch' } }])
+    expect(platform.written).toEqual([
+      { environment: 'preview', values: { DATABASE_URL: 'preview-branch' } },
+      { environment: 'production', values: { DATABASE_URL: 'main-branch' } },
+    ])
+  })
+
   it('stops before writing anything when the host’s values are locked', async () => {
     const host = hostTarget(hostStore({ DATABASE_URL: 'db' }, 'unavailable'))
     const ci = memory('github', ['ci'], {})

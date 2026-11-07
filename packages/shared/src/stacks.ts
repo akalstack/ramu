@@ -35,6 +35,10 @@ export interface Stack {
   /** Text the dev server prints once it serves, so the browser can open on it. */
   readyText: string | null
   deployTarget: DeployTargetId
+  /** Stores data in a Postgres database, which the deploy sheet offers to provision. */
+  database: boolean
+  /** Applies database migrations, run before each production deploy from Ramu. */
+  migrate: string[] | null
   /** Lines added to `.gitignore` when the generator does not write one. */
   ignore: string[]
 }
@@ -64,6 +68,8 @@ export const STACKS: Record<StackId, Stack> = {
     test: null,
     readyText: 'Accepting connections',
     deployTarget: 'netlify',
+    database: false,
+    migrate: null,
     ignore: ['.DS_Store'],
   },
   nextjs: {
@@ -90,6 +96,8 @@ export const STACKS: Record<StackId, Stack> = {
     test: ['npm', 'run', 'lint'],
     readyText: 'Ready in',
     deployTarget: 'vercel',
+    database: true,
+    migrate: null,
     ignore: NODE_IGNORE,
   },
   'vite-react': {
@@ -105,6 +113,8 @@ export const STACKS: Record<StackId, Stack> = {
     test: ['npm', 'run', 'lint'],
     readyText: 'Local:',
     deployTarget: 'netlify',
+    database: false,
+    migrate: null,
     ignore: NODE_IGNORE,
   },
   astro: {
@@ -119,6 +129,8 @@ export const STACKS: Record<StackId, Stack> = {
     test: ['npx', '--yes', 'astro', 'check'],
     readyText: 'Local',
     deployTarget: 'netlify',
+    database: false,
+    migrate: null,
     ignore: NODE_IGNORE,
   },
   expo: {
@@ -134,6 +146,8 @@ export const STACKS: Record<StackId, Stack> = {
     test: ['npx', 'tsc', '--noEmit'],
     readyText: 'Metro waiting on',
     deployTarget: 'expo',
+    database: false,
+    migrate: null,
     ignore: [...NODE_IGNORE, '.expo/'],
   },
   'node-api': {
@@ -148,6 +162,8 @@ export const STACKS: Record<StackId, Stack> = {
     test: ['npx', 'tsc', '--noEmit'],
     readyText: 'Server is running',
     deployTarget: 'railway',
+    database: false,
+    migrate: null,
     ignore: NODE_IGNORE,
   },
   django: {
@@ -164,6 +180,8 @@ export const STACKS: Record<StackId, Stack> = {
     test: ['uv', 'run', 'manage.py', 'test'],
     readyText: 'Quit the server with',
     deployTarget: 'railway',
+    database: true,
+    migrate: ['uv', 'run', 'manage.py', 'migrate'],
     ignore: ['.venv/', '__pycache__/', '*.pyc', '.env', 'db.sqlite3', '.DS_Store'],
   },
   fastapi: {
@@ -180,6 +198,8 @@ export const STACKS: Record<StackId, Stack> = {
     test: ['uv', 'run', 'pytest'],
     readyText: 'Application startup complete',
     deployTarget: 'railway',
+    database: false,
+    migrate: null,
     ignore: ['.venv/', '__pycache__/', '*.pyc', '.env', '.DS_Store'],
   },
   rails: {
@@ -192,6 +212,8 @@ export const STACKS: Record<StackId, Stack> = {
     test: ['bin/rails', 'test'],
     readyText: 'Listening on',
     deployTarget: 'fly',
+    database: true,
+    migrate: ['bin/rails', 'db:migrate'],
     ignore: [],
   },
   go: {
@@ -204,6 +226,8 @@ export const STACKS: Record<StackId, Stack> = {
     test: ['go', 'test', './...'],
     readyText: null,
     deployTarget: 'fly',
+    database: false,
+    migrate: null,
     ignore: ['/bin/', '.env', '.DS_Store'],
   },
 }

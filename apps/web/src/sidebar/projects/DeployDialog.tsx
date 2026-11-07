@@ -8,6 +8,7 @@ import type {
   Project,
   Repository,
 } from '@ramu/shared/types'
+import { isHostingPlatform } from '@ramu/shared/types/deploy'
 import { BrandIcon } from '@/components/brand-icon'
 import { Button } from '@/components/desktop-button'
 import { RowButton } from '@/components/row-button'
@@ -17,6 +18,7 @@ import { invoke as openOnThisComputer } from '../../ipc'
 import { errorText } from '../../lib/errors'
 import { useHost } from '../../workspace/HostProvider'
 import { CiSetupSection } from './CiSetup'
+import { DatabaseSection } from './Database'
 import { DomainsSection } from './Domains'
 import { EnvSyncSection } from './EnvSync'
 
@@ -46,7 +48,7 @@ export function DeployDialog({
   useLanguage()
   const host = useHost()
   const [status, setStatus] = useState<ProjectDeployment | null>(null)
-  const [accounts, setAccounts] = useState<HostingAccount[]>([])
+  const [accounts, setAccounts] = useState<(HostingAccount & { platform: HostingPlatform })[]>([])
   const [platform, setPlatform] = useState<HostingPlatform | null>(null)
   const [repoId, setRepoId] = useState<string | null>(repos[0]?.id ?? null)
   const [busy, setBusy] = useState(false)
@@ -54,17 +56,22 @@ export function DeployDialog({
   const [confirming, setConfirming] = useState(false)
   const [rollback, setRollback] = useState<Deployment | null>(null)
   const [logs, setLogs] = useState<{ id: string; text: string } | null>(null)
+  // A new database adds variables, so the sync table reads them again.
+  const [provisioned, setProvisioned] = useState(0)
   const load = useCallback(() => {
     void Promise.all([host.invoke('deploy.project', project.id), host.invoke('deploy.accounts', false)]).then(
       ([next, summary]) => {
         setStatus(next)
-        setAccounts(summary.accounts)
+        const hosting = summary.accounts.flatMap((account) =>
+          isHostingPlatform(account.platform) ? [{ ...account, platform: account.platform }] : [],
+        )
+        setAccounts(hosting)
         setPlatform(
           (current) =>
             current ??
-            summary.accounts.find((account) => account.platform === next.recommended)?.platform ??
-            summary.accounts.find((account) => account.connected)?.platform ??
-            summary.accounts[0]?.platform ??
+            hosting.find((account) => account.platform === next.recommended)?.platform ??
+            hosting.find((account) => account.connected)?.platform ??
+            hosting[0]?.platform ??
             null,
         )
       },
@@ -295,7 +302,12 @@ export function DeployDialog({
           )}
         </>
       )}
-      <EnvSyncSection projectId={project.id} repoId={repoId} />
+      <DatabaseSection
+        projectId={project.id}
+        repoId={repoId}
+        onProvisioned={() => setProvisioned((count) => count + 1)}
+      />
+      <EnvSyncSection key={provisioned} projectId={project.id} repoId={repoId} />
       <CiSetupSection projectId={project.id} repoId={repoId} />
     </Dialog>
   )

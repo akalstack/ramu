@@ -44,6 +44,8 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 
 - **Domains with real accounts:** on Vercel and on Netlify, **Add domain** for a subdomain and a domain itself at an outside DNS provider (the records shown match what the platform's dashboard asks for, including Vercel's ownership TXT record for a domain used elsewhere), **Create records** for a domain on Vercel DNS and on Netlify DNS, the states moving from **Waiting for DNS** to **Live over HTTPS**, the thread woken once, and `deploy_domain_add` and `deploy_domain_records` approval cards from a phone.
 
+- **Databases with real accounts:** a Neon API key in Settings → Hosting accounts, **Provision** for a Next.js app linked to Vercel and one linked to Netlify (a Neon project and its `preview` branch; **Sync** writing the main branch's address to production and the preview branch's to preview and GitHub Actions; a preview deployment reading the preview branch), the storage figure in the sheet, a Django project's `migrate` running before **Deploy to production**, and a failing migration stopping the deploy and waking the project's thread with its output.
+
 Representative tasks to run once the above is available:
 
 - Ask an agent to open Calculator on one computer and compute `(125 * 8) + 42` (expect `1042`) while watching and stopping it from a phone and a second desktop.

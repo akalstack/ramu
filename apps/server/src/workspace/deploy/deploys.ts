@@ -6,8 +6,10 @@ import { commitBranchInfo } from '../git'
 import type { Workspace } from '../workspace'
 import { HostingAccounts } from './accounts'
 import { DomainWatches } from './domainWatch'
+import { ResourceService } from './resources'
 import { DeployService } from './service'
 import { HostingSignIns } from './signIn'
+import { ProjectWake } from './wake'
 
 /** The deploy pieces one host shares between IPC, agent tools and Publish to the web. */
 export interface Deploys {
@@ -15,6 +17,8 @@ export interface Deploys {
   service: DeployService
   signIns: HostingSignIns
   domains: DomainWatches
+  resources: ResourceService
+  wake: ProjectWake
 }
 
 export function createDeploys(
@@ -26,13 +30,30 @@ export function createDeploys(
   const getState = <T>(key: string, fallback: T) => workspace.getAppState(key, fallback)
   const setState = (key: string, value: unknown) => workspace.setAppState(key, value)
   const accounts = new HostingAccounts(getState, setState, credentials)
+  const stack = (projectId: string) => workspace.projectConfiguration(projectId).config.stack
+  const resources = new ResourceService(
+    {
+      getState,
+      setState,
+      stack: (projectId) => ({
+        database: stack(projectId)?.database ?? false,
+        migrate: stack(projectId)?.migrate ?? null,
+      }),
+    },
+    accounts,
+    credentials,
+  )
   const service = new DeployService(
     {
       getState,
       setState,
-      stackTarget: (projectId) => {
-        const stack = workspace.projectConfiguration(projectId).config.stack
-        return stack?.deployTarget ?? stack?.id ?? null
+      stackTarget: (projectId) => stack(projectId)?.deployTarget ?? stack(projectId)?.id ?? null,
+      async beforeProduction(projectId, binding) {
+        for (const repository of workspace.listRepositories(projectId)) {
+          const remote = await forgeRemoteOf(repository.root)
+          if (remote && `${remote.owner}/${remote.repo}` === binding.repository)
+            return resources.migrateProduction(projectId, repository.root, binding.productionBranch)
+        }
       },
       async githubRepository(projectId, repoId) {
         const repository = workspace.getRepository(repoId)
@@ -51,10 +72,13 @@ export function createDeploys(
     },
     accounts,
   )
+  const wake = new ProjectWake(db, workspace, agents)
   return {
     accounts,
     service,
     signIns: new HostingSignIns(accounts),
-    domains: new DomainWatches(db, workspace, agents, service),
+    domains: new DomainWatches(workspace, wake, service),
+    resources,
+    wake,
   }
 }

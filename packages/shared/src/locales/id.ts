@@ -5698,7 +5698,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Not connected. Deploys and Publish to the web need an account.': 'Belum terhubung. Deploy dan Terbitkan ke web butuh akun.',
   'signed in through its CLI': 'masuk lewat CLI-nya',
   'token saved on this host': 'token disimpan di host ini',
-  'Connect Vercel and Netlify on the machine running this host.': 'Hubungkan Vercel dan Netlify di mesin yang menjalankan host ini.',
+  'Connect hosting and database accounts on the machine running this host.':
+    'Hubungkan akun hosting dan database di mesin yang menjalankan host ini.',
   'Sign in with {0}': 'Masuk dengan {0}',
   'Runs {0}’s own sign-in on the host. Authorize Ramu in the page it opens; the token stays in this host’s credential store and your own CLI login is not changed.': 'Menjalankan proses masuk milik {0} di host. Izinkan Ramu di halaman yang terbuka; token tetap di penyimpanan kredensial host ini dan login CLI-mu sendiri tidak berubah.',
   'Open the sign-in page': 'Buka halaman masuk',
@@ -5799,4 +5800,23 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Adding a domain': 'Menambahkan domain',
   'Created DNS records': 'Membuat record DNS',
   'Creating DNS records': 'Membuat record DNS',
+  'Create a personal API key. Neon keys reach your whole account and do not expire, so revoke it on Neon when Ramu no longer needs it':
+    'Buat API key pribadi. Key Neon menjangkau seluruh akun Anda dan tidak kedaluwarsa, jadi cabut di Neon saat Ramu tidak membutuhkannya lagi',
+  'Copy the key and paste it here.': 'Salin key lalu tempel di sini.',
+  'Not connected. Databases for your projects need an account.':
+    'Belum terhubung. Database untuk proyek Anda memerlukan akun.',
+  Database: 'Database',
+  'Postgres on {0} · {1}': 'Postgres di {0} · {1}',
+  'Production uses the main branch. Previews, this host and CI use a preview branch, so they never change production data. Sync below sets {0}.':
+    'Produksi memakai branch utama. Preview, host ini, dan CI memakai branch preview, jadi tidak pernah mengubah data produksi. Sinkronisasi di bawah mengatur {0}.',
+  'Sync below sets {0}.': 'Sinkronisasi di bawah mengatur {0}.',
+  'Storage this period: {0}': 'Penyimpanan periode ini: {0}',
+  'Before each production deploy from Ramu, {0} runs against the production database.':
+    'Sebelum setiap deploy produksi dari Ramu, {0} dijalankan pada database produksi.',
+  'This app stores data. Provision creates a Postgres database on your own account, with a separate branch for previews and development.':
+    'Aplikasi ini menyimpan data. Sediakan membuat database Postgres di akun Anda sendiri, dengan branch terpisah untuk preview dan pengembangan.',
+  'Database provider': 'Penyedia database',
+  Provision: 'Sediakan',
+  'Postgres on your account’s plan; the free plan includes 0.5 GB and sleeps when idle.':
+    'Postgres sesuai paket akun Anda; paket gratis mencakup 0,5 GB dan tidur saat tidak dipakai.',
 }

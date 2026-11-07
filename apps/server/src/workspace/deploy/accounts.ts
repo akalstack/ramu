@@ -1,11 +1,28 @@
-// One sign-in per hosting platform on this host, used by deploys and by Publish to the web. The token lives in the
-// host credential store; ordinary state keeps only a reference and the account name Settings shows.
-import { HOSTING_PLATFORMS, type HostingAccount, type HostingPlatform } from '@ramu/shared/types/deploy'
+// One sign-in per hosting platform and resource provider on this host, used by deploys, databases and Publish to the
+// web. The token lives in the host credential store; ordinary state keeps only a reference and the account name
+// Settings shows.
+import {
+  ACCOUNT_PLATFORMS,
+  isHostingPlatform,
+  type AccountPlatform,
+  type HostingAccount,
+} from '@ramu/shared/types/deploy'
 import { HostCredentialStore } from '../../credentials/store'
 import { SavedCredential } from '../forge/savedCredential'
 import { DeployError, hostingAdapter, type HostingAdapter, type HostingAuth } from './adapter'
+import { resourceAdapter } from './resource'
 import './vercel'
 import './netlify'
+import './neon'
+
+/** What an account needs from its platform's adapter: a name, a token page and who a token belongs to. */
+type AccountAdapter = Pick<HostingAdapter, 'name' | 'tokenPage' | 'account'> & { kind: HostingAccount['kind'] }
+
+function accountAdapter(platform: AccountPlatform): AccountAdapter {
+  if (!isHostingPlatform(platform)) return resourceAdapter(platform)
+  const adapter = hostingAdapter(platform)
+  return { name: adapter.name, tokenPage: adapter.tokenPage, account: (auth) => adapter.account(auth), kind: 'hosting' }
+}
 
 interface SavedHosting {
   token: string
@@ -36,8 +53,8 @@ type State = ConstructorParameters<typeof SavedCredential>[1]
 type SetState = ConstructorParameters<typeof SavedCredential>[2]
 
 export class HostingAccounts {
-  private readonly saved: Record<HostingPlatform, SavedCredential<SavedHosting>>
-  private readonly errors = new Map<HostingPlatform, string>()
+  private readonly saved: Record<AccountPlatform, SavedCredential<SavedHosting>>
+  private readonly errors = new Map<AccountPlatform, string>()
 
   constructor(
     getState: State,
@@ -45,22 +62,22 @@ export class HostingAccounts {
     credentials = new HostCredentialStore(),
     private readonly fetcher: typeof fetch = fetch,
     private readonly vercelOAuth = 'https://api.vercel.com/login/oauth/token',
-    private readonly adapter: (platform: HostingPlatform) => HostingAdapter = hostingAdapter,
+    private readonly adapter: (platform: AccountPlatform) => AccountAdapter = accountAdapter,
   ) {
-    const saved = (platform: HostingPlatform) =>
+    const saved = (platform: AccountPlatform) =>
       new SavedCredential<SavedHosting>(
         { key: `hosting-${platform}`, connectionId: `hosting-${platform}`, shown: 'label' },
         getState,
         setState,
         credentials,
       )
-    this.saved = { vercel: saved('vercel'), netlify: saved('netlify') }
+    this.saved = { vercel: saved('vercel'), netlify: saved('netlify'), neon: saved('neon') }
   }
 
   /** Every platform's connection; `check` asks each connected platform who the token is. */
-  async list(check: boolean, cli: (platform: HostingPlatform) => boolean): Promise<HostingAccount[]> {
+  async list(check: boolean, cli: (platform: AccountPlatform) => boolean): Promise<HostingAccount[]> {
     return Promise.all(
-      HOSTING_PLATFORMS.map(async (platform) => {
+      ACCOUNT_PLATFORMS.map(async (platform) => {
         if (check && this.saved[platform].savedField()) await this.check(platform)
         return this.describe(platform, cli(platform))
       }),
@@ -68,16 +85,17 @@ export class HostingAccounts {
   }
 
   /** Whether a token is saved, without reading it. */
-  connected(platform: HostingPlatform): boolean {
+  connected(platform: AccountPlatform): boolean {
     return !!this.saved[platform].savedField()
   }
 
-  private async describe(platform: HostingPlatform, cli: boolean): Promise<HostingAccount> {
+  private async describe(platform: AccountPlatform, cli: boolean): Promise<HostingAccount> {
     const adapter = this.adapter(platform)
     const shown = this.saved[platform].savedField()
     const value = shown ? await this.saved[platform].read().catch(() => null) : null
     return {
       platform,
+      kind: adapter.kind,
       name: adapter.name,
       connected: !!shown,
       account: shown?.shown ?? null,
@@ -90,7 +108,7 @@ export class HostingAccounts {
     }
   }
 
-  private async check(platform: HostingPlatform): Promise<void> {
+  private async check(platform: AccountPlatform): Promise<void> {
     try {
       const { auth } = await this.auth(platform)
       await this.adapter(platform).account(auth)
@@ -104,7 +122,7 @@ export class HostingAccounts {
    * Checks a secret against the platform's account endpoint, then keeps it. A refused one never replaces a working
    * connection.
    */
-  async save(platform: HostingPlatform, secret: HostingSecret, via: 'cli' | 'token'): Promise<HostingAccount> {
+  async save(platform: AccountPlatform, secret: HostingSecret, via: 'cli' | 'token'): Promise<HostingAccount> {
     const identity = await this.adapter(platform).account({ token: secret.token })
     await this.saved[platform].save({
       token: secret.token,
@@ -120,14 +138,14 @@ export class HostingAccounts {
     return this.describe(platform, via === 'cli')
   }
 
-  async disconnect(platform: HostingPlatform): Promise<void> {
+  async disconnect(platform: AccountPlatform): Promise<void> {
     this.errors.delete(platform)
     await this.saved[platform].remove()
   }
 
   /** The token a call uses, renewed first when it is a session about to expire. */
   async auth(
-    platform: HostingPlatform,
+    platform: AccountPlatform,
   ): Promise<{ auth: HostingAuth; accountId: string | null; defaultScope: string | null }> {
     let value = await this.saved[platform].read()
     if (!value)
@@ -144,7 +162,7 @@ export class HostingAccounts {
     }
   }
 
-  private async renew(platform: HostingPlatform, value: SavedHosting): Promise<SavedHosting> {
+  private async renew(platform: AccountPlatform, value: SavedHosting): Promise<SavedHosting> {
     let response: Response
     try {
       response = await this.fetcher(this.vercelOAuth, {

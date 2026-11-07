@@ -36,6 +36,8 @@ export interface DeployHost {
   stackTarget(projectId: string): string | null
   /** A repository of the project as a GitHub repository, with the token of the account that reaches it. */
   githubRepository(projectId: string, repoId: string): Promise<RepositoryLink>
+  /** Runs before a production deploy starts (the project's migrations); a failure stops the deploy. */
+  beforeProduction?(projectId: string, binding: DeployBinding): Promise<void>
 }
 
 const key = (projectId: string) => `deploy-binding:${projectId}`
@@ -139,6 +141,7 @@ export class DeployService {
           : `${adapter.name} builds previews from pull requests: push the branch and open one.`,
       )
     if (!binding.repository) throw new Error('Link a repository before deploying.')
+    if (production) await this.host.beforeProduction?.(projectId, binding)
     const branch = ref ?? binding.productionBranch
     const since = Date.now() - 5_000
     try {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import type { HostingAccount, HostingAccountsSummary, HostingPlatform, HostingSignIn } from '@ramu/shared/types'
+import type { AccountPlatform, HostingAccount, HostingAccountsSummary, HostingSignIn } from '@ramu/shared/types'
+import { isHostingPlatform } from '@ramu/shared/types/deploy'
 import { BrandIcon } from '@/components/brand-icon'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
@@ -10,14 +11,18 @@ import { errorText } from '../lib/errors'
 import { useSettingsInvoke } from './SettingsScope'
 
 /** What to pick on each platform's token page: the smallest scope it offers. */
-const SCOPE_HINT: Record<HostingPlatform, string> = {
+const SCOPE_HINT: Record<AccountPlatform, string> = {
   vercel: 'Scope: the team your projects are in, not Full Account',
   netlify: 'Netlify tokens reach every team you belong to, so choose an expiry',
+  neon: 'Create a personal API key. Neon keys reach your whole account and do not expire, so revoke it on Neon when Ramu no longer needs it',
 }
 
 /** The headline under a platform's name: who is connected and how, or what to do. */
 function deployAccountHeadline(account: HostingAccount): string {
-  if (!account.connected) return t('Not connected. Deploys and Publish to the web need an account.')
+  if (!account.connected)
+    return account.kind === 'hosting'
+      ? t('Not connected. Deploys and Publish to the web need an account.')
+      : t('Not connected. Databases for your projects need an account.')
   if (account.error) return account.error
   const via = account.via === 'cli' ? t('signed in through its CLI') : t('token saved on this host')
   const who = t('Connected as {0} ({1})', { 0: account.account ?? account.name, 1: via })
@@ -26,7 +31,7 @@ function deployAccountHeadline(account: HostingAccount): string {
     : who
 }
 
-/** Vercel and Netlify: the platform's own sign-in first, a guided token page otherwise. */
+/** Hosting platforms and database providers: the platform's own sign-in first, a guided token page otherwise. */
 export function DeployAccounts() {
   const invoke = useSettingsInvoke()
   const [summary, setSummary] = useState<HostingAccountsSummary | null>(null)
@@ -69,7 +74,7 @@ export function DeployAccounts() {
       ))}
       {summary && !summary.canAdminister && (
         <p className="m-0 mb-3 px-4 text-caption text-muted-foreground">
-          {t('Connect Vercel and Netlify on the machine running this host.')}
+          {t('Connect hosting and database accounts on the machine running this host.')}
         </p>
       )}
     </>
@@ -94,6 +99,7 @@ function DeployAccountRow({
   const tokenId = useId()
   const waiting = signIn?.state === 'starting' || signIn?.state === 'waiting'
   const signInId = signIn?.id
+  const cliPlatform = account.cli && isHostingPlatform(account.platform) ? account.platform : null
   useEffect(() => {
     if (!waiting || !signInId) return
     // The CLI runs on the host; its state is read until the person authorizes or it fails.
@@ -166,7 +172,7 @@ function DeployAccountRow({
       </SettingsRow>
       {open && (
         <div className="mb-3 flex flex-col gap-3 rounded-(--radius-m) bg-fill p-4 text-caption">
-          {account.cli && (
+          {cliPlatform && (
             <section className="flex flex-col gap-2" aria-label={t('Sign in with {0}', { 0: account.name })}>
               <strong>{t('Sign in with {0}', { 0: account.name })}</strong>
               <p className="m-0 text-muted-foreground">
@@ -198,7 +204,7 @@ function DeployAccountRow({
                   <Button
                     size="sm"
                     disabled={busy}
-                    onClick={() => void run(async () => setSignIn(await invoke('deploy.signIn', account.platform)))}
+                    onClick={() => void run(async () => setSignIn(await invoke('deploy.signIn', cliPlatform)))}
                   >
                     {t('Sign in with {0}', { 0: account.name })}
                   </Button>
@@ -232,7 +238,11 @@ function DeployAccountRow({
               </li>
               <li>{t('Name it Ramu.')}</li>
               <li>{t(SCOPE_HINT[account.platform])}</li>
-              <li>{t('Set an expiry, then copy the token and paste it here.')}</li>
+              <li>
+                {account.kind === 'hosting'
+                  ? t('Set an expiry, then copy the token and paste it here.')
+                  : t('Copy the key and paste it here.')}
+              </li>
             </ol>
             <label htmlFor={tokenId} className="flex flex-col gap-1">
               {t('API token')}

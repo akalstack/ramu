@@ -111,20 +111,23 @@ export async function envStatus(variables: string[], targets: EnvTarget[]): Prom
 }
 
 /**
- * Copies each app variable this host has a value for to every place that lacks it. A target that cannot be read is
- * left alone, and one that refuses stops the sync with its message after the others before it were written.
+ * Copies each app variable this host has a value for to every place that lacks it. `byEnvironment` replaces the host's
+ * value in one environment, such as a production database's address. A target that cannot be read is left alone, and
+ * one that refuses stops the sync with its message after the others before it were written.
  */
 export async function syncEnv(
   variables: string[],
   host: ReturnType<typeof hostTarget>,
   others: EnvTarget[],
+  byEnvironment: Partial<Record<EnvEnvironment, Record<string, string>>> = {},
 ): Promise<EnvSyncStatus> {
-  const values = host.values()
+  const hostValues = host.values()
   for (const target of others) {
     const columns = await columnsOf([target])
     for (const column of columns) {
       if (!column.names) continue
       const present = new Set(column.names)
+      const values = { ...hostValues, ...byEnvironment[column.environment] }
       const missing = variables.filter((name) => !present.has(name) && name in values)
       if (missing.length)
         await target.set(column.environment, Object.fromEntries(missing.map((name) => [name, values[name]!])))

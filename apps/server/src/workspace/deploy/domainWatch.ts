@@ -1,11 +1,9 @@
 // Following a newly added domain until it serves the app over HTTPS, then waking a thread once through its durable
 // queue, the same way pull request and push watches hand over CI failures.
 import { randomUUID } from 'node:crypto'
-import type { AgentService } from '../../agent'
-import type { Db } from '../../db'
-import { currentBranch } from '../git'
 import type { Workspace } from '../workspace'
 import type { DeployService } from './service'
+import type { ProjectWake } from './wake'
 
 const KEY = 'domain-watches'
 const INTERVAL = 60_000
@@ -27,9 +25,8 @@ export class DomainWatches {
   private stopping = false
 
   constructor(
-    private readonly db: Pick<Db, 'exec'>,
-    private readonly workspace: Pick<Workspace, 'getAppState' | 'setAppState' | 'getTask' | 'listTasks'>,
-    private readonly agents: Pick<AgentService, 'get' | 'list' | 'enqueueBackground'>,
+    private readonly workspace: Pick<Workspace, 'getAppState' | 'setAppState'>,
+    private readonly wake: Pick<ProjectWake, 'latestThread' | 'send'>,
     private readonly service: Pick<DeployService, 'domains'>,
   ) {}
 
@@ -44,25 +41,13 @@ export class DomainWatches {
     )
   }
 
-  /** The project's most recently active thread that can still take a message. */
-  private latestThread(projectId: string): string | null {
-    for (const task of this.workspace
-      .listTasks()
-      .filter((entry) => entry.projectId === projectId && entry.status !== 'archived')
-      .sort((a, b) => b.lastActiveAt - a.lastActiveAt)) {
-      const session = this.agents.list(task.id).findLast((entry) => !entry.parentId && entry.state !== 'stopped')
-      if (session) return session.id
-    }
-    return null
-  }
-
   /** Follows one domain of a project; watching it again replaces the earlier watch. */
   watch(projectId: string, name: string, sessionId: string | null): void {
     const watch: DomainWatch = {
       id: randomUUID(),
       projectId,
       name,
-      sessionId: sessionId ?? this.latestThread(projectId),
+      sessionId: sessionId ?? this.wake.latestThread(projectId),
       since: Date.now(),
     }
     this.workspace.setAppState(KEY, [
@@ -105,35 +90,15 @@ export class DomainWatches {
     }
   }
 
-  private async session(watch: DomainWatch) {
-    if (!watch.sessionId) return null
-    try {
-      const session = this.agents.get(watch.sessionId)
-      if (session.state === 'stopped' || this.workspace.getTask(session.taskId).status === 'archived') return null
-      const branch = await currentBranch(session.cwd)
-      return branch ? { id: session.id, cwd: session.cwd, branch } : null
-    } catch {
-      return null
-    }
-  }
-
   private async deliver(watch: DomainWatch): Promise<void> {
-    const session = await this.session(watch)
-    if (!session) return this.remove(watch.id)
     const text = `The custom domain ${watch.name} is live: its DNS points at the hosting platform and https://${watch.name} serves this project with a valid certificate. Tell the person in one line.`
-    // Queue and removal share the database transaction, so a restart cannot announce the same domain twice.
-    this.db.exec('BEGIN IMMEDIATE')
-    try {
-      this.agents.enqueueBackground(session.id, text, { cwd: session.cwd, branch: session.branch })
+    const sent = await this.wake.send(watch.sessionId, text, () =>
       this.workspace.setAppState(
         KEY,
         this.list().filter((entry) => entry.id !== watch.id),
-      )
-      this.db.exec('COMMIT')
-    } catch (error) {
-      this.db.exec('ROLLBACK')
-      throw error
-    }
+      ),
+    )
+    if (!sent) this.remove(watch.id)
   }
 
   async stop(): Promise<void> {

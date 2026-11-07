@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DomainStatus } from '@ramu/shared/types/deploy'
 import { DomainWatches } from '../src/workspace/deploy/domainWatch'
+import { ProjectWake } from '../src/workspace/deploy/wake'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -41,21 +42,22 @@ function setup(states: DomainStatus[][]) {
   ]
   const enqueueBackground = vi.fn()
   const domains = vi.fn(async () => states.shift() ?? [])
-  const watches = new DomainWatches(
+  const workspace = {
+    getAppState: <T>(key: string, fallback: T) => (state.get(key) as T) ?? fallback,
+    setAppState: (key: string, value: unknown) => void state.set(key, value),
+    getTask: (id: string) => tasks.find((task) => task.id === id)!,
+    listTasks: () => tasks,
+  }
+  const wake = new ProjectWake(
     { exec: () => {} },
-    {
-      getAppState: <T>(key: string, fallback: T) => (state.get(key) as T) ?? fallback,
-      setAppState: (key: string, value: unknown) => void state.set(key, value),
-      getTask: (id: string) => tasks.find((task) => task.id === id)!,
-      listTasks: () => tasks,
-    } as never,
+    workspace as never,
     {
       get: (id: string) => sessions.find((session) => session.id === id)!,
       list: (taskId: string) => sessions.filter((session) => session.taskId === taskId),
       enqueueBackground,
     } as never,
-    { domains },
   )
+  const watches = new DomainWatches(workspace as never, wake, { domains })
   return { watches, enqueueBackground, domains, cwd, state }
 }
 

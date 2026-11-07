@@ -27,6 +27,9 @@ import type {
   ProjectDeployment,
   Deployment,
   DomainStatus,
+  AccountPlatform,
+  ProjectResources,
+  ResourceProvider,
 } from './types/deploy'
 import type { LimitRetryResult } from './chat/providerWait'
 import type { CiPreview, CiSetupResult } from './ciWorkflow'
@@ -1183,8 +1186,8 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.signInStatus'(id: string): HostingSignIn
   'deploy.cancelSignIn'(id: string): void
   /** Checks a token pasted on the guided token page and keeps it in the host's credential store. Host only. */
-  'deploy.saveToken'(platform: HostingPlatform, token: string): HostingAccount
-  'deploy.disconnect'(platform: HostingPlatform): HostingAccountsSummary
+  'deploy.saveToken'(platform: AccountPlatform, token: string): HostingAccount
+  'deploy.disconnect'(platform: AccountPlatform): HostingAccountsSummary
   /** Where a project deploys, its live address and its latest deployments. */
   'deploy.project'(projectId: string): ProjectDeployment
   /** Links a repository of the project to a new or existing project on the platform, through its Git integration. */
@@ -1205,6 +1208,10 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.addDomain'(projectId: string, domain: string): DomainStatus
   /** Creates the domain's records in the platform's own DNS; confirming in the sheet is the person's approval. */
   'deploy.createRecords'(projectId: string, domain: string): DomainStatus
+  /** Whether the project needs a database, the providers that can make one, and the ones it has. */
+  'deploy.resources'(projectId: string, repoId: string): ProjectResources
+  /** Creates the project's database on the connected account; its variables join secrets sync. */
+  'deploy.provision'(projectId: string, repoId: string, provider: ResourceProvider, plan: string): ProjectResources
   /** What Set up CI would add to a repository of the project, from its last fetched default branch. */
   'ci.preview'(projectId: string, repoId: string): CiPreview
   /**

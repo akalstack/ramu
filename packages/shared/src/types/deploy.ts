@@ -6,6 +6,17 @@ import type { DeployTargetId } from '../stacks'
 export const HOSTING_PLATFORMS = ['vercel', 'netlify'] as const
 export type HostingPlatform = (typeof HOSTING_PLATFORMS)[number]
 
+/** Database and storage providers with a resource adapter on the server. */
+export const RESOURCE_PROVIDERS = ['neon'] as const
+export type ResourceProvider = (typeof RESOURCE_PROVIDERS)[number]
+
+/** Every account connected in Settings → Hosting accounts: the hosting platforms, then the resource providers. */
+export const ACCOUNT_PLATFORMS = [...HOSTING_PLATFORMS, ...RESOURCE_PROVIDERS] as const
+export type AccountPlatform = (typeof ACCOUNT_PLATFORMS)[number]
+
+export const isHostingPlatform = (platform: AccountPlatform): platform is HostingPlatform =>
+  (HOSTING_PLATFORMS as readonly string[]).includes(platform)
+
 /** What a platform can do beyond the required reads. The UI and agent tools hide what a target lacks. */
 export type HostingCapability = 'linkRepository' | 'deployPreview' | 'deployProduction' | 'rollback' | 'domains'
 
@@ -14,7 +25,9 @@ export type DeployFailureKind = 'signed-out' | 'missing-permission' | 'plan-limi
 
 /** One platform's connection on this host. The token never leaves the host. */
 export interface HostingAccount {
-  platform: HostingPlatform
+  platform: AccountPlatform
+  /** Whether it deploys apps or provides a resource such as a database. */
+  kind: 'hosting' | ResourceKind
   /** The platform's name, such as "Vercel". */
   name: string
   connected: boolean
@@ -38,6 +51,50 @@ export interface HostingAccountsSummary {
   accounts: HostingAccount[]
   /** False on a paired device that is not the host: connections change only on the host itself. */
   canAdminister: boolean
+}
+
+/** What a resource adapter provides. */
+export type ResourceKind = 'database'
+
+/** A size or tier a provider offers when creating a resource. */
+export interface ResourcePlan {
+  id: string
+  name: string
+  /** One line on what it includes, such as its storage. */
+  summary: string
+}
+
+/** A resource made for a project. Connection values stay on the host; clients see variable names only. */
+export interface ProjectResource {
+  provider: ResourceProvider
+  kind: ResourceKind
+  /** The resource's id at the provider. */
+  id: string
+  name: string
+  /** The environment variables it sets, such as DATABASE_URL. */
+  variables: string[]
+  /** Previews and this host use a branch of the database rather than production's. */
+  previewBranch: boolean
+  /** The provider's page for the resource, where it is resized or deleted. */
+  page: string
+  /** What the provider reports for the current billing period, when it does. */
+  usage: { storageBytes: number | null; computeSeconds: number | null } | null
+}
+
+export interface ProjectResources {
+  /** The project's stack, or the variables its code reads, show it needs a database. */
+  needsDatabase: boolean
+  /** Providers that can create one, with their plans and whether an account is connected. */
+  providers: {
+    provider: ResourceProvider
+    name: string
+    kind: ResourceKind
+    connected: boolean
+    plans: ResourcePlan[]
+  }[]
+  resources: ProjectResource[]
+  /** The migrate command from `ramu.json`, run before each production deploy from Ramu. */
+  migrate: string | null
 }
 
 /** A platform CLI sign-in running on the host: the link and code to show, then the result. */

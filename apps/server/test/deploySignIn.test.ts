@@ -186,7 +186,7 @@ it('keeps a checked token in the credential store, shows only the account, and r
     credentials,
     fetch,
     'http://unused',
-    () => adapter((token) => token === 'good-token'),
+    () => ({ ...adapter((token) => token === 'good-token'), kind: 'hosting' }),
   )
   const shown = await accounts.save('vercel', { token: 'good-token' }, 'token')
   expect(shown).toMatchObject({ connected: true, account: 'ana', via: 'token', broadScope: 'whole account' })
@@ -212,7 +212,7 @@ it('renews an expiring Vercel CLI session with its refresh token, keeping the ro
     credentials,
     fetcher,
     'http://oauth.test/token',
-    () => adapter(() => true),
+    () => ({ ...adapter(() => true), kind: 'hosting' }),
   )
   await accounts.save('vercel', { token: 'vca_1', refreshToken: 'r1', expiresAt: Date.now() + 1000 }, 'cli')
   expect((await accounts.auth('vercel')).auth.token).toBe('vca_2')

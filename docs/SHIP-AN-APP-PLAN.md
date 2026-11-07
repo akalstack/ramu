@@ -47,7 +47,7 @@ Vercel and Netlify are built ([Deploying an app](guide/deploy.md)): `HostingAdap
 
 - **More platforms, in order:** Cloudflare (Pages and Workers, signed in with `wrangler login`), GitHub Pages (through the forge's GitHub account, deployed by a GitHub Actions job), then Fly and Railway, then **Own server** (below). Each is a REST client using a token from `credentials/`; a platform CLI is only for its browser sign-in.
 - **Capabilities still to declare:** `promote`, `usage` (§8) and the resource kinds a platform provisions. Netlify previews come from pull requests; a branch preview through its API is not declared.
-- **`ResourceAdapter`** (databases, cache, file storage, email): `kind`, `plans`, `provision(project, plan)` returning the resource and its connection variables, and optional `branch(for a preview)`, `usage` and `migrateCommand`. A hosting platform that provisions through its marketplace implements it too (Vercel Marketplace, Cloudflare D1, KV and R2, Netlify DB); a standalone provider (Neon, Supabase, Upstash, Resend) implements only this one. Deleting a resource is not on the interface; it is done on the provider's page. It joins the contract suite with a provision whose reply is lost.
+- **`ResourceAdapter`** (`workspace/deploy/resource.ts`, Neon built, §7): a hosting platform that provisions through its marketplace implements it too (Vercel Marketplace, Cloudflare D1, KV and R2, Netlify DB); a standalone provider (Supabase, Upstash, Resend) implements only this one. Deleting a resource is not on the interface.
 - **Connecting an account, still to do:** the same CLI sign-in for `gh`, `wrangler`, `fly`, `railway` and `eas` as those platforms land; starting a sign-in from a paired device for a remote host, with the link shown there (hosting accounts change only on the host today); token links prefilled where the platform allows it (GitHub's fine-grained token form, Cloudflare's templates); and offering an expiring token again before it runs out (Settings shows the date today).
 - **Deploy watch:** after a deploy, and on every push to the default branch, the thread is woken once the deployment finishes: the URL on success, the log tail on failure. It reuses the pull request watch's wake and queue path (`background/pullRequestWatches.ts`) and adds **Deployment failed** presets for Vercel and Netlify to [webhook schedules](guide/background-work.md#when-a-request-arrives).
 - **Marks:** each resource kind names its `BrandId` (`packages/shared/src/brands.ts`) and shows its `BrandIcon` beside its name, as the hosting platforms do.
@@ -76,9 +76,12 @@ For someone who has a VPS or wants the app on the Ramu host:
 
 ### 7. Databases and storage
 
-- The stack choice says when the app needs a database, file storage or email. The deploy sheet then offers the platform's own option (Vercel Marketplace: Neon Postgres, Upstash Redis, Blob; Cloudflare: D1, KV, R2; Netlify DB) or a provider the person picks (Neon, Supabase, Resend for email), on the person's account.
-- **Provision** creates it through the `ResourceAdapter`, and its connection variables join the same secrets sync: this host for development, the platform's preview and production environments, and GitHub Actions when tests need it. Preview deployments get their own branch database where the provider has branching (Neon, Supabase).
-- Migrations run as a step of the deploy (the stack's migrate command), and a failed migration stops the deploy and wakes the thread with its output. Deleting a database is never an agent action.
+`ResourceAdapter` with Neon (API key on the guided token page), **Provision** in the deploy sheet for stacks or code that need a database, a `preview` branch for previews, this host and CI, connection variables in secrets sync, and migrations before a production deploy from Ramu are built ([Databases](guide/deploy.md#databases)). What remains:
+
+- **More providers:** the platforms' own options (Vercel Marketplace, Cloudflare D1, KV and R2, Netlify DB), Supabase, file storage and email (Resend), each a `ResourceAdapter` with its `BrandId`, and the stack choice naming storage and email needs.
+- **Neon's CLI sign-in:** `neonctl auth` signs in through a browser on the host and saves an hourly token renewed through Neon's OAuth client; Ramu uses an API key until that renewal is built.
+- **A branch per pull request** instead of one shared `preview` branch, created when the preview deployment starts and removed when the pull request closes (needs the deploy watch in §3).
+- **Migrations on every production deploy:** a push to the default branch that the platform deploys itself runs no migration from Ramu; it needs the deploy watch, or a build step on the platform.
 
 ### 8. Cost and usage
 

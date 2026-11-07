@@ -8,7 +8,7 @@ import type { DomainWatches } from './domainWatch'
 import type { DeployService } from './service'
 
 const DEPLOY_GUIDE =
-  'Deploy tools work on the project this thread belongs to, on the platform and account linked in its Deploy sheet. Call deploy_status first: it names the platform, the live address, the latest deployments and the capabilities the platform has; never call an action it does not list. Never run vercel or netlify yourself to deploy. deploy_production, deploy_rollback, deploy_domain_add and deploy_domain_records always ask the person; a refusal is final for this request.'
+  'Deploy tools work on the project this thread belongs to, on the platform and account linked in its Deploy sheet. Call deploy_status first: it names the platform, the live address, the latest deployments and the capabilities the platform has; never call an action it does not list. Never run vercel or netlify yourself to deploy. deploy_production, deploy_rollback, deploy_domain_add and deploy_domain_records always ask the person; a refusal is final for this request. deploy_production first runs the migrate command from ramu.json against the production database; a failed migration stops the deploy and returns its output to fix. Never delete a database; that is the person’s action on the provider’s page.'
 
 const deploymentId = z.string().trim().min(1).max(200)
 const domain = z.string().trim().min(1).max(260)

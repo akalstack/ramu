@@ -92,6 +92,8 @@ function projectFile(path: string, name: string, stack: (typeof STACKS)[StackId]
             ...(stack.build ? { build: commandLine(stack.build) } : {}),
             ...(stack.test ? { test: commandLine(stack.test) } : {}),
             deployTarget: stack.deployTarget,
+            ...(stack.database ? { database: true } : {}),
+            ...(stack.migrate ? { migrate: stack.migrate } : {}),
           },
         }
       : {}),
@@ -127,6 +129,8 @@ export function projectFactsText(config: ProjectConfig): string | undefined {
     stack.build ? `Build: ${stack.build}` : '',
     stack.test ? `Test: ${stack.test}` : '',
     stack.deployTarget ? `Deploys to: ${stack.deployTarget}` : '',
+    stack.database ? 'Stores data in Postgres: read DATABASE_URL (DATABASE_URL_UNPOOLED for migrations).' : '',
+    stack.migrate ? `Migrate (runs before each production deploy): ${commandLine(stack.migrate)}` : '',
   ].filter(Boolean)
   return lines.length ? `Project facts from ramu.json (use these commands):\n${lines.join('\n')}` : undefined
 }

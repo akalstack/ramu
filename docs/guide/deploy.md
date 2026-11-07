@@ -1,14 +1,16 @@
 # Deploying an app
 
-Ramu deploys a project to a hosting platform on your own account. It hosts nothing itself: the app, its deployments and its billing stay with the platform, and the repository stays a normal GitHub repository. Vercel and Netlify are supported.
+Ramu deploys a project to a hosting platform on your own account. It hosts nothing itself: the app, its deployments, its database and their billing stay with the providers, and the repository stays a normal GitHub repository. Vercel and Netlify host apps; Neon provides Postgres databases.
 
 ## Connect an account
 
-**Settings → Git → Hosting accounts** lists Vercel and Netlify with their marks. **Connect** offers two ways, in this order:
+**Settings → Git → Hosting accounts** lists Vercel, Netlify and Neon with their marks. **Connect** offers two ways, in this order:
 
 1. **Sign in with Vercel** or **Sign in with Netlify**, when the platform's CLI (`vercel` or `netlify`) is installed on the host. Ramu runs the CLI's own browser sign-in on the host and shows its link (and Vercel's code) in Settings; **Open the sign-in page**, sign in and authorize. Ramu then reads the token the CLI saved, checks it with the platform and shows the account name. The CLI runs against a private configuration folder that is deleted afterwards, so your own CLI login is not read, changed or signed out.
    - Vercel's sign-in is a session that renews itself; Ramu renews it before it expires. A Vercel CLI that signs in with a key bound to the computer cannot be used; use a token instead.
 2. **A token**, when there is no CLI or the sign-in fails (a team that blocks CLI logins, single sign-on). **Open the token page** goes to the platform's token page, and a short checklist says what to pick: name it Ramu, the smallest scope (on Vercel, the team your projects are in rather than Full Account), and an expiry. Paste it into the secret field: it goes straight to the host's credential store, is checked with the platform on the spot, and is never shown again. Settings shows the account, an expiry date, and a note when a Vercel token reaches your whole account.
+
+Neon connects with an API key only: create a personal key named Ramu on Neon's API keys page and paste it. Neon keys reach your whole account and do not expire, so revoke it on Neon when Ramu no longer needs it.
 
 Agents never create tokens by driving your browser: a signed-in dashboard gives full account power, and a new token would end up in screenshots and the transcript.
 
@@ -33,6 +35,15 @@ The same accounts publish artifacts with **Publish to the web** ([Artifacts](art
   - Ramu checks a newly added domain every minute for up to three days, and when it serves HTTPS it wakes the project's most recent thread with one message, through the same queue as pull request feedback.
 - **Checks** says whether the repository has CI and offers **Set up CI** when it has none ([Set up CI](git-hosting.md#set-up-ci)).
 
+## Databases
+
+The deploy sheet shows **Database** when the project needs one: its stack stores data (`"database": true` in `ramu.json`, set for the Next.js, Django and Rails stacks), or its code reads `DATABASE_URL`.
+
+- **Provision** creates a Neon Postgres project named after the Ramu project on your connected Neon account, and a `preview` branch of it (a copy that shares storage until it changes). Production uses the main branch; preview deployments, this host and GitHub Actions use the `preview` branch, so they never change production data.
+- Ramu keeps both branches' connection values in the host's credential store and sets the preview branch's `DATABASE_URL` (pooled, for the app) and `DATABASE_URL_UNPOOLED` (direct, for migrations) in this host's Environment variables. **Sync** in **Environment variables** then copies them on: the main branch's values to the platform's production variables, the preview branch's to its preview variables and GitHub Actions. The sheet shows names only.
+- Once provisioned, the sheet shows the database, **Open** for its page on Neon, and the storage Neon reports for the period. Resizing and deleting it are done on Neon's page; neither the sheet nor an agent deletes a database.
+- **Migrations:** when `ramu.json` names a `migrate` command (the Django and Rails stacks fill it in), **Deploy to production** and `deploy_production` first run it on this host against the production database, in the repository's checkout of the production branch. The checkout must be on that branch at the commit pushed to GitHub, so the migrations match what deploys. A failed migration stops the deploy: the sheet shows its output, and the project's most recent thread is woken with it to find a fix. Pushes to the default branch that the platform deploys on its own do not run migrations from Ramu.
+
 The project stays linked to the account that linked it. If you connect a different account later, deploy actions are refused until you connect that account again or link the project again.
 
 ## Agents
@@ -45,5 +56,7 @@ Threads in a project get deploy tools for that project, on its linked platform a
 - `deploy_domains`: the project's domains, the records each needs and whether it is live.
 - `deploy_domain_add` and `deploy_domain_records`: add a domain, or create its records in the platform's DNS. They always ask you with a card naming the domain and each record, in every access mode, and the thread is woken when the domain is live.
 - `deploy_production` and `deploy_rollback`: always ask you with an approval card naming the address and what changes, in every access mode. A refusal is final for that request.
+
+`deploy_production` runs the project's migrations first, and a failed migration returns its output to the agent instead of deploying. Agents cannot create or delete databases.
 
 A deploy whose reply never arrives is not retried: Ramu reads the deployment list again and reports the deployment it finds, so a retry never deploys twice.
