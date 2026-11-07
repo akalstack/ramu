@@ -62,6 +62,17 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
     if (!ctx.localApps) throw new Error('Update this host for deploys.')
     return ctx.localApps
   }
+  // An app published from this computer gets only the saved variables its code reads, never every saved one.
+  void ctx.localApps?.start(async (root) => {
+    const names = new Set(await readAppVariables(root))
+    let saved: Record<string, string> = {}
+    try {
+      saved = hostTarget(ctx.environment).values()
+    } catch {
+      // A locked credential store starts the app without them; the sheet's variables section says why.
+    }
+    return Object.fromEntries(Object.entries(saved).filter(([name]) => names.has(name)))
+  })
   const administrator = () => ctx.host.canAdministerIntegrations?.() === true
   const administrate = () => {
     if (!administrator()) throw new Error('Connect hosting accounts on the host running Ramu.')

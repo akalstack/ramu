@@ -14,9 +14,13 @@ import { TunnelManager } from '../../remote/tunnel'
 const BUILD_TIMEOUT_MS = 15 * 60_000
 const OUTPUT_TAIL = 2000
 const MANIFEST_MAX_BYTES = 256 * 1024
+const RESERVED = new Set(['PATH', 'HOME', 'DOCKER_HOST', 'DOCKER_CONFIG', 'DOCKER_CONTEXT'])
 
 /** Runs one command with no shell; `input` goes to its standard input. Resolves with its output. */
-export type LocalRun = (argv: string[], options?: { cwd?: string; input?: string; timeout?: number }) => Promise<string>
+export type LocalRun = (
+  argv: string[],
+  options?: { cwd?: string; input?: string; timeout?: number; env?: Record<string, string> },
+) => Promise<string>
 
 export const runLocal: LocalRun = (argv, options = {}) =>
   new Promise((resolve, reject) => {
@@ -32,6 +36,7 @@ export const runLocal: LocalRun = (argv, options = {}) =>
           PATH: process.env.PATH ?? '',
           HOME: process.env.HOME ?? '',
           ...(process.env.DOCKER_HOST ? { DOCKER_HOST: process.env.DOCKER_HOST } : {}),
+          ...options.env,
         },
       },
       (error, stdout, stderr) => {
@@ -56,7 +61,7 @@ export function localAppName(projectId: string): string {
 }
 
 /** The `docker run` arguments: only the app's port, published to loopback, with privileges dropped. */
-export function localRunArgs(name: string, hostPort: number, appPort: number): string[] {
+export function localRunArgs(name: string, hostPort: number, appPort: number, variables: string[] = []): string[] {
   return [
     'docker',
     'run',
@@ -69,6 +74,7 @@ export function localRunArgs(name: string, hostPort: number, appPort: number): s
     'no-new-privileges',
     '--publish',
     `127.0.0.1:${hostPort}:${appPort}`,
+    ...variables.flatMap((variable) => ['--env', variable]),
     name,
   ]
 }
@@ -83,6 +89,8 @@ interface Running {
 /** Apps the person published from this computer, each in its own container behind its own tunnel. */
 export class LocalApps {
   private readonly apps = new Map<string, Running>()
+  /** The project's own variables the app reads, from this host's Environment variables; none until set. */
+  private variables: (root: string) => Promise<Record<string, string>> = async () => ({})
 
   constructor(
     private readonly deps: {
@@ -101,7 +109,9 @@ export class LocalApps {
     return this.deps.run ?? runLocal
   }
 
-  async restore() {
+  /** Reads the app's variables with `variables` from now on, then starts the apps left published. */
+  async start(variables: (root: string) => Promise<Record<string, string>>) {
+    this.variables = variables
     for (const [projectId, root] of Object.entries(this.deps.saved.read()))
       await this.publish(projectId, root).catch(() => {})
   }
@@ -133,7 +143,12 @@ export class LocalApps {
       })
       await this.run(['docker', 'rm', '--force', name]).catch(() => {})
       const hostPort = await (this.deps.freePort ?? freeLoopbackPort)()
-      await this.run(localRunArgs(name, hostPort, port))
+      // Names docker itself relies on are never taken from the app's variables.
+      const variables = Object.fromEntries(
+        Object.entries(await this.variables(root)).filter(([key]) => !RESERVED.has(key)),
+      )
+      // Each value reaches docker in its own environment, named by `--env NAME`, never on a command line.
+      await this.run(localRunArgs(name, hostPort, port, Object.keys(variables)), { env: variables })
       app.state = 'running'
       // The tunnel goes to the container's loopback port and nothing else.
       app.tunnel.use(choice, `http://127.0.0.1:${hostPort}`)

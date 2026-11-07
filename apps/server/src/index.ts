@@ -776,7 +776,6 @@ const localApps = new LocalApps({
   choice: publicPageTunnel,
   changed: () => send('workspace:changed', {}),
 })
-void localApps.restore()
 pageAutomation.start()
 let sharedMcp: SharedMcpService | undefined
 const getSharedMcp = () => {

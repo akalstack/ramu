@@ -67,7 +67,7 @@ A VPS over SSH is built ([Your own server](guide/deploy.md#your-own-server), `wo
 - **Apps that are not one container:** a database or worker beside the app (a Compose file) and per-project health checks before the old container is removed.
 - **The Ramu host itself** is built for Docker ([On this computer](guide/deploy.md#on-this-computer)), behind a quick tunnel whose address changes when Ramu restarts. Remaining:
   - A lasting hostname: a named Cloudflare Tunnel Ramu configures itself, with an ingress naming exactly the app's hostname and port and ending in a catch-all 404, checked before it starts and refusing Ramu's own port, a wildcard hostname or a Unix socket.
-  - The project's own variables passed into the container, and the uptime watch following the published address.
+  - The uptime watch following the published address, once it lasts across restarts.
   - Without Docker: running the app as a supervised command in its own process group, with the sheet saying it runs with the person's own permissions.
 
 ### 5. Domains

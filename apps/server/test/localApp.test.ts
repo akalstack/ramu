@@ -8,9 +8,13 @@ import type { TunnelManager } from '../src/remote/tunnel'
 
 function setup(choice: TunnelChoice = { kind: 'quick' }, docker = true) {
   const order: string[] = []
-  const calls: { argv: string[]; input?: string }[] = []
+  const calls: { argv: string[]; input?: string; env?: Record<string, string> }[] = []
   const run = vi.fn<LocalRun>(async (argv, options) => {
-    calls.push({ argv, ...(options?.input !== undefined ? { input: options.input } : {}) })
+    calls.push({
+      argv,
+      ...(options?.input !== undefined ? { input: options.input } : {}),
+      ...(options?.env ? { env: options.env } : {}),
+    })
     order.push(argv.slice(0, 2).join(' '))
     if (argv[1] === 'version' && !docker) throw new Error('Cannot connect to the Docker daemon')
     return ''
@@ -86,6 +90,17 @@ describe('apps published from this computer', () => {
       '.',
     ])
     expect(calls.some((call) => call.argv.includes('127.0.0.1:41234:80'))).toBe(true)
+  })
+
+  it('passes the app’s own variables by name, with values only in docker’s environment', async () => {
+    const { apps, calls } = setup()
+    await apps.start(async () => ({ DATABASE_URL: 'postgres://secret', PATH: '/evil' }))
+    await apps.publish('demo', project())
+    const started = calls.find((call) => call.argv[1] === 'run')!
+    expect(started.argv).toContain('DATABASE_URL')
+    expect(started.argv.join(' ')).not.toContain('postgres://secret')
+    expect(started.argv).not.toContain('PATH')
+    expect(started.env).toEqual({ DATABASE_URL: 'postgres://secret' })
   })
 
   it('takes the app off the internet before stopping its container', async () => {
