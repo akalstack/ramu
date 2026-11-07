@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { canRollBackTo, DEPLOYMENT_STATE, deployText } from '@ramu/shared/deployText'
+import { accountBrand } from '@ramu/shared/brands'
+import { accountName, canRollBackTo, DEPLOYMENT_STATE, deployText } from '@ramu/shared/deployText'
 import type {
   Deployment,
   HostingAccount,
@@ -11,10 +12,12 @@ import type {
 import { isHostingPlatform } from '@ramu/shared/types/deploy'
 import { BrandIcon } from '@/components/brand-icon'
 import { Button } from '@/components/desktop-button'
+import { Input } from '@/components/desktop-input'
 import { RowButton } from '@/components/row-button'
 import { Dialog } from '../../Menu'
 import { t, useLanguage } from '../../i18n'
 import { invoke as openOnThisComputer } from '../../ipc'
+import { ServerConnect } from '../../settings/ServerConnect'
 import { errorText } from '../../lib/errors'
 import { useHost } from '../../workspace/HostProvider'
 import { CiSetupSection } from './CiSetup'
@@ -45,6 +48,9 @@ export function DeployDialog({
   const [status, setStatus] = useState<ProjectDeployment | null>(null)
   const [accounts, setAccounts] = useState<(HostingAccount & { platform: HostingPlatform })[]>([])
   const [platform, setPlatform] = useState<HostingPlatform | null>(null)
+  const [canAdminister, setCanAdminister] = useState(false)
+  const [domain, setDomain] = useState('')
+  const [pullRequest, setPullRequest] = useState<string | null>(null)
   const [repoId, setRepoId] = useState<string | null>(repos[0]?.id ?? null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -61,6 +67,7 @@ export function DeployDialog({
           isHostingPlatform(account.platform) ? [{ ...account, platform: account.platform }] : [],
         )
         setAccounts(hosting)
+        setCanAdminister(summary.canAdminister)
         setPlatform(
           (current) =>
             current ??
@@ -92,8 +99,18 @@ export function DeployDialog({
   // An Expo app ships through the stores, not a hosting platform, unless it is already linked to one.
   const storeOnly = !binding && status?.recommended === 'expo'
 
+  const toServer = !binding && platform === 'server'
   const confirm = () => {
     if (storeOnly) return onClose()
+    if (toServer) {
+      if (!repoId || !domain.trim()) return
+      void run(async () => {
+        const linked = await host.invoke('deploy.linkServer', project.id, repoId, domain.trim())
+        setStatus(linked.deployment)
+        setPullRequest(linked.pullRequest)
+      })
+      return
+    }
     if (!binding) {
       if (!platform || !repoId) return
       void run(async () => {
@@ -118,15 +135,21 @@ export function DeployDialog({
           ? t('Working…')
           : storeOnly
             ? t('Done')
-            : !binding
-              ? t('Link repository')
-              : !canDeploy
-                ? t('Done')
-                : confirming
-                  ? t('Deploy now')
-                  : t('Deploy to production')
+            : toServer
+              ? t('Set up the server')
+              : !binding
+                ? t('Link repository')
+                : !canDeploy
+                  ? t('Done')
+                  : confirming
+                    ? t('Deploy now')
+                    : t('Deploy to production')
       }
-      confirmDisabled={!status || (!binding && !storeOnly && (!platform || !repoId || !account?.connected))}
+      confirmDisabled={
+        !status ||
+        (!binding && !storeOnly && (!platform || !repoId || !account?.connected)) ||
+        (toServer && !domain.trim())
+      }
       busy={busy}
       error={error}
       onCancel={onClose}
@@ -155,12 +178,14 @@ export function DeployDialog({
                 aria-pressed={platform === entry.platform}
                 onClick={() => setPlatform(entry.platform)}
               >
-                <BrandIcon brand={entry.platform} />
-                <span className="flex-1 text-foreground">{entry.name}</span>
+                <BrandIcon brand={accountBrand(entry.platform)} />
+                <span className="flex-1 text-foreground">{accountName(t, entry.platform, entry.name)}</span>
                 <span className="text-caption text-muted-foreground">
                   {entry.connected
                     ? t('Connected as {0}', { 0: entry.account ?? entry.name })
-                    : t('Connect it in Settings → Hosting accounts')}
+                    : entry.platform === 'server'
+                      ? t('Connect it below')
+                      : t('Connect it in Settings → Hosting accounts')}
                 </span>
               </RowButton>
             ))}
@@ -185,13 +210,40 @@ export function DeployDialog({
               {t('Connect a repository to this project and publish it to GitHub first.')}
             </p>
           )}
+          {toServer && (
+            <section aria-label={t('Own server')} className="mt-3 flex flex-col gap-2 border-t border-(--line) pt-3">
+              <p className="m-0 text-caption">
+                {t(
+                  'The app runs on your server as a Docker container behind Caddy, which serves your domain over HTTPS. Every merge to the default branch deploys through GitHub Actions, so your server never needs Ramu running.',
+                )}
+              </p>
+              <ServerConnect invoke={host.invoke} canAdminister={canAdminister} onConnected={load} />
+              {account?.connected && (
+                <label className="flex flex-col gap-1 text-caption">
+                  {t('Domain')}
+                  <Input
+                    placeholder="app.example.com"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    value={domain}
+                    onChange={(event) => setDomain(event.target.value)}
+                  />
+                  <span className="text-muted-foreground">
+                    {t(
+                      'Point the domain at the server with an A record; Caddy gets its HTTPS certificate once it does. Set up the server opens a pull request with the Dockerfile and deploy job the repository lacks, and keeps the SSH details in its GitHub Actions secrets.',
+                    )}
+                  </span>
+                </label>
+              )}
+            </section>
+          )}
         </>
       ) : (
         <>
           <p className="flex items-center gap-2">
-            <BrandIcon brand={binding.platform} />
+            <BrandIcon brand={accountBrand(binding.platform)} />
             <span className="flex-1">
-              {account?.name ?? binding.platform} · {binding.siteName}
+              {account ? accountName(t, account.platform, account.name) : binding.platform} · {binding.siteName}
               {binding.repository ? ` · ${binding.repository}` : ''}
             </span>
           </p>
@@ -206,6 +258,14 @@ export function DeployDialog({
           {status.error && (
             <p role="alert" className="text-caption text-destructive">
               {status.error.message}
+            </p>
+          )}
+          {pullRequest && (
+            <p role="status" className="flex items-center gap-2 text-caption">
+              <span className="flex-1">{t('Merge the pull request to deploy; every later merge deploys again.')}</span>
+              <Button size="sm" variant="secondary" onClick={() => open(pullRequest)}>
+                {t('Open pull request')}
+              </Button>
             </p>
           )}
           {confirming && (
@@ -293,7 +353,10 @@ export function DeployDialog({
           <UptimeSection projectId={project.id} />
           <UsageSection projectId={project.id} />
           {status.capabilities.includes('domains') && (
-            <DomainsSection projectId={project.id} platform={account?.name ?? binding.platform} />
+            <DomainsSection
+              projectId={project.id}
+              platform={account ? accountName(t, account.platform, account.name) : binding.platform}
+            />
           )}
         </>
       )}

@@ -233,8 +233,7 @@ export class StoreReleases {
     const root = this.root(projectId)
     if (!root) throw new Error('This project has no Expo app at the root of its repository.')
     const { url } = await proposeFile(root, 'ramu/eas-json', async () => ({
-      path: 'eas.json',
-      content: EAS_JSON,
+      files: [{ path: 'eas.json', content: EAS_JSON }],
       commit: 'build: add eas.json for store releases\n',
       title: 'Add eas.json for store releases',
       body: [

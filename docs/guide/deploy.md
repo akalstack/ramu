@@ -1,10 +1,10 @@
 # Deploying an app
 
-Ramu deploys a project to a hosting platform on your own account. It hosts nothing itself: the app, its deployments, its database and their billing stay with the providers, and the repository stays a normal GitHub repository. Vercel and Netlify host apps; Neon provides Postgres databases; Expo (EAS) builds phone apps for the App Store and Google Play ([Store releases](#store-releases)).
+Ramu deploys a project to a hosting platform on your own account, or to your own server. It hosts nothing itself: the app, its deployments, its database and their billing stay with the providers, and the repository stays a normal GitHub repository. Vercel and Netlify host apps, as does a Linux server you rent ([Your own server](#your-own-server)); Neon provides Postgres databases; Expo (EAS) builds phone apps for the App Store and Google Play ([Store releases](#store-releases)).
 
 ## Connect an account
 
-**Settings → Git → Hosting accounts** lists Vercel, Netlify, Neon and Expo with their marks. **Connect** offers two ways, in this order:
+**Settings → Git → Hosting accounts** lists Vercel, Netlify, your own server, Neon and Expo with their marks. Your own server connects with an SSH key instead ([Your own server](#your-own-server)). **Connect** offers two ways, in this order:
 
 1. **Sign in with Vercel** or **Sign in with Netlify**, when the platform's CLI (`vercel` or `netlify`) is installed on the host. Ramu runs the CLI's own browser sign-in on the host and shows its link (and Vercel's code) in Settings; **Open the sign-in page**, sign in and authorize. Ramu then reads the token the CLI saved, checks it with the platform and shows the account name. The CLI runs against a private configuration folder that is deleted afterwards, so your own CLI login is not read, changed or signed out.
    - Vercel's sign-in is a session that renews itself; Ramu renews it before it expires. A Vercel CLI that signs in with a key bound to the computer cannot be used; use a token instead.
@@ -37,7 +37,21 @@ The same accounts publish artifacts with **Publish to the web** ([Artifacts](art
   - Ramu checks a newly added domain every minute for up to three days, and when it serves HTTPS it wakes the project's most recent thread with one message, through the same queue as pull request feedback.
 - **Checks** says whether the repository has CI and offers **Set up CI** when it has none ([Set up CI](git-hosting.md#set-up-ci)).
 
-## When a deployment finishes
+## Your own server
+
+**Own server** in the deploy sheet runs the app on a Linux server you rent (Ubuntu or Debian), as a Docker container behind [Caddy](https://caddyserver.com), which serves your domain over HTTPS with certificates it gets and renews itself. Deploys run in the repository's GitHub Actions, so the server never needs Ramu running.
+
+1. **Connect the server**, in the sheet or in Settings → Hosting accounts: its address, SSH port and the user Ramu signs in as. **Create a key for this server** makes an ed25519 key pair on the host and shows its public line; add that line to `~/.ssh/authorized_keys` of that user on the server, then press **Connect**. **Use a key I already have** takes a private key without a passphrase instead. The private key goes to the host's credential store and is never shown again.
+2. **The server's own key is pinned.** The first connection remembers the server's host key and shows its fingerprint; every later connection, from Ramu and from the deploy job, refuses a different one. After rebuilding a server, **Disconnect** it and connect again.
+3. **Docker.** Ramu checks that the user can run Docker and that nothing else holds ports 80 and 443. When Docker is missing, the sheet shows Docker's own install steps to run on the server yourself; Ramu never installs software there or runs anything as root. **Check again** reads the server once more.
+4. **Set up the server** with a domain such as `app.example.com` (point it at the server with an A record; the sheet's **Domains** shows the record). Ramu then:
+   - writes the app's Caddy site, forwarding the domain to the container, and starts Ramu's Caddy container if it is not running;
+   - puts the SSH key, the address, the user, the port and the pinned host key in the repository's GitHub Actions secrets (`RAMU_SSH_KEY`, `RAMU_SSH_HOST`, `RAMU_SSH_USER`, `RAMU_SSH_PORT`, `RAMU_SSH_KNOWN_HOSTS`);
+   - opens one pull request with what the repository lacks: a `Dockerfile` written for its stack (a Node server or static build, Django, FastAPI or Flask, Go, or plain HTML files) with a `.dockerignore` that keeps `.env` files out of the image, and `.github/workflows/deploy.yml`. When Ramu cannot tell how the app starts, it asks for a Dockerfile with an `EXPOSE` line instead; an existing Dockerfile is used as it is, on the port it exposes.
+5. **Merge the pull request** to deploy. The deploy job runs after CI passes on the default branch (on every push there when the repository has no Ramu CI): it builds the image, pushes it to GitHub's container registry tagged with the commit, and restarts the container over SSH. If the new version stops right after starting, the previous one is put back and the run fails. The server keeps the running image and the one before it.
+
+Once set up, the sheet works as for the platforms: the deploy job's runs are the deployments, **Logs** shows a run's log (and the app's own output for the version running now), **Deploy to production** starts the job on the default branch, and **Roll back** starts it with an earlier deployment's commit, deploying that image again without building. The [deploy watch](#when-a-deployment-finishes), [uptime](#uptime) and **Domains** (adding one updates the Caddy site; the records go at your domain provider) work the same way. **Environment variables** syncs to the server's production variables, kept in a file on the server readable only by that user and passed to the container, never baked into the image; writing them restarts the container. There is no usage report: the server's host bills for it.
+
 
 Ramu follows a deployment until the platform finishes it, then wakes one thread with one message, through the same queue as pull request feedback:
 
@@ -107,7 +121,7 @@ Threads in a project get deploy tools for that project, on its linked platform a
 
 - `deploy_status`: the target, live address, what the platform can do, and the latest deployments.
 - `deploy_logs`: the end of a deployment's build log.
-- `deploy_preview`: a preview deployment of the thread's current branch (Vercel; Netlify builds previews from pull requests). Outside Full access it asks first. The thread is woken when it finishes, as after `deploy_production` ([When a deployment finishes](#when-a-deployment-finishes)).
+- `deploy_preview`: a preview deployment of the thread's current branch (Vercel; Netlify builds previews from pull requests; your own server has production only). Outside Full access it asks first. The thread is woken when it finishes, as after `deploy_production` ([When a deployment finishes](#when-a-deployment-finishes)).
 - `deploy_domains`: the project's domains, the records each needs and whether it is live.
 - `deploy_usage`: what the platform and database report for the billing period, beside the plan's limits, and the billing page. Read-only.
 - `deploy_domain_add` and `deploy_domain_records`: add a domain, or create its records in the platform's DNS. They always ask you with a card naming the domain and each record, in every access mode, and the thread is woken when the domain is live.

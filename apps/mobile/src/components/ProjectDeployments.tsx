@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Linking, View } from 'react-native'
 import { ExternalLink, RotateCcw } from 'lucide-react-native'
+import { accountBrand } from '@ramu/shared/brands'
 import { translate } from '@ramu/shared/i18n'
 import type { ProjectDeployment, UptimeStatus, UsageReport } from '@ramu/shared/types/deploy'
 import { deploymentsView, rollbackConfirmation } from '../runtime/deployments'
@@ -120,7 +121,7 @@ export function ProjectDeployments({
         {status?.binding && view ? (
           <>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
-              <BrandIcon brand={status.binding.platform} size={16} />
+              <BrandIcon brand={accountBrand(status.binding.platform)} size={16} />
               <T style={{ flex: 1 }} weight="600">
                 {view.target}
               </T>
@@ -207,7 +208,7 @@ export function ProjectDeployments({
                 {view.usage.map((report) => (
                   <View key={report.platform} style={{ gap: space.xs }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
-                      <BrandIcon brand={report.platform} size={16} />
+                      <BrandIcon brand={accountBrand(report.platform)} size={16} />
                       <T style={{ flex: 1 }} weight="600">
                         {report.title}
                       </T>

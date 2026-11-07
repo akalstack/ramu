@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Deployment, DeployBinding, DnsRecord, HostingCapability, UsageFigure } from '@ramu/shared/types/deploy'
 import { capabilityNames, DeployError, type HostingAdapter, type HostingSite } from '../src/workspace/deploy/adapter'
 import { netlifyAdapter } from '../src/workspace/deploy/netlify'
+import { serverAdapter } from '../src/workspace/deploy/server'
+import type { SshRunner } from '../src/workspace/deploy/ssh'
 import { DeployService } from '../src/workspace/deploy/service'
 import { vercelAdapter } from '../src/workspace/deploy/vercel'
 
@@ -317,6 +319,7 @@ describe.each(contracts)('$name hosting adapter', (contract) => {
         getState: <T>() => binding as T,
         setState: () => {},
         stackTarget: () => null,
+        githubToken: async () => 'gh_123',
         githubRepository: async () => repository,
       },
       { auth: async () => ({ auth, accountId: 'u1', defaultScope: null }) } as never,
@@ -344,6 +347,7 @@ describe.each(contracts)('$name hosting adapter', (contract) => {
           }) as T,
         setState: () => {},
         stackTarget: () => null,
+        githubToken: async () => 'gh_123',
         githubRepository: async () => repository,
       },
       { auth: async () => ({ auth, accountId: 'u1', defaultScope: null }) } as never,
@@ -518,6 +522,7 @@ describe('domain state the platform does not report', () => {
           }) as T,
         setState: () => {},
         stackTarget: () => null,
+        githubToken: async () => 'gh_123',
         githubRepository: async () => repository,
       },
       { auth: async () => ({ auth, accountId: 'u1', defaultScope: null }) } as never,
@@ -590,6 +595,7 @@ describe('pull request previews', () => {
           }) as T,
         setState: () => {},
         stackTarget: () => null,
+        githubToken: async () => 'gh_123',
         githubRepository: async () => {
           throw new Error('unused')
         },
@@ -599,5 +605,222 @@ describe('pull request previews', () => {
     )
     expect((await service.preview('project', 'fix'))?.id).toBe('new')
     expect(await service.preview('project', 'nothing')).toBeNull()
+  })
+})
+
+describe('Own server hosting adapter', () => {
+  const sha = (n: number) => String(n).repeat(40)
+  const connection = {
+    host: '203.0.113.10',
+    port: 22,
+    user: 'deploy',
+    privateKey: '-----BEGIN OPENSSH PRIVATE KEY-----\nkey\n-----END OPENSSH PRIVATE KEY-----\n',
+    publicKey: null,
+    knownHosts: '203.0.113.10 ssh-ed25519 AAAA',
+  }
+  const serverAuth = { token: JSON.stringify(connection), github: async () => 'gh_123' }
+  const site = { siteId: 'ana/shop', siteName: 'shop.example.com' }
+  const run = (id: number, extra: object) => ({
+    id,
+    status: 'completed',
+    conclusion: 'success',
+    head_branch: 'main',
+    head_sha: sha(id),
+    display_title: `Deploy ${sha(id)}`,
+    created_at: new Date(now - id * 1000).toISOString(),
+    path: '.github/workflows/deploy.yml',
+    head_commit: { message: `Change ${id}\n\nbody` },
+    ...extra,
+  })
+
+  /** A fake server reached through the fake ssh runner: its files, and every command and input it received. */
+  const fakeServer = () => {
+    const env = new Map<string, string>([['DATABASE_URL', 'postgres://old']])
+    let domains = ['shop.example.com']
+    const received: { command: string; input: string }[] = []
+    const ssh: SshRunner = async (target, command, input) => {
+      expect(target.knownHosts).toBe(connection.knownHosts)
+      received.push({ command, input })
+      const values = (command.split("' ramu")[1] ?? '')
+        .split(' ')
+        .filter(Boolean)
+        .map((value) => Buffer.from(value.slice(1), 'base64').toString())
+      let stdout = ''
+      if (command.includes('id -un')) stdout = 'deploy\n'
+      else if (command.includes('printf "port=')) stdout = `port=3000\ndomains=${domains.join(' ')} \n`
+      else if (command.includes('docker logs')) stdout = 'listening on 3000\nGET / 200\n'
+      else if (command.includes('sed -n')) stdout = [...env.keys()].join('\n')
+      else if (command.includes('awk -F='))
+        for (const line of input.trim().split('\n')) env.set(line.split('=')[0]!, line.slice(line.indexOf('=') + 1))
+      else if (command.includes('reverse_proxy')) domains = values[2]!.split(' ')
+      return { code: 0, stdout, stderr: '', knownHosts: connection.knownHosts }
+    }
+    return { ssh, env, received, domains: () => domains }
+  }
+
+  const githubRoutes = (runs: unknown[], dispatched: { body: string | null }[]): Route[] => [
+    {
+      method: 'GET',
+      path: /^\/repos\/ana\/shop\/actions\/workflows\/deploy\.yml\/runs\?per_page=/,
+      body: { workflow_runs: runs },
+    },
+    {
+      method: 'GET',
+      path: /^\/repos\/ana\/shop\/actions\/runs\/1$/,
+      body: runs.find((entry) => (entry as { id: number }).id === 1),
+    },
+    {
+      method: 'GET',
+      path: /^\/repos\/ana\/shop\/actions\/runs\/2$/,
+      body: runs.find((entry) => (entry as { id: number }).id === 2),
+    },
+    {
+      method: 'GET',
+      path: /^\/repos\/ana\/shop\/actions\/runs\/9$/,
+      body: run(9, { status: 'queued', conclusion: null }),
+    },
+    {
+      method: 'GET',
+      path: /^\/repos\/ana\/shop\/actions\/runs\/7$/,
+      body: run(7, { path: '.github/workflows/ci.yml' }),
+    },
+    { method: 'GET', path: /^\/repos\/ana\/shop\/actions\/runs\/\d+\/jobs$/, body: { jobs: [{ id: 55 }] } },
+    {
+      method: 'POST',
+      path: /^\/repos\/ana\/shop\/actions\/workflows\/deploy\.yml\/dispatches$/,
+      body: { workflow_run_id: 9 },
+      effect: () => dispatched.push({ body: null }),
+    },
+  ]
+
+  const setup = async (runs: unknown[] = [run(1, {}), run(2, {}), run(3, { conclusion: 'skipped' })]) => {
+    const dispatched: { body: string | null }[] = []
+    const github = await fake(githubRoutes(runs, dispatched))
+    const box = fakeServer()
+    // The job log is a redirect to a short-lived file, fetched without the token.
+    const logs = createServer((req, res) => {
+      if (req.url === '/repos/ana/shop/actions/jobs/55/logs') {
+        expect(req.headers.authorization).toBe('Bearer gh_123')
+        return void res.writeHead(302, { Location: `${github.url}/blob/55` }).end()
+      }
+      expect(req.headers.authorization).toBeUndefined()
+      res
+        .writeHead(200)
+        .end('2026-11-07T10:00:00.0000000Z Building\n2026-11-07T10:00:01.0000000Z Running ghcr.io/ana/shop\n')
+    })
+    servers.push(logs)
+    await new Promise<void>((resolve) => logs.listen(0, '127.0.0.1', resolve))
+    const port = (logs.address() as AddressInfo).port
+    // The job log and its file are served apart from the recorded JSON replies.
+    const fetcher: typeof fetch = (input, init) => {
+      const url = String(input)
+      return fetch(/\/actions\/jobs\/|\/blob\//.test(url) ? url.replace(/:\d+\//, `:${port}/`) : url, init)
+    }
+    const adapter = serverAdapter({
+      ssh: box.ssh,
+      api: github.url,
+      fetch: fetcher,
+      address: async () => '203.0.113.10',
+      pollMs: 1,
+    })
+    return { adapter, github, box, dispatched }
+  }
+
+  it('answers every required read from the deploy job’s runs, the pinned key and the server', async () => {
+    const { adapter, box, github } = await setup()
+    expect(await adapter.account(serverAuth)).toMatchObject({
+      id: 'deploy@203.0.113.10:22',
+      name: 'deploy@203.0.113.10',
+    })
+    const deployments = await adapter.listDeployments(serverAuth, site, 10)
+    // A run skipped because CI failed deployed nothing, so it is not listed.
+    expect(deployments.map((entry) => entry.id)).toEqual(['1', '2'])
+    expect(deployments[0]).toMatchObject({
+      state: 'ready',
+      production: true,
+      ref: 'main',
+      commit: sha(1),
+      message: 'Change 1',
+      url: null,
+    })
+    expect(await adapter.deploymentStatus(serverAuth, site, '1')).toMatchObject({ id: '1', state: 'ready' })
+    expect(await adapter.productionUrl(serverAuth, site)).toBe('https://shop.example.com')
+    // The live deploy's log ends with the container's own output; an older one has only its job log.
+    const live = await adapter.deploymentLogs(serverAuth, site, '1', 5)
+    expect(live).toBe('Building\nRunning ghcr.io/ana/shop\n\nlistening on 3000\nGET / 200')
+    expect(await adapter.deploymentLogs(serverAuth, site, '2', 5)).toBe('Building\nRunning ghcr.io/ana/shop')
+    expect(box.received.filter((call) => call.command.includes('docker logs'))).toHaveLength(1)
+    // Only the GitHub token, and only in a header.
+    expect(github.requests.join('\n')).not.toContain('gh_123')
+  })
+
+  it('declares only what it implements: deploys and rollbacks through the job, variables and domains on the server', async () => {
+    const { adapter } = await setup()
+    expect(capabilityNames(adapter)).toEqual(['deployProduction', 'rollback', 'domains'])
+    expect(adapter.capabilities.environment?.environments).toEqual(['production'])
+  })
+
+  it('deploys by dispatching the job, and rolls back by dispatching it with the earlier commit', async () => {
+    const { adapter, github } = await setup()
+    const started = await adapter.capabilities.deployProduction!(
+      serverAuth,
+      { ...site, repository: 'ana/shop' },
+      'main',
+    )
+    expect(started).toMatchObject({ id: '9', state: 'queued', production: true })
+    await adapter.capabilities.rollback!(serverAuth, site, '2')
+    expect(github.requests.filter((line) => line.startsWith('POST'))).toHaveLength(2)
+    // Only runs of the deploy job can be put back.
+    await expect(adapter.capabilities.rollback!(serverAuth, site, '7')).rejects.toMatchObject({ kind: 'not-found' })
+    await expect(adapter.deploymentStatus(serverAuth, site, '1/../../x')).rejects.toMatchObject({ kind: 'not-found' })
+  })
+
+  it('says to merge the deploy job first when GitHub has none', async () => {
+    const github = await fake([{ method: 'POST', path: /dispatches$/, status: 404, body: {} }])
+    const adapter = serverAdapter({ ssh: fakeServer().ssh, api: github.url })
+    await expect(
+      adapter.capabilities.deployProduction!(serverAuth, { ...site, repository: 'ana/shop' }, 'main'),
+    ).rejects.toThrow(/Merge the pull request that adds the deploy job first/)
+  })
+
+  it('keeps variables on the server, sending values only on standard input', async () => {
+    const { adapter, box } = await setup()
+    const environment = adapter.capabilities.environment!
+    expect(await environment.list(serverAuth, site)).toEqual({ production: ['DATABASE_URL'] })
+    await environment.set(serverAuth, site, 'production', { API_KEY: 'sk_live_secret', DATABASE_URL: 'postgres://new' })
+    const write = box.received.at(-1)!
+    expect(write.command).not.toContain('sk_live_secret')
+    expect(write.command).not.toContain(Buffer.from('sk_live_secret').toString('base64'))
+    expect(write.input).toBe('API_KEY=sk_live_secret\nDATABASE_URL=postgres://new\n')
+    expect(box.env.get('DATABASE_URL')).toBe('postgres://new')
+    await expect(environment.set(serverAuth, site, 'production', { A: 'one\ntwo' })).rejects.toThrow(/several lines/)
+    await expect(environment.set(serverAuth, site, 'production', { 'A B': 'x' })).rejects.toThrow(/not a variable name/)
+  })
+
+  it('lists the domains Caddy serves with the A record each needs, and adds one to the Caddy site', async () => {
+    const { adapter, box } = await setup()
+    const domains = adapter.capabilities.domains!
+    expect(await domains.list(serverAuth, site)).toEqual([
+      {
+        name: 'shop.example.com',
+        records: [{ type: 'A', host: 'shop.example.com', name: 'shop', value: '203.0.113.10' }],
+        configured: null,
+        certificate: null,
+        managedDns: false,
+        zone: 'example.com',
+      },
+    ])
+    await domains.add(serverAuth, site, 'www.example.com')
+    expect(box.domains()).toEqual(['shop.example.com', 'www.example.com'])
+    await expect(domains.createRecords(serverAuth, site, (await domains.list(serverAuth, site))[0]!)).rejects.toThrow(
+      /domain provider/,
+    )
+  })
+
+  it('reaches only the bound repository with a token, and fails plainly without one', async () => {
+    const { adapter } = await setup()
+    await expect(adapter.listDeployments({ token: serverAuth.token }, site, 5)).rejects.toMatchObject({
+      kind: 'not-found',
+    })
   })
 })

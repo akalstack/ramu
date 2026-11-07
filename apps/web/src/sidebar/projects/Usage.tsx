@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { accountBrand } from '@ramu/shared/brands'
 import { deployText, nearLimit } from '@ramu/shared/deployText'
 import type { UsageReport } from '@ramu/shared/types'
 import { BrandIcon } from '@/components/brand-icon'
@@ -34,7 +35,7 @@ export function UsageSection({ projectId }: { projectId: string }) {
       {reports?.map((report) => (
         <div key={report.platform} className="flex flex-col gap-1 text-caption">
           <span className="flex items-center gap-2">
-            <BrandIcon brand={report.platform} />
+            <BrandIcon brand={accountBrand(report.platform)} />
             <span className="flex-1 text-foreground">
               {report.period
                 ? t('{0} since {1}', { 0: report.name, 1: new Date(report.period.start).toLocaleDateString() })

@@ -40,6 +40,8 @@ export interface DeployHost {
   stackTarget(projectId: string): string | null
   /** A repository of the project as a GitHub repository, with the token of the account that reaches it. */
   githubRepository(projectId: string, repoId: string): Promise<RepositoryLink>
+  /** The token of the GitHub account that reaches `repository` (`owner/name`) from one of the project's checkouts. */
+  githubToken(projectId: string, repository: string): Promise<string>
   /** Runs before a production deploy starts (the project's migrations); a failure stops the deploy. */
   beforeProduction?(projectId: string, binding: DeployBinding): Promise<void>
 }
@@ -75,7 +77,20 @@ export class DeployService {
         `This project is linked under another ${this.adapter(binding.platform).name} account. Connect that account, or link the project again.`,
         'missing-permission',
       )
-    return { binding, auth: { ...auth, scope: binding.scope } }
+    const repository = binding.repository
+    return {
+      binding,
+      auth: {
+        ...auth,
+        scope: binding.scope,
+        ...(repository ? { github: () => this.host.githubToken(projectId, repository) } : {}),
+      },
+    }
+  }
+
+  /** Remembers a binding made outside `link`, such as setting up the person's own server. */
+  bind(projectId: string, binding: DeployBinding): void {
+    this.host.setState(key(projectId), binding)
   }
 
   async project(projectId: string): Promise<ProjectDeployment> {
@@ -176,12 +191,12 @@ export class DeployService {
     return {
       id: binding.platform,
       name: adapter.name,
-      environments: ['preview', 'production'],
+      environments: environment.environments,
       list: async () => environment.list((await this.bound(projectId)).auth, binding),
       set: async (target, values) => {
-        if (target !== 'preview' && target !== 'production')
-          throw new Error(`${adapter.name} has no ${target} variables.`)
-        await environment.set((await this.bound(projectId)).auth, binding, target, values)
+        const kept = environment.environments.find((name) => name === target)
+        if (!kept) throw new Error(`${adapter.name} has no ${target} variables.`)
+        await environment.set((await this.bound(projectId)).auth, binding, kept, values)
       },
     }
   }
@@ -227,15 +242,11 @@ export class DeployService {
     if (!binding) return null
     const adapter = this.adapter(binding.platform)
     const read = adapter.capabilities.usage
-    return usageReport(
-      binding.platform,
-      adapter.name,
-      read &&
-        (async () => {
-          const { auth } = await this.bound(projectId)
-          return read(auth, binding)
-        }),
-    )
+    if (!read) return null
+    return usageReport(binding.platform, adapter.name, async () => {
+      const { auth } = await this.bound(projectId)
+      return read(auth, binding)
+    })
   }
 
   /** The bound platform's name, such as "Vercel", for cards that name where a change happens. */

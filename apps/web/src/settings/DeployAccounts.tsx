@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { accountBrand } from '@ramu/shared/brands'
+import { accountName } from '@ramu/shared/deployText'
 import type { AccountPlatform, HostingAccount, HostingAccountsSummary, HostingSignIn } from '@ramu/shared/types'
-import { isHostingPlatform } from '@ramu/shared/types/deploy'
+import { CLI_SIGN_IN_PLATFORMS, type CliSignInPlatform } from '@ramu/shared/types/deploy'
 import { BrandIcon } from '@/components/brand-icon'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
@@ -8,10 +10,11 @@ import { SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { t } from '../i18n'
 import { invoke as openOnThisComputer } from '../ipc'
 import { errorText } from '../lib/errors'
+import { ServerConnect } from './ServerConnect'
 import { useSettingsInvoke } from './SettingsScope'
 
 /** What to pick on each platform's token page: the smallest scope it offers. */
-const SCOPE_HINT: Record<AccountPlatform, string> = {
+const SCOPE_HINT: Record<Exclude<AccountPlatform, 'server'>, string> = {
   vercel: 'Scope: the team your projects are in, not Full Account',
   netlify: 'Netlify tokens reach every team you belong to, so choose an expiry',
   neon: 'Create a personal API key. Neon keys reach your whole account and do not expire, so revoke it on Neon when Ramu no longer needs it',
@@ -27,6 +30,8 @@ function deployAccountHeadline(account: HostingAccount): string {
         ? t('Not connected. Store releases of phone apps need an account.')
         : t('Not connected. Databases for your projects need an account.')
   if (account.error) return account.error
+  if (account.platform === 'server')
+    return t('Connected as {0} with an SSH key kept on this host', { 0: account.account ?? account.name })
   const via = account.via === 'cli' ? t('signed in through its CLI') : t('token saved on this host')
   const who = t('Connected as {0} ({1})', { 0: account.account ?? account.name, 1: via })
   return account.expiresAt
@@ -102,7 +107,10 @@ function DeployAccountRow({
   const tokenId = useId()
   const waiting = signIn?.state === 'starting' || signIn?.state === 'waiting'
   const signInId = signIn?.id
-  const cliPlatform = account.cli && isHostingPlatform(account.platform) ? account.platform : null
+  const cliPlatform =
+    account.cli && (CLI_SIGN_IN_PLATFORMS as readonly string[]).includes(account.platform)
+      ? (account.platform as CliSignInPlatform)
+      : null
   useEffect(() => {
     if (!waiting || !signInId) return
     // The CLI runs on the host; its state is read until the person authorizes or it fails.
@@ -144,14 +152,18 @@ function DeployAccountRow({
   return (
     <>
       <SettingsRow>
-        <SettingsLabel title={account.name} icon={<BrandIcon brand={account.platform} />} help={help} />
+        <SettingsLabel
+          title={accountName(t, account.platform, account.name)}
+          icon={<BrandIcon brand={accountBrand(account.platform)} />}
+          help={help}
+        />
         <span className="flex items-center gap-2">
           {account.connected && (
             <Button variant="secondary" size="sm" onClick={() => reload(true)}>
               {t('Check connection')}
             </Button>
           )}
-          {canAdminister && !open && (
+          {canAdminister && !open && !(account.platform === 'server' && account.connected) && (
             <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
               {account.connected ? t('Reconnect') : t('Connect')}
             </Button>
@@ -173,7 +185,24 @@ function DeployAccountRow({
           )}
         </span>
       </SettingsRow>
-      {open && (
+      {open && account.platform === 'server' && (
+        <div className="mb-3 flex flex-col gap-3 rounded-(--radius-m) bg-fill p-4 text-caption">
+          <ServerConnect
+            invoke={invoke}
+            canAdminister={canAdminister}
+            onConnected={() => {
+              setOpen(false)
+              reload(false)
+            }}
+          />
+          <span>
+            <Button variant="ghost" size="sm" onClick={close}>
+              {t('Cancel')}
+            </Button>
+          </span>
+        </div>
+      )}
+      {open && account.platform !== 'server' && (
         <div className="mb-3 flex flex-col gap-3 rounded-(--radius-m) bg-fill p-4 text-caption">
           {cliPlatform && (
             <section className="flex flex-col gap-2" aria-label={t('Sign in with {0}', { 0: account.name })}>

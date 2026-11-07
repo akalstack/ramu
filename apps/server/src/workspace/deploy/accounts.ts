@@ -14,6 +14,7 @@ import { expoClient } from './expo'
 import { resourceAdapter } from './resource'
 import './vercel'
 import './netlify'
+import './server'
 import './neon'
 
 /** What an account needs from its platform's adapter: a name, a token page and who a token belongs to. */
@@ -75,7 +76,13 @@ export class HostingAccounts {
         setState,
         credentials,
       )
-    this.saved = { vercel: saved('vercel'), netlify: saved('netlify'), neon: saved('neon'), expo: saved('expo') }
+    this.saved = {
+      vercel: saved('vercel'),
+      netlify: saved('netlify'),
+      server: saved('server'),
+      neon: saved('neon'),
+      expo: saved('expo'),
+    }
   }
 
   /** Every platform's connection; `check` asks each connected platform who the token is. */

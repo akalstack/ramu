@@ -2,9 +2,13 @@
 // one platform's API. A new platform adds an adapter on the server and its id here.
 import type { DeployTargetId } from '../stacks'
 
-/** Hosting platforms with an adapter on the server. */
-export const HOSTING_PLATFORMS = ['vercel', 'netlify'] as const
+/** Hosting platforms with an adapter on the server; `server` is the person's own server, reached over SSH. */
+export const HOSTING_PLATFORMS = ['vercel', 'netlify', 'server'] as const
 export type HostingPlatform = (typeof HOSTING_PLATFORMS)[number]
+
+/** Hosting platforms whose own CLI can sign in on the host. */
+export const CLI_SIGN_IN_PLATFORMS = ['vercel', 'netlify'] as const
+export type CliSignInPlatform = (typeof CLI_SIGN_IN_PLATFORMS)[number]
 
 /** Database and storage providers with a resource adapter on the server. */
 export const RESOURCE_PROVIDERS = ['neon'] as const
@@ -106,7 +110,7 @@ export interface ProjectResources {
 /** A platform CLI sign-in running on the host: the link and code to show, then the result. */
 export interface HostingSignIn {
   id: string
-  platform: HostingPlatform
+  platform: CliSignInPlatform
   state: 'starting' | 'waiting' | 'connected' | 'failed'
   url: string | null
   code: string | null
@@ -306,4 +310,36 @@ export interface StoreRelease {
   builds: StoreBuild[]
   /** Why the builds could not be read, in plain words. */
   error: string | null
+}
+
+/** Whether the connected server can run the app: Docker usable by the SSH user, and ports 80 and 443 for Caddy. */
+export type ServerDocker = 'ready' | 'missing' | 'no-permission'
+
+/** The person's own server as Settings and the Deploy sheet show it. The private key never leaves the host. */
+export interface ServerStatus {
+  connection: {
+    host: string
+    port: number
+    user: string
+    /** The pinned host key's SHA-256 fingerprint, as `ssh-keygen -l` prints it. */
+    fingerprint: string
+    /** The public half of the key Ramu signs in with, when Ramu can tell it. */
+    publicKey: string | null
+  } | null
+  /** A key pair made on this host and not used yet: the public line to add to the server's authorized_keys. */
+  pendingKey: string | null
+  /** Null until the server is checked. */
+  docker: ServerDocker | null
+  dockerVersion: string | null
+  /** Something other than Ramu's Caddy already listens on port 80 or 443. */
+  portsBusy: boolean
+  /** Why the server could not be reached or checked, in plain words. */
+  error: string | null
+}
+
+/** What linking a project to the server did: the deployment status, and the pull request with the files it needs. */
+export interface ServerLinkResult {
+  deployment: ProjectDeployment
+  /** The pull request adding the Dockerfile and deploy job, or null when the repository has both. */
+  pullRequest: string | null
 }

@@ -14,6 +14,11 @@ import type {
 export interface HostingAuth {
   token: string
   scope?: string | null
+  /**
+   * The token of the GitHub account that reaches the bound repository, for a platform that deploys through its
+   * GitHub Actions (the person's own server). Read only when called.
+   */
+  github?: () => Promise<string>
 }
 
 /** Who a token belongs to, and whether it reaches more than deploys need. */
@@ -54,7 +59,9 @@ export interface HostingCapabilities {
   rollback?(auth: HostingAuth, site: HostingSite, deploymentId: string): Promise<void>
   /** The project's environment variables: names only when listing; values are written, never read back. */
   environment?: {
-    list(auth: HostingAuth, site: HostingSite): Promise<Record<PlatformEnvironment, string[]>>
+    /** The environments the platform keeps variables for. */
+    environments: readonly PlatformEnvironment[]
+    list(auth: HostingAuth, site: HostingSite): Promise<Partial<Record<PlatformEnvironment, string[]>>>
     set(
       auth: HostingAuth,
       site: HostingSite,

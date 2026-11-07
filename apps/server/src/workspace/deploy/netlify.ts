@@ -246,6 +246,7 @@ export function netlifyAdapter(options: { api?: string; github?: string; fetch?:
         )
       },
       environment: {
+        environments: ['preview', 'production'],
         async list(auth, target) {
           const env = await call<{ key: string; values?: { context?: string }[] }[]>(
             await siteEnv(auth, target.siteId),

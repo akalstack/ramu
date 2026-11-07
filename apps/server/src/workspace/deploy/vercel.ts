@@ -261,6 +261,7 @@ export function vercelAdapter(options: { api?: string; fetch?: typeof fetch } = 
       deployPreview: (auth, site, ref) => deploy(auth, site, ref, false),
       deployProduction: (auth, site, ref) => deploy(auth, site, ref, true),
       environment: {
+        environments: ['preview', 'production'],
         async list(auth, site) {
           const { envs } = await call<{ envs?: { key: string; target?: string[] | string }[] }>(
             `/v10/projects/${project(site)}/env`,

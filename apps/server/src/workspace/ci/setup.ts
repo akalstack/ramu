@@ -54,11 +54,15 @@ function generated(forge: CiForge, facts: CiFacts): CiWorkflow {
   return workflow
 }
 
-/** The root of a commit, read through Git so nothing is checked out. */
-async function factsAt(root: string, ref: string): Promise<Facts> {
+/** The root of a commit and the contents of the named files there, read through Git so nothing is checked out. */
+export async function factsAt<Name extends string = (typeof CI_MANIFESTS)[number]>(
+  root: string,
+  ref: string,
+  names: readonly Name[] = CI_MANIFESTS as readonly string[] as readonly Name[],
+): Promise<{ files: string[]; manifests: Partial<Record<Name, string>> }> {
   const files = (await git(root, ['ls-tree', '--name-only', ref])).split('\n').filter(Boolean)
-  const manifests: Facts['manifests'] = {}
-  for (const name of CI_MANIFESTS) {
+  const manifests: Partial<Record<Name, string>> = {}
+  for (const name of names) {
     if (!files.includes(name)) continue
     const size = Number((await git(root, ['cat-file', '-s', `${ref}:${name}`]).catch(() => '')).trim())
     if (!size || size > MANIFEST_LIMIT) continue
@@ -116,14 +120,13 @@ function pushFailure(error: unknown): Error {
 /** Commits the workflow on a new branch from the fetched default branch and opens a pull request for it. */
 export async function setUpCi(root: string, requireCi: boolean): Promise<CiSetupResult> {
   const forge = await forgeOf(root, true)
-  const { url, file, defaultBranch } = await proposeFile(
+  const { url, change, defaultBranch } = await proposeFile(
     root,
     BRANCH,
     async (ref, defaultBranch) => {
       const workflow = generated(forge, { ...(await factsAt(root, ref)), defaultBranch, stack: stackOf(root) })
       return {
-        path: workflow.path,
-        content: workflow.content,
+        files: [{ path: workflow.path, content: workflow.content }],
         commit: `ci: set up CI\n\nInstall with ${workflow.toolchain}, then ${workflow.steps.map((step) => step.name.toLowerCase()).join(', ') || 'install only'}.\n`,
         title: 'Set up CI',
         body: [
@@ -136,7 +139,7 @@ export async function setUpCi(root: string, requireCi: boolean): Promise<CiSetup
     },
     pushFailure,
   )
-  return { url, path: file.path, protection: requireCi ? await protect(root, forge, defaultBranch) : null }
+  return { url, path: change.files[0]!.path, protection: requireCi ? await protect(root, forge, defaultBranch) : null }
 }
 
 /** Requires the CI check before merging. The pull request is already open, so a refusal is reported, not thrown. */

@@ -8,7 +8,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { HostingPlatform, HostingSignIn } from '@ramu/shared/types/deploy'
+import type { CliSignInPlatform, HostingSignIn } from '@ramu/shared/types/deploy'
 import { findExecutable } from '../../providers/providerBinaries'
 import type { HostingAccounts, HostingSecret } from './accounts'
 
@@ -113,12 +113,12 @@ export class HostingSignIns {
 
   constructor(
     private readonly accounts: HostingAccounts,
-    private readonly cli: (platform: HostingPlatform) => string | null = platformCli,
+    private readonly cli: (platform: CliSignInPlatform) => string | null = platformCli,
     private readonly spawner: Spawn = spawn,
     private readonly pollMs = POLL_MS,
   ) {}
 
-  start(platform: HostingPlatform): HostingSignIn {
+  start(platform: CliSignInPlatform): HostingSignIn {
     const executable = this.cli(platform)
     if (!executable) throw new Error(`The ${platform} CLI is not installed on this host. Use a token instead.`)
     // One sign-in per platform at a time; a new one replaces the old.

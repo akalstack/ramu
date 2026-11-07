@@ -18,6 +18,8 @@ import { UptimeWatches } from './uptime'
 import { projectUsage, UsageNotices } from './usage'
 import { ProjectWake } from './wake'
 import { StoreReleases } from './release'
+import { githubActionsTarget } from './envSync'
+import { ServerSetup } from './serverSetup'
 
 const commandOf = (argv: string[] | null | undefined) => (argv ? commandLine(argv) : null)
 
@@ -43,6 +45,8 @@ export interface Deploys {
   resources: ResourceService
   /** Store releases of a project's Expo app. */
   releases: StoreReleases
+  /** The person's own server: connecting it and setting projects up on it. */
+  server: ServerSetup
   wake: ProjectWake
 }
 
@@ -74,32 +78,46 @@ export function createDeploys(
     accounts,
     credentials,
   )
+  /** The project's checkout whose GitHub remote is `repository`. */
+  const checkoutOf = async (projectId: string, repository: string) => {
+    for (const entry of workspace.listRepositories(projectId)) {
+      const remote = await forgeRemoteOf(entry.root)
+      if (remote?.origin === 'github.com' && `${remote.owner}/${remote.repo}` === repository) return entry.root
+    }
+    return null
+  }
+  const githubRepository = async (projectId: string, repoId: string) => {
+    const repository = workspace.getRepository(repoId)
+    if (repository.projectId !== projectId) throw new Error('Choose a repository of this project.')
+    const remote = await forgeRemoteOf(repository.root)
+    if (!remote || remote.origin !== 'github.com')
+      throw new Error('Publish this repository to GitHub first: the hosting platforms link to GitHub repositories.')
+    const { defaultBranch } = await commitBranchInfo(repository.root)
+    return {
+      root: repository.root,
+      link: {
+        owner: remote.owner,
+        name: remote.repo,
+        githubToken: () => repositoryToken(repository.root),
+        productionBranch: defaultBranch ?? 'main',
+      },
+    }
+  }
   const service = new DeployService(
     {
       getState,
       setState,
+      async githubToken(projectId, repository) {
+        const root = await checkoutOf(projectId, repository)
+        if (!root) throw new Error(`This project has no checkout of ${repository} on this host.`)
+        return repositoryToken(root)
+      },
       stackTarget: (projectId) => stack(projectId)?.deployTarget ?? stack(projectId)?.id ?? null,
       async beforeProduction(projectId, binding) {
-        for (const repository of workspace.listRepositories(projectId)) {
-          const remote = await forgeRemoteOf(repository.root)
-          if (remote && `${remote.owner}/${remote.repo}` === binding.repository)
-            return resources.migrateProduction(projectId, repository.root, binding.productionBranch)
-        }
+        const root = binding.repository ? await checkoutOf(projectId, binding.repository) : null
+        if (root) return resources.migrateProduction(projectId, root, binding.productionBranch)
       },
-      async githubRepository(projectId, repoId) {
-        const repository = workspace.getRepository(repoId)
-        if (repository.projectId !== projectId) throw new Error('Choose a repository of this project.')
-        const remote = await forgeRemoteOf(repository.root)
-        if (!remote || remote.origin !== 'github.com')
-          throw new Error('Publish this repository to GitHub first: the hosting platforms link to GitHub repositories.')
-        const { defaultBranch } = await commitBranchInfo(repository.root)
-        return {
-          owner: remote.owner,
-          name: remote.repo,
-          githubToken: () => repositoryToken(repository.root),
-          productionBranch: defaultBranch ?? 'main',
-        }
-      },
+      githubRepository: async (projectId, repoId) => (await githubRepository(projectId, repoId)).link,
     },
     accounts,
   )
@@ -183,6 +201,14 @@ export function createDeploys(
     uptime,
     resources,
     releases,
+    server: new ServerSetup(
+      getState,
+      setState,
+      accounts,
+      service,
+      { repository: githubRepository, actionsSecrets: githubActionsTarget },
+      credentials,
+    ),
     wake,
   }
 }

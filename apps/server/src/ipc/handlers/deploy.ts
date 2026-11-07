@@ -2,10 +2,11 @@ import { z } from 'zod'
 import type { StoreTarget } from '@ramu/shared/types/deploy'
 import {
   ACCOUNT_PLATFORMS,
+  CLI_SIGN_IN_PLATFORMS,
   HOSTING_PLATFORMS,
-  isHostingPlatform,
   RESOURCE_PROVIDERS,
   type AccountPlatform,
+  type CliSignInPlatform,
   type HostingPlatform,
   type ResourceProvider,
 } from '@ramu/shared/types/deploy'
@@ -25,6 +26,14 @@ import { id } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
 const platform = z.enum(HOSTING_PLATFORMS)
+const cliPlatform = z.enum(CLI_SIGN_IN_PLATFORMS)
+const serverInput = z.object({
+  host: z.string().trim().min(1).max(253),
+  port: z.number().int().min(1).max(65535),
+  user: z.string().trim().min(1).max(32),
+  /** A pasted private key; null signs in with the key Ramu created. */
+  privateKey: z.string().max(16_384).nullable(),
+})
 const account = z.enum(ACCOUNT_PLATFORMS)
 const provider = z.enum(RESOURCE_PROVIDERS)
 const plan = z.string().trim().min(1).max(60)
@@ -54,7 +63,10 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
     if (!administrator()) throw new Error('Connect hosting accounts on the host running Ramu.')
   }
   const summary = async (check: boolean) => ({
-    accounts: await deploys().accounts.list(check, (name) => isHostingPlatform(name) && !!platformCli(name)),
+    accounts: await deploys().accounts.list(
+      check,
+      (name) => (CLI_SIGN_IN_PLATFORMS as readonly string[]).includes(name) && !!platformCli(name),
+    ),
     canAdminister: administrator(),
   })
   // Deploy actions on one project run one at a time, so two clicks never start two deploys.
@@ -87,8 +99,8 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
   return {
     'deploy.accounts': { args: z.tuple([z.boolean()]), run: (check: boolean) => summary(check) },
     'deploy.signIn': {
-      args: z.tuple([platform]),
-      run: (name: HostingPlatform) => {
+      args: z.tuple([cliPlatform]),
+      run: (name: CliSignInPlatform) => {
         administrate()
         return deploys().signIns.start(name)
       },
@@ -99,6 +111,7 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([account, z.string().trim().min(8).max(4000).regex(/^\S+$/, 'Paste the token alone')]),
       run: (name: AccountPlatform, token: string) => {
         administrate()
+        if (name === 'server') throw new Error('Connect your server with its address and an SSH key.')
         return deploys().accounts.save(name, { token }, 'token')
       },
     },
@@ -109,6 +122,29 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
         await deploys().accounts.disconnect(name)
         return summary(false)
       },
+    },
+    'deploy.server': {
+      args: z.tuple([z.boolean()]),
+      run: (check: boolean) => deploys().server.status(check),
+    },
+    'deploy.serverKey': {
+      args: z.tuple([]),
+      run: () => {
+        administrate()
+        return deploys().server.createKey()
+      },
+    },
+    'deploy.connectServer': {
+      args: z.tuple([serverInput]),
+      run: (input: z.infer<typeof serverInput>) => {
+        administrate()
+        return deploys().server.connect(input)
+      },
+    },
+    'deploy.linkServer': {
+      args: z.tuple([id, id, domain]),
+      run: (projectId: string, repoId: string, name: string) =>
+        exclusive(projectId, () => deploys().server.link(project(projectId), repoId, name)),
     },
     'deploy.project': {
       args: z.tuple([id]),

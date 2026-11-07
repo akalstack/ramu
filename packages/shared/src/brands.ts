@@ -1,4 +1,5 @@
 // Which brand mark the desktop, the phone and the site show beside a forge, platform or service's name.
+import type { AccountPlatform } from './types/deploy'
 import type { ForgeService } from './types/forge'
 
 /** Every brand whose mark ships in `apps/web/src/assets/brands/`. */
@@ -38,4 +39,9 @@ const FORGE_BRANDS: Record<ForgeService, BrandId> = {
 
 export function forgeBrand(service: ForgeService): BrandId {
   return FORGE_BRANDS[service]
+}
+
+/** The mark beside a hosting account: the platform's own, and Docker's for the person's own server, which runs it. */
+export function accountBrand(platform: AccountPlatform): BrandId {
+  return platform === 'server' ? 'docker' : platform
 }
