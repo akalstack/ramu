@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Image, Share, TextInput, View, useWindowDimensions } from 'react-native'
+import { Alert, Image, PanResponder, Share, TextInput, View, useWindowDimensions } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ArrowDown, ArrowUp, MoreHorizontal } from 'lucide-react-native'
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react-native'
 import type { Slide } from '@ramu/shared/artifactSource'
 import { designTexts } from '@ramu/shared/designText'
 import {
@@ -29,7 +29,7 @@ import { Button, Card, IconButton, Row, Sheet, T } from '../../../components/ui'
 import InteractiveFrame from '../../../components/InteractiveFrame'
 import { hostShareLabel, SHARE_LABELS } from '../../../components/ArtifactKindMark'
 import { shareFile } from '../../../components/interactiveShare'
-import { hostExportFormats, kindExports } from '@ramu/shared/interactiveExport'
+import { hostExportFormats, kindExports, slideCount } from '@ramu/shared/interactiveExport'
 import { pageRunActivity } from '../../../runtime/pageRunActivity'
 import { WIDGET_PAGE_KEY, widgetPage } from '../../../components/PageWidgetSync'
 import {
@@ -125,6 +125,34 @@ export default function PageScreen() {
     const id = nextMessage.current
     setMessages((all) => [...all.slice(-40), { id, data }])
   }, [])
+  // A deck shows one slide at a time on the phone; a sideways swipe or the arrows move through it.
+  const slides = document ? slideCount(document) : 0
+  const [slide, setSlide] = useState(0)
+  const slideAt = useRef(0)
+  const showSlide = useCallback(
+    (index: number) => {
+      const next = Math.max(0, Math.min(slides - 1, index))
+      slideAt.current = next
+      setSlide(next)
+      post({ type: 'slide', value: { index: next, present: true } })
+    },
+    [post, slides],
+  )
+  const showSlideLatest = useRef(showSlide)
+  useEffect(() => {
+    showSlideLatest.current = showSlide
+  }, [showSlide])
+  const swipe = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponderCapture: (_, move) =>
+          Math.abs(move.dx) > 24 && Math.abs(move.dx) > Math.abs(move.dy) * 2,
+        onPanResponderRelease: (_, move) => {
+          if (Math.abs(move.dx) > 48) showSlideLatest.current(slideAt.current + (move.dx < 0 ? 1 : -1))
+        },
+      }),
+    [],
+  )
   const reply = useCallback(
     (requestId: string, value: unknown, failure?: string) =>
       post(failure ? { type: 'reply', requestId, error: failure } : { type: 'reply', requestId, value: value ?? null }),
@@ -590,18 +618,42 @@ export default function PageScreen() {
             />
           </View>
         ) : null}
+        {slides > 1 ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.s }}>
+            <IconButton
+              icon={ChevronLeft}
+              label={say('Previous slide')}
+              disabled={slide === 0}
+              onPress={() => showSlide(slide - 1)}
+            />
+            <T size={font.caption} tone="muted" accessibilityLiveRegion="polite">
+              {say('{current} of {count}', { current: slide + 1, count: slides })}
+            </T>
+            <IconButton
+              icon={ChevronRight}
+              label={say('Next slide')}
+              disabled={slide === slides - 1}
+              onPress={() => showSlide(slide + 1)}
+            />
+          </View>
+        ) : null}
         {document ? (
-          <InteractiveFrame
-            html={html}
-            title={page?.title ?? document.reference.title}
-            instance={instance}
-            height={Math.max(320, screenHeight - 140)}
-            theme={theme}
-            messages={messages}
-            maxMessage={3_500_000}
-            onMessage={receive}
-            onStop={() => setFrameError(say('Content stopped. Reload to try again.'))}
-          />
+          <View {...(slides > 1 ? swipe.panHandlers : {})}>
+            <InteractiveFrame
+              html={html}
+              title={page?.title ?? document.reference.title}
+              instance={instance}
+              height={Math.max(320, screenHeight - 140)}
+              theme={theme}
+              messages={messages}
+              maxMessage={3_500_000}
+              onMessage={receive}
+              onStop={() => setFrameError(say('Content stopped. Reload to try again.'))}
+              onPainted={() => {
+                if (slides > 1) post({ type: 'slide', value: { index: slideAt.current, present: true } })
+              }}
+            />
+          </View>
         ) : null}
       </View>
       <Sheet open={menu} onClose={() => setMenu(false)} title={page?.title ?? say('Artifacts')}>

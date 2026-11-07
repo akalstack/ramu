@@ -11,6 +11,7 @@ export default function InteractiveFrame({
   theme,
   onMessage,
   onStop,
+  onPainted,
   messages,
   maxMessage = 40_000,
 }: InteractiveFrameProps) {
@@ -77,6 +78,7 @@ export default function InteractiveFrame({
             const message = JSON.parse(event.nativeEvent.data)
             if (message?.ramuInteractive === 1 && message.instance === instance && message.type === 'painted') {
               setPainted(instance)
+              onPainted?.()
               return
             }
             onMessage(message)

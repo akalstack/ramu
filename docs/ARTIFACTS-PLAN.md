@@ -78,16 +78,13 @@ A Doc's Markdown and a Mermaid diagram's source (desktop and phone) a deck's sli
 ### 4. Desktop
 
 - The artifact view opens as a workspace tab beside the chat, with the toolbar each kind has today (Outline and Edit text for docs, Range and Refresh for dashboards, playback for motions).
-- Thread cards for every kind show a live preview (the first slide, the doc's opening, the chart, the poster frame) with **Open**, **Keep as artifact** and the kind's export.
 - While presenting Slides, speaker notes show on a second display when there is one.
 
 ### 5. Phone
 
-- The **Artifacts** tab filters by kind beside the host filter (built). Each kind gets a viewer that fits the phone:
-  - Slides: swipe, with Present when the phone is connected to a display.
-  - Doc: reading width, with editing.
+- The **Artifacts** tab filters by kind, a deck shows one slide at a time with swipe and arrows, a doc keeps a reading width with **Edit text**, and a dashboard draws its figures above its charts (built). Remaining viewers:
+  - Slides: Present when the phone is connected to a display.
   - Motion: native video for the exported MP4.
-  - Dashboard: figures above charts.
 - **Export** hands the file to the share sheet; **Add to Home Screen or share** and the home-screen widget work for every kind.
 - **Present from the phone:** the phone turns slides on the desktop's Present view of the same deck.
 
