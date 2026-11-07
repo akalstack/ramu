@@ -4,9 +4,7 @@ Abilities let a thread's agent ask Ramu for something its provider cannot do (an
 
 ## The need
 
-- **Choices differ per project.** A client's project may have to stay on one provider, but ability choices are host-wide today.
-- **Asking for an ability by name.** A person who wants a teammate for images has to know which model has image generation.
-- **Auto is not cost-aware.** It follows the fallback order, not which provider is cheapest for good-enough results.
+- **Auto does not compare images.** Image providers are ordered by cost only, not by how good their images are.
 - **Abilities beyond the providers' own.** An image, speech or search service connected as a Shared MCP server cannot stand in for a provider.
 
 ## Delivery
@@ -28,9 +26,10 @@ Abilities let a thread's agent ask Ramu for something its provider cannot do (an
 
 ### 3. Cost-aware Auto
 
-- **Measure first:** for each ability, Ramu keeps a small set of fixed sample tasks (for example, five image prompts and five long-context questions with known answers). It runs them on each signed-in provider that has the ability when that provider is first checked and after each update, and stores a quality score with the result. The score comes from a reviewer model's rubric for images and from exact checks where answers are known.
-- **Then choose:** with **Auto**, Ramu picks the cheapest provider whose score is within a margin of the best, using Activity's per-provider usage for the cost. Subscriptions count as cheaper than API keys while they have room.
-- **Shown to the person:** the Abilities settings show each provider's score and typical cost per call, and the transcript row says "chosen as the cheapest good enough".
+Scored samples for web search and long documents, subscription-before-API-key ordering, typical cost from reported costs, the score and cost in Settings and **chosen as the cheapest good enough** on the row are built ([Abilities](guide/agents.md#abilities)). Remaining:
+
+- **Images:** a reviewer model's rubric score for a few fixed image prompts, so image providers are compared on quality as well as cost.
+- **Codex costs:** Codex reports tokens but no cost, so a Codex API key ranks after keys with a reported cost until Ramu prices its tokens.
 
 ### 4. Abilities from Shared MCP servers
 
@@ -46,6 +45,6 @@ Image generation and web search can be mapped to an approved Shared MCP tool (se
 
 ## Acceptance
 
-- **Cost-aware Auto:** with two providers that can make images, Auto picks the cheaper one whose score is within the margin, and the row says why.
+- **Cost-aware Auto:** with two signed-in providers that can search, one on an API key, Auto picks the subscription, and the row says why; with image scores built, the same holds for images.
 - **Music:** a Motion explainer gets background music from a provider that offers it, and the exported MP4 has it mixed under the narration.
 - Checks that need live providers are listed under [Acceptance](roadmap.md#acceptance) until run.

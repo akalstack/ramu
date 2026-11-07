@@ -473,7 +473,7 @@ function AbilityCard({ call, chat }: { call: AbilityCall; chat: Chat }) {
       </T>
       {call.model ? (
         <T size={font.caption} tone="muted" numberOfLines={1}>
-          {call.model}
+          {call.cheapest ? `${call.model} · ${say('chosen as the cheapest good enough')}` : call.model}
         </T>
       ) : null}
       {call.sent.prompt ? (

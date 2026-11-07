@@ -68,6 +68,12 @@ export interface AbilityCheck {
   checkedAt: string
   /** Why it failed, in a sentence. */
   detail?: string
+  /** The share of the check's sample tasks answered right, 0 to 1; absent for an ability without measured samples. */
+  score?: number
+  /** The login uses an API key, billed per call, rather than a subscription. */
+  apiKey?: boolean
+  /** The middle of the costs the provider reported for this ability's recent calls, in US dollars. */
+  typicalCostUsd?: number
 }
 
 /** A Shared MCP server's tool the person mapped to an ability, called through the thread's own Shared MCP access. */
@@ -105,11 +111,23 @@ export interface AbilityRoute {
   provider: AgentProvider
   model: string
   accountId: string
+  /** Auto chose it over a pricier provider whose sample score was no better by more than the margin. */
+  cheapest?: true
 }
 
+/** How far below the best sample score a provider may be and still count as good enough. */
+export const ABILITY_SCORE_MARGIN = 0.2
+
 /**
- * The providers a call tries, in order: a fixed choice alone, or with Auto every provider whose check passed, in the
- * person's fallback order (providers missing from it last). Only each provider's chosen login is used: moving to another
+ * What a call is likely to cost on a login: a subscription costs nothing extra while it has room (a limited one hands
+ * over to the next route), an API key its typical reported cost, and an API key with no reported cost ranks last.
+ */
+const callCost = (check: AbilityCheck) => (check.apiKey ? (check.typicalCostUsd ?? Number.POSITIVE_INFINITY) : 0)
+
+/**
+ * The providers a call tries, in order: a fixed choice alone, or with Auto every provider whose check passed. Auto
+ * puts the good-enough ones first (within the margin of the best sample score, or all when none is scored), cheapest
+ * first, then the rest by score; equal ones keep the person's fallback order (providers missing from it last). Only each provider's chosen login is used: moving to another
  * subscription when one is limited is never automatic. Null when the ability is Off.
  */
 export function abilityRoutes(
@@ -140,14 +158,26 @@ export function abilityRoutes(
     return index < 0 ? order.length : index
   }
   const seen = new Set<AgentProvider>()
-  return passed
+  const candidates = passed
     .slice()
     .sort((a, b) => rank(a.provider) - rank(b.provider))
-    .flatMap((check) => {
-      if (seen.has(check.provider)) return []
-      seen.add(check.provider)
-      return [{ provider: check.provider, model: check.model, accountId: check.accountId }]
-    })
+    .filter((check) => !seen.has(check.provider) && !!seen.add(check.provider))
+  const scores = candidates.flatMap((check) => (check.score === undefined ? [] : [check.score]))
+  const best = scores.length ? Math.max(...scores) : null
+  const good = (check: AbilityCheck) =>
+    best === null || (check.score !== undefined && check.score >= best - ABILITY_SCORE_MARGIN)
+  const ordered = [
+    ...candidates.filter(good).sort((a, b) => callCost(a) - callCost(b)),
+    ...candidates.filter((check) => !good(check)).sort((a, b) => (b.score ?? -1) - (a.score ?? -1)),
+  ]
+  const first = ordered[0]
+  const cheapest = !!first && candidates.some((check) => good(check) && callCost(check) > callCost(first))
+  return ordered.map((check, index) => ({
+    provider: check.provider,
+    model: check.model,
+    accountId: check.accountId,
+    ...(cheapest && index === 0 ? { cheapest: true as const } : {}),
+  }))
 }
 
 /** What `agent_models` says about abilities: which provider offers each, and which are not available here. */
@@ -208,5 +238,9 @@ export interface AbilityCall {
   /** Why a refused call was refused: no provider has it, the person turned it Off, or declined the approval. */
   refusal?: 'unavailable' | 'off' | 'declined' | 'limited'
   tokens?: { input: number; output: number }
+  /** What the provider reported the call cost, in US dollars. */
+  costUsd?: number
+  /** Auto chose the provider as the cheapest good-enough one. */
+  cheapest?: true
   durationMs?: number
 }

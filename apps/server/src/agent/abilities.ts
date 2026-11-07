@@ -265,10 +265,7 @@ export class AbilityService {
     this.stopping.abort()
   }
 
-  private async probe(
-    target: Parameters<AbilityProbe>[0],
-    signal: AbortSignal,
-  ): Promise<{ ok: boolean; detail?: string }> {
+  private async probe(target: Parameters<AbilityProbe>[0], signal: AbortSignal): ReturnType<AbilityProbe> {
     const route: AbilityRoute = { provider: target.provider, model: target.model, accountId: target.accountId }
     const key = `${target.provider}|${target.accountId}`
     const ask = (request: AbilityRequest, timeoutMs: number) =>
@@ -311,19 +308,25 @@ export class AbilityService {
         const out = await ask(
           {
             ability: 'web_search',
-            prompt: searchPrompt('What is the official website of the Node.js project?'),
+            prompt: searchPrompt(SEARCH_SAMPLES.map((sample, index) => `${index + 1}. ${sample.question}`).join('\n')),
             images: [],
           },
           120_000,
         )
-        return out.sources.length ? { ok: true } : { ok: false, detail: 'The answer cited no web sources.' }
+        const found = `${out.text}\n${out.sources.map((source) => source.url).join('\n')}`.toLowerCase()
+        const score = SEARCH_SAMPLES.filter((sample) => found.includes(sample.domain)).length / SEARCH_SAMPLES.length
+        return out.sources.length
+          ? { ok: true, score, ...cost(out) }
+          : { ok: false, detail: 'The answer cited no web sources.', ...cost(out) }
       }
       case 'long_context': {
-        const out = await ask(
-          { ability: 'long_context', prompt: 'Reply with the single word: ready', images: [] },
-          60_000,
-        )
-        return /ready/i.test(out.text) ? { ok: true } : { ok: false, detail: 'The model did not answer.' }
+        const sample = longSample()
+        const out = await ask({ ability: 'long_context', prompt: sample.prompt, images: [] }, 240_000)
+        const answered = out.text.toLowerCase()
+        const score = sample.answers.filter((answer) => answered.includes(answer)).length / sample.answers.length
+        return score
+          ? { ok: true, score, ...cost(out) }
+          : { ok: false, detail: 'The model answered none of the questions about a long document.', ...cost(out) }
       }
       default:
         return { ok: false, detail: 'Ramu has no check for this ability yet.' }
@@ -525,6 +528,7 @@ export class AbilityService {
       )
       if ((base.ability === 'image_generation' || base.ability === 'image_edit') && !attachments.length)
         throw new Error(`${providerName(route.provider)} returned no image. ${clip(out.text, 300)}`.trim())
+      if (out.costUsd !== undefined) this.checks.recordCost(route.provider, route.accountId, base.ability, out.costUsd)
       return {
         ...base,
         status: 'done',
@@ -535,6 +539,8 @@ export class AbilityService {
         ...(attachments.length ? { attachments } : {}),
         ...(out.sources.length ? { sources: out.sources } : {}),
         ...(out.tokens ? { tokens: out.tokens } : {}),
+        ...(out.costUsd === undefined ? {} : { costUsd: out.costUsd }),
+        ...(route.cheapest ? { cheapest: true as const } : {}),
         durationMs: Date.now() - started,
       }
     }
@@ -746,6 +752,50 @@ function editPrompt(prompt: string): string {
     `<change>\n${prompt}\n</change>`,
     'After the image, reply with one short sentence describing the change.',
   ].join('\n\n')
+}
+
+const cost = (out: AbilityOutput) => (out.costUsd === undefined ? {} : { costUsd: out.costUsd })
+
+/** The web search check's sample: questions whose answer names a site that does not move. */
+const SEARCH_SAMPLES = [
+  { question: 'What is the official website of the Node.js project?', domain: 'nodejs.org' },
+  { question: 'Where is the Python Software Foundation’s website?', domain: 'python.org' },
+  { question: 'What is the website of the Rust package registry?', domain: 'crates.io' },
+  { question: 'What is the official website of the Go programming language?', domain: 'go.dev' },
+  { question: 'What is the official website of the Kotlin language?', domain: 'kotlinlang.org' },
+]
+
+/**
+ * The long-read check's sample: about 50,000 tokens of filler with five notes spread through it, and a question about
+ * each. The same every time, so scores compare across providers and versions.
+ */
+function longSample(): { prompt: string; answers: string[] } {
+  const notes = [
+    ['access code of the north greenhouse', '4817'],
+    ['name of the ferry to the lighthouse', 'marigold'],
+    ['colour of the archive door', 'teal'],
+    ['month of the harvest fair', 'october'],
+    ['surname of the clockmaker', 'okonkwo'],
+  ] as const
+  const words =
+    'river stone market lantern orchard bridge harbour meadow valley signal garden ledger window summit'.split(' ')
+  let seed = 7
+  const next = () => (seed = (seed * 48271) % 2147483647)
+  const sentence = () =>
+    `The ${words[next() % words.length]} near the ${words[next() % words.length]} was ${['quiet', 'busy', 'old', 'new'][next() % 4]} that ${['morning', 'evening', 'season', 'year'][next() % 4]}.`
+  const paragraphs: string[] = []
+  for (let index = 0; index < 400; index++) {
+    const lines = Array.from({ length: 8 }, sentence)
+    const note = index % 80 === 40 ? notes[(index - 40) / 80] : undefined
+    if (note) lines.splice(4, 0, `Note ${(index - 40) / 80 + 1}: the ${note[0]} is ${note[1]}.`)
+    paragraphs.push(lines.join(' '))
+  }
+  return {
+    prompt: longReadPrompt(notes.map(([thing], index) => `${index + 1}. What is the ${thing}?`).join('\n'), [
+      { name: 'town-records.txt', text: paragraphs.join('\n\n') },
+    ]),
+    answers: notes.map(([, answer]) => answer),
+  }
 }
 
 function searchPrompt(query: string): string {

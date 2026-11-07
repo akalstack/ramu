@@ -19,7 +19,7 @@ import { SettingsGroupTitle, SettingsRow, SettingsTitle } from '@/components/set
 import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
 import { Dropdown } from '../Menu'
-import { t, useLanguage } from '../i18n'
+import { formatLocale, t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { modelDisplayName, useModelSets } from '../models/ModelSets'
 import { useSettingsInvoke } from './SettingsScope'
@@ -204,6 +204,24 @@ export function ProviderAbilities({ status, onChecked }: { status: ProviderStatu
             <span className={check.ok ? '' : 'muted text-muted-foreground'}>
               {t(ABILITY_LABELS[check.ability])}
               {check.ok ? ` · ${t('Available')}` : ` · ${t('Not available')}${check.detail ? `: ${check.detail}` : ''}`}
+              {check.ok && check.score !== undefined
+                ? ` · ${t('{0}% on the sample tasks', { '0': String(Math.round(check.score * 100)) })}`
+                : ''}
+              {check.ok
+                ? ` · ${
+                    !check.apiKey
+                      ? t('Subscription')
+                      : check.typicalCostUsd === undefined
+                        ? t('API key, cost not reported')
+                        : t('About {0} a call', {
+                            '0': new Intl.NumberFormat(formatLocale(), {
+                              style: 'currency',
+                              currency: 'USD',
+                              maximumFractionDigits: 3,
+                            }).format(check.typicalCostUsd),
+                          })
+                  }`
+                : ''}
             </span>
           </li>
         ))}

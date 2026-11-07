@@ -23,6 +23,8 @@ export interface AbilityOutput {
   images: { bytes: Buffer; extension: string }[]
   sources: AbilitySource[]
   tokens?: { input: number; output: number }
+  /** What the provider reported the step cost, in US dollars, where it reports one. */
+  costUsd?: number
 }
 
 /** Runs one ability step on one provider login; Ramu's routing, approval and recording stay with the caller. */
@@ -83,6 +85,7 @@ async function claudeAbility(
     input.close()
     let text = ''
     let tokens: AbilityOutput['tokens']
+    let costUsd: number | undefined
     for await (const message of run) {
       if (message.type === 'assistant')
         for (const block of message.message.content) if (block.type === 'text') text += block.text
@@ -96,11 +99,18 @@ async function claudeAbility(
         const usage = message.usage as { input_tokens?: number; output_tokens?: number } | undefined
         if (typeof usage?.input_tokens === 'number' && typeof usage.output_tokens === 'number')
           tokens = { input: usage.input_tokens, output: usage.output_tokens }
+        if (typeof message.total_cost_usd === 'number') costUsd = message.total_cost_usd
       }
     }
     if (abort.signal.aborted)
       throw new Error(signal.aborted ? 'The ability call was stopped' : 'The ability call timed out')
-    return { text: text.trim(), images: [], sources: markdownLinks(text), ...(tokens ? { tokens } : {}) }
+    return {
+      text: text.trim(),
+      images: [],
+      sources: markdownLinks(text),
+      ...(tokens ? { tokens } : {}),
+      ...(costUsd === undefined ? {} : { costUsd }),
+    }
   } finally {
     clearTimeout(timer)
     signal.removeEventListener('abort', stop)

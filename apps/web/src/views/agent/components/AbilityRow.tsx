@@ -3,7 +3,7 @@ import { BookOpen, ImageIcon, Search, Sparkles } from 'lucide-react'
 import { ABILITY_DONE, ABILITY_LABELS, type AbilityCall } from '@ramu/shared/providers/abilities'
 import { providerName } from '@ramu/shared/providers/providers'
 import { Button } from '@/components/desktop-button'
-import { t, useLanguage } from '../../../i18n'
+import { formatLocale, t, useLanguage } from '../../../i18n'
 import { Attachments } from '../../../composer/Attachments'
 import { useHost } from '../../../workspace/HostProvider'
 import { notifyError } from '../../../chat/Notifications'
@@ -38,6 +38,12 @@ export function AbilityRow({ call, sessionId, live }: { call: AbilityCall; sessi
       : t('{0} failed', { '0': t(ABILITY_LABELS[call.ability]) })
   const facts = [
     call.model,
+    call.cheapest ? t('chosen as the cheapest good enough') : '',
+    call.costUsd
+      ? new Intl.NumberFormat(formatLocale(), { style: 'currency', currency: 'USD', maximumFractionDigits: 3 }).format(
+          call.costUsd,
+        )
+      : '',
     call.durationMs ? t('{0}s', { '0': String(Math.max(1, Math.round(call.durationMs / 1000))) }) : '',
     call.tokens ? t('{0} tokens', { '0': (call.tokens.input + call.tokens.output).toLocaleString() }) : '',
   ].filter(Boolean)

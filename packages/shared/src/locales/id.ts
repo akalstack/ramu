@@ -6103,4 +6103,9 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Deployment pertama gagal. Logs menunjukkan sebabnya; thread terbaru proyek sudah diberi tahu.',
   'Run the migrations before each production build goes live: the platform holds every finished build, Ramu runs the migrate command from ramu.json against production at that commit, and only then makes it live. A failed migration leaves the previous build live. This computer must be awake for production deploys.':
     'Jalankan migrasi sebelum setiap build produksi tayang: platform menahan setiap build yang selesai, Ramu menjalankan perintah migrate dari ramu.json terhadap produksi pada commit itu, lalu baru menayangkannya. Migrasi yang gagal membuat build sebelumnya tetap tayang. Komputer ini harus menyala untuk deploy produksi.',
+  '{0}% on the sample tasks': '{0}% pada tugas contoh',
+  'Subscription': 'Langganan',
+  'API key, cost not reported': 'API key, biaya tidak dilaporkan',
+  'About {0} a call': 'Sekitar {0} per panggilan',
+  'chosen as the cheapest good enough': 'dipilih sebagai yang termurah dan cukup baik',
 }

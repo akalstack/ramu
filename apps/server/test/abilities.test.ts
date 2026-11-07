@@ -87,7 +87,6 @@ function service(
   extra: Partial<AbilityHost> = {},
 ) {
   const host: AbilityHost = {
-    ...extra,
     preferences: () => preferences,
     catalog: async () => catalogs,
     session: () => session(provider),
@@ -98,12 +97,13 @@ function service(
     search,
     login: async (name) =>
       name === 'codex' || name === 'claude-code'
-        ? { provider: name, accountId: 'default', version: versions[name], login: 'me@example.com' }
+        ? { provider: name, accountId: 'default', version: versions[name], login: 'me@example.com', apiKey: false }
         : null,
     readChecks: () => stored,
     writeChecks: (checks) => {
       stored = checks
     },
+    ...extra,
   }
   return new AbilityService(host, run, (name) => DECLARED[name] ?? [])
 }
@@ -118,7 +118,9 @@ const working: AbilityRun = async (route, declaration, request) => {
       images: [],
       sources: [{ title: 'Node', url: 'https://nodejs.org' }],
     }
-  return { text: 'ready', images: [], sources: [], tokens: { input: 10, output: 2 } }
+  // The long-read check asks about notes in its sample document; a real call gets a plain answer.
+  const notes = [...request.prompt.matchAll(/Note \d: the [^.]+ is (\w+)\./g)].map((match) => match[1])
+  return { text: notes.join('\n') || 'ready', images: [], sources: [], tokens: { input: 10, output: 2 } }
 }
 
 const withAbilities = (abilities: Partial<AbilityPreferences>) => {
@@ -258,6 +260,32 @@ describe('ability calls', () => {
     expect(answer).toMatchObject({ status: 'done', ranOn: 'Codex (gpt-x)' })
     expect(run.mock.calls.map(([route]) => route.provider)).toEqual(['claude-code', 'codex'])
     expect(run.mock.calls.every(([route]) => route.accountId === 'default')).toBe(true)
+  })
+
+  it('scores each check on its sample tasks, and Auto picks the cheaper of two good-enough providers', async () => {
+    // Codex signs in with an API key and Claude with a subscription; both search equally well.
+    const login: AbilityHost['login'] = async (name) =>
+      name === 'codex' || name === 'claude-code'
+        ? { provider: name, accountId: 'default', version: '1', login: name, apiKey: name === 'codex' }
+        : null
+    const run = vi.fn<AbilityRun>(async (route, declaration, request, signal, timeout) => ({
+      ...(await working(route, declaration, request, signal, timeout)),
+      costUsd: 0.01,
+    }))
+    const abilities = service(run, 'opencode', undefined, { login })
+    await abilities.refresh()
+    const checks = abilities.checks.list()
+    const of = (provider: AgentProvider, ability: string) =>
+      checks.find((check) => check.provider === provider && check.ability === ability)
+    // The fake cites one of the five sites the search sample asks for, and finds every note in the long document.
+    expect(of('claude-code', 'web_search')?.score).toBe(0.2)
+    expect(of('claude-code', 'long_context')?.score).toBe(1)
+    expect(of('codex', 'web_search')).toMatchObject({ apiKey: true, typicalCostUsd: 0.01 })
+    withAbilities({})
+    preferences = { ...preferences, fallback: { ...preferences.fallback, order: [{ provider: 'codex' }] as never } }
+    await abilities.call('thread', 'web_search', { query: 'Node release' })
+    const recorded = (events.at(-1) as { call: AbilityCall }).call
+    expect(recorded).toMatchObject({ provider: 'claude-code', cheapest: true, costUsd: 0.01 })
   })
 
   it("falls back to Ramu's own search when no provider can search", async () => {

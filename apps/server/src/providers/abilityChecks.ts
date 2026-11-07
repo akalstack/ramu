@@ -6,14 +6,33 @@ import { providerAdapter } from './adapters'
 import { findExecutable, providerAccountId, providerBinary, providerEnvironment } from './providerBinaries'
 import { signInState } from './providers'
 
-/** A check as stored: the login identity it ran under stays on the host and is never returned. */
-type Stored = AbilityCheck & { login: string }
+/**
+ * A check as stored: the login identity it ran under stays on the host and is never returned, and so do the costs its
+ * calls reported, which the list shows as their middle value.
+ */
+type Stored = Omit<AbilityCheck, 'typicalCostUsd'> & { login: string; costs?: number[] }
+
+/** Reported costs kept per check, newest last. */
+const KEPT_COSTS = 20
+
+const middle = (values: readonly number[]) => {
+  const sorted = [...values].sort((a, b) => a - b)
+  const half = Math.floor(sorted.length / 2)
+  return sorted.length % 2 ? sorted[half]! : (sorted[half - 1]! + sorted[half]!) / 2
+}
 
 /** One check: run the ability once with the smallest request that proves it, and say whether it worked. */
 export type AbilityProbe = (
   target: { provider: AgentProvider; accountId: string; model: string; declaration: AbilityDeclaration },
   signal: AbortSignal,
-) => Promise<{ ok: boolean; detail?: string }>
+) => Promise<{
+  ok: boolean
+  detail?: string
+  /** The share of the check's sample tasks answered right. */
+  score?: number
+  /** What the provider reported the check cost. */
+  costUsd?: number
+}>
 
 /** The login a check runs under: who is signed in and on which installed version. */
 export interface AbilityLogin {
@@ -22,6 +41,8 @@ export interface AbilityLogin {
   version: string
   /** Changes when a different person or plan signs in, so the checks run again. */
   login: string
+  /** The login uses an API key, billed per call. */
+  apiKey: boolean
   models: readonly AgentModel[]
 }
 
@@ -43,7 +64,13 @@ export async function providerLogin(
   if (!version) return null
   const signIn = await signInState(provider, binary, env).catch(() => ({ signedIn: false }) as const)
   if (!signIn.signedIn) return null
-  return { provider, accountId, version, login: [signIn.email, signIn.plan, signIn.apiKey ? 'key' : ''].join('|') }
+  return {
+    provider,
+    accountId,
+    version,
+    login: [signIn.email, signIn.plan, signIn.apiKey ? 'key' : ''].join('|'),
+    apiKey: !!signIn.apiKey,
+  }
 }
 
 /** The model a check and later calls use: the declared one, the largest window for long context, else the default. */
@@ -91,7 +118,23 @@ export class AbilityChecks {
   list(provider?: AgentProvider): AbilityCheck[] {
     return this.stored()
       .filter((entry) => !provider || entry.provider === provider)
-      .map(({ login: _login, ...check }) => check)
+      .map(({ login: _login, costs, ...check }) =>
+        costs?.length ? { ...check, typicalCostUsd: middle(costs) } : check,
+      )
+  }
+
+  /** Keeps the cost a call reported on the current check of the login it ran on. */
+  recordCost(provider: AgentProvider, accountId: string, ability: Ability, costUsd: number): void {
+    if (!Number.isFinite(costUsd) || costUsd < 0) return
+    const stored = this.stored()
+    // The newest check of that login is the current one; older versions' entries were dropped when it ran.
+    const index = stored.findLastIndex(
+      (entry) => entry.provider === provider && entry.accountId === accountId && entry.ability === ability,
+    )
+    const entry = stored[index]
+    if (!entry) return
+    stored[index] = { ...entry, costs: [...(entry.costs ?? []), costUsd].slice(-KEPT_COSTS) }
+    this.write(stored)
   }
 
   running(): boolean {
@@ -135,6 +178,7 @@ export class AbilityChecks {
         version: target.version,
         login: target.login,
         checkedAt: new Date().toISOString(),
+        ...(target.apiKey ? { apiKey: true } : {}),
       }
       const model = checkModel(declaration, target.models)
       if (!model) {
@@ -163,6 +207,8 @@ export class AbilityChecks {
           model: model.id,
           ok: outcome.ok,
           ...(outcome.detail ? { detail: outcome.detail } : {}),
+          ...(outcome.score === undefined ? {} : { score: outcome.score }),
+          ...(outcome.costUsd === undefined ? {} : { costs: [outcome.costUsd] }),
         })
       } catch (error) {
         if (signal.aborted) break

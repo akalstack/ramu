@@ -50,6 +50,35 @@ describe('ability routing', () => {
     expect(abilityRoutes('web_search', off, checks, [], chosen)).toBeNull()
   })
 
+  it('with Auto, picks the cheapest provider whose sample score is within the margin of the best, and says so', () => {
+    const images = [
+      { ...check('codex', 'image_generation'), apiKey: true, typicalCostUsd: 0.04, score: 0.9 },
+      { ...check('claude-code', 'image_generation'), apiKey: true, typicalCostUsd: 0.01, score: 0.8 },
+      { ...check('opencode', 'image_generation'), score: 0.4 },
+    ]
+    const routes = abilityRoutes('image_generation', DEFAULT_ABILITY_PREFERENCES, images, ['codex', 'opencode'], chosen)
+    // OpenCode's subscription costs nothing extra but scored too low, so it is tried last.
+    expect(routes?.map((route) => route.provider)).toEqual(['claude-code', 'codex', 'opencode'])
+    expect(routes?.[0]?.cheapest).toBe(true)
+    expect(routes?.slice(1).some((route) => route.cheapest)).toBe(false)
+  })
+
+  it('puts a subscription with room before an API key, and an API key without a reported cost last', () => {
+    const searches = [
+      { ...check('codex', 'web_search'), apiKey: true },
+      { ...check('claude-code', 'web_search'), apiKey: true, typicalCostUsd: 0.02 },
+      check('opencode', 'web_search'),
+    ]
+    const routes = abilityRoutes('web_search', DEFAULT_ABILITY_PREFERENCES, searches, ['codex', 'claude-code'], chosen)
+    expect(routes?.map((route) => route.provider)).toEqual(['opencode', 'claude-code', 'codex'])
+  })
+
+  it('keeps the fallback order and claims nothing when every provider costs the same', () => {
+    const routes = abilityRoutes('web_search', DEFAULT_ABILITY_PREFERENCES, checks, ['codex', 'claude-code'], chosen)
+    expect(routes?.map((route) => route.provider)).toEqual(['codex', 'claude-code'])
+    expect(routes?.[0]?.cheapest).toBeUndefined()
+  })
+
   it('lists what is available, missing and off, with the tool for each', () => {
     const off = { choices: { image_generation: 'off' as const }, askBeforeOtherProvider: false }
     const listing = abilityListing(off, checks, ['codex'], chosen)
