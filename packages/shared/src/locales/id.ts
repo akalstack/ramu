@@ -6040,4 +6040,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'All time': 'Sepanjang waktu',
   'Last year': 'Setahun terakhir',
   'Last {count} days': '{count} hari terakhir',
+  'Publish to GitHub…': 'Publikasikan ke GitHub…',
+  'This repository is not on GitHub yet. Publish it, then link it here.':
+    'Repositori ini belum ada di GitHub. Publikasikan dulu, lalu tautkan di sini.',
 }

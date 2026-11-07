@@ -20,6 +20,8 @@ import { invoke as openOnThisComputer } from '../../ipc'
 import { ServerConnect } from '../../settings/ServerConnect'
 import { errorText } from '../../lib/errors'
 import { useHost } from '../../workspace/HostProvider'
+import { projectCtx } from '../../workspace/workspace'
+import { openPublishRepository } from '../../git/PublishRepositoryHost'
 import { CiSetupSection } from './CiSetup'
 import { DatabaseSection } from './Database'
 import { DomainsSection } from './Domains'
@@ -94,6 +96,31 @@ export function DeployDialog({
     }
   }
   const binding = status?.binding ?? null
+  // A repository with no remote cannot be linked yet, so the sheet offers to publish it to GitHub first.
+  const [unpublished, setUnpublished] = useState(false)
+  useEffect(() => {
+    setUnpublished(false)
+    if (!repoId || binding) return
+    let live = true
+    void host.invoke('git.status', projectCtx(project.id), repoId).then(
+      (git) => {
+        if (live) setUnpublished(git.remote === false)
+      },
+      () => {},
+    )
+    return () => {
+      live = false
+    }
+  }, [host, project.id, repoId, binding])
+  const publish = () => {
+    const repo = repos.find((entry) => entry.id === repoId)
+    if (!repo) return
+    void openPublishRepository(projectCtx(project.id), repo.id, repo.name).then((published) => {
+      if (!published) return
+      setUnpublished(false)
+      load()
+    })
+  }
   const account = accounts.find((entry) => entry.platform === (binding?.platform ?? platform))
   const canDeploy = !!binding && !!status?.capabilities.includes('deployProduction')
   const recommended = accounts.find((entry) => entry.platform === status?.recommended)
@@ -154,6 +181,7 @@ export function DeployDialog({
       }
       confirmDisabled={
         !status ||
+        (!binding && unpublished) ||
         (!binding && !storeOnly && (!platform || !repoId || !account?.connected)) ||
         (toServer && !domain.trim())
       }
@@ -214,6 +242,16 @@ export function DeployDialog({
                   <span className="flex-1 text-foreground">{repo.name}</span>
                 </RowButton>
               ))}
+            </div>
+          )}
+          {!binding && unpublished && (
+            <div className="mt-3 flex items-center gap-2 text-caption">
+              <span className="flex-1 text-muted-foreground">
+                {t('This repository is not on GitHub yet. Publish it, then link it here.')}
+              </span>
+              <Button variant="outline" size="sm" onClick={publish}>
+                {t('Publish to GitHub…')}
+              </Button>
             </div>
           )}
           {!repos.length && (

@@ -46,7 +46,7 @@ Vercel, Netlify and the person's own server are built ([Deploying an app](guide/
 - **`ResourceAdapter`** (`workspace/deploy/resource.ts`, Neon built, §6): a hosting platform that provisions through its marketplace implements it too (Vercel Marketplace, Cloudflare D1, KV and R2, Netlify DB); a standalone provider (Supabase, Upstash, Resend) implements only this one. Deleting a resource is not on the interface.
 - **Connecting an account, still to do:** the same CLI sign-in for `gh`, `wrangler` and `eas` as those platforms land; starting a sign-in from a paired device for a remote host, with the link shown there (hosting accounts change only on the host today); and token links prefilled where the platform allows it (GitHub's fine-grained token form, Cloudflare's templates).
 - **Deploy watch, still to do:** deploys, pushes and merges from Ramu are followed ([When a deployment finishes](guide/deploy.md#when-a-deployment-finishes), `workspace/deploy/deployWatch.ts`), and **Deployment failed** webhook presets cover Vercel and Netlify. Pushes an agent makes with `git push` in its shell are not followed yet, nor are pushes from outside Ramu without a webhook schedule.
-- **UI:** the sheet's remaining steps from [the person's path](#the-persons-path) (create the GitHub repository when there is none, set the variables, push and wait for the first deployment), and **Deploy** suggested when a goal is met. The pull request card shows the preview, and the phone a project's deployments, uptime and usage with **Roll back** ([Deploying an app](guide/deploy.md#on-the-phone)); databases are not on the phone yet.
+- **UI:** the sheet's remaining steps from [the person's path](#the-persons-path) (set the variables, push and wait for the first deployment), and **Deploy** suggested when a goal is met. The pull request card shows the preview, and the phone a project's deployments, uptime and usage with **Roll back** ([Deploying an app](guide/deploy.md#on-the-phone)); databases are not on the phone yet.
 - **Publish to the web:** Netlify and Vercel use the hosting accounts; the static upload in `hosting/staticSite.ts` moves onto the adapters as a capability, with Cloudflare Pages and GitHub Pages, as those adapters land.
 
 ### 3. CI/CD
@@ -55,7 +55,6 @@ Vercel, Netlify and the person's own server are built ([Deploying an app](guide/
 
 - **Deploy job** only for targets without Git integration: the own server's `deploy.yml` and Fly.io's `fly-deploy.yml` are built (`packages/shared/src/serverDeploy.ts` and `flyDeploy.ts`, proposed with the files they need in one pull request, secrets written through the GitHub Actions `EnvTarget`). GitHub Pages gets its own the same way as it lands, using its official action.
 - **Secrets sync for more targets:** the deploy sheet's sync over `EnvTarget` (`workspace/deploy/envSync.ts`: this host, GitHub Actions secrets, Vercel and Netlify) is built ([Deploying an app](guide/deploy.md#deploy-a-project)). GitLab CI variables join it as a target, and each new hosting adapter declares `environment` (names per preview and production, and writing values) so it is covered.
-- **Required CI by default:** repositories created by the deploy sheet should join the ones **Require CI to pass** is checked by default for, as repositories published from Source Control do.
 
 ### 4. Own server
 
