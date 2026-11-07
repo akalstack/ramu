@@ -30,7 +30,7 @@ it('opens a kind this build does not know as an app', () => {
   expect(artifactKind('doc')).toBe('doc')
   expect(artifactKind('diagram')).toBe('diagram')
   expect(artifactKind('slides')).toBe('slides')
-  expect(artifactKind('motion')).toBe('app')
+  expect(artifactKind('podcast')).toBe('app')
   expect(artifactKind(undefined)).toBe('app')
 })
 

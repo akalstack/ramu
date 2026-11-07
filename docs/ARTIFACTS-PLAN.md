@@ -56,10 +56,9 @@ The kind is chosen by the agent from the request, shown as a small mark on every
 
 ### 1. Kinds in the engine
 
-App, Doc, Diagram, Slides, Dashboard (over tables the agent fills in) and Design (fixed-size frames of HTML and CSS) are in the engine, with PDF for every kind, PowerPoint and slide images for decks, Word for docs and PNG for diagrams, kept per version (see [Kinds](guide/artifacts.md#kinds)). The remaining kinds and exports follow the same path: `artifact_publish` and `artifact_preview` take the kind and its source, validated by a zod schema per kind in `packages/shared/src/artifactSource.ts`, and the host draws the source into HTML for the sandboxed frame in `apps/server/src/interactive/kinds.ts`.
+App, Doc, Diagram, Slides, Dashboard (over tables the agent fills in), Design (fixed-size frames of HTML and CSS) and Motion (timed scenes played by CSS) are in the engine, with PDF for every kind, PowerPoint and slide images for decks, Word for docs and PNG for diagrams, kept per version (see [Kinds](guide/artifacts.md#kinds)). The remaining kinds and exports follow the same path: `artifact_publish` and `artifact_preview` take the kind and its source, validated by a zod schema per kind in `packages/shared/src/artifactSource.ts`, and the host draws the source into HTML for the sandboxed frame in `apps/server/src/interactive/kinds.ts`.
 
 - **Kinds and their preview checks:**
-  - **Motion:** a timeline player; total length is within its bound.
 - **Renderers** share `ramu:kit` and the theme tokens, so every kind looks like Ramu in light and dark. Rendering stays offline unless the artifact declares sources.
 - **Exports run on the host:**
   - **MP4 and WebM:** frames captured by the headless browser and encoded with the browser's own WebCodecs `VideoEncoder`. This adds no ffmpeg binary, which is what kept browser recording out of Ramu so far.

@@ -22,7 +22,9 @@ import { renderArtifactSource } from './kinds'
 import { ARTIFACT_KINDS } from '@ramu/shared/artifacts'
 import {
   DESIGN_FRAMES_MAX,
+  MOTION_SCENES_MAX,
   designFrameSchema,
+  motionSceneSchema,
   dashboardChartSchema,
   dashboardDatasetSchema,
   dashboardFigureSchema,
@@ -37,7 +39,7 @@ export const interactiveInput = z.object({
     .enum(ARTIFACT_KINDS)
     .optional()
     .describe(
-      'app (default): interactive HTML in html or files. doc: writing to keep (a report, plan, spec, notes) as Markdown in source. diagram: a flowchart, sequence, state or concept diagram as Mermaid or SVG in source, with format. slides: a deck as slides and theme, with its images in files. dashboard: figures and charts over tables, in datasets, figures and charts. design: screens or mockups as fixed-size frames of HTML and CSS, in frames.',
+      'app (default): interactive HTML in html or files. doc: writing to keep (a report, plan, spec, notes) as Markdown in source. diagram: a flowchart, sequence, state or concept diagram as Mermaid or SVG in source, with format. slides: a deck as slides and theme, with its images in files. dashboard: figures and charts over tables, in datasets, figures and charts. design: screens or mockups as fixed-size frames of HTML and CSS, in frames. motion: a short animated explainer as timed scenes, in scenes.',
     ),
   source: z
     .string()
@@ -68,6 +70,11 @@ export const interactiveInput = z.object({
     .max(DESIGN_FRAMES_MAX)
     .optional()
     .describe('The frames of a design (kind design): screens, mockups or a one-pager, each at a fixed size.'),
+  scenes: z
+    .array(motionSceneSchema)
+    .max(MOTION_SCENES_MAX)
+    .optional()
+    .describe('The scenes of a motion (kind motion), in order, at most two minutes together.'),
   refreshMinutes: z
     .number()
     .int()
@@ -239,7 +246,8 @@ export class InteractiveStore {
       input.source !== undefined ||
       input.slides !== undefined ||
       input.datasets !== undefined ||
-      input.frames !== undefined
+      input.frames !== undefined ||
+      input.scenes !== undefined
     )
       throw new Error(
         'Set kind to doc, diagram, slides or dashboard to publish source, slides or datasets; apps use html or files.',
@@ -280,7 +288,9 @@ export class InteractiveStore {
             ? 'A dashboard is written in datasets, figures and charts; html and files are for apps.'
             : input.kind === 'design'
               ? 'A design is written in frames, each with its own html and css; html and files are for apps.'
-              : `A ${input.kind} is written in source; html and files are for apps.`,
+              : input.kind === 'motion'
+                ? 'A motion is written in scenes, each with its seconds, html and css; html and files are for apps.'
+                : `A ${input.kind} is written in source; html and files are for apps.`,
       )
     const source = parseArtifactSource({ ...input, kind: input.kind ?? 'app' })
     const offline = { ...input, network: OFFLINE_NETWORK }

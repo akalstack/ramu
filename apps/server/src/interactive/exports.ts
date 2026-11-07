@@ -110,7 +110,12 @@ function printPdf(document: InteractiveDocument): Promise<Buffer> {
 
 /** A diagram or dashboard as one PNG at twice its drawn size, on the page's own background. */
 function pictureImage(document: InteractiveDocument): Promise<Buffer> {
-  const selector = document.reference.kind === 'dashboard' ? '.ramu-dashboard' : '.ramu-diagram'
+  const selector =
+    document.reference.kind === 'dashboard'
+      ? '.ramu-dashboard'
+      : document.reference.kind === 'motion'
+        ? '.ramu-motion'
+        : '.ramu-diagram'
   return withPage(document, { width: 1200, height: 900 }, 2, (page) =>
     page.locator(selector).first().screenshot({ type: 'png', animations: 'disabled' }),
   )

@@ -1,5 +1,6 @@
 import {
   AppWindow,
+  Clapperboard,
   FileText,
   Frame,
   LayoutDashboard,
@@ -18,6 +19,7 @@ const KIND_ICONS: Record<ArtifactKind, LucideIcon> = {
   slides: Presentation,
   dashboard: LayoutDashboard,
   design: Frame,
+  motion: Clapperboard,
 }
 const KIND_LABELS: Record<ArtifactKind, string> = {
   app: 'App',
@@ -26,6 +28,7 @@ const KIND_LABELS: Record<ArtifactKind, string> = {
   slides: 'Slides',
   dashboard: 'Dashboard',
   design: 'Design',
+  motion: 'Motion',
 }
 
 /** English copy keys for a kind's name and for sharing each of its exports, translated with say(). */
@@ -47,9 +50,11 @@ const HOST_SHARE_LABELS: Record<HostExportFormat, string> = {
 export const hostShareLabel = (format: HostExportFormat, kind: ArtifactKind) =>
   format === 'png' && kind === 'design'
     ? 'Share frame images'
-    : format === 'png' && kind !== 'slides'
-      ? 'Share PNG'
-      : HOST_SHARE_LABELS[format]
+    : format === 'png' && kind === 'motion'
+      ? 'Share poster image'
+      : format === 'png' && kind !== 'slides'
+        ? 'Share PNG'
+        : HOST_SHARE_LABELS[format]
 
 /** The small mark rows and cards show for what an artifact is, named for screen readers. */
 export function ArtifactKindMark({ kind, size = 14, color }: { kind: ArtifactKind; size?: number; color: string }) {

@@ -365,3 +365,25 @@ it.skipIf(!interactiveBrowserPath())(
   },
   120_000,
 )
+
+it.skipIf(!interactiveBrowserPath())(
+  'previews a motion and draws its poster image',
+  async () => {
+    const { db, interactive } = setup(previewInteractive)
+    const preview = await interactive.preview('s', {
+      kind: 'motion',
+      scenes: [
+        { seconds: 3, html: '<h1 style="margin:40px">Sync</h1>' },
+        { seconds: 3, html: '<p style="margin:40px">Every device, the same notes.</p>' },
+      ],
+      title: 'Sync explainer',
+      summary: 'S',
+      checks: [],
+    } as never)
+    expect(preview.errors).toEqual([])
+    const document = interactive.get('s', interactive.publish('s', preview.id, 'r1').id, 1)
+    const poster = await new ArtifactExports(db).make(document, 'png')
+    expect(poster).toMatchObject({ name: 'Sync explainer.png', mimeType: 'image/png' })
+  },
+  120_000,
+)

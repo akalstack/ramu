@@ -304,6 +304,30 @@ const designSource = z.object({
     .max(DESIGN_FRAMES_MAX, `A design has at most ${DESIGN_FRAMES_MAX} frames. Split it into two designs.`),
 })
 export type DesignSource = z.infer<typeof designSource>
+
+export const MOTION_SCENES_MAX = 20
+export const MOTION_SECONDS_MAX = 120
+export const motionSceneSchema = z.object({
+  seconds: z.number().min(1).max(30).describe('How long the scene shows.'),
+  html: z.string().max(100_000).describe('The scene, filling a 16:9 stage.'),
+  css: z
+    .string()
+    .max(50_000)
+    .optional()
+    .describe('Styles for this scene only. Start its animations at animation-delay: var(--scene-start).'),
+})
+const motionSource = z
+  .object({
+    kind: z.literal('motion'),
+    scenes: z
+      .array(motionSceneSchema)
+      .min(1, 'A motion needs at least one scene in scenes.')
+      .max(MOTION_SCENES_MAX, `A motion has at most ${MOTION_SCENES_MAX} scenes.`),
+  })
+  .refine((motion) => motion.scenes.reduce((total, scene) => total + scene.seconds, 0) <= MOTION_SECONDS_MAX, {
+    message: `A motion runs at most ${MOTION_SECONDS_MAX} seconds. Shorten its scenes or split it.`,
+  })
+export type MotionSource = z.infer<typeof motionSource>
 export type DashboardAggregate = (typeof DASHBOARD_AGGREGATES)[number]
 
 /** The source of an artifact that is not an App, checked per kind before anything is drawn. */
@@ -313,6 +337,7 @@ const artifactSourceSchema = z.discriminatedUnion('kind', [
   slidesSource,
   dashboardSource,
   designSource,
+  motionSource,
 ])
 export type ArtifactSource = z.infer<typeof artifactSourceSchema>
 
@@ -328,6 +353,7 @@ export function parseArtifactSource(input: {
   charts?: unknown
   refreshMinutes?: unknown
   frames?: unknown
+  scenes?: unknown
 }): ArtifactSource {
   const result = artifactSourceSchema.safeParse(input)
   if (result.success) return result.data
