@@ -26,7 +26,7 @@ Connect an account once in **Settings → Git → Hosting accounts**, with the p
 
 | Target | What Ramu sets up | Details |
 | --- | --- | --- |
-| Vercel or Netlify | Links the platform to the repository: a preview for every pull request, and production from every push to the default branch | [Deploy a project](deploy.md#deploy-a-project) |
+| Vercel, Netlify or Railway | Links the platform to the repository: a preview for every pull request, and production from every push to the default branch | [Deploy a project](deploy.md#deploy-a-project) |
 | Your own server | A Docker container behind Caddy on a Linux server you rent, deployed by a GitHub Actions job that one pull request adds | [Your own server](deploy.md#your-own-server) |
 | App Store and Google Play | For an Expo app: the store checks, an `eas.json` pull request, and **Release** to TestFlight and Play's internal track | [Store releases](deploy.md#store-releases) |
 
@@ -43,7 +43,7 @@ The same sheet covers the rest:
 
 ## 6. Every later change
 
-The agent works on a branch and opens a pull request. Its card in Source Control and on the phone shows the checks and, on Vercel or Netlify, the preview address ([Pull requests in Source Control](git-hosting.md#pull-requests-in-source-control)). Merging deploys it.
+The agent works on a branch and opens a pull request. Its card in Source Control and on the phone shows the checks and, on Vercel, Netlify or Railway, the preview address ([Pull requests in Source Control](git-hosting.md#pull-requests-in-source-control)). Merging deploys it.
 
 - **When a deployment finishes**, Ramu wakes the thread that deployed, pushed or merged, with the live address or the end of the build log ([When a deployment finishes](deploy.md#when-a-deployment-finishes)). For pushes from outside Ramu, a **Deployment failed** webhook schedule starts a thread instead ([When a request arrives](background-work.md#when-a-request-arrives)).
 - **When CI breaks the default branch** after a push from a thread, the failing jobs go back to that thread ([Set up CI](git-hosting.md#set-up-ci)).

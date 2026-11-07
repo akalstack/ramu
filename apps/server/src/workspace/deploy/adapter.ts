@@ -192,27 +192,78 @@ export async function platformCall<T>(
 }
 
 function failure(name: string, status: number, body: string, what: string): DeployError {
-  if (status === 401)
+  const kind: DeployFailureKind | null =
+    status === 401
+      ? 'signed-out'
+      : status === 402 || (status !== 404 && status >= 400 && status < 500 && LIMIT.test(body))
+        ? 'plan-limit'
+        : status === 403
+          ? 'missing-permission'
+          : status === 404
+            ? 'not-found'
+            : null
+  return refusal(name, kind, status, what)
+}
+
+/** A refusal in the person's words: what happened and where to fix it. */
+function refusal(name: string, kind: DeployFailureKind | null, status: number | null, what: string): DeployError {
+  if (kind === 'signed-out')
     return new DeployError(
       `${name} refused the saved sign-in while ${what}. Connect ${name} again in Settings → Git → Hosting accounts.`,
-      'signed-out',
+      kind,
       status,
     )
-  if (status === 402 || (status !== 404 && status >= 400 && status < 500 && LIMIT.test(body)))
+  if (kind === 'plan-limit')
     return new DeployError(
       `Your ${name} plan's limit stopped this while ${what}. Raise it on ${name}'s billing page.`,
-      'plan-limit',
+      kind,
       status,
     )
-  if (status === 403)
+  if (kind === 'missing-permission')
     return new DeployError(
       `The ${name} account lacks permission for this while ${what}. Check the token's scope or your role in the team.`,
-      'missing-permission',
+      kind,
       status,
     )
-  if (status === 404)
-    return new DeployError(`${name} found nothing for this account while ${what}.`, 'not-found', status)
-  return new DeployError(`${name} answered ${status} while ${what}.`, null, status)
+  if (kind === 'not-found')
+    return new DeployError(`${name} found nothing for this account while ${what}.`, kind, status)
+  return new DeployError(`${name} answered ${status ?? 'with an error'} while ${what}.`, null, status)
+}
+
+/** How a GraphQL API words a refusal it answers beside a 200. */
+const GRAPHQL_KINDS: [RegExp, DeployFailureKind][] = [
+  [/unauthenticated|invalid (api )?token|token (is )?(expired|revoked)|not logged in/i, 'signed-out'],
+  [/not authori[sz]ed|unauthori[sz]ed|forbidden|permission|access denied/i, 'missing-permission'],
+  [/not found|could not find|does not exist|no such/i, 'not-found'],
+  [LIMIT, 'plan-limit'],
+]
+
+/**
+ * One GraphQL call. GraphQL APIs answer most refusals as `errors` beside a 200, so those are classified like HTTP
+ * refusals; their text is never shown either.
+ */
+export async function graphqlCall<T>(
+  name: string,
+  fetcher: typeof fetch,
+  url: string,
+  init: { token: string; headers?: Record<string, string> },
+  query: string,
+  variables: Record<string, unknown>,
+  what: string,
+): Promise<T> {
+  const reply = await platformCall<{ data?: T | null; errors?: { message?: string }[] }>(
+    name,
+    fetcher,
+    url,
+    { method: 'POST', body: JSON.stringify({ query, variables }), ...init },
+    what,
+  )
+  if (reply.errors?.length) {
+    const text = reply.errors.map((error) => error.message ?? '').join('\n')
+    throw refusal(name, GRAPHQL_KINDS.find(([pattern]) => pattern.test(text))?.[1] ?? null, null, what)
+  }
+  if (!reply.data) throw new DeployError(`${name} sent no answer while ${what}.`, null)
+  return reply.data
 }
 
 /** The last `lines` non-empty lines of a log. */

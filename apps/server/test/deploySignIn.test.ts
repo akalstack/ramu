@@ -7,7 +7,13 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { HostCredentialStore } from '../src/credentials/store'
 import { HostingAccounts } from '../src/workspace/deploy/accounts'
 import { DeployError, type HostingAdapter } from '../src/workspace/deploy/adapter'
-import { HostingSignIns, netlifyCliToken, signInPrompt, vercelCliToken } from '../src/workspace/deploy/signIn'
+import {
+  HostingSignIns,
+  netlifyCliToken,
+  railwayCliToken,
+  signInPrompt,
+  vercelCliToken,
+} from '../src/workspace/deploy/signIn'
 
 const folders: string[] = []
 afterEach(async () => {
@@ -31,6 +37,26 @@ it('reads the link and code from what the CLIs print, with or without terminal e
     code: 'WXYZ-1234',
   })
   expect(signInPrompt('Logging in...')).toEqual({ url: null, code: null })
+  // Railway prints its one-click link, then the code on the line after.
+  expect(
+    signInPrompt(
+      '  → Sign in with one click:\n    https://railway.com/activate?code=PLUM-RIVER\n\n  → Or go to https://railway.com/activate and enter this code:\n    PLUM-RIVER\n',
+    ),
+  ).toEqual({ url: 'https://railway.com/activate?code=PLUM-RIVER', code: 'PLUM-RIVER' })
+})
+
+it('reads the Railway CLI session from ~/.railway/config.json, expiry in milliseconds', async () => {
+  const home = await folder()
+  await mkdir(join(home, '.railway'), { recursive: true })
+  await writeFile(
+    join(home, '.railway', 'config.json'),
+    JSON.stringify({
+      projects: {},
+      user: { accessToken: 'rw_1', refreshToken: 'rr_1', tokenExpiresAt: 2_000_000_000 },
+    }),
+  )
+  expect(await railwayCliToken(home)).toEqual({ token: 'rw_1', refreshToken: 'rr_1', expiresAt: 2_000_000_000_000 })
+  await expect(railwayCliToken(await folder())).rejects.toThrow('without saving')
 })
 
 it('reads the Vercel CLI login from auth.json in its configuration folder, expiry in milliseconds', async () => {
@@ -142,6 +168,39 @@ it('runs netlify login --request in a private HOME and checks the ticket until i
   expect(saved).toEqual([['netlify', { token: 'nfp_1' }, 'cli']])
 })
 
+it('runs railway login --browserless in a private HOME, shows its link and code, and saves the session', async () => {
+  const saved: unknown[] = []
+  const accounts = { save: async (...args: unknown[]) => (saved.push(args), { account: 'Ana' }) }
+  let home = ''
+  const spawner = vi.fn((_file: string, args: string[], options: { env: NodeJS.ProcessEnv }) => {
+    home = options.env.HOME!
+    return child(
+      '  → Sign in with one click:\n    https://railway.com/activate?code=PLUM-RIVER\n  → Or go to https://railway.com/activate and enter this code:\n    PLUM-RIVER\n',
+      async () => {
+        await until(() => signIns.status(started.id).state === 'waiting')
+        await mkdir(join(home, '.railway'), { recursive: true })
+        await writeFile(
+          join(home, '.railway', 'config.json'),
+          JSON.stringify({ user: { accessToken: 'rw_1', refreshToken: 'rr_1', tokenExpiresAt: 2_000_000_000 } }),
+        )
+      },
+    )
+  })
+  const signIns = new HostingSignIns(accounts as never, () => '/bin/railway', spawner as never)
+  const started = signIns.start('railway')
+  await until(() => signIns.status(started.id).state === 'waiting')
+  expect(signIns.status(started.id)).toMatchObject({
+    url: 'https://railway.com/activate?code=PLUM-RIVER',
+    code: 'PLUM-RIVER',
+  })
+  await until(() => signIns.status(started.id).state === 'connected')
+  expect(spawner.mock.calls[0]![1]).toEqual(['login', '--browserless'])
+  expect(home).not.toBe(process.env.HOME)
+  expect(saved).toEqual([['railway', { token: 'rw_1', refreshToken: 'rr_1', expiresAt: 2_000_000_000_000 }, 'cli']])
+  await until(() => !existsSync(home))
+  expect(existsSync(home)).toBe(false)
+})
+
 it('reports a missing CLI and a cancelled sign-in without saving anything', async () => {
   const accounts = { save: vi.fn() }
   expect(() => new HostingSignIns(accounts as never, () => null).start('vercel')).toThrow('Use a token instead')
@@ -185,7 +244,7 @@ it('keeps a checked token in the credential store, shows only the account, and r
     (key, value) => void state.set(key, value),
     credentials,
     fetch,
-    'http://unused',
+    {},
     () => ({ ...adapter((token) => token === 'good-token'), kind: 'hosting' }),
   )
   const shown = await accounts.save('vercel', { token: 'good-token' }, 'token')
@@ -211,7 +270,7 @@ it('renews an expiring Vercel CLI session with its refresh token, keeping the ro
     (key, value) => void state.set(key, value),
     credentials,
     fetcher,
-    'http://oauth.test/token',
+    { vercel: { url: 'http://oauth.test/token', client: 'cl_test' } },
     () => ({ ...adapter(() => true), kind: 'hosting' }),
   )
   await accounts.save('vercel', { token: 'vca_1', refreshToken: 'r1', expiresAt: Date.now() + 1000 }, 'cli')
@@ -221,4 +280,26 @@ it('renews an expiring Vercel CLI session with its refresh token, keeping the ro
   // Fresh now: no second renewal.
   expect((await accounts.auth('vercel')).auth.token).toBe('vca_2')
   expect(bodies).toHaveLength(1)
+})
+
+it('renews a Railway CLI session through Railway’s OAuth endpoint with the CLI’s client', async () => {
+  const { state, credentials } = store()
+  const calls: { url: string; body: string }[] = []
+  const fetcher = (async (url: string, init: RequestInit) => {
+    calls.push({ url, body: String(init.body) })
+    return new Response(JSON.stringify({ access_token: 'rw_2', expires_in: 3600 }))
+  }) as typeof fetch
+  const accounts = new HostingAccounts(
+    (key, fallback) => (state.get(key) ?? fallback) as never,
+    (key, value) => void state.set(key, value),
+    credentials,
+    fetcher,
+    { railway: { url: 'http://railway.test/oauth/token', client: 'rlwy_test' } },
+    () => ({ ...adapter(() => true), name: 'Railway', kind: 'hosting' }),
+  )
+  await accounts.save('railway', { token: 'rw_1', refreshToken: 'rr_1', expiresAt: Date.now() + 1000 }, 'cli')
+  expect((await accounts.auth('railway')).auth.token).toBe('rw_2')
+  expect(calls[0]!.url).toBe('http://railway.test/oauth/token')
+  expect(calls[0]!.body).toContain('client_id=rlwy_test')
+  expect(calls[0]!.body).toContain('refresh_token=rr_1')
 })

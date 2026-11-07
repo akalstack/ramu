@@ -142,7 +142,7 @@ describe('connecting a server', () => {
     const getState = <T>(key: string, fallback: T) => (state.has(key) ? (state.get(key) as T) : fallback)
     const setState = (key: string, value: unknown) => void state.set(key, value)
     const adapter = serverAdapter({ ssh })
-    const accounts = new HostingAccounts(getState, setState, credentials, fetch, '', () => ({
+    const accounts = new HostingAccounts(getState, setState, credentials, fetch, {}, () => ({
       name: adapter.name,
       tokenPage: adapter.tokenPage,
       account: (auth) => adapter.account(auth),

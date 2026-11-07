@@ -48,6 +48,7 @@ export function signInPrompt(output: string): { url: string | null; code: string
   const code =
     (url ? new URL(url).searchParams.get('user_code') : null) ??
     plain.match(/enter (?:the code )?([A-Z0-9]{4}-[A-Z0-9]{4})/)?.[1] ??
+    plain.match(/enter this code:\s*([A-Za-z0-9-]{4,32})/i)?.[1] ??
     null
   return { url, code }
 }
@@ -99,6 +100,26 @@ export async function netlifyCliToken(home: string): Promise<HostingSecret> {
   throw new Error('The Netlify CLI finished without saving a sign-in.')
 }
 
+/**
+ * Railway's CLI keeps its OAuth session in `~/.railway/config.json`: an access token, the refresh token that renews it
+ * and when it expires (seconds). Older versions kept a plain token there instead.
+ */
+export async function railwayCliToken(home: string): Promise<HostingSecret> {
+  const file = join(home, '.railway', 'config.json')
+  if (!existsSync(file)) throw new Error('The Railway CLI finished without saving a sign-in.')
+  const { user } = JSON.parse(await readFile(file, 'utf8')) as {
+    user?: { token?: string; accessToken?: string; refreshToken?: string; tokenExpiresAt?: number }
+  }
+  if (user?.accessToken)
+    return {
+      token: user.accessToken,
+      ...(user.refreshToken ? { refreshToken: user.refreshToken } : {}),
+      ...(user.tokenExpiresAt ? { expiresAt: user.tokenExpiresAt * 1000 } : {}),
+    }
+  if (user?.token) return { token: user.token }
+  throw new Error('The Railway CLI finished without saving a sign-in.')
+}
+
 interface Running {
   view: HostingSignIn
   children: Set<ChildProcess>
@@ -138,7 +159,9 @@ export class HostingSignIns {
         const secret =
           platform === 'vercel'
             ? await this.vercel(entry, executable, entry.folder)
-            : await this.netlify(entry, executable, entry.folder)
+            : platform === 'netlify'
+              ? await this.netlify(entry, executable, entry.folder)
+              : await this.railway(entry, executable, entry.folder)
         if (entry.stopped) return
         const account = await this.accounts.save(platform, secret, 'cli')
         entry.view = { ...entry.view, state: 'connected', account: account.account, error: null }
@@ -210,7 +233,20 @@ export class HostingSignIns {
 
   private show(entry: Running, output: string) {
     const prompt = signInPrompt(output)
-    if (prompt.url && !entry.view.url) entry.view = { ...entry.view, state: 'waiting', ...prompt }
+    // The code can be printed after the link, in a later chunk.
+    if (prompt.url && (!entry.view.url || (!entry.view.code && prompt.code)))
+      entry.view = { ...entry.view, state: 'waiting', ...prompt }
+  }
+
+  /**
+   * `railway login --browserless` runs Railway's device sign-in: it prints a link (with its code) that works from any
+   * device and waits for approval, then saves the session in the private HOME.
+   */
+  private async railway(entry: Running, executable: string, folder: string): Promise<HostingSecret> {
+    await this.run(entry, executable, ['login', '--browserless'], cliEnvironment(folder), (output) =>
+      this.show(entry, output),
+    )
+    return railwayCliToken(folder)
   }
 
   /** `vercel login` runs Vercel's device sign-in and prints the link with its code, then waits for approval. */

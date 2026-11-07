@@ -14,6 +14,7 @@ import { expoClient } from './expo'
 import { resourceAdapter } from './resource'
 import './vercel'
 import './netlify'
+import './railway'
 import './server'
 import './neon'
 
@@ -37,7 +38,7 @@ interface SavedHosting {
   via?: 'cli' | 'token'
   defaultScope?: string | null
   broadScope?: string | null
-  /** A Vercel CLI sign-in is an OAuth session: its access token expires and is renewed with this. */
+  /** A CLI sign-in (Vercel, Railway) is an OAuth session: its access token expires and is renewed with this. */
   refreshToken?: string
   /** Milliseconds. */
   expiresAt?: number
@@ -50,8 +51,13 @@ export interface HostingSecret {
   expiresAt?: number
 }
 
-/** Vercel's OAuth client for its CLI: a CLI session is renewed with the client it was issued to. */
-const VERCEL_CLI_CLIENT = 'cl_HYyOPBNtFMfHhaUn9L4QPfTZz6TP47bp'
+/** Where a platform's CLI session is renewed, and the CLI's OAuth client it was issued to. */
+export type OAuthRenewal = Partial<Record<AccountPlatform, { url: string; client: string }>>
+
+const CLI_OAUTH: OAuthRenewal = {
+  vercel: { url: 'https://api.vercel.com/login/oauth/token', client: 'cl_HYyOPBNtFMfHhaUn9L4QPfTZz6TP47bp' },
+  railway: { url: 'https://backboard.railway.com/oauth/token', client: 'rlwy_oaci_onEklvmksh1hRUiCo7E2zX12' },
+}
 const RENEW_BEFORE_MS = 5 * 60_000
 
 type State = ConstructorParameters<typeof SavedCredential>[1]
@@ -66,7 +72,7 @@ export class HostingAccounts {
     setState: SetState,
     credentials = new HostCredentialStore(),
     private readonly fetcher: typeof fetch = fetch,
-    private readonly vercelOAuth = 'https://api.vercel.com/login/oauth/token',
+    private readonly oauth: OAuthRenewal = CLI_OAUTH,
     private readonly adapter: (platform: AccountPlatform) => AccountAdapter = accountAdapter,
   ) {
     const saved = (platform: AccountPlatform) =>
@@ -79,6 +85,7 @@ export class HostingAccounts {
     this.saved = {
       vercel: saved('vercel'),
       netlify: saved('netlify'),
+      railway: saved('railway'),
       server: saved('server'),
       neon: saved('neon'),
       expo: saved('expo'),
@@ -179,33 +186,40 @@ export class HostingAccounts {
   }
 
   private async renew(platform: AccountPlatform, value: SavedHosting): Promise<SavedHosting> {
+    const name = this.adapter(platform).name
+    const oauth = this.oauth[platform]
+    if (!oauth)
+      throw new DeployError(
+        `The ${name} sign-in ended. Connect ${name} again in Settings → Git → Hosting accounts.`,
+        'signed-out',
+      )
     let response: Response
     try {
-      response = await this.fetcher(this.vercelOAuth, {
+      response = await this.fetcher(oauth.url, {
         method: 'POST',
         redirect: 'error',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
-          client_id: VERCEL_CLI_CLIENT,
+          client_id: oauth.client,
           grant_type: 'refresh_token',
           refresh_token: value.refreshToken!,
         }).toString(),
       })
     } catch (error) {
-      throw new DeployError('Vercel did not answer while renewing the sign-in.', null, null, { cause: error })
+      throw new DeployError(`${name} did not answer while renewing the sign-in.`, null, null, { cause: error })
     }
     if (!response.ok)
       throw new DeployError(
-        'The Vercel sign-in ended. Connect Vercel again in Settings → Git → Hosting accounts.',
+        `The ${name} sign-in ended. Connect ${name} again in Settings → Git → Hosting accounts.`,
         'signed-out',
         response.status,
       )
     const renewed = (await response.json()) as { access_token?: string; refresh_token?: string; expires_in?: number }
-    if (!renewed.access_token) throw new DeployError('Vercel sent no new sign-in.', 'signed-out')
+    if (!renewed.access_token) throw new DeployError(`${name} sent no new sign-in.`, 'signed-out')
     const next: SavedHosting = {
       ...value,
       token: renewed.access_token,
-      // Refresh tokens rotate: the old one stops working once this one is issued.
+      // Refresh tokens rotate: the old one stops working once a new one is issued.
       refreshToken: renewed.refresh_token ?? value.refreshToken,
       expiresAt: Date.now() + (renewed.expires_in ?? 3600) * 1000,
     }

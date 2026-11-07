@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Deployment, DeployBinding, DnsRecord, HostingCapability, UsageFigure } from '@ramu/shared/types/deploy'
 import { capabilityNames, DeployError, type HostingAdapter, type HostingSite } from '../src/workspace/deploy/adapter'
 import { netlifyAdapter } from '../src/workspace/deploy/netlify'
+import { railwayAdapter } from '../src/workspace/deploy/railway'
 import { serverAdapter } from '../src/workspace/deploy/server'
 import type { SshRunner } from '../src/workspace/deploy/ssh'
 import { DeployService } from '../src/workspace/deploy/service'
@@ -24,6 +25,10 @@ interface Route {
   drop?: boolean
   /** A body sent as it is, for replies that are not one JSON document. */
   raw?: string
+  /** For a GraphQL API, where every call is one POST: the operation name the request must carry. */
+  operation?: string
+  /** A body made from the request's GraphQL variables, for replies that depend on them. */
+  answer?(variables: Record<string, unknown>): unknown
 }
 
 interface Fake {
@@ -40,18 +45,32 @@ afterEach(async () => {
 async function fake(routes: Route[]): Promise<Fake> {
   const state: Fake = { url: '', requests: [], routes }
   const server = createServer((req, res) => {
-    const line = `${req.method} ${req.url}`
-    state.requests.push(line)
-    expect(req.headers.authorization).toMatch(/^Bearer \S+/)
-    req.resume()
+    expect(req.headers.authorization).toMatch(/^(Bearer|FlyV1) \S+/)
+    let body = ''
+    req.on('data', (chunk: Buffer) => (body += chunk.toString('utf8')))
     req.on('end', () => {
-      const route = state.routes.find((entry) => entry.method === req.method && entry.path.test(req.url ?? ''))
+      // A GraphQL call is named by its operation, such as `POST /graphql mutation Rollback`.
+      let request: { query?: unknown; variables?: Record<string, unknown> } = {}
+      try {
+        request = JSON.parse(body) as typeof request
+      } catch {
+        // Not a JSON body: a REST call without one.
+      }
+      const operation = /^\s*(query|mutation) (\w+)/.exec(String(request.query ?? ''))
+      const line = `${req.method} ${req.url}${operation ? ` ${operation[1]} ${operation[2]}` : ''}`
+      state.requests.push(line)
+      const route = state.routes.find(
+        (entry) =>
+          entry.method === req.method &&
+          entry.path.test(req.url ?? '') &&
+          (!entry.operation || entry.operation === operation?.[2]),
+      )
       if (!route) return void res.writeHead(500).end(`no recorded reply for ${line}`)
       route.effect?.()
       if (route.drop) return void req.socket.destroy()
       res
         .writeHead(route.status ?? 200, { 'Content-Type': 'application/json' })
-        .end(route.raw ?? JSON.stringify(route.body ?? {}))
+        .end(route.raw ?? JSON.stringify(route.answer?.(request.variables ?? {}) ?? route.body ?? {}))
     })
   })
   servers.push(server)
@@ -63,6 +82,7 @@ async function fake(routes: Route[]): Promise<Fake> {
 /** One adapter's recorded replies, shaped like the platform's own. */
 interface Contract {
   name: string
+  platform: DeployBinding['platform']
   make(url: string): HostingAdapter
   site: HostingSite
   capabilities: HostingCapability[]
@@ -70,6 +90,8 @@ interface Contract {
   first: unknown
   created: unknown
   createdId: string
+  /** The first deployment's id, which a rollback puts back. */
+  firstId: string
   productionUrl: string
   logTail: string
   /** The usage the recorded replies report, figures and billing page. */
@@ -80,6 +102,7 @@ const now = Date.now()
 const contracts: Contract[] = [
   {
     name: 'Vercel',
+    platform: 'vercel',
     make: (url) => vercelAdapter({ api: url }),
     site: { siteId: 'prj_1', siteName: 'shop' },
     capabilities: ['linkRepository', 'deployPreview', 'deployProduction', 'rollback', 'domains', 'usage'],
@@ -100,6 +123,7 @@ const contracts: Contract[] = [
       meta: { githubCommitRef: 'main' },
     },
     createdId: 'dpl_2',
+    firstId: 'dpl_1',
     productionUrl: 'https://shop.example.com',
     logTail: 'Error: build failed',
     // Charges add up per service and unit; credits and purchases are not usage.
@@ -164,6 +188,7 @@ const contracts: Contract[] = [
   },
   {
     name: 'Netlify',
+    platform: 'netlify',
     make: (url) => netlifyAdapter({ api: url, github: `${url}/gh` }),
     site: { siteId: 'site_1', siteName: 'shop' },
     capabilities: ['linkRepository', 'deployProduction', 'rollback', 'domains', 'usage'],
@@ -187,6 +212,7 @@ const contracts: Contract[] = [
       deploy_ssl_url: 'https://d2--shop.netlify.app',
     },
     createdId: 'd2',
+    firstId: 'd1',
     productionUrl: 'https://shop.netlify.app',
     logTail: 'Failed: exit 2',
     usage: {
@@ -251,9 +277,91 @@ const contracts: Contract[] = [
       { method: 'POST', path: /^\/sites\/site_1\/deploys\/d1\/restore$/, body: {} },
     ],
   },
+  {
+    name: 'Railway',
+    platform: 'railway',
+    make: (url) => railwayAdapter({ api: `${url}/graphql` }),
+    site: { siteId: 'prj_1:env_prod:svc_1', siteName: 'shop' },
+    capabilities: ['linkRepository', 'deployProduction', 'rollback', 'domains', 'usage'],
+    first: {
+      id: 'dep_1',
+      status: 'SUCCESS',
+      createdAt: new Date(now - 60_000).toISOString(),
+      environmentId: 'env_prod',
+      serviceId: 'svc_1',
+      staticUrl: 'shop-production.up.railway.app',
+      meta: { branch: 'main', commitHash: 'aaa', commitMessage: 'First\n\nbody' },
+    },
+    created: {
+      id: 'dep_2',
+      status: 'BUILDING',
+      createdAt: new Date(now).toISOString(),
+      environmentId: 'env_prod',
+      serviceId: 'svc_1',
+      meta: { branch: 'main' },
+    },
+    createdId: 'dep_2',
+    firstId: 'dep_1',
+    productionUrl: 'https://shop.example.com',
+    logTail: 'Build failed',
+    usage: {
+      figures: [{ metric: 'transfer', service: null, used: 1_500_000_000, unit: 'bytes', limit: null }],
+      billingPage: /^https:\/\/railway\.com\//,
+    },
+    routes: (list, created) => {
+      const graphql = (operation: string, data: unknown, extra: Partial<Route> = {}): Route => ({
+        method: 'POST',
+        path: /^\/graphql$/,
+        operation,
+        body: { data },
+        ...extra,
+      })
+      return [
+        graphql('Me', { me: { id: 'u1', name: 'Ana', email: 'ana@example.com', workspaces: [{ id: 'ws_1' }] } }),
+        graphql('Deployments', null, {
+          answer: () => ({ data: { deployments: { edges: list.map((node) => ({ node })) } } }),
+        }),
+        graphql('Deployment', null, {
+          answer: ({ id }) => ({
+            data: { deployment: [...list, created].find((entry) => (entry as { id: string }).id === id) },
+          }),
+        }),
+        graphql('BuildLogs', { buildLogs: [{ message: 'Installing' }, { message: 'Build failed' }] }),
+        graphql('Domains', {
+          domains: {
+            serviceDomains: [{ domain: 'shop-production.up.railway.app' }],
+            customDomains: [
+              {
+                domain: 'shop.example.com',
+                status: { certificateStatus: 'CERTIFICATE_STATUS_TYPE_VALID', dnsRecords: [] },
+              },
+            ],
+          },
+        }),
+        graphql('ProjectCreate', {
+          projectCreate: { id: 'prj_1', name: 'shop', environments: { edges: [{ node: { id: 'env_prod' } }] } },
+        }),
+        graphql('ServiceCreate', { serviceCreate: { id: 'svc_1' } }),
+        graphql('ServiceDomainCreate', { serviceDomainCreate: { domain: 'shop-production.up.railway.app' } }),
+        graphql('Deploy', { serviceInstanceDeployV2: 'dep_2' }, { id: 'deploy', effect: () => list.unshift(created) }),
+        graphql('Rollback', { deploymentRollback: true }),
+        graphql('Usage', { usage: [{ measurement: 'NETWORK_TX_GB', value: 1.5 }] }),
+        graphql('Billing', {
+          project: {
+            workspace: {
+              customer: { billingPeriod: { start: '2026-11-01T00:00:00Z', end: '2026-12-01T00:00:00Z' } },
+            },
+          },
+        }),
+      ]
+    },
+  },
 ]
 
 const auth = { token: 'tok_123' }
+/** A request that changes something: any POST to a REST API, a mutation to a GraphQL one. */
+const writes = (line: string) =>
+  / (query|mutation) \w+$/.test(line) ? / mutation /.test(line) : line.startsWith('POST')
 const repository = { owner: 'ana', name: 'shop', githubToken: async () => 'gh_123', productionBranch: 'main' }
 
 describe.each(contracts)('$name hosting adapter', (contract) => {
@@ -289,7 +397,7 @@ describe.each(contracts)('$name hosting adapter', (contract) => {
       expect((await adapter.capabilities.deployPreview(auth, bound, 'feature')).id).toBeTruthy()
     const deployed: Deployment = await adapter.capabilities.deployProduction!(auth, bound, 'main')
     expect(deployed).toMatchObject({ id: contract.createdId, production: true })
-    await adapter.capabilities.rollback!(auth, site, contract.name === 'Vercel' ? 'dpl_1' : 'd1')
+    await adapter.capabilities.rollback!(auth, site, contract.firstId)
     // Tokens go only in the Authorization header, never in a URL.
     expect(server.requests.join('\n')).not.toContain('tok_123')
   })
@@ -307,7 +415,7 @@ describe.each(contracts)('$name hosting adapter', (contract) => {
     const { adapter, server } = await setup()
     server.routes.find((route) => route.id === 'deploy')!.drop = true
     const binding: DeployBinding = {
-      platform: contract.name === 'Vercel' ? 'vercel' : 'netlify',
+      platform: contract.platform,
       ...contract.site,
       repository: 'ana/shop',
       productionBranch: 'main',
@@ -327,9 +435,9 @@ describe.each(contracts)('$name hosting adapter', (contract) => {
     )
     const result = await service.deploy('project', null, true)
     expect(result.id).toBe(contract.createdId)
-    expect(server.requests.filter((line) => line.startsWith('POST'))).toHaveLength(1)
+    expect(server.requests.filter(writes)).toHaveLength(1)
     // The answer came from reading the deployments again after the lost reply.
-    expect(server.requests.at(-1)).toMatch(/deployments\?projectId|deploys\?per_page/)
+    expect(server.requests.at(-1)).toMatch(/deployments\?projectId|deploys\?per_page|query Deployments$/)
   })
 
   it('refuses to act under another account than the one that linked the project', async () => {
@@ -354,7 +462,7 @@ describe.each(contracts)('$name hosting adapter', (contract) => {
       () => adapter,
     )
     await expect(service.deploy('project', null, true)).rejects.toMatchObject({ kind: 'missing-permission' })
-    expect(server.requests.filter((line) => line.startsWith('POST'))).toHaveLength(0)
+    expect(server.requests.filter(writes)).toHaveLength(0)
   })
 
   it.each([
@@ -365,7 +473,9 @@ describe.each(contracts)('$name hosting adapter', (contract) => {
     [404, '{}', 'not-found'],
     [500, '{"secret":"echoed tok_123"}', null],
   ])('maps %i to the shared failure kind', async (status, body, kind) => {
-    const server = await fake([{ method: 'GET', path: /./, status, body: JSON.parse(body) }])
+    const server = await fake(
+      ['GET', 'POST'].map((method) => ({ method, path: /./, status, body: JSON.parse(body) as unknown })),
+    )
     const failure = await contract
       .make(server.url)
       .listDeployments(auth, contract.site, 5)
@@ -822,5 +932,146 @@ describe('Own server hosting adapter', () => {
     await expect(adapter.listDeployments({ token: serverAuth.token }, site, 5)).rejects.toMatchObject({
       kind: 'not-found',
     })
+  })
+})
+
+describe('Railway specifics', () => {
+  const site = { siteId: 'prj_1:env_prod:svc_1', siteName: 'shop' }
+  const graphql = (operation: string, data: unknown, extra: Partial<Route> = {}): Route => ({
+    method: 'POST',
+    path: /^\/graphql$/,
+    operation,
+    body: { data },
+    ...extra,
+  })
+
+  it('maps GraphQL errors answered beside a 200 to the shared kinds, without passing their text on', async () => {
+    for (const [message, kind] of [
+      ['Not Authorized', 'missing-permission'],
+      ['Project not found', 'not-found'],
+      ['Usage limit exceeded for this plan', 'plan-limit'],
+      ['Something else broke (tok_123)', null],
+    ] as const) {
+      const server = await fake([{ method: 'POST', path: /./, body: { data: null, errors: [{ message }] } }])
+      const failure = await railwayAdapter({ api: `${server.url}/graphql` })
+        .listDeployments(auth, site, 5)
+        .catch((error: unknown) => error)
+      expect((failure as DeployError).kind).toBe(kind)
+      expect((failure as Error).message).not.toContain('tok_123')
+    }
+  })
+
+  it('names a workspace token by its workspace, since only account tokens can read `me`', async () => {
+    const server = await fake([
+      { method: 'POST', path: /./, operation: 'Me', body: { data: null, errors: [{ message: 'Not Authorized' }] } },
+      graphql('Token', { apiToken: { workspaces: [{ id: 'ws_1', name: 'Ana’s team' }] } }),
+    ])
+    expect(await railwayAdapter({ api: `${server.url}/graphql` }).account(auth)).toEqual({
+      id: 'ws_1',
+      name: 'Ana’s team',
+      defaultScope: 'ws_1',
+      broadScope: null,
+      expiresAt: null,
+    })
+  })
+
+  it('refuses a deployment of another service and a link Ramu did not make', async () => {
+    const server = await fake([
+      graphql('Deployment', { deployment: { id: 'dep_9', status: 'SUCCESS', serviceId: 'svc_other' } }),
+    ])
+    const adapter = railwayAdapter({ api: `${server.url}/graphql` })
+    await expect(adapter.capabilities.rollback!(auth, site, 'dep_9')).rejects.toMatchObject({ kind: 'not-found' })
+    await expect(adapter.listDeployments(auth, { siteId: 'prj_1', siteName: 'shop' }, 5)).rejects.toMatchObject({
+      kind: 'not-found',
+    })
+    expect(server.requests.filter(writes)).toEqual([])
+  })
+
+  it('lists variable names only and writes production’s through one upsert', async () => {
+    const sent: Record<string, unknown>[] = []
+    const server = await fake([
+      graphql('Variables', null, {
+        answer: (variables) => {
+          sent.push(variables)
+          return { data: { variables: { DATABASE_URL: 'postgres://secret', RAILWAY_PUBLIC_DOMAIN: 'x' } } }
+        },
+      }),
+    ])
+    const environment = railwayAdapter({ api: `${server.url}/graphql` }).capabilities.environment!
+    expect(environment.environments).toEqual(['production'])
+    expect(await environment.list(auth, site)).toEqual({ production: ['DATABASE_URL', 'RAILWAY_PUBLIC_DOMAIN'] })
+    await environment.set(auth, site, 'production', { API_KEY: 'sk_1' })
+    expect(sent.at(-1)).toEqual({
+      input: { projectId: 'prj_1', environmentId: 'env_prod', serviceId: 'svc_1', variables: { API_KEY: 'sk_1' } },
+    })
+  })
+
+  it('lists custom domains with the records Railway asks for, and never creates DNS records', async () => {
+    const server = await fake([
+      graphql('Domains', {
+        domains: {
+          serviceDomains: [{ domain: 'shop-production.up.railway.app' }],
+          customDomains: [
+            {
+              domain: 'www.shop.id',
+              status: {
+                certificateStatus: 'CERTIFICATE_STATUS_TYPE_VALIDATING_OWNERSHIP',
+                dnsRecords: [
+                  {
+                    hostlabel: 'www',
+                    fqdn: 'www.shop.id',
+                    recordType: 'DNS_RECORD_TYPE_CNAME',
+                    requiredValue: 'abc.up.railway.app',
+                    status: 'DNS_RECORD_STATUS_REQUIRES_UPDATE',
+                    zone: 'shop.id',
+                  },
+                ],
+              },
+            },
+            {
+              domain: 'shop.example.com',
+              status: {
+                certificateStatus: 'CERTIFICATE_STATUS_TYPE_VALID',
+                dnsRecords: [
+                  {
+                    hostlabel: 'shop',
+                    fqdn: 'shop.example.com',
+                    recordType: 'DNS_RECORD_TYPE_CNAME',
+                    requiredValue: 'def.up.railway.app',
+                    status: 'DNS_RECORD_STATUS_PROPAGATED',
+                    zone: 'example.com',
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+      graphql('CustomDomainCreate', { customDomainCreate: { id: 'cd_1' } }),
+    ])
+    const domains = railwayAdapter({ api: `${server.url}/graphql` }).capabilities.domains!
+    expect(await domains.list(auth, site)).toEqual([
+      {
+        name: 'www.shop.id',
+        records: [{ type: 'CNAME', host: 'www.shop.id', name: 'www', value: 'abc.up.railway.app' }],
+        configured: false,
+        certificate: false,
+        managedDns: false,
+        zone: 'shop.id',
+      },
+      {
+        name: 'shop.example.com',
+        records: [{ type: 'CNAME', host: 'shop.example.com', name: 'shop', value: 'def.up.railway.app' }],
+        configured: true,
+        certificate: true,
+        managedDns: false,
+        zone: 'example.com',
+      },
+    ])
+    await domains.add(auth, site, 'shop.example.org')
+    expect(server.requests.at(-1)).toMatch(/mutation CustomDomainCreate$/)
+    await expect(domains.createRecords(auth, site, (await domains.list(auth, site))[0]!)).rejects.toThrow(
+      /domain provider/,
+    )
   })
 })

@@ -5701,6 +5701,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Available': 'Tersedia',
   'Scope: the team your projects are in, not Full Account': 'Cakupan: tim tempat proyekmu berada, bukan Full Account',
   'Netlify tokens reach every team you belong to, so choose an expiry': 'Token Netlify menjangkau semua tim yang kamu ikuti, jadi pilih masa berlaku',
+  'Pick the workspace your projects are in, so the token reaches only that workspace': 'Pilih workspace tempat proyekmu berada, supaya token hanya menjangkau workspace itu',
   'Not connected. Deploys and Publish to the web need an account.': 'Belum terhubung. Deploy dan Terbitkan ke web butuh akun.',
   'signed in through its CLI': 'masuk lewat CLI-nya',
   'token saved on this host': 'token disimpan di host ini',

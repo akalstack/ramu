@@ -3,11 +3,11 @@
 import type { DeployTargetId } from '../stacks'
 
 /** Hosting platforms with an adapter on the server; `server` is the person's own server, reached over SSH. */
-export const HOSTING_PLATFORMS = ['vercel', 'netlify', 'server'] as const
+export const HOSTING_PLATFORMS = ['vercel', 'netlify', 'railway', 'server'] as const
 export type HostingPlatform = (typeof HOSTING_PLATFORMS)[number]
 
 /** Hosting platforms whose own CLI can sign in on the host. */
-export const CLI_SIGN_IN_PLATFORMS = ['vercel', 'netlify'] as const
+export const CLI_SIGN_IN_PLATFORMS = ['vercel', 'netlify', 'railway'] as const
 export type CliSignInPlatform = (typeof CLI_SIGN_IN_PLATFORMS)[number]
 
 /** Database and storage providers with a resource adapter on the server. */
@@ -144,7 +144,7 @@ export interface DeployBinding {
   productionBranch: string
   /** The platform account id the binding was made with; another account is refused. */
   accountId: string
-  /** A Vercel team the project belongs to. */
+  /** The team or workspace the project belongs to (a Vercel team, a Railway workspace). */
   scope: string | null
 }
 
