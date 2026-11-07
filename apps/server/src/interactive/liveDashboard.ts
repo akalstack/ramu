@@ -7,9 +7,14 @@ import type { InteractiveDocument } from '@ramu/shared/interactive'
 import { figureValues, renderDashboard } from './dashboard'
 
 type Cell = string | number | null
-type LiveTable = Pick<DashboardSource['datasets'][number], 'source' | 'file' | 'columns'>
-/** Reads one live table of a project, its rows in the table's column order. */
-export type ReadDashboardSource = (projectId: string, table: LiveTable) => Promise<Cell[][]>
+type LiveTable = Pick<DashboardSource['datasets'][number], 'source' | 'file' | 'records' | 'columns'>
+/**
+ * Reads one live table, its rows in the table's column order: a project's deploys or file, or an App's records. A
+ * dashboard in no project (`projectId` null) reads only records of an App in no project.
+ */
+export type ReadDashboardSource = (projectId: string | null, table: LiveTable) => Promise<Cell[][]>
+const isLive = (table: LiveTable, projectId: string | null) =>
+  !!table.records || (!!projectId && !!(table.source || table.file))
 
 const REFRESH_MS = 5 * 60_000
 
@@ -29,17 +34,17 @@ export class LiveDashboards {
     private readonly now: () => number = Date.now,
   ) {}
 
-  /** The dashboard's source with its live tables read now; null when it has none, or no project to read them from. */
+  /** The dashboard's source with its live tables read now; null when it has none it can read here. */
   private async fresh(document: InteractiveDocument, projectId: string | null): Promise<DashboardSource | null> {
-    if (document.reference.kind !== 'dashboard' || !projectId) return null
+    if (document.reference.kind !== 'dashboard') return null
     const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.dashboard)?.content
     if (!stored) return null
     const board = JSON.parse(stored) as { datasets: LiveTable[] }
-    if (!board.datasets.some((table) => table.source || table.file)) return null
+    if (!board.datasets.some((table) => isLive(table, projectId))) return null
     const at = new Date(this.now()).toISOString()
     const datasets = await Promise.all(
       board.datasets.map(async (table) =>
-        table.source || table.file
+        isLive(table, projectId)
           ? {
               ...table,
               // A source that cannot be read now shows empty rather than the published rows passing for current.

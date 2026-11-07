@@ -784,7 +784,22 @@ void publicPages.restore(publicPageTunnel())
 // A dashboard's live tables, read from its own project: its deploys in each source's fixed column order, or a file in
 // its folder, read only.
 const isoTime = (at: number) => new Date(at).toISOString()
-const liveDashboards = new LiveDashboards(async (projectId, { source, file, columns }) => {
+const liveDashboards = new LiveDashboards(async (projectId, { source, file, records, columns }) => {
+  if (records) {
+    // Only an App in the dashboard's own project (or, for a dashboard in no project, an App in none) is read.
+    if (!pages.has(records.artifact) || (pages.get(records.artifact).projectId ?? null) !== projectId) return []
+    return pages.records(records.artifact, records.collection).map((record) =>
+      columns.map((column) => {
+        if (column === 'createdAt') return isoTime(record.createdAt)
+        const value = column === 'id' ? record.id : record.data[column]
+        if (value === undefined || value === null) return null
+        if (typeof value === 'number' || typeof value === 'string')
+          return typeof value === 'string' ? value.slice(0, 200) : value
+        return JSON.stringify(value).slice(0, 200)
+      }),
+    )
+  }
+  if (!projectId) return []
   if (file) {
     const root = workspace.listProjects().find((project) => project.id === projectId)?.root
     if (!root) return []

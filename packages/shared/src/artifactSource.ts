@@ -221,10 +221,19 @@ export const dashboardDatasetSchema = z
       .describe(
         "A CSV (with a header row) or JSON (an array of objects) file in the dashboard's project folder, read again when it is opened and never written. columns names which of its columns to show, by header or key. Leave rows out.",
       ),
+    records: z
+      .object({
+        artifact: z.string().uuid().describe('The id of the App artifact that keeps the records.'),
+        collection: z.string().trim().min(1).max(60),
+      })
+      .optional()
+      .describe(
+        "An App artifact's own records, read again when the dashboard is opened. columns names the fields to show (createdAt is when each record was added); leave rows out. The App must be in the dashboard's project.",
+      ),
   })
   .transform((table, ctx) => {
-    if (table.source && table.file) {
-      ctx.addIssue({ code: 'custom', message: `Give ${table.id} a source or a file, not both.` })
+    if ([table.source, table.file, table.records].filter(Boolean).length > 1) {
+      ctx.addIssue({ code: 'custom', message: `Give ${table.id} one of a source, a file or records.` })
       return z.NEVER
     }
     if (table.source) return { ...table, columns: [...DASHBOARD_SOURCES[table.source]], rows: table.rows }

@@ -150,6 +150,46 @@ it('reads a table from a project file, by header or key, and refuses paths outsi
   expect(read).toHaveBeenCalledWith('p1', expect.objectContaining({ file: 'data/s.csv' }))
 })
 
+it('reads an App’s records as a live table, also for a dashboard in no project, and keeps other tables as published', async () => {
+  const app = '00000000-0000-4000-8000-0000000000aa'
+  const parsed = parseArtifactSource({
+    kind: 'dashboard',
+    datasets: [
+      { id: 'spend', records: { artifact: app, collection: 'expenses' }, columns: ['category', 'amount'] },
+      { id: 'deploys', source: 'deployments' },
+    ],
+    figures: [{ label: 'Spent', dataset: 'spend', column: 'amount' }],
+  })
+  if (parsed.kind !== 'dashboard') throw new Error('not a dashboard')
+  expect(() =>
+    parseArtifactSource({
+      kind: 'dashboard',
+      datasets: [{ id: 'x', records: { artifact: app, collection: 'e' }, file: 'a.csv', columns: ['a'] }],
+      figures: [{ label: 'A', dataset: 'x', column: 'a', aggregate: 'count' }],
+    }),
+  ).toThrow('one of a source, a file or records')
+  const drawn = renderDashboard(parsed, 'Spending')
+  const document = {
+    reference: { id: 'r', version: 1, kind: 'dashboard', title: 'Spending' },
+    html: drawn.html,
+    files: drawn.files,
+  } as unknown as InteractiveDocument
+  const read = vi.fn<ReadDashboardSource>(async (_project, table) =>
+    table.records
+      ? [
+          ['food', 30],
+          ['rent', 70],
+        ]
+      : [],
+  )
+  expect((await new LiveDashboards(read).serve(document, null)).html).toContain('<strong>100</strong>')
+  expect(read).toHaveBeenCalledTimes(1)
+  expect(read).toHaveBeenCalledWith(
+    null,
+    expect.objectContaining({ records: { artifact: app, collection: 'expenses' } }),
+  )
+})
+
 it('cuts dated tables to the dashboard’s range when drawn, leaving undated ones whole', () => {
   const parsed = parseArtifactSource({
     kind: 'dashboard',
