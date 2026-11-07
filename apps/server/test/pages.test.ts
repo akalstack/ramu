@@ -566,3 +566,41 @@ it('opens a page to people without Ramu on its own listener that serves only tha
   expect(saved).toEqual([])
   expect(open.status(trip.id).state).toBe('off')
 })
+
+it('fills an artifact file from an image attachment the thread holds, and refuses without a way to read one', async () => {
+  const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js')
+  const { ToolRegistry } = await import('../src/agent/toolRegistry')
+  const { registerInteractiveTools } = await import('../src/interactive/tools')
+  const preview = vi.fn(async (_session: string, _input: { files?: object[] }) => ({
+    id: 'x',
+    version: 1,
+    errors: [] as string[],
+  }))
+  const store = { preview } as never
+  const id = '11111111-2222-4333-8444-555555555555'
+  const attachment = vi.fn(async () => Buffer.from('png-bytes'))
+  const input = {
+    kind: 'slides',
+    title: 'Deck',
+    summary: 'S',
+    slides: [{ layout: 'image', title: 'Hero', image: { path: 'hero.png', alt: 'A hero' } }],
+    files: [{ path: 'hero.png', attachment: id }],
+  }
+  const extra = { signal: new AbortController().signal } as never
+  const registry = new ToolRegistry(new McpServer({ name: 'test', version: '1' }), true)
+  registerInteractiveTools(registry.server, store, 's', {
+    pages: { has: () => false } as never,
+    ai: {} as never,
+    projectId: () => null,
+    attachment,
+  })
+  await registry.invoke('artifact_preview', input, extra)
+  expect(attachment).toHaveBeenCalledWith(id)
+  expect(preview.mock.calls[0]![1]).toMatchObject({
+    files: [{ path: 'hero.png', content: Buffer.from('png-bytes').toString('base64'), encoding: 'base64' }],
+  })
+  expect(preview.mock.calls[0]![1].files![0]).not.toHaveProperty('attachment')
+  const bare = new ToolRegistry(new McpServer({ name: 'test', version: '1' }), true)
+  registerInteractiveTools(bare.server, store, 's')
+  expect((await bare.invoke('artifact_preview', input, extra)).isError).toBe(true)
+})

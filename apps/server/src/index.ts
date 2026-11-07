@@ -1369,6 +1369,7 @@ const mcpHttp = createServer(async (req, res) => {
     registerInteractiveTools(server, interactive, source.id, {
       pages,
       ai: pageAi,
+      attachment: async (id) => readFileSync(abilities.heldImage(source.id, id).path),
       projectId: () => {
         const projectId = workspace.getTask(source.taskId).projectId
         return projectId === NO_PROJECT ? null : projectId

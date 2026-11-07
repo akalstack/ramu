@@ -701,21 +701,24 @@ export class AbilityService {
     return resolved
   }
 
+  /** An image attachment this thread already holds: one the person sent or an ability call made; refused otherwise. */
+  heldImage(sessionId: string, ref: string): { path: string; name: string; mimeType: string } {
+    const held = this.host
+      .events(sessionId)
+      .some((event) =>
+        event.kind === 'user'
+          ? event.attachments?.some((file) => file.id === ref)
+          : event.kind === 'ability' && event.call.attachments?.some((file) => file.id === ref),
+      )
+    if (!held) throw new Error('That attachment is not in this thread.')
+    const attachment = this.host.attachments.get(ref)
+    if (!attachment.mimeType.startsWith('image/')) throw new Error(`${attachment.name} is not an image.`)
+    return { path: attachment.path, name: attachment.name, mimeType: attachment.mimeType }
+  }
+
   /** An image the call may send: a file in the thread's folder, or an attachment this thread already holds. */
   private async image(session: AgentSessionInfo, ref: string): Promise<{ path: string; name: string }> {
-    if (/^[a-f0-9-]{36}$/.test(ref)) {
-      const held = this.host
-        .events(session.id)
-        .some((event) =>
-          event.kind === 'user'
-            ? event.attachments?.some((file) => file.id === ref)
-            : event.kind === 'ability' && event.call.attachments?.some((file) => file.id === ref),
-        )
-      if (!held) throw new Error('That attachment is not in this thread.')
-      const attachment = this.host.attachments.get(ref)
-      if (!attachment.mimeType.startsWith('image/')) throw new Error(`${attachment.name} is not an image.`)
-      return { path: attachment.path, name: attachment.name }
-    }
+    if (/^[a-f0-9-]{36}$/.test(ref)) return this.heldImage(session.id, ref)
     const path = await this.within(session, ref)
     if (!IMAGE_EXTENSIONS.has(extname(path).toLowerCase()))
       throw new Error(`${ref} is not a PNG, JPEG, WebP or GIF image.`)

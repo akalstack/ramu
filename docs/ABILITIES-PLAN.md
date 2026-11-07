@@ -18,7 +18,6 @@ Abilities let a thread's agent ask Ramu for something its provider cannot do (an
 ### 2. Connection with the other plans
 
 - **[Artifacts](ARTIFACTS-PLAN.md):**
-  - Design, Slides and Doc artifacts use `generate_image` for their illustrations and `edit_image` for changes.
   - Motion can use `video_generation` and `speech` where they exist, and renders on the host where they do not.
   - A page's own AI (`ramuContent.ai`) can ask for an image through the same routing, within the page's grant.
 - **[Shipping an app](SHIP-AN-APP-PLAN.md):**

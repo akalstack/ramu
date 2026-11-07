@@ -149,8 +149,15 @@ export const interactiveInput = z.object({
     .array(
       z.object({
         path: z.string().min(1).max(200),
-        content: z.string().max(INTERACTIVE_MAX_HTML),
+        content: z.string().max(INTERACTIVE_MAX_HTML).default(''),
         encoding: z.enum(['utf8', 'base64']).optional(),
+        attachment: z
+          .string()
+          .uuid()
+          .optional()
+          .describe(
+            'An image this thread holds, such as one generate_image made (its attachmentId): the host puts its bytes in this file, so leave content out.',
+          ),
       }),
     )
     .min(1)
