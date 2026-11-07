@@ -303,6 +303,7 @@ export function parseArtifactSource(input: {
   datasets?: unknown
   figures?: unknown
   charts?: unknown
+  refreshMinutes?: unknown
 }): ArtifactSource {
   const result = artifactSourceSchema.safeParse(input)
   if (result.success) return result.data
