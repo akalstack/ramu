@@ -272,18 +272,55 @@ export class AbilityService {
       this.run(route, target.declaration, request, signal, timeoutMs)
     switch (target.declaration.ability) {
       case 'image_generation': {
-        const out = await ask(
-          {
-            ability: 'image_generation',
-            prompt: imagePrompt('a small, simple flat illustration of a red apple'),
-            images: [],
-          },
-          180_000,
-        )
-        const image = out.images[0]
-        if (!image) return { ok: false, detail: `No image came back. ${clip(out.text, 200)}`.trim() }
-        this.checkImages.set(key, image.bytes)
-        return { ok: true }
+        let costUsd: number | undefined
+        const add = (out: AbilityOutput) => {
+          if (out.costUsd !== undefined) costUsd = (costUsd ?? 0) + out.costUsd
+        }
+        const made: { sample: (typeof IMAGE_SAMPLES)[number]; bytes: Buffer }[] = []
+        for (const sample of IMAGE_SAMPLES) {
+          const out = await ask(
+            { ability: 'image_generation', prompt: imagePrompt(sample.prompt), images: [] },
+            180_000,
+          )
+          add(out)
+          const image = out.images[0]
+          if (image) made.push({ sample, bytes: image.bytes })
+          else if (sample === IMAGE_SAMPLES[0])
+            return {
+              ok: false,
+              detail: `No image came back. ${clip(out.text, 200)}`.trim(),
+              ...(costUsd === undefined ? {} : { costUsd }),
+            }
+        }
+        this.checkImages.set(key, made.find((entry) => entry.sample.edit)?.bytes ?? made[0]!.bytes)
+        // The same login reads each image back and answers questions about what it should show.
+        const folder = mkdtempSync(join(tmpdir(), 'ramu-ability-check-'))
+        let right = 0
+        try {
+          for (const [index, entry] of made.entries()) {
+            const path = join(folder, `sample-${index}.png`)
+            writeFileSync(path, entry.bytes)
+            // Reading takes no tool, so the step cannot make another image instead of answering.
+            const out = await this.run(
+              route,
+              { ability: 'vision', via: { contextWindow: 0 } },
+              { ability: 'vision', prompt: reviewPrompt(entry.sample.questions), images: [path] },
+              signal,
+              120_000,
+            )
+            add(out)
+            const lines = out.text.toLowerCase().split('\n')
+            right += entry.sample.questions.filter(([, expected], number) =>
+              lines.some(
+                (line) => line.trim().startsWith(`${number + 1}`) && expected.some((word) => line.includes(word)),
+              ),
+            ).length
+          }
+        } finally {
+          rmSync(folder, { recursive: true, force: true })
+        }
+        const asked = IMAGE_SAMPLES.reduce((sum, sample) => sum + sample.questions.length, 0)
+        return { ok: true, score: right / asked, ...(costUsd === undefined ? {} : { costUsd }) }
       }
       case 'image_edit': {
         const bytes = this.checkImages.get(key)
@@ -751,6 +788,42 @@ function editPrompt(prompt: string): string {
     'Edit the attached image as described below with your built-in image generation tool, keeping everything else as it is. Do not draw SVG, HTML or code, and use no other tool.',
     `<change>\n${prompt}\n</change>`,
     'After the image, reply with one short sentence describing the change.',
+  ].join('\n\n')
+}
+
+/**
+ * The image check's sample: three pictures whose content can be checked by asking about it, each question with the
+ * words a right answer contains. The apple is the one the editing check changes.
+ */
+const IMAGE_SAMPLES: { prompt: string; questions: [string, string[]][]; edit?: true }[] = [
+  {
+    prompt: 'a small, simple flat illustration of a red apple',
+    questions: [
+      ['Which fruit is shown?', ['apple']],
+      ['What colour is the fruit?', ['red']],
+    ],
+    edit: true,
+  },
+  {
+    prompt: 'exactly three blue circles on a plain white background, nothing else',
+    questions: [
+      ['How many circles are there? Answer with a digit.', ['3', 'three']],
+      ['What colour are the circles?', ['blue']],
+    ],
+  },
+  {
+    prompt: 'a yellow umbrella standing open in the snow',
+    questions: [
+      ['Which object is in the middle of the picture?', ['umbrella']],
+      ['What colour is that object?', ['yellow']],
+    ],
+  },
+]
+
+function reviewPrompt(questions: [string, string[]][]): string {
+  return [
+    'Look at the attached image and answer each question in one or two words, on its own line starting with its number.',
+    questions.map(([question], index) => `${index + 1}. ${question}`).join('\n'),
   ].join('\n\n')
 }
 

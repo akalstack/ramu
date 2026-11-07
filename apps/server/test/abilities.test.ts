@@ -110,6 +110,17 @@ function service(
 
 /** A fake provider: Codex makes images and searches; Claude searches and reads. */
 const working: AbilityRun = async (route, declaration, request) => {
+  // Reading back a check's sample image: the fake answers as if each picture showed what was asked for.
+  if (request.ability === 'vision')
+    return {
+      text: /circles/.test(request.prompt)
+        ? '1. 3\n2. blue'
+        : /fruit/.test(request.prompt)
+          ? '1. apple\n2. red'
+          : '1. umbrella\n2. yellow',
+      images: [],
+      sources: [],
+    }
   if (request.ability === 'image_generation' || request.ability === 'image_edit')
     return { text: 'A red apple.', images: [{ bytes: PNG, extension: 'png' }], sources: [] }
   if (request.ability === 'web_search')
@@ -161,10 +172,14 @@ describe('ability checks', () => {
     ])
     // Long context runs on the widest model; the rest on the default.
     expect(passed.find((check) => check.ability === 'long_context')?.model).toBe('wide')
-    expect(run).toHaveBeenCalledTimes(5)
+    // Image generation makes three sample images and reads each back; the rest take one call each.
+    expect(run).toHaveBeenCalledTimes(10)
+    expect(passed.find((check) => check.ability === 'image_generation')?.score).toBe(1)
+    // The read-back runs with no tool, so it cannot answer by making another image.
+    expect(run.mock.calls.filter(([, declaration]) => declaration.ability === 'vision')).toHaveLength(3)
     // Check again runs one provider's checks anew.
     await abilities.recheck('codex')
-    expect(run).toHaveBeenCalledTimes(8)
+    expect(run).toHaveBeenCalledTimes(18)
     expect(abilities.native('codex', 'image_generation')).toBe(true)
     expect(abilities.native('claude-code', 'image_generation')).toBe(false)
   })
@@ -193,6 +208,19 @@ describe('ability checks', () => {
     expect(run.mock.calls.length).toBe(calls + 2)
     expect(stored.some((check) => (check as { login?: string }).login === undefined)).toBe(false)
     expect(JSON.stringify(first.checks.list())).not.toContain('me@example.com')
+  })
+
+  it('scores image generation by what its sample images show, read back on the same login', async () => {
+    const run = vi.fn<AbilityRun>(async (route, declaration, request, signal, timeout) =>
+      request.ability === 'vision' && /circles/.test(request.prompt)
+        ? { text: '1. 2\n2. green', images: [], sources: [] }
+        : working(route, declaration, request, signal, timeout),
+    )
+    const abilities = service(run)
+    await abilities.refresh()
+    const check = abilities.checks.list('codex').find((entry) => entry.ability === 'image_generation')
+    // Four of the six answers are right: the circles came out wrong.
+    expect(check?.score).toBeCloseTo(4 / 6)
   })
 
   it('never runs on a simulated host', async () => {
