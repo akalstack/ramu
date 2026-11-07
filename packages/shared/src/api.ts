@@ -253,6 +253,8 @@ interface ArtifactMethods {
   /** Starts a new artifact from a template, with a history of its own. */
   'artifacts.fromTemplate'(templateId: string): import('./artifacts').ArtifactInfo
   'artifacts.removeTemplate'(templateId: string): void
+  /** Sets how often a dashboard's live tables are read again, as a new version on top of `base`. */
+  'artifacts.setRefresh'(artifactId: string, base: number, minutes: number): import('./artifacts').ArtifactInfo
   /** Saves the person's text for each slide of a deck as a new version on top of `base`; refused if another came since. */
   'artifacts.editSlides'(
     artifactId: string,

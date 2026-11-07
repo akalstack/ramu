@@ -337,6 +337,24 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([z.string().uuid()]),
       run: (templateId: string) => need().pages.removeTemplate(templateId),
     },
+    'artifacts.setRefresh': {
+      args: z.tuple([id, z.number().int().positive(), z.number().int().min(5).max(1440)]),
+      run: async (artifactId: string, base: number, minutes: number) => {
+        const { pages } = need()
+        const artifact = pages.get(artifactId)
+        if (artifact.kind !== 'dashboard') throw new Error('Only a dashboard has a refresh rule.')
+        const stored = pages
+          .document(artifactId, base)
+          .files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.dashboard)?.content
+        if (!stored) throw new Error('This dashboard version has no tables. Ask the agent to publish it again.')
+        const source = parseArtifactSource({
+          kind: 'dashboard',
+          ...(JSON.parse(stored) as object),
+          refreshMinutes: minutes,
+        })
+        return pages.saveEdit(artifactId, base, await renderArtifactSource(source, artifact.title))
+      },
+    },
     'artifacts.editSlides': {
       args: z.tuple([id, z.number().int().positive(), z.array(slideTextEdit).max(SLIDES_MAX)]),
       run: async (artifactId: string, base: number, edits: SlideTextEdit[]) => {

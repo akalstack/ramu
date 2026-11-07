@@ -30,7 +30,7 @@ import { Button } from '../components/desktop-button'
 import { Input } from '../components/desktop-input'
 import { Textarea } from '@/components/ui/textarea'
 import { GHOST_ICON_BUTTON_CLASS, GHOST_TEXT_BUTTON_CLASS } from '../components/button-classes'
-import { Dialog, Menu, type MenuEntry } from '../Menu'
+import { Dialog, Dropdown, Menu, type MenuEntry } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
@@ -58,6 +58,16 @@ const message = (error: unknown) =>
     : String(error)
 
 /** One page, full window: its frame, toolbar, runs, questions about its records and everything the person can do with it. */
+const REFRESH_CHOICES = [5, 15, 60, 360, 1440]
+const refreshLabel = (minutes: number) =>
+  ({
+    5: t('Every 5 minutes'),
+    15: t('Every 15 minutes'),
+    60: t('Every hour'),
+    360: t('Every 6 hours'),
+    1440: t('Once a day'),
+  })[minutes] ?? t('Every {count} minutes', { count: minutes })
+
 export function PageView({ artifactId, onBack }: { artifactId: string; onBack(): void }) {
   useLanguage()
   const { invoke } = useHost()
@@ -125,6 +135,14 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
       if (payload.artifactId === artifactId && !payload.run) void load()
     })
   }, [load, on, artifactId])
+  // A dashboard with live tables offers its refresh rule; the default read interval is five minutes.
+  const dashboardSource = document?.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.dashboard)?.content
+  const dashboardBoard = dashboardSource
+    ? (JSON.parse(dashboardSource) as { datasets: { source?: string }[]; refreshMinutes?: number })
+    : null
+  const liveRefresh = dashboardBoard?.datasets.some((table) => table.source)
+    ? (dashboardBoard.refreshMinutes ?? 5)
+    : null
   const instance = `page:${artifactId}:${document?.reference.version ?? 0}:${generation}`
   const { url } = useContentDocument(document?.html, instance, !!document, state, document?.reference.network)
   const slides = document ? slideCount(document) : 0
@@ -287,6 +305,20 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
         )}
         <div className="ml-auto flex flex-none items-center gap-0.5">
           {slides > 0 && <SlideToolbar controls={slideControls} count={slides} disabled={!ready} />}
+          {page.kind === 'dashboard' && liveRefresh !== null && (
+            <Dropdown
+              label={t('Refresh')}
+              value={String(liveRefresh)}
+              disabled={viewOnly || !document}
+              options={REFRESH_CHOICES.map((minutes) => ({ value: String(minutes), label: refreshLabel(minutes) }))}
+              onChange={(next) => {
+                if (!document) return
+                void invoke('artifacts.setRefresh', artifactId, document.reference.version, Number(next))
+                  .then(() => load())
+                  .catch((error) => notifyError(message(error), page.title))
+              }}
+            />
+          )}
           {page.kind === 'slides' && !editingSlides && (
             <Button
               variant="ghost"
