@@ -2,6 +2,7 @@
 // phone at once, or by the person while an agent saved a version. Changes to different lines are both kept; changes
 // to the same lines (or two insertions at one place) that differ are a conflict, and the caller asks the person.
 // Pure, so the host and the tests merge the same way.
+import type { Slide } from './artifactSource'
 
 interface Change {
   /** The base lines replaced, as a half-open range. */
@@ -96,4 +97,38 @@ export function mergeText(base: string, ours: string, theirs: string): string | 
   for (const change of all.sort((x, y) => y.start - x.start || y.end - x.end))
     lines.splice(change.start, change.end - change.start, ...change.lines)
   return lines.join('\n')
+}
+
+const SLIDE_TEXT = ['title', 'body', 'by', 'notes'] as const
+
+/**
+ * A deck's slide text from two edits of one earlier version, merged field by field the way a doc's lines are: the
+ * current deck's slides with the person's text changes on top. Null when the decks' slides were added, removed or
+ * moved since, or when both changed the same lines of one field differently.
+ */
+export function mergeSlideText(base: Slide[], mine: Slide[], current: Slide[]): Slide[] | null {
+  if (mine.length !== base.length || current.length !== base.length) return null
+  const merged: Slide[] = []
+  for (const [index, slide] of current.entries()) {
+    const was = base[index]!
+    const edited = mine[index]!
+    // A slide moved or relaid out since is not the same slide any more.
+    if (slide.layout !== was.layout || edited.layout !== was.layout) return null
+    const next: Slide = { ...slide }
+    for (const key of SLIDE_TEXT) {
+      const text = mergeText(was[key] ?? '', edited[key] ?? '', slide[key] ?? '')
+      if (text === null) return null
+      if (text.trim()) next[key] = text
+      else delete next[key]
+    }
+    if (was.columns || edited.columns || slide.columns) {
+      const columns = [0, 1].map((at) =>
+        mergeText(was.columns?.[at] ?? '', edited.columns?.[at] ?? '', slide.columns?.[at] ?? ''),
+      )
+      if (columns.some((column) => column === null)) return null
+      next.columns = columns as NonNullable<Slide['columns']>
+    }
+    merged.push(next)
+  }
+  return merged
 }

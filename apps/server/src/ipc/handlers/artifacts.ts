@@ -1,4 +1,4 @@
-import { mergeText } from '@ramu/shared/textMerge'
+import { mergeSlideText, mergeText } from '@ramu/shared/textMerge'
 import { EditingPresence } from '../../interactive/editing'
 import { formatFigure } from '../../interactive/dashboard'
 import { designTextEdit, withDesignTexts, type DesignTextEdit } from '@ramu/shared/designText'
@@ -498,15 +498,32 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
         const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.slides)?.content
         if (!stored) throw new Error('This deck version has no slide list. Ask the agent to publish it again.')
         const deck = JSON.parse(stored) as { slides: Slide[]; theme?: unknown }
-        const source = parseArtifactSource({
-          kind: 'slides',
-          slides: editSlideText(deck.slides, edits),
-          theme: deck.theme,
-        })
-        const images = (document.files ?? []).filter((file) => file.encoding === 'base64')
+        let slides = editSlideText(deck.slides, edits)
+        let theme = deck.theme
+        // Text edited from an earlier version merges onto the current deck, slide by slide, as a doc's lines do.
+        const current = artifact.version
+        const latest = current === base ? document : pages.document(artifactId, current)
+        if (current !== base) {
+          const now = latest.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.slides)?.content
+          const newer = now ? (JSON.parse(now) as { slides: Slide[]; theme?: unknown }) : null
+          const merged = newer ? mergeSlideText(deck.slides, slides, newer.slides) : null
+          if (!newer || !merged)
+            throw new Error(
+              `This deck changed while you were editing (now v${current}), in the same text or its slides. Reopen it to see v${current}, and edit that.`,
+            )
+          slides = merged
+          theme = newer.theme
+        }
+        const source = parseArtifactSource({ kind: 'slides', slides, theme })
+        const images = (latest.files ?? []).filter((file) => file.encoding === 'base64')
         const drawn = await renderArtifactSource(source, artifact.title, images)
         if (drawn.problems.length) throw new Error(drawn.problems[0])
-        return pages.saveEdit(artifactId, base, drawn, editedBy())
+        return pages.saveEdit(
+          artifactId,
+          current,
+          drawn,
+          current === base ? editedBy() : `${editedBy()}, merged with v${current}`,
+        )
       },
     },
     'artifacts.editDesign': {
