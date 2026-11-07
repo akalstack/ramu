@@ -2,6 +2,7 @@
 // one the person pastes), pins the server's host key on that first contact and keeps both in the host's credential
 // store. Setting up checks Docker, writes the app's Caddy site, puts the SSH details in the repository's GitHub Actions
 // secrets and opens one pull request with the Dockerfile and deploy job the repository lacks.
+import { loadProjectConfig } from '../projectConfig'
 import { domainName } from '@ramu/shared/domains'
 import {
   DOCKER_MANIFESTS,
@@ -247,7 +248,8 @@ export class ServerSetup {
     const defaultBranch = (await commitBranchInfo(root)).defaultBranch ?? link.productionBranch
     const { ref } = await fetchedBranch(root, defaultBranch)
     const plan = await this.plan(root, ref, defaultBranch, app)
-    await this.remote(connection, SETUP_SCRIPT, [app, String(plan.port), domain], 'setting up Caddy')
+    const healthPath = loadProjectConfig(root).config.stack?.healthPath ?? '/'
+    await this.remote(connection, SETUP_SCRIPT, [app, String(plan.port), domain, healthPath], 'setting up Caddy')
     await this.host.actionsSecrets(root).set('ci', {
       [SERVER_SECRETS.key]: connection.privateKey,
       [SERVER_SECRETS.knownHosts]: connection.knownHosts,

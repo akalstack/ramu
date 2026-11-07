@@ -1,5 +1,9 @@
 // The own-server pieces around the adapter: the deploy job the pull request adds, the SSH helpers (keys, pinned host
 // keys, the remote command line) and connecting a server, all without a real server or network.
+import { execFileSync } from 'node:child_process'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { serverAppName, serverWorkflow, SERVER_DEPLOY_SCRIPT, SERVER_SECRETS } from '@ramu/shared/serverDeploy'
@@ -57,6 +61,62 @@ describe('serverWorkflow', () => {
 })
 
 const FIXTURE_KEY = 'AAAAC3NzaC1lZDI1NTE5AAAAIPVMG+ElpEM04bD0eMCEH8mLSZUO4Dp0Z2tRy1K4/+0S'
+
+describe('the deploy script on the server', () => {
+  // Stand-ins for docker and sleep: docker logs each call, and the app answers its health path with $CODE.
+  const run = (code: string) => {
+    const home = mkdtempSync(join(tmpdir(), 'ramu-deploy-'))
+    const bin = join(home, 'bin')
+    mkdirSync(bin)
+    const app = join(home, 'ramu/apps/shop')
+    mkdirSync(app, { recursive: true })
+    writeFileSync(join(app, 'port'), '3000\n')
+    writeFileSync(join(app, 'health'), '/api/health\n')
+    writeFileSync(join(app, 'image'), 'ghcr.io/me/shop:old\n')
+    writeFileSync(
+      join(bin, 'docker'),
+      [
+        '#!/bin/sh',
+        'echo "$*" >> "$HOME/calls"',
+        'case "$1 $2" in',
+        '  "inspect -f") echo "true 0";;',
+        '  "exec ramu-caddy") echo "  HTTP/1.1 $CODE Status" >&2; [ "$CODE" -lt 400 ];;',
+        'esac',
+        'exit 0',
+      ].join('\n'),
+    )
+    writeFileSync(join(bin, 'sleep'), '#!/bin/sh\nexit 0\n')
+    chmodSync(join(bin, 'docker'), 0o755)
+    chmodSync(join(bin, 'sleep'), 0o755)
+    const b64 = (value: string) => `v${Buffer.from(value).toString('base64')}`
+    let failed = ''
+    try {
+      execFileSync('sh', ['-c', SERVER_DEPLOY_SCRIPT, 'ramu', b64('shop'), b64('ghcr.io/me/shop:new'), b64('me')], {
+        env: { HOME: home, PATH: `${bin}:${process.env.PATH}`, CODE: code },
+        input: '',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      })
+    } catch (error) {
+      failed = String((error as { stderr?: Buffer }).stderr ?? error)
+    }
+    return { failed, calls: readFileSync(join(home, 'calls'), 'utf8'), image: readFileSync(join(app, 'image'), 'utf8') }
+  }
+
+  it('keeps the new version once it answers its health path through Caddy, even with a sign-in page', () => {
+    const { failed, calls, image } = run('401')
+    expect(failed).toBe('')
+    expect(calls).toContain('exec ramu-caddy wget -S -q -T 5 -O /dev/null http://ramu-shop:3000/api/health')
+    expect(image).toBe('ghcr.io/me/shop:new\n')
+  })
+
+  it('puts the previous version back when the new one keeps failing its health path', () => {
+    const { failed, calls, image } = run('502')
+    expect(failed).toContain('did not answer at /api/health')
+    expect(failed).toContain('Put ghcr.io/me/shop:old back.')
+    expect(calls).toMatch(/run -d --name ramu-shop .* ghcr.io\/me\/shop:old/)
+    expect(image).toBe('ghcr.io/me/shop:old\n')
+  })
+})
 
 describe('SSH helpers', () => {
   it('creates an ed25519 key pair in OpenSSH’s own formats', () => {

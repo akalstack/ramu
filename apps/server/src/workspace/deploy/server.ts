@@ -76,6 +76,10 @@ export const SETUP_SCRIPT = [
   'mkdir -p "$dir" "$root/caddy/sites"',
   '[ -f "$dir/env" ] || { : > "$dir/env"; chmod 600 "$dir/env"; }',
   'printf "%s\\n" "$port" > "$dir/port"',
+  // The path the deploy checks before the old version is removed; kept when a later call (adding a domain) names none.
+  'if [ -n "${4:-}" ]; then health=$(d "$4"); case "$health" in /*) ;; *) echo "Unexpected health path." >&2; exit 2;; esac',
+  '  case "$health" in *[!A-Za-z0-9/._~-]*) echo "Unexpected health path." >&2; exit 2;; esac',
+  '  printf "%s\\n" "$health" > "$dir/health"; fi',
   'printf "%s\\n" $domains > "$dir/domains"',
   'printf "import sites/*.caddy\\n" > "$root/caddy/Caddyfile"',
   'printf "%s {\\n\\tencode gzip\\n\\treverse_proxy ramu-%s:%s\\n}\\n" "$(printf "%s" "$domains" | sed "s/ /, /g")" "$app" "$port" > "$root/caddy/sites/$app.caddy"',
