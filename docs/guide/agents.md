@@ -115,7 +115,7 @@ Agents choose an artifact's kind (`kind`: an `app`, a `doc` in Markdown or a `di
 
 ## Deploys
 
-Threads in a project check its deployments and logs with `deploy_status` and `deploy_logs`, start a preview with `deploy_preview`, read custom domains with `deploy_domains` and the billing period's usage with `deploy_usage`, and ask you before `deploy_production` (which runs the project's migrations first), `deploy_rollback`, `deploy_domain_add` and `deploy_domain_records`. See [Deploying an app](deploy.md#agents).
+Threads in a project check its deployments and logs with `deploy_status` and `deploy_logs`, start a preview with `deploy_preview`, read custom domains with `deploy_domains` and the billing period's usage with `deploy_usage`, and ask you before `deploy_production` (which runs the project's migrations first), `deploy_rollback`, `deploy_domain_add` and `deploy_domain_records`. A project with an Expo app also gets `release_status` and `release_logs`, and `release_start`, which always asks you before building and uploading to TestFlight and Play's internal track. See [Deploying an app](deploy.md#agents).
 
 `ci_setup` writes a CI workflow into the thread's checkout for the agent to review and commit through a pull request. See [Set up CI](git-hosting.md#set-up-ci).
 

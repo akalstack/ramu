@@ -17,6 +17,7 @@ import { HostingSignIns } from './signIn'
 import { UptimeWatches } from './uptime'
 import { projectUsage, UsageNotices } from './usage'
 import { ProjectWake } from './wake'
+import { StoreReleases } from './release'
 
 const commandOf = (argv: string[] | null | undefined) => (argv ? commandLine(argv) : null)
 
@@ -40,6 +41,8 @@ export interface Deploys {
   usage(projectId: string): Promise<UsageReport[]>
   usageNotices: UsageNotices
   resources: ResourceService
+  /** Store releases of a project's Expo app. */
+  releases: StoreReleases
   wake: ProjectWake
 }
 
@@ -101,10 +104,15 @@ export function createDeploys(
     accounts,
   )
   const wake = new ProjectWake(db, workspace, agents)
+  const releases = new StoreReleases(
+    { roots: (projectId) => workspace.listRepositories(projectId).map((repository) => repository.root) },
+    accounts,
+  )
   const deployWatch = new DeployWatches(
     { getState, setState, migrate: (projectId) => commandOf(stack(projectId)?.migrate) },
     wake,
     service,
+    releases,
   )
   const uptime = new UptimeWatches(
     {
@@ -174,6 +182,7 @@ export function createDeploys(
     },
     uptime,
     resources,
+    releases,
     wake,
   }
 }

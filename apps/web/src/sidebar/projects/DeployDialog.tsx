@@ -21,6 +21,7 @@ import { CiSetupSection } from './CiSetup'
 import { DatabaseSection } from './Database'
 import { DomainsSection } from './Domains'
 import { EnvSyncSection } from './EnvSync'
+import { ReleaseSection } from './Release'
 import { UptimeSection } from './Uptime'
 import { UsageSection } from './Usage'
 
@@ -88,8 +89,11 @@ export function DeployDialog({
   const account = accounts.find((entry) => entry.platform === (binding?.platform ?? platform))
   const canDeploy = !!binding && !!status?.capabilities.includes('deployProduction')
   const recommended = accounts.find((entry) => entry.platform === status?.recommended)
+  // An Expo app ships through the stores, not a hosting platform, unless it is already linked to one.
+  const storeOnly = !binding && status?.recommended === 'expo'
 
   const confirm = () => {
+    if (storeOnly) return onClose()
     if (!binding) {
       if (!platform || !repoId) return
       void run(async () => {
@@ -112,15 +116,17 @@ export function DeployDialog({
       confirmLabel={
         busy
           ? t('Working…')
-          : !binding
-            ? t('Link repository')
-            : !canDeploy
-              ? t('Done')
-              : confirming
-                ? t('Deploy now')
-                : t('Deploy to production')
+          : storeOnly
+            ? t('Done')
+            : !binding
+              ? t('Link repository')
+              : !canDeploy
+                ? t('Done')
+                : confirming
+                  ? t('Deploy now')
+                  : t('Deploy to production')
       }
-      confirmDisabled={!status || (!binding && (!platform || !repoId || !account?.connected))}
+      confirmDisabled={!status || (!binding && !storeOnly && (!platform || !repoId || !account?.connected))}
       busy={busy}
       error={error}
       onCancel={onClose}
@@ -128,7 +134,7 @@ export function DeployDialog({
     >
       {!status ? (
         <p className="text-muted-foreground">{t('Checking…')}</p>
-      ) : !binding ? (
+      ) : storeOnly ? null : !binding ? (
         <>
           <p>
             {recommended
@@ -291,6 +297,7 @@ export function DeployDialog({
           )}
         </>
       )}
+      <ReleaseSection projectId={project.id} />
       <DatabaseSection
         projectId={project.id}
         repoId={repoId}

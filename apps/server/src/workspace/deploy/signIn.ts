@@ -16,18 +16,18 @@ const TIMEOUT_MS = 10 * 60_000
 const POLL_MS = 4_000
 
 /** Packaged apps may start without the shell's PATH, so look in the usual install locations too. */
-export function platformCli(platform: HostingPlatform): string | null {
+export function platformCli(name: string): string | null {
   return (
-    findExecutable(platform) ??
+    findExecutable(name) ??
     ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin']
-      .map((dir) => join(dir, platform))
+      .map((dir) => join(dir, name))
       .find((path) => existsSync(path)) ??
     null
   )
 }
 
 /** Only what a CLI needs to run: no agent markers (which switch CLIs to agent output), no Ramu secrets. */
-function cliEnvironment(home: string): NodeJS.ProcessEnv {
+export function cliEnvironment(home: string): NodeJS.ProcessEnv {
   const keep = ['PATH', 'USER', 'LOGNAME', 'LANG', 'LC_ALL', 'TMPDIR', 'SHELL', 'SystemRoot']
   return {
     ...Object.fromEntries(keep.flatMap((key) => (process.env[key] ? [[key, process.env[key]]] : []))),

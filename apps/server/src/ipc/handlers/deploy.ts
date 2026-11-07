@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { StoreTarget } from '@ramu/shared/types/deploy'
 import {
   ACCOUNT_PLATFORMS,
   HOSTING_PLATFORMS,
@@ -31,6 +32,8 @@ const signIn = z.string().uuid()
 const deploymentId = z.string().trim().min(1).max(200)
 const domain = z.string().trim().min(1).max(260)
 const branch = z.string().trim().min(1).max(200)
+const storeTarget = z.enum(['all', 'ios', 'android'])
+const buildId = z.string().uuid()
 
 /** A platform project name from the Ramu project's name: lowercase letters, digits and dashes. */
 const siteName = (name: string) =>
@@ -222,6 +225,28 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
         ctx.gitCwdOf(taskId, repoId)
         return ctx.deploys?.preview(repoId, name) ?? null
       },
+    },
+    'deploy.release': {
+      args: z.tuple([id]),
+      run: (projectId: string) => deploys().releases.status(project(projectId)),
+    },
+    'deploy.startRelease': {
+      args: z.tuple([id, storeTarget]),
+      run: (projectId: string, target: StoreTarget) =>
+        exclusive(projectId, async () => {
+          const builds = await deploys().releases.start(project(projectId), target)
+          for (const build of builds) deploys().deployWatch.followRelease(projectId, build.id, null)
+          return builds
+        }),
+    },
+    'deploy.releaseLogs': {
+      args: z.tuple([id, buildId, z.enum(['build', 'submission'])]),
+      run: (projectId: string, build: string, of: 'build' | 'submission') =>
+        deploys().releases.logs(project(projectId), build, of),
+    },
+    'deploy.proposeEasJson': {
+      args: z.tuple([id]),
+      run: (projectId: string) => exclusive(projectId, () => deploys().releases.proposeEasJson(project(projectId))),
     },
     'deploy.rollback': {
       args: z.tuple([id, deploymentId]),

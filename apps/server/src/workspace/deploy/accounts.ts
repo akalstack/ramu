@@ -1,6 +1,6 @@
-// One sign-in per hosting platform and resource provider on this host, used by deploys, databases and Publish to the
-// web. The token lives in the host credential store; ordinary state keeps only a reference and the account name
-// Settings shows.
+// One sign-in per hosting platform, resource provider and store service on this host, used by deploys, databases,
+// store releases and Publish to the web. The token lives in the host credential store; ordinary state keeps only a
+// reference and the account name Settings shows.
 import {
   ACCOUNT_PLATFORMS,
   isHostingPlatform,
@@ -10,6 +10,7 @@ import {
 import { HostCredentialStore } from '../../credentials/store'
 import { SavedCredential } from '../forge/savedCredential'
 import { DeployError, hostingAdapter, type HostingAdapter, type HostingAuth } from './adapter'
+import { expoClient } from './expo'
 import { resourceAdapter } from './resource'
 import './vercel'
 import './netlify'
@@ -18,7 +19,10 @@ import './neon'
 /** What an account needs from its platform's adapter: a name, a token page and who a token belongs to. */
 type AccountAdapter = Pick<HostingAdapter, 'name' | 'tokenPage' | 'account'> & { kind: HostingAccount['kind'] }
 
+const expo = expoClient()
+
 function accountAdapter(platform: AccountPlatform): AccountAdapter {
+  if (platform === 'expo') return expo
   if (!isHostingPlatform(platform)) return resourceAdapter(platform)
   const adapter = hostingAdapter(platform)
   return { name: adapter.name, tokenPage: adapter.tokenPage, account: (auth) => adapter.account(auth), kind: 'hosting' }
@@ -71,7 +75,7 @@ export class HostingAccounts {
         setState,
         credentials,
       )
-    this.saved = { vercel: saved('vercel'), netlify: saved('netlify'), neon: saved('neon') }
+    this.saved = { vercel: saved('vercel'), netlify: saved('netlify'), neon: saved('neon'), expo: saved('expo') }
   }
 
   /** Every platform's connection; `check` asks each connected platform who the token is. */
@@ -82,6 +86,11 @@ export class HostingAccounts {
         return this.describe(platform, cli(platform))
       }),
     )
+  }
+
+  /** The account name Settings shows for a saved sign-in, without reading the token. */
+  accountName(platform: AccountPlatform): string | null {
+    return this.saved[platform].savedField()?.shown ?? null
   }
 
   /** Whether a token is saved, without reading it. */

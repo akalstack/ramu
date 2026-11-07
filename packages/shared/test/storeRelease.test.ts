@@ -1,0 +1,84 @@
+import { describe, expect, it } from 'vitest'
+import { blockingChecks, EAS_JSON, storeChecks, type StoreFacts } from '../src/storeRelease'
+
+const ready: StoreFacts = {
+  appJson: {
+    expo: {
+      name: 'Barber',
+      version: '1.0.0',
+      icon: './assets/icon.png',
+      ios: { bundleIdentifier: 'com.barber.app', infoPlist: { NSCameraUsageDescription: 'Scan your loyalty card.' } },
+      android: { package: 'com.barber.app' },
+      extra: { eas: { projectId: '1f0e2c4e-0000-4000-8000-000000000001' } },
+    },
+  },
+  easJson: {
+    ...JSON.parse(EAS_JSON),
+    submit: { production: { ios: { ascAppId: '6450000000' }, android: { track: 'internal' } } },
+  },
+  dynamicConfig: null,
+  dependencies: ['expo', 'expo-camera'],
+  iconExists: true,
+}
+
+const state = (facts: StoreFacts) => Object.fromEntries(storeChecks(facts).map((check) => [check.id, check.state]))
+
+describe('store checks', () => {
+  it('pass for an app the stores accept, with the eas.json Ramu proposes', () => {
+    expect(Object.values(state(ready)).every((value) => value === 'ok')).toBe(true)
+    expect(blockingChecks(storeChecks(ready), 'all')).toEqual([])
+  })
+
+  it('name what is missing, and block only the platform it matters for', () => {
+    const facts: StoreFacts = {
+      ...ready,
+      appJson: { expo: { ...(ready.appJson as { expo: object }).expo, ios: {} } },
+      easJson: { build: { production: {} }, submit: { production: { android: { track: 'production' } } } },
+      iconExists: false,
+    }
+    const checks = storeChecks(facts)
+    expect(state(facts)).toMatchObject({
+      'ios-bundle': 'missing',
+      'ios-app': 'missing',
+      icon: 'missing',
+      'android-track': 'missing',
+      'build-number': 'warning',
+      'ios-privacy': 'missing',
+    })
+    expect(blockingChecks(checks, 'android').map((check) => check.id)).toEqual(['icon', 'android-track'])
+    expect(blockingChecks(checks, 'ios').map((check) => check.id)).toEqual([
+      'ios-bundle',
+      'icon',
+      'ios-app',
+      'ios-privacy',
+    ])
+  })
+
+  it('warn when a library’s plugin gives only its generic permission text', () => {
+    const expo = (ready.appJson as { expo: Record<string, unknown> }).expo
+    const generic = {
+      ...ready,
+      appJson: { expo: { ...expo, ios: { bundleIdentifier: 'com.barber.app' }, plugins: ['expo-camera'] } },
+    }
+    expect(storeChecks(generic).find((check) => check.id === 'ios-privacy')).toEqual({
+      id: 'ios-privacy',
+      state: 'warning',
+      detail: 'NSCameraUsageDescription',
+    })
+    const worded = {
+      ...generic,
+      appJson: {
+        expo: { ...generic.appJson.expo, plugins: [['expo-camera', { cameraPermission: 'Scan your card.' }]] },
+      },
+    }
+    expect(state(worded)['ios-privacy']).toBe('ok')
+  })
+
+  it('ask for eas.json first, and say when the configuration is code', () => {
+    const checks = storeChecks({ ...ready, appJson: null, easJson: null, dynamicConfig: 'app.config.ts' })
+    expect(checks).toEqual([
+      { id: 'eas-json', state: 'missing', detail: null },
+      { id: 'dynamic-config', state: 'warning', detail: 'app.config.ts' },
+    ])
+  })
+})

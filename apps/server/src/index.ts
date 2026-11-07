@@ -50,7 +50,7 @@ import type { TunnelChoice } from '@ramu/shared/types'
 import { registerThemeTools } from './themeTools'
 import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
 import { createDeploys } from './workspace/deploy/deploys'
-import { registerDeployTools } from './workspace/deploy/tools'
+import { registerDeployTools, registerReleaseTools } from './workspace/deploy/tools'
 import { registerCiTools } from './workspace/ci/tools'
 import { setAcpTerminalService } from './providers/acpTerminals'
 import { SqliteBackgroundTerminalHistory } from './workspace/backgroundTerminalHistory'
@@ -1329,6 +1329,10 @@ const mcpHttp = createServer(async (req, res) => {
       () => agents.get(source.id),
       () => workspace.listProjects().find((project) => project.id === deployProject)?.name ?? 'this project',
       (detail, signal) => agents.requestPermission(source.id, 'Deploy', detail, signal),
+    )
+  if (!review && deployProject && deployProject !== NO_PROJECT && deploys.releases.root(deployProject))
+    registerReleaseTools(server, deploys.releases, deploys.deployWatch, source, deployProject, (detail, signal) =>
+      agents.requestPermission(source.id, 'Release', detail, signal),
     )
   if (!review) registerCiTools(server, source, () => agents.get(source.id))
   if (!review && !source.parentId) registerSecretTools(server, agents, source.id)

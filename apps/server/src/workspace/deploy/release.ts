@@ -1,0 +1,247 @@
+// Store releases of a project's Expo app: the checks the stores need, read from app.json and eas.json, and Release,
+// which builds the app on EAS and submits each build to TestFlight or Play's internal track. Builds and submissions
+// start through the `eas` CLI (EAS has no public API for them) as an argument list with the token in its environment;
+// everything else is read through Expo's API. A submission for review is never made here: that is the person's
+// action on each store.
+import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { lstat, readFile } from 'node:fs/promises'
+import { isAbsolute, join, relative, resolve } from 'node:path'
+import {
+  blockingChecks,
+  EAS_JSON,
+  easProjectId,
+  RELEASE_PROFILE,
+  storeCheckText,
+  storeChecks,
+  type StoreFacts,
+} from '@ramu/shared/storeRelease'
+import { translate } from '@ramu/shared/i18n'
+import type { StoreBuild, StoreRelease, StoreTarget } from '@ramu/shared/types/deploy'
+import { redactSecrets } from '../../memory/secrets'
+import { commitBranchInfo } from '../git'
+import { proposeFile } from '../proposeFile'
+import { DeployError } from './adapter'
+import type { HostingAccounts } from './accounts'
+import { expoClient, type ExpoClient } from './expo'
+import { cliEnvironment, platformCli } from './signIn'
+
+const LISTED = 10
+const LOG_LINES = 200
+/** Configuration files larger than this are not read; a real app.json or eas.json is far smaller. */
+const FILE_LIMIT = 256 * 1024
+/** Uploading the project and starting the builds; the builds themselves run on EAS and are not waited for. */
+const START_TIMEOUT_MS = 20 * 60_000
+
+/** Runs the `eas` CLI in `cwd` with the token in its environment and resolves with its standard output. */
+export type EasRunner = (args: string[], options: { cwd: string; token: string }) => Promise<string>
+
+/** The `eas` CLI on this host, or the published one through npx. */
+function easCommand(): { file: string; prefix: string[] } {
+  const installed = platformCli('eas')
+  if (installed) return { file: installed, prefix: [] }
+  return { file: platformCli('npx') ?? 'npx', prefix: ['--yes', 'eas-cli@latest'] }
+}
+
+const runEas: EasRunner = (args, { cwd, token }) =>
+  new Promise((done, fail) => {
+    const { file, prefix } = easCommand()
+    execFile(
+      file,
+      [...prefix, ...args],
+      {
+        cwd,
+        // The person's own HOME, for Git and npm caches; only Ramu's secrets are left out, and the token is EAS's own.
+        env: { ...cliEnvironment(process.env.HOME ?? cwd), EXPO_TOKEN: token },
+        timeout: START_TIMEOUT_MS,
+        maxBuffer: 16 * 1024 * 1024,
+      },
+      (error, stdout, stderr) => {
+        if (!error) return done(stdout)
+        const output = redactSecrets(
+          String(stderr || stdout)
+            .split('\n')
+            .slice(-30)
+            .join('\n')
+            .trim(),
+        )
+        fail(new Error(`EAS stopped before starting the builds.${output ? `\n\n${output}` : ''}`, { cause: error }))
+      },
+    )
+  })
+
+/** A file of the repository, read only when it is a regular file of a sensible size. */
+async function readSmall(root: string, name: string): Promise<string | null> {
+  const info = await lstat(join(root, name)).catch(() => null)
+  if (!info?.isFile() || info.size > FILE_LIMIT) return null
+  return readFile(join(root, name), 'utf8')
+}
+
+async function readJson(root: string, name: string): Promise<unknown> {
+  const text = await readSmall(root, name)
+  if (text === null) return null
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    throw new Error(`${name} is not valid JSON. Fix it before releasing.`)
+  }
+}
+
+const DYNAMIC = ['app.config.ts', 'app.config.js', 'app.config.mjs', 'app.config.cjs']
+
+/** Whether a repository root holds an Expo app. */
+const isExpoApp = (root: string) =>
+  existsSync(join(root, 'app.json')) || DYNAMIC.some((name) => existsSync(join(root, name)))
+
+export interface ReleaseHost {
+  /** The project's repository checkouts, in order. */
+  roots(projectId: string): string[]
+}
+
+export class StoreReleases {
+  constructor(
+    private readonly host: ReleaseHost,
+    private readonly accounts: Pick<HostingAccounts, 'auth' | 'accountName'>,
+    private readonly client: ExpoClient = expoClient(),
+    private readonly run: EasRunner = runEas,
+  ) {}
+
+  /** The first repository of the project with an Expo app at its root. */
+  root(projectId: string): string | null {
+    return this.host.roots(projectId).find(isExpoApp) ?? null
+  }
+
+  private async facts(root: string): Promise<StoreFacts> {
+    const appJson = await readJson(root, 'app.json')
+    const pkg = (await readJson(root, 'package.json').catch(() => null)) as {
+      dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    } | null
+    const icon = appJson
+      ? ((appJson as { expo?: { icon?: unknown }; icon?: unknown }).expo?.icon ?? (appJson as { icon?: unknown }).icon)
+      : null
+    let iconExists = false
+    if (typeof icon === 'string') {
+      // The icon must be a file inside the repository; a path that leaves it does not count.
+      const path = resolve(root, icon)
+      const inside = relative(root, path)
+      iconExists =
+        !!inside && !inside.startsWith('..') && !isAbsolute(inside) && !!(await lstat(path).catch(() => null))?.isFile()
+    }
+    return {
+      appJson,
+      easJson: await readJson(root, 'eas.json'),
+      dynamicConfig: DYNAMIC.find((name) => existsSync(join(root, name))) ?? null,
+      dependencies: Object.keys({ ...pkg?.dependencies, ...pkg?.devDependencies }),
+      iconExists,
+    }
+  }
+
+  async status(projectId: string): Promise<StoreRelease> {
+    const account = this.accounts.accountName('expo')
+    const root = this.root(projectId)
+    const empty: StoreRelease = { app: null, connected: !!account, account, checks: [], builds: [], error: null }
+    if (!root) return empty
+    const facts = await this.facts(root)
+    const easProject = easProjectId(facts.appJson)
+    const name = String(
+      (facts.appJson as { expo?: { name?: unknown } } | null)?.expo?.name ?? root.split(/[\\/]/).pop() ?? '',
+    )
+    const status: StoreRelease = {
+      ...empty,
+      app: { name, projectId: easProject, page: null },
+      checks: storeChecks(facts),
+    }
+    if (!account || !easProject) return status
+    try {
+      const { auth } = await this.accounts.auth('expo')
+      const [app, builds] = await Promise.all([
+        this.client.app(auth, easProject),
+        this.client.builds(auth, easProject, LISTED),
+      ])
+      return { ...status, app: { name: app.name, projectId: easProject, page: app.page }, builds }
+    } catch (error) {
+      return { ...status, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
+   * Builds the default branch on EAS for `target` and submits each build when it finishes: iOS to TestFlight, Android
+   * to Play's internal track. Refused while a check that matters for `target` is missing, or while the checkout is
+   * on another branch. The caller is the person's approval.
+   */
+  async start(projectId: string, target: StoreTarget): Promise<StoreBuild[]> {
+    const root = this.root(projectId)
+    if (!root) throw new Error('This project has no Expo app at the root of its repository.')
+    const blocking = blockingChecks(storeChecks(await this.facts(root)), target)
+    if (blocking.length)
+      throw new Error(
+        `Fix these first: ${blocking.map((check) => storeCheckText((key, values) => translate('en', key, values), check)).join('; ')}.`,
+      )
+    const { branch, defaultBranch } = await commitBranchInfo(root)
+    if (defaultBranch && branch !== defaultBranch)
+      throw new Error(`A release builds ${defaultBranch}. Switch the project’s checkout to ${defaultBranch} first.`)
+    const { auth } = await this.accounts.auth('expo')
+    const stdout = await this.run(
+      [
+        'build',
+        '--platform',
+        target,
+        '--profile',
+        RELEASE_PROFILE,
+        '--auto-submit-with-profile',
+        RELEASE_PROFILE,
+        '--non-interactive',
+        '--no-wait',
+        '--json',
+      ],
+      { cwd: root, token: auth.token },
+    )
+    let started: { id?: unknown }[]
+    try {
+      started = JSON.parse(stdout) as { id?: unknown }[]
+    } catch (error) {
+      throw new DeployError(
+        'EAS did not report the builds it started. Check the builds on expo.dev before releasing again.',
+        null,
+        null,
+        { cause: error },
+      )
+    }
+    const ids = (Array.isArray(started) ? started : []).flatMap((entry) =>
+      typeof entry?.id === 'string' ? [entry.id] : [],
+    )
+    return Promise.all(ids.map((id) => this.client.build(auth, id)))
+  }
+
+  async build(buildId: string): Promise<StoreBuild> {
+    const { auth } = await this.accounts.auth('expo')
+    return this.client.build(auth, buildId)
+  }
+
+  /** The end of a build's or its submission's log, for a build of the project's own app. */
+  async logs(projectId: string, buildId: string, of: 'build' | 'submission'): Promise<string> {
+    const root = this.root(projectId)
+    const easProject = root ? easProjectId(await readJson(root, 'app.json')) : null
+    if (!easProject) throw new Error('This project has no Expo app linked to an EAS project.')
+    const { auth } = await this.accounts.auth('expo')
+    return this.client.logs(auth, easProject, buildId, of, LOG_LINES)
+  }
+
+  /** Opens a pull request that adds the eas.json Release needs; the person merges it. */
+  async proposeEasJson(projectId: string): Promise<{ url: string | null }> {
+    const root = this.root(projectId)
+    if (!root) throw new Error('This project has no Expo app at the root of its repository.')
+    const { url } = await proposeFile(root, 'ramu/eas-json', async () => ({
+      path: 'eas.json',
+      content: EAS_JSON,
+      commit: 'build: add eas.json for store releases\n',
+      title: 'Add eas.json for store releases',
+      body: [
+        `Adds \`eas.json\` with a \`${RELEASE_PROFILE}\` build profile whose build numbers EAS keeps and raises on every build, and a \`${RELEASE_PROFILE}\` submit profile that sends Android builds to Play’s internal testing track.`,
+        'Before the first iOS release, add the app’s App Store Connect Apple ID as `submit.production.ios.ascAppId`.',
+      ].join('\n\n'),
+    }))
+    return { url }
+  }
+}

@@ -52,6 +52,8 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 
 - **Usage with real accounts:** the deploy sheet's figures on a Vercel Hobby account and a Pro team (or the plain-words note where Vercel refuses billing data), a Netlify team on a legacy plan with build minutes and one billed in credits, and a Neon free project, each matching the platform's own usage page; **Open billing** landing on the right page; an 80% notice for Netlify build minutes or Neon storage opening the project's thread, and `deploy_usage` read from a thread.
 
+- **Store releases with real accounts:** an Expo robot token in Settings → Hosting accounts; for an Expo app made from the Expo stack, the store checks matching what EAS and the stores then ask for, **Add eas.json in a pull request**, and **Release** for iOS and Android with the `eas` CLI installed and through `npx`, each build reaching TestFlight and Play's internal track with only the store steps done by hand; a build broken on purpose and a submission without a Play service account each waking the thread once with the log tail and no secrets; and the `release_start` approval card from a phone.
+
 Representative tasks to run once the above is available:
 
 - Ask an agent to open Calculator on one computer and compute `(125 * 8) + 42` (expect `1042`) while watching and stopping it from a phone and a second desktop.

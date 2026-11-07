@@ -10,8 +10,15 @@ export type HostingPlatform = (typeof HOSTING_PLATFORMS)[number]
 export const RESOURCE_PROVIDERS = ['neon'] as const
 export type ResourceProvider = (typeof RESOURCE_PROVIDERS)[number]
 
-/** Every account connected in Settings → Hosting accounts: the hosting platforms, then the resource providers. */
-export const ACCOUNT_PLATFORMS = [...HOSTING_PLATFORMS, ...RESOURCE_PROVIDERS] as const
+/** Services that build an app and hand it to the app stores. */
+export const STORE_SERVICES = ['expo'] as const
+export type StoreService = (typeof STORE_SERVICES)[number]
+
+/**
+ * Every account connected in Settings → Hosting accounts: the hosting platforms, the resource providers, then the
+ * store services.
+ */
+export const ACCOUNT_PLATFORMS = [...HOSTING_PLATFORMS, ...RESOURCE_PROVIDERS, ...STORE_SERVICES] as const
 export type AccountPlatform = (typeof ACCOUNT_PLATFORMS)[number]
 
 export const isHostingPlatform = (platform: AccountPlatform): platform is HostingPlatform =>
@@ -27,8 +34,8 @@ export type DeployFailureKind = 'signed-out' | 'missing-permission' | 'plan-limi
 /** One platform's connection on this host. The token never leaves the host. */
 export interface HostingAccount {
   platform: AccountPlatform
-  /** Whether it deploys apps or provides a resource such as a database. */
-  kind: 'hosting' | ResourceKind
+  /** Whether it deploys apps, provides a resource such as a database, or releases phone apps to the stores. */
+  kind: 'hosting' | ResourceKind | 'store'
   /** The platform's name, such as "Vercel". */
   name: string
   connected: boolean
@@ -227,4 +234,76 @@ export interface UsageReport {
   unavailable: string | null
   /** The platform's billing page. Ramu never changes a plan or adds a payment method. */
   billingPage: string
+}
+
+/** The app stores a release reaches, by the platform the app runs on. */
+export type StorePlatform = 'ios' | 'android'
+
+/** What Release builds: both platforms, or one. */
+export type StoreTarget = StorePlatform | 'all'
+
+/** A store submission: an upload to TestFlight or Play's internal track, never a submission for review. */
+export interface StoreSubmission {
+  id: string
+  state: DeploymentState
+  /** The Play track for Android; null for iOS, which always goes to TestFlight. */
+  track: string | null
+  /** Why it failed, in the service's words. */
+  error: string | null
+  createdAt: number
+}
+
+/** One store build of the app on the build service, with the submission made from it. */
+export interface StoreBuild {
+  id: string
+  platform: StorePlatform
+  state: DeploymentState
+  profile: string | null
+  /** The version people see, such as 1.2.0. */
+  version: string | null
+  /** The build number (iOS) or version code (Android). */
+  buildNumber: string | null
+  commit: string | null
+  message: string | null
+  /** Why it failed, in the service's words. */
+  error: string | null
+  createdAt: number
+  /** The build's page on the service. */
+  page: string
+  submission: StoreSubmission | null
+}
+
+/** One thing the stores need, checked from the app's configuration before a release. */
+export type StoreCheckId =
+  | 'eas-json'
+  | 'eas-project'
+  | 'ios-bundle'
+  | 'android-package'
+  | 'icon'
+  | 'version'
+  | 'build-number'
+  | 'ios-app'
+  | 'android-track'
+  | 'ios-privacy'
+  | 'dynamic-config'
+
+export interface StoreCheck {
+  id: StoreCheckId
+  /** `warning` passes but is worth fixing before the stores review the app. */
+  state: 'ok' | 'missing' | 'warning'
+  /** The value found or what is missing, such as a bundle identifier or permission keys. */
+  detail: string | null
+}
+
+/** Store releases of a project's Expo app: what the stores need, and the latest builds and submissions. */
+export interface StoreRelease {
+  /** The Expo app at the repository root; null when the project has none. */
+  app: { name: string; projectId: string | null; page: string | null } | null
+  /** Whether an Expo account is connected on this host, and its name. */
+  connected: boolean
+  account: string | null
+  checks: StoreCheck[]
+  builds: StoreBuild[]
+  /** Why the builds could not be read, in plain words. */
+  error: string | null
 }

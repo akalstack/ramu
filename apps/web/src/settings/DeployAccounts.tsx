@@ -15,6 +15,7 @@ const SCOPE_HINT: Record<AccountPlatform, string> = {
   vercel: 'Scope: the team your projects are in, not Full Account',
   netlify: 'Netlify tokens reach every team you belong to, so choose an expiry',
   neon: 'Create a personal API key. Neon keys reach your whole account and do not expire, so revoke it on Neon when Ramu no longer needs it',
+  expo: 'Create it for a robot user with the Developer role on the account that owns the app; a personal token reaches every account you belong to',
 }
 
 /** The headline under a platform's name: who is connected and how, or what to do. */
@@ -22,7 +23,9 @@ function deployAccountHeadline(account: HostingAccount): string {
   if (!account.connected)
     return account.kind === 'hosting'
       ? t('Not connected. Deploys and Publish to the web need an account.')
-      : t('Not connected. Databases for your projects need an account.')
+      : account.kind === 'store'
+        ? t('Not connected. Store releases of phone apps need an account.')
+        : t('Not connected. Databases for your projects need an account.')
   if (account.error) return account.error
   const via = account.via === 'cli' ? t('signed in through its CLI') : t('token saved on this host')
   const who = t('Connected as {0} ({1})', { 0: account.account ?? account.name, 1: via })

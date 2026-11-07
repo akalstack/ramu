@@ -30,6 +30,9 @@ import type {
   AccountPlatform,
   ProjectResources,
   ResourceProvider,
+  StoreBuild,
+  StoreRelease,
+  StoreTarget,
   UptimeStatus,
   UsageReport,
 } from './types/deploy'
@@ -1225,6 +1228,17 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.uptime'(projectId: string): UptimeStatus
   /** Turns the live address watch on or off; off forgets its checks and closes an open incident without a recap. */
   'deploy.setUptime'(projectId: string, enabled: boolean): UptimeStatus
+  /** The project's Expo app: what the stores need, checked from app.json and eas.json, and its latest store builds. */
+  'deploy.release'(projectId: string): StoreRelease
+  /**
+   * Builds the app on EAS and submits each build to TestFlight or Play's internal track, never for review; pressing
+   * Release in the sheet is the person's approval. The project's latest thread hears how it finished.
+   */
+  'deploy.startRelease'(projectId: string, target: StoreTarget): StoreBuild[]
+  /** The end of a store build's log, or of its submission's. */
+  'deploy.releaseLogs'(projectId: string, buildId: string, of: 'build' | 'submission'): string
+  /** Opens a pull request that adds the eas.json a release needs. */
+  'deploy.proposeEasJson'(projectId: string): { url: string | null }
   /** What Set up CI would add to a repository of the project, from its last fetched default branch. */
   'ci.preview'(projectId: string, repoId: string): CiPreview
   /**

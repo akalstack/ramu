@@ -1,16 +1,18 @@
 # Deploying an app
 
-Ramu deploys a project to a hosting platform on your own account. It hosts nothing itself: the app, its deployments, its database and their billing stay with the providers, and the repository stays a normal GitHub repository. Vercel and Netlify host apps; Neon provides Postgres databases.
+Ramu deploys a project to a hosting platform on your own account. It hosts nothing itself: the app, its deployments, its database and their billing stay with the providers, and the repository stays a normal GitHub repository. Vercel and Netlify host apps; Neon provides Postgres databases; Expo (EAS) builds phone apps for the App Store and Google Play ([Store releases](#store-releases)).
 
 ## Connect an account
 
-**Settings → Git → Hosting accounts** lists Vercel, Netlify and Neon with their marks. **Connect** offers two ways, in this order:
+**Settings → Git → Hosting accounts** lists Vercel, Netlify, Neon and Expo with their marks. **Connect** offers two ways, in this order:
 
 1. **Sign in with Vercel** or **Sign in with Netlify**, when the platform's CLI (`vercel` or `netlify`) is installed on the host. Ramu runs the CLI's own browser sign-in on the host and shows its link (and Vercel's code) in Settings; **Open the sign-in page**, sign in and authorize. Ramu then reads the token the CLI saved, checks it with the platform and shows the account name. The CLI runs against a private configuration folder that is deleted afterwards, so your own CLI login is not read, changed or signed out.
    - Vercel's sign-in is a session that renews itself; Ramu renews it before it expires. A Vercel CLI that signs in with a key bound to the computer cannot be used; use a token instead.
 2. **A token**, when there is no CLI or the sign-in fails (a team that blocks CLI logins, single sign-on). **Open the token page** goes to the platform's token page, and a short checklist says what to pick: name it Ramu, the smallest scope (on Vercel, the team your projects are in rather than Full Account), and an expiry. Paste it into the secret field: it goes straight to the host's credential store, is checked with the platform on the spot, and is never shown again. Settings shows the account, an expiry date, and a note when a Vercel token reaches your whole account.
 
 Neon connects with an API key only: create a personal key named Ramu on Neon's API keys page and paste it. Neon keys reach your whole account and do not expire, so revoke it on Neon when Ramu no longer needs it.
+
+Expo connects with an access token only: on Expo's access tokens page, create a robot user with the Developer role on the account that owns the app and create its token (a personal token reaches every account you belong to, and Settings says so). Revoke it on Expo when Ramu no longer needs it.
 
 Agents never create tokens by driving your browser: a signed-in dashboard gives full account power, and a new token would end up in screenshots and the transcript.
 
@@ -47,9 +49,21 @@ Ramu follows a deployment until the platform finishes it, then wakes one thread 
 
 Pushes made outside Ramu, such as from a terminal or GitHub's website, are not followed. For those, a **Deployment failed** [webhook schedule](background-work.md#when-a-request-arrives) for Vercel or Netlify starts a thread instead.
 
+## Store releases
+
+For an Expo app (an `app.json` or `app.config.*` at the repository root, as the Expo stack creates), the deploy sheet shows **Store releases**. A project whose stack names Expo shows only this, not the hosting platforms.
+
+- **What the stores need**, checked from `app.json` and `eas.json`: an `eas.json` with a `production` build profile, the EAS project the app is linked to (`extra.eas.projectId`, which an agent sets with `eas init`), the iOS bundle identifier and Android package, the icon file, the version, build numbers that EAS raises on every build (`autoIncrement` or `appVersionSource: "remote"`; numbers set by hand are a warning), the App Store Connect app (`submit.production.ios.ascAppId`), Android submissions to the internal track only, and the iOS permission texts the app's Expo libraries need (such as `NSCameraUsageDescription` for `expo-camera`), set in `ios.infoPlist` or in the library's plugin options. An app that computes its configuration in `app.config.*` is checked from `app.json` only, and the sheet says so.
+- **Add eas.json in a pull request** opens a pull request with an `eas.json` whose `production` build profile raises build numbers and whose `production` submit profile sends Android to the internal track, made in a temporary worktree as [Set up CI](git-hosting.md#set-up-ci) does.
+- **What only you can do on the stores** lists the steps Ramu cannot take: enrolling in the Apple Developer Program, creating the app in App Store Connect and in Google Play Console, the first iOS build in a terminal so EAS can create the signing credentials with your Apple sign-in, the first Android upload to Play Console by hand, a Google service account key for submissions, and inviting testers, the store listings and submitting for review.
+- **Release** builds iOS and Android, or one of them, on EAS from the default branch, then uploads the iOS build to TestFlight and the Android build to Play's internal testing track. It asks once more before anything starts, and is refused while a check that matters for the chosen platforms is missing or the project's checkout is on another branch. Ramu runs `eas build --non-interactive --no-wait --json` with the `production` build and submit profiles (the `eas` CLI on the host, or the published one through `npx`), since EAS starts builds only through its CLI; the token is passed in its environment.
+- **Nothing is submitted for review.** Submitting a TestFlight build to App Review or promoting a Play release to production is your step on each store.
+- The latest store builds list each build's platform, state, version and build number, the upload's state, **Open** on expo.dev, **Logs** and **Upload log**.
+- **When a build finishes:** Ramu follows each build and its upload, for up to eight hours, and wakes the project's most recent thread (or the thread that started the release) once: when the upload is done, or with the end of the build's or upload's log when either fails, redacted as for deployments.
+
 ## On the phone
 
-**Deployments** in a project's menu on the phone shows the platform and repository, the live address with **Open**, the latest deployments with their state, branch, time and **Open**, the [uptime](#uptime) watch with any open incident, and [usage](#usage) with **Open billing**. **Roll back** on an earlier production deployment asks first, naming the version and the address that changes, as in the deploy sheet. Linking, deploying, domains, databases and the watch's switch are on a computer. Viewer pairings do not see deployments.
+**Deployments** in a project's menu on the phone shows the platform and repository, the live address with **Open**, the latest deployments with their state, branch, time and **Open**, the [uptime](#uptime) watch with any open incident, and [usage](#usage) with **Open billing**. **Roll back** on an earlier production deployment asks first, naming the version and the address that changes, as in the deploy sheet. Linking, deploying, store releases, domains, databases and the watch's switch are on a computer. Viewer pairings do not see deployments.
 
 ## Usage
 
@@ -98,6 +112,8 @@ Threads in a project get deploy tools for that project, on its linked platform a
 - `deploy_usage`: what the platform and database report for the billing period, beside the plan's limits, and the billing page. Read-only.
 - `deploy_domain_add` and `deploy_domain_records`: add a domain, or create its records in the platform's DNS. They always ask you with a card naming the domain and each record, in every access mode, and the thread is woken when the domain is live.
 - `deploy_production` and `deploy_rollback`: always ask you with an approval card naming the address and what changes, in every access mode. A refusal is final for that request.
+- `release_status` and `release_logs`, for a project with an Expo app: what the stores need, the steps only you can do, the latest store builds, and the end of a build's or upload's log. Read-only.
+- `release_start`: builds the app on EAS and uploads it to TestFlight and Play's internal track. It always asks you with a card naming the app, its version, the platforms and the Expo account, in every access mode, and the thread is woken when each build and upload finish. Agents never submit an app for review.
 
 `deploy_production` runs the project's migrations first, and a failed migration returns its output to the agent instead of deploying. Agents cannot create or delete databases.
 

@@ -1,7 +1,6 @@
 // Set up CI: the workflow for a repository from what its default branch holds, opened as a pull request from a
 // throwaway worktree so the person's checkout, branch and uncommitted work are never touched.
-import { lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { lstat, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import {
   CI_MANIFESTS,
@@ -14,9 +13,10 @@ import {
   type CiWorkflow,
   CI_CHECK,
 } from '@ramu/shared/ciWorkflow'
-import { createPullRequest, forgeRemoteOf, requireCheck } from '../forge'
+import { forgeRemoteOf, requireCheck } from '../forge'
 import { kindOfOrigin } from '../forge/route'
-import { branchExists, commitBranchInfo, fetchedBranch, git, publishRemote } from '../git'
+import { commitBranchInfo, git, publishRemote } from '../git'
+import { existsAt, proposeFile } from '../proposeFile'
 import { loadProjectConfig } from '../projectConfig'
 
 /** Manifests larger than this are not read; a real package.json or Gemfile is far smaller. */
@@ -79,12 +79,6 @@ async function factsIn(root: string): Promise<Facts> {
   return { files, manifests }
 }
 
-const existsAt = (root: string, ref: string, path: string) =>
-  git(root, ['cat-file', '-e', `${ref}:${path}`]).then(
-    () => true,
-    () => false,
-  )
-
 /** App state listing the repositories Ramu created on a forge, where requiring CI breaks no one's habits. */
 export const CREATED_REPOSITORIES = 'created-repositories'
 
@@ -106,17 +100,6 @@ export async function ciPreview(root: string): Promise<Omit<CiPreview, 'requireB
   }
 }
 
-/** A branch name free both here and on the remote, so an earlier attempt is never overwritten. */
-async function freeBranch(root: string, remote: string): Promise<string> {
-  for (let n = 1; n <= 20; n++) {
-    const name = n === 1 ? BRANCH : `${BRANCH}-${n}`
-    if (await branchExists(root, name)) continue
-    const listed = await git(root, ['ls-remote', '--heads', remote, `refs/heads/${name}`])
-    if (!listed.trim()) return name
-  }
-  throw new Error('Delete the older ramu/set-up-ci branches before setting up CI again.')
-}
-
 /** Git refuses workflow files pushed with a token that lacks the workflow scope; say how to grant it. */
 function pushFailure(error: unknown): Error {
   const text = error instanceof Error ? error.message : String(error)
@@ -130,63 +113,30 @@ function pushFailure(error: unknown): Error {
   })
 }
 
-/**
- * Commits the workflow on a new branch from the fetched default branch and opens a pull request for it. The commit
- * is made in a temporary worktree with the repository's hooks switched off: they expect installed dependencies, and the
- * change is one generated file the person reviews in the pull request.
- */
+/** Commits the workflow on a new branch from the fetched default branch and opens a pull request for it. */
 export async function setUpCi(root: string, requireCi: boolean): Promise<CiSetupResult> {
   const forge = await forgeOf(root, true)
-  const defaultBranch = (await commitBranchInfo(root)).defaultBranch ?? 'main'
-  const { remote } = await publishRemote(root, defaultBranch)
-  if (!remote) throw new Error('This repository has no remote to open a pull request on.')
-  const { ref } = await fetchedBranch(root, defaultBranch)
-  const workflow = generated(forge, { ...(await factsAt(root, ref)), defaultBranch, stack: stackOf(root) })
-  if (await existsAt(root, ref, workflow.path))
-    throw new Error(`${defaultBranch} already has ${workflow.path}. Ask an agent to change it instead.`)
-  const branch = await freeBranch(root, remote)
-  const scratch = await mkdtemp(join(tmpdir(), 'ramu-ci-'))
-  const hooks = join(scratch, 'hooks')
-  const tree = join(scratch, 'tree')
-  const quiet = ['-c', `core.hooksPath=${hooks}`]
-  await mkdir(hooks)
-  let added = false
-  try {
-    await git(root, [...quiet, 'worktree', 'add', '--no-track', '-b', branch, '--', tree, ref])
-    added = true
-    await mkdir(dirname(join(tree, workflow.path)), { recursive: true })
-    await writeFile(join(tree, workflow.path), workflow.content)
-    await git(tree, ['add', '--', workflow.path])
-    await git(tree, [...quiet, 'commit', '--file=-'], {
-      input: `ci: set up CI\n\nInstall with ${workflow.toolchain}, then ${workflow.steps.map((step) => step.name.toLowerCase()).join(', ') || 'install only'}.\n`,
-    })
-    await git(tree, [...quiet, 'push', '--set-upstream', remote, branch]).catch((error: unknown) => {
-      throw pushFailure(error)
-    })
-    const status = await createPullRequest(tree, {
-      title: 'Set up CI',
-      body: [
-        `Adds \`${workflow.path}\`: it installs with ${workflow.toolchain} (cached) and runs ${
-          workflow.steps.map((step) => `\`${step.run}\``).join(', ') || 'the install only'
-        } on pull requests and pushes to \`${defaultBranch}\`.`,
-        'Generated by Ramu from the repository’s lockfile and scripts. Monorepo filters and services such as a database for tests may need adding.',
-      ].join('\n\n'),
-      base: defaultBranch,
-      draft: false,
-    })
-    return {
-      url: status.pullRequest?.url ?? null,
-      path: workflow.path,
-      protection: requireCi ? await protect(root, forge, defaultBranch) : null,
-    }
-  } finally {
-    if (added) {
-      await git(root, ['worktree', 'remove', '--force', '--', tree]).catch(() => undefined)
-      // The branch lives on the remote now; the local copy only clutters the branch list.
-      await git(root, ['branch', '-D', branch]).catch(() => undefined)
-    }
-    await rm(scratch, { recursive: true, force: true })
-  }
+  const { url, file, defaultBranch } = await proposeFile(
+    root,
+    BRANCH,
+    async (ref, defaultBranch) => {
+      const workflow = generated(forge, { ...(await factsAt(root, ref)), defaultBranch, stack: stackOf(root) })
+      return {
+        path: workflow.path,
+        content: workflow.content,
+        commit: `ci: set up CI\n\nInstall with ${workflow.toolchain}, then ${workflow.steps.map((step) => step.name.toLowerCase()).join(', ') || 'install only'}.\n`,
+        title: 'Set up CI',
+        body: [
+          `Adds \`${workflow.path}\`: it installs with ${workflow.toolchain} (cached) and runs ${
+            workflow.steps.map((step) => `\`${step.run}\``).join(', ') || 'the install only'
+          } on pull requests and pushes to \`${defaultBranch}\`.`,
+          'Generated by Ramu from the repository’s lockfile and scripts. Monorepo filters and services such as a database for tests may need adding.',
+        ].join('\n\n'),
+      }
+    },
+    pushFailure,
+  )
+  return { url, path: file.path, protection: requireCi ? await protect(root, forge, defaultBranch) : null }
 }
 
 /** Requires the CI check before merging. The pull request is already open, so a refusal is reported, not thrown. */

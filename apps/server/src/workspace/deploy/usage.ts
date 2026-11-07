@@ -11,6 +11,7 @@ const BILLING_PAGES: Record<AccountPlatform, string> = {
   vercel: 'https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings%2Fbilling&title=Billing',
   netlify: 'https://app.netlify.com/',
   neon: 'https://console.neon.tech/app/billing',
+  expo: 'https://expo.dev/settings/billing',
 }
 
 /** One platform's report, with the reason in plain words when it has no figures for this account. */

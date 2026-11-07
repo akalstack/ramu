@@ -7,7 +7,7 @@ A person who has never written code describes an app, and Ramu takes it from an 
 Today an agent in Ramu can write the app, run it in a background terminal, check it in the browser and fix failing checks on a pull request. Everything before and after that is manual:
 
 - **Starting:** `project_add` only clones a repository or registers a folder. Someone with an idea and no repository has to create a folder, run `git init` and pick a framework first, which a non-coder cannot do.
-- **Deploying:** a project can be linked to Vercel or Netlify, with status, logs, production deploys and rollback ([Deploying an app](guide/deploy.md)). Other platforms have no target yet: `railway`, `cloudflared` and `docker` are on the risky-command list (`agent/autoCommandRules.ts`), so an agent can run them, but each run is a one-off approval.
+- **Deploying:** a project can be linked to Vercel or Netlify, with status, logs, production deploys and rollback, and an Expo app released to TestFlight and Play's internal track ([Deploying an app](guide/deploy.md)). Other platforms have no target yet: `railway`, `cloudflared` and `docker` are on the risky-command list (`agent/autoCommandRules.ts`), so an agent can run them, but each run is a one-off approval.
 - **CI/CD:** Ramu adds a CI workflow through a pull request ([Set up CI](guide/git-hosting.md#set-up-ci)), wakes the thread whose push breaks the default branch, and can require CI before merge on GitHub.
 - **Secrets:** `request_secret` and **Environment variables** put a token on the host, and **Sync** in the deploy sheet copies it to GitHub Actions and the platform's variables; GitLab CI variables are not covered yet.
 
@@ -93,9 +93,12 @@ Usage figures for Vercel, Netlify and Neon beside the limits their APIs report, 
 
 ### 10. Mobile store releases
 
-- For an Expo app, **Release** is a deploy target: EAS Build for iOS and Android, then EAS Submit to TestFlight and Play's internal track, on the person's Expo account (`EXPO_TOKEN` through `request_secret`). Over-the-air updates (EAS Update) are the preview channel for each pull request, with a QR code in the thread for Expo Go.
-- The sheet checks what the stores need first (bundle identifier, icons, version, privacy text) and lists what only the person can do: enrolling in the Apple Developer Program and creating the Play app. Submitting to production review is always the person's action.
-- A build or submission that fails wakes the thread with its log, through the same deploy watch.
+**Store releases** in the deploy sheet (checks from `app.json` and `eas.json`, the person's store steps, **Add eas.json in a pull request**, **Release** through `eas build --auto-submit-with-profile` to TestFlight and Play's internal track), the Expo access token in Settings, the deploy watch through each build and its upload, and `release_status`, `release_logs` and `release_start` are built ([Store releases](guide/deploy.md#store-releases), `workspace/deploy/release.ts` and `expo.ts`). What remains:
+
+- **Previews per pull request with EAS Update:** publish each pull request's branch to its own update channel and show a QR code on the pull request card and in the thread that opens it in Expo Go. It needs `expo-updates` and a runtime version in the app, a channel per branch, and works in Expo Go only for apps without custom native code, so the sheet must say when a development build is needed instead.
+- **Expo's CLI sign-in:** `eas login --device --non-interactive` signs in through a browser on any device and saves a session secret in `~/.expo/state.json` (eas-cli 27); a sign-in can ask the person to pick the number their browser shows. Ramu would run it with a private `HOME`, exchange the session for an access token named Ramu (Expo's `createAccessToken` mutation), then end the session, which needs the number choice in Settings' sign-in.
+- **On the phone:** the store builds and their uploads beside a project's deployments, and **Release** with the same confirmation.
+- **Dynamic configuration:** an `app.config.*` app is checked from `app.json` only; reading its resolved configuration needs `expo config --json`, which runs the project's code.
 
 ### 11. Documentation and clean-up
 

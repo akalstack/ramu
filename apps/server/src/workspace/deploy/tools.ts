@@ -2,10 +2,13 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AgentSessionInfo } from '@ramu/shared/types'
 import { z } from 'zod'
 import { domainName } from '@ramu/shared/domains'
+import { translate } from '@ramu/shared/i18n'
+import { STORE_PERSON_STEPS, storeCheckText } from '@ramu/shared/storeRelease'
 import type { DnsRecord, UsageReport } from '@ramu/shared/types/deploy'
 import { currentBranch } from '../git'
 import type { DeployWatches } from './deployWatch'
 import type { DomainWatches } from './domainWatch'
+import type { StoreReleases } from './release'
 import type { DeployService } from './service'
 
 const DEPLOY_GUIDE =
@@ -194,6 +197,79 @@ export function registerDeployTools(
       if (!(updated.configured && updated.certificate))
         watches.domains.watch(projectId, updated.name, source.parentId ?? source.id)
       return result({ domain: updated })
+    },
+  )
+}
+
+const RELEASE_GUIDE =
+  'Release tools work on the Expo app of the project this thread belongs to, on the Expo account connected on this host. Call release_status first: it lists what the stores need (from app.json and eas.json), what only the person can do on the stores, and the latest store builds with their submissions. Never run eas build or eas submit yourself. release_start always asks the person; a refusal is final for this request. Ramu never submits an app for review: that is the person’s step on each store.'
+
+/** Store releases of the project's Expo app; registered only for a project that has one. */
+export function registerReleaseTools(
+  server: McpServer,
+  releases: Pick<StoreReleases, 'status' | 'start' | 'logs'>,
+  watch: Pick<DeployWatches, 'followRelease'>,
+  source: AgentSessionInfo,
+  projectId: string,
+  /** Asks the person through the thread's approval card. Resolves false when refused. */
+  requestApproval: (detail: string, signal?: AbortSignal) => Promise<boolean>,
+) {
+  const result = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] })
+  server.registerTool(
+    'release_status',
+    {
+      description: `${RELEASE_GUIDE} Returns the app, the store checks, the person’s store steps and the latest builds.`,
+      inputSchema: {},
+    },
+    async () => {
+      const status = await releases.status(projectId)
+      return result({
+        ...status,
+        checks: status.checks.map((check) => ({
+          ...check,
+          text: storeCheckText((key, values) => translate('en', key, values), check),
+        })),
+        personSteps: STORE_PERSON_STEPS,
+      })
+    },
+  )
+  server.registerTool(
+    'release_logs',
+    {
+      description:
+        'The end of a store build’s log, or of the log of the submission made from it (an id from release_status). Read it before fixing a failed build or submission.',
+      inputSchema: { buildId: z.string().uuid(), of: z.enum(['build', 'submission']).optional() },
+    },
+    async ({ buildId, of }) => result({ buildId, log: await releases.logs(projectId, buildId, of ?? 'build') }),
+  )
+  server.registerTool(
+    'release_start',
+    {
+      description:
+        'Builds the app’s default branch on EAS and uploads each build to TestFlight (iOS) and Play’s internal testing track (Android). Never submits for review. Always asks the person with a card; a refusal is final. Refused while a store check is missing. This thread is woken when each build and its upload finish, with the log on failure, so do not poll.',
+      inputSchema: { platform: z.enum(['all', 'ios', 'android']).optional() },
+    },
+    async ({ platform }, extra) => {
+      const target = platform ?? 'all'
+      const status = await releases.status(projectId)
+      if (!status.app) throw new Error('This project has no Expo app at the root of its repository.')
+      const version = status.checks.find((check) => check.id === 'version')?.detail
+      const stores =
+        target === 'all'
+          ? 'iOS and Android, then upload the iOS build to TestFlight and the Android build to Play’s internal testing track'
+          : target === 'ios'
+            ? 'iOS, then upload it to TestFlight'
+            : 'Android, then upload it to Play’s internal testing track'
+      if (
+        !(await requestApproval(
+          `Release ${status.app.name}${version ? ` ${version}` : ''} to the stores: build it on EAS for ${stores}, on the Expo account ${status.account ?? ''}. Testers you invite can install it; nothing is submitted for review.`,
+          extra.signal,
+        ))
+      )
+        throw new Error('The person declined the release. Do not retry it without a new request.')
+      const builds = await releases.start(projectId, target)
+      for (const build of builds) watch.followRelease(projectId, build.id, source.parentId ?? source.id)
+      return result({ builds })
     },
   )
 }
