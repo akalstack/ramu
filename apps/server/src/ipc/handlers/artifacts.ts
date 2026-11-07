@@ -290,6 +290,19 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
         return pages.saveEdit(artifactId, base, drawn)
       },
     },
+    'artifacts.saveTemplate': {
+      args: z.tuple([id]),
+      run: (artifactId: string) => need().pages.saveTemplate(artifactId),
+    },
+    'artifacts.templates': { args: z.tuple([]), run: () => need().pages.templates() },
+    'artifacts.fromTemplate': {
+      args: z.tuple([z.string().uuid()]),
+      run: (templateId: string) => need().pages.fromTemplate(templateId),
+    },
+    'artifacts.removeTemplate': {
+      args: z.tuple([z.string().uuid()]),
+      run: (templateId: string) => need().pages.removeTemplate(templateId),
+    },
     'artifacts.editSlides': {
       args: z.tuple([id, z.number().int().positive(), z.array(slideTextEdit).max(SLIDES_MAX)]),
       run: async (artifactId: string, base: number, edits: SlideTextEdit[]) => {

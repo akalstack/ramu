@@ -350,3 +350,12 @@ export function parseArtifactLink(url: string): ArtifactLink | null {
     return null
   }
 }
+
+/** A saved starting point: an artifact's drawn version without its records, values, grants or history. */
+export interface ArtifactTemplate {
+  id: string
+  kind: ArtifactKind
+  title: string
+  icon: string
+  createdAt: number
+}

@@ -42,6 +42,10 @@ CREATE TABLE IF NOT EXISTS artifact_shares (
     token TEXT PRIMARY KEY, artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE, data TEXT NOT NULL,
     created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL
   );
+CREATE TABLE IF NOT EXISTS artifact_templates (
+    id TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL, icon TEXT NOT NULL, document TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
 CREATE TABLE IF NOT EXISTS interactive_exports (
     id TEXT NOT NULL, version INTEGER NOT NULL, format TEXT NOT NULL, digest TEXT NOT NULL, name TEXT NOT NULL,
     mime TEXT NOT NULL, data BLOB NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(id,version,format)

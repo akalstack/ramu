@@ -25,6 +25,10 @@ Docs, diagrams, decks and dashboards are drawn on the host into the same sandbox
 
 Below, an App's **page** is the web page it shows, as in **Page settings**. Records, AI and the other capabilities are for apps.
 
+## Templates
+
+**Save as template** in an artifact's menu on the desktop keeps its current version as a starting point: its code or source only, never its records, values, grants or history. Templates are listed above your artifacts; **Use** makes a new artifact from one, with a history of its own, and **Remove** deletes the template, not anything made from it.
+
 ## In a thread
 
 Each document appears as a card. The card can **Reset**, switch width (Fit, Tablet, Phone), **Expand**, show older **Versions**, keep **Saved scenarios**, and **Export** HTML or source. **Ask about this** adds the document, with its current state, to your next message; **Choose values** attaches only the values you pick.

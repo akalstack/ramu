@@ -183,3 +183,20 @@ it('edits a Mermaid diagram’s source in place, and offers no text to edit for 
     editableSource({ reference: { kind: 'diagram' }, files: [{ path: 'diagram.svg', content: '<svg/>' }] }),
   ).toBeNull()
 })
+
+it('keeps an artifact as a template without its values, and starts new artifacts from it', async () => {
+  const { interactive, pages } = setup()
+  const preview = await interactive.preview('s', doc('## Weekly report\n\nWhat shipped.\n'))
+  const kept = pages.keep('s', interactive.publish('s', preview.id, 'r1').id, { title: 'Weekly report' })
+  const template = pages.saveTemplate(kept.id)
+  expect(pages.templates()).toEqual([expect.objectContaining({ id: template.id, kind: 'doc', title: 'Weekly report' })])
+  const made = pages.fromTemplate(template.id)
+  expect(made.id).not.toBe(kept.id)
+  expect(made.version).toBe(1)
+  expect(made.kind).toBe('doc')
+  expect(pages.document(made.id).files).toEqual(pages.document(kept.id).files)
+  expect(pages.state(made.id).state).toBeNull()
+  pages.removeTemplate(template.id)
+  expect(pages.templates()).toEqual([])
+  expect(() => pages.fromTemplate(template.id)).toThrow('That template was removed.')
+})

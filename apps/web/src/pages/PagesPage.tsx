@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AppWindow, Pin, Plus } from 'lucide-react'
 import { NO_PROJECT } from '@ramu/shared/types'
 import { draftKey, draftStore, loadDraft, saveDraft } from '../composer/drafts'
-import type { ArtifactInfo, ArtifactKind } from '@ramu/shared/artifacts'
+import type { ArtifactInfo, ArtifactKind, ArtifactTemplate } from '@ramu/shared/artifacts'
 import { ARTIFACT_KINDS, declaredCapabilities } from '@ramu/shared/artifacts'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -46,6 +46,13 @@ export function PagesPage() {
   const [kind, setKind] = useState<ArtifactKind | 'all'>('all')
   const [importing, setImporting] = useState(false)
   const viewOnly = useViewOnly()
+  const { invoke } = useHost()
+  // Saved starting points: a new artifact from one gets its code and source, and a history of its own.
+  const [templates, setTemplates] = useState<ArtifactTemplate[]>([])
+  const loadTemplates = useCallback(() => {
+    if (!viewOnly) void invoke('artifacts.templates').then(setTemplates, () => setTemplates([]))
+  }, [invoke, viewOnly])
+  useEffect(loadTemplates, [loadTemplates])
   const host = useHost()
   // A page starts as a request to an agent: New chat outside any project, with the request begun in the box.
   const newPage = () => {
@@ -137,6 +144,39 @@ export function PagesPage() {
           </Empty>
         )}
         {importing && <ImportPageDialog onClose={() => setImporting(false)} />}
+        {templates.length > 0 && (
+          <section aria-label={t('Templates')} className="flex flex-col gap-1">
+            <h2 className="m-0 text-caption font-semibold text-muted-foreground">{t('Templates')}</h2>
+            <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
+              {templates.map((template) => (
+                <li key={template.id} className="flex items-center gap-2 rounded-md px-2 py-1">
+                  <span aria-hidden>{template.icon}</span>
+                  <ArtifactKindMark kind={template.kind} size={13} className="flex-none text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate">{template.title}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      void invoke('artifacts.fromTemplate', template.id).then(
+                        (made) => setOpen(made.id),
+                        () => loadTemplates(),
+                      )
+                    }
+                  >
+                    {t('Use')}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void invoke('artifacts.removeTemplate', template.id).then(loadTemplates)}
+                  >
+                    {t('Remove')}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
           {shown.map((page) => {
             const uses = declaredCapabilities(page.capabilities)

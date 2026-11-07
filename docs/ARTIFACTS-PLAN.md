@@ -136,7 +136,9 @@ Ramu is one person across devices today, so versions are enough. A household or 
 
 ### 10. Templates
 
-- **Save as template** on any artifact keeps its source and its design system with no records, values or history. **New** shows the person's templates for the chosen kind above the blank start, for example "Weekly report", "Pitch deck" or "Expense tracker".
+**Save as template** and starting a new artifact from one are built on the desktop ([Templates](guide/artifacts.md#templates)). Remaining:
+
+- **New** offering the templates for the chosen kind beside the blank start, the phone's list, and a template's design system once design systems exist.
 - Templates travel between hosts the way **Import an artifact** does now: a template share link opens on another connected host as a copy.
 - Ramu ships a small starting set per kind (a report, a 6-slide deck, a landing page, a metrics dashboard, a 30-second explainer, a flowchart). It is kept in the repository and checked by the same previews as any artifact.
 

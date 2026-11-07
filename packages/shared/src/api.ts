@@ -247,6 +247,12 @@ interface ArtifactMethods {
    * refused if another came since.
    */
   'artifacts.editSource'(artifactId: string, base: number, text: string): import('./artifacts').ArtifactInfo
+  /** Keeps an artifact's current version as a template, without its records, values, grants or history. */
+  'artifacts.saveTemplate'(artifactId: string): import('./artifacts').ArtifactTemplate
+  'artifacts.templates'(): import('./artifacts').ArtifactTemplate[]
+  /** Starts a new artifact from a template, with a history of its own. */
+  'artifacts.fromTemplate'(templateId: string): import('./artifacts').ArtifactInfo
+  'artifacts.removeTemplate'(templateId: string): void
   /** Saves the person's text for each slide of a deck as a new version on top of `base`; refused if another came since. */
   'artifacts.editSlides'(
     artifactId: string,
