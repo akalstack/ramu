@@ -79,8 +79,7 @@ A Doc's Markdown and a Mermaid diagram's source (desktop and phone) and a deck's
 ### 4. Desktop
 
 - The artifact view opens as a workspace tab beside the chat, with the toolbar each kind needs:
-  - Doc: outline, edit.
-  - Dashboard: range and refresh.
+  - Dashboard: a time range beside **Refresh** (built: Outline and Edit text for docs, Refresh for dashboards).
 - Thread cards for every kind show a live preview (the first slide, the doc's opening, the chart, the poster frame) with **Open**, **Keep as artifact** and the kind's export.
 - While presenting Slides, speaker notes show on a second display when there is one.
 

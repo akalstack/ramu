@@ -47,6 +47,7 @@ import { PublishDialog } from './PublishDialog'
 import { ArtifactKindMark, hostExportEntries, kindExportEntries } from './ArtifactKindMark'
 import { SlideToolbar, useSlideControls } from './SlideControls'
 import { MotionToolbar } from './MotionControls'
+import { DocOutline, docOutline } from './DocOutline'
 
 const VIEWPORTS = [
   { id: 'fit', label: 'Fit to width', width: undefined, Icon: Monitor },
@@ -143,6 +144,8 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
       if (payload.artifactId === artifactId && !payload.run) void load()
     })
   }, [load, on, artifactId])
+  // A doc with more than one heading offers its outline to jump through.
+  const outline = page?.kind === 'doc' && document ? docOutline(document.html) : []
   // A dashboard with live tables offers its refresh rule; the default read interval is five minutes.
   const dashboardSource = document?.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.dashboard)?.content
   const dashboardBoard = dashboardSource
@@ -354,6 +357,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
         )}
         <div className="ml-auto flex flex-none items-center gap-0.5">
           {slides > 0 && <SlideToolbar controls={slideControls} count={slides} disabled={!ready} />}
+          {outline.length > 1 && <DocOutline frame={frame} instance={instance} headings={outline} disabled={!ready} />}
           {motionSeconds > 0 && (
             <MotionToolbar frame={frame} instance={instance} seconds={motionSeconds} disabled={!ready} />
           )}
