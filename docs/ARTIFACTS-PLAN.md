@@ -136,9 +136,9 @@ Ramu is one person across devices today, so versions are enough. A household or 
 
 ### 10. Templates
 
-**Save as template** and starting a new artifact from one are built on the desktop ([Templates](guide/artifacts.md#templates)). Remaining:
+**Save as template** (desktop) and starting a new artifact from one (desktop and phone) are built ([Templates](guide/artifacts.md#templates)). Remaining:
 
-- **New** offering the templates for the chosen kind beside the blank start, the phone's list, and a template's design system once design systems exist.
+- **New** offering the templates for the chosen kind beside the blank start (the phone lists them under **Start from a template**), and a template's design system once design systems exist.
 - Templates travel between hosts the way **Import an artifact** does now: a template share link opens on another connected host as a copy.
 - Starting points for the kinds still to come (a landing page for Design, a 30-second explainer for Motion); the report, deck, dashboard and flowchart ship today.
 
