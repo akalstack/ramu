@@ -39,7 +39,6 @@ Vercel, Netlify and the person's own server are built ([Deploying an app](guide/
 
 - **Capabilities still to declare:** `promote` and the resource kinds a platform provisions. Netlify previews come from pull requests; a branch preview through its API is not declared.
 - **`ResourceAdapter`** (`workspace/deploy/resource.ts`, Neon built, §2): a hosting platform that provisions through its marketplace implements it too (Vercel Marketplace, Cloudflare D1, KV and R2, Netlify DB); a standalone provider (Supabase, Upstash, Resend) implements only this one. Deleting a resource is not on the interface.
-- **UI:** the sheet's remaining steps from [the person's path](#the-persons-path) (set the variables, push and wait for the first deployment). The pull request card shows the preview, and the phone a project's deployments, domains, databases, uptime, usage and store builds, with **Roll back** and **Release** ([Deploying an app](guide/deploy.md#on-the-phone)).
 
 ### 2. Databases and storage
 

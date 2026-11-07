@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { accountBrand } from '@ramu/shared/brands'
-import { accountName, canRollBackTo, DEPLOYMENT_STATE, deployText } from '@ramu/shared/deployText'
+import { accountName, canRollBackTo, DEPLOYMENT_STATE, deployText, firstDeployStep } from '@ramu/shared/deployText'
 import type {
   Deployment,
   HostingAccount,
@@ -123,6 +123,7 @@ export function DeployDialog({
   }
   const account = accounts.find((entry) => entry.platform === (binding?.platform ?? platform))
   const canDeploy = !!binding && !!status?.capabilities.includes('deployProduction')
+  const firstStep = status ? firstDeployStep(status) : null
   const recommended = accounts.find((entry) => entry.platform === status?.recommended)
   // An Expo app ships through the stores, not a hosting platform, unless it is already linked to one.
   const storeOnly = !binding && status?.recommended === 'expo'
@@ -355,6 +356,18 @@ export function DeployDialog({
               <Button size="sm" variant="secondary" onClick={() => open(pullRequest)}>
                 {t('Open pull request')}
               </Button>
+            </p>
+          )}
+          {!pullRequest && firstStep && (
+            <p role="status" className="text-caption">
+              {firstStep === 'push'
+                ? t(
+                    'Next: push {0}, or merge a pull request into it, and the platform builds the first deployment. The project’s latest thread hears how it went.',
+                    { 0: binding.productionBranch },
+                  )
+                : firstStep === 'building'
+                  ? t('The first deployment is building…')
+                  : t('The first deployment failed. Logs shows why; the project’s latest thread was told.')}
             </p>
           )}
           {confirming && (

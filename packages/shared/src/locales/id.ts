@@ -6096,4 +6096,9 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Tempel token di mesin yang menjalankan host ini. Vercel, Netlify, dan Railway juga bisa login dari sini: proses loginnya berjalan di host dan tokennya tetap di sana.',
   'Cloudflare token with DNS edit, used once': 'Token Cloudflare dengan DNS edit, dipakai sekali',
   'DNS at Cloudflare? Create them there…': 'DNS di Cloudflare? Buat di sana…',
+  'Next: push {0}, or merge a pull request into it, and the platform builds the first deployment. The project’s latest thread hears how it went.':
+    'Berikutnya: push {0}, atau gabungkan pull request ke sana, dan platform membangun deployment pertama. Thread terbaru proyek diberi tahu hasilnya.',
+  'The first deployment is building…': 'Deployment pertama sedang dibangun…',
+  'The first deployment failed. Logs shows why; the project’s latest thread was told.':
+    'Deployment pertama gagal. Logs menunjukkan sebabnya; thread terbaru proyek sudah diberi tahu.',
 }

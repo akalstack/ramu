@@ -57,6 +57,20 @@ export const domainState = (domain: Pick<DomainStatus, 'configured' | 'certifica
       ? t('Waiting for the HTTPS certificate')
       : t('Waiting for DNS')
 
+/**
+ * Where a linked project is on its way to its first live production deployment: nothing deployed yet (push or merge
+ * to start it), building, or failed with nothing live; null once one is live.
+ */
+export function firstDeployStep(status: ProjectDeployment): 'push' | 'building' | 'failed' | null {
+  if (!status.binding) return null
+  const production = status.deployments.filter((deployment) => deployment.production)
+  if (production.some((deployment) => deployment.state === 'ready')) return null
+  const latest = production[0]
+  if (!latest) return 'push'
+  if (latest.state === 'queued' || latest.state === 'building') return 'building'
+  return latest.state === 'failed' ? 'failed' : 'push'
+}
+
 export const nearLimit = (figure: UsageFigure) => !!figure.limit && figure.used >= figure.limit * 0.8
 
 export function deployText(t: Translate, time: (at: number) => string) {
