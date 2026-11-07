@@ -1,6 +1,7 @@
 // Secrets sync: the variables an app reads, where each one is set, and copying the missing ones from this host to the
 // other places. Every place is an `EnvTarget`, so syncing is one loop over targets. Values travel only from this
 // host's credential store to a target's API; they are never returned to a client.
+import { gitlabVariableNames, setGitlabVariables } from '../forge/gitlab'
 import { lstat, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
@@ -57,6 +58,17 @@ export function githubActionsTarget(root: string): EnvTarget {
     environments: ['ci'],
     list: async () => ({ ci: await actionsSecretNames(root) }),
     set: (_environment, values) => setActionsSecrets(root, values),
+  }
+}
+
+/** The GitLab project's CI/CD variables, which its pipelines read. */
+export function gitlabCiTarget(root: string): EnvTarget {
+  return {
+    id: 'gitlab',
+    name: 'GitLab CI',
+    environments: ['ci'],
+    list: async () => ({ ci: await gitlabVariableNames(root) }),
+    set: (_environment, values) => setGitlabVariables(root, values),
   }
 }
 

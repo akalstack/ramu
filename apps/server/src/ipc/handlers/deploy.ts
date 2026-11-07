@@ -15,6 +15,7 @@ import { platformCli } from '../../workspace/deploy/signIn'
 import {
   envStatus,
   githubActionsTarget,
+  gitlabCiTarget,
   hostTarget,
   readAppVariables,
   syncEnv,
@@ -97,7 +98,9 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
     const repository = repositoryOf(projectId, repoId)
     const remote = await forgeRemoteOf(repository.root)
     const others: EnvTarget[] = []
-    if (remote && (await kindOfOrigin(remote.origin)) === 'github') others.push(githubActionsTarget(repository.root))
+    const forge = remote ? await kindOfOrigin(remote.origin) : null
+    if (forge === 'github') others.push(githubActionsTarget(repository.root))
+    if (forge === 'gitlab') others.push(gitlabCiTarget(repository.root))
     const hosting = deploys().service.envTarget(projectId)
     if (hosting) others.push(hosting)
     const byEnvironment = await deploys().resources.environmentValues(projectId)

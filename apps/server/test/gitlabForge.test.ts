@@ -20,6 +20,8 @@ import {
   pullRequestAction,
   readyTitle,
   requirePipeline,
+  setGitlabVariables,
+  gitlabVariableNames,
 } from '../src/workspace/forge/gitlab'
 
 it('reports the latest attempt of each pipeline job, and allowed failures do not fail the merge request', () => {
@@ -406,6 +408,42 @@ it('turns on Pipelines must succeed only when it is off, changing nothing else',
     expect(writes).toEqual([{ only_allow_merge_if_pipeline_succeeds: true }])
     await expect(requirePipeline(dir, request)).resolves.toBe('already')
     expect(writes).toHaveLength(1)
+  } finally {
+    vi.unstubAllEnvs()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+it('lists CI variable names and writes values protected, masked when GitLab can mask them', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-gitlab-variables-'))
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'git@gitlab.com:a/b.git'], { cwd: dir })
+  vi.stubEnv('GLAB_CONFIG_DIR', '/nonexistent')
+  vi.stubEnv('GITLAB_HOST', 'gitlab.com')
+  vi.stubEnv('GITLAB_TOKEN', 'glpat-test')
+  const writes: { method: string; url: string; body: unknown }[] = []
+  const request = vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method && init.method !== 'GET') {
+      writes.push({ method: init.method, url, body: JSON.parse(String(init.body)) })
+      return new Response('{}')
+    }
+    return new Response(JSON.stringify([{ key: 'DATABASE_URL', value: 'hidden' }]))
+  }) as unknown as typeof fetch
+  try {
+    expect(await gitlabVariableNames(dir, request)).toEqual(['DATABASE_URL'])
+    await setGitlabVariables(dir, { DATABASE_URL: 'postgresql://u:p@h/db', SHORT: 'abc' }, request)
+    expect(writes).toEqual([
+      {
+        method: 'PUT',
+        url: 'https://gitlab.com/api/v4/projects/a%2Fb/variables/DATABASE_URL',
+        body: { value: 'postgresql://u:p@h/db', protected: true, masked: true },
+      },
+      {
+        method: 'POST',
+        url: 'https://gitlab.com/api/v4/projects/a%2Fb/variables',
+        body: { key: 'SHORT', value: 'abc', protected: true, masked: false },
+      },
+    ])
   } finally {
     vi.unstubAllEnvs()
     rmSync(dir, { recursive: true, force: true })

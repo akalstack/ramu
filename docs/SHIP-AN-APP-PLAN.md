@@ -54,7 +54,7 @@ Vercel, Netlify and the person's own server are built ([Deploying an app](guide/
 **Set up CI**, requiring CI before merge on GitHub, and following pushes to the default branch are built ([Set up CI](guide/git-hosting.md#set-up-ci)): the generator in `packages/shared/src/ciWorkflow.ts`, the pull request from a temporary worktree in `apps/server/src/workspace/ci/`, `ci_setup`, and push watches beside pull request watches in `background/pullRequestWatches.ts`. What remains:
 
 - **Deploy job** only for targets without Git integration: the own server's `deploy.yml` and Fly.io's `fly-deploy.yml` are built (`packages/shared/src/serverDeploy.ts` and `flyDeploy.ts`, proposed with the files they need in one pull request, secrets written through the GitHub Actions `EnvTarget`). GitHub Pages' `pages-deploy.yml` (`packages/shared/src/pagesDeploy.ts`) uses GitHub's own Pages actions.
-- **Secrets sync for more targets:** the deploy sheet's sync over `EnvTarget` (`workspace/deploy/envSync.ts`: this host, GitHub Actions secrets, Vercel and Netlify) is built ([Deploying an app](guide/deploy.md#deploy-a-project)). GitLab CI variables join it as a target, and each new hosting adapter declares `environment` (names per preview and production, and writing values) so it is covered.
+- **Secrets sync for more targets:** the deploy sheet's sync over `EnvTarget` (`workspace/deploy/envSync.ts`: this host, GitHub Actions secrets, GitLab CI variables, Vercel and Netlify) is built ([Deploying an app](guide/deploy.md#deploy-a-project)). GitHub Pages and Cloudflare Pages build static sites and keep no variables; a new hosting adapter declares `environment` so it is covered.
 
 ### 4. Own server
 

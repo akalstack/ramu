@@ -209,6 +209,35 @@ export async function requirePipeline(cwd: string, request: typeof fetch = fetch
   return 'required'
 }
 
+/** The names of the project's CI/CD variables; values are never read back. */
+export async function gitlabVariableNames(cwd: string, request: typeof fetch = fetch): Promise<string[]> {
+  const a = await access(cwd, request)
+  const variables = await projectApi<{ key: string }[]>(a, '/variables?per_page=100')
+  return (variables ?? []).map((variable) => variable.key)
+}
+
+/**
+ * Writes CI/CD variables, protected (default branch pipelines only) and masked in job logs when GitLab can mask the
+ * value; an existing variable of the same name is updated in place.
+ */
+export async function setGitlabVariables(
+  cwd: string,
+  values: Record<string, string>,
+  request: typeof fetch = fetch,
+): Promise<void> {
+  const a = await access(cwd, request)
+  const existing = new Set(
+    ((await projectApi<{ key: string }[]>(a, '/variables?per_page=100')) ?? []).map((v) => v.key),
+  )
+  for (const [key, value] of Object.entries(values)) {
+    // GitLab masks only single-line values of eight characters or more from its own alphabet.
+    const masked = value.length >= 8 && /^[A-Za-z0-9+/=@:.~_-]+$/.test(value)
+    const body = { value, protected: true, masked }
+    if (existing.has(key)) await projectApi(a, `/variables/${encode(key)}`, { method: 'PUT', body })
+    else await projectApi(a, '/variables', { method: 'POST', body: { key, ...body } })
+  }
+}
+
 interface RawMergeRequest {
   iid: number
   title: string
