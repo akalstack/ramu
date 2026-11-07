@@ -11,6 +11,7 @@ import {
   expoSessionToken,
   flyCliToken,
   HostingSignIns,
+  neonCliKey,
   netlifyCliToken,
   railwayCliToken,
   signInPrompt,
@@ -279,6 +280,30 @@ it('runs eas login --device in a private HOME, sends the number the person picke
   expect(env.npm_config_cache).toMatch(/\.npm$/)
   expect(exchanged).toEqual(['session-1'])
   expect(saved).toEqual([['expo', { token: 'expo_token_1' }, 'cli']])
+})
+
+it('runs neon profile create --mint in a private folder, shows its link, and keeps only the minted key', async () => {
+  const saved: unknown[] = []
+  const accounts = { save: async (...args: unknown[]) => (saved.push(args), { account: 'ana@example.com' }) }
+  let config = ''
+  const spawner = vi.fn((_file: string, args: string[]) => {
+    config = args[args.indexOf('--config-dir') + 1]!
+    return child(
+      'Awaiting authentication in web browser.\nAuth Url: https://oauth2.neon.tech/oauth2/auth?client_id=neonctl\n',
+      async () => {
+        await until(() => signIns.status(started.id).state === 'waiting')
+        await writeFile(join(config, 'credentials.ramu.json'), JSON.stringify({ type: 'api_key', api_key: 'napi_1' }))
+      },
+    )
+  })
+  const signIns = new HostingSignIns(accounts as never, () => '/usr/local/bin/neonctl', spawner as never)
+  const started = signIns.start('neon')
+  await until(() => signIns.status(started.id).state === 'connected')
+  expect(spawner.mock.calls[0]![1].slice(0, 4)).toEqual(['profile', 'create', 'ramu', '--mint'])
+  expect(saved).toEqual([['neon', { token: 'napi_1' }, 'cli']])
+  await until(() => !existsSync(config))
+  expect(existsSync(config)).toBe(false)
+  await expect(neonCliKey(await folder(), 'ramu')).rejects.toThrow('without saving a key')
 })
 
 it('exchanges an Expo session for a token named Ramu and ends the session either way', async () => {

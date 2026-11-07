@@ -28,7 +28,18 @@ export function platformCli(name: string): string | null {
 
 /** The CLI a platform's sign-in runs: its own, or for Expo the `eas` CLI, else the published one through npx. */
 export function signInCli(platform: CliSignInPlatform): string | null {
-  return platform === 'expo' ? (platformCli('eas') ?? platformCli('npx')) : platformCli(platform)
+  if (platform === 'expo') return platformCli('eas') ?? platformCli('npx')
+  if (platform === 'neon') return platformCli('neon') ?? platformCli('neonctl') ?? platformCli('npx')
+  return platformCli(platform)
+}
+
+/** The API key `neon profile create --mint` saved for a profile in its configuration folder. */
+export async function neonCliKey(configDir: string, profile: string): Promise<HostingSecret> {
+  const file = join(configDir, `credentials.${profile}.json`)
+  const saved = JSON.parse(await readFile(file, 'utf8').catch(() => '{}')) as { type?: unknown; api_key?: unknown }
+  if (saved.type !== 'api_key' || typeof saved.api_key !== 'string' || !saved.api_key)
+    throw new Error('The Neon CLI finished without saving a key.')
+  return { token: saved.api_key }
 }
 
 const EXPO_API = 'https://api.expo.dev'
@@ -222,7 +233,9 @@ export class HostingSignIns {
                 ? await this.railway(entry, executable, entry.folder)
                 : platform === 'expo'
                   ? await this.expo(entry, executable, entry.folder)
-                  : await this.fly(entry, executable, entry.folder)
+                  : platform === 'neon'
+                    ? await this.neon(entry, executable, entry.folder)
+                    : await this.fly(entry, executable, entry.folder)
         if (entry.stopped) return
         const account = await this.accounts.save(platform, secret, 'cli')
         entry.view = { ...entry.view, state: 'connected', account: account.account, error: null }
@@ -394,5 +407,24 @@ export class HostingSignIns {
     const session = state.auth?.sessionSecret
     if (typeof session !== 'string' || !session) throw new Error('EAS finished without saving a sign-in.')
     return this.expoToken(session)
+  }
+
+  /**
+   * `neon profile create ramu --mint` opens Neon's sign-in in the host's browser and prints its link; once the person
+   * approves, the CLI mints an API key, saves only that in the private configuration folder and drops the session.
+   */
+  private async neon(entry: Running, executable: string, folder: string): Promise<HostingSecret> {
+    const prefix = basename(executable).startsWith('npx') ? ['--yes', 'neonctl@latest'] : []
+    const config = join(folder, 'neon')
+    await mkdir(config, { recursive: true })
+    const env = { ...cliEnvironment(folder), npm_config_cache: join(process.env.HOME ?? folder, '.npm') }
+    await this.run(
+      entry,
+      executable,
+      [...prefix, 'profile', 'create', 'ramu', '--mint', '--config-dir', config],
+      env,
+      (output) => this.show(entry, output),
+    )
+    return neonCliKey(config, 'ramu')
   }
 }
