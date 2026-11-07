@@ -353,3 +353,18 @@ test('a message to a teammate heads its own turn, so the lead’s answer above i
   assert.deepEqual(kinds.slice(0, 3), ['user', 'summary', 'text'])
   assert.equal(kinds[3], 'teammate-message')
 })
+
+test('work after a finished turn opens a running turn instead of folding into the finished one', () => {
+  const events = [
+    ...finished,
+    { kind: 'thinking', text: 'Resuming the goal', at: 70_000 },
+    { kind: 'text', text: 'Building the hero next.', at: 71_000 },
+  ]
+  const rows = foldTurns(transcript(events), true, false)
+  assert.deepEqual(
+    rows.map((r) => r.kind),
+    ['user', 'summary', 'text', 'thinking', 'text'],
+  )
+  assert.equal(rows[1].label, 'Worked for 1m 5s')
+  assert.equal(rows.at(-1).text, 'Building the hero next.')
+})

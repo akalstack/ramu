@@ -6,6 +6,10 @@ import { type Turn } from '../types'
 /** A message the person wrote to a teammate opens a turn of its own, as their message to the lead does. */
 const opensTurn = (event: AgentEvent) => event.kind === 'user' || event.kind === 'teammate-message'
 
+/** The agent producing something: after a turn's result this is a new turn, such as a goal continuing on its own. */
+const agentOutput = (block: Block) =>
+  block.kind === 'tools' || ['thinking', 'text', 'content', 'agent'].includes(block.event.kind)
+
 /** A teammate's card is its work, not the lead's. */
 const leadWork = (block: Block) => !(block.kind === 'event' && block.event.kind === 'agent' && block.event.teammate)
 
@@ -21,8 +25,15 @@ export function toTurns(blocks: Block[], events: AgentEvent[]): Turn[] {
       return
     }
     let turn = turns.at(-1)
-    if (!turn) {
-      turn = { key: -1, user: null, items: [], ended: false }
+    if (!turn || (turn.ended && agentOutput(block))) {
+      const at = block.kind === 'event' ? block.event.at : undefined
+      turn = {
+        key: turn ? index : -1,
+        user: null,
+        items: [],
+        ended: false,
+        ...(at !== undefined ? { startedAt: at } : {}),
+      }
       turns.push(turn)
     }
     turn.items.push(block)

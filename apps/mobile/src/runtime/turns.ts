@@ -33,9 +33,16 @@ const settled = (item: TranscriptItem) =>
 export function foldTurns(items: TranscriptItem[], live: boolean, waiting: boolean): TranscriptItem[] {
   const turns: TranscriptItem[][] = []
   // A message to a teammate opens a turn too, so the lead's answer above it is not folded into the work before it.
+  // Work after a turn's end opens one as well: a goal continuing on its own must not fold into the turn that finished.
+  let ended = false
   for (const item of items) {
-    if (item.kind === 'user' || item.kind === 'teammate-message' || !turns.length) turns.push([])
+    const output = item.kind === 'text' || item.kind === 'thinking' || item.kind === 'tool'
+    if (item.kind === 'user' || item.kind === 'teammate-message' || !turns.length || (ended && output)) {
+      turns.push([])
+      ended = false
+    }
     turns.at(-1)!.push(item)
+    if (item.kind === 'end') ended = true
   }
   return groupTools(
     turns.flatMap((turn, index) => {

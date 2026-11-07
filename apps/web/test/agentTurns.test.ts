@@ -69,3 +69,18 @@ it('keeps the lead’s turn open after a message to a teammate when the lead is 
     ]).at(-1),
   ).toEqual({ ended: false, interrupted: false })
 })
+
+it('opens a new turn when the agent works again after a result, such as a goal continuing on its own', () => {
+  expect(
+    turnsOf([
+      { kind: 'user', text: 'where do things stand?' },
+      { kind: 'text', text: 'The project is clean.' },
+      result('The project is clean.'),
+      { kind: 'thinking', text: 'Resuming the goal' },
+      { kind: 'text', text: 'Building the hero next.' },
+    ]),
+  ).toEqual([
+    { ended: true, interrupted: false },
+    { ended: false, interrupted: false },
+  ])
+})
