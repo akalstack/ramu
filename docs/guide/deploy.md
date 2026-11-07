@@ -97,7 +97,7 @@ For an Expo app (an `app.json` or `app.config.*` at the repository root, as the 
 
 ## On the phone
 
-**Deployments** in a project's menu on the phone shows the platform and repository, the live address with **Open**, the latest deployments with their state, branch, time and **Open**, the [uptime](#uptime) watch with any open incident, and [usage](#usage) with **Open billing**. **Roll back** on an earlier production deployment asks first, naming the version and the address that changes, as in the deploy sheet. Linking, deploying, store releases, domains, databases and the watch's switch are on a computer. Viewer pairings do not see deployments.
+**Deployments** in a project's menu on the phone shows the platform and repository, the live address with **Open**, the latest deployments with their state, branch, time and **Open**, the [uptime](#uptime) watch with any open incident and its switch, and [usage](#usage) with **Open billing**. **Roll back** on an earlier production deployment asks first, naming the version and the address that changes, as in the deploy sheet. Linking, deploying, store releases, domains and databases are on a computer. Viewer pairings do not see deployments.
 
 ## Usage
 
@@ -116,7 +116,7 @@ Every six hours the host reads the same figures. A figure with a reported limit 
 
 ## Uptime
 
-Once a project has a live production deployment, **Watch the live address** in the deploy sheet is on. Untick it to stop the checks.
+Once a project has a live production deployment, **Watch the live address** in the deploy sheet is on. Untick it there, or turn off the switch beside **Uptime** in the project's **Deployments** on the phone, to stop the checks.
 
 - **What is checked:** every five minutes, the host sends one `GET` to the production address and the project's health path (`"healthPath"` in the stack of `ramu.json`, such as `"/api/health"`; `/` by default). An answer within 10 seconds that is a success, a redirect, or a sign-in or rate-limit page counts as up. Redirects are followed on the same host name only; a redirect to another host is an answer and is not followed. The sheet shows the last check with its status code and response time.
 - **Incidents:** two failed checks in a row open a thread in the project titled **Down: …**, with the status code or the reason there was no answer, the response time, the last production deployment and the end of its build log, and notify your phones (the phone's **Failed** notifications). The thread uses the model of the project's most recent thread, with at most Auto access. Its agent reads the logs first and, when the last deploy is the likely cause, offers **Roll back** through `deploy_rollback`, whose card always asks you. A project has at most one open incident.

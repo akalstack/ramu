@@ -77,8 +77,7 @@ function uptimeLines(
   check: (value: NonNullable<UptimeStatus['last']>) => string,
 ): DeploymentsView['uptime'] {
   if (!uptime) return { lines: [], down: false }
-  if (!uptime.enabled)
-    return { lines: [t('The live address is not watched. Turn it on in the Deploy sheet on a computer.')], down: false }
+  if (!uptime.enabled) return { lines: [t('The live address is not watched.')], down: false }
   return {
     down: uptime.downSince !== null || uptime.last?.result === 'down',
     lines: [

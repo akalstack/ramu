@@ -5943,8 +5943,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Reconnect to see this project’s deployments.': 'Sambungkan ulang untuk melihat deployment proyek ini.',
   'This project has no deploy target yet. Open Deploy… on the project on a computer.':
     'Proyek ini belum punya target deploy. Buka Deploy… pada proyek di komputer.',
-  'The live address is not watched. Turn it on in the Deploy sheet on a computer.':
-    'Alamat live tidak dipantau. Aktifkan di lembar Deploy di komputer.',
+  'The live address is not watched.': 'Alamat live tidak dipantau.',
   'The host checks {0} every five minutes.': 'Host memeriksa {0} setiap lima menit.',
   'Preview failed': 'Preview gagal',
   'Preview building…': 'Preview sedang di-build…',

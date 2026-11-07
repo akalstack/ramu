@@ -9,7 +9,7 @@ import { useStore } from '../runtime/store'
 import { VIEW_ONLY_WRITE_NOTICE } from '../runtime/viewerAccess'
 import { font, space, useTheme } from '../theme'
 import { BrandIcon } from './Logos'
-import { Button, Divider, SectionLabel, Sheet, T } from './ui'
+import { Button, Divider, SectionLabel, Sheet, T, Toggle } from './ui'
 
 const time = (at: number) => new Date(at).toLocaleString()
 const open = (url: string) => void Linking.openURL(/^https?:\/\//i.test(url) ? url : `https://${url}`).catch(() => {})
@@ -81,6 +81,22 @@ export function ProjectDeployments({
   const loaded = data.key === key ? data : { key }
   const status = loaded.status
   const view = status ? deploymentsView(status, loaded.uptime ?? null, loaded.usage ?? [], t, time) : null
+
+  // Off forgets the watch's checks and closes an open incident, as on the desktop.
+  const setUptime = (enabled: boolean) => {
+    if (!writable() || busy) return
+    setBusy(true)
+    void runtime.current
+      .invoke(hostId, 'deploy.setUptime', projectId, enabled)
+      .then(
+        (uptime) => {
+          if (active.current === key) setData((current) => ({ ...current, uptime }))
+        },
+        (reason: unknown) =>
+          Alert.alert(t('That didn’t work'), reason instanceof Error ? reason.message : String(reason)),
+      )
+      .finally(() => setBusy(false))
+  }
 
   const rollBack = (deploymentId: string) => {
     const target = status?.deployments.find((entry) => entry.id === deploymentId)
@@ -191,7 +207,20 @@ export function ProjectDeployments({
           </View>
           {view.uptime.lines.length ? (
             <>
-              <SectionLabel>{t('Uptime')}</SectionLabel>
+              <SectionLabel
+                right={
+                  loaded.uptime ? (
+                    <Toggle
+                      accessibilityLabel={t('Watch the live address')}
+                      value={loaded.uptime.enabled}
+                      disabled={busy || !online || viewOnly}
+                      onValueChange={setUptime}
+                    />
+                  ) : null
+                }
+              >
+                {t('Uptime')}
+              </SectionLabel>
               <View style={{ paddingHorizontal: space.m, gap: space.xs }} accessibilityLiveRegion="polite">
                 {view.uptime.lines.map((line, index) => (
                   <T key={index} size={font.caption} tone={view.uptime.down && index > 0 ? 'bad' : 'muted'}>

@@ -87,11 +87,7 @@ A VPS over SSH is built ([Your own server](guide/deploy.md#your-own-server), `wo
 
 Usage figures for Vercel, Netlify and Neon beside the limits their APIs report, **Open billing**, notices at 80% and 100%, and `deploy_usage` are built ([Usage](guide/deploy.md#usage)). What remains: figures for each new platform's adapter as it lands, and Netlify bandwidth or credits if Netlify's API starts reporting them.
 
-### 8. Uptime
-
-**Watch the live address**, incident threads after two failed checks, the recap on recovery and unknown spans while the host sleeps are built ([Uptime](guide/deploy.md#uptime)), and the phone shows the watch's state beside the project's deployments. What remains: turning the watch on and off from the phone.
-
-### 9. Mobile store releases
+### 8. Mobile store releases
 
 **Store releases** in the deploy sheet (checks from `app.json` and `eas.json`, the person's store steps, **Add eas.json in a pull request**, **Release** through `eas build --auto-submit-with-profile` to TestFlight and Play's internal track), the Expo access token in Settings, the deploy watch through each build and its upload, and `release_status`, `release_logs` and `release_start` are built ([Store releases](guide/deploy.md#store-releases), `workspace/deploy/release.ts` and `expo.ts`). What remains:
 
@@ -100,7 +96,7 @@ Usage figures for Vercel, Netlify and Neon beside the limits their APIs report, 
 - **On the phone:** the store builds and their uploads beside a project's deployments, and **Release** with the same confirmation.
 - **Dynamic configuration:** an `app.config.*` app is checked from `app.json` only; reading its resolved configuration needs `expo config --json`, which runs the project's code.
 
-### 10. The site
+### 9. The site
 
 The site (`apps/site`, one Astro page) is about keeping coding agents moving. With this plan, Ramu also takes someone from an idea to a live app, so the site gets new copy throughout, written once the features ship and only claiming what they do:
 
