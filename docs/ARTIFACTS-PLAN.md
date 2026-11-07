@@ -68,7 +68,7 @@ App, Doc, Diagram, Slides and Dashboard (over tables the agent fills in) are in 
 
 ### 2. Editing in place
 
-A Doc's Markdown is edited on the desktop with **Edit text** and saved as a version marked "Edited by you"; an edit made on an older version is refused rather than merged, and agents are told to keep the person's wording ([Kinds](guide/artifacts.md#kinds)). Remaining:
+A Doc's Markdown is edited on the desktop and the phone with **Edit text** and saved as a version marked "Edited by you"; an edit made on an older version is refused rather than merged, and agents are told to keep the person's wording ([Kinds](guide/artifacts.md#kinds)). Remaining:
 
 - The Doc in the editor Ramu already uses for files (Tiptap on the desktop) instead of its Markdown, and a native rich-text view on the phone.
 - A deck's slide text and order, a diagram's labels and a design frame's text, edited through the same frame message channel pages use for state.

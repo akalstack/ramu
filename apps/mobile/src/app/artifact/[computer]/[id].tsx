@@ -10,6 +10,7 @@ import {
 } from '@ramu/shared/interactive'
 import { interactiveThemeVariables } from '@ramu/shared/interactiveTheme'
 import {
+  ARTIFACT_SOURCE_FILES,
   artifactLink,
   declaredCapabilities,
   type ArtifactInfo,
@@ -83,6 +84,9 @@ export default function PageScreen() {
   const [question, setQuestion] = useState('')
   const [answer, setAnswer] = useState<ArtifactRun | null>(null)
   const [conflicts, setConflicts] = useState<string[]>([])
+  // A doc's Markdown while the person edits it on the phone, and the version that edit started from.
+  const [editing, setEditing] = useState<{ base: number; text: string } | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
   const [frameError, setFrameError] = useState('')
   const [generation, setGeneration] = useState(0)
   const state = useRef<InteractiveState | null>(null)
@@ -660,6 +664,17 @@ export default function PageScreen() {
             >
               <T>{say('Add to Home Screen or share')}</T>
             </Row>
+            {page?.kind === 'doc' && document && online && !shared && !viewer ? (
+              <Row
+                onPress={() => {
+                  setMenu(false)
+                  const text = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.doc)?.content
+                  if (text !== undefined) setEditing({ base: document.reference.version, text })
+                }}
+              >
+                <T>{say('Edit text')}</T>
+              </Row>
+            ) : null}
             {(document ? kindExports(document, theme) : []).map(({ format, file }) => (
               <Row
                 key={format}
@@ -716,6 +731,49 @@ export default function PageScreen() {
             </Card>
           ))}
         </View>
+      </Sheet>
+      <Sheet presentation="screen" open={!!editing} onClose={() => setEditing(null)} title={say('Edit text')}>
+        {editing ? (
+          <View style={{ padding: space.l, gap: space.m, flex: 1 }}>
+            <TextInput
+              accessibilityLabel={say('Markdown')}
+              multiline
+              autoFocus
+              textAlignVertical="top"
+              value={editing.text}
+              onChangeText={(text) => setEditing({ ...editing, text })}
+              style={{
+                minHeight: 320,
+                flex: 1,
+                color: c.text,
+                fontSize: font.control,
+                fontFamily: 'Menlo',
+                backgroundColor: c.fill,
+                borderRadius: 10,
+                padding: space.m,
+              }}
+            />
+            <T size={font.caption} tone="muted">
+              {say('Saving makes v{version}, marked Edited by you.', { version: editing.base + 1 })}
+            </T>
+            <Button
+              title={say('Save')}
+              disabled={savingEdit}
+              onPress={() => {
+                setSavingEdit(true)
+                store
+                  .invoke(computerId, 'artifacts.editDoc', artifactId, editing.base, editing.text)
+                  .then(() => {
+                    setEditing(null)
+                    void load()
+                  })
+                  // A newer version or a problem in the text keeps the edit open, so nothing typed is lost.
+                  .catch((failure) => Alert.alert(say('That didn’t work'), reason(failure)))
+                  .finally(() => setSavingEdit(false))
+              }}
+            />
+          </View>
+        ) : null}
       </Sheet>
       {page && pending.length ? (
         <Sheet
