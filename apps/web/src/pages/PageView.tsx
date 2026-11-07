@@ -48,6 +48,7 @@ import { ArtifactKindMark, hostExportEntries, kindExportEntries } from './Artifa
 import { SlideToolbar, useSlideControls } from './SlideControls'
 import { MotionToolbar } from './MotionControls'
 import { DocOutline, docOutline } from './DocOutline'
+import { designTexts } from '@ramu/shared/designText'
 
 const VIEWPORTS = [
   { id: 'fit', label: 'Fit to width', width: undefined, Icon: Monitor },
@@ -98,6 +99,10 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   // A doc's Markdown while the person edits it, and the version that edit started from.
   const [editing, setEditing] = useState<{ base: number; text: string } | null>(null)
   // A deck's slide text while the person edits it, slide by slide, and the version it started from.
+  const [editingDesign, setEditingDesign] = useState<{
+    base: number
+    frames: { name: string; texts: string[] }[]
+  } | null>(null)
   const [editingSlides, setEditingSlides] = useState<{ base: number; slides: (Slide & { from: number })[] } | null>(
     null,
   )
@@ -374,6 +379,26 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
                   .catch((error) => notifyError(message(error), page.title))
               }}
             />
+          )}
+          {page.kind === 'design' && !editingDesign && (
+            <Button
+              variant="ghost"
+              className={GHOST_TEXT_BUTTON_CLASS}
+              disabled={viewOnly || !document}
+              title={t('Change the words yourself; the agent keeps your edit when it revises')}
+              onClick={() => {
+                const stored = document?.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.design)?.content
+                if (document && stored)
+                  setEditingDesign({
+                    base: document.reference.version,
+                    frames: (JSON.parse(stored) as { frames: { name: string; html: string }[] }).frames.map(
+                      (frame) => ({ name: frame.name, texts: designTexts(frame.html) }),
+                    ),
+                  })
+              }}
+            >
+              <PenLine size={13} /> {t('Edit text')}
+            </Button>
           )}
           {page.kind === 'slides' && !editingSlides && (
             <Button
@@ -793,8 +818,80 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           </div>
         </form>
       )}
+      {editingDesign && (
+        <form
+          aria-label={t('Edit text')}
+          className="flex min-h-0 flex-1 flex-col gap-2 p-3"
+          onSubmit={(event) => {
+            event.preventDefault()
+            setSavingEdit(true)
+            invoke(
+              'artifacts.editDesign',
+              artifactId,
+              editingDesign.base,
+              editingDesign.frames.map((frame) => frame.texts),
+            )
+              .then(() => {
+                setEditingDesign(null)
+                void load()
+              })
+              .catch((error) => notifyError(message(error), page.title))
+              .finally(() => setSavingEdit(false))
+          }}
+        >
+          <ol className="m-0 flex min-h-0 flex-1 list-none flex-col gap-4 overflow-auto p-0">
+            {editingDesign.frames.map((frame, index) => (
+              <li key={index} className="flex flex-col gap-1.5">
+                <span className="text-caption font-medium text-muted-foreground">{frame.name}</span>
+                {frame.texts.length ? (
+                  frame.texts.map((text, at) => {
+                    const change = (value: string) =>
+                      setEditingDesign({
+                        ...editingDesign,
+                        frames: editingDesign.frames.map((entry, which) =>
+                          which === index
+                            ? { ...entry, texts: entry.texts.map((old, spot) => (spot === at ? value : old)) }
+                            : entry,
+                        ),
+                      })
+                    const label = t('Text {number} of {frame}', { number: at + 1, frame: frame.name })
+                    return text.length > 80 ? (
+                      <Textarea
+                        key={at}
+                        aria-label={label}
+                        value={text}
+                        onChange={(event) => change(event.target.value)}
+                      />
+                    ) : (
+                      <Input
+                        key={at}
+                        aria-label={label}
+                        value={text}
+                        onChange={(event) => change(event.target.value)}
+                      />
+                    )
+                  })
+                ) : (
+                  <span className="text-caption text-muted-foreground">{t('No text in this frame.')}</span>
+                )}
+              </li>
+            ))}
+          </ol>
+          <div className="flex items-center gap-2">
+            <span className="mr-auto text-caption text-muted-foreground">
+              {t('Saving makes v{version}, marked Edited by you.', { version: editingDesign.base + 1 })}
+            </span>
+            <Button type="button" variant="ghost" disabled={savingEdit} onClick={() => setEditingDesign(null)}>
+              {t('Cancel')}
+            </Button>
+            <Button type="submit" variant="default" disabled={savingEdit}>
+              {t('Save')}
+            </Button>
+          </div>
+        </form>
+      )}
       <div
-        hidden={!!editing || !!editingSlides}
+        hidden={!!editing || !!editingSlides || !!editingDesign}
         className={`relative min-h-0 flex-1 overflow-auto ${width ? 'flex justify-center bg-fill px-3 py-4' : ''}`}
       >
         <div

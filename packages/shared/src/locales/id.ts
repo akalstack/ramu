@@ -6035,4 +6035,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Buat dek peluncuran singkat sebagai artefak Slide dari pull request yang digabung sejak rilis terakhir: masalahnya, apa yang baru, tampilannya, dan langkah berikutnya, dengan catatan pembicara.',
   'Outline': 'Kerangka',
   'Who said it': 'Siapa yang mengatakannya',
+  'Text {number} of {frame}': 'Teks {number} dari {frame}',
+  'No text in this frame.': 'Tidak ada teks di bingkai ini.',
 }

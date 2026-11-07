@@ -267,6 +267,12 @@ interface ArtifactMethods {
     base: number,
     edits: import('./artifactSource').SlideTextEdit[],
   ): import('./artifacts').ArtifactInfo
+  /** Saves the person's words for each design frame's text runs as a new version on top of `base`. */
+  'artifacts.editDesign'(
+    artifactId: string,
+    base: number,
+    texts: import('./designText').DesignTextEdit,
+  ): import('./artifacts').ArtifactInfo
   /** A PDF, PowerPoint or slide images the host makes from a version (the current one when absent), kept with it. */
   'artifacts.export'(
     artifactId: string,

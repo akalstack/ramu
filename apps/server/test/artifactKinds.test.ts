@@ -179,6 +179,25 @@ it('marks an edit with the device it was made on', async () => {
   expect(pages.document(kept.id).reference.changes).toBe('Edited by you')
 })
 
+it('saves the person’s words in a design’s frames, keeping its markup and styles', async () => {
+  const { registerArtifactHandlers } = await import('../src/ipc/handlers/artifacts')
+  const { interactive, pages } = setup()
+  const preview = await interactive.preview('s', {
+    kind: 'design',
+    frames: [{ name: 'Hero', width: 800, height: 400, html: '<h1>Old line</h1><p>Keep</p>', css: 'h1{color:red}' }],
+    title: 'Hero',
+    summary: 'H',
+    checks: [],
+  } as never)
+  const kept = pages.keep('s', interactive.publish('s', preview.id, 'r1').id, { title: 'Hero' })
+  const methods = registerArtifactHandlers({ pages, pageAi: {}, activity: { run: () => {} }, host: {} } as never)
+  await methods['artifacts.editDesign']!.run(kept.id, 1, [['New line', 'Keep']])
+  const stored = JSON.parse(pages.document(kept.id).files!.find((file) => file.path === 'design.json')!.content)
+  expect(stored.frames[0]).toMatchObject({ html: '<h1>New line</h1><p>Keep</p>', css: 'h1{color:red}' })
+  expect(pages.document(kept.id).reference.changes).toBe('Edited by you')
+  await expect(methods['artifacts.editDesign']!.run(kept.id, 2, [['Only one']])).rejects.toThrow('changed while')
+})
+
 it('edits a Mermaid diagram’s source in place, and offers no text to edit for an SVG diagram', async () => {
   const { interactive, pages } = setup()
   const preview = await interactive.preview('s', {

@@ -3,6 +3,7 @@ import { Alert, Image, Share, TextInput, View, useWindowDimensions } from 'react
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ArrowDown, ArrowUp, MoreHorizontal } from 'lucide-react-native'
 import type { Slide } from '@ramu/shared/artifactSource'
+import { designTexts } from '@ramu/shared/designText'
 import {
   interactiveHtml,
   readInteractiveState,
@@ -101,6 +102,11 @@ export default function PageScreen() {
   const [editingSlides, setEditingSlides] = useState<{ base: number; slides: (Slide & { from: number })[] } | null>(
     null,
   )
+  // A design's frame words while the person edits them, one list per frame, and the version they started from.
+  const [editingDesign, setEditingDesign] = useState<{
+    base: number
+    frames: { name: string; texts: string[] }[]
+  } | null>(null)
   const [frameError, setFrameError] = useState('')
   const [generation, setGeneration] = useState(0)
   const state = useRef<InteractiveState | null>(null)
@@ -707,6 +713,23 @@ export default function PageScreen() {
                 <T>{say('Edit text')}</T>
               </Row>
             ) : null}
+            {page?.kind === 'design' && document && online && !shared && !viewer ? (
+              <Row
+                onPress={() => {
+                  setMenu(false)
+                  const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.design)?.content
+                  if (stored)
+                    setEditingDesign({
+                      base: document.reference.version,
+                      frames: (JSON.parse(stored) as { frames: { name: string; html: string }[] }).frames.map(
+                        (frame) => ({ name: frame.name, texts: designTexts(frame.html) }),
+                      ),
+                    })
+                }}
+              >
+                <T>{say('Edit text')}</T>
+              </Row>
+            ) : null}
             {(document ? kindExports(document, theme) : []).map(({ format, file }) => (
               <Row
                 key={format}
@@ -800,6 +823,73 @@ export default function PageScreen() {
                     void load()
                   })
                   // A newer version or a problem in the text keeps the edit open, so nothing typed is lost.
+                  .catch((failure) => Alert.alert(say('That didn’t work'), reason(failure)))
+                  .finally(() => setSavingEdit(false))
+              }}
+            />
+          </View>
+        ) : null}
+      </Sheet>
+      <Sheet
+        presentation="screen"
+        open={!!editingDesign}
+        onClose={() => setEditingDesign(null)}
+        title={say('Edit text')}
+      >
+        {editingDesign ? (
+          <View style={{ padding: space.l, gap: space.l }}>
+            {editingDesign.frames.map((frame, index) => (
+              <View key={index} style={{ gap: space.s }}>
+                <T size={font.caption} tone="muted">
+                  {frame.name}
+                </T>
+                {frame.texts.length ? (
+                  frame.texts.map((text, at) => (
+                    <TextInput
+                      key={at}
+                      accessibilityLabel={say('Text {number} of {frame}', { number: at + 1, frame: frame.name })}
+                      multiline={text.length > 40}
+                      value={text}
+                      onChangeText={(value) =>
+                        setEditingDesign({
+                          ...editingDesign,
+                          frames: editingDesign.frames.map((entry, which) =>
+                            which === index
+                              ? { ...entry, texts: entry.texts.map((old, spot) => (spot === at ? value : old)) }
+                              : entry,
+                          ),
+                        })
+                      }
+                      style={[field, text.length > 40 ? { minHeight: 72 } : null]}
+                    />
+                  ))
+                ) : (
+                  <T size={font.caption} tone="muted">
+                    {say('No text in this frame.')}
+                  </T>
+                )}
+              </View>
+            ))}
+            <T size={font.caption} tone="muted">
+              {say('Saving makes v{version}, marked Edited by you.', { version: editingDesign.base + 1 })}
+            </T>
+            <Button
+              title={say('Save')}
+              disabled={savingEdit}
+              onPress={() => {
+                setSavingEdit(true)
+                store
+                  .invoke(
+                    computerId,
+                    'artifacts.editDesign',
+                    artifactId,
+                    editingDesign.base,
+                    editingDesign.frames.map((frame) => frame.texts),
+                  )
+                  .then(() => {
+                    setEditingDesign(null)
+                    void load()
+                  })
                   .catch((failure) => Alert.alert(say('That didn’t work'), reason(failure)))
                   .finally(() => setSavingEdit(false))
               }}

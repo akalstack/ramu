@@ -1,3 +1,4 @@
+import { designTextEdit, withDesignTexts, type DesignTextEdit } from '@ramu/shared/designText'
 import { readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { join, sep } from 'node:path'
 import { z } from 'zod'
@@ -447,6 +448,29 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
         })
         const images = (document.files ?? []).filter((file) => file.encoding === 'base64')
         const drawn = await renderArtifactSource(source, artifact.title, images)
+        if (drawn.problems.length) throw new Error(drawn.problems[0])
+        return pages.saveEdit(artifactId, base, drawn, editedBy())
+      },
+    },
+    'artifacts.editDesign': {
+      args: z.tuple([id, z.number().int().positive(), designTextEdit]),
+      run: async (artifactId: string, base: number, texts: DesignTextEdit) => {
+        const { pages } = need()
+        const artifact = pages.get(artifactId)
+        if (artifact.kind !== 'design') throw new Error('Only a design’s frame text is edited here.')
+        const document = pages.document(artifactId, base)
+        const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.design)?.content
+        if (!stored) throw new Error('This design version has no frames. Ask the agent to publish it again.')
+        const design = JSON.parse(stored) as { frames: { html: string }[]; tokens?: unknown }
+        if (texts.length !== design.frames.length)
+          throw new Error('The design changed while you were editing. Reopen it and edit again.')
+        const source = parseArtifactSource({
+          kind: 'design',
+          ...design,
+          frames: design.frames.map((frame, index) => ({ ...frame, html: withDesignTexts(frame.html, texts[index]!) })),
+        })
+        const fonts = (document.files ?? []).filter((file) => file.encoding === 'base64')
+        const drawn = await renderArtifactSource(source, artifact.title, fonts)
         if (drawn.problems.length) throw new Error(drawn.problems[0])
         return pages.saveEdit(artifactId, base, drawn, editedBy())
       },
