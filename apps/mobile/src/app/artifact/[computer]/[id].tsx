@@ -13,6 +13,7 @@ import { interactiveThemeVariables } from '@ramu/shared/interactiveTheme'
 import {
   ARTIFACT_SOURCE_FILES,
   artifactLink,
+  editableSource,
   declaredCapabilities,
   type ArtifactInfo,
   type ArtifactRun,
@@ -677,12 +678,12 @@ export default function PageScreen() {
             >
               <T>{say('Add to Home Screen or share')}</T>
             </Row>
-            {page?.kind === 'doc' && document && online && !shared && !viewer ? (
+            {document && editableSource(document) !== null && online && !shared && !viewer ? (
               <Row
                 onPress={() => {
                   setMenu(false)
-                  const text = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.doc)?.content
-                  if (text !== undefined) setEditing({ base: document.reference.version, text })
+                  const text = editableSource(document)
+                  if (text !== null) setEditing({ base: document.reference.version, text })
                 }}
               >
                 <T>{say('Edit text')}</T>
@@ -793,7 +794,7 @@ export default function PageScreen() {
               onPress={() => {
                 setSavingEdit(true)
                 store
-                  .invoke(computerId, 'artifacts.editDoc', artifactId, editing.base, editing.text)
+                  .invoke(computerId, 'artifacts.editSource', artifactId, editing.base, editing.text)
                   .then(() => {
                     setEditing(null)
                     void load()

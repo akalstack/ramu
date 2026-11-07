@@ -18,7 +18,7 @@ import {
   type Slide,
   type SlideTextEdit,
 } from '@ramu/shared/artifactSource'
-import { ARTIFACT_SOURCE_FILES } from '@ramu/shared/artifacts'
+import { ARTIFACT_SOURCE_FILES, editableSource } from '@ramu/shared/artifacts'
 import { renderArtifactSource } from '../../interactive/kinds'
 import { HOST_EXPORT_FORMATS, type HostExportFormat } from '@ramu/shared/interactiveExport'
 import { id } from '../schemas'
@@ -273,13 +273,18 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
         return ctx.liveDashboards ? ctx.liveDashboards.serve(document, pages.get(artifactId).projectId) : document
       },
     },
-    'artifacts.editDoc': {
+    'artifacts.editSource': {
       args: z.tuple([id, z.number().int().positive(), z.string().max(DOC_MAX_SOURCE)]),
-      run: async (artifactId: string, base: number, markdown: string) => {
+      run: async (artifactId: string, base: number, text: string) => {
         const { pages } = need()
         const artifact = pages.get(artifactId)
-        if (artifact.kind !== 'doc') throw new Error('Only a doc is edited as text here; ask the agent to change this.')
-        const source = parseArtifactSource({ kind: 'doc', source: markdown })
+        if (editableSource(pages.document(artifactId, base)) === null)
+          throw new Error('Only a doc or a Mermaid diagram is edited as text here; ask the agent to change this.')
+        const source = parseArtifactSource(
+          artifact.kind === 'diagram'
+            ? { kind: 'diagram', format: 'mermaid', source: text }
+            : { kind: 'doc', source: text },
+        )
         const drawn = await renderArtifactSource(source, artifact.title)
         if (drawn.problems.length) throw new Error(drawn.problems[0])
         return pages.saveEdit(artifactId, base, drawn)

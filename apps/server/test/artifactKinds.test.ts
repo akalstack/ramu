@@ -5,6 +5,7 @@ import { PageStore } from '../src/interactive/pages'
 import { cleanSvg } from '../src/interactive/svg'
 import { renderArtifactSource } from '../src/interactive/kinds'
 import { parseArtifactSource } from '@ramu/shared/artifactSource'
+import { editableSource } from '@ramu/shared/artifacts'
 
 const databases: Db[] = []
 afterEach(() => {
@@ -156,4 +157,29 @@ it('saves the person’s own edit of a doc as a new version, and refuses one mad
   expect(document.reference.changes).toBe('Edited by you')
   expect(document.files).toEqual([{ path: 'document.md', content: '## Goals\n\nShip sync on Friday.\n' }])
   expect(() => pages.saveEdit(kept.id, 1, drawn)).toThrow('it is now at v2')
+})
+
+it('edits a Mermaid diagram’s source in place, and offers no text to edit for an SVG diagram', async () => {
+  const { interactive, pages } = setup()
+  const preview = await interactive.preview('s', {
+    kind: 'diagram',
+    format: 'mermaid',
+    source: 'flowchart LR\n  A[Plan] --> B[Ship]',
+    title: 'Flow',
+    summary: 'F',
+    checks: [],
+  })
+  const kept = pages.keep('s', interactive.publish('s', preview.id, 'r1').id, { title: 'Flow' })
+  expect(editableSource(pages.document(kept.id))).toBe('flowchart LR\n  A[Plan] --> B[Ship]')
+  const source = parseArtifactSource({
+    kind: 'diagram',
+    format: 'mermaid',
+    source: 'flowchart LR\n  A[Plan] --> B[Launch]',
+  })
+  pages.saveEdit(kept.id, 1, await renderArtifactSource(source, 'Flow'))
+  expect(editableSource(pages.document(kept.id))).toContain('B[Launch]')
+  expect(pages.document(kept.id).html).toContain('Launch')
+  expect(
+    editableSource({ reference: { kind: 'diagram' }, files: [{ path: 'diagram.svg', content: '<svg/>' }] }),
+  ).toBeNull()
 })

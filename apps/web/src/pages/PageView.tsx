@@ -18,6 +18,7 @@ import {
 import type { InteractiveDocument, InteractiveState } from '@ramu/shared/interactive'
 import {
   ARTIFACT_SOURCE_FILES,
+  editableSource,
   type ArtifactInfo,
   type ArtifactRun,
   type ArtifactVersion,
@@ -297,20 +298,23 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
               <PenLine size={13} /> {t('Edit text')}
             </Button>
           )}
-          {page.kind === 'doc' && !editing && (
-            <Button
-              variant="ghost"
-              className={GHOST_TEXT_BUTTON_CLASS}
-              disabled={viewOnly || !document}
-              title={t('Change the words yourself; the agent keeps your edit when it revises')}
-              onClick={() => {
-                const text = document?.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.doc)?.content
-                if (document && text !== undefined) setEditing({ base: document.reference.version, text })
-              }}
-            >
-              <PenLine size={13} /> {t('Edit text')}
-            </Button>
-          )}
+          {(page.kind === 'doc' || page.kind === 'diagram') &&
+            !editing &&
+            document &&
+            editableSource(document) !== null && (
+              <Button
+                variant="ghost"
+                className={GHOST_TEXT_BUTTON_CLASS}
+                disabled={viewOnly || !document}
+                title={t('Change the words yourself; the agent keeps your edit when it revises')}
+                onClick={() => {
+                  const text = editableSource(document)
+                  if (text !== null) setEditing({ base: document.reference.version, text })
+                }}
+              >
+                <PenLine size={13} /> {t('Edit text')}
+              </Button>
+            )}
           {runs.map(([name, run]) => (
             <Button
               key={name}
@@ -537,7 +541,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           onSubmit={(event) => {
             event.preventDefault()
             setSavingEdit(true)
-            invoke('artifacts.editDoc', artifactId, editing.base, editing.text)
+            invoke('artifacts.editSource', artifactId, editing.base, editing.text)
               .then(() => {
                 setEditing(null)
                 void load()

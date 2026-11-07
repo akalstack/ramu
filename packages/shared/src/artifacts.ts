@@ -138,6 +138,23 @@ export const ARTIFACT_SOURCE_FILES = {
   dashboard: 'dashboard.json',
 } as const
 
+/**
+ * The text a person edits in place for a doc (its Markdown) or a diagram written in Mermaid (its source, labels
+ * included); null for kinds edited another way, or not at all.
+ */
+export function editableSource(document: {
+  reference: { kind?: ArtifactKind }
+  files?: { path: string; content: string }[]
+}): string | null {
+  const path =
+    document.reference.kind === 'doc'
+      ? ARTIFACT_SOURCE_FILES.doc
+      : document.reference.kind === 'diagram'
+        ? ARTIFACT_SOURCE_FILES.mermaid
+        : null
+  return (path && document.files?.find((file) => file.path === path)?.content) ?? null
+}
+
 export interface ArtifactInfo {
   id: string
   kind: ArtifactKind

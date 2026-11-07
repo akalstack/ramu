@@ -242,8 +242,11 @@ interface ArtifactMethods {
   'artifacts.exists'(artifactId: string): boolean
   'artifacts.versions'(artifactId: string): import('./artifacts').ArtifactVersion[]
   'artifacts.document'(artifactId: string, version?: number): import('./interactive').InteractiveDocument
-  /** Saves the person's own edit of a doc's Markdown as a new version on top of `base`; refused if another came since. */
-  'artifacts.editDoc'(artifactId: string, base: number, markdown: string): import('./artifacts').ArtifactInfo
+  /**
+   * Saves the person's own edit of a doc's Markdown or a Mermaid diagram's source as a new version on top of `base`;
+   * refused if another came since.
+   */
+  'artifacts.editSource'(artifactId: string, base: number, text: string): import('./artifacts').ArtifactInfo
   /** Saves the person's text for each slide of a deck as a new version on top of `base`; refused if another came since. */
   'artifacts.editSlides'(
     artifactId: string,
