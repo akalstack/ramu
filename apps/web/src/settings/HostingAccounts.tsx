@@ -18,6 +18,7 @@ import { errorText } from '../lib/errors'
 import { useSettingsInvoke } from './SettingsScope'
 import { runProviderCommand } from '../models/ProviderSetupTerminal'
 import { invoke as openOnThisComputer } from '../ipc'
+import { githubTokenLink } from '@ramu/shared/githubTokenLink'
 import { accountDetail, connectionHeadline, savedDetail } from './hostingStatus'
 import { DeployAccounts } from './DeployAccounts'
 
@@ -91,6 +92,17 @@ function ConnectionForm({
           onChange={(event) => setToken(event.target.value)}
         />
       </label>
+      {origin && (
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="self-start"
+          onClick={() => void openOnThisComputer('app.openExternal', githubTokenLink(origin))}
+        >
+          {t('Create a fine-grained token on GitHub')}
+        </Button>
+      )}
       <p className="m-0 text-caption text-muted-foreground">
         {t(
           'Prefer a fine-grained token limited to the repositories you need. The token is stored by the host in its OS credential store, is sent only to {0}, and is never shown again.',

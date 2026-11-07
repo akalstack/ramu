@@ -2,7 +2,7 @@
 
 ## GitHub
 
-Ramu uses the [GitHub CLI](https://cli.github.com) sign-ins you already have (`gh auth login`), or a token saved in **Settings → Git → Hosting accounts**. Saved tokens stay in the host's OS credential store and go only to their own server.
+Ramu uses the [GitHub CLI](https://cli.github.com) sign-ins you already have (`gh auth login`), or a token saved in **Settings → Git → Hosting accounts**, where **Create a fine-grained token on GitHub** opens GitHub's form named Ramu, expiring in 90 days, with the permissions Ramu uses already chosen (pull requests, issues, checks, Actions, secrets, workflows and Pages); you pick the repositories. Saved tokens stay in the host's OS credential store and go only to their own server.
 
 - **Start a thread from an issue:** pick an issue on the new-thread screen. Its text becomes the first message, and a pull request from that checkout closes it.
 - **Open a pull request:** **Create pull request** in Source Control drafts the title and description from the branch's commits.
