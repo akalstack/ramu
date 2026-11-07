@@ -411,3 +411,26 @@ it.skipIf(!interactiveBrowserPath())(
   },
   300_000,
 )
+
+it.skipIf(!interactiveBrowserPath())(
+  'exports a motion as MP4 where the browser can encode H.264, or says why not',
+  async () => {
+    const { db, interactive } = setup(previewInteractive)
+    const preview = await interactive.preview('s', {
+      kind: 'motion',
+      scenes: [{ seconds: 1, html: '<h1 style="margin:40px">Sync</h1>' }],
+      title: 'Sync',
+      summary: 'S',
+      checks: [],
+    } as never)
+    const document = interactive.get('s', interactive.publish('s', preview.id, 'r1').id, 1)
+    try {
+      const video = await new ArtifactExports(db).make(document, 'mp4')
+      expect(video).toMatchObject({ name: 'Sync.mp4', mimeType: 'video/mp4' })
+      expect(Buffer.from(video.content, 'base64').subarray(4, 8).toString()).toBe('ftyp')
+    } catch (error) {
+      expect((error as Error).message).toContain('cannot make MP4 video')
+    }
+  },
+  300_000,
+)

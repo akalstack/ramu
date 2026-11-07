@@ -37,7 +37,7 @@ export interface ExportedFile {
 }
 
 /** Files the host makes in its headless browser or with a writer library, kept with the version they were made from. */
-export const HOST_EXPORT_FORMATS = ['pdf', 'pptx', 'png', 'docx', 'webm'] as const
+export const HOST_EXPORT_FORMATS = ['pdf', 'pptx', 'png', 'docx', 'webm', 'mp4'] as const
 export type HostExportFormat = (typeof HOST_EXPORT_FORMATS)[number]
 
 /**
@@ -50,7 +50,7 @@ export function hostExportFormats(kind: ArtifactKind): HostExportFormat[] {
     : kind === 'design'
       ? ['png', 'pdf']
       : kind === 'motion'
-        ? ['webm', 'png']
+        ? ['mp4', 'webm', 'png']
         : kind === 'doc'
           ? ['docx', 'pdf']
           : kind === 'diagram' || kind === 'dashboard'

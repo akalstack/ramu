@@ -29,6 +29,7 @@ const MIME: Record<HostExportFormat, string> = {
   png: 'image/png',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   webm: 'video/webm',
+  mp4: 'video/mp4',
 }
 
 function deckOf(document: InteractiveDocument): SlidesSource {
@@ -90,6 +91,8 @@ async function withPage<T>(
     await page.evaluate('document.fonts.ready.then(()=>new Promise(r=>setTimeout(r,300)))')
     return await work(page)
   } catch (error) {
+    // A missing codec is told as it is; trying again would not help.
+    if (error instanceof Error && error.cause === 'codec') throw error
     throw new Error('Could not make this export in the host’s browser. Try again.', { cause: error })
   } finally {
     clearTimeout(timer)
@@ -155,7 +158,7 @@ const VIDEO_FPS = 12
  * Animations API, so frames never depend on how fast the browser is, then encoded with the browser's own WebCodecs
  * (VP9) and packaged by Mediabunny in a blank page that the artifact never touches. No ffmpeg is involved.
  */
-function motionVideo(document: InteractiveDocument): Promise<Buffer> {
+function motionVideo(document: InteractiveDocument, container: 'webm' | 'mp4' = 'webm'): Promise<Buffer> {
   const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.motion)?.content
   if (!stored) throw new Error('This motion version has no scenes. Ask the agent to publish it again.')
   const seconds = (JSON.parse(stored) as { scenes: { seconds: number }[] }).scenes.reduce(
@@ -184,18 +187,39 @@ function motionVideo(document: InteractiveDocument): Promise<Buffer> {
       await encoder.addScriptTag({
         content: `var module={exports:{}};var exports=module.exports;${readFileSync(join(dirname(require.resolve('mediabunny')), 'mediabunny.min.cjs'), 'utf8')}`,
       })
-      await encoder.evaluate(async (fps: number) => {
-        const { Output, WebMOutputFormat, BufferTarget, CanvasSource, QUALITY_HIGH } = (
-          window as unknown as { Mediabunny: typeof import('mediabunny') }
-        ).Mediabunny
-        const canvas = new OffscreenCanvas(1280, 720)
-        const target = new BufferTarget()
-        const output = new Output({ format: new WebMOutputFormat(), target })
-        const source = new CanvasSource(canvas, { codec: 'vp9', bitrate: QUALITY_HIGH })
-        output.addVideoTrack(source, { frameRate: fps })
-        await output.start()
-        Object.assign(window, { video: { canvas, target, output, source } })
-      }, VIDEO_FPS)
+      const ready = await encoder.evaluate(
+        async ({ fps, container }: { fps: number; container: 'webm' | 'mp4' }) => {
+          const {
+            Output,
+            WebMOutputFormat,
+            Mp4OutputFormat,
+            BufferTarget,
+            CanvasSource,
+            QUALITY_HIGH,
+            canEncodeVideo,
+          } = (window as unknown as { Mediabunny: typeof import('mediabunny') }).Mediabunny
+          const codec = container === 'mp4' ? 'avc' : 'vp9'
+          // H.264 comes with Google Chrome, not every Chromium build; say so instead of failing midway.
+          if (!(await canEncodeVideo(codec, { width: 1280, height: 720 }))) return false
+          const canvas = new OffscreenCanvas(1280, 720)
+          const target = new BufferTarget()
+          const output = new Output({
+            format: container === 'mp4' ? new Mp4OutputFormat({ fastStart: 'in-memory' }) : new WebMOutputFormat(),
+            target,
+          })
+          const source = new CanvasSource(canvas, { codec, bitrate: QUALITY_HIGH })
+          output.addVideoTrack(source, { frameRate: fps })
+          await output.start()
+          Object.assign(window, { video: { canvas, target, output, source } })
+          return true
+        },
+        { fps: VIDEO_FPS, container },
+      )
+      if (!ready)
+        throw new Error(
+          "This computer's browser cannot make MP4 video. Export WebM instead, or install Google Chrome for MP4.",
+          { cause: 'codec' },
+        )
       for (let index = 0; index < frames; index++) {
         await page.evaluate(
           `document.getAnimations().forEach((a) => { a.currentTime = ${(index / VIDEO_FPS) * 1000} })`,
@@ -263,16 +287,17 @@ export class ArtifactExports {
   /** One export at a time: each starts its own browser. */
   private queue: Promise<unknown> = Promise.resolve()
 
-  private readonly makers: Record<'pdf' | 'png' | 'webm', (document: InteractiveDocument) => Promise<Buffer>>
+  private readonly makers: Record<'pdf' | 'png' | 'webm' | 'mp4', (document: InteractiveDocument) => Promise<Buffer>>
 
   constructor(
     private readonly db: Db,
     /** Tests replace the browser-backed makers they exercise. */
-    makers: Partial<Record<'pdf' | 'png' | 'webm', (document: InteractiveDocument) => Promise<Buffer>>> = {},
+    makers: Partial<Record<'pdf' | 'png' | 'webm' | 'mp4', (document: InteractiveDocument) => Promise<Buffer>>> = {},
   ) {
     this.makers = {
       pdf: printPdf,
-      webm: motionVideo,
+      webm: (document) => motionVideo(document, 'webm'),
+      mp4: (document) => motionVideo(document, 'mp4'),
       png: (document) =>
         document.reference.kind === 'slides'
           ? slideImages(document)
