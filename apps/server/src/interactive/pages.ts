@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import type { Db } from '../db'
-import type { InteractiveDocument, InteractiveReference, JsonValue } from '@ramu/shared/interactive'
+import type { InteractiveDocument, InteractiveFile, InteractiveReference, JsonValue } from '@ramu/shared/interactive'
 import { interactiveOrigin, readInteractiveState } from '@ramu/shared/interactive'
 import {
   ARTIFACT_LIMITS,
@@ -335,6 +335,36 @@ export class PageStore {
       this.db.exec('RELEASE restore_page')
     } catch (error) {
       this.db.exec('ROLLBACK TO restore_page; RELEASE restore_page')
+      throw error
+    }
+    return this.get(artifactId)
+  }
+
+  /**
+   * A version the person wrote themselves, drawn from what they edited, on top of `base`. When another version arrived
+   * since `base` the edit is refused rather than merged, so neither side's words are lost silently.
+   */
+  saveEdit(artifactId: string, base: number, drawn: { html: string; files: InteractiveFile[] }): ArtifactInfo {
+    const current = this.row(artifactId).current_version
+    if (current !== base)
+      throw new Error(
+        `This changed while you were editing: it is now at v${current}. Copy your text, reopen it to see v${current}, and edit that.`,
+      )
+    const latest = this.document(artifactId, current)
+    const reference: InteractiveReference = {
+      ...latest.reference,
+      version: current + 1,
+      createdAt: Date.now(),
+      changes: 'Edited by you',
+      artifactId,
+    }
+    delete reference.restoredFrom
+    this.db.exec('SAVEPOINT edit_page')
+    try {
+      this.addVersion(artifactId, { reference, html: drawn.html, preview: null, files: JSON.stringify(drawn.files) })
+      this.db.exec('RELEASE edit_page')
+    } catch (error) {
+      this.db.exec('ROLLBACK TO edit_page; RELEASE edit_page')
       throw error
     }
     return this.get(artifactId)

@@ -5673,6 +5673,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Slides': 'Slide',
   'Export PowerPoint': 'Ekspor PowerPoint',
   'Export Word': 'Ekspor Word',
+  Markdown: 'Markdown',
+  'Edit text': 'Edit teks',
+  'Saving makes v{version}, marked Edited by you.': 'Menyimpan membuat v{version}, ditandai Diedit oleh Anda.',
+  'Change the words yourself; the agent keeps your edit when it revises':
+    'Ubah sendiri kata-katanya; agen mempertahankan suntingan Anda saat merevisi',
   'Export CSV': 'Ekspor CSV',
   Dashboard: 'Dasbor',
   'Export PNG': 'Ekspor PNG',

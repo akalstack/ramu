@@ -3,6 +3,8 @@ import { openDb, type Db } from '../src/db'
 import { InteractiveStore, type InteractiveInput } from '../src/interactive/store'
 import { PageStore } from '../src/interactive/pages'
 import { cleanSvg } from '../src/interactive/svg'
+import { renderArtifactSource } from '../src/interactive/kinds'
+import { parseArtifactSource } from '@ramu/shared/artifactSource'
 
 const databases: Db[] = []
 afterEach(() => {
@@ -140,4 +142,18 @@ it('keeps only drawing elements and plain attributes in SVG', () => {
   expect(() => cleanSvg('<!DOCTYPE svg [<!ENTITY x "y">]><svg/>')).toThrow('Remove the <!DOCTYPE>')
   expect(() => cleanSvg('<svg><g></svg>')).toThrow('The SVG closes </svg> where <g> is open.')
   expect(() => cleanSvg('<svg/><svg/>')).toThrow('Put everything inside one <svg> element.')
+})
+
+it('saves the person’s own edit of a doc as a new version, and refuses one made on an older version', async () => {
+  const { interactive, pages } = setup()
+  const preview = await interactive.preview('s', doc('## Goals\n\nShip sync.\n'))
+  const kept = pages.keep('s', interactive.publish('s', preview.id, 'r1').id, { title: 'Launch plan' })
+  const source = parseArtifactSource({ kind: 'doc', source: '## Goals\n\nShip sync on Friday.\n' })
+  const drawn = await renderArtifactSource(source, 'Launch plan')
+  const edited = pages.saveEdit(kept.id, 1, drawn)
+  expect(edited.version).toBe(2)
+  const document = pages.document(kept.id)
+  expect(document.reference.changes).toBe('Edited by you')
+  expect(document.files).toEqual([{ path: 'document.md', content: '## Goals\n\nShip sync on Friday.\n' }])
+  expect(() => pages.saveEdit(kept.id, 1, drawn)).toThrow('it is now at v2')
 })

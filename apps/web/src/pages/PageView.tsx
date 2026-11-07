@@ -6,6 +6,7 @@ import {
   Monitor,
   MoreHorizontal,
   MousePointerClick,
+  PenLine,
   Play,
   Smartphone,
   Square,
@@ -13,7 +14,12 @@ import {
   X,
 } from 'lucide-react'
 import type { InteractiveDocument, InteractiveState } from '@ramu/shared/interactive'
-import type { ArtifactInfo, ArtifactRun, ArtifactVersion } from '@ramu/shared/artifacts'
+import {
+  ARTIFACT_SOURCE_FILES,
+  type ArtifactInfo,
+  type ArtifactRun,
+  type ArtifactVersion,
+} from '@ramu/shared/artifacts'
 import { interactiveExport, slideCount } from '@ramu/shared/interactiveExport'
 import { Button } from '../components/desktop-button'
 import { Input } from '../components/desktop-input'
@@ -71,6 +77,9 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   const [answer, setAnswer] = useState<ArtifactRun | null>(null)
   const [asking, setAsking] = useState(false)
   const [status, setStatus] = useState('')
+  // A doc's Markdown while the person edits it, and the version that edit started from.
+  const [editing, setEditing] = useState<{ base: number; text: string } | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
   const state = useRef<InteractiveState | null>(null)
   const revision = useRef(0)
   const frame = useRef<HTMLIFrameElement>(null)
@@ -260,6 +269,20 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
         )}
         <div className="ml-auto flex flex-none items-center gap-0.5">
           {slides > 0 && <SlideToolbar controls={slideControls} count={slides} disabled={!ready} />}
+          {page.kind === 'doc' && !editing && (
+            <Button
+              variant="ghost"
+              className={GHOST_TEXT_BUTTON_CLASS}
+              disabled={viewOnly || !document}
+              title={t('Change the words yourself; the agent keeps your edit when it revises')}
+              onClick={() => {
+                const text = document?.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.doc)?.content
+                if (document && text !== undefined) setEditing({ base: document.reference.version, text })
+              }}
+            >
+              <PenLine size={13} /> {t('Edit text')}
+            </Button>
+          )}
           {runs.map(([name, run]) => (
             <Button
               key={name}
@@ -479,7 +502,46 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           {status}
         </p>
       )}
-      <div className={`relative min-h-0 flex-1 overflow-auto ${width ? 'flex justify-center bg-fill px-3 py-4' : ''}`}>
+      {editing && (
+        <form
+          aria-label={t('Edit text')}
+          className="flex min-h-0 flex-1 flex-col gap-2 p-3"
+          onSubmit={(event) => {
+            event.preventDefault()
+            setSavingEdit(true)
+            invoke('artifacts.editDoc', artifactId, editing.base, editing.text)
+              .then(() => {
+                setEditing(null)
+                void load()
+              })
+              // A newer version or a problem in the text keeps the edit open, so nothing typed is lost.
+              .catch((error) => notifyError(message(error), page.title))
+              .finally(() => setSavingEdit(false))
+          }}
+        >
+          <Textarea
+            aria-label={t('Markdown')}
+            className="min-h-0 flex-1 resize-none font-mono text-control"
+            value={editing.text}
+            onChange={(event) => setEditing({ ...editing, text: event.target.value })}
+          />
+          <div className="flex items-center justify-end gap-2">
+            <span className="mr-auto text-caption text-muted-foreground">
+              {t('Saving makes v{version}, marked Edited by you.', { version: editing.base + 1 })}
+            </span>
+            <Button type="button" variant="ghost" disabled={savingEdit} onClick={() => setEditing(null)}>
+              {t('Cancel')}
+            </Button>
+            <Button type="submit" variant="default" disabled={savingEdit}>
+              {t('Save')}
+            </Button>
+          </div>
+        </form>
+      )}
+      <div
+        hidden={!!editing}
+        className={`relative min-h-0 flex-1 overflow-auto ${width ? 'flex justify-center bg-fill px-3 py-4' : ''}`}
+      >
         <div
           ref={stage}
           className={`relative ${width ? 'h-full overflow-hidden rounded-lg bg-(--canvas)' : 'size-full'} ${slideControls.presenting ? '[&>iframe]:pointer-events-none' : ''}`}

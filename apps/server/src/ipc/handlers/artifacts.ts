@@ -9,6 +9,8 @@ import {
   type RamuDataSource,
 } from '@ramu/shared/artifacts'
 import { NO_PROJECT } from '@ramu/shared/types'
+import { DOC_MAX_SOURCE, parseArtifactSource } from '@ramu/shared/artifactSource'
+import { renderArtifactSource } from '../../interactive/kinds'
 import { HOST_EXPORT_FORMATS, type HostExportFormat } from '@ramu/shared/interactiveExport'
 import { id } from '../schemas'
 import type { HandlerContext, RegisterHandlers } from '../types'
@@ -260,6 +262,18 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
         const document = pages.document(artifactId, version)
         // A dashboard's live tables are read again from its own project when it is opened.
         return ctx.liveDashboards ? ctx.liveDashboards.serve(document, pages.get(artifactId).projectId) : document
+      },
+    },
+    'artifacts.editDoc': {
+      args: z.tuple([id, z.number().int().positive(), z.string().max(DOC_MAX_SOURCE)]),
+      run: async (artifactId: string, base: number, markdown: string) => {
+        const { pages } = need()
+        const artifact = pages.get(artifactId)
+        if (artifact.kind !== 'doc') throw new Error('Only a doc is edited as text here; ask the agent to change this.')
+        const source = parseArtifactSource({ kind: 'doc', source: markdown })
+        const drawn = await renderArtifactSource(source, artifact.title)
+        if (drawn.problems.length) throw new Error(drawn.problems[0])
+        return pages.saveEdit(artifactId, base, drawn)
       },
     },
     'artifacts.export': {

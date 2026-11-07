@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 /** Markdown for a Doc: long reports fit, a book does not. */
-const DOC_MAX_SOURCE = 200_000
+export const DOC_MAX_SOURCE = 200_000
 /** Mermaid text for a Diagram, the same bound the chat's diagram renderer draws. */
 const MERMAID_MAX_SOURCE = 50_000
 /** Hand-written SVG for a Diagram. */
