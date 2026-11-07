@@ -128,7 +128,11 @@ export function projectFactsText(config: ProjectConfig): string | undefined {
     stack.dev ? `Run it: ${stack.dev}` : '',
     stack.build ? `Build: ${stack.build}` : '',
     stack.test ? `Test: ${stack.test}` : '',
-    stack.deployTarget ? `Deploys to: ${stack.deployTarget}` : '',
+    stack.deployTarget === 'expo'
+      ? 'Deploys to: the App Store and Google Play, released with release_status and release_start'
+      : stack.deployTarget
+        ? `Deploys to: ${stack.deployTarget}, through the deploy tools (deploy_status first)`
+        : '',
     stack.database ? 'Stores data in Postgres: read DATABASE_URL (DATABASE_URL_UNPOOLED for migrations).' : '',
     stack.migrate ? `Migrate (runs before each production deploy): ${commandLine(stack.migrate)}` : '',
   ].filter(Boolean)

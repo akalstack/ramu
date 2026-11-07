@@ -19,7 +19,7 @@ export const STORE_SERVICES = ['expo'] as const
 export type StoreService = (typeof STORE_SERVICES)[number]
 
 /**
- * Every account connected in Settings → Hosting accounts: the hosting platforms, the resource providers, then the
+ * Every account connected in Settings → Git → Hosting accounts: the hosting platforms, the resource providers, then the
  * store services.
  */
 export const ACCOUNT_PLATFORMS = [...HOSTING_PLATFORMS, ...RESOURCE_PROVIDERS, ...STORE_SERVICES] as const

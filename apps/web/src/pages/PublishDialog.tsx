@@ -85,7 +85,7 @@ export function PublishDialog({ page, onClose }: { page: ArtifactInfo; onClose()
                   ? t('Connect GitHub in Settings → Git hosting')
                   : entry.target === 'cloudflare-pages'
                     ? t('Needs a token')
-                    : t('Connect it in Settings → Hosting accounts')}
+                    : t('Connect it in Settings → Git → Hosting accounts')}
             </span>
           </RowButton>
         ))}

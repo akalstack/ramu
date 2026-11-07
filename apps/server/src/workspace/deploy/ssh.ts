@@ -170,7 +170,7 @@ const TIMEOUT_MS = 3 * 60_000
 export function sshFailure(stderr: string, host: string): DeployError {
   if (/REMOTE HOST IDENTIFICATION HAS CHANGED|Host key verification failed|host key .* differs/i.test(stderr))
     return new DeployError(
-      `${host} answered with a different server key than the one Ramu pinned. If you rebuilt the server, disconnect it in Settings → Hosting accounts and connect again; otherwise someone may be intercepting the connection.`,
+      `${host} answered with a different server key than the one Ramu pinned. If you rebuilt the server, disconnect it in Settings → Git → Hosting accounts and connect again; otherwise someone may be intercepting the connection.`,
       'missing-permission',
     )
   if (/Permission denied|Too many authentication failures/i.test(stderr))

@@ -194,7 +194,7 @@ export async function platformCall<T>(
 function failure(name: string, status: number, body: string, what: string): DeployError {
   if (status === 401)
     return new DeployError(
-      `${name} refused the saved sign-in while ${what}. Connect ${name} again in Settings → Hosting accounts.`,
+      `${name} refused the saved sign-in while ${what}. Connect ${name} again in Settings → Git → Hosting accounts.`,
       'signed-out',
       status,
     )

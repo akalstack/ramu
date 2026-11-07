@@ -166,7 +166,7 @@ export class HostingAccounts {
     let value = await this.saved[platform].read()
     if (!value)
       throw new DeployError(
-        `Connect ${this.adapter(platform).name} in Settings → Hosting accounts first.`,
+        `Connect ${this.adapter(platform).name} in Settings → Git → Hosting accounts first.`,
         'signed-out',
       )
     if (value.refreshToken && value.expiresAt && value.expiresAt - RENEW_BEFORE_MS < Date.now())
@@ -196,7 +196,7 @@ export class HostingAccounts {
     }
     if (!response.ok)
       throw new DeployError(
-        'The Vercel sign-in ended. Connect Vercel again in Settings → Hosting accounts.',
+        'The Vercel sign-in ended. Connect Vercel again in Settings → Git → Hosting accounts.',
         'signed-out',
         response.status,
       )

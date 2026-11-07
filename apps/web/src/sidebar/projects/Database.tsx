@@ -117,7 +117,7 @@ export function DatabaseSection({
                 <span className="text-caption text-muted-foreground">
                   {entry.connected && entry.plans[0]
                     ? t(entry.plans[0].summary)
-                    : t('Connect it in Settings → Hosting accounts')}
+                    : t('Connect it in Settings → Git → Hosting accounts')}
                 </span>
               </RowButton>
             ))}

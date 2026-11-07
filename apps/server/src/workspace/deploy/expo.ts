@@ -99,7 +99,7 @@ function refusal(errors: { message?: string; extensions?: { errorCode?: string }
   const code = errors.map((error) => `${error.extensions?.errorCode ?? ''} ${error.message ?? ''}`).join(' ')
   if (/UNAUTHENTICATED|not logged in/i.test(code))
     return new DeployError(
-      `Expo refused the saved token while ${what}. Connect Expo again in Settings → Hosting accounts.`,
+      `Expo refused the saved token while ${what}. Connect Expo again in Settings → Git → Hosting accounts.`,
       'signed-out',
     )
   if (/UNAUTHORIZED|FORBIDDEN|permission/i.test(code))

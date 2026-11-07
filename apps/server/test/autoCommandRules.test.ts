@@ -161,6 +161,8 @@ describe('what Auto always asks about, mirroring the other providers', () => {
     ['terraform apply', 'publish'],
     ['kubectl delete pod x', 'publish'],
     ['vercel deploy --prod', 'publish'],
+    ['netlify deploy --prod', 'publish'],
+    ['eas submit --platform ios', 'publish'],
     ['aws s3 rm s3://bucket --recursive', 'publish'],
     // credentials and secret stores
     ['cat .env', 'credentials'],

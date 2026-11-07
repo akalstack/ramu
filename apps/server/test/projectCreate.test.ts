@@ -38,6 +38,7 @@ it('runs the stack generator in the new folder, records the stack in ramu.json a
   expect(await git(folder.path, ['status', '--porcelain'])).toBe('')
   expect(await git(folder.path, ['log', '--format=%s'])).toContain('Start shop with Vite + React')
   expect(projectFactsText(config)).toContain('Build: npm run build')
+  expect(projectFactsText(config)).toContain('Deploys to: netlify, through the deploy tools')
 })
 
 it('removes the folder when the generator fails, so the name can be tried again', async () => {

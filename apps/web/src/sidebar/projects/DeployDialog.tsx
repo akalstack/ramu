@@ -185,7 +185,7 @@ export function DeployDialog({
                     ? t('Connected as {0}', { 0: entry.account ?? entry.name })
                     : entry.platform === 'server'
                       ? t('Connect it below')
-                      : t('Connect it in Settings → Hosting accounts')}
+                      : t('Connect it in Settings → Git → Hosting accounts')}
                 </span>
               </RowButton>
             ))}
