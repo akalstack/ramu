@@ -189,7 +189,13 @@ describe('Neon resource adapter', () => {
   it('gives production its own values and the preview branch to previews, this host and CI', async () => {
     const server = await fake(neonRoutes([]))
     const { resources } = service(server.url)
-    expect((await resources.status('p1', [])).needsDatabase).toBe(true)
+    expect((await resources.status('p1', [])).needs).toEqual(['database'])
+    // The code reading Redis and Resend variables shows it needs a cache and email too.
+    expect((await resources.status('p1', ['REDIS_URL', 'RESEND_API_KEY'])).needs).toEqual([
+      'database',
+      'cache',
+      'email',
+    ])
     await resources.provision('p1', 'neon', 'default', 'shop')
     const values = await resources.environmentValues('p1')
     expect(values.production?.DATABASE_URL).toContain('main-pooler')

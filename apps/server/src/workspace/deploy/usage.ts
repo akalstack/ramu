@@ -22,6 +22,9 @@ const BILLING_PAGES: Record<AccountPlatform, string> = {
   neon: 'https://console.neon.tech/app/billing',
   // Supabase's Management API reports no usage, so no report is made for it.
   supabase: 'https://supabase.com/dashboard/org/_/billing',
+  // Neither reports usage through the API Ramu uses, so no report is made for them.
+  upstash: 'https://console.upstash.com/account/billing',
+  resend: 'https://resend.com/settings/billing',
   expo: 'https://expo.dev/settings/billing',
 }
 

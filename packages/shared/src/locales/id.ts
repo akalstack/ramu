@@ -6047,8 +6047,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Which stores?': 'Toko yang mana?',
   'Connect Expo on the computer running the host to release.': 'Hubungkan Expo di komputer yang menjalankan host untuk merilis.',
   'Finish what the stores need in the Deploy sheet on a computer first.': 'Selesaikan dulu yang dibutuhkan toko di lembar Deploy di komputer.',
-  'previews use their own database':
-    'preview memakai database sendiri',
+  'previews have their own': 'preview punya miliknya sendiri',
   Databases: 'Basis data',
   'Put {0} online, or see where it is deployed': 'Online-kan {0}, atau lihat di mana ia di-deploy',
   'Running without Docker, with your permissions.': 'Berjalan tanpa Docker, dengan izin Anda.',
@@ -6133,4 +6132,28 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Tidak ada runtimeVersion di app.json: eas update:configure mengaturnya',
   'No updates.url in app.json: eas update:configure sets it':
     'Tidak ada updates.url di app.json: eas update:configure mengaturnya',
+  'Cache':
+    'Cache',
+  'Email':
+    'Email',
+  'Redis on {0} · {1}':
+    'Redis di {0} · {1}',
+  'Email sending on {0} · {1}':
+    'Pengiriman email di {0} · {1}',
+  'Production has its own Redis database. Previews, this host and CI use a second one, so they never read or clear production’s keys. Sync below sets {0}.':
+    'Produksi punya database Redis sendiri. Preview, host ini, dan CI memakai database kedua, sehingga tidak pernah membaca atau menghapus key produksi. Sinkronkan di bawah mengatur {0}.',
+  'This app uses Redis. Provision creates a Redis database on your own account, with a second one for previews and development.':
+    'Aplikasi ini memakai Redis. Provision membuat database Redis di akun Anda sendiri, dengan database kedua untuk preview dan pengembangan.',
+  'Production and previews each get their own sending-only key, so neither can manage the account. Sync below sets {0}.':
+    'Produksi dan preview masing-masing mendapat key khusus pengiriman, sehingga keduanya tidak bisa mengelola akun. Sinkronkan di bawah mengatur {0}.',
+  'This app sends email. Provision creates sending-only keys on your own account: one for production, one for previews and development.':
+    'Aplikasi ini mengirim email. Provision membuat key khusus pengiriman di akun Anda sendiri: satu untuk produksi, satu untuk preview dan pengembangan.',
+  'Redis in us-east-1 on your account’s plan, with a second database for previews.':
+    'Redis di us-east-1 pada paket akun Anda, dengan database kedua untuk preview.',
+  'A sending-only key for production and another for previews; add your domain on Resend to send from it.':
+    'Key khusus pengiriman untuk produksi dan satu lagi untuk preview; tambahkan domain Anda di Resend untuk mengirim darinya.',
+  'Create a Developer API key, then paste your account email and the key joined by a colon (you@example.com:key). The key reaches every database of the account':
+    'Buat Developer API key, lalu tempel email akun Anda dan key yang digabung dengan titik dua (anda@example.com:key). Key ini menjangkau setiap database di akun',
+  'Create a key with Full access, which creating sending keys needs; the app gets sending-only keys, never this one':
+    'Buat key dengan Full access, yang diperlukan untuk membuat key pengiriman; aplikasi mendapat key khusus pengiriman, bukan key ini',
 }

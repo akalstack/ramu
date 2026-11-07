@@ -209,11 +209,7 @@ export function resourceRows(
     return {
       id: `${resource.provider}:${resource.id}`,
       name: resource.name,
-      detail: [
-        provider,
-        resource.variables.join(', '),
-        resource.previewBranch ? t('previews use their own database') : null,
-      ]
+      detail: [provider, resource.variables.join(', '), resource.previewBranch ? t('previews have their own') : null]
         .filter(Boolean)
         .join(' · '),
       page: resource.page,

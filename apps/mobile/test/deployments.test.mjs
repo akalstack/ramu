@@ -197,7 +197,7 @@ test('shows store builds with their upload, and says why Release cannot start ye
 test('lists a project’s databases with their provider, variables and preview branch', () => {
   const rows = resourceRows(
     {
-      needsDatabase: true,
+      needs: ['database'],
       providers: [{ provider: 'neon', name: 'Neon', kind: 'database', connected: true, plans: [] }],
       resources: [
         {
@@ -218,7 +218,7 @@ test('lists a project’s databases with their provider, variables and preview b
     {
       id: 'neon:n1',
       name: 'shop',
-      detail: 'Neon · DATABASE_URL, DATABASE_URL_UNPOOLED · previews use their own database',
+      detail: 'Neon · DATABASE_URL, DATABASE_URL_UNPOOLED · previews have their own',
       page: 'https://console.neon.tech/app/projects/n1',
     },
   ])

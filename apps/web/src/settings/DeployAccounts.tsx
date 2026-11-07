@@ -24,6 +24,10 @@ const SCOPE_HINT: Record<Exclude<AccountPlatform, 'server' | 'github-pages' | 'c
   neon: 'Create a personal API key. Neon keys reach your whole account and do not expire, so revoke it on Neon when Ramu no longer needs it',
   supabase:
     'Create an access token with an expiry. Supabase tokens reach every organization you belong to, and Ramu creates projects in the first one',
+  upstash:
+    'Create a Developer API key, then paste your account email and the key joined by a colon (you@example.com:key). The key reaches every database of the account',
+  resend:
+    'Create a key with Full access, which creating sending keys needs; the app gets sending-only keys, never this one',
   expo: 'Create it for a robot user with the Developer role on the account that owns the app; a personal token reaches every account you belong to',
 }
 

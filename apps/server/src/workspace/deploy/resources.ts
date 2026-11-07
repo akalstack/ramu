@@ -4,6 +4,7 @@
 import { execFile } from 'node:child_process'
 import { commandLine } from '@ramu/shared/stacks'
 import {
+  RESOURCE_KINDS,
   RESOURCE_PROVIDERS,
   type ProjectResource,
   type ProjectResources,
@@ -83,6 +84,13 @@ export const runMigration: MigrationRunner = (argv, cwd, variables) =>
       (error, stdout, stderr) => resolve({ ok: !error, output: `${stdout}\n${stderr}` }),
     )
   })
+
+/** Variables whose use in the code shows the app needs a kind of resource. */
+const NEEDS: Record<Exclude<ResourceKind, 'database'>, string[]> = {
+  cache: ['REDIS_URL', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'],
+  email: ['RESEND_API_KEY'],
+}
+const KIND_NAMES: Record<ResourceKind, string> = { database: 'a database', cache: 'a cache', email: 'email sending' }
 
 const key = (projectId: string) => `resources:${projectId}`
 const branchKey = (projectId: string) => `resource-branches:${projectId}`
@@ -198,7 +206,11 @@ export class ResourceService {
       }),
     )
     return {
-      needsDatabase: stack.database || appVariables.includes('DATABASE_URL'),
+      needs: RESOURCE_KINDS.filter((kind) =>
+        kind === 'database'
+          ? stack.database || appVariables.includes('DATABASE_URL')
+          : NEEDS[kind].some((name) => appVariables.includes(name)),
+      ),
       providers: RESOURCE_PROVIDERS.map((provider) => {
         const adapter = this.adapter(provider)
         return {
@@ -228,7 +240,7 @@ export class ResourceService {
     const adapter = this.adapter(provider)
     if (!adapter.plans.some((entry) => entry.id === plan)) throw new Error('Choose one of the offered plans.')
     if (this.bindings(projectId).some((binding) => binding.kind === adapter.kind))
-      throw new Error('This project already has a database. Manage it on the provider’s page.')
+      throw new Error(`This project already has ${KIND_NAMES[adapter.kind]}. Manage it on the provider’s page.`)
     const { auth, accountId } = await this.auth(provider)
     let made
     try {
@@ -237,7 +249,7 @@ export class ResourceService {
       if (!(error instanceof ReplyLostError)) throw error
       made = await adapter.find(auth, name)
       if (!made)
-        throw new Error(`${adapter.name} did not answer, and no database named ${name} is listed. Try again.`, {
+        throw new Error(`${adapter.name} did not answer, and nothing named ${name} is listed. Try again.`, {
           cause: error,
         })
     }
