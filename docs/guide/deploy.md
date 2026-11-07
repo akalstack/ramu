@@ -16,6 +16,8 @@ Neon connects with an API key only: create a personal key named Ramu on Neon's A
 
 Expo connects with an access token only: on Expo's access tokens page, create a robot user with the Developer role on the account that owns the app and create its token (a personal token reaches every account you belong to, and Settings says so). Revoke it on Expo when Ramu no longer needs it.
 
+A token with an end date shows it in Settings, and a week before it runs out each project deploying with it gets a notice in its latest thread naming the date and **Replace**; an expired one says so.
+
 Agents never create tokens by driving your browser: a signed-in dashboard gives full account power, and a new token would end up in screenshots and the transcript.
 
 Hosting accounts are added, replaced and removed only on the computer running the host. Paired devices see their status: the phone shows each platform's account under **GitHub on this host**, and a project's deployments under **Deployments** ([On the phone](#on-the-phone)). **Disconnect** deletes Ramu's copy only; to revoke the token itself, delete it on the platform.

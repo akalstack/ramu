@@ -1,3 +1,4 @@
+import { TokenExpiryNotices } from './tokenExpiry'
 import { DEFAULT_AGENT_SETTINGS, type AgentSettings } from '@ramu/shared/types'
 import type { InboxNotice } from '@ramu/shared/chat/notices'
 import type { DeployBinding, Deployment, UsageReport } from '@ramu/shared/types/deploy'
@@ -43,6 +44,7 @@ export interface Deploys {
   /** Every usage report of a project: its hosting platform's, then its resources'. */
   usage(projectId: string): Promise<UsageReport[]>
   usageNotices: UsageNotices
+  tokenExpiry: TokenExpiryNotices
   resources: ResourceService
   /** Store releases of a project's Expo app. */
   releases: StoreReleases
@@ -180,11 +182,25 @@ export function createDeploys(
     },
     usage,
   )
+  // A week before a saved hosting token expires, the projects deploying with it hear where to replace it.
+  const tokenExpiry = new TokenExpiryNotices({
+    getState,
+    setState,
+    accounts: () => accounts.list(false, () => false),
+    projects: () => workspace.listProjects(),
+    platformOf: (projectId) => service.binding(projectId)?.platform ?? null,
+    latestThread(projectId) {
+      const sessionId = wake.latestThread(projectId)
+      return sessionId ? { taskId: agents.get(sessionId).taskId, sessionId } : null
+    },
+    raise: (notice) => events.notice(notice),
+  })
   return {
     accounts,
     service,
     usage,
     usageNotices: notices,
+    tokenExpiry,
     signIns: new HostingSignIns(accounts),
     domains: new DomainWatches(workspace, wake, service),
     deployWatch,
