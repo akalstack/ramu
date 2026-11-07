@@ -130,6 +130,8 @@ export function DeployDialog({
   const toServer = !binding && platform === 'server'
   // Fly.io has no Git integration: linking opens a pull request with the deploy job instead.
   const toFly = !binding && platform === 'fly'
+  // GitHub Pages goes through the repository's GitHub sign-in, so it needs nothing connected first.
+  const toPages = !binding && platform === 'github-pages'
   const confirm = () => {
     if (storeOnly) return onClose()
     if (toServer) {
@@ -171,18 +173,20 @@ export function DeployDialog({
               ? t('Set up the server')
               : toFly
                 ? t('Set up Fly.io')
-                : !binding
-                  ? t('Link repository')
-                  : !canDeploy
-                    ? t('Done')
-                    : confirming
-                      ? t('Deploy now')
-                      : t('Deploy to production')
+                : toPages
+                  ? t('Set up GitHub Pages')
+                  : !binding
+                    ? t('Link repository')
+                    : !canDeploy
+                      ? t('Done')
+                      : confirming
+                        ? t('Deploy now')
+                        : t('Deploy to production')
       }
       confirmDisabled={
         !status ||
         (!binding && unpublished) ||
-        (!binding && !storeOnly && (!platform || !repoId || !account?.connected)) ||
+        (!binding && !storeOnly && (!platform || !repoId || (!account?.connected && !toPages))) ||
         (toServer && !domain.trim())
       }
       busy={busy}
@@ -220,11 +224,13 @@ export function DeployDialog({
                 <BrandIcon brand={accountBrand(entry.platform)} />
                 <span className="flex-1 text-foreground">{accountName(t, entry.platform, entry.name)}</span>
                 <span className="text-caption text-muted-foreground">
-                  {entry.connected
-                    ? t('Connected as {0}', { 0: entry.account ?? entry.name })
-                    : entry.platform === 'server'
-                      ? t('Connect it below')
-                      : t('Connect it in Settings → Git → Hosting accounts')}
+                  {entry.platform === 'github-pages'
+                    ? t('Uses the repository’s GitHub sign-in')
+                    : entry.connected
+                      ? t('Connected as {0}', { 0: entry.account ?? entry.name })
+                      : entry.platform === 'server'
+                        ? t('Connect it below')
+                        : t('Connect it in Settings → Git → Hosting accounts')}
                 </span>
               </RowButton>
             ))}
@@ -263,6 +269,13 @@ export function DeployDialog({
             <p className="m-0 mt-3 text-caption">
               {t(
                 'Fly.io cannot watch a repository, so Ramu creates the app, keeps a deploy token limited to it in the repository’s GitHub Actions secrets, and opens a pull request with fly.toml, a Dockerfile when the repository has none, and the deploy job. Every merge to the default branch deploys; there are no preview deployments.',
+              )}
+            </p>
+          )}
+          {toPages && (
+            <p className="m-0 mt-3 text-caption">
+              {t(
+                'For a static site: Ramu turns on GitHub Pages for the repository and opens a pull request with a deploy job that builds the site (or publishes its files as they are) with GitHub’s own Pages actions. Every merge to the default branch deploys; there are no preview deployments, and the site is public.',
               )}
             </p>
           )}

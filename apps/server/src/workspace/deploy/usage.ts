@@ -15,6 +15,8 @@ const BILLING_PAGES: Record<AccountPlatform, string> = {
   fly: 'https://fly.io/dashboard/personal/billing',
   // The person's own server is billed by whoever hosts it; it reports no usage, so no report is made for it.
   server: '',
+  // GitHub Pages is free for public repositories and reports no usage, so no report is made for it.
+  'github-pages': '',
   neon: 'https://console.neon.tech/app/billing',
   expo: 'https://expo.dev/settings/billing',
 }

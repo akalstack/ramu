@@ -179,6 +179,7 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
       run: (projectId: string, name: HostingPlatform, repoId: string) =>
         exclusive(projectId, async () => {
           if (name === 'fly') return deploys().fly.link(project(projectId), repoId, siteName(known(projectId).name))
+          if (name === 'github-pages') return deploys().pages.link(project(projectId), repoId)
           if (name === 'server') throw new Error('Set up your own server with its domain.')
           return {
             deployment: await deploys().service.link(project(projectId), name, repoId, siteName(known(projectId).name)),

@@ -41,7 +41,10 @@ export function forgeBrand(service: ForgeService): BrandId {
   return FORGE_BRANDS[service]
 }
 
-/** The mark beside a hosting account: the platform's own, and Docker's for the person's own server, which runs it. */
+/**
+ * The mark beside a hosting account: the platform's own, Docker's for the person's own server, which runs it, and
+ * GitHub's for GitHub Pages.
+ */
 export function accountBrand(platform: AccountPlatform): BrandId {
-  return platform === 'server' ? 'docker' : platform
+  return platform === 'server' ? 'docker' : platform === 'github-pages' ? 'github' : platform
 }

@@ -17,6 +17,7 @@ import './netlify'
 import './railway'
 import './fly'
 import './server'
+import './githubPages'
 import './neon'
 
 /** What an account needs from its platform's adapter: a name, a token page and who a token belongs to. */
@@ -89,6 +90,7 @@ export class HostingAccounts {
       railway: saved('railway'),
       fly: saved('fly'),
       server: saved('server'),
+      'github-pages': saved('github-pages'),
       neon: saved('neon'),
       expo: saved('expo'),
     }

@@ -3,7 +3,7 @@
 import type { DeployTargetId } from '../stacks'
 
 /** Hosting platforms with an adapter on the server; `server` is the person's own server, reached over SSH. */
-export const HOSTING_PLATFORMS = ['vercel', 'netlify', 'railway', 'fly', 'server'] as const
+export const HOSTING_PLATFORMS = ['vercel', 'netlify', 'railway', 'fly', 'server', 'github-pages'] as const
 export type HostingPlatform = (typeof HOSTING_PLATFORMS)[number]
 
 /** Hosting platforms whose own CLI can sign in on the host. */

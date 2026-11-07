@@ -14,7 +14,7 @@ import { ServerConnect } from './ServerConnect'
 import { useSettingsInvoke } from './SettingsScope'
 
 /** What to pick on each platform's token page: the smallest scope it offers. */
-const SCOPE_HINT: Record<Exclude<AccountPlatform, 'server'>, string> = {
+const SCOPE_HINT: Record<Exclude<AccountPlatform, 'server' | 'github-pages'>, string> = {
   vercel: 'Scope: the team your projects are in, not Full Account',
   netlify: 'Netlify tokens reach every team you belong to, so choose an expiry',
   railway: 'Pick the workspace your projects are in, so the token reaches only that workspace',
@@ -74,14 +74,17 @@ export function DeployAccounts() {
     )
   return (
     <>
-      {summary?.accounts.map((account) => (
-        <DeployAccountRow
-          key={account.platform}
-          account={account}
-          canAdminister={summary.canAdminister}
-          reload={load}
-        />
-      ))}
+      {/* GitHub Pages uses the repository's GitHub sign-in, listed under GitHub; there is nothing to connect. */}
+      {summary?.accounts
+        .filter((account) => account.platform !== 'github-pages')
+        .map((account) => (
+          <DeployAccountRow
+            key={account.platform}
+            account={account}
+            canAdminister={summary.canAdminister}
+            reload={load}
+          />
+        ))}
       {summary && !summary.canAdminister && (
         <p className="m-0 mb-3 px-4 text-caption text-muted-foreground">
           {t('Connect hosting and database accounts on the machine running this host.')}
@@ -204,7 +207,7 @@ function DeployAccountRow({
           </span>
         </div>
       )}
-      {open && account.platform !== 'server' && (
+      {open && account.platform !== 'server' && account.platform !== 'github-pages' && (
         <div className="mb-3 flex flex-col gap-3 rounded-(--radius-m) bg-fill p-4 text-caption">
           {cliPlatform && (
             <section className="flex flex-col gap-2" aria-label={t('Sign in with {0}', { 0: account.name })}>

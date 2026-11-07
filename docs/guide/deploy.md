@@ -54,6 +54,15 @@ Fly.io cannot watch a repository, so deploys run in the repository's GitHub Acti
 
 Once set up, the deploy job's runs are the deployments: **Logs** shows a run's log, **Deploy to production** starts the job on the default branch, and **Roll back** starts it with an earlier deployment's commit, deploying that commit's image from Fly.io's registry again without building. **Environment variables** syncs to the app's Fly.io secrets, **Domains** adds a domain as a Fly.io certificate and shows its record (a CNAME to the app, or an A record for a domain itself), and the [deploy watch](#when-a-deployment-finishes) and [uptime](#uptime) work as for the other platforms. Fly.io's API reports no usage; **Open billing** shows it on Fly.io. A token that cannot create deploy tokens is refused with what to connect instead. Revoke the deploy token on Fly.io's **Tokens** page when the app no longer deploys from the repository.
 
+## GitHub Pages
+
+For a static site (a Vite, Astro, Next.js export, Create React App, SvelteKit, Eleventy or Docusaurus build, or plain HTML files), **GitHub Pages** in the deploy sheet needs nothing connected: it uses the repository's own GitHub sign-in. **Set up GitHub Pages**:
+
+- turns on Pages for the repository, publishing from GitHub Actions (Pages needs a public repository, or a paid plan for a private one, and admin access);
+- opens one pull request with `.github/workflows/pages-deploy.yml`, which installs with the lockfile's package manager, runs the build script and publishes its output folder (or publishes the files as they are when there is no build), after CI passes when the repository has Ramu's CI.
+
+Merge it to deploy. The job's runs are the deployments, **Logs** shows a run's log, **Deploy to production** starts it on the default branch and **Roll back** builds and publishes an earlier commit again. There are no preview deployments, and the site is public at the address Pages gives it.
+
 ## Your own server
 
 **Own server** in the deploy sheet runs the app on a Linux server you rent (Ubuntu or Debian), as a Docker container behind [Caddy](https://caddyserver.com), which serves your domain over HTTPS with certificates it gets and renews itself. Deploys run in the repository's GitHub Actions, so the server never needs Ramu running.

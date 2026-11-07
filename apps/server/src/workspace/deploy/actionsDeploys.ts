@@ -46,7 +46,7 @@ function deploymentOf(run: WorkflowRun): Deployment {
   }
 }
 
-const GITHUB_HEADERS = {
+export const GITHUB_HEADERS = {
   Accept: 'application/vnd.github+json',
   'X-GitHub-Api-Version': '2022-11-28',
   'User-Agent': 'Ramu',

@@ -1,3 +1,4 @@
+import { PagesSetup } from './pagesSetup'
 import { TokenExpiryNotices } from './tokenExpiry'
 import { DEFAULT_AGENT_SETTINGS, type AgentSettings } from '@ramu/shared/types'
 import type { InboxNotice } from '@ramu/shared/chat/notices'
@@ -56,6 +57,7 @@ export interface Deploys {
   /** The person's own server: connecting it and setting projects up on it. */
   server: ServerSetup
   fly: FlySetup
+  pages: PagesSetup
   wake: ProjectWake
 }
 
@@ -275,6 +277,7 @@ export function createDeploys(
       credentials,
     ),
     fly: new FlySetup(accounts, service, { repository: githubRepository, actionsSecrets: githubActionsTarget }),
+    pages: new PagesSetup(accounts, service, { repository: githubRepository }),
     wake,
   }
 }

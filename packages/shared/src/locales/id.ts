@@ -6069,4 +6069,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'No speaker notes on this slide.': 'Tidak ada catatan pembicara di slide ini.',
   'Edit as formatted text': 'Sunting sebagai teks berformat',
   'Block {number}': 'Blok {number}',
+  'Set up GitHub Pages': 'Siapkan GitHub Pages',
+  'Uses the repository’s GitHub sign-in': 'Memakai login GitHub repositori',
+  'For a static site: Ramu turns on GitHub Pages for the repository and opens a pull request with a deploy job that builds the site (or publishes its files as they are) with GitHub’s own Pages actions. Every merge to the default branch deploys; there are no preview deployments, and the site is public.':
+    'Untuk situs statis: Ramu menyalakan GitHub Pages untuk repositori dan membuka pull request berisi job deploy yang membangun situs (atau menerbitkan berkasnya apa adanya) dengan action Pages milik GitHub. Setiap penggabungan ke cabang default men-deploy; tidak ada deployment preview, dan situsnya publik.',
 }
