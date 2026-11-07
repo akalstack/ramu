@@ -27,7 +27,7 @@ import type {
   CliSignInPlatform,
   ProjectDeployment,
   Deployment,
-  ServerLinkResult,
+  DeployLinkResult,
   ServerStatus,
   DomainStatus,
   AccountPlatform,
@@ -1206,11 +1206,15 @@ export interface RamuMethods extends ArtifactMethods {
    * Sets a project up on the connected server for a domain: its Caddy site, the deploy job's Actions secrets and a pull
    * request with the Dockerfile and deploy job the repository lacks.
    */
-  'deploy.linkServer'(projectId: string, repoId: string, domain: string): ServerLinkResult
+  'deploy.linkServer'(projectId: string, repoId: string, domain: string): DeployLinkResult
   /** Where a project deploys, its live address and its latest deployments. */
   'deploy.project'(projectId: string): ProjectDeployment
-  /** Links a repository of the project to a new or existing project on the platform, through its Git integration. */
-  'deploy.link'(projectId: string, platform: HostingPlatform, repoId: string): ProjectDeployment
+  /**
+   * Links a repository of the project to a new or existing project on the platform, through its Git integration. Fly.io
+   * has none: the app is created, its deploy token goes to the repository's Actions secrets, and a pull request adds the
+   * deploy job.
+   */
+  'deploy.link'(projectId: string, platform: HostingPlatform, repoId: string): DeployLinkResult
   /** Deploys the production branch; pressing Deploy in the sheet is the person's approval. */
   'deploy.production'(projectId: string): Deployment
   /** The end of one deployment's build log. */

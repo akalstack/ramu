@@ -13,7 +13,7 @@ import {
   SERVER_SECRETS,
   SERVER_WORKFLOW_PATH,
 } from '@ramu/shared/serverDeploy'
-import type { ServerLinkResult, ServerStatus } from '@ramu/shared/types/deploy'
+import type { DeployLinkResult, ServerStatus } from '@ramu/shared/types/deploy'
 import { HostCredentialStore } from '../../credentials/store'
 import { factsAt } from '../ci/setup'
 import { SavedCredential } from '../forge/savedCredential'
@@ -225,7 +225,7 @@ export class ServerSetup {
    * Sets a project up on the connected server for `domain`: the Caddy site, the deploy job's secrets, the pull
    * request with the files the repository lacks, then the binding. Each step can run again safely.
    */
-  async link(projectId: string, repoId: string, input: string): Promise<ServerLinkResult> {
+  async link(projectId: string, repoId: string, input: string): Promise<DeployLinkResult> {
     const domain = domainName(input)
     if (!domain) throw new Error('Enter a domain name such as app.example.com.')
     const connection = await this.connection()

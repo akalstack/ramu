@@ -100,6 +100,8 @@ export function DeployDialog({
   const storeOnly = !binding && status?.recommended === 'expo'
 
   const toServer = !binding && platform === 'server'
+  // Fly.io has no Git integration: linking opens a pull request with the deploy job instead.
+  const toFly = !binding && platform === 'fly'
   const confirm = () => {
     if (storeOnly) return onClose()
     if (toServer) {
@@ -114,7 +116,9 @@ export function DeployDialog({
     if (!binding) {
       if (!platform || !repoId) return
       void run(async () => {
-        setStatus(await host.invoke('deploy.link', project.id, platform, repoId))
+        const linked = await host.invoke('deploy.link', project.id, platform, repoId)
+        setStatus(linked.deployment)
+        setPullRequest(linked.pullRequest)
       })
       return
     }
@@ -137,13 +141,15 @@ export function DeployDialog({
             ? t('Done')
             : toServer
               ? t('Set up the server')
-              : !binding
-                ? t('Link repository')
-                : !canDeploy
-                  ? t('Done')
-                  : confirming
-                    ? t('Deploy now')
-                    : t('Deploy to production')
+              : toFly
+                ? t('Set up Fly.io')
+                : !binding
+                  ? t('Link repository')
+                  : !canDeploy
+                    ? t('Done')
+                    : confirming
+                      ? t('Deploy now')
+                      : t('Deploy to production')
       }
       confirmDisabled={
         !status ||
@@ -160,14 +166,18 @@ export function DeployDialog({
       ) : storeOnly ? null : !binding ? (
         <>
           <p>
-            {recommended
-              ? t(
-                  '{0} is recommended for this project’s stack. Ramu links it to the repository, so every pull request gets a preview and the default branch deploys to production.',
-                  { 0: recommended.name },
-                )
-              : t(
-                  'Ramu links the platform to the repository, so every pull request gets a preview and the default branch deploys to production.',
-                )}
+            {recommended && (recommended.platform === 'fly' || recommended.platform === 'server')
+              ? t('{0} is recommended for this project’s stack.', {
+                  0: accountName(t, recommended.platform, recommended.name),
+                })
+              : recommended
+                ? t(
+                    '{0} is recommended for this project’s stack. Ramu links it to the repository, so every pull request gets a preview and the default branch deploys to production.',
+                    { 0: recommended.name },
+                  )
+                : t(
+                    'Ramu links the platform to the repository, so every pull request gets a preview and the default branch deploys to production.',
+                  )}
           </p>
           <div role="radiogroup" aria-label={t('Platform')} className="flex flex-col gap-0.5">
             {accounts.map((entry) => (
@@ -208,6 +218,13 @@ export function DeployDialog({
           {!repos.length && (
             <p className="text-caption text-muted-foreground">
               {t('Connect a repository to this project and publish it to GitHub first.')}
+            </p>
+          )}
+          {toFly && (
+            <p className="m-0 mt-3 text-caption">
+              {t(
+                'Fly.io cannot watch a repository, so Ramu creates the app, keeps a deploy token limited to it in the repository’s GitHub Actions secrets, and opens a pull request with fly.toml, a Dockerfile when the repository has none, and the deploy job. Every merge to the default branch deploys; there are no preview deployments.',
+              )}
             </p>
           )}
           {toServer && (

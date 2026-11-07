@@ -27,6 +27,7 @@ Connect an account once in **Settings → Git → Hosting accounts**, with the p
 | Target | What Ramu sets up | Details |
 | --- | --- | --- |
 | Vercel, Netlify or Railway | Links the platform to the repository: a preview for every pull request, and production from every push to the default branch | [Deploy a project](deploy.md#deploy-a-project) |
+| Fly.io | Creates the app and opens a pull request with `fly.toml`, a Dockerfile and a GitHub Actions deploy job; every merge deploys | [Fly.io](deploy.md#flyio) |
 | Your own server | A Docker container behind Caddy on a Linux server you rent, deployed by a GitHub Actions job that one pull request adds | [Your own server](deploy.md#your-own-server) |
 | App Store and Google Play | For an Expo app: the store checks, an `eas.json` pull request, and **Release** to TestFlight and Play's internal track | [Store releases](deploy.md#store-releases) |
 

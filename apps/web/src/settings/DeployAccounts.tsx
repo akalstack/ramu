@@ -18,6 +18,7 @@ const SCOPE_HINT: Record<Exclude<AccountPlatform, 'server'>, string> = {
   vercel: 'Scope: the team your projects are in, not Full Account',
   netlify: 'Netlify tokens reach every team you belong to, so choose an expiry',
   railway: 'Pick the workspace your projects are in, so the token reaches only that workspace',
+  fly: 'Create an organization token for the organization your apps go in, rather than a personal access token',
   neon: 'Create a personal API key. Neon keys reach your whole account and do not expire, so revoke it on Neon when Ramu no longer needs it',
   expo: 'Create it for a robot user with the Developer role on the account that owns the app; a personal token reaches every account you belong to',
 }

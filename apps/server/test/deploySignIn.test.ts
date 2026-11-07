@@ -8,6 +8,7 @@ import { HostCredentialStore } from '../src/credentials/store'
 import { HostingAccounts } from '../src/workspace/deploy/accounts'
 import { DeployError, type HostingAdapter } from '../src/workspace/deploy/adapter'
 import {
+  flyCliToken,
   HostingSignIns,
   netlifyCliToken,
   railwayCliToken,
@@ -199,6 +200,40 @@ it('runs railway login --browserless in a private HOME, shows its link and code,
   expect(saved).toEqual([['railway', { token: 'rw_1', refreshToken: 'rr_1', expiresAt: 2_000_000_000_000 }, 'cli']])
   await until(() => !existsSync(home))
   expect(existsSync(home)).toBe(false)
+})
+
+it('runs fly auth login in a private HOME and reads the token flyctl saved in .fly/config.yml', async () => {
+  const saved: unknown[] = []
+  const accounts = { save: async (...args: unknown[]) => (saved.push(args), { account: 'Ana' }) }
+  let home = ''
+  const spawner = vi.fn((_file: string, args: string[], options: { env: NodeJS.ProcessEnv }) => {
+    home = options.env.HOME!
+    return child(
+      'Open this URL in a browser and approve the login:\n\n    https://fly.io/app/auth/cli/abc123\n\n',
+      async () => {
+        await until(() => signIns.status(started.id).state === 'waiting')
+        await mkdir(join(home, '.fly'), { recursive: true })
+        await writeFile(join(home, '.fly', 'config.yml'), 'access_token: fo1_abc\nlast_login: 2026-11-07T00:00:00Z\n')
+      },
+    )
+  })
+  const signIns = new HostingSignIns(accounts as never, () => '/bin/fly', spawner as never)
+  const started = signIns.start('fly')
+  await until(() => signIns.status(started.id).state === 'waiting')
+  expect(signIns.status(started.id).url).toBe('https://fly.io/app/auth/cli/abc123')
+  await until(() => signIns.status(started.id).state === 'connected')
+  expect(spawner.mock.calls[0]![1]).toEqual(['auth', 'login'])
+  expect(home).not.toBe(process.env.HOME)
+  expect(saved).toEqual([['fly', { token: 'fo1_abc' }, 'cli']])
+})
+
+it('reads a quoted flyctl token, and refuses a config without one', async () => {
+  const home = await folder()
+  await mkdir(join(home, '.fly'), { recursive: true })
+  await writeFile(join(home, '.fly', 'config.yml'), 'access_token: "FlyV1 fm2_a,fm2_b"\n')
+  expect(await flyCliToken(home)).toEqual({ token: 'FlyV1 fm2_a,fm2_b' })
+  await writeFile(join(home, '.fly', 'config.yml'), 'send_metrics: true\n')
+  await expect(flyCliToken(home)).rejects.toThrow('without saving')
 })
 
 it('reports a missing CLI and a cancelled sign-in without saving anything', async () => {

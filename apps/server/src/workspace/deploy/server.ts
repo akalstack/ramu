@@ -5,11 +5,11 @@
 import { lookup } from 'node:dns/promises'
 import { z } from 'zod'
 import { apexOf, recordName } from '@ramu/shared/domains'
-import { DOCKER_INSTALL_PAGE, serverAppName, SERVER_WORKFLOW, SERVER_WORKFLOW_PATH } from '@ramu/shared/serverDeploy'
-import type { Deployment, DeploymentState, ServerDocker } from '@ramu/shared/types/deploy'
+import { DOCKER_INSTALL_PAGE, serverAppName, SERVER_WORKFLOW } from '@ramu/shared/serverDeploy'
+import type { ServerDocker } from '@ramu/shared/types/deploy'
+import { actionsDeploys } from './actionsDeploys'
 import {
   DeployError,
-  platformCall,
   registerHostingAdapter,
   tail,
   type HostingAdapter,
@@ -144,57 +144,7 @@ export function probeResult(stdout: string): { docker: ServerDocker; version: st
   return { docker, version: fields.version || null, portsBusy: fields.ports === 'busy' }
 }
 
-interface WorkflowRun {
-  id: number
-  status?: string
-  conclusion?: string | null
-  head_branch?: string | null
-  head_sha?: string
-  display_title?: string
-  created_at?: string
-  path?: string
-  head_commit?: { message?: string } | null
-}
-
-const STATES: Record<string, DeploymentState> = {
-  queued: 'queued',
-  requested: 'queued',
-  waiting: 'queued',
-  pending: 'queued',
-  in_progress: 'building',
-}
-
-function runState(run: WorkflowRun): DeploymentState {
-  if (run.status !== 'completed') return STATES[run.status ?? 'queued'] ?? 'queued'
-  if (run.conclusion === 'success') return 'ready'
-  if (run.conclusion === 'cancelled' || run.conclusion === 'skipped') return 'canceled'
-  return 'failed'
-}
-
-/** A run of the deploy job as a deployment. Its title names the commit it deployed, which a rollback sets. */
-function deploymentOf(run: WorkflowRun): Deployment {
-  const commit = /Deploy ([0-9a-f]{40})/.exec(run.display_title ?? '')?.[1] ?? run.head_sha ?? null
-  return {
-    id: String(run.id),
-    state: runState(run),
-    url: null,
-    production: true,
-    ref: run.head_branch ?? null,
-    commit,
-    message: commit && commit === run.head_sha ? (run.head_commit?.message?.split('\n')[0] ?? null) : null,
-    createdAt: run.created_at ? Date.parse(run.created_at) : 0,
-  }
-}
-
-const GITHUB_HEADERS = {
-  Accept: 'application/vnd.github+json',
-  'X-GitHub-Api-Version': '2022-11-28',
-  'User-Agent': 'Ramu',
-}
-
 const VARIABLE = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/
-const LIST_LIMIT = 30
-const POLL_TRIES = 5
 
 export function serverAdapter(
   options: {
@@ -229,64 +179,7 @@ export function serverAdapter(
     return result.stdout
   }
 
-  const github = async <T>(auth: HostingAuth, path: string, what: string, init: RequestInit = {}) => {
-    if (!auth.github) throw new DeployError('Link this project to its GitHub repository first.', 'not-found')
-    return platformCall<T>(
-      'GitHub',
-      fetcher,
-      `${api}${path}`,
-      { ...init, token: await auth.github(), headers: GITHUB_HEADERS },
-      what,
-    )
-  }
-
-  const runs = async (auth: HostingAuth, site: HostingSite, limit: number) => {
-    const { workflow_runs } = await github<{ workflow_runs?: WorkflowRun[] }>(
-      auth,
-      `/repos/${site.siteId}/actions/workflows/${SERVER_WORKFLOW}/runs?per_page=${Math.min(limit + 10, 100)}`,
-      'reading the deploy runs',
-    )
-    // A run skipped because CI failed deployed nothing.
-    return (workflow_runs ?? []).filter((run) => run.conclusion !== 'skipped').slice(0, limit)
-  }
-
-  const run = async (auth: HostingAuth, site: HostingSite, id: string) => {
-    if (!/^\d{1,20}$/.test(id)) throw new DeployError('That is not a deploy run of this project.', 'not-found')
-    const found = await github<WorkflowRun>(auth, `/repos/${site.siteId}/actions/runs/${id}`, 'reading the deploy run')
-    if ((found.path ?? '').split('@')[0] !== SERVER_WORKFLOW_PATH)
-      throw new DeployError('That is not a deploy run of this project.', 'not-found')
-    return found
-  }
-
-  /** Starts the deploy job and answers with its run, read from GitHub's reply or the runs started since. */
-  const dispatch = async (auth: HostingAuth, site: HostingSite, ref: string, inputs: Record<string, string>) => {
-    const since = Date.now() - 5_000
-    let reply: { workflow_run_id?: number } | null
-    try {
-      reply = await github<{ workflow_run_id?: number } | null>(
-        auth,
-        `/repos/${site.siteId}/actions/workflows/${SERVER_WORKFLOW}/dispatches`,
-        'starting the deploy job',
-        { method: 'POST', body: JSON.stringify({ ref, inputs, return_run_details: true }) },
-      )
-    } catch (error) {
-      if (error instanceof DeployError && error.kind === 'not-found')
-        throw new DeployError(
-          `GitHub has no ${SERVER_WORKFLOW_PATH} on ${ref}. Merge the pull request that adds the deploy job first.`,
-          'not-found',
-          error.status,
-          { cause: error },
-        )
-      throw error
-    }
-    if (reply?.workflow_run_id) return deploymentOf(await run(auth, site, String(reply.workflow_run_id)))
-    for (let attempt = 0; attempt < POLL_TRIES; attempt++) {
-      const started = (await runs(auth, site, 5)).find((entry) => Date.parse(entry.created_at ?? '') >= since)
-      if (started) return deploymentOf(started)
-      await new Promise((resolve) => setTimeout(resolve, pollMs))
-    }
-    throw new DeployError('GitHub started the deploy job but has not listed its run yet. Check again shortly.', null)
-  }
+  const job = actionsDeploys({ workflow: SERVER_WORKFLOW, api, fetch: fetcher, pollMs })
 
   const info = async (auth: HostingAuth, site: HostingSite) => {
     const fields = replyFields(
@@ -314,28 +207,12 @@ export function serverAdapter(
         expiresAt: null,
       }
     },
-    async listDeployments(auth, site, limit) {
-      return (await runs(auth, site, Math.min(limit, LIST_LIMIT))).map(deploymentOf)
-    },
-    async deploymentStatus(auth, site, id) {
-      return deploymentOf(await run(auth, site, id))
-    },
+    listDeployments: (auth, site, limit) => job.list(auth, site, limit),
+    deploymentStatus: (auth, site, id) => job.status(auth, site, id),
     async deploymentLogs(auth, site, id, lines) {
-      if (!/^\d{1,20}$/.test(id)) throw new DeployError('That is not a deploy run of this project.', 'not-found')
-      const { jobs } = await github<{ jobs?: { id: number }[] }>(
-        auth,
-        `/repos/${site.siteId}/actions/runs/${id}/jobs`,
-        'reading the deploy job',
-      )
-      const job = jobs?.[0]
-      let log = job ? await jobLog(auth, site, job.id) : ''
-      log = tail(
-        // eslint-disable-next-line no-control-regex -- terminal colour codes in the job log
-        log.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z ?/gm, ''),
-        lines,
-      )
+      const log = await job.log(auth, site, id, lines)
       // The container's own output belongs to the version running now, the newest finished deploy.
-      const live = (await runs(auth, site, 10)).map(deploymentOf).find((entry) => entry.state === 'ready')
+      const live = (await job.list(auth, site, 10)).find((entry) => entry.state === 'ready')
       if (live?.id !== id) return log
       const app = await remote(auth, LOGS_SCRIPT, [serverAppName(site.siteId), String(lines)], 'reading the app’s log')
       return `${log}\n\n${tail(app, lines)}`.trim()
@@ -344,12 +221,8 @@ export function serverAdapter(
       return `https://${site.siteName}`
     },
     capabilities: {
-      deployProduction: (auth, site, ref) => dispatch(auth, site, ref, {}),
-      async rollback(auth, site, id) {
-        const target = deploymentOf(await run(auth, site, id))
-        if (!target.commit || !target.ref) throw new DeployError('That deploy names no commit to put back.', null)
-        await dispatch(auth, site, target.ref, { tag: target.commit })
-      },
+      deployProduction: (auth, site, ref) => job.deploy(auth, site, ref),
+      rollback: (auth, site, id) => job.rollback(auth, site, id),
       environment: {
         environments: ['production'],
         async list(auth, site) {
@@ -404,20 +277,6 @@ export function serverAdapter(
         },
       },
     },
-  }
-
-  /** A job's log: GitHub answers with a short-lived link to the file, fetched without the token. */
-  async function jobLog(auth: HostingAuth, site: HostingSite, job: number): Promise<string> {
-    if (!auth.github) return ''
-    const response = await fetcher(`${api}/repos/${site.siteId}/actions/jobs/${job}/logs`, {
-      redirect: 'manual',
-      headers: { ...GITHUB_HEADERS, Authorization: `Bearer ${await auth.github()}` },
-    }).catch(() => null)
-    const location = response?.headers.get('location')
-    await response?.body?.cancel().catch(() => undefined)
-    if (!location?.startsWith('https://') && !location?.startsWith(api)) return ''
-    const file = await fetcher(location, { redirect: 'error' }).catch(() => null)
-    return file?.ok ? await file.text() : ''
   }
 }
 

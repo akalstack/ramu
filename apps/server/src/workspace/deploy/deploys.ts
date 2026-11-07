@@ -19,6 +19,7 @@ import { projectUsage, UsageNotices } from './usage'
 import { ProjectWake } from './wake'
 import { StoreReleases } from './release'
 import { githubActionsTarget } from './envSync'
+import { FlySetup } from './flySetup'
 import { ServerSetup } from './serverSetup'
 
 const commandOf = (argv: string[] | null | undefined) => (argv ? commandLine(argv) : null)
@@ -47,6 +48,7 @@ export interface Deploys {
   releases: StoreReleases
   /** The person's own server: connecting it and setting projects up on it. */
   server: ServerSetup
+  fly: FlySetup
   wake: ProjectWake
 }
 
@@ -209,6 +211,7 @@ export function createDeploys(
       { repository: githubRepository, actionsSecrets: githubActionsTarget },
       credentials,
     ),
+    fly: new FlySetup(accounts, service, { repository: githubRepository, actionsSecrets: githubActionsTarget }),
     wake,
   }
 }

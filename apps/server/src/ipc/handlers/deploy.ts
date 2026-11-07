@@ -108,7 +108,16 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
     'deploy.signInStatus': { args: z.tuple([signIn]), run: (signInId: string) => deploys().signIns.status(signInId) },
     'deploy.cancelSignIn': { args: z.tuple([signIn]), run: (signInId: string) => deploys().signIns.cancel(signInId) },
     'deploy.saveToken': {
-      args: z.tuple([account, z.string().trim().min(8).max(4000).regex(/^\S+$/, 'Paste the token alone')]),
+      args: z.tuple([
+        account,
+        // Fly.io shows its tokens after a `FlyV1` scheme, which is part of what people copy.
+        z
+          .string()
+          .trim()
+          .min(8)
+          .max(4000)
+          .regex(/^(?:FlyV1 )?\S+$/, 'Paste the token alone'),
+      ]),
       run: (name: AccountPlatform, token: string) => {
         administrate()
         if (name === 'server') throw new Error('Connect your server with its address and an SSH key.')
@@ -153,9 +162,14 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
     'deploy.link': {
       args: z.tuple([id, platform, id]),
       run: (projectId: string, name: HostingPlatform, repoId: string) =>
-        exclusive(projectId, () =>
-          deploys().service.link(project(projectId), name, repoId, siteName(known(projectId).name)),
-        ),
+        exclusive(projectId, async () => {
+          if (name === 'fly') return deploys().fly.link(project(projectId), repoId, siteName(known(projectId).name))
+          if (name === 'server') throw new Error('Set up your own server with its domain.')
+          return {
+            deployment: await deploys().service.link(project(projectId), name, repoId, siteName(known(projectId).name)),
+            pullRequest: null,
+          }
+        }),
     },
     'deploy.production': {
       args: z.tuple([id]),

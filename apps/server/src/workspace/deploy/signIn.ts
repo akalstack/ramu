@@ -120,6 +120,19 @@ export async function railwayCliToken(home: string): Promise<HostingSecret> {
   throw new Error('The Railway CLI finished without saving a sign-in.')
 }
 
+/**
+ * flyctl keeps its login as `access_token` in `~/.fly/config.yml`: a user token, macaroons, or both, comma-separated.
+ * It has no expiry Ramu can renew; a revoked one shows as signed out.
+ */
+export async function flyCliToken(home: string): Promise<HostingSecret> {
+  const file = join(home, '.fly', 'config.yml')
+  if (!existsSync(file)) throw new Error('The Fly.io CLI finished without saving a sign-in.')
+  const line = /^access_token:\s*(.+)$/m.exec(await readFile(file, 'utf8'))?.[1]?.trim()
+  const token = line?.replace(/^(["'])(.*)\1$/, '$2').trim()
+  if (!token) throw new Error('The Fly.io CLI finished without saving a sign-in.')
+  return { token }
+}
+
 interface Running {
   view: HostingSignIn
   children: Set<ChildProcess>
@@ -161,7 +174,9 @@ export class HostingSignIns {
             ? await this.vercel(entry, executable, entry.folder)
             : platform === 'netlify'
               ? await this.netlify(entry, executable, entry.folder)
-              : await this.railway(entry, executable, entry.folder)
+              : platform === 'railway'
+                ? await this.railway(entry, executable, entry.folder)
+                : await this.fly(entry, executable, entry.folder)
         if (entry.stopped) return
         const account = await this.accounts.save(platform, secret, 'cli')
         entry.view = { ...entry.view, state: 'connected', account: account.account, error: null }
@@ -247,6 +262,15 @@ export class HostingSignIns {
       this.show(entry, output),
     )
     return railwayCliToken(folder)
+  }
+
+  /**
+   * `fly auth login` opens Fly.io's sign-in in the host's browser and prints its link; the page hands the token back to
+   * flyctl on a loopback port, which saves it in the private HOME's `.fly` folder.
+   */
+  private async fly(entry: Running, executable: string, folder: string): Promise<HostingSecret> {
+    await this.run(entry, executable, ['auth', 'login'], cliEnvironment(folder), (output) => this.show(entry, output))
+    return flyCliToken(folder)
   }
 
   /** `vercel login` runs Vercel's device sign-in and prints the link with its code, then waits for approval. */

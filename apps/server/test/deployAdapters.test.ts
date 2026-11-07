@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Deployment, DeployBinding, DnsRecord, HostingCapability, UsageFigure } from '@ramu/shared/types/deploy'
 import { capabilityNames, DeployError, type HostingAdapter, type HostingSite } from '../src/workspace/deploy/adapter'
+import { flyAdapter, flyApi, flyAuthorization } from '../src/workspace/deploy/fly'
 import { netlifyAdapter } from '../src/workspace/deploy/netlify'
 import { railwayAdapter } from '../src/workspace/deploy/railway'
 import { serverAdapter } from '../src/workspace/deploy/server'
@@ -1073,5 +1074,244 @@ describe('Railway specifics', () => {
     await expect(domains.createRecords(auth, site, (await domains.list(auth, site))[0]!)).rejects.toThrow(
       /domain provider/,
     )
+  })
+})
+
+describe('Fly.io hosting adapter', () => {
+  const sha = (n: number) => String(n).repeat(40)
+  const site = { siteId: 'ana/shop', siteName: 'shop-app' }
+  const user = { token: 'fo1_user' }
+  const run = (id: number, extra: object = {}) => ({
+    id,
+    status: 'completed',
+    conclusion: 'success',
+    head_branch: 'main',
+    head_sha: sha(id),
+    display_title: `Deploy ${sha(id)}`,
+    created_at: new Date(now - id * 1000).toISOString(),
+    path: '.github/workflows/fly-deploy.yml',
+    head_commit: { message: `Change ${id}` },
+    ...extra,
+  })
+  const graphql = (operation: string, data: unknown, extra: Partial<Route> = {}): Route => ({
+    method: 'POST',
+    path: /^\/graphql$/,
+    operation,
+    body: { data },
+    ...extra,
+  })
+  const setup = async (routes: Route[] = []) => {
+    const headers: string[] = []
+    // Routes a test passes come first, so they answer before the defaults.
+    const server = await fake([
+      ...routes,
+      graphql('Viewer', {
+        viewer: { __typename: 'User', id: 'u1', email: 'ana@example.com', name: 'Ana' },
+        organizations: {
+          nodes: [
+            { id: 'org_team', slug: 'team', type: 'SHARED' },
+            { id: 'org_1', slug: 'personal', type: 'PERSONAL' },
+          ],
+        },
+      }),
+      {
+        method: 'GET',
+        path: /^\/gh\/repos\/ana\/shop\/actions\/workflows\/fly-deploy\.yml\/runs\?per_page=/,
+        body: { workflow_runs: [run(1), run(2), run(3, { conclusion: 'skipped' })] },
+      },
+      { method: 'GET', path: /^\/gh\/repos\/ana\/shop\/actions\/runs\/2$/, body: run(2) },
+      {
+        method: 'GET',
+        path: /^\/gh\/repos\/ana\/shop\/actions\/runs\/9$/,
+        body: run(9, { status: 'queued', conclusion: null }),
+      },
+      {
+        method: 'GET',
+        path: /^\/gh\/repos\/ana\/shop\/actions\/runs\/7$/,
+        body: run(7, { path: '.github/workflows/deploy.yml' }),
+      },
+      {
+        method: 'POST',
+        path: /^\/gh\/repos\/ana\/shop\/actions\/workflows\/fly-deploy\.yml\/dispatches$/,
+        body: { workflow_run_id: 9 },
+      },
+      {
+        method: 'GET',
+        path: /^\/v1\/apps\/shop-app\/secrets$/,
+        body: { secrets: [{ name: 'DATABASE_URL', digest: 'x' }] },
+      },
+      { method: 'POST', path: /^\/v1\/apps\/shop-app\/secrets$/, body: { secrets: [], version: 2 } },
+      {
+        method: 'GET',
+        path: /^\/v1\/apps\/shop-app\/certificates$/,
+        body: {
+          certificates: [
+            { hostname: 'shop-app.fly.dev', configured: true },
+            { hostname: 'www.shop.id', configured: false },
+            { hostname: 'shop.id', configured: true },
+          ],
+        },
+      },
+      {
+        method: 'GET',
+        path: /^\/v1\/apps\/shop-app\/certificates\/www\.shop\.id$/,
+        body: {
+          hostname: 'www.shop.id',
+          configured: false,
+          dns_requirements: { cname: 'shop-app.fly.dev.', a: ['66.241.1.1'] },
+        },
+      },
+      {
+        method: 'GET',
+        path: /^\/v1\/apps\/shop-app\/certificates\/shop\.id$/,
+        body: { hostname: 'shop.id', configured: true, dns_requirements: { a: ['66.241.1.1'], aaaa: ['2a09::1'] } },
+      },
+      { method: 'POST', path: /^\/v1\/apps\/shop-app\/certificates\/acme$/, status: 201, body: {} },
+    ])
+    const fetcher: typeof fetch = (input, init) => {
+      headers.push(String(new Headers(init?.headers).get('authorization')))
+      return fetch(input, init)
+    }
+    const options = {
+      graphql: `${server.url}/graphql`,
+      machines: `${server.url}/v1`,
+      github: `${server.url}/gh`,
+      fetch: fetcher,
+    }
+    return { server, headers, adapter: flyAdapter({ ...options, pollMs: 1 }), api: flyApi(options) }
+  }
+  const withGithub = { ...user, github: async () => 'gh_123' }
+
+  it('sends user tokens and macaroons with the scheme each Fly API takes', () => {
+    expect(flyAuthorization('fo1_user', 'graphql')).toBe('Bearer fo1_user')
+    expect(flyAuthorization('FlyV1 fm2_a,fm2_b', 'machines')).toBe('FlyV1 fm2_a,fm2_b')
+    expect(flyAuthorization('fo1_user,fm2_a', 'graphql')).toBe('FlyV1 fm2_a,fo1_user')
+    expect(flyAuthorization('fo1_user,fm2_a', 'machines')).toBe('FlyV1 fm2_a')
+  })
+
+  it('names a user sign-in as broad and defaults new apps to the personal organization', async () => {
+    const { adapter } = await setup()
+    expect(await adapter.account(user)).toMatchObject({ id: 'u1', name: 'Ana', defaultScope: 'personal' })
+    expect((await adapter.account(user)).broadScope).toMatch(/organization token/)
+    const macaroon = await setup([
+      graphql('Viewer', {
+        viewer: { __typename: 'Macaroon', id: null, email: 'ana@example.com', name: null },
+        organizations: { nodes: [{ id: 'org_team', slug: 'team', type: 'SHARED' }] },
+      }),
+    ])
+    expect(await macaroon.adapter.account({ token: 'FlyV1 fm2_org' })).toMatchObject({
+      id: 'org:team',
+      defaultScope: 'team',
+      broadScope: null,
+    })
+  })
+
+  it('declares only what it implements, reading deployments from the deploy job and dispatching it', async () => {
+    const { adapter, server } = await setup()
+    expect(capabilityNames(adapter)).toEqual(['deployProduction', 'rollback', 'domains'])
+    expect(adapter.capabilities.environment?.environments).toEqual(['production'])
+    const listed = await adapter.listDeployments(withGithub, site, 10)
+    expect(listed.map((entry) => entry.id)).toEqual(['1', '2'])
+    expect(listed[0]).toMatchObject({
+      state: 'ready',
+      production: true,
+      ref: 'main',
+      commit: sha(1),
+      message: 'Change 1',
+    })
+    expect(await adapter.productionUrl(withGithub, site)).toBe('https://shop-app.fly.dev')
+    expect(
+      await adapter.capabilities.deployProduction!(withGithub, { ...site, repository: 'ana/shop' }, 'main'),
+    ).toMatchObject({
+      id: '9',
+      state: 'queued',
+    })
+    await adapter.capabilities.rollback!(withGithub, site, '2')
+    await expect(adapter.capabilities.rollback!(withGithub, site, '7')).rejects.toMatchObject({ kind: 'not-found' })
+    expect(server.requests.filter((line) => /dispatches$/.test(line))).toHaveLength(2)
+    await expect(adapter.productionUrl(withGithub, { siteId: 'ana/shop', siteName: '../x' })).rejects.toMatchObject({
+      kind: 'not-found',
+    })
+  })
+
+  it('keeps variables as Fly secrets: names only when listing, values written in one call', async () => {
+    const { adapter, server } = await setup()
+    const environment = adapter.capabilities.environment!
+    expect(await environment.list(user, site)).toEqual({ production: ['DATABASE_URL'] })
+    await environment.set(user, site, 'production', { API_KEY: 'sk_1' })
+    expect(server.requests.at(-1)).toBe('POST /v1/apps/shop-app/secrets')
+    expect(server.requests.join('\n')).not.toContain('sk_1')
+  })
+
+  it('lists custom domains with the record each needs, adds one as a certificate, and leaves DNS to the person', async () => {
+    const { adapter, server } = await setup()
+    const domains = adapter.capabilities.domains!
+    expect(await domains.list(user, site)).toEqual([
+      {
+        name: 'www.shop.id',
+        records: [{ type: 'CNAME', host: 'www.shop.id', name: 'www', value: 'shop-app.fly.dev' }],
+        configured: false,
+        certificate: null,
+        managedDns: false,
+        zone: 'shop.id',
+      },
+      {
+        name: 'shop.id',
+        records: [{ type: 'A', host: 'shop.id', name: '@', value: '66.241.1.1' }],
+        configured: true,
+        certificate: null,
+        managedDns: false,
+        zone: 'shop.id',
+      },
+    ])
+    await domains.add(user, site, 'app.shop.id')
+    expect(server.requests.at(-1)).toBe('POST /v1/apps/shop-app/certificates/acme')
+    await expect(domains.createRecords(user, site, (await domains.list(user, site))[0]!)).rejects.toThrow(
+      /domain provider/,
+    )
+  })
+
+  it('creates the app (with a suffix when the name is taken) and a deploy token limited to it', async () => {
+    let taken = true
+    const sent: Record<string, unknown>[] = []
+    const { api, headers } = await setup([
+      {
+        method: 'POST',
+        path: /^\/v1\/apps$/,
+        status: 422,
+        body: { error: 'taken' },
+        effect: () => void (taken = false),
+      },
+      graphql('AppOrganization', { app: { organization: { id: 'org_1' } } }),
+      graphql('DeployToken', null, {
+        answer: (variables) => {
+          sent.push(variables)
+          return { data: { createLimitedAccessToken: { limitedAccessToken: { tokenHeader: 'FlyV1 fm2_deploy' } } } }
+        },
+      }),
+    ])
+    const created = await api
+      .createApp({ token: 'FlyV1 fm2_org' }, 'shop-app', 'personal')
+      .catch((error: unknown) => error)
+    // The second name is tried after the first is refused as taken; the fake refuses both here.
+    expect(taken).toBe(false)
+    expect(created).toBeInstanceOf(DeployError)
+    expect(await api.deployToken(user, 'shop-app')).toBe('FlyV1 fm2_deploy')
+    expect(sent[0]).toMatchObject({
+      input: { organizationId: 'org_1', profile: 'deploy', profileParams: { app_id: 'shop-app' } },
+    })
+    expect(headers).toContain('FlyV1 fm2_org')
+  })
+
+  it.each([
+    [401, 'signed-out'],
+    [403, 'missing-permission'],
+    [404, 'not-found'],
+  ])('maps %i from the Machines API to the shared failure kind', async (status, kind) => {
+    const server = await fake([{ method: 'GET', path: /./, status, body: {} }])
+    const failure = await flyAdapter({ machines: `${server.url}/v1` })
+      .capabilities.environment!.list(user, site)
+      .catch((error: unknown) => error)
+    expect((failure as DeployError).kind).toBe(kind)
   })
 })

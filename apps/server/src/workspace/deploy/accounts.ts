@@ -15,6 +15,7 @@ import { resourceAdapter } from './resource'
 import './vercel'
 import './netlify'
 import './railway'
+import './fly'
 import './server'
 import './neon'
 
@@ -86,6 +87,7 @@ export class HostingAccounts {
       vercel: saved('vercel'),
       netlify: saved('netlify'),
       railway: saved('railway'),
+      fly: saved('fly'),
       server: saved('server'),
       neon: saved('neon'),
       expo: saved('expo'),

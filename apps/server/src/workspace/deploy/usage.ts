@@ -11,6 +11,8 @@ const BILLING_PAGES: Record<AccountPlatform, string> = {
   vercel: 'https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings%2Fbilling&title=Billing',
   netlify: 'https://app.netlify.com/',
   railway: 'https://railway.com/workspace/usage',
+  // Fly.io reports no usage through its API, so no report is made for it.
+  fly: 'https://fly.io/dashboard/personal/billing',
   // The person's own server is billed by whoever hosts it; it reports no usage, so no report is made for it.
   server: '',
   neon: 'https://console.neon.tech/app/billing',
