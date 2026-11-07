@@ -717,7 +717,7 @@ export default function PageScreen() {
                 <T>{say('Versions')}</T>
               </Row>
             ) : null}
-            {page?.capabilities.widget && !shared ? (
+            {(page?.capabilities.widget || page?.kind === 'dashboard') && !shared ? (
               <Row
                 onPress={() => {
                   setMenu(false)

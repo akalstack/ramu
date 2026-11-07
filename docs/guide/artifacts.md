@@ -79,7 +79,7 @@ A page declares what it uses, and the first time it opens it asks once, in plain
 - **A project folder:** a page in a project can read one folder of it, never write.
 - **Ramu data:** a page can read figures you already see in Ramu, read-only, each source allowed on its own: token use by day and provider (the last 30 days), thread titles and states, and pull requests on threads. Threads and pull requests are the page's project's when it has one. Never transcripts, files, credentials or settings.
 
-On the phone, **Show in the home screen widget** puts a page's declared widget (a number or a short list from its records) on the iOS or Android home screen; it refreshes when Ramu opens, when the page changes and every quarter hour, and says when it was read. A page run that keeps working shows as a Live Activity on iOS. Records you add without a connection wait on the phone and are sent in order when the host answers; any the host refuses are listed rather than dropped. A question asked offline waits while the page stays open.
+On the phone, **Show in the home screen widget** puts a page's declared widget (a number or a short list from its records), or a dashboard's first figure with the next few as lines (read live when its tables are), on the iOS or Android home screen; it refreshes when Ramu opens, when the page changes and every quarter hour, and says when it was read. A page run that keeps working shows as a Live Activity on iOS. Records you add without a connection wait on the phone and are sent in order when the host answers; any the host refuses are listed rather than dropped. A question asked offline waits while the page stays open.
 
 ## Sharing and shipping
 

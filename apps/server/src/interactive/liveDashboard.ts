@@ -72,6 +72,28 @@ export class LiveDashboards {
   }
 
   /**
+   * Every figure's value with its unit, read live when the dashboard has live tables here (else as published): what
+   * the phone's home-screen widget shows for a dashboard.
+   */
+  async figures(
+    document: InteractiveDocument,
+    projectId: string | null,
+  ): Promise<{ label: string; value: number | null; unit: string }[]> {
+    const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.dashboard)?.content
+    if (!stored) return []
+    const parsed = parseArtifactSource({ kind: 'dashboard', ...(JSON.parse(stored) as object) })
+    const source =
+      (await this.fresh(document, projectId).catch(() => null)) ?? (parsed.kind === 'dashboard' ? parsed : null)
+    if (!source) return []
+    const values = figureValues(source)
+    return source.figures.map((figure) => ({
+      label: figure.label,
+      value: values[figure.label] ?? null,
+      unit: figure.unit ?? '',
+    }))
+  }
+
+  /**
    * The watched figures' values read now, by label, with their units; null when the dashboard watches none. The host
    * compares them with the last read to tell the person's devices what changed.
    */

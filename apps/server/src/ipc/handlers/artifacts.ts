@@ -1,3 +1,4 @@
+import { formatFigure } from '../../interactive/dashboard'
 import { designTextEdit, withDesignTexts, type DesignTextEdit } from '@ramu/shared/designText'
 import { readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { join, sep } from 'node:path'
@@ -683,9 +684,19 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
     },
     'artifacts.widget': {
       args: z.tuple([id]),
-      run: (artifactId: string) => {
+      run: async (artifactId: string) => {
         const { pages } = need()
-        return widgetData(pages, pages.get(artifactId))
+        const page = pages.get(artifactId)
+        // A dashboard's widget shows its first figure, and the next few as lines.
+        if (page.kind === 'dashboard' && ctx.liveDashboards) {
+          const figures = await ctx.liveDashboards.figures(pages.document(artifactId), page.projectId)
+          const shown = (figure: (typeof figures)[number]) => formatFigure(figure.value, figure.unit)
+          const [first, ...rest] = figures
+          return first
+            ? { title: first.label, value: shown(first), items: rest.slice(0, 4).map((f) => `${f.label}: ${shown(f)}`) }
+            : null
+        }
+        return widgetData(pages, page)
       },
     },
     'artifacts.webhookUrls': {

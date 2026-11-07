@@ -215,6 +215,45 @@ it('tells the host’s devices which slide a deck is on, and only for a deck', a
   expect(() => methods['artifacts.turnSlide']!.run(id, 0)).toThrow('Only a deck')
 })
 
+it('gives a dashboard’s first figure to the home-screen widget, with the next ones as lines', async () => {
+  const { registerArtifactHandlers } = await import('../src/ipc/handlers/artifacts')
+  const { LiveDashboards } = await import('../src/interactive/liveDashboard')
+  const { interactive, pages } = setup()
+  const preview = await interactive.preview('s', {
+    kind: 'dashboard',
+    datasets: [
+      {
+        id: 'w',
+        columns: ['week', 'signups', 'active'],
+        rows: [
+          ['W1', 3, 10],
+          ['W2', 4, 12],
+        ],
+      },
+    ],
+    figures: [
+      { label: 'Signups', dataset: 'w', column: 'signups' },
+      { label: 'Active', dataset: 'w', column: 'active', aggregate: 'last', unit: ' people' },
+    ],
+    title: 'Growth',
+    summary: 'G',
+    checks: [],
+  } as never)
+  const kept = pages.keep('s', interactive.publish('s', preview.id, 'r1').id, { title: 'Growth' })
+  const methods = registerArtifactHandlers({
+    pages,
+    pageAi: {},
+    activity: { run: () => {} },
+    host: {},
+    liveDashboards: new LiveDashboards(async () => []),
+  } as never)
+  expect(await methods['artifacts.widget']!.run(kept.id)).toEqual({
+    title: 'Signups',
+    value: '7',
+    items: ['Active: 12 people'],
+  })
+})
+
 it('edits a Mermaid diagram’s source in place, and offers no text to edit for an SVG diagram', async () => {
   const { interactive, pages } = setup()
   const preview = await interactive.preview('s', {
