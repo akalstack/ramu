@@ -46,6 +46,7 @@ import { openPage } from './openPage'
 import { PublishDialog } from './PublishDialog'
 import { ArtifactKindMark, hostExportEntries, kindExportEntries } from './ArtifactKindMark'
 import { SlideToolbar, useSlideControls } from './SlideControls'
+import { MotionToolbar } from './MotionControls'
 
 const VIEWPORTS = [
   { id: 'fit', label: 'Fit to width', width: undefined, Icon: Monitor },
@@ -150,6 +151,14 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   const liveRefresh = dashboardBoard?.datasets.some((table) => table.source)
     ? (dashboardBoard.refreshMinutes ?? 5)
     : null
+  // A motion's length, from the scenes its version keeps, for the toolbar's scrub bar.
+  const motionSource = document?.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.motion)?.content
+  const motionSeconds = motionSource
+    ? (JSON.parse(motionSource) as { scenes: { seconds: number }[] }).scenes.reduce(
+        (total, scene) => total + scene.seconds,
+        0,
+      )
+    : 0
   const instance = `page:${artifactId}:${document?.reference.version ?? 0}:${generation}`
   const { url } = useContentDocument(document?.html, instance, !!document, state, document?.reference.network)
   const slides = document ? slideCount(document) : 0
@@ -345,6 +354,9 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
         )}
         <div className="ml-auto flex flex-none items-center gap-0.5">
           {slides > 0 && <SlideToolbar controls={slideControls} count={slides} disabled={!ready} />}
+          {motionSeconds > 0 && (
+            <MotionToolbar frame={frame} instance={instance} seconds={motionSeconds} disabled={!ready} />
+          )}
           {page.kind === 'dashboard' && liveRefresh !== null && (
             <Dropdown
               label={t('Refresh')}
