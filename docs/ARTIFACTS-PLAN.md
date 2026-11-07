@@ -64,18 +64,12 @@ App, Doc, Diagram, Slides, Dashboard (over tables the agent fills in), Design (f
 
 - Slides: **Present** on a display the phone is connected to (AirPlay or a cable), with the notes on the phone. Everything else for the phone is built: kind filters, viewers per kind, editing, exports to the share sheet, Add to Home Screen and the widget for apps and dashboards.
 
-### 3. Connection with shipping an app
-
-The [shipping plan](SHIP-AN-APP-PLAN.md) and this one share one rule: make the smallest thing that does the job first, and grow it when it needs more.
-
-- **App to project:** an App artifact grows into a project through **Make it a project** (built), and **Publish to the web** moves onto the shipping plan's `HostingAdapter` when it exists. The static GitHub Pages, Netlify, Vercel and Cloudflare Pages deploys built for pages are its first targets.
-
-### 4. Documentation
+### 3. Documentation
 
 - The site's feature list names the kinds, with the [shipping plan's](SHIP-AN-APP-PLAN.md) site rewrite.
 - Each new behavior above is described in [Artifacts](guide/artifacts.md), the mobile README and VERIFICATION.md as it lands.
 
-### 5. Two people editing one artifact
+### 4. Two people editing one artifact
 
 Ramu is one person across devices today, so versions are enough. A household or a small team sharing an artifact through a share link that can edit needs more:
 
@@ -83,13 +77,13 @@ Ramu is one person across devices today, so versions are enough. A household or 
 - **Merging:** a Doc's and a deck's text are kept as a CRDT (Yjs) on the host, so two people typing at once merge instead of making competing versions. A version is still saved when either stops editing for a minute, so Restore and Compare keep working.
 - **Access:** an editing share link names the person it is for and can be revoked like any share link. Kinds without text (Dashboard, Motion) stay one editor at a time, with "Being edited by …" shown to the other.
 
-### 6. Dashboards from named services
+### 5. Dashboards from named services
 
 - Besides records, folders, Ramu data and Shared MCP servers, a Dashboard or Live artifact can read **named services** through connectors on the host: Salesforce, Amplitude and Grafana first.
 - Each connector is one file implementing `query(spec)` with that service's own sign-in, kept in `credentials/`. It is read-only, and each service is its own grant on the artifact, listed in plain words.
 - A connector is added only after its sign-in and the data it can read are reviewed and written up in SECURITY.md, the same bar as Shared MCP.
 
-### 7. Voice-over for Motion
+### 6. Voice-over for Motion
 
 - A Motion artifact can have narration: the agent writes a script per scene, and the **speech** ability ([Abilities](ABILITIES-PLAN.md)) turns it into audio on a signed-in provider that offers it. The host mixes the audio into the MP4 with the browser's own audio encoder, timed to the scenes.
 - **Narration** in the artifact's toolbar previews, re-records one scene, or removes the narration. The grant sheet says which provider receives the script, and no other content leaves the host.
