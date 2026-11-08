@@ -40,6 +40,7 @@ import {
   Flag,
   Globe,
   Lightbulb,
+  Brain,
   Search,
   ShieldAlert,
   SquareTerminal,
@@ -1171,6 +1172,8 @@ type ToolItem = Extract<TranscriptItem, { kind: 'tool' }>
 function toolWords(item: ToolItem, language: Language, running: boolean): { verb: string; subject: string } {
   if (item.ramu)
     return { verb: translate(language, running ? item.ramu.running : item.ramu.done), subject: item.ramu.subject ?? '' }
+  // A command's terminal icon and its own words already say what runs; the tool's name ("Bash") adds nothing.
+  if (item.tool === 'execute' && !item.file && item.subject) return { verb: '', subject: item.subject }
   return { verb: item.file ? translate(language, toolVerb(item.verb, running)) : item.verb, subject: item.subject }
 }
 
@@ -1186,7 +1189,7 @@ function ToolGroup({ item, thinking }: { item: Extract<TranscriptItem, { kind: '
   )
   const counts = new Map<string, number>()
   for (const tool of item.tools) {
-    const verb = toolWords(tool, language, false).verb
+    const verb = toolWords(tool, language, false).verb || translate(language, 'Commands')
     counts.set(verb, (counts.get(verb) ?? 0) + 1)
   }
   const words = current ? toolWords(current, language, current.status === 'in_progress') : null
@@ -1197,7 +1200,7 @@ function ToolGroup({ item, thinking }: { item: Extract<TranscriptItem, { kind: '
       : [...counts].map(([verb, count]) => `${verb}${count > 1 ? ` ×${count}` : ''}`).join(' · ')
   // A group of Ramu's own tools wears its mark, as each of its rows does.
   const ramuGroup = item.tools.every((tool) => tool.ramu)
-  const Icon = current ? toolIcons[current.tool] : Wrench
+  const Icon = thinking ? Brain : current ? toolIcons[current.tool] : Wrench
   // While working, only the words shimmer; the icon stays still, as on the desktop.
   const tint = failed ? c.bad : c.muted
   // Tools already here when the group appeared stay still; ones that arrive later fade in.
@@ -1214,7 +1217,11 @@ function ToolGroup({ item, thinking }: { item: Extract<TranscriptItem, { kind: '
         }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
       >
-        {ramuGroup || current?.ramu ? <RamuGlyph size={14} color={tint} /> : <Icon size={14} color={tint} />}
+        {!thinking && (ramuGroup || current?.ramu) ? (
+          <RamuGlyph size={14} color={tint} />
+        ) : (
+          <Icon size={14} color={tint} />
+        )}
         <View style={{ flex: 1, minWidth: 0 }}>
           {/* The headline follows the current tool; each change fades instead of jumping. */}
           <Arrive animate={false} identity={headline}>
@@ -2312,7 +2319,10 @@ function ThinkingRow({ text, live }: { text: string; live: boolean }) {
   if (live)
     return (
       <View style={{ gap: space.xs }}>
-        <Shimmer size={font.control}>{say('Thinking')}</Shimmer>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+          <Brain size={14} color={c.muted} />
+          <Shimmer size={font.control}>{say('Thinking')}</Shimmer>
+        </View>
         <T size={font.caption} tone="muted" style={{ lineHeight: 18 }}>
           {text.length > 600 ? `…${text.slice(-600)}` : text}
         </T>
@@ -2327,6 +2337,7 @@ function ThinkingRow({ text, live }: { text: string; live: boolean }) {
         onPress={() => setOpen((value) => !value)}
         style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: 2 }}
       >
+        <Brain size={14} color={c.muted} style={{ marginRight: space.s - 4 }} />
         <T size={font.control} tone="muted">
           {say('Thought')}
         </T>
