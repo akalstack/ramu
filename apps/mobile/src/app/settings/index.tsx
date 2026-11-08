@@ -119,9 +119,10 @@ export default function SettingsMenu() {
           </Card>
         ) : (
           <>
-            <ComputerScope host={host} />
             {SETTINGS_GROUPS.map((group) => (
               <View key={group.id}>
+                {/* The groups after This phone edit a host, so the picker for which one sits right above them. */}
+                {group.id === 'agents' ? <ComputerScope host={host} /> : null}
                 <SectionLabel>{translate(language, group.label)}</SectionLabel>
                 <Card
                   style={{

@@ -268,17 +268,26 @@ test('computer use has its own page, found by search, and sub-agent, recall and 
   assert.deepEqual(paths('workflows', []), [])
 })
 
-test('the phone menu is the desktop menu in its order, without host-only sections, plus this phone', async () => {
+test('the phone menu has every desktop section a phone can use, arranged for a phone, under the desktop’s names', async () => {
   const { SETTINGS_MENU } = await import('../../../packages/shared/src/settingsMenu.ts')
-  const shared = SETTINGS_SECTIONS.filter((section) => section.group !== 'phone')
+  const shown = SETTINGS_SECTIONS.map((section) => section.id)
+  // Nothing the phone can use is missing, and nothing only the host's keyboard needs is offered.
   assert.deepEqual(
-    shared.map((section) => [section.id, section.label, section.group]),
-    SETTINGS_MENU.filter((entry) => entry.phone).map((entry) => [entry.id, entry.label, entry.group.toLowerCase()]),
+    SETTINGS_MENU.filter((entry) => entry.phone)
+      .map((entry) => entry.id)
+      .filter((id) => !shown.includes(id)),
+    [],
   )
   for (const hidden of ['editor', 'shortcuts', 'environment']) assert.equal(sectionById(hidden), undefined)
-  assert.deepEqual(
-    SETTINGS_SECTIONS.filter((section) => section.group === 'phone').map((section) => section.id),
-    ['notifications', 'about'],
-  )
+  // This phone first, then a host's agents before its workspace, and history and About last.
+  const byGroup = (group) => SETTINGS_SECTIONS.filter((section) => section.group === group).map((section) => section.id)
+  assert.deepEqual(byGroup('phone'), ['appearance', 'notifications', 'remote'])
+  assert.deepEqual(byGroup('agents'), ['chats', 'access', 'models', 'providers', 'workflows', 'memory', 'agent-setup'])
+  assert.deepEqual(byGroup('workspace'), ['git', 'browser', 'computer', 'system'])
+  assert.deepEqual(byGroup('more'), ['archived', 'about'])
+  // Host pages keep the desktop's names, so a section reads the same on both.
+  for (const section of SETTINGS_SECTIONS.filter((entry) => entry.scope === 'host'))
+    assert.equal(section.label, SETTINGS_MENU.find((entry) => entry.id === section.id).label)
+  assert.equal(sectionById('remote').label, 'Paired computers')
   assert.ok(searchSettings('izin', null, (text) => (text === 'Permissions' ? 'Izin' : text)).length > 0)
 })

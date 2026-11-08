@@ -1,5 +1,6 @@
-// The settings menu both apps draw: one list, so the desktop and the phone show the same sections, names, groups and
-// order. Labels are English copy keys, translated where they are drawn.
+// The settings menu's sections: the desktop draws them in this order and these groups; the phone shows the same
+// sections under the same names, arranged for a phone (apps/mobile/src/runtime/settingsModel.ts). Labels are English
+// copy keys, translated where they are drawn.
 
 export const SETTINGS_MENU_GROUPS = ['Workspace', 'Agents', 'System'] as const
 export type SettingsMenuGroup = (typeof SETTINGS_MENU_GROUPS)[number]

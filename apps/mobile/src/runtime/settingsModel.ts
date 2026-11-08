@@ -6,45 +6,60 @@ import {
   limitChoicePatch,
   type LimitChoice,
 } from '@ramu/shared/chat/limitPolicy'
-import {
-  HOST_ONLY_SECTIONS,
-  SETTINGS_MENU,
-  SETTINGS_MENU_GROUPS,
-  type PhoneSettingsMenuId,
-} from '@ramu/shared/settingsMenu'
+import { HOST_ONLY_SECTIONS, SETTINGS_MENU, type PhoneSettingsMenuId } from '@ramu/shared/settingsMenu'
 import type { SettingEdit, SettingSchema, SettingsSnapshot, SharedSetting } from '@ramu/shared/settingsCompatibility'
 
-// The phone's settings menu: the desktop's own menu (`@ramu/shared/settingsMenu`), in its order and wording, without
-// the sections that only matter at the host's keyboard, plus a group for things that live on this phone.
+// The phone's settings menu: the desktop's sections (`@ramu/shared/settingsMenu`) and their names, without the ones
+// that only matter at the host's keyboard, arranged for a phone: this phone first, then what you change on a host away
+// from it (its agents before its workspace), and history and About last.
 
 export type Language = 'en' | 'id'
-export type SettingsGroup = 'workspace' | 'agents' | 'system' | 'phone'
+export type SettingsGroup = 'phone' | 'agents' | 'workspace' | 'more'
 export type SettingsSection = PhoneSettingsMenuId | 'notifications' | 'about'
 
 /** Labels are English copy keys, translated where they are drawn (as the desktop does). */
 type Text = string
 const text = (key: string): Text => key
 
+/** The menu's groups in order; the host picker sits after This phone, above the groups that edit a host. */
 export const SETTINGS_GROUPS: { id: SettingsGroup; label: Text }[] = [
-  ...SETTINGS_MENU_GROUPS.map((group) => ({ id: group.toLowerCase() as SettingsGroup, label: text(group) })),
   { id: 'phone', label: text('This phone') },
+  { id: 'agents', label: text('Agents') },
+  { id: 'workspace', label: text('Workspace') },
+  { id: 'more', label: text('More') },
 ]
 
 /** Pages about this phone rather than the selected host: no host picker on them. */
 const PHONE_PAGES: readonly SettingsSection[] = ['appearance', 'archived', 'remote', 'notifications', 'about']
 
+/** Every section the phone shows, in its order. Paired hosts are what Remote access holds on a phone. */
+const PHONE_MENU: readonly { id: SettingsSection; group: SettingsGroup; label?: Text }[] = [
+  { id: 'appearance', group: 'phone' },
+  { id: 'notifications', group: 'phone', label: text('Notifications') },
+  { id: 'remote', group: 'phone', label: text('Paired computers') },
+  { id: 'chats', group: 'agents' },
+  { id: 'access', group: 'agents' },
+  { id: 'models', group: 'agents' },
+  { id: 'providers', group: 'agents' },
+  { id: 'workflows', group: 'agents' },
+  { id: 'memory', group: 'agents' },
+  { id: 'agent-setup', group: 'agents' },
+  { id: 'git', group: 'workspace' },
+  { id: 'browser', group: 'workspace' },
+  { id: 'computer', group: 'workspace' },
+  { id: 'system', group: 'workspace' },
+  { id: 'archived', group: 'more' },
+  { id: 'about', group: 'more', label: text('About') },
+]
+
 /** `host` pages edit the selected computer's shared preferences; `phone` pages only touch this device. */
 export const SETTINGS_SECTIONS: { id: SettingsSection; group: SettingsGroup; scope: 'host' | 'phone'; label: Text }[] =
-  [
-    ...SETTINGS_MENU.filter((entry): entry is Extract<typeof entry, { phone: true }> => entry.phone).map((entry) => ({
-      id: entry.id,
-      group: entry.group.toLowerCase() as SettingsGroup,
-      scope: PHONE_PAGES.includes(entry.id) ? ('phone' as const) : ('host' as const),
-      label: text(entry.label),
-    })),
-    { id: 'notifications', group: 'phone', scope: 'phone', label: text('Notifications') },
-    { id: 'about', group: 'phone', scope: 'phone', label: text('About') },
-  ]
+  PHONE_MENU.map((entry) => ({
+    id: entry.id,
+    group: entry.group,
+    scope: PHONE_PAGES.includes(entry.id) ? 'phone' : 'host',
+    label: entry.label ?? text(SETTINGS_MENU.find((menu) => menu.id === entry.id)!.label),
+  }))
 
 /** The desktop sections the phone leaves to the host, named once under the menu. */
 export const HOST_ONLY_LABELS = HOST_ONLY_SECTIONS
