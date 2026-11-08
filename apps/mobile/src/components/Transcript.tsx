@@ -756,7 +756,7 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
     case 'tool':
       return <ToolRow item={item} />
     case 'tools':
-      return <ToolGroup item={item} />
+      return <ToolGroup item={item} thinking={Boolean(meta?.streaming)} />
     case 'plan':
       return <PlanCard item={item} />
     case 'agents':
@@ -1174,9 +1174,11 @@ function toolWords(item: ToolItem, language: Language, running: boolean): { verb
   return { verb: item.file ? translate(language, toolVerb(item.verb, running)) : item.verb, subject: item.subject }
 }
 
-function ToolGroup({ item }: { item: Extract<TranscriptItem, { kind: 'tools' }> }) {
+/** `thinking`: the group's last step is reasoning still streaming, so the headline says so instead of the last tool. */
+function ToolGroup({ item, thinking }: { item: Extract<TranscriptItem, { kind: 'tools' }>; thinking: boolean }) {
   const { c } = useTheme()
   const { language } = useStore()
+  const say = useSay()
   const [open, setOpen] = useState(false)
   const toggled = useContext(RowToggle)
   const { current, running, failed } = toolActivity(item.tools, (tool) =>
@@ -1188,8 +1190,9 @@ function ToolGroup({ item }: { item: Extract<TranscriptItem, { kind: 'tools' }> 
     counts.set(verb, (counts.get(verb) ?? 0) + 1)
   }
   const words = current ? toolWords(current, language, current.status === 'in_progress') : null
-  const headline =
-    running || failed
+  const headline = thinking
+    ? say('Thinking')
+    : running || failed
       ? `${words?.verb ?? ''} ${words?.subject ?? ''}`.trim()
       : [...counts].map(([verb, count]) => `${verb}${count > 1 ? ` ×${count}` : ''}`).join(' · ')
   // A group of Ramu's own tools wears its mark, as each of its rows does.
@@ -1215,7 +1218,7 @@ function ToolGroup({ item }: { item: Extract<TranscriptItem, { kind: 'tools' }> 
         <View style={{ flex: 1, minWidth: 0 }}>
           {/* The headline follows the current tool; each change fades instead of jumping. */}
           <Arrive animate={false} identity={headline}>
-            <ActivityText active={running > 0}>{headline}</ActivityText>
+            <ActivityText active={running > 0 || thinking}>{headline}</ActivityText>
           </Arrive>
         </View>
         {failed > 0 ? (
@@ -1227,9 +1230,9 @@ function ToolGroup({ item }: { item: Extract<TranscriptItem, { kind: 'tools' }> 
       </Pressable>
       <Collapse open={open}>
         <View style={{ gap: space.xs }}>
-          {item.entries.map((entry) =>
+          {item.entries.map((entry, index) =>
             entry.kind === 'thinking' ? (
-              <ThinkingRow key={entry.id} text={entry.text} live={false} />
+              <ThinkingRow key={entry.id} text={entry.text} live={thinking && index === item.entries.length - 1} />
             ) : (
               <Arrive key={entry.id} animate={!initial.has(entry.id)}>
                 <ToolRow item={entry} />

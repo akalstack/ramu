@@ -89,22 +89,20 @@ export function foldTurns(items: TranscriptItem[], live: boolean, waiting: boole
 type Step = Extract<TranscriptItem, { kind: 'tool' | 'thinking' }>
 
 /**
- * Consecutive tools share one disclosure with the reasoning between them, in arrival order, as on the desktop.
- * A lone tool keeps its own row. Reasoning at the very end of the thread stays out, since it may still be streaming.
+ * Consecutive tools share one disclosure with all the reasoning around them, in arrival order. Unlike the desktop, the
+ * phone keeps a thought that is still streaming inside its group too, whose headline says Thinking meanwhile, so the
+ * small screen holds one compact row of work rather than reasoning spread between tools. A lone tool keeps its own
+ * row, and reasoning with no tool beside it stands alone.
  */
-export function groupTools(items: TranscriptItem[], liveTail = true): TranscriptItem[] {
+export function groupTools(items: TranscriptItem[]): TranscriptItem[] {
   const grouped: TranscriptItem[] = []
   let run: Step[] = []
-  const flush = (atEnd: boolean) => {
-    let end = run.length
-    if (atEnd && liveTail) while (end > 0 && run[end - 1]!.kind === 'thinking') end--
-    const entries = run.slice(0, end)
-    const tools = entries.filter((step) => step.kind === 'tool')
-    if (tools.length && entries.length > 1) {
-      const first = entries[0]!
-      grouped.push({ kind: 'tools', id: first.id, at: first.at, tools, entries })
-    } else grouped.push(...entries)
-    grouped.push(...run.slice(end))
+  const flush = () => {
+    const tools = run.filter((step) => step.kind === 'tool')
+    if (tools.length && run.length > 1) {
+      const first = run[0]!
+      grouped.push({ kind: 'tools', id: first.id, at: first.at, tools, entries: run })
+    } else grouped.push(...run)
     run = []
   }
   for (const item of items) {
@@ -112,9 +110,9 @@ export function groupTools(items: TranscriptItem[], liveTail = true): Transcript
       run.push(item)
       continue
     }
-    flush(false)
-    grouped.push(item.kind === 'summary' ? { ...item, items: groupTools(item.items, false) } : item)
+    flush()
+    grouped.push(item.kind === 'summary' ? { ...item, items: groupTools(item.items) } : item)
   }
-  flush(true)
+  flush()
   return grouped
 }

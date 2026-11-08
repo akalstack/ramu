@@ -264,7 +264,7 @@ test('mobile groups consecutive tools inside live turns and finished work, prese
   assert.equal(finished.at(-1).text, 'Summary')
 })
 
-test('mobile folds reasoning between tools into their group, leaving a still-streaming thought on its own', () => {
+test('mobile keeps every thought beside tools in their group, the one still streaming too', () => {
   const events = [
     { kind: 'user', text: 'ship', at: 1000 },
     { kind: 'thinking', text: 'look first', at: 1500 },
@@ -277,13 +277,23 @@ test('mobile folds reasoning between tools into their group, leaving a still-str
   const group = live.find((row) => row.kind === 'tools')
   assert.deepEqual(
     group.entries.map((entry) => entry.kind),
-    ['thinking', 'tool', 'thinking', 'tool'],
+    ['thinking', 'tool', 'thinking', 'tool', 'thinking'],
   )
   assert.deepEqual(
     group.tools.map((entry) => entry.id),
     ['first', 'second'],
   )
-  assert.equal(live.at(-1).kind, 'thinking')
+  assert.equal(live.at(-1), group)
+  // Reasoning with no tool beside it has no group to join.
+  const alone = foldTurns(
+    transcript([
+      { kind: 'user', text: 'hi', at: 1 },
+      { kind: 'thinking', text: 'hm', at: 2 },
+    ]),
+    true,
+    false,
+  )
+  assert.equal(alone.at(-1).kind, 'thinking')
   const finished = foldTurns(
     transcript([
       ...events,

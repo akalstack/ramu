@@ -643,8 +643,15 @@ export default function ChatScreen() {
         chat={chat!}
         date={itemMeta.get(item.id)?.date}
         footer={itemMeta.get(item.id)?.footer}
-        // The newest reasoning or reply of a running turn is live: reasoning streams, and a reply fades in block by block.
-        streaming={(item.kind === 'thinking' || item.kind === 'text') && running && item === rows.at(-1)}
+        // The newest reasoning or reply of a running turn is live: reasoning streams (also as the last step of a tool
+        // group), and a reply fades in block by block.
+        streaming={
+          (item.kind === 'thinking' ||
+            item.kind === 'text' ||
+            (item.kind === 'tools' && item.entries.at(-1)?.kind === 'thinking')) &&
+          running &&
+          item === rows.at(-1)
+        }
         fresh={fresh && item.kind !== 'user'}
         visible={contentScreenFocused && visibleContentRows.has(item.id)}
       />
@@ -674,7 +681,8 @@ export default function ChatScreen() {
     running &&
     (lastRow?.kind === 'thinking' ||
       (lastRow?.kind === 'tool' && lastRow.status === 'in_progress') ||
-      (lastRow?.kind === 'tools' && lastRow.tools.some((tool) => tool.status === 'in_progress')))
+      (lastRow?.kind === 'tools' &&
+        (lastRow.entries.at(-1)?.kind === 'thinking' || lastRow.tools.some((tool) => tool.status === 'in_progress'))))
   // Stopped by you or failed since the last message: the empty send button becomes Continue.
   const lastUser = chat.items.findLastIndex((item) => item.kind === 'user')
   const stopped =
