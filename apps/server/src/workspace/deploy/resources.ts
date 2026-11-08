@@ -20,8 +20,6 @@ import { currentBranch, git } from '../git'
 import { DeployError, ReplyLostError, tail } from './adapter'
 import type { HostingAccounts } from './accounts'
 import { resourceAdapter, type ResourceAdapter } from './resource'
-import { isWorkerProvider } from './workerResources'
-import type { WorkerBindingType } from '@ramu/shared/cloudflareDeploy'
 import { usageReport } from './usage'
 
 /** The variable names a database's connection uses, which a project's code reading them also signals. */
@@ -54,22 +52,9 @@ export interface ResourceHost {
   setState(key: string, value: unknown): void
   /** The project's `ramu.json` stack facts. */
   stack(projectId: string): Record<ResourceKind, boolean> & { migrate: string[] | null }
-  /** The platform the project deploys to, which decides whether D1, KV, R2 and the Vercel Marketplace are offered. */
+  /** The platform the project deploys to, whose own database the sheet can point to. */
   platform?(projectId: string): string | null
-  /** The project's id on that platform, and the team or account it is in there. */
-  site?(projectId: string): { id: string; scope: string | null } | null
 }
-
-/** The Vercel Marketplace and Vercel Blob connect to a Vercel project, so they are offered only for one. */
-const VERCEL_OWN: readonly ResourceProvider[] = ['vercel-marketplace', 'vercel-blob']
-
-/** D1, KV and R2 are reached through a Worker's binding, so they are offered only for a project on Cloudflare Workers. */
-const offered = (provider: ResourceProvider, platform: string | null | undefined, database?: ResourceProvider) =>
-  isWorkerProvider(provider)
-    ? platform === 'cloudflare-workers'
-    : VERCEL_OWN.includes(provider)
-      ? platform === 'vercel'
-      : provider !== 'supabase-storage' || database === 'supabase'
 
 /** A migration that failed: its output tail, for the person and the thread. */
 export class MigrationError extends Error {
@@ -103,24 +88,7 @@ export const runMigration: MigrationRunner = (argv, cwd, variables) =>
     )
   })
 
-/** Variables whose use in the code shows the app needs a kind of resource. */
-const NEEDS: Record<Exclude<ResourceKind, 'database'>, string[]> = {
-  cache: ['REDIS_URL', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'],
-  storage: ['BLOB_READ_WRITE_TOKEN', 'SUPABASE_STORAGE_BUCKET'],
-  email: ['RESEND_API_KEY'],
-}
-/** The Worker types whose use in the code shows a Workers project needs a kind of resource. */
-const WORKER_NEEDS: Partial<Record<ResourceKind, WorkerBindingType>> = {
-  database: 'D1Database',
-  cache: 'KVNamespace',
-  storage: 'R2Bucket',
-}
-const KIND_NAMES: Record<ResourceKind, string> = {
-  database: 'a database',
-  cache: 'a cache',
-  storage: 'file storage',
-  email: 'email sending',
-}
+const KIND_NAMES: Record<ResourceKind, string> = { database: 'a database' }
 
 const key = (projectId: string) => `resources:${projectId}`
 const branchKey = (projectId: string) => `resource-branches:${projectId}`
@@ -221,17 +189,7 @@ export class ResourceService {
     return Object.keys(secrets?.preview ?? {})
   }
 
-  /** `workerTypes` are the Worker types the code uses, such as `KVNamespace`; they count only for a Workers project. */
-  async status(
-    projectId: string,
-    appVariables: string[],
-    workerTypes: readonly WorkerBindingType[] = [],
-  ): Promise<ProjectResources> {
-    const workers = this.host.platform?.(projectId) === 'cloudflare-workers'
-    const usesWorker = (kind: ResourceKind) => {
-      const type = WORKER_NEEDS[kind]
-      return workers && !!type && workerTypes.includes(type)
-    }
+  async status(projectId: string, appVariables: string[]): Promise<ProjectResources> {
     const stack = this.host.stack(projectId)
     const resources = await Promise.all(
       this.bindings(projectId).map(async (binding): Promise<ProjectResource> => {
@@ -251,18 +209,9 @@ export class ResourceService {
       }),
     )
     return {
-      needs: RESOURCE_KINDS.filter(
-        (kind) =>
-          usesWorker(kind) ||
-          stack[kind] ||
-          (kind === 'database'
-            ? appVariables.includes('DATABASE_URL')
-            : NEEDS[kind].some((name) => appVariables.includes(name))),
-      ),
+      needs: RESOURCE_KINDS.filter((kind) => stack[kind] || appVariables.includes('DATABASE_URL')),
       platform: (this.host.platform?.(projectId) ?? null) as HostingPlatform | null,
-      providers: RESOURCE_PROVIDERS.filter((provider) =>
-        offered(provider, this.host.platform?.(projectId), this.binding(projectId, 'database')?.provider),
-      ).map((provider) => {
+      providers: RESOURCE_PROVIDERS.map((provider) => {
         const adapter = this.adapter(provider)
         return {
           provider,
@@ -290,30 +239,12 @@ export class ResourceService {
   ): Promise<Record<string, string>> {
     const adapter = this.adapter(provider)
     if (!adapter.plans.some((entry) => entry.id === plan)) throw new Error('Choose one of the offered plans.')
-    if (!offered(provider, this.host.platform?.(projectId), this.binding(projectId, 'database')?.provider))
-      throw new Error(
-        provider === 'supabase-storage'
-          ? 'Provision a Supabase database for this app first; its storage goes in the same project.'
-          : `${adapter.name} is for a project deployed to ${VERCEL_OWN.includes(provider) ? 'Vercel' : 'Cloudflare Workers'}. Link the project there first.`,
-      )
     if (this.bindings(projectId).some((binding) => binding.kind === adapter.kind))
       throw new Error(`This project already has ${KIND_NAMES[adapter.kind]}. Manage it on the provider’s page.`)
     const { auth, accountId } = await this.auth(provider)
     let made
     try {
-      // A platform's own marketplace works in the team the project is linked in.
-      const site = this.host.site?.(projectId) ?? null
-      const scoped = VERCEL_OWN.includes(provider) && site ? { ...auth, scope: site.scope } : auth
-      const database = this.binding(projectId, 'database')
-      made = await adapter.provision(
-        scoped,
-        {
-          name,
-          ...(site ? { site: site.id } : {}),
-          ...(database ? { database: { provider: database.provider, id: database.id } } : {}),
-        },
-        plan,
-      )
+      made = await adapter.provision(auth, { name }, plan)
     } catch (error) {
       if (!(error instanceof ReplyLostError)) throw error
       made = await adapter.find(auth, name)
@@ -381,8 +312,7 @@ export class ResourceService {
   async migrateProduction(projectId: string, root: string, branch: string, commit?: string | null): Promise<void> {
     const argv = this.host.stack(projectId).migrate
     const binding = this.bindings(projectId).find((entry) => entry.kind === 'database')
-    // D1's migrations run in the Worker's deploy job, against the database it binds.
-    if (!argv || !binding || isWorkerProvider(binding.provider)) return
+    if (!argv || !binding) return
     const secrets = await this.secrets(projectId, binding.kind).read()
     if (!secrets) throw new Error('This host lost the database’s connection values. Provision it again on this host.')
     if ((await currentBranch(root)) !== branch)

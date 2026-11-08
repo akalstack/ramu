@@ -14,16 +14,12 @@ import {
 } from '@ramu/shared/types/deploy'
 import { DATABASE_VARIABLES, MigrationError } from '../../workspace/deploy/resources'
 import { signInCli } from '../../workspace/deploy/signIn'
-import { resourceAdapter } from '../../workspace/deploy/resource'
-import { isWorkerProvider, WORKER_TYPE } from '../../workspace/deploy/workerResources'
-import { DEFAULT_BINDING, type WorkerBindingType } from '@ramu/shared/cloudflareDeploy'
 import {
   envStatus,
   githubActionsTarget,
   gitlabCiTarget,
   hostTarget,
   readAppVariables,
-  readWorkerBindings,
   syncEnv,
   type EnvTarget,
 } from '../../workspace/deploy/envSync'
@@ -34,13 +30,6 @@ import type { RegisterHandlers } from '../types'
 
 const platform = z.enum(HOSTING_PLATFORMS)
 const cliPlatform = z.enum(CLI_SIGN_IN_PLATFORMS)
-const serverInput = z.object({
-  host: z.string().trim().min(1).max(253),
-  port: z.number().int().min(1).max(65535),
-  user: z.string().trim().min(1).max(32),
-  /** A pasted private key; null signs in with the key Ramu created. */
-  privateKey: z.string().max(16_384).nullable(),
-})
 const account = z.enum(ACCOUNT_PLATFORMS)
 const provider = z.enum(RESOURCE_PROVIDERS)
 const plan = z.string().trim().min(1).max(60)
@@ -168,7 +157,6 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
       ]),
       run: (name: AccountPlatform, token: string) => {
         administrate()
-        if (name === 'server') throw new Error('Connect your server with its address and an SSH key.')
         return deploys().accounts.save(name, { token }, 'token')
       },
     },
@@ -180,43 +168,6 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
         return summary(false)
       },
     },
-    'deploy.server': {
-      args: z.tuple([z.boolean()]),
-      run: (check: boolean) => deploys().server.status(check),
-    },
-    'deploy.serverKey': {
-      args: z.tuple([]),
-      run: () => {
-        administrate()
-        return deploys().server.createKey()
-      },
-    },
-    'deploy.useServer': {
-      args: z.tuple([z.string().min(1).max(300)]),
-      run: (accountId: string) => {
-        administrate()
-        return deploys().server.use(accountId)
-      },
-    },
-    'deploy.forgetServer': {
-      args: z.tuple([z.string().min(1).max(300)]),
-      run: (accountId: string) => {
-        administrate()
-        return deploys().server.forget(accountId)
-      },
-    },
-    'deploy.connectServer': {
-      args: z.tuple([serverInput]),
-      run: (input: z.infer<typeof serverInput>) => {
-        administrate()
-        return deploys().server.connect(input)
-      },
-    },
-    'deploy.linkServer': {
-      args: z.tuple([id, id, domain]),
-      run: (projectId: string, repoId: string, name: string) =>
-        exclusive(projectId, () => deploys().server.link(project(projectId), repoId, name)),
-    },
     'deploy.project': {
       args: z.tuple([id]),
       run: (projectId: string) => deploys().service.project(project(projectId)),
@@ -224,18 +175,9 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
     'deploy.link': {
       args: z.tuple([id, platform, id]),
       run: (projectId: string, name: HostingPlatform, repoId: string) =>
-        exclusive(projectId, async () => {
-          if (name === 'fly') return deploys().fly.link(project(projectId), repoId, siteName(known(projectId).name))
-          if (name === 'github-pages') return deploys().pages.link(project(projectId), repoId)
-          if (name === 'cloudflare-workers') return deploys().workers.link(project(projectId), repoId)
-          if (name === 'cloudflare')
-            return deploys().cloudflare.link(project(projectId), repoId, siteName(known(projectId).name))
-          if (name === 'server') throw new Error('Set up your own server with its domain.')
-          return {
-            deployment: await deploys().service.link(project(projectId), name, repoId, siteName(known(projectId).name)),
-            pullRequest: null,
-          }
-        }),
+        exclusive(projectId, async () => ({
+          deployment: await deploys().service.link(project(projectId), name, repoId, siteName(known(projectId).name)),
+        })),
     },
     'deploy.production': {
       args: z.tuple([id]),
@@ -281,14 +223,8 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
     },
     'deploy.resources': {
       args: z.tuple([id, id]),
-      run: async (projectId: string, repoId: string) => {
-        const root = repositoryOf(projectId, repoId).root
-        return deploys().resources.status(
-          project(projectId),
-          await readAppVariables(root),
-          Object.keys(await readWorkerBindings(root)) as WorkerBindingType[],
-        )
-      },
+      run: async (projectId: string, repoId: string) =>
+        deploys().resources.status(project(projectId), await readAppVariables(repositoryOf(projectId, repoId).root)),
     },
     'deploy.provision': {
       args: z.tuple([id, id, provider, plan]),
@@ -303,25 +239,7 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
           )
           // Development on this host uses the preview branch, never production's data.
           await hostTarget(ctx.environment).set('development', values)
-          // A Worker reaches D1, KV and R2 through its wrangler config, which a pull request binds by the name its code reads.
-          const bindings = await readWorkerBindings(root)
-          if (isWorkerProvider(name)) {
-            const made = deploys().resources.binding(project(projectId), resourceAdapter(name).kind)
-            const type = WORKER_TYPE[name]
-            if (made)
-              await deploys().workers.proposeBinding(
-                project(projectId),
-                repoId,
-                name,
-                made.id,
-                bindings[type] ?? DEFAULT_BINDING[type],
-              )
-          }
-          return deploys().resources.status(
-            projectId,
-            [...(await readAppVariables(root)), ...DATABASE_VARIABLES],
-            Object.keys(bindings) as WorkerBindingType[],
-          )
+          return deploys().resources.status(projectId, [...(await readAppVariables(root)), ...DATABASE_VARIABLES])
         }),
     },
     'deploy.domains': {

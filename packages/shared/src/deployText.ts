@@ -2,7 +2,6 @@
 // view so both describe them the same way. Pure: the clients pass their own translation and date formatting.
 import type { Translate } from './forgeStatus'
 import type {
-  AccountPlatform,
   Deployment,
   DeploymentState,
   DomainStatus,
@@ -26,10 +25,6 @@ const METRIC: Record<Exclude<UsageFigure['metric'], 'service'>, string> = {
   compute: 'Database compute',
   transfer: 'Data transfer',
 }
-
-/** A hosting account's name for people: the platform's own name, or the words for the person's own server. */
-export const accountName = (t: Translate, platform: AccountPlatform, name: string): string =>
-  platform === 'server' ? t('Own server') : name
 
 /** The production deployment visitors see now, as far as the list tells: the newest one that finished building. */
 export function liveDeployment(status: ProjectDeployment): Deployment | null {

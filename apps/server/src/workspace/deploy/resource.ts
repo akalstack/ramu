@@ -1,4 +1,4 @@
-// Databases and storage behind one small interface, the counterpart of `HostingAdapter` for what an app keeps its data
+// Databases behind one small interface, the counterpart of `HostingAdapter` for what an app keeps its data
 // in. A provider creates a resource on the person's own account and hands back the variables the app connects with.
 // Deleting a resource is deliberately not here: it is done on the provider's own page.
 import type { ResourceKind, ResourcePlan, ResourceProvider } from '@ramu/shared/types/deploy'
@@ -18,15 +18,8 @@ export interface ResourceAdapter {
   readonly tokenPage: string
   readonly plans: ResourcePlan[]
   account(auth: HostingAuth): Promise<HostingIdentity>
-  /**
-   * Creates a resource named after the project; `site` is the project's id on the platform it deploys to, and
-   * `database` the project's database, for a resource that lives beside it.
-   */
-  provision(
-    auth: HostingAuth,
-    project: { name: string; site?: string; database?: { provider: ResourceProvider; id: string } },
-    plan: string,
-  ): Promise<ProvisionedResource>
+  /** Creates a resource named after the project. */
+  provision(auth: HostingAuth, project: { name: string }, plan: string): Promise<ProvisionedResource>
   /** A resource of that name already on the account, for a provision whose reply was lost. */
   find(auth: HostingAuth, name: string): Promise<ProvisionedResource | null>
   /** The provider's page for a resource. */

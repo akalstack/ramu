@@ -49,7 +49,7 @@ const PATH = [
   },
   {
     title: 'Deploy to your account',
-    body: 'One sheet picks the target, signs in to your account, publishes the repository and sets the variables the app needs, with its database, cache, storage or email made on your own account too. Then it shows the live address.',
+    body: 'One sheet picks the target, signs in to your account, publishes the repository and sets the variables the app needs, with its Postgres database made on your own account too. Then it shows the live address.',
   },
   {
     title: 'Keep changing it',
@@ -64,17 +64,9 @@ const SAFELY = [
   'The first production deploy, domains and DNS always ask you first',
 ]
 
-const PLATFORMS = [
-  'Vercel',
-  'Netlify',
-  'Cloudflare',
-  'GitHub Pages',
-  'Railway',
-  'Fly.io',
-  'Your own server',
-  'Expo for the app stores',
-]
-const DATA = ['Neon', 'Supabase', 'Cloudflare D1, KV and R2', 'Vercel Marketplace and Blob', 'Upstash', 'Resend']
+const PLATFORMS = ['Vercel', 'Netlify', 'Expo for the app stores']
+const CLI_PLATFORMS = ['Railway', 'Fly.io', 'Cloudflare', 'Supabase']
+const DATA = ['Neon']
 
 const WORK = [
   {
@@ -231,6 +223,7 @@ const WORK = [
         <div class="section-head">
           <ul class="checks">
             <li>Hosting: {PLATFORMS.join(', ')}</li>
+            <li>Through their own CLI, with your account kept on your computer: {CLI_PLATFORMS.join(', ')}</li>
             <li>Data: {DATA.join(', ')}</li>
           </ul>
         </div>

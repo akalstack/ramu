@@ -1,7 +1,6 @@
 // Secrets sync: the variables an app reads, where each one is set, and copying the missing ones from this host to the
 // other places. Every place is an `EnvTarget`, so syncing is one loop over targets. Values travel only from this
 // host's credential store to a target's API; they are never returned to a client.
-import { workerBindings, type WorkerBindingType } from '@ramu/shared/cloudflareDeploy'
 import { gitlabVariableNames, setGitlabVariables } from '../forge/gitlab'
 import { lstat, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -98,11 +97,6 @@ async function readCodeFiles(root: string): Promise<{ path: string; text: string
 
 export async function readAppVariables(root: string): Promise<string[]> {
   return appVariables(await readCodeFiles(root))
-}
-
-/** The Worker binding types the code uses, with the name it gives each. */
-export async function readWorkerBindings(root: string): Promise<Partial<Record<WorkerBindingType, string>>> {
-  return workerBindings(await readCodeFiles(root))
 }
 
 async function columnsOf(targets: EnvTarget[]): Promise<EnvColumn[]> {

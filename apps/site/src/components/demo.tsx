@@ -13,7 +13,6 @@ type Step =
 const TARGETS = [
   { id: 'vercel', name: 'Vercel', host: 'barbershop.vercel.app' },
   { id: 'netlify', name: 'Netlify', host: 'barbershop.netlify.app' },
-  { id: 'cloudflare', name: 'Cloudflare', host: 'barbershop.pages.dev' },
 ] as const
 
 const steps = (target: (typeof TARGETS)[number]): Step[] => [

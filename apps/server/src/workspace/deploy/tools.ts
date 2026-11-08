@@ -4,15 +4,18 @@ import { z } from 'zod'
 import { domainName } from '@ramu/shared/domains'
 import { translate } from '@ramu/shared/i18n'
 import { STORE_PERSON_STEPS, storeCheckText } from '@ramu/shared/storeRelease'
-import type { DnsRecord, UsageReport } from '@ramu/shared/types/deploy'
+import { CLI_PLATFORMS, type CliPlatform, type DnsRecord, type UsageReport } from '@ramu/shared/types/deploy'
+import { commandLine } from '@ramu/shared/stacks'
 import { currentBranch } from '../git'
+import type { HostingAccounts } from './accounts'
+import { CLI_PLATFORM_SPECS, cliCommandReads, runPlatformCli } from './cliPlatforms'
 import type { DeployWatches } from './deployWatch'
 import type { DomainWatches } from './domainWatch'
 import type { StoreReleases } from './release'
 import type { DeployService } from './service'
 
 const DEPLOY_GUIDE =
-  'Deploy tools work on the project this thread belongs to, on the platform and account linked in its Deploy sheet. Call deploy_status first: it names the platform, the live address, the latest deployments and the capabilities the platform has; never call an action it does not list. Never run vercel or netlify yourself to deploy. deploy_production, deploy_rollback, deploy_domain_add and deploy_domain_records always ask the person; a refusal is final for this request. deploy_production first runs the migrate command from ramu.json against the production database; a failed migration stops the deploy and returns its output to fix. Never delete a database; that is the person’s action on the provider’s page. After deploy_preview, deploy_production or a push of the production branch, Ramu wakes this thread once the deployment finishes, with its address or the end of its build log; do not poll for it.'
+  'Deploy tools work on the project this thread belongs to, on the platform and account linked in its Deploy sheet. Call deploy_status first: it names the platform, the live address, the latest deployments and the capabilities the platform has; never call an action it does not list. Never run vercel or netlify yourself to deploy. A project on Railway, Fly.io, Cloudflare or Supabase has no deploy target here: use platform_cli for it. deploy_production, deploy_rollback, deploy_domain_add and deploy_domain_records always ask the person; a refusal is final for this request. deploy_production first runs the migrate command from ramu.json against the production database; a failed migration stops the deploy and returns its output to fix. Never delete a database; that is the person’s action on the provider’s page. After deploy_preview, deploy_production or a push of the production branch, Ramu wakes this thread once the deployment finishes, with its address or the end of its build log; do not poll for it.'
 
 const deploymentId = z.string().trim().min(1).max(200)
 const domain = z.string().trim().min(1).max(260)
@@ -270,6 +273,60 @@ export function registerReleaseTools(
       const builds = await releases.start(projectId, target)
       for (const build of builds) watch.followRelease(projectId, build.id, source.parentId ?? source.id)
       return result({ builds })
+    },
+  )
+}
+
+const CLI_GUIDE = `Runs the CLI of Railway (railway), Fly.io (fly), Cloudflare (wrangler) or Supabase (supabase) in this thread's checkout, signed in with the account the person connected in Settings → Git → Hosting accounts. Use it instead of running those CLIs yourself: the token is passed to the CLI in its environment and never shown, and a CLI you run yourself is signed out. Pass the arguments after the CLI's name, such as ["status"] or ["deploy", "--detach"]; never pass a token or a login command. Commands that only read (whoami, status, list, logs, help) run straight away; every other command asks the person with a card naming it, and a refusal is final for this request. Run non-interactive forms (--yes, --json, --detach, --no-tail) since there is no terminal to answer prompts. Write the platform's own config files (railway.json, fly.toml, wrangler.toml, supabase/config.toml) yourself and commit them like any change.`
+
+/** The platforms driven through their own CLI, signed in with the token kept on this host. */
+export function registerPlatformCliTools(
+  server: McpServer,
+  accounts: Pick<HostingAccounts, 'auth' | 'connected'>,
+  source: AgentSessionInfo,
+  current: () => AgentSessionInfo,
+  /** Asks the person through the thread's approval card. Resolves false when refused. */
+  requestApproval: (detail: string, signal?: AbortSignal) => Promise<boolean>,
+  run: typeof runPlatformCli = runPlatformCli,
+) {
+  server.registerTool(
+    'platform_cli',
+    {
+      description: CLI_GUIDE,
+      inputSchema: {
+        platform: z.enum(CLI_PLATFORMS),
+        args: z.array(z.string().max(1000)).min(1).max(60),
+      },
+    },
+    async ({ platform, args }: { platform: CliPlatform; args: string[] }, extra) => {
+      const spec = CLI_PLATFORM_SPECS[platform]
+      if (!accounts.connected(platform))
+        throw new Error(
+          `${spec.name} is not connected on this host. Ask the person to connect it in Settings → Git → Hosting accounts.`,
+        )
+      if (args.some((arg) => /^(login|logout)$/.test(arg) || /token/i.test(arg.split('=')[0] ?? '')))
+        throw new Error('Sign-in is the person’s step in Settings, and the token is passed for you. Leave it out.')
+      const session = current()
+      if (session.id !== source.id || session.cwd !== source.cwd)
+        throw new Error('The thread’s checkout changed. Reconnect before trying again.')
+      const shown = `${spec.binaries[0]} ${commandLine(args)}`
+      if (
+        !cliCommandReads(platform, args) &&
+        !(await requestApproval(`Run ${shown} on your ${spec.name} account, in ${session.cwd}.`, extra.signal))
+      )
+        throw new Error('The person declined this command. Do not retry it without a new request.')
+      const { auth, accountId, defaultScope } = await accounts.auth(platform)
+      const ran = await run(
+        platform,
+        args,
+        session.cwd,
+        { token: auth.token, accountId: defaultScope ?? accountId },
+        extra.signal,
+      )
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify({ command: shown, ...ran }) }],
+        ...(ran.exitCode === 0 ? {} : { isError: true }),
+      }
     },
   )
 }

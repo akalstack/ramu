@@ -1,5 +1,3 @@
-import { CloudflareSetup, WorkersSetup } from './cloudflareSetup'
-import { PagesSetup } from './pagesSetup'
 import { TokenExpiryNotices } from './tokenExpiry'
 import { DEFAULT_AGENT_SETTINGS, type AgentSettings } from '@ramu/shared/types'
 import type { InboxNotice } from '@ramu/shared/chat/notices'
@@ -22,8 +20,6 @@ import { projectUsage, UsageNotices } from './usage'
 import { ProjectWake } from './wake'
 import { StoreReleases } from './release'
 import { githubActionsTarget } from './envSync'
-import { FlySetup } from './flySetup'
-import { ServerSetup } from './serverSetup'
 
 const commandOf = (argv: string[] | null | undefined) => (argv ? commandLine(argv) : null)
 
@@ -55,12 +51,6 @@ export interface Deploys {
   resources: ResourceService
   /** Store releases of a project's Expo app. */
   releases: StoreReleases
-  /** The person's own server: connecting it and setting projects up on it. */
-  server: ServerSetup
-  fly: FlySetup
-  pages: PagesSetup
-  cloudflare: CloudflareSetup
-  workers: WorkersSetup
   wake: ProjectWake
 }
 
@@ -88,16 +78,9 @@ export function createDeploys(
       setState,
       stack: (projectId) => ({
         database: stack(projectId)?.database ?? false,
-        cache: stack(projectId)?.cache ?? false,
-        storage: stack(projectId)?.storage ?? false,
-        email: stack(projectId)?.email ?? false,
         migrate: stack(projectId)?.migrate ?? null,
       }),
       platform: (projectId): string | null => service.binding(projectId)?.platform ?? null,
-      site: (projectId): { id: string; scope: string | null } | null => {
-        const binding: DeployBinding | null = service.binding(projectId)
-        return binding ? { id: binding.siteId, scope: binding.scope ?? null } : null
-      },
     },
     accounts,
     credentials,
@@ -131,11 +114,6 @@ export function createDeploys(
     {
       getState,
       setState,
-      async githubToken(projectId, repository) {
-        const root = await checkoutOf(projectId, repository)
-        if (!root) throw new Error(`This project has no checkout of ${repository} on this host.`)
-        return repositoryToken(root)
-      },
       stackTarget: (projectId) => stack(projectId)?.deployTarget ?? stack(projectId)?.id ?? null,
       async beforeProduction(projectId, binding) {
         const root = binding.repository ? await checkoutOf(projectId, binding.repository) : null
@@ -299,21 +277,6 @@ export function createDeploys(
     uptime,
     resources,
     releases,
-    server: new ServerSetup(
-      getState,
-      setState,
-      accounts,
-      service,
-      { repository: githubRepository, actionsSecrets: githubActionsTarget },
-      credentials,
-    ),
-    fly: new FlySetup(accounts, service, { repository: githubRepository, actionsSecrets: githubActionsTarget }),
-    pages: new PagesSetup(accounts, service, { repository: githubRepository }),
-    workers: new WorkersSetup(accounts, service, { repository: githubRepository, actionsSecrets: githubActionsTarget }),
-    cloudflare: new CloudflareSetup(accounts, service, {
-      repository: githubRepository,
-      actionsSecrets: githubActionsTarget,
-    }),
     wake,
   }
 }

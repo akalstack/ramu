@@ -10,11 +10,8 @@ import netlify from '../assets/brands/netlify.svg'
 import cloudflare from '../assets/brands/cloudflare.svg'
 import fly from '../assets/brands/fly.svg'
 import railway from '../assets/brands/railway.svg'
-import docker from '../assets/brands/docker.svg'
 import neon from '../assets/brands/neon.svg'
 import supabase from '../assets/brands/supabase.svg'
-import upstash from '../assets/brands/upstash.svg'
-import resend from '../assets/brands/resend.svg'
 import postgres from '../assets/brands/postgres.svg'
 import sentry from '../assets/brands/sentry.svg'
 import grafana from '../assets/brands/grafana.svg'
@@ -33,11 +30,8 @@ const MARKS: Record<BrandId, string> = {
   cloudflare,
   fly,
   railway,
-  docker,
   neon,
   supabase,
-  upstash,
-  resend,
   postgres,
   sentry,
   grafana,

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { exposedPort, serverDockerfile } from '../src/serverDeploy'
+import { appDockerfile, exposedPort } from '../src/dockerfile'
 
 const pkg = (value: unknown) => JSON.stringify(value)
 
-describe('serverDockerfile', () => {
+describe('appDockerfile', () => {
   it('runs a Node server with its start script on port 3000, building first with the lockfile’s manager', () => {
-    const dockerfile = serverDockerfile({
+    const dockerfile = appDockerfile({
       files: ['package.json', 'pnpm-lock.yaml'],
       manifests: { 'package.json': pkg({ scripts: { build: 'next build', start: 'next start' } }) },
     })!
@@ -18,7 +18,7 @@ describe('serverDockerfile', () => {
   })
 
   it('serves a static build with Caddy, falling back to index.html only for a Vite app', () => {
-    const vite = serverDockerfile({
+    const vite = appDockerfile({
       files: ['package.json', 'package-lock.json'],
       manifests: { 'package.json': pkg({ scripts: { build: 'vite build' }, devDependencies: { vite: '^7' } }) },
     })!
@@ -26,7 +26,7 @@ describe('serverDockerfile', () => {
     expect(vite.content).toContain('RUN npm ci')
     expect(vite.content).toContain('COPY --from=build /app/dist /srv')
     expect(vite.content).toContain('/index.html')
-    const astro = serverDockerfile({
+    const astro = appDockerfile({
       files: ['package.json'],
       manifests: {
         'package.json': pkg({ scripts: { build: 'astro build' }, dependencies: { astro: '^5', vite: '^7' } }),
@@ -36,7 +36,7 @@ describe('serverDockerfile', () => {
   })
 
   it('serves Django through gunicorn with the project manage.py names', () => {
-    const dockerfile = serverDockerfile({
+    const dockerfile = appDockerfile({
       files: ['manage.py', 'requirements.txt', 'shop'],
       manifests: {
         'requirements.txt': 'django\n',
@@ -49,20 +49,18 @@ describe('serverDockerfile', () => {
 
   it('serves FastAPI with uvicorn, and builds a Go module into a small image', () => {
     expect(
-      serverDockerfile({
+      appDockerfile({
         files: ['pyproject.toml', 'main.py'],
         manifests: { 'pyproject.toml': 'dependencies = ["fastapi"]' },
       })?.content,
     ).toContain('"uvicorn","main:app"')
-    expect(serverDockerfile({ files: ['go.mod'], manifests: {} })?.content).toContain('distroless')
+    expect(appDockerfile({ files: ['go.mod'], manifests: {} })?.content).toContain('distroless')
   })
 
   it('returns null when it cannot tell how the app starts', () => {
-    expect(
-      serverDockerfile({ files: ['package.json'], manifests: { 'package.json': pkg({ scripts: {} }) } }),
-    ).toBeNull()
-    expect(serverDockerfile({ files: ['Gemfile'], manifests: { Gemfile: "gem 'rails'" } })).toBeNull()
-    expect(serverDockerfile({ files: ['requirements.txt'], manifests: { 'requirements.txt': 'requests' } })).toBeNull()
+    expect(appDockerfile({ files: ['package.json'], manifests: { 'package.json': pkg({ scripts: {} }) } })).toBeNull()
+    expect(appDockerfile({ files: ['Gemfile'], manifests: { Gemfile: "gem 'rails'" } })).toBeNull()
+    expect(appDockerfile({ files: ['requirements.txt'], manifests: { 'requirements.txt': 'requests' } })).toBeNull()
   })
 
   it('reads the port an existing Dockerfile exposes', () => {

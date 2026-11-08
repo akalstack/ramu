@@ -121,7 +121,7 @@ function service(url: string, migrate: string[] | null = null, runner?: Migratio
     {
       getState: <T>(name: string, fallback: T) => (state.get(name) as T) ?? fallback,
       setState: (name, value) => void state.set(name, value),
-      stack: () => ({ database: true, cache: false, storage: false, email: false, migrate }),
+      stack: () => ({ database: true, migrate }),
     },
     { auth: async () => ({ auth, accountId: 'u1', defaultScope: null }), connected: () => true } as never,
     store,
@@ -190,12 +190,6 @@ describe('Neon resource adapter', () => {
     const server = await fake(neonRoutes([]))
     const { resources } = service(server.url)
     expect((await resources.status('p1', [])).needs).toEqual(['database'])
-    // The code reading Redis and Resend variables shows it needs a cache and email too.
-    expect((await resources.status('p1', ['REDIS_URL', 'RESEND_API_KEY'])).needs).toEqual([
-      'database',
-      'cache',
-      'email',
-    ])
     await resources.provision('p1', 'neon', 'default', 'shop')
     const values = await resources.environmentValues('p1')
     expect(values.production?.DATABASE_URL).toContain('main-pooler')
@@ -276,7 +270,7 @@ describe('a database branch per pull request', () => {
       {
         getState: <T>(name: string, fallback: T) => (state.get(name) as T) ?? fallback,
         setState: (name, value) => void state.set(name, value),
-        stack: () => ({ database: true, cache: false, storage: false, email: false, migrate: null }),
+        stack: () => ({ database: true, migrate: null }),
       },
       { auth: async () => ({ auth, accountId: 'u1', defaultScope: null }), connected: () => true } as never,
       store,

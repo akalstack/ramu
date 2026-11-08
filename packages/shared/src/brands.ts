@@ -13,11 +13,8 @@ export const BRAND_IDS = [
   'cloudflare',
   'fly',
   'railway',
-  'docker',
   'neon',
   'supabase',
-  'upstash',
-  'resend',
   'postgres',
   'sentry',
   'expo',
@@ -43,30 +40,11 @@ export function forgeBrand(service: ForgeService): BrandId {
   return FORGE_BRANDS[service]
 }
 
-/**
- * The mark beside a hosting account: the platform's own, Docker's for the person's own server, which runs it, and
- * GitHub's for GitHub Pages and Cloudflare's for Workers, D1, KV and R2; none for a service without a mark here.
- */
+/** The mark beside a hosting account: the platform's own; none for a service without a mark here. */
 export function accountBrand(platform: AccountPlatform): BrandId | undefined {
   // Amplitude's mark is not in Simple Icons and its guidelines are for its partners, so it shows the generic shape; so do
   // the media services, whose marks are only listed beside their names.
   if (platform === 'amplitude' || platform === 'gemini' || platform === 'elevenlabs' || platform === 'openai')
     return undefined
-  if (platform === 'server') return 'docker'
-  if (platform === 'github-pages') return 'github'
-  if (platform === 'vercel-marketplace' || platform === 'vercel-blob') return 'vercel'
-  if (platform === 'supabase-storage') return 'supabase'
-  return platform.startsWith('cloudflare')
-    ? 'cloudflare'
-    : (platform as Exclude<
-        AccountPlatform,
-        | `cloudflare-${string}`
-        | 'server'
-        | 'github-pages'
-        | 'vercel-marketplace'
-        | 'vercel-blob'
-        | 'supabase-storage'
-        | 'amplitude'
-        | MediaService
-      >)
+  return platform as Exclude<AccountPlatform, 'amplitude' | MediaService>
 }

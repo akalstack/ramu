@@ -40,8 +40,6 @@ export interface DeployHost {
   stackTarget(projectId: string): string | null
   /** A repository of the project as a GitHub repository, with the token of the account that reaches it. */
   githubRepository(projectId: string, repoId: string): Promise<RepositoryLink>
-  /** The token of the GitHub account that reaches `repository` (`owner/name`) from one of the project's checkouts. */
-  githubToken(projectId: string, repository: string): Promise<string>
   /** Runs before a production deploy starts (the project's migrations); a failure stops the deploy. */
   beforeProduction?(projectId: string, binding: DeployBinding): Promise<void>
 }
@@ -71,21 +69,13 @@ export class DeployService {
   private async bound(projectId: string): Promise<{ binding: DeployBinding; auth: HostingAuth }> {
     const binding = this.binding(projectId)
     if (!binding) throw new Error('This project has no deploy target yet. Open Deploy on the project to link one.')
-    const { auth, accountId } = await this.accounts.auth(binding.platform, binding.accountId)
+    const { auth, accountId } = await this.accounts.auth(binding.platform)
     if (accountId && accountId !== binding.accountId)
       throw new DeployError(
         `This project is linked under another ${this.adapter(binding.platform).name} account. Connect that account, or link the project again.`,
         'missing-permission',
       )
-    const repository = binding.repository
-    return {
-      binding,
-      auth: {
-        ...auth,
-        scope: binding.scope,
-        ...(repository ? { github: () => this.host.githubToken(projectId, repository) } : {}),
-      },
-    }
+    return { binding, auth: { ...auth, scope: binding.scope } }
   }
 
   /** Remembers a binding made outside `link`, such as setting up the person's own server. */

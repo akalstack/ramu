@@ -14,34 +14,14 @@ const WORDS: Record<ResourceKind, { title: string; preview: string; offer: strin
   database: {
     title: 'Database',
     preview:
-      'Production has its own database. Previews, this host and CI use a separate preview copy (a Neon branch, or a second Supabase project), so they never change production data. Sync below sets {0}.',
+      'Production has its own database. Previews, this host and CI use a separate preview copy (a Neon branch), so they never change production data. Sync below sets {0}.',
     offer:
       'This app stores data. Provision creates a Postgres database on your own account, with a separate copy for previews and development.',
-  },
-  cache: {
-    title: 'Cache',
-    preview:
-      'Production has its own Redis database. Previews, this host and CI use a second one, so they never read or clear production’s keys. Sync below sets {0}.',
-    offer:
-      'This app uses Redis. Provision creates a Redis database on your own account, with a second one for previews and development.',
-  },
-  storage: {
-    title: 'File storage',
-    preview: 'Sync below sets {0}.',
-    offer:
-      'This app stores files. Provision creates storage on your own account: an R2 bucket for a Worker, a Vercel Blob store for a Vercel project, or a bucket in the app’s Supabase project, each with a separate one for previews where the provider has it.',
-  },
-  email: {
-    title: 'Email',
-    preview:
-      'Production and previews each get their own sending-only key, so neither can manage the account. Sync below sets {0}.',
-    offer:
-      'This app sends email. Provision creates sending-only keys on your own account: one for production, one for previews and development.',
   },
 }
 
 /**
- * The Deploy sheet's resources: for each kind the project needs (a database, a cache, email), Provision, then where it
+ * The Deploy sheet's resources: when the project needs a database, Provision, then where it
  * lives and the variables it sets. Deleting one is done on the provider's page, never here.
  */
 export function DatabaseSection({
@@ -147,28 +127,11 @@ function KindSection({
               </Button>
             </span>
             <span className="text-muted-foreground">
-              {resource.provider === 'vercel-blob'
-                ? t(
-                    'Vercel set BLOB_READ_WRITE_TOKEN on the project and keeps it; previews read and write the same store.',
-                  )
-                : resource.provider === 'vercel-marketplace'
-                  ? t(
-                      'Vercel set its variables on the project for production, previews and development, and keeps the values; Ramu does not see them.',
-                    )
-                  : resource.provider.startsWith('cloudflare-')
-                    ? t(
-                        'Bound to the Worker by a pull request, named as the code reads it; wrangler dev uses a separate preview copy.',
-                      )
-                    : resource.previewBranch
-                      ? t(words.preview, { 0: resource.variables.join(', ') })
-                      : t('Sync below sets {0}.', { 0: resource.variables.join(', ') })}
+              {resource.previewBranch
+                ? t(words.preview, { 0: resource.variables.join(', ') })
+                : t('Sync below sets {0}.', { 0: resource.variables.join(', ') })}
             </span>
-            {resource.provider === 'cloudflare-d1' && (
-              <span className="text-muted-foreground">
-                {t('The deploy job applies the migrations in migrations/ before each deploy.')}
-              </span>
-            )}
-            {kind === 'database' && shown.migrate && resource.provider !== 'cloudflare-d1' && (
+            {kind === 'database' && shown.migrate && (
               <span className="text-muted-foreground">
                 {t('Before each production deploy from Ramu, {0} runs against the production database.', {
                   0: shown.migrate,

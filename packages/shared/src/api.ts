@@ -34,7 +34,6 @@ import type {
   ProjectDeployment,
   Deployment,
   DeployLinkResult,
-  ServerStatus,
   DomainStatus,
   AccountPlatform,
   ProjectResources,
@@ -1318,21 +1317,6 @@ export interface RamuMethods extends ArtifactMethods {
   /** Checks a token pasted on the guided token page and keeps it in the host's credential store. Host only. */
   'deploy.saveToken'(platform: AccountPlatform, token: string): HostingAccount
   'deploy.disconnect'(platform: AccountPlatform): HostingAccountsSummary
-  /** The person's own server: its address, pinned host key and, with `check`, whether Docker can run apps there. */
-  'deploy.server'(check: boolean): ServerStatus
-  /** The public line of a key pair made on the host for the server's authorized_keys. Host only. */
-  'deploy.serverKey'(): string
-  /** Signs in to the server with Ramu's key or a pasted one and pins its host key. Host only. */
-  /** Makes another server kept on this host the one new setups use. */
-  'deploy.useServer'(accountId: string): ServerStatus
-  /** Forgets a kept server that is not the one new setups use. */
-  'deploy.forgetServer'(accountId: string): ServerStatus
-  'deploy.connectServer'(input: { host: string; port: number; user: string; privateKey: string | null }): ServerStatus
-  /**
-   * Sets a project up on the connected server for a domain: its Caddy site, the deploy job's Actions secrets and a pull
-   * request with the Dockerfile and deploy job the repository lacks.
-   */
-  'deploy.linkServer'(projectId: string, repoId: string, domain: string): DeployLinkResult
   /** Where a project deploys, its live address and its latest deployments. */
   'deploy.project'(projectId: string): ProjectDeployment
   /**

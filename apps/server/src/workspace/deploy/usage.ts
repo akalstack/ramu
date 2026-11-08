@@ -11,25 +11,12 @@ import type { DeployService } from './service'
 const BILLING_PAGES: Record<AccountPlatform, string> = {
   vercel: 'https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings%2Fbilling&title=Billing',
   netlify: 'https://app.netlify.com/',
+  // Platforms run through their CLI report no usage to Ramu, so no report is made for them.
   railway: 'https://railway.com/workspace/usage',
-  // Fly.io reports no usage through its API, so no report is made for it.
   fly: 'https://fly.io/dashboard/personal/billing',
-  // The person's own server is billed by whoever hosts it; it reports no usage, so no report is made for it.
-  server: '',
-  // GitHub Pages is free for public repositories and reports no usage, so no report is made for it.
-  'github-pages': '',
   cloudflare: 'https://dash.cloudflare.com/?to=/:account/billing',
-  'cloudflare-workers': 'https://dash.cloudflare.com/?to=/:account/billing',
-  'cloudflare-d1': 'https://dash.cloudflare.com/?to=/:account/billing',
-  'cloudflare-kv': 'https://dash.cloudflare.com/?to=/:account/billing',
-  'cloudflare-r2': 'https://dash.cloudflare.com/?to=/:account/billing',
-  neon: 'https://console.neon.tech/app/billing',
   supabase: 'https://supabase.com/dashboard/org/_/usage',
-  upstash: 'https://console.upstash.com/account/billing',
-  resend: 'https://resend.com/settings/usage',
-  'vercel-marketplace': 'https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings%2Fbilling&title=Billing',
-  'vercel-blob': 'https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings%2Fbilling&title=Billing',
-  'supabase-storage': 'https://supabase.com/dashboard/org/_/billing',
+  neon: 'https://console.neon.tech/app/billing',
   // A Grafana account is read by dashboards, not billed through Ramu, so no report is made for it.
   grafana: '',
   amplitude: '',

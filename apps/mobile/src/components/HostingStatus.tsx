@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, View } from 'react-native'
 import { accountBrand } from '@ramu/shared/brands'
-import { accountName } from '@ramu/shared/deployText'
 import { forgeStatusText } from '@ramu/shared/forgeStatus'
 import { translate } from '@ramu/shared/i18n'
 import type { ForgeConnectionSummary, HostingAccount } from '@ramu/shared/types'
@@ -123,11 +122,11 @@ export function HostingStatus({ hostId }: { hostId: string }) {
               <T style={{ flex: 1 }} size={font.caption} tone={account.error ? 'warn' : 'muted'}>
                 {!account.connected
                   ? t('{0}: not connected. Connect it in Ramu on the host computer.', {
-                      0: accountName(t, account.platform, account.name),
+                      0: account.name,
                     })
                   : (account.error ??
                     t('{0}: connected as {1}', {
-                      0: accountName(t, account.platform, account.name),
+                      0: account.name,
                       1: account.account ?? account.name,
                     }))}
               </T>

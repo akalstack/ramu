@@ -9,7 +9,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { connect, createServer, type AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import type { TunnelChoice } from '@ramu/shared/types'
-import { DOCKER_MANIFESTS, exposedPort, serverDockerfile } from '@ramu/shared/serverDeploy'
+import { DOCKER_MANIFESTS, exposedPort, appDockerfile } from '@ramu/shared/dockerfile'
 import type { LocalAppMode, LocalAppStatus } from '@ramu/shared/types/deploy'
 import { TunnelManager } from '../../remote/tunnel'
 import { NamedTunnel, type LastingAddress, type LastingAddresses } from './namedTunnel'
@@ -413,7 +413,7 @@ export class LocalApps {
       if (existsSync(path) && statSync(path).size <= MANIFEST_MAX_BYTES)
         manifests[manifest] = readFileSync(path, 'utf8')
     }
-    const generated = serverDockerfile({ files, manifests })
+    const generated = appDockerfile({ files, manifests })
     if (!generated)
       throw new Error('Ramu cannot tell how this app starts. Ask an agent to add a Dockerfile with an EXPOSE line.')
     return { dockerfile: generated.content, port: generated.port }

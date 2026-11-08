@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { isCliPlatform } from '@ramu/shared/types/deploy'
 import { existsSync, readFileSync } from 'node:fs'
 import { rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -130,9 +131,11 @@ export function projectFactsText(config: ProjectConfig): string | undefined {
     stack.test ? `Test: ${stack.test}` : '',
     stack.deployTarget === 'expo'
       ? 'Deploys to: the App Store and Google Play, released with release_status and release_start'
-      : stack.deployTarget
-        ? `Deploys to: ${stack.deployTarget}, through the deploy tools (deploy_status first)`
-        : '',
+      : stack.deployTarget && isCliPlatform(stack.deployTarget)
+        ? `Deploys to: ${stack.deployTarget}, through its own CLI with platform_cli (the person connects the account in Settings)`
+        : stack.deployTarget
+          ? `Deploys to: ${stack.deployTarget}, through the deploy tools (deploy_status first)`
+          : '',
     stack.database ? 'Stores data in Postgres: read DATABASE_URL (DATABASE_URL_UNPOOLED for migrations).' : '',
     stack.migrate ? `Migrate (runs before each production deploy): ${commandLine(stack.migrate)}` : '',
   ].filter(Boolean)

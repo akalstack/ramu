@@ -18,8 +18,12 @@ import {
   updatePreviewNeeds,
   type StoreFacts,
 } from '@ramu/shared/storeRelease'
-import { EAS_PREVIEW_WORKFLOW_PATH, easPreviewWorkflow, EXPO_TOKEN_SECRET } from '@ramu/shared/easPreview'
-import { packageManagerOf } from '@ramu/shared/pagesDeploy'
+import {
+  EAS_PREVIEW_WORKFLOW_PATH,
+  easPreviewWorkflow,
+  EXPO_TOKEN_SECRET,
+  packageManagerOf,
+} from '@ramu/shared/easPreview'
 import { translate } from '@ramu/shared/i18n'
 import type { StoreBuild, StoreRelease, StoreTarget, UsageReport } from '@ramu/shared/types/deploy'
 import { redactSecrets } from '../../memory/secrets'

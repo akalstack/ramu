@@ -14,11 +14,6 @@ import type {
 export interface HostingAuth {
   token: string
   scope?: string | null
-  /**
-   * The token of the GitHub account that reaches the bound repository, for a platform that deploys through its
-   * GitHub Actions (the person's own server). Read only when called.
-   */
-  github?: () => Promise<string>
 }
 
 /** Who a token belongs to, and whether it reaches more than deploys need. */

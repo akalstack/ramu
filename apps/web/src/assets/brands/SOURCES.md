@@ -11,11 +11,8 @@ Brand marks for forges, hosting platforms, databases and services, drawn as mask
 | `cloudflare.svg` | Simple Icons (CC0 1.0) | https://www.cloudflare.com/trademark/ |
 | `fly.svg` | Simple Icons (CC0 1.0) | https://fly.io/docs/about/brand |
 | `railway.svg` | Simple Icons (CC0 1.0) | https://railway.com/brand |
-| `docker.svg` | Simple Icons (CC0 1.0) | https://www.docker.com/company/newsroom/media-resources/ |
 | `neon.svg` | Simple Icons (CC0 1.0) | https://neon.com/brand |
 | `supabase.svg` | Simple Icons (CC0 1.0) | https://supabase.com/brand-assets |
-| `upstash.svg` | Simple Icons (CC0 1.0) | https://upstash.com/brand |
-| `resend.svg` | Simple Icons (CC0 1.0) | https://resend.com/brand |
 | `postgres.svg` | Simple Icons (CC0 1.0) | https://www.postgresql.org/about/policies/trademarks/ |
 | `sentry.svg` | Simple Icons (CC0 1.0) | https://sentry.io/branding/ |
 | `salesforce.svg` | Simple Icons 13.21 (CC0 1.0) | https://www.salesforce.com/company/legal/trademarks/ |

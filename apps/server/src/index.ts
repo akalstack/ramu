@@ -65,7 +65,7 @@ import { LiveDashboards, watchDashboards } from './interactive/liveDashboard'
 import { tableFromFile } from './interactive/dashboardFile'
 import { readText } from './workspace/files'
 import { appliedDesignSystem, designTokensOf } from '@ramu/shared/artifacts'
-import { registerDeployTools, registerReleaseTools } from './workspace/deploy/tools'
+import { registerDeployTools, registerPlatformCliTools, registerReleaseTools } from './workspace/deploy/tools'
 import { registerCiTools } from './workspace/ci/tools'
 import { setAcpTerminalService } from './providers/acpTerminals'
 import { SqliteBackgroundTerminalHistory } from './workspace/backgroundTerminalHistory'
@@ -1544,6 +1544,14 @@ const mcpHttp = createServer(async (req, res) => {
   if (!review && deployProject && deployProject !== NO_PROJECT && deploys.releases.root(deployProject))
     registerReleaseTools(server, deploys.releases, deploys.deployWatch, source, deployProject, (detail, signal) =>
       agents.requestPermission(source.id, 'Release', detail, signal),
+    )
+  if (!review)
+    registerPlatformCliTools(
+      server,
+      deploys.accounts,
+      source,
+      () => agents.get(source.id),
+      (detail, signal) => agents.requestPermission(source.id, 'Platform CLI', detail, signal),
     )
   if (!review) registerCiTools(server, source, () => agents.get(source.id))
   if (!review && !source.parentId) registerSecretTools(server, agents, source.id)

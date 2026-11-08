@@ -4749,7 +4749,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Pasang GitHub CLI (gh) atau simpan token GitHub di Pengaturan untuk membuka pull request dan mengikuti checks-nya di sini.',
   'Sign in with the GitHub CLI or save a GitHub token in Settings to open pull requests and follow their checks here.':
     'Masuk dengan GitHub CLI atau simpan token GitHub di Pengaturan untuk membuka pull request dan mengikuti checks-nya di sini.',
-  'Set up GitHub': 'Siapkan GitHub',
   'Add {0} of {1}': 'Tambah {0} dari {1}',
   'Select a repository': 'Pilih repositori',
   "This folder contains several repositories. Untick any you don't want in the project.":
@@ -5876,9 +5875,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Create an organization token for the organization your apps go in, rather than a personal access token':
     'Buat token organisasi untuk organisasi tempat aplikasimu berada, bukan token akses pribadi',
   '{0} is recommended for this project’s stack.': '{0} disarankan untuk stack proyek ini.',
-  'Fly.io cannot watch a repository, so Ramu creates the app, keeps a deploy token limited to it in the repository’s GitHub Actions secrets, and opens a pull request with fly.toml, a Dockerfile when the repository has none, and the deploy job. Every merge to the default branch deploys; there are no preview deployments.':
-    'Fly.io tidak bisa memantau repositori, jadi Ramu membuat aplikasinya, menyimpan token deploy yang terbatas untuk aplikasi itu di secret GitHub Actions repositori, lalu membuka pull request berisi fly.toml, Dockerfile bila repositori belum punya, dan job deploy. Setiap merge ke branch default akan men-deploy; tidak ada deployment pratinjau.',
-  'Set up Fly.io': 'Siapkan Fly.io',
   'Not connected. Deploys and Publish to the web need an account.':
     'Belum terhubung. Deploy dan Terbitkan ke web butuh akun.',
   'signed in through its CLI': 'masuk lewat CLI-nya',
@@ -5911,6 +5907,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   Platform: 'Platform',
   'Connected as {0}': 'Terhubung sebagai {0}',
   'Connect it in Settings → Git → Hosting accounts': 'Hubungkan di Pengaturan → Git → Akun hosting',
+  'Not connected. Agents deploy here through its CLI with this account, asking before each change.':
+    'Belum terhubung. Agen men-deploy ke sini lewat CLI-nya dengan akun ini, dan bertanya sebelum setiap perubahan.',
+  'Or link Vercel or Netlify, which watch the repository: every pull request gets a preview and the default branch deploys to production.':
+    'Atau tautkan Vercel atau Netlify, yang memantau repositori: setiap pull request mendapat preview dan branch default di-deploy ke produksi.',
+  '{0} is recommended for this project’s stack. It deploys through its own CLI: ask the project’s agent to deploy it, and Ramu runs the CLI with your {0} account and asks before each command that changes anything.':
+    '{0} direkomendasikan untuk stack proyek ini. Deploy-nya lewat CLI-nya sendiri: minta agen proyek untuk men-deploy, lalu Ramu menjalankan CLI dengan akun {0} Anda dan bertanya sebelum setiap perintah yang mengubah sesuatu.',
   'Connect a repository to this project and publish it to GitHub first.':
     'Hubungkan repositori ke proyek ini dan terbitkan ke GitHub dulu.',
   'Run on this computer': 'Jalankan di komputer ini',
@@ -6022,8 +6024,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Not connected. Databases for your projects need an account.':
     'Belum terhubung. Database untuk proyek Anda memerlukan akun.',
   Database: 'Database',
-  'Production has its own database. Previews, this host and CI use a separate preview copy (a Neon branch, or a second Supabase project), so they never change production data. Sync below sets {0}.':
-    'Produksi punya database sendiri. Preview, host ini, dan CI memakai salinan preview terpisah (branch Neon, atau proyek Supabase kedua), sehingga tidak pernah mengubah data produksi. Sinkronkan di bawah mengatur {0}.',
+  'Production has its own database. Previews, this host and CI use a separate preview copy (a Neon branch), so they never change production data. Sync below sets {0}.':
+    'Produksi punya database sendiri. Preview, host ini, dan CI memakai salinan preview terpisah (branch Neon), sehingga tidak pernah mengubah data produksi. Sinkronisasi di bawah mengatur {0}.',
+  'Create a custom token for the one account your apps go in, with Edit on only what your agent deploys (Workers Scripts, Cloudflare Pages, D1, Workers KV Storage or R2)':
+    'Buat token kustom untuk satu akun tempat aplikasi Anda berada, dengan Edit hanya pada yang di-deploy agen Anda (Workers Scripts, Cloudflare Pages, D1, Workers KV Storage, atau R2)',
+  'Create an access token with an expiry. Supabase tokens reach every organization you belong to':
+    'Buat access token dengan masa berlaku. Token Supabase menjangkau setiap organisasi tempat Anda bergabung',
   'Sync below sets {0}.': 'Sinkronisasi di bawah mengatur {0}.',
   'Before each production deploy from Ramu, {0} runs against the production database.':
     'Sebelum setiap deploy produksi dari Ramu, {0} dijalankan pada database produksi.',
@@ -6151,41 +6157,7 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Berikan kunci service account Google ke EAS untuk pengiriman (eas credentials, lalu Android, lalu Google Service Account).',
   'Invite testers in TestFlight and in Play’s internal testing, fill in each store listing, and submit for review on each store when you are ready. Ramu never submits for review.':
     'Undang penguji di TestFlight dan di pengujian internal Play, isi listing tiap toko, dan kirim untuk ditinjau di tiap toko saat Anda siap. Ramu tidak pernah mengirim untuk ditinjau.',
-  'Another web server already uses port 80 or 443; stop it so Caddy can serve HTTPS.':
-    'Server web lain sudah memakai port 80 atau 443; hentikan agar Caddy bisa melayani HTTPS.',
-  'Connect it below': 'Hubungkan di bawah',
-  'Connect your server on the machine running this host.':
-    'Hubungkan server Anda di komputer yang menjalankan host ini.',
-  'Connected as {0} with an SSH key kept on this host':
-    'Terhubung sebagai {0} dengan kunci SSH yang disimpan di host ini',
-  'Create a key for this server': 'Buat kunci untuk server ini',
-  'Docker is installed, but this user cannot use it. Add the user to the docker group, sign in to the server again, and check that Docker is running.':
-    'Docker sudah terpasang, tetapi pengguna ini tidak bisa memakainya. Tambahkan pengguna ke grup docker, masuk lagi ke server, dan pastikan Docker berjalan.',
-  'Docker is not installed. Ramu never installs software on your server; run Docker’s own steps there yourself:':
-    'Docker belum terpasang. Ramu tidak pernah memasang perangkat lunak di server Anda; jalankan sendiri langkah resmi Docker di sana:',
-  'Docker {0} is ready.': 'Docker {0} siap.',
   Domain: 'Domain',
-  'It goes straight to this host’s credential store and is never shown again. A key with a passphrase cannot be used.':
-    'Kunci langsung masuk ke penyimpanan kredensial host ini dan tidak pernah ditampilkan lagi. Kunci dengan frasa sandi tidak bisa dipakai.',
-  'Merge the pull request to deploy; every later merge deploys again.':
-    'Gabungkan pull request untuk men-deploy; setiap penggabungan berikutnya men-deploy lagi.',
-  'On the server, add this line to ~/.ssh/authorized_keys for that user, then press Connect.':
-    'Di server, tambahkan baris ini ke ~/.ssh/authorized_keys milik pengguna tersebut, lalu tekan Hubungkan.',
-  'Open Docker’s install guide': 'Buka panduan pemasangan Docker',
-  'Own server': 'Server sendiri',
-  'Point the domain at the server with an A record; Caddy gets its HTTPS certificate once it does. Set up the server opens a pull request with the Dockerfile and deploy job the repository lacks, and keeps the SSH details in its GitHub Actions secrets.':
-    'Arahkan domain ke server dengan record A; Caddy mendapatkan sertifikat HTTPS-nya setelah itu. Siapkan server membuka pull request berisi Dockerfile dan job deploy yang belum ada di repositori, dan menyimpan detail SSH di secret GitHub Actions-nya.',
-  'Private key': 'Kunci privat',
-  'Ramu remembers the server’s own key on this first connection and refuses a different one later.':
-    'Ramu mengingat kunci milik server pada koneksi pertama ini dan menolak kunci yang berbeda nanti.',
-  'Server key {0}, pinned on first connect; a different key is refused.':
-    'Kunci server {0}, disematkan saat koneksi pertama; kunci yang berbeda ditolak.',
-  'Set up the server': 'Siapkan server',
-  'Signed in as {0} on {1}.': 'Masuk sebagai {0} di {1}.',
-  'The app runs on your server as a Docker container behind Caddy, which serves your domain over HTTPS. Every merge to the default branch deploys through GitHub Actions, so your server never needs Ramu running.':
-    'Aplikasi berjalan di server Anda sebagai kontainer Docker di belakang Caddy, yang melayani domain Anda lewat HTTPS. Setiap penggabungan ke cabang default di-deploy lewat GitHub Actions, jadi server Anda tidak pernah perlu Ramu berjalan.',
-  'Use a key I already have': 'Pakai kunci yang sudah saya punya',
-  'Use a key Ramu creates instead': 'Pakai kunci buatan Ramu saja',
   User: 'Pengguna',
   'Tell people what shipped': 'Kabarkan yang sudah dirilis',
   'Make a release note': 'Buat catatan rilis',
@@ -6233,19 +6205,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'No speaker notes on this slide.': 'Tidak ada catatan pembicara di slide ini.',
   'Edit as formatted text': 'Sunting sebagai teks berformat',
   'Block {number}': 'Blok {number}',
-  'Set up GitHub Pages': 'Siapkan GitHub Pages',
-  'Uses the repository’s GitHub sign-in': 'Memakai login GitHub repositori',
-  'For a static site: Ramu turns on GitHub Pages for the repository and opens a pull request with a deploy job that builds the site (or publishes its files as they are) with GitHub’s own Pages actions. Every merge to the default branch deploys; there are no preview deployments, and the site is public.':
-    'Untuk situs statis: Ramu menyalakan GitHub Pages untuk repositori dan membuka pull request berisi job deploy yang membangun situs (atau menerbitkan berkasnya apa adanya) dengan action Pages milik GitHub. Setiap penggabungan ke cabang default men-deploy; tidak ada deployment preview, dan situsnya publik.',
-  'Set up Cloudflare Pages': 'Siapkan Cloudflare Pages',
-  'For a static site: Ramu creates the Pages project, keeps your Pages token and account id in the repository’s GitHub Actions secrets, and opens a pull request with a deploy job that builds the site and uploads it with wrangler. Every merge to the default branch deploys, and each pull request gets a preview.':
-    'Untuk situs statis: Ramu membuat proyek Pages, menyimpan token Pages dan id akun Anda di secret GitHub Actions repositori, dan membuka pull request berisi job deploy yang membangun situs dan mengunggahnya dengan wrangler. Setiap penggabungan ke cabang default men-deploy, dan setiap pull request mendapat preview.',
-  'Create a custom token for the one account your sites go in, with Account → Cloudflare Pages → Edit (add Workers Scripts → Edit for Workers, and D1, Workers KV Storage or R2 → Edit for those); it is kept in each linked repository’s Actions secrets':
-    'Buat token kustom untuk satu akun tempat situs Anda berada, dengan Account → Cloudflare Pages → Edit (tambahkan Workers Scripts → Edit untuk Workers, dan D1, Workers KV Storage, atau R2 → Edit untuk itu); token disimpan di Actions secrets setiap repositori yang ditautkan',
-  'Other servers': 'Server lain',
-  '{0}, kept for the projects set up on it': '{0}, disimpan untuk proyek yang disiapkan di sana',
-  'Use for new setups': 'Pakai untuk penyiapan baru',
-  'Add another server': 'Tambah server lain',
   'Lasting address: https://{0}': 'Alamat tetap: https://{0}',
   Hostname: 'Nama host',
   'Cloudflare token': 'Token Cloudflare',
@@ -6256,9 +6215,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Read it by running expo config': 'Baca dengan menjalankan expo config',
   'Runs the project’s own app.config code on this computer to read the configuration it computes':
     'Menjalankan kode app.config proyek di komputer ini untuk membaca konfigurasi yang dihitungnya',
-  'Set up Cloudflare Workers': 'Siapkan Cloudflare Workers',
-  'For a Worker with a wrangler config: Ramu keeps your Cloudflare token (which needs Workers Scripts edit) and account id in the repository’s GitHub Actions secrets and opens a pull request with a job that runs wrangler deploy. Every merge to the default branch deploys.':
-    'Untuk Worker dengan konfigurasi wrangler: Ramu menyimpan token Cloudflare Anda (yang perlu Workers Scripts edit) dan id akun di secret GitHub Actions repositori, lalu membuka pull request berisi job yang menjalankan wrangler deploy. Setiap penggabungan ke cabang default men-deploy.',
   'Create a fine-grained token on GitHub': 'Buat token fine-grained di GitHub',
   'Paste tokens on the machine running this host. Vercel, Netlify and Railway can also be signed in from here: their sign-in runs on the host and keeps the token there.':
     'Tempel token di mesin yang menjalankan host ini. Vercel, Netlify, dan Railway juga bisa login dari sini: proses loginnya berjalan di host dan tokennya tetap di sana.',
@@ -6276,10 +6232,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'API key, cost not reported': 'API key, biaya tidak dilaporkan',
   'About {0} a call': 'Sekitar {0} per panggilan',
   'chosen as the cheapest good enough': 'dipilih sebagai yang termurah dan cukup baik',
-  'Postgres on your organization’s plan, with a second project for previews; the free plan allows two projects and pauses them after a week without use.':
-    'Postgres pada paket organisasi Anda, dengan proyek kedua untuk preview; paket gratis mengizinkan dua proyek dan menjedanya setelah seminggu tidak dipakai.',
-  'Create an access token with an expiry. Supabase tokens reach every organization you belong to, and Ramu creates projects in the first one':
-    'Buat access token dengan masa berlaku. Token Supabase menjangkau setiap organisasi tempat Anda bergabung, dan Ramu membuat proyek di organisasi pertama',
   'Pull request previews': 'Preview pull request',
   'Each pull request is published as an EAS Update, with a QR code on the pull request.':
     'Setiap pull request diterbitkan sebagai EAS Update, dengan kode QR di pull request.',
@@ -6300,53 +6252,14 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Tidak ada updates.url di app.json: eas update:configure mengaturnya',
   Cache: 'Cache',
   Email: 'Email',
-  'Production has its own Redis database. Previews, this host and CI use a second one, so they never read or clear production’s keys. Sync below sets {0}.':
-    'Produksi punya database Redis sendiri. Preview, host ini, dan CI memakai database kedua, sehingga tidak pernah membaca atau menghapus key produksi. Sinkronkan di bawah mengatur {0}.',
-  'This app uses Redis. Provision creates a Redis database on your own account, with a second one for previews and development.':
-    'Aplikasi ini memakai Redis. Provision membuat database Redis di akun Anda sendiri, dengan database kedua untuk preview dan pengembangan.',
-  'Production and previews each get their own sending-only key, so neither can manage the account. Sync below sets {0}.':
-    'Produksi dan preview masing-masing mendapat key khusus pengiriman, sehingga keduanya tidak bisa mengelola akun. Sinkronkan di bawah mengatur {0}.',
-  'This app sends email. Provision creates sending-only keys on your own account: one for production, one for previews and development.':
-    'Aplikasi ini mengirim email. Provision membuat key khusus pengiriman di akun Anda sendiri: satu untuk produksi, satu untuk preview dan pengembangan.',
-  'Redis in us-east-1 on your account’s plan, with a second database for previews.':
-    'Redis di us-east-1 pada paket akun Anda, dengan database kedua untuk preview.',
-  'A sending-only key for production and another for previews; add your domain on Resend to send from it.':
-    'Key khusus pengiriman untuk produksi dan satu lagi untuk preview; tambahkan domain Anda di Resend untuk mengirim darinya.',
-  'Create a Developer API key, then paste your account email and the key joined by a colon (you@example.com:key). The key reaches every database of the account':
-    'Buat Developer API key, lalu tempel email akun Anda dan key yang digabung dengan titik dua (anda@example.com:key). Key ini menjangkau setiap database di akun',
-  'Create a key with Full access, which creating sending keys needs; the app gets sending-only keys, never this one':
-    'Buat key dengan Full access, yang diperlukan untuk membuat key pengiriman; aplikasi mendapat key khusus pengiriman, bukan key ini',
   'Checked through the first thread that needs it, before Auto uses it.':
     'Diperiksa lewat thread pertama yang membutuhkannya, sebelum Auto memakainya.',
   '{0}: also try in Auto': '{0}: coba juga di Auto',
   'A Shared MCP tool Auto tries after your signed-in providers.':
     'Alat Shared MCP yang dicoba Auto setelah penyedia yang Anda masuki.',
   'The number the sign-in page shows': 'Angka yang ditampilkan halaman masuk',
-  'SQLite on your Cloudflare account, bound to the Worker, with a second database for wrangler dev.':
-    'SQLite di akun Cloudflare Anda, diikat ke Worker, dengan database kedua untuk wrangler dev.',
-  'A KV namespace on your Cloudflare account, bound to the Worker, with a second one for wrangler dev.':
-    'Namespace KV di akun Cloudflare Anda, diikat ke Worker, dengan namespace kedua untuk wrangler dev.',
-  'An R2 bucket on your Cloudflare account, bound to the Worker, with a second one for wrangler dev.':
-    'Bucket R2 di akun Cloudflare Anda, diikat ke Worker, dengan bucket kedua untuk wrangler dev.',
-  'Bound to the Worker by a pull request, named as the code reads it; wrangler dev uses a separate preview copy.':
-    'Diikat ke Worker lewat pull request, dengan nama seperti yang dibaca kode; wrangler dev memakai salinan preview terpisah.',
-  'The deploy job applies the migrations in migrations/ before each deploy.':
-    'Job deploy menerapkan migrasi di migrations/ sebelum setiap deploy.',
-  'File storage': 'Penyimpanan file',
-  'Vercel set its variables on the project for production, previews and development, and keeps the values; Ramu does not see them.':
-    'Vercel mengatur variabelnya di proyek untuk produksi, preview, dan pengembangan, serta menyimpan nilainya; Ramu tidak melihatnya.',
-  'Postgres from a database integration your Vercel team installed, billed through Vercel; Vercel sets its variables on the project.':
-    'Postgres dari integrasi database yang dipasang tim Vercel Anda, ditagih lewat Vercel; Vercel mengatur variabelnya di proyek.',
   'Or use Netlify Database: add @netlify/database to the app (netlify database init does it), and Netlify creates the database on the next deploy, gives each deploy preview its own branch and applies the migrations in netlify/database/migrations/.':
     'Atau pakai Netlify Database: tambahkan @netlify/database ke aplikasi (netlify database init melakukannya), dan Netlify membuat database pada deploy berikutnya, memberi setiap deploy preview branch sendiri, dan menerapkan migrasi di netlify/database/migrations/.',
-  'This app stores files. Provision creates storage on your own account: an R2 bucket for a Worker, a Vercel Blob store for a Vercel project, or a bucket in the app’s Supabase project, each with a separate one for previews where the provider has it.':
-    'Aplikasi ini menyimpan file. Provision membuat penyimpanan di akun Anda sendiri: bucket R2 untuk Worker, store Vercel Blob untuk proyek Vercel, atau bucket di proyek Supabase aplikasi, masing-masing dengan yang terpisah untuk preview jika penyedianya mendukung.',
-  'Vercel set BLOB_READ_WRITE_TOKEN on the project and keeps it; previews read and write the same store.':
-    'Vercel mengatur BLOB_READ_WRITE_TOKEN di proyek dan menyimpannya; preview membaca dan menulis store yang sama.',
-  'A private Blob store connected to the project; Vercel sets BLOB_READ_WRITE_TOKEN on it.':
-    'Store Blob privat yang terhubung ke proyek; Vercel mengatur BLOB_READ_WRITE_TOKEN di sana.',
-  'A private bucket in the app’s Supabase project, and one in its preview project.':
-    'Bucket privat di proyek Supabase aplikasi, dan satu di proyek preview-nya.',
   'Also being edited on {0}. Saving keeps both edits where they changed different lines.':
     'Juga sedang disunting di {0}. Menyimpan mempertahankan kedua suntingan jika mengubah baris yang berbeda.',
   'Create a service account with the Viewer role and a token for it, then paste your Grafana address and the token joined by | (https://acme.grafana.net|glsa_…). Dashboards read it only where you allow it':

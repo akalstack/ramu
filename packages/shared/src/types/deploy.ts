@@ -2,18 +2,19 @@
 // one platform's API. A new platform adds an adapter on the server and its id here.
 import type { DeployTargetId } from '../stacks'
 
-/** Hosting platforms with an adapter on the server; `server` is the person's own server, reached over SSH. */
-export const HOSTING_PLATFORMS = [
-  'vercel',
-  'netlify',
-  'railway',
-  'fly',
-  'server',
-  'github-pages',
-  'cloudflare',
-  'cloudflare-workers',
-] as const
+/** Hosting platforms with an adapter on the server: linked to a repository, watched, rolled back from the sheet. */
+export const HOSTING_PLATFORMS = ['vercel', 'netlify'] as const
 export type HostingPlatform = (typeof HOSTING_PLATFORMS)[number]
+
+/**
+ * Platforms an agent drives through the platform's own CLI with the token saved on this host (`platform_cli`), rather
+ * than through an adapter: the agent writes the setup, Ramu keeps the token out of the thread and asks before a
+ * command that changes anything.
+ */
+export const CLI_PLATFORMS = ['railway', 'fly', 'cloudflare', 'supabase'] as const
+export type CliPlatform = (typeof CLI_PLATFORMS)[number]
+export const isCliPlatform = (value: unknown): value is CliPlatform =>
+  typeof value === 'string' && (CLI_PLATFORMS as readonly string[]).includes(value)
 
 /** Platforms whose own CLI can sign in on the host. */
 export const CLI_SIGN_IN_PLATFORMS = ['vercel', 'netlify', 'railway', 'fly', 'expo', 'neon'] as const
@@ -21,19 +22,8 @@ export type CliSignInPlatform = (typeof CLI_SIGN_IN_PLATFORMS)[number]
 /** Sign-ins whose link works from any device, so a paired owner device can start them for a remote host. */
 export const REMOTE_SIGN_IN_PLATFORMS: readonly CliSignInPlatform[] = ['vercel', 'netlify', 'railway', 'expo']
 
-/** Database and storage providers with a resource adapter on the server. */
-export const RESOURCE_PROVIDERS = [
-  'neon',
-  'supabase',
-  'cloudflare-d1',
-  'upstash',
-  'cloudflare-kv',
-  'cloudflare-r2',
-  'resend',
-  'vercel-marketplace',
-  'vercel-blob',
-  'supabase-storage',
-] as const
+/** Database providers with a resource adapter on the server. */
+export const RESOURCE_PROVIDERS = ['neon'] as const
 export type ResourceProvider = (typeof RESOURCE_PROVIDERS)[number]
 
 /** Services that build an app and hand it to the app stores. */
@@ -73,6 +63,7 @@ export const isMediaService = (value: unknown): value is MediaService =>
 
 export const ACCOUNT_PLATFORMS = [
   ...HOSTING_PLATFORMS,
+  ...CLI_PLATFORMS,
   ...RESOURCE_PROVIDERS,
   ...STORE_SERVICES,
   ...NAMED_SERVICES,
@@ -93,8 +84,8 @@ export type DeployFailureKind = 'signed-out' | 'missing-permission' | 'plan-limi
 /** One platform's connection on this host. The token never leaves the host. */
 export interface HostingAccount {
   platform: AccountPlatform
-  /** Whether it deploys apps, provides a resource such as a database, or releases phone apps to the stores. */
-  kind: 'hosting' | ResourceKind | 'store' | 'service' | 'media'
+  /** Whether it deploys apps, runs through its CLI, provides a database, or releases phone apps to the stores. */
+  kind: 'hosting' | 'cli' | ResourceKind | 'store' | 'service' | 'media'
   /** The platform's name, such as "Vercel". */
   name: string
   connected: boolean
@@ -120,8 +111,8 @@ export interface HostingAccountsSummary {
   canAdminister: boolean
 }
 
-/** What a resource adapter provides: a database, a cache, file storage, or sending email. */
-export const RESOURCE_KINDS = ['database', 'cache', 'storage', 'email'] as const
+/** What a resource adapter provides. */
+export const RESOURCE_KINDS = ['database'] as const
 export type ResourceKind = (typeof RESOURCE_KINDS)[number]
 
 /** A size or tier a provider offers when creating a resource. */
@@ -205,7 +196,7 @@ export interface DeployBinding {
   productionBranch: string
   /** The platform account id the binding was made with; another account is refused. */
   accountId: string
-  /** The team or workspace the project belongs to (a Vercel team, a Railway workspace). */
+  /** The team or workspace the project belongs to (a Vercel team). */
   scope: string | null
 }
 
@@ -389,41 +380,9 @@ export interface StoreRelease {
   error: string | null
 }
 
-/** Whether the connected server can run the app: Docker usable by the SSH user, and ports 80 and 443 for Caddy. */
-export type ServerDocker = 'ready' | 'missing' | 'no-permission'
-
-/** The person's own server as Settings and the Deploy sheet show it. The private key never leaves the host. */
-export interface ServerStatus {
-  /** Other servers kept on this host; projects linked under one keep deploying to it. */
-  others: { id: string; name: string }[]
-  connection: {
-    host: string
-    port: number
-    user: string
-    /** The pinned host key's SHA-256 fingerprint, as `ssh-keygen -l` prints it. */
-    fingerprint: string
-    /** The public half of the key Ramu signs in with, when Ramu can tell it. */
-    publicKey: string | null
-  } | null
-  /** A key pair made on this host and not used yet: the public line to add to the server's authorized_keys. */
-  pendingKey: string | null
-  /** Null until the server is checked. */
-  docker: ServerDocker | null
-  dockerVersion: string | null
-  /** Something other than Ramu's Caddy already listens on port 80 or 443. */
-  portsBusy: boolean
-  /** Why the server could not be reached or checked, in plain words. */
-  error: string | null
-}
-
-/**
- * What linking a project did: the deployment status and, for a target deployed by a GitHub Actions job (the own server,
- * Fly.io), the pull request with the files the repository lacks.
- */
+/** What linking a project did: the deployment status. */
 export interface DeployLinkResult {
   deployment: ProjectDeployment
-  /** The pull request adding the deploy job and the files it needs, or null when there is none to merge. */
-  pullRequest: string | null
 }
 
 /** An app published from this computer through a tunnel of its own (Deploy → Run on this computer). */

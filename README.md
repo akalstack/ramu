@@ -49,7 +49,7 @@ Open a project, say what you want, and review the result. The defaults work out 
 **From idea to live app**
 
 - **New project from one sentence.** Ramu asks a few questions, picks a stack, runs the framework's own generator and keeps building toward a goal checked by the build and tests.
-- **Deploy on your own accounts.** Vercel, Netlify or your own server, with previews per pull request, production from the default branch and **Roll back**; Expo apps to TestFlight and Play's internal track.
+- **Deploy on your own accounts.** Vercel or Netlify, with previews per pull request, production from the default branch and **Roll back**; Railway, Fly.io, Cloudflare and Supabase through their own CLI with your account, asking before each change; Expo apps to TestFlight and Play's internal track.
 - **Everything around it.** CI through a pull request, environment variables synced, a Neon database, custom domains, usage beside your plan's limits, and an incident thread when the live address stops answering ([shipping an app](docs/guide/shipping.md)).
 
 **Anywhere**

@@ -50,10 +50,6 @@ export const projectConfigSchema = z.object({
       deployTarget: z.string().trim().min(1).max(40).optional(),
       /** Stores data in a Postgres database. */
       database: z.boolean().optional(),
-      /** Uses a cache, stores files or sends email: the deploy sheet offers to provision each. */
-      cache: z.boolean().optional(),
-      storage: z.boolean().optional(),
-      email: z.boolean().optional(),
       /** An argument list, run before each production deploy from Ramu. */
       migrate: z.array(z.string().min(1).max(1000)).min(1).max(50).optional(),
       /** The path the uptime watch checks on the live address, such as `/api/health`. */

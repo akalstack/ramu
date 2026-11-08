@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { accountBrand } from '@ramu/shared/brands'
-import { accountName, canRollBackTo, DEPLOYMENT_STATE, deployText, firstDeployStep } from '@ramu/shared/deployText'
+import { canRollBackTo, DEPLOYMENT_STATE, deployText, firstDeployStep } from '@ramu/shared/deployText'
 import type {
   Deployment,
   HostingAccount,
@@ -9,16 +9,14 @@ import type {
   Project,
   Repository,
 } from '@ramu/shared/types'
-import { isHostingPlatform } from '@ramu/shared/types/deploy'
+import { isCliPlatform, isHostingPlatform } from '@ramu/shared/types/deploy'
 import { BrandIcon } from '@/components/brand-icon'
 import { Button } from '@/components/desktop-button'
-import { Input } from '@/components/desktop-input'
 import { Checkbox } from '@/components/desktop-checkbox'
 import { RowButton } from '@/components/row-button'
 import { Dialog } from '../../Menu'
 import { t, useLanguage } from '../../i18n'
 import { invoke as openOnThisComputer } from '../../ipc'
-import { ServerConnect } from '../../settings/ServerConnect'
 import { errorText } from '../../lib/errors'
 import { useHost } from '../../workspace/HostProvider'
 import { projectCtx } from '../../workspace/workspace'
@@ -52,9 +50,8 @@ export function DeployDialog({
   const [status, setStatus] = useState<ProjectDeployment | null>(null)
   const [accounts, setAccounts] = useState<(HostingAccount & { platform: HostingPlatform })[]>([])
   const [platform, setPlatform] = useState<HostingPlatform | null>(null)
-  const [canAdminister, setCanAdminister] = useState(false)
-  const [domain, setDomain] = useState('')
-  const [pullRequest, setPullRequest] = useState<string | null>(null)
+  // The account of a platform the stack names that deploys through its own CLI, such as Railway.
+  const [cliAccount, setCliAccount] = useState<HostingAccount | null>(null)
   const [repoId, setRepoId] = useState<string | null>(repos[0]?.id ?? null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -71,7 +68,11 @@ export function DeployDialog({
           isHostingPlatform(account.platform) ? [{ ...account, platform: account.platform }] : [],
         )
         setAccounts(hosting)
-        setCanAdminister(summary.canAdminister)
+        setCliAccount(
+          isCliPlatform(next.recommended)
+            ? (summary.accounts.find((account) => account.platform === next.recommended) ?? null)
+            : null,
+        )
         setPlatform(
           (current) =>
             current ??
@@ -128,32 +129,11 @@ export function DeployDialog({
   const recommended = accounts.find((entry) => entry.platform === status?.recommended)
   // An Expo app ships through the stores, not a hosting platform, unless it is already linked to one.
   const storeOnly = !binding && status?.recommended === 'expo'
-
-  const toServer = !binding && platform === 'server'
-  // Fly.io has no Git integration: linking opens a pull request with the deploy job instead.
-  const toFly = !binding && platform === 'fly'
-  // GitHub Pages goes through the repository's GitHub sign-in, so it needs nothing connected first.
-  const toPages = !binding && platform === 'github-pages'
-  const toCloudflare = !binding && platform === 'cloudflare'
-  const toWorkers = !binding && platform === 'cloudflare-workers'
   const confirm = () => {
     if (storeOnly) return onClose()
-    if (toServer) {
-      if (!repoId || !domain.trim()) return
-      void run(async () => {
-        const linked = await host.invoke('deploy.linkServer', project.id, repoId, domain.trim())
-        setStatus(linked.deployment)
-        setPullRequest(linked.pullRequest)
-      })
-      return
-    }
     if (!binding) {
       if (!platform || !repoId) return
-      void run(async () => {
-        const linked = await host.invoke('deploy.link', project.id, platform, repoId)
-        setStatus(linked.deployment)
-        setPullRequest(linked.pullRequest)
-      })
+      void run(async () => setStatus((await host.invoke('deploy.link', project.id, platform, repoId)).deployment))
       return
     }
     if (!canDeploy) return onClose()
@@ -173,29 +153,18 @@ export function DeployDialog({
           ? t('Working…')
           : storeOnly
             ? t('Done')
-            : toServer
-              ? t('Set up the server')
-              : toFly
-                ? t('Set up Fly.io')
-                : toPages
-                  ? t('Set up GitHub Pages')
-                  : toCloudflare
-                    ? t('Set up Cloudflare Pages')
-                    : toWorkers
-                      ? t('Set up Cloudflare Workers')
-                      : !binding
-                        ? t('Link repository')
-                        : !canDeploy
-                          ? t('Done')
-                          : confirming
-                            ? t('Deploy now')
-                            : t('Deploy to production')
+            : !binding
+              ? t('Link repository')
+              : !canDeploy
+                ? t('Done')
+                : confirming
+                  ? t('Deploy now')
+                  : t('Deploy to production')
       }
       confirmDisabled={
         !status ||
         (!binding && unpublished) ||
-        (!binding && !storeOnly && (!platform || !repoId || (!account?.connected && !toPages))) ||
-        (toServer && !domain.trim())
+        (!binding && !storeOnly && (!platform || !repoId || !account?.connected))
       }
       busy={busy}
       error={error}
@@ -206,11 +175,22 @@ export function DeployDialog({
         <p className="text-muted-foreground">{t('Checking…')}</p>
       ) : storeOnly ? null : !binding ? (
         <>
+          {cliAccount && (
+            <p role="status" className="m-0 mb-3 text-caption">
+              {t(
+                '{0} is recommended for this project’s stack. It deploys through its own CLI: ask the project’s agent to deploy it, and Ramu runs the CLI with your {0} account and asks before each command that changes anything.',
+                { 0: cliAccount.name },
+              )}{' '}
+              {cliAccount.connected
+                ? t('Connected as {0}', { 0: cliAccount.account ?? cliAccount.name })
+                : t('Connect it in Settings → Git → Hosting accounts')}
+            </p>
+          )}
           <p>
-            {recommended && (recommended.platform === 'fly' || recommended.platform === 'server')
-              ? t('{0} is recommended for this project’s stack.', {
-                  0: accountName(t, recommended.platform, recommended.name),
-                })
+            {cliAccount
+              ? t(
+                  'Or link Vercel or Netlify, which watch the repository: every pull request gets a preview and the default branch deploys to production.',
+                )
               : recommended
                 ? t(
                     '{0} is recommended for this project’s stack. Ramu links it to the repository, so every pull request gets a preview and the default branch deploys to production.',
@@ -230,15 +210,11 @@ export function DeployDialog({
                 onClick={() => setPlatform(entry.platform)}
               >
                 <BrandIcon brand={accountBrand(entry.platform)} />
-                <span className="flex-1 text-foreground">{accountName(t, entry.platform, entry.name)}</span>
+                <span className="flex-1 text-foreground">{entry.name}</span>
                 <span className="text-caption text-muted-foreground">
-                  {entry.platform === 'github-pages'
-                    ? t('Uses the repository’s GitHub sign-in')
-                    : entry.connected
-                      ? t('Connected as {0}', { 0: entry.account ?? entry.name })
-                      : entry.platform === 'server'
-                        ? t('Connect it below')
-                        : t('Connect it in Settings → Git → Hosting accounts')}
+                  {entry.connected
+                    ? t('Connected as {0}', { 0: entry.account ?? entry.name })
+                    : t('Connect it in Settings → Git → Hosting accounts')}
                 </span>
               </RowButton>
             ))}
@@ -273,68 +249,13 @@ export function DeployDialog({
               {t('Connect a repository to this project and publish it to GitHub first.')}
             </p>
           )}
-          {toFly && (
-            <p className="m-0 mt-3 text-caption">
-              {t(
-                'Fly.io cannot watch a repository, so Ramu creates the app, keeps a deploy token limited to it in the repository’s GitHub Actions secrets, and opens a pull request with fly.toml, a Dockerfile when the repository has none, and the deploy job. Every merge to the default branch deploys; there are no preview deployments.',
-              )}
-            </p>
-          )}
-          {toPages && (
-            <p className="m-0 mt-3 text-caption">
-              {t(
-                'For a static site: Ramu turns on GitHub Pages for the repository and opens a pull request with a deploy job that builds the site (or publishes its files as they are) with GitHub’s own Pages actions. Every merge to the default branch deploys; there are no preview deployments, and the site is public.',
-              )}
-            </p>
-          )}
-          {toCloudflare && (
-            <p className="m-0 mt-3 text-caption">
-              {t(
-                'For a static site: Ramu creates the Pages project, keeps your Pages token and account id in the repository’s GitHub Actions secrets, and opens a pull request with a deploy job that builds the site and uploads it with wrangler. Every merge to the default branch deploys, and each pull request gets a preview.',
-              )}
-            </p>
-          )}
-          {toWorkers && (
-            <p className="m-0 mt-3 text-caption">
-              {t(
-                'For a Worker with a wrangler config: Ramu keeps your Cloudflare token (which needs Workers Scripts edit) and account id in the repository’s GitHub Actions secrets and opens a pull request with a job that runs wrangler deploy. Every merge to the default branch deploys.',
-              )}
-            </p>
-          )}
-          {toServer && (
-            <section aria-label={t('Own server')} className="mt-3 flex flex-col gap-2 border-t border-(--line) pt-3">
-              <p className="m-0 text-caption">
-                {t(
-                  'The app runs on your server as a Docker container behind Caddy, which serves your domain over HTTPS. Every merge to the default branch deploys through GitHub Actions, so your server never needs Ramu running.',
-                )}
-              </p>
-              <ServerConnect invoke={host.invoke} canAdminister={canAdminister} onConnected={load} />
-              {account?.connected && (
-                <label className="flex flex-col gap-1 text-caption">
-                  {t('Domain')}
-                  <Input
-                    placeholder="app.example.com"
-                    autoCapitalize="none"
-                    spellCheck={false}
-                    value={domain}
-                    onChange={(event) => setDomain(event.target.value)}
-                  />
-                  <span className="text-muted-foreground">
-                    {t(
-                      'Point the domain at the server with an A record; Caddy gets its HTTPS certificate once it does. Set up the server opens a pull request with the Dockerfile and deploy job the repository lacks, and keeps the SSH details in its GitHub Actions secrets.',
-                    )}
-                  </span>
-                </label>
-              )}
-            </section>
-          )}
         </>
       ) : (
         <>
           <p className="flex items-center gap-2">
             <BrandIcon brand={accountBrand(binding.platform)} />
             <span className="flex-1">
-              {account ? accountName(t, account.platform, account.name) : binding.platform} · {binding.siteName}
+              {account?.name ?? binding.platform} · {binding.siteName}
               {binding.repository ? ` · ${binding.repository}` : ''}
             </span>
           </p>
@@ -349,14 +270,6 @@ export function DeployDialog({
           {status.error && (
             <p role="alert" className="text-caption text-destructive">
               {status.error.message}
-            </p>
-          )}
-          {pullRequest && (
-            <p role="status" className="flex items-center gap-2 text-caption">
-              <span className="flex-1">{t('Merge the pull request to deploy; every later merge deploys again.')}</span>
-              <Button size="sm" variant="secondary" onClick={() => open(pullRequest)}>
-                {t('Open pull request')}
-              </Button>
             </p>
           )}
           {status.capabilities.includes('promote') && (
@@ -377,7 +290,7 @@ export function DeployDialog({
               </span>
             </label>
           )}
-          {!pullRequest && firstStep && (
+          {firstStep && (
             <p role="status" className="text-caption">
               {firstStep === 'push'
                 ? t(
@@ -474,10 +387,7 @@ export function DeployDialog({
           <UptimeSection projectId={project.id} />
           <UsageSection projectId={project.id} />
           {status.capabilities.includes('domains') && (
-            <DomainsSection
-              projectId={project.id}
-              platform={account ? accountName(t, account.platform, account.name) : binding.platform}
-            />
+            <DomainsSection projectId={project.id} platform={account?.name ?? binding.platform} />
           )}
         </>
       )}

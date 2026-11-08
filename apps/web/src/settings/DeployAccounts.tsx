@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { accountBrand } from '@ramu/shared/brands'
-import { accountName } from '@ramu/shared/deployText'
 import type { AccountPlatform, HostingAccount, HostingAccountsSummary, HostingSignIn } from '@ramu/shared/types'
 import {
   CLI_SIGN_IN_PLATFORMS,
@@ -16,30 +15,18 @@ import { SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { t } from '../i18n'
 import { invoke as openOnThisComputer } from '../ipc'
 import { errorText } from '../lib/errors'
-import { ServerConnect } from './ServerConnect'
 import { useSettingsInvoke } from './SettingsScope'
 
 /** What to pick on each platform's token page: the smallest scope it offers. */
-const SCOPE_HINT: Record<
-  Exclude<
-    AccountPlatform,
-    'server' | 'github-pages' | 'vercel-marketplace' | 'vercel-blob' | 'supabase-storage' | `cloudflare-${string}`
-  >,
-  string
-> = {
+const SCOPE_HINT: Record<AccountPlatform, string> = {
   vercel: 'Scope: the team your projects are in, not Full Account',
   netlify: 'Netlify tokens reach every team you belong to, so choose an expiry',
   railway: 'Pick the workspace your projects are in, so the token reaches only that workspace',
   cloudflare:
-    'Create a custom token for the one account your sites go in, with Account → Cloudflare Pages → Edit (add Workers Scripts → Edit for Workers, and D1, Workers KV Storage or R2 → Edit for those); it is kept in each linked repository’s Actions secrets',
+    'Create a custom token for the one account your apps go in, with Edit on only what your agent deploys (Workers Scripts, Cloudflare Pages, D1, Workers KV Storage or R2)',
   fly: 'Create an organization token for the organization your apps go in, rather than a personal access token',
   neon: 'Create a personal API key. Neon keys reach your whole account and do not expire, so revoke it on Neon when Ramu no longer needs it',
-  supabase:
-    'Create an access token with an expiry. Supabase tokens reach every organization you belong to, and Ramu creates projects in the first one',
-  upstash:
-    'Create a Developer API key, then paste your account email and the key joined by a colon (you@example.com:key). The key reaches every database of the account',
-  resend:
-    'Create a key with Full access, which creating sending keys needs; the app gets sending-only keys, never this one',
+  supabase: 'Create an access token with an expiry. Supabase tokens reach every organization you belong to',
   grafana:
     'Create a service account with the Viewer role and a token for it, then paste your Grafana address and the token joined by | (https://acme.grafana.net|glsa_…). Dashboards read it only where you allow it',
   amplitude:
@@ -58,16 +45,16 @@ function deployAccountHeadline(account: HostingAccount): string {
   if (!account.connected)
     return account.kind === 'hosting'
       ? t('Not connected. Deploys and Publish to the web need an account.')
-      : account.kind === 'store'
-        ? t('Not connected. Store releases of phone apps need an account.')
-        : account.kind === 'service'
-          ? t('Not connected. Dashboards that read it need an account.')
-          : account.kind === 'media'
-            ? t('Not connected. Abilities can use it for video, speech, music or sound effects.')
-            : t('Not connected. Databases for your projects need an account.')
+      : account.kind === 'cli'
+        ? t('Not connected. Agents deploy here through its CLI with this account, asking before each change.')
+        : account.kind === 'store'
+          ? t('Not connected. Store releases of phone apps need an account.')
+          : account.kind === 'service'
+            ? t('Not connected. Dashboards that read it need an account.')
+            : account.kind === 'media'
+              ? t('Not connected. Abilities can use it for video, speech, music or sound effects.')
+              : t('Not connected. Databases for your projects need an account.')
   if (account.error) return account.error
-  if (account.platform === 'server')
-    return t('Connected as {0} with an SSH key kept on this host', { 0: account.account ?? account.name })
   const via = account.via === 'cli' ? t('signed in through its CLI') : t('token saved on this host')
   const who = t('Connected as {0} ({1})', { 0: account.account ?? account.name, 1: via })
   return account.expiresAt
@@ -108,17 +95,9 @@ export function DeployAccounts({ only }: { only?: HostingAccount['kind'] } = {})
     )
   return (
     <>
-      {/* GitHub Pages uses the repository's GitHub sign-in, listed under GitHub; there is nothing to connect. */}
       {summary?.accounts
-        // Workers, D1, KV and R2 use the Cloudflare row's token and the Marketplace the Vercel row's; GitHub Pages uses
-        // the repository's GitHub account.
-        .filter(
-          (account) =>
-            !['github-pages', 'vercel-marketplace', 'vercel-blob', 'supabase-storage'].includes(account.platform) &&
-            !account.platform.startsWith('cloudflare-') &&
-            // Media keys are saved beside the abilities they serve, not with the hosting accounts.
-            (only ? account.kind === only : account.kind !== 'media'),
-        )
+        // Media keys are saved beside the abilities they serve, not with the hosting accounts.
+        .filter((account) => (only ? account.kind === only : account.kind !== 'media'))
         .map((account) => (
           <DeployAccountRow
             key={account.platform}
@@ -205,18 +184,14 @@ function DeployAccountRow({
   return (
     <>
       <SettingsRow>
-        <SettingsLabel
-          title={accountName(t, account.platform, account.name)}
-          icon={<BrandIcon brand={accountBrand(account.platform)} />}
-          help={help}
-        />
+        <SettingsLabel title={account.name} icon={<BrandIcon brand={accountBrand(account.platform)} />} help={help} />
         <span className="flex items-center gap-2">
           {account.connected && (
             <Button variant="secondary" size="sm" onClick={() => reload(true)}>
               {t('Check connection')}
             </Button>
           )}
-          {(canAdminister || remoteSignIn) && !open && !(account.platform === 'server' && account.connected) && (
+          {(canAdminister || remoteSignIn) && !open && (
             <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
               {account.connected ? t('Reconnect') : t('Connect')}
             </Button>
@@ -238,221 +213,198 @@ function DeployAccountRow({
           )}
         </span>
       </SettingsRow>
-      {open && account.platform === 'server' && (
+      {open && (
         <div className="mb-3 flex flex-col gap-3 rounded-(--radius-m) bg-fill p-4 text-caption">
-          <ServerConnect
-            invoke={invoke}
-            canAdminister={canAdminister}
-            onConnected={() => {
-              setOpen(false)
-              reload(false)
-            }}
-          />
-          <span>
-            <Button variant="ghost" size="sm" onClick={close}>
-              {t('Cancel')}
-            </Button>
-          </span>
-        </div>
-      )}
-      {open &&
-        account.platform !== 'server' &&
-        account.platform !== 'github-pages' &&
-        account.platform !== 'vercel-marketplace' &&
-        account.platform !== 'vercel-blob' &&
-        account.platform !== 'supabase-storage' &&
-        !account.platform.startsWith('cloudflare-') && (
-          <div className="mb-3 flex flex-col gap-3 rounded-(--radius-m) bg-fill p-4 text-caption">
-            {cliPlatform && (
-              <section className="flex flex-col gap-2" aria-label={t('Sign in with {0}', { 0: account.name })}>
-                <strong>{t('Sign in with {0}', { 0: account.name })}</strong>
-                <p className="m-0 text-muted-foreground">
-                  {t(
-                    'Runs {0}’s own sign-in on the host. Authorize Ramu in the page it opens; the token stays in this host’s credential store and your own CLI login is not changed.',
-                    { 0: account.name },
-                  )}
-                </p>
-                {signIn?.state === 'waiting' && signIn.url && (
-                  <span className="flex flex-wrap items-center gap-2" role="status">
-                    <Button size="sm" onClick={() => void openOnThisComputer('app.openExternal', signIn.url!)}>
-                      {t('Open the sign-in page')}
-                    </Button>
-                    {signIn.code && (
-                      <span>
-                        {t('Code')} <strong className="font-mono">{signIn.code}</strong>
-                      </span>
-                    )}
-                    <span className="text-muted-foreground">{t('Waiting for you to authorize…')}</span>
-                  </span>
+          {cliPlatform && (
+            <section className="flex flex-col gap-2" aria-label={t('Sign in with {0}', { 0: account.name })}>
+              <strong>{t('Sign in with {0}', { 0: account.name })}</strong>
+              <p className="m-0 text-muted-foreground">
+                {t(
+                  'Runs {0}’s own sign-in on the host. Authorize Ramu in the page it opens; the token stays in this host’s credential store and your own CLI login is not changed.',
+                  { 0: account.name },
                 )}
-                {signIn?.state === 'waiting' && signIn.asksNumber && (
-                  <form
-                    className="flex flex-wrap items-center gap-2"
-                    onSubmit={(event) => {
-                      event.preventDefault()
-                      void run(async () => {
-                        setSignIn(await invoke('deploy.signInMatch', signIn.id, number.trim()))
-                        setNumber('')
-                      })
-                    }}
-                  >
-                    <label className="flex items-center gap-2">
-                      {t('The number the sign-in page shows')}
-                      <Input
-                        value={number}
-                        inputMode="numeric"
-                        maxLength={4}
-                        className="w-20"
-                        onChange={(event) => setNumber(event.target.value.replace(/\D/g, ''))}
-                      />
-                    </label>
-                    <Button type="submit" size="sm" disabled={busy || !number}>
-                      {t('Send')}
-                    </Button>
-                  </form>
-                )}
-                {signIn?.state === 'failed' && signIn.error && (
-                  <p role="alert" className="m-0 text-destructive">
-                    {signIn.error}
-                  </p>
-                )}
-                {!waiting && (
-                  <span>
-                    <Button
-                      size="sm"
-                      disabled={busy}
-                      onClick={() => void run(async () => setSignIn(await invoke('deploy.signIn', cliPlatform)))}
-                    >
-                      {t('Sign in with {0}', { 0: account.name })}
-                    </Button>
-                  </span>
-                )}
-              </section>
-            )}
-            {canAdminister && account.platform === 'salesforce' && (
-              <form
-                className="flex flex-col gap-2"
-                aria-label={t('Sign in with {0}', { 0: account.name })}
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  void run(async () => setSignIn(await invoke('deploy.salesforceSignIn', token.trim(), sandbox)))
-                }}
-              >
-                <strong>{t('Sign in with {0}', { 0: account.name })}</strong>
-                <p className="m-0 text-muted-foreground">{t(SCOPE_HINT.salesforce)}</p>
-                <p className="m-0 text-muted-foreground">
-                  {t('Callback URL')} <code className="font-mono">{SALESFORCE_CALLBACK}</code>
-                </p>
-                <label htmlFor={tokenId} className="flex flex-col gap-1">
-                  {t('Consumer key')}
-                  <Input
-                    id={tokenId}
-                    value={token}
-                    autoComplete="off"
-                    onChange={(event) => setToken(event.target.value)}
-                  />
-                </label>
-                <label className="flex items-center gap-2">
-                  <Checkbox checked={sandbox} onCheckedChange={(checked) => setSandbox(checked === true)} />
-                  {t('A sandbox org')}
-                </label>
-                {signIn?.state === 'waiting' && signIn.url && (
-                  <span className="flex flex-wrap items-center gap-2" role="status">
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => void openOnThisComputer('app.openExternal', signIn.url!)}
-                    >
-                      {t('Open the sign-in page')}
-                    </Button>
-                    <span className="text-muted-foreground">{t('Waiting for you to authorize…')}</span>
-                  </span>
-                )}
-                {signIn?.state === 'failed' && signIn.error && (
-                  <p role="alert" className="m-0 text-destructive">
-                    {signIn.error}
-                  </p>
-                )}
-                {!waiting && (
-                  <span>
-                    <Button type="submit" size="sm" disabled={busy || token.trim().length < 10}>
-                      {t('Sign in with {0}', { 0: account.name })}
-                    </Button>
-                  </span>
-                )}
-              </form>
-            )}
-            {canAdminister && account.platform !== 'salesforce' && (
-              <form
-                className="flex flex-col gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  void run(async () => {
-                    await invoke('deploy.saveToken', account.platform, token.trim())
-                    setToken('')
-                    setOpen(false)
-                    reload(false)
-                  })
-                }}
-              >
-                <strong>{account.cli ? t('Or use a token') : t('Connect with a token')}</strong>
-                <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-muted-foreground">
-                  <li>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => void openOnThisComputer('app.openExternal', account.tokenPage)}
-                    >
-                      {t('Open {0}’s token page', { 0: account.name })}
-                    </Button>
-                  </li>
-                  <li>{t('Name it Ramu.')}</li>
-                  <li>{t(SCOPE_HINT[account.platform as keyof typeof SCOPE_HINT])}</li>
-                  <li>
-                    {account.kind === 'hosting'
-                      ? t('Set an expiry, then copy the token and paste it here.')
-                      : t('Copy the key and paste it here.')}
-                  </li>
-                </ol>
-                <label htmlFor={tokenId} className="flex flex-col gap-1">
-                  {t('API token')}
-                  <Input
-                    id={tokenId}
-                    type="password"
-                    autoComplete="off"
-                    autoCapitalize="none"
-                    spellCheck={false}
-                    disabled={busy}
-                    value={token}
-                    onChange={(event) => setToken(event.target.value)}
-                  />
-                </label>
-                <p className="m-0 text-muted-foreground">
-                  {t(
-                    'The token goes straight to the host’s credential store, is checked with {0}, and is never shown again.',
-                    {
-                      0: account.name,
-                    },
-                  )}
-                </p>
-                {error && (
-                  <p role="alert" className="m-0 text-destructive">
-                    {error}
-                  </p>
-                )}
-                <span className="flex gap-2">
-                  <Button type="submit" size="sm" disabled={busy || token.trim().length < 8}>
-                    {busy ? t('Checking…') : t('Save')}
+              </p>
+              {signIn?.state === 'waiting' && signIn.url && (
+                <span className="flex flex-wrap items-center gap-2" role="status">
+                  <Button size="sm" onClick={() => void openOnThisComputer('app.openExternal', signIn.url!)}>
+                    {t('Open the sign-in page')}
                   </Button>
-                  <Button type="button" variant="ghost" size="sm" onClick={close}>
-                    {t('Cancel')}
+                  {signIn.code && (
+                    <span>
+                      {t('Code')} <strong className="font-mono">{signIn.code}</strong>
+                    </span>
+                  )}
+                  <span className="text-muted-foreground">{t('Waiting for you to authorize…')}</span>
+                </span>
+              )}
+              {signIn?.state === 'waiting' && signIn.asksNumber && (
+                <form
+                  className="flex flex-wrap items-center gap-2"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    void run(async () => {
+                      setSignIn(await invoke('deploy.signInMatch', signIn.id, number.trim()))
+                      setNumber('')
+                    })
+                  }}
+                >
+                  <label className="flex items-center gap-2">
+                    {t('The number the sign-in page shows')}
+                    <Input
+                      value={number}
+                      inputMode="numeric"
+                      maxLength={4}
+                      className="w-20"
+                      onChange={(event) => setNumber(event.target.value.replace(/\D/g, ''))}
+                    />
+                  </label>
+                  <Button type="submit" size="sm" disabled={busy || !number}>
+                    {t('Send')}
+                  </Button>
+                </form>
+              )}
+              {signIn?.state === 'failed' && signIn.error && (
+                <p role="alert" className="m-0 text-destructive">
+                  {signIn.error}
+                </p>
+              )}
+              {!waiting && (
+                <span>
+                  <Button
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => void run(async () => setSignIn(await invoke('deploy.signIn', cliPlatform)))}
+                  >
+                    {t('Sign in with {0}', { 0: account.name })}
                   </Button>
                 </span>
-              </form>
-            )}
-          </div>
-        )}
+              )}
+            </section>
+          )}
+          {canAdminister && account.platform === 'salesforce' && (
+            <form
+              className="flex flex-col gap-2"
+              aria-label={t('Sign in with {0}', { 0: account.name })}
+              onSubmit={(event) => {
+                event.preventDefault()
+                void run(async () => setSignIn(await invoke('deploy.salesforceSignIn', token.trim(), sandbox)))
+              }}
+            >
+              <strong>{t('Sign in with {0}', { 0: account.name })}</strong>
+              <p className="m-0 text-muted-foreground">{t(SCOPE_HINT.salesforce)}</p>
+              <p className="m-0 text-muted-foreground">
+                {t('Callback URL')} <code className="font-mono">{SALESFORCE_CALLBACK}</code>
+              </p>
+              <label htmlFor={tokenId} className="flex flex-col gap-1">
+                {t('Consumer key')}
+                <Input
+                  id={tokenId}
+                  value={token}
+                  autoComplete="off"
+                  onChange={(event) => setToken(event.target.value)}
+                />
+              </label>
+              <label className="flex items-center gap-2">
+                <Checkbox checked={sandbox} onCheckedChange={(checked) => setSandbox(checked === true)} />
+                {t('A sandbox org')}
+              </label>
+              {signIn?.state === 'waiting' && signIn.url && (
+                <span className="flex flex-wrap items-center gap-2" role="status">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => void openOnThisComputer('app.openExternal', signIn.url!)}
+                  >
+                    {t('Open the sign-in page')}
+                  </Button>
+                  <span className="text-muted-foreground">{t('Waiting for you to authorize…')}</span>
+                </span>
+              )}
+              {signIn?.state === 'failed' && signIn.error && (
+                <p role="alert" className="m-0 text-destructive">
+                  {signIn.error}
+                </p>
+              )}
+              {!waiting && (
+                <span>
+                  <Button type="submit" size="sm" disabled={busy || token.trim().length < 10}>
+                    {t('Sign in with {0}', { 0: account.name })}
+                  </Button>
+                </span>
+              )}
+            </form>
+          )}
+          {canAdminister && account.platform !== 'salesforce' && (
+            <form
+              className="flex flex-col gap-2"
+              onSubmit={(event) => {
+                event.preventDefault()
+                void run(async () => {
+                  await invoke('deploy.saveToken', account.platform, token.trim())
+                  setToken('')
+                  setOpen(false)
+                  reload(false)
+                })
+              }}
+            >
+              <strong>{account.cli ? t('Or use a token') : t('Connect with a token')}</strong>
+              <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-muted-foreground">
+                <li>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void openOnThisComputer('app.openExternal', account.tokenPage)}
+                  >
+                    {t('Open {0}’s token page', { 0: account.name })}
+                  </Button>
+                </li>
+                <li>{t('Name it Ramu.')}</li>
+                <li>{t(SCOPE_HINT[account.platform as keyof typeof SCOPE_HINT])}</li>
+                <li>
+                  {account.kind === 'hosting'
+                    ? t('Set an expiry, then copy the token and paste it here.')
+                    : t('Copy the key and paste it here.')}
+                </li>
+              </ol>
+              <label htmlFor={tokenId} className="flex flex-col gap-1">
+                {t('API token')}
+                <Input
+                  id={tokenId}
+                  type="password"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  disabled={busy}
+                  value={token}
+                  onChange={(event) => setToken(event.target.value)}
+                />
+              </label>
+              <p className="m-0 text-muted-foreground">
+                {t(
+                  'The token goes straight to the host’s credential store, is checked with {0}, and is never shown again.',
+                  {
+                    0: account.name,
+                  },
+                )}
+              </p>
+              {error && (
+                <p role="alert" className="m-0 text-destructive">
+                  {error}
+                </p>
+              )}
+              <span className="flex gap-2">
+                <Button type="submit" size="sm" disabled={busy || token.trim().length < 8}>
+                  {busy ? t('Checking…') : t('Save')}
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={close}>
+                  {t('Cancel')}
+                </Button>
+              </span>
+            </form>
+          )}
+        </div>
+      )}
     </>
   )
 }
