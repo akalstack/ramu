@@ -11,6 +11,7 @@ import {
   abilityListing,
   abilityRoutes,
   isMcpChoice,
+  AUTO_MCP_ABILITIES,
   MCP_ABILITIES,
   type Ability,
   type AbilityCall,
@@ -118,11 +119,21 @@ const IMAGE_TYPES: Record<string, string> = {
  * Arguments for a Shared MCP tool from the one text an ability passes: the property named like a prompt or query, else
  * the first required text property, else the first text property.
  */
-export function mcpArguments(schema: Record<string, unknown>, text: string): Record<string, unknown> {
+export function mcpArguments(
+  schema: Record<string, unknown>,
+  text: string,
+  images: string[] = [],
+): Record<string, unknown> {
   const properties = (schema.properties ?? {}) as Record<string, { type?: unknown }>
+  // Images go in the property named for them, a list when the tool takes several, each as a data URL.
+  const imageKey = images.length
+    ? Object.keys(properties).find((name) => /^(images?|image_url|input_image|file)$/i.test(name))
+    : undefined
+  if (images.length && !imageKey)
+    throw new Error('This Shared MCP tool takes no image to edit. Map image editing to another tool.')
   const textual = Object.keys(properties).filter((key) => {
     const type = properties[key]?.type
-    return type === undefined || type === 'string'
+    return key !== imageKey && (type === undefined || type === 'string')
   })
   const required = Array.isArray(schema.required) ? (schema.required as unknown[]) : []
   const key =
@@ -130,7 +141,10 @@ export function mcpArguments(schema: Record<string, unknown>, text: string): Rec
     textual.find((name) => required.includes(name)) ??
     textual[0]
   if (!key) throw new Error('This Shared MCP tool takes no text to send. Map the ability to another tool.')
-  return { [key]: text }
+  return {
+    [key]: text,
+    ...(imageKey ? { [imageKey]: properties[imageKey]?.type === 'array' ? images : images[0] } : {}),
+  }
 }
 
 const clip = (text: string, n: number) => (text.length > n ? `${text.slice(0, n - 1)}…` : text)
@@ -664,13 +678,19 @@ export class AbilityService {
   }
 
   /** One call to a Shared MCP tool through the thread's own access, with its text and images. */
-  private async mcpCall(session: AgentSessionInfo, tool: AbilityMcpTool, text: string, signal?: AbortSignal) {
+  private async mcpCall(
+    session: AgentSessionInfo,
+    tool: AbilityMcpTool,
+    text: string,
+    signal?: AbortSignal,
+    inputs: string[] = [],
+  ) {
     if (!this.host.mcp) throw new Error('Shared MCP is not available on this host.')
     const { server, result } = await this.host.mcp(
       session.id,
       tool.connectionId,
       tool.tool,
-      (schema) => mcpArguments(schema, text),
+      (schema) => mcpArguments(schema, text, inputs),
       signal ?? new AbortController().signal,
     )
     const content = (Array.isArray(result.content) ? result.content : []) as {
@@ -702,7 +722,7 @@ export class AbilityService {
     signal: AbortSignal,
   ): Promise<AbilityCall | null> {
     const tool = this.preferences().autoMcp?.[base.ability]
-    if (!tool || !MCP_ABILITIES.includes(base.ability) || !this.host.mcp) return null
+    if (!tool || !AUTO_MCP_ABILITIES.includes(base.ability) || !this.host.mcp) return null
     if (!this.mcpTools().some((entry) => entry.connectionId === tool.connectionId && entry.tool === tool.tool))
       return null
     const same = (entry: AbilityMcpCheck) =>
@@ -762,19 +782,31 @@ export class AbilityService {
         'unavailable',
         `${ABILITY_LABELS[base.ability]} cannot run on a Shared MCP tool. Choose a provider for it in Settings → Models → Abilities.`,
       )
-    const text = String(base.args.prompt ?? base.args.query ?? prepared.sent.prompt)
-    const { server, texts, images } = await this.mcpCall(session, choice, text, signal)
+    // A long read sends its whole rendered prompt, documents included; an edit sends its images as data URLs.
+    const text =
+      base.ability === 'long_context'
+        ? prepared.request.prompt
+        : String(base.args.prompt ?? base.args.query ?? prepared.sent.prompt)
+    const inputs =
+      base.ability === 'image_edit'
+        ? prepared.request.images.map((path) => {
+            const extension = extname(path).slice(1).toLowerCase()
+            const mime = extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : `image/${extension}`
+            return `data:${mime};base64,${readFileSync(path).toString('base64')}`
+          })
+        : []
+    const { server, texts, images } = await this.mcpCall(session, choice, text, signal, inputs)
     const attachments = images.map((image, index) =>
       this.host.attachments.add(`${slug(text)}-${index + 1}.${image.extension}`, image.bytes),
     )
-    if (base.ability === 'image_generation' && !attachments.length)
+    if ((base.ability === 'image_generation' || base.ability === 'image_edit') && !attachments.length)
       throw new Error(`${server} returned no image. ${clip(texts.join(' '), 300)}`.trim())
     return {
       ...base,
       status: 'done',
       mcp: { server, tool: choice.tool },
       sent: prepared.sent,
-      summary: clip(texts.join('\n\n'), 6_000),
+      summary: clip(texts.join('\n\n'), base.ability === 'long_context' ? 20_000 : 6_000),
       ...(attachments.length ? { attachments } : {}),
       durationMs: Date.now() - started,
     }

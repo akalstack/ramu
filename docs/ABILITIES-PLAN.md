@@ -20,9 +20,9 @@ A page's own AI asks for an image through the same routing (`ramuContent.ai.imag
 
 ### 3. Abilities from Shared MCP servers
 
-Image generation and web search can be mapped to an approved Shared MCP tool, or offered to Auto after the providers once its check passes (see [Abilities](guide/agents.md#abilities)). Remaining:
+Image generation, image editing, web search and long reads can be mapped to an approved Shared MCP tool (images as data URLs in its image field, a long read's files in its prompt), and image generation and search offered to Auto after the providers once their check passes (see [Abilities](guide/agents.md#abilities)). Remaining:
 
-- Speech, image editing and long reads on an MCP tool, once a way to pass files and audio to a generic tool is settled.
+- **Speech on an MCP tool,** with the `speech` ability of §1: audio a tool returns as MCP `audio` content, kept with the Motion artifact.
 
 ### 4. Music and sound effects
 

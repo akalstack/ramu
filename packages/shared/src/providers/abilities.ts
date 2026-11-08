@@ -88,8 +88,13 @@ export interface AbilityMcpTool {
  */
 export type AbilityChoice = 'auto' | 'off' | { provider: AgentProvider; model: string } | AbilityMcpTool
 
-/** Abilities a Shared MCP tool can stand in for: the ones that take only text, so any such tool can be given it. */
-export const MCP_ABILITIES: readonly Ability[] = ['image_generation', 'web_search']
+/**
+ * Abilities a Shared MCP tool can stand in for: text in (a long read's documents go in its prompt), and for image
+ * editing the images as data URLs in the tool's image field.
+ */
+export const MCP_ABILITIES: readonly Ability[] = ['image_generation', 'image_edit', 'web_search', 'long_context']
+/** The ones Auto can also try on a Shared MCP tool, which have a sample check to run first. */
+export const AUTO_MCP_ABILITIES: readonly Ability[] = ['image_generation', 'web_search']
 
 /** A Shared MCP tool offered for mapping, with its server's name for the menu. */
 export interface AbilityMcpToolOption extends AbilityMcpTool {

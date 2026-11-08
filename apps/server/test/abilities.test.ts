@@ -449,6 +449,19 @@ describe('abilities on a Shared MCP tool', () => {
     await expect(abilities.pageImage('a pear')).rejects.toThrow('turned off')
   })
 
+  it('passes an edit’s images to the tool’s image field as data URLs, and refuses a tool without one', () => {
+    const image = 'data:image/png;base64,AAAA'
+    expect(
+      mcpArguments({ properties: { prompt: { type: 'string' }, images: { type: 'array' } } }, 'make it green', [image]),
+    ).toEqual({ prompt: 'make it green', images: [image] })
+    expect(
+      mcpArguments({ properties: { prompt: { type: 'string' }, image_url: { type: 'string' } } }, 'green', [image]),
+    ).toEqual({ prompt: 'green', image_url: image })
+    expect(() => mcpArguments({ properties: { prompt: { type: 'string' } } }, 'green', [image])).toThrow(
+      'takes no image',
+    )
+  })
+
   it('fills the tool’s prompt or query, else its first required text', () => {
     expect(mcpArguments({ properties: { size: { type: 'number' }, prompt: { type: 'string' } } }, 'apple')).toEqual({
       prompt: 'apple',
@@ -489,11 +502,12 @@ describe('abilities on a Shared MCP tool', () => {
       status: 'failed',
       message: expect.stringContaining('Pictures returned an error. quota'),
     })
+    // A long read sends its whole prompt, the file's text included, as the tool's text.
     withAbilities({ choices: { long_context: { connectionId: 'c1', tool: 'make' } } })
     writeFileSync(join(cwd, 'notes.md'), 'Tuesday.')
     expect(await abilities.call('thread', 'read_long', { question: 'When?', files: ['notes.md'] })).toMatchObject({
-      status: 'refused',
-      message: expect.stringContaining('cannot run on a Shared MCP tool'),
+      status: 'done',
+      summary: expect.stringContaining('Tuesday.'),
     })
   })
 })

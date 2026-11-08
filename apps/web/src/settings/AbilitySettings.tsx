@@ -4,6 +4,7 @@ import {
   ABILITIES,
   ABILITY_LABELS,
   DEFAULT_ABILITY_PREFERENCES,
+  AUTO_MCP_ABILITIES,
   MCP_ABILITIES,
   isMcpChoice,
   type Ability,
@@ -159,7 +160,7 @@ export function AbilitySettings({
           </SettingsRow>
         )
       })}
-      {MCP_ABILITIES.filter((ability) => mcpTools.length && (abilities.choices[ability] ?? 'auto') === 'auto').map(
+      {AUTO_MCP_ABILITIES.filter((ability) => mcpTools.length && (abilities.choices[ability] ?? 'auto') === 'auto').map(
         (ability) => {
           const tool = abilities.autoMcp?.[ability]
           return (

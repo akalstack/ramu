@@ -16,7 +16,7 @@ import { agentSettings, id, pullMode, providerId } from './schemas'
 import {
   ABILITIES,
   DEFAULT_ABILITY_PREFERENCES,
-  MCP_ABILITIES,
+  AUTO_MCP_ABILITIES,
   type AbilityPreferences,
 } from '@ramu/shared/providers/abilities'
 
@@ -118,7 +118,7 @@ export const abilityChoices = z.object(
 const mcpTool = z.object({ connectionId: z.string().min(1).max(200), tool: z.string().min(1).max(200) })
 const abilityPreferences = z.object({
   choices: abilityChoices.default({}),
-  autoMcp: z.object(Object.fromEntries(MCP_ABILITIES.map((ability) => [ability, mcpTool.optional()]))).optional(),
+  autoMcp: z.object(Object.fromEntries(AUTO_MCP_ABILITIES.map((ability) => [ability, mcpTool.optional()]))).optional(),
   askBeforeOtherProvider: z.boolean().default(false),
 })
 const advisorPreferences = z.object({
