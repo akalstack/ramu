@@ -23,11 +23,16 @@ Ramu is an **Agent Development Environment**: your coding agents, editor, termin
 
 Open a project, say what you want, and review the result. The defaults work out of the box; **Settings** holds the rest.
 
-## What it does
+## Why Ramu
+
+**From one sentence to a live app.** Describe what you want. Ramu asks a few questions, picks a stack, runs the framework's own generator and keeps building until the build and tests pass. Then it deploys to your own Vercel, Netlify or app store account, with a preview for every pull request and **Roll back** when something breaks ([shipping an app](docs/guide/shipping.md)).
+
+**Usage limits don't stop the work.** Rank your providers and models. When one runs out, the thread moves to the next with its context and switches back once your first choice has room again. When all are limited, Ramu waits and resumes, even after a restart.
+
+## What else it does
 
 **Agents that keep going**
 
-- **Usage limits handled.** Rank providers and models; when one runs out, the thread moves to the next with its context, and switches back once your first choice has room again. When all are limited, Ramu waits and resumes, even after a restart.
 - **Goals.** An agent works toward an objective across turns, with an optional verification command that decides when it is done.
 - **Background work.** Schedules, webhook triggers, queued messages and long-running commands keep going after you close the window. Recaps say what happened.
 
@@ -46,11 +51,10 @@ Open a project, say what you want, and review the result. The defaults work out 
 - Interactive documents agents publish in a thread: diagrams, calculators, prototypes.
 - Shared MCP tools with per-thread approval, Inbox for what needs you, themes, and English or Bahasa Indonesia.
 
-**From idea to live app**
+**Shipping and running the app**
 
-- **New project from one sentence.** Ramu asks a few questions, picks a stack, runs the framework's own generator and keeps building toward a goal checked by the build and tests.
-- **Deploy on your own accounts.** Vercel or Netlify, with previews per pull request, production from the default branch and **Roll back**; Railway, Fly.io, Cloudflare and Supabase through their own CLI with your account, asking before each change; Expo apps to TestFlight and Play's internal track.
-- **Everything around it.** CI through a pull request, environment variables synced, a Neon database, custom domains, usage beside your plan's limits, and an incident thread when the live address stops answering ([shipping an app](docs/guide/shipping.md)).
+- **More places to deploy.** Production from the default branch on Vercel or Netlify; Railway, Fly.io, Cloudflare and Supabase through their own CLI with your account, asking before each change; Expo apps to TestFlight and Play's internal track.
+- **Everything around it.** CI through a pull request, environment variables synced, a Neon database, custom domains, usage beside your plan's limits, and an incident thread when the live address stops answering.
 
 **Anywhere**
 
