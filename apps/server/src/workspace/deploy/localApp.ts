@@ -1,9 +1,9 @@
 // An app run on this computer for demos and home use, reachable from the internet through a tunnel of its own.
-// The review in docs/SHIP-AN-APP-PLAN.md holds here: by default the app runs in a Docker container with only its port
-// published to loopback (no host network, no Ramu environment), the tunnel names exactly that port, and it gets a
-// hostname of its own that shares nothing with Ramu's address or the artifacts' pages. Without Docker, and only when the
-// person chooses it, a Node app runs as a program in its own process group, with none of Ramu's environment, on a
-// loopback port; it has the person's own permissions, which the sheet says before it starts.
+// By default the app runs in a Docker container with only its port published to loopback (no host network, no Ramu
+// environment), the tunnel names exactly that port, and it gets a hostname of its own that shares nothing with Ramu's
+// address or the artifacts' pages. Without Docker, and only when the person chooses it, a Node app runs as a program in
+// its own process group, with none of Ramu's environment, on a loopback port; it has the person's own permissions,
+// which the sheet says before it starts.
 import { execFile, spawn } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { connect, createServer, type AddressInfo } from 'node:net'
