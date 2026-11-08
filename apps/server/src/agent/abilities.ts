@@ -12,8 +12,11 @@ import {
   abilityListing,
   abilityRoutes,
   isMcpChoice,
+  isMediaChoice,
+  mediaFor,
   AUTO_MCP_ABILITIES,
   MCP_ABILITIES,
+  MEDIA_ABILITIES,
   type Ability,
   type AbilityCall,
   type AbilityCheck,
@@ -37,6 +40,9 @@ import type {
   ProviderCatalog,
 } from '@ramu/shared/types'
 import type { JsonValue } from '@ramu/shared/interactive'
+import { MEDIA_SERVICE_NAMES, type MediaService } from '@ramu/shared/types/deploy'
+import type { HostingAuth } from '../workspace/deploy/adapter'
+import { mediaConnector } from '../media/mediaServices'
 import { AbilityChecks, type AbilityLogin, type AbilityProbe } from '../providers/abilityChecks'
 import type { AbilityDeclaration } from '../providers/adapter'
 import { providerAdapter } from '../providers/adapters'
@@ -69,6 +75,8 @@ export interface AbilityHost {
   ): Promise<{ server: string; result: { content?: unknown[]; isError?: boolean } }>
   /** Shared MCP tools approved on this host, which an ability can be mapped to. */
   mcpTools?(): AbilityMcpToolOption[]
+  /** Media services with a saved API key, and the key a call runs with. */
+  media?: { connected(): MediaService[]; auth(service: MediaService): Promise<HostingAuth> }
   /** Checks' kept results. */
   readChecks(): unknown
   writeChecks(checks: unknown[]): void
@@ -96,6 +104,11 @@ export const abilityInputs = {
   },
   make_sound: { prompt: z.string().trim().min(1).max(500) },
   speak: { text: z.string().trim().min(1).max(600) },
+  make_video: {
+    prompt: z.string().trim().min(1).max(2000),
+    seconds: z.number().int().min(3).max(15).optional(),
+    aspect: z.enum(['landscape', 'portrait']).optional(),
+  },
   read_image: {
     question: z.string().trim().min(1).max(4000),
     images: z.array(z.string().min(1).max(1024)).min(1).max(4),
@@ -116,6 +129,7 @@ const TIMEOUT_MS: Record<AbilityTool, number> = {
   make_music: 300_000,
   make_sound: 120_000,
   speak: 120_000,
+  make_video: 600_000,
 }
 /** Text a long read may send, in characters: within a 400,000-token window with room for the answer. */
 const LONG_READ_CHARS = 1_200_000
@@ -264,14 +278,20 @@ export class AbilityService {
   /** What `agent_models` lists: which provider offers each ability here. Starts checks that are due. */
   listing(): AbilityListing {
     void this.refresh()
-    return abilityListing(this.preferences(), this.passed(), this.order(), providerAccountId)
+    return abilityListing(this.preferences(), this.passed(), this.order(), providerAccountId, this.connectedMedia())
   }
 
-  status(): { checks: AbilityCheck[]; mcpChecks: AbilityMcpCheck[]; running: boolean } {
+  /** Media services with a saved key on this host. */
+  connectedMedia(): MediaService[] {
+    return this.host.media?.connected() ?? []
+  }
+
+  status(): { checks: AbilityCheck[]; mcpChecks: AbilityMcpCheck[]; media: MediaService[]; running: boolean } {
     void this.refresh()
     return {
       checks: this.checks.list(),
       mcpChecks: this.mcpChecks(),
+      media: this.connectedMedia(),
       running: this.checks.running() || !!this.refreshing,
     }
   }
@@ -557,6 +577,10 @@ export class AbilityService {
         return await this.track(ABILITY_LABELS[ability], clip(done.sent.prompt, 80), () =>
           this.viaMcp(session, base, done, mapped, started, signal),
         )
+      if (isMediaChoice(mapped))
+        return await this.track(ABILITY_LABELS[ability], clip(done.sent.prompt, 80), () =>
+          this.viaMedia(session, base, done, mapped.media, started, signal),
+        )
       const routes = abilityRoutes(
         ability,
         { ...host, choices },
@@ -668,6 +692,9 @@ export class AbilityService {
     }
     const choice = this.preferences().choices[base.ability] ?? 'auto'
     if (choice === 'auto') {
+      // A media service the person saved a key for comes after their signed-in providers, in its fixed order.
+      const service = mediaFor(base.ability, this.connectedMedia())[0]
+      if (service) return this.viaMedia(session, base, prepared, service, started, signal)
       const viaTool = await this.autoMcp(session, base, prepared, started, signal)
       if (viaTool) return viaTool
     }
@@ -871,6 +898,86 @@ export class AbilityService {
     }
   }
 
+  /**
+   * One call to a media service on the person's own key: only the caller's prompt or words are sent, the file is saved
+   * as an attachment of the thread, and the call is billed to that account. "Ask before using another provider" asks
+   * first, naming the service.
+   */
+  private async viaMedia(
+    session: AgentSessionInfo,
+    base: Pick<AbilityCall, 'id' | 'ability' | 'tool' | 'args'>,
+    prepared: Prepared,
+    service: MediaService,
+    started: number,
+    signal?: AbortSignal,
+  ): Promise<AbilityCall> {
+    const connector = mediaConnector(service)
+    if (!MEDIA_ABILITIES[service].includes(base.ability))
+      throw new Refusal(
+        'unavailable',
+        `${connector.name} does not make ${ABILITY_LABELS[base.ability].toLowerCase()}. Choose another service for it in Settings → Models → Abilities.`,
+      )
+    if (!this.host.media || !this.connectedMedia().includes(service))
+      throw new Refusal(
+        'unavailable',
+        `${connector.name} is chosen for ${ABILITY_LABELS[base.ability].toLowerCase()}, but no API key for it is saved. Save one in Settings → Models → Abilities, then try again.`,
+      )
+    const prompt = String(base.args.text ?? base.args.prompt ?? prepared.sent.prompt)
+    if (this.preferences().askBeforeOtherProvider) {
+      const allowed = await this.host.requestPermission(
+        session.id,
+        `${ABILITY_LABELS[base.ability].toLowerCase()} with ${connector.name}`,
+        [
+          `Runs on ${connector.name} with your API key, billed to that account. It sends only this:`,
+          clip(prompt, 1200),
+        ].join('\n\n'),
+        signal,
+      )
+      if (!allowed)
+        throw new Refusal(
+          'declined',
+          `The person declined sending this to ${connector.name}. Continue without it and say so in your reply.`,
+        )
+    }
+    const stop = new AbortController()
+    const abort = () => stop.abort()
+    signal?.addEventListener('abort', abort, { once: true })
+    const timer = setTimeout(abort, TIMEOUT_MS[base.tool])
+    try {
+      const file = await connector.make(
+        await this.host.media.auth(service),
+        {
+          ability: base.ability,
+          prompt,
+          ...(typeof base.args.seconds === 'number' ? { seconds: base.args.seconds } : {}),
+          ...(base.args.aspect === 'portrait' || base.args.aspect === 'landscape' ? { aspect: base.args.aspect } : {}),
+        },
+        stop.signal,
+      )
+      const attachment = this.host.attachments.add(`${slug(prompt)}.${file.extension}`, file.bytes)
+      return {
+        ...base,
+        status: 'done',
+        media: service,
+        model: file.model,
+        sent: prepared.sent,
+        summary: `Made with ${connector.name} (${file.model}) on your API key.`,
+        attachments: [attachment],
+        durationMs: Date.now() - started,
+      }
+    } catch (error) {
+      if (stop.signal.aborted && !signal?.aborted)
+        throw new Error(
+          `${connector.name} did not finish within ${Math.round(TIMEOUT_MS[base.tool] / 60_000)} minutes.`,
+          { cause: error },
+        )
+      throw error
+    } finally {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', abort)
+    }
+  }
+
   private async keylessSearch(
     base: Pick<AbilityCall, 'id' | 'ability' | 'tool' | 'args'>,
     prepared: Prepared,
@@ -948,6 +1055,11 @@ export class AbilityService {
         const text = input.seconds ? `${input.prompt} (${input.seconds} seconds)` : input.prompt
         return { ability, request: { ability, prompt: text, images: [] }, sent: { prompt: text, inputs: [] } }
       }
+      case 'make_video': {
+        const input = z.object(abilityInputs.make_video).parse(args)
+        const text = input.seconds ? `${input.prompt} (${input.seconds} seconds)` : input.prompt
+        return { ability, request: { ability, prompt: text, images: [] }, sent: { prompt: text, inputs: [] } }
+      }
       case 'read_image': {
         const input = z.object(abilityInputs.read_image).parse(args)
         const images = await Promise.all(input.images.map((ref) => this.image(session, ref)))
@@ -1007,7 +1119,7 @@ export class AbilityService {
     return { path: attachment.path, name: attachment.name, mimeType: attachment.mimeType }
   }
 
-  /** An image or audio attachment this thread holds, for an artifact file filled from it. */
+  /** An image, audio or video attachment this thread holds, for an artifact file filled from it. */
   heldFile(sessionId: string, ref: string): { path: string; name: string; mimeType: string } {
     const held = this.host
       .events(sessionId)
@@ -1018,8 +1130,8 @@ export class AbilityService {
       )
     if (!held) throw new Error('That attachment is not in this thread.')
     const attachment = this.host.attachments.get(ref)
-    if (!/^(image|audio)\//.test(attachment.mimeType))
-      throw new Error(`${attachment.name} is not an image or audio file.`)
+    if (!/^(image|audio|video)\//.test(attachment.mimeType))
+      throw new Error(`${attachment.name} is not an image, audio or video file.`)
     return { path: attachment.path, name: attachment.name, mimeType: attachment.mimeType }
   }
 
@@ -1190,10 +1302,13 @@ function toolAnswer(call: AbilityCall) {
   return {
     status: 'done',
     ability: call.ability,
-    ranOn:
-      call.provider === 'ramu'
-        ? "Ramu's web search"
-        : `${providerName(call.provider!)}${call.model ? ` (${call.model})` : ''}`,
+    ranOn: call.mcp
+      ? `${call.mcp.server} (${call.mcp.tool})`
+      : call.media
+        ? `${MEDIA_SERVICE_NAMES[call.media]}${call.model ? ` (${call.model})` : ''} on the person's API key`
+        : call.provider === 'ramu'
+          ? "Ramu's web search"
+          : `${providerName(call.provider!)}${call.model ? ` (${call.model})` : ''}`,
     summary: call.summary,
     ...(call.attachments?.length
       ? {

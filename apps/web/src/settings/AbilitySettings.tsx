@@ -6,7 +6,10 @@ import {
   DEFAULT_ABILITY_PREFERENCES,
   AUTO_MCP_ABILITIES,
   MCP_ABILITIES,
+  MEDIA_ABILITIES,
   isMcpChoice,
+  isMediaChoice,
+  mediaFor,
   type Ability,
   type AbilityCheck,
   type AbilityChoice,
@@ -17,6 +20,8 @@ import {
 } from '@ramu/shared/providers/abilities'
 import { providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
 import type { AppPreferences } from '@ramu/shared/types'
+import { MEDIA_SERVICE_NAMES, MEDIA_SERVICES, type MediaService } from '@ramu/shared/types/deploy'
+import { DeployAccounts } from './DeployAccounts'
 import { SettingsGroupTitle, SettingsRow, SettingsTitle } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
@@ -27,6 +32,7 @@ import { modelDisplayName, useModelSets } from '../models/ModelSets'
 import { useSettingsInvoke } from './SettingsScope'
 
 const mcpValue = (tool: AbilityMcpTool) => `mcp:${tool.connectionId}:${tool.tool}`
+const mediaValue = (service: MediaService) => `media:${service}`
 const choiceValue = (choice: AbilityChoice | undefined) =>
   !choice || choice === 'auto'
     ? 'auto'
@@ -34,7 +40,9 @@ const choiceValue = (choice: AbilityChoice | undefined) =>
       ? 'off'
       : isMcpChoice(choice)
         ? mcpValue(choice)
-        : `${choice.provider}:${choice.model}`
+        : isMediaChoice(choice)
+          ? mediaValue(choice.media)
+          : `${choice.provider}:${choice.model}`
 
 /** Settings › Models › Abilities: which provider runs each ability for threads whose own provider lacks it. */
 export function AbilitySettings({
@@ -51,6 +59,7 @@ export function AbilitySettings({
   const { catalogs } = useModelSets()
   const [checks, setChecks] = useState<AbilityCheck[] | null>(null)
   const [mcpChecks, setMcpChecks] = useState<AbilityMcpCheck[]>([])
+  const [media, setMedia] = useState<MediaService[]>([])
   const [running, setRunning] = useState(false)
   // Approved Shared MCP tools an image or search ability can run on instead of a provider.
   const [mcpTools, setMcpTools] = useState<AbilityMcpToolOption[]>([])
@@ -66,6 +75,7 @@ export function AbilitySettings({
           if (!active) return
           setChecks(status.checks)
           setMcpChecks(status.mcpChecks)
+          setMedia(status.media)
           setRunning(status.running)
         },
         () => active && setChecks([]),
@@ -116,17 +126,24 @@ export function AbilitySettings({
             value: `${check.provider}:${check.model}`,
             label: `${modelName(check.provider, check.model)} · ${providerName(check.provider)}`,
           })),
+          ...mediaFor(ability, media).map((service) => ({
+            value: mediaValue(service),
+            label: `${MEDIA_SERVICE_NAMES[service]} · ${t('API key')}`,
+          })),
           ...(MCP_ABILITIES.includes(ability)
             ? mcpTools.map((tool) => ({ value: mcpValue(tool), label: `${tool.tool} · ${tool.server}` }))
             : []),
           { value: 'off', label: t('Off') },
         ]
+        const offered = mediaFor(ability, media)
         if (typeof choice === 'object' && !options.some((option) => option.value === current))
           options.splice(1, 0, {
             value: current,
             label: isMcpChoice(choice)
               ? `${choice.tool} · ${t('Shared MCP')}`
-              : `${modelName(choice.provider, choice.model)} · ${providerName(choice.provider)}`,
+              : isMediaChoice(choice)
+                ? `${MEDIA_SERVICE_NAMES[choice.media]} · ${t('No key saved')}`
+                : `${modelName(choice.provider, choice.model)} · ${providerName(choice.provider)}`,
           })
         return (
           <SettingsRow key={ability}>
@@ -139,7 +156,11 @@ export function AbilitySettings({
                     ? t('Checked on {0}', {
                         '0': [...new Set(passed.map((check) => providerName(check.provider)))].join(', '),
                       })
-                    : t('No signed-in provider here offers it.')}
+                    : offered.length
+                      ? t('On your {0} API key', {
+                          '0': offered.map((service) => MEDIA_SERVICE_NAMES[service]).join(', '),
+                        })
+                      : t('No signed-in provider here offers it.')}
               </span>
             </span>
             <Dropdown
@@ -152,6 +173,8 @@ export function AbilitySettings({
                 if (next === 'auto' || next === 'off') return set(ability, next)
                 const tool = mcpTools.find((entry) => mcpValue(entry) === next)
                 if (tool) return set(ability, { connectionId: tool.connectionId, tool: tool.tool })
+                const service = MEDIA_SERVICES.find((entry) => mediaValue(entry) === next)
+                if (service) return set(ability, { media: service })
                 const [provider, ...model] = next.split(':')
                 const check = passed.find((entry) => entry.provider === provider)
                 if (check) set(ability, { provider: check.provider, model: model.join(':') })
@@ -209,6 +232,17 @@ export function AbilitySettings({
           }
         />
       </SettingsRow>
+      <SettingsGroupTitle>{t('Media accounts')}</SettingsGroupTitle>
+      <p className="muted text-muted-foreground small text-caption m-[0_0_12px] leading-[1.55]">
+        {t(
+          'Video, speech, music and sound effects that no signed-in provider makes run on a media service with your own API key, billed to that account. Auto uses one after your signed-in providers.',
+        )}{' '}
+        {MEDIA_SERVICES.map(
+          (service) =>
+            `${MEDIA_SERVICE_NAMES[service]}: ${MEDIA_ABILITIES[service].map((ability) => t(ABILITY_LABELS[ability]).toLowerCase()).join(', ')}`,
+        ).join(' · ')}
+      </p>
+      <DeployAccounts only="media" />
     </div>
   )
 }

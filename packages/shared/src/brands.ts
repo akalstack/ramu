@@ -1,5 +1,5 @@
 // Which brand mark the desktop, the phone and the site show beside a forge, platform or service's name.
-import type { AccountPlatform } from './types/deploy'
+import type { AccountPlatform, MediaService } from './types/deploy'
 import type { ForgeService } from './types/forge'
 
 /** Every brand whose mark ships in `apps/web/src/assets/brands/`. */
@@ -48,8 +48,10 @@ export function forgeBrand(service: ForgeService): BrandId {
  * GitHub's for GitHub Pages and Cloudflare's for Workers, D1, KV and R2; none for a service without a mark here.
  */
 export function accountBrand(platform: AccountPlatform): BrandId | undefined {
-  // Amplitude's mark is not in Simple Icons and its guidelines are for its partners, so it shows the generic shape.
-  if (platform === 'amplitude') return undefined
+  // Amplitude's mark is not in Simple Icons and its guidelines are for its partners, so it shows the generic shape; so do
+  // the media services, whose marks are only listed beside their names.
+  if (platform === 'amplitude' || platform === 'gemini' || platform === 'elevenlabs' || platform === 'openai')
+    return undefined
   if (platform === 'server') return 'docker'
   if (platform === 'github-pages') return 'github'
   if (platform === 'vercel-marketplace' || platform === 'vercel-blob') return 'vercel'
@@ -65,5 +67,6 @@ export function accountBrand(platform: AccountPlatform): BrandId | undefined {
         | 'vercel-blob'
         | 'supabase-storage'
         | 'amplitude'
+        | MediaService
       >)
 }

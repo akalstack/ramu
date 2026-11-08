@@ -35,6 +35,10 @@ const BILLING_PAGES: Record<AccountPlatform, string> = {
   amplitude: '',
   salesforce: '',
   expo: 'https://expo.dev/settings/billing',
+  // A media account is read by ability calls, not deployed to, so no report is made for it.
+  gemini: '',
+  elevenlabs: '',
+  openai: '',
 }
 
 /** One platform's report, with the reason in plain words when it has no figures for this account. */

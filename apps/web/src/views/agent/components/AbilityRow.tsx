@@ -1,3 +1,4 @@
+import { MEDIA_SERVICE_NAMES } from '@ramu/shared/types/deploy'
 import { useState } from 'react'
 import { BookOpen, ImageIcon, Search, Sparkles } from 'lucide-react'
 import { ABILITY_DONE, ABILITY_LABELS, type AbilityCall } from '@ramu/shared/providers/abilities'
@@ -16,11 +17,13 @@ const ICONS = { image_generation: ImageIcon, image_edit: ImageIcon, web_search: 
 const abilityRunner = (call: AbilityCall) =>
   call.mcp
     ? call.mcp.server
-    : call.provider === 'ramu'
-      ? t("Ramu's search")
-      : call.provider
-        ? providerName(call.provider)
-        : ''
+    : call.media
+      ? MEDIA_SERVICE_NAMES[call.media]
+      : call.provider === 'ramu'
+        ? t("Ramu's search")
+        : call.provider
+          ? providerName(call.provider)
+          : ''
 
 /** One ability call in the thread: what ran where, what was sent, the result, and how to run it again. */
 export function AbilityRow({ call, sessionId, live }: { call: AbilityCall; sessionId: string; live: boolean }) {
@@ -102,7 +105,7 @@ export function AbilityRow({ call, sessionId, live }: { call: AbilityCall; sessi
               {running === 'same' ? t('Making another…') : t('Make another')}
             </Button>
           )}
-          {done && call.provider !== 'ramu' && !call.mcp && (
+          {done && call.provider !== 'ramu' && !call.mcp && !call.media && (
             <Button
               variant="ghost"
               size="sm"

@@ -1,4 +1,4 @@
-import type { MotionAudio } from '@ramu/shared/artifactSource'
+import type { MotionAudio, MotionClip } from '@ramu/shared/artifactSource'
 import { narrationTrack, type NarrationTrack } from './narration'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -159,7 +159,8 @@ const VIDEO_FPS = 12
 interface Mix {
   narration: string | null
   music: { data: string; volume: number | null } | null
-  cues: { data: string; volume: number | null; start: number }[]
+  /** Sounds from a moment: a scene's sound or voice, and a clip's own sound, which stops when its scene ends. */
+  cues: { data: string; volume: number | null; start: number; end?: number }[]
   seconds: number
 }
 const AUDIO_RATE = 48_000
@@ -183,7 +184,7 @@ async function motionVideo(document: InteractiveDocument, container: 'webm' | 'm
   const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.motion)?.content
   if (!stored) throw new Error('This motion version has no scenes. Ask the agent to publish it again.')
   const motion = JSON.parse(stored) as {
-    scenes: { seconds: number; narration?: string; sound?: MotionAudio; voice?: MotionAudio }[]
+    scenes: { seconds: number; narration?: string; sound?: MotionAudio; voice?: MotionAudio; video?: MotionClip }[]
     music?: MotionAudio
   }
   const scenes = motion.scenes
@@ -191,7 +192,7 @@ async function motionVideo(document: InteractiveDocument, container: 'webm' | 'm
   const frames = Math.ceil(seconds * VIDEO_FPS)
   // Narration is spoken on this computer, and the music and scene sounds come from the version's own files; they are
   // mixed at 48 kHz, the rate every audio encoder here takes.
-  const fileOf = (audio: MotionAudio | undefined) => {
+  const fileOf = (audio: MotionAudio | MotionClip | undefined) => {
     const file = audio && document.files?.find((entry) => entry.path === audio.path && entry.encoding === 'base64')
     return file ? { data: file.content, volume: audio!.volume ?? null } : null
   }
@@ -205,7 +206,12 @@ async function motionVideo(document: InteractiveDocument, container: 'webm' | 'm
     at += scene.seconds
     const voice = fileOf(scene.voice)
     const sound = fileOf(scene.sound)
-    return [...(sound ? [{ ...sound, start }] : []), ...(voice ? [{ ...voice, volume: voice.volume ?? 1, start }] : [])]
+    const clip = fileOf(scene.video)
+    return [
+      ...(sound ? [{ ...sound, start }] : []),
+      ...(voice ? [{ ...voice, volume: voice.volume ?? 1, start }] : []),
+      ...(clip ? [{ ...clip, start, end: start + scene.seconds }] : []),
+    ]
   })
   const mix: Mix = {
     narration: track ? Buffer.from(atRate(track, AUDIO_RATE).buffer).toString('base64') : null,
@@ -288,6 +294,22 @@ async function motionVideo(document: InteractiveDocument, container: 'webm' | 'm
         await page.evaluate(
           `document.getAnimations().forEach((a) => { a.currentTime = ${(index / VIDEO_FPS) * 1000} })`,
         )
+        // A scene's clip is put at this frame's moment too, and the frame waits until it shows it.
+        await page.evaluate(`(async () => {
+          const t = ${index / VIDEO_FPS}
+          await Promise.all([...document.querySelectorAll('video[data-ramu-start]')].map((clip) => {
+            clip.pause()
+            const into = t - Number(clip.dataset.ramuStart)
+            if (into < 0 || into >= Number(clip.dataset.ramuSeconds)) return null
+            const at = Math.min(into, Math.max(0, (clip.duration || into) - 0.05))
+            if (Math.abs(clip.currentTime - at) < 0.001 && clip.readyState >= 2) return null
+            return new Promise((done) => {
+              clip.addEventListener('seeked', done, { once: true })
+              setTimeout(done, 3000)
+              clip.currentTime = at
+            })
+          }))
+        })()`)
         const shot = (await stage.screenshot({ type: 'jpeg', quality: 90, animations: 'allow' })).toString('base64')
         await encoder.evaluate(
           async ({ shot, index, fps }: { shot: string; index: number; fps: number }) => {
@@ -310,7 +332,7 @@ async function motionVideo(document: InteractiveDocument, container: 'webm' | 'm
             const { voice } = (window as unknown as { video: { voice: { add(b: AudioBuffer): Promise<void> } } }).video
             const bytesOf = (base64: string) => Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))
             const mixer = new OfflineAudioContext(1, Math.ceil(audio.seconds * rate), rate)
-            const play = (buffer: AudioBuffer, start: number, volume: number, loop = false) => {
+            const play = (buffer: AudioBuffer, start: number, volume: number, loop = false, end?: number) => {
               const source = mixer.createBufferSource()
               source.buffer = buffer
               source.loop = loop
@@ -318,6 +340,7 @@ async function motionVideo(document: InteractiveDocument, container: 'webm' | 'm
               gain.gain.value = volume
               source.connect(gain).connect(mixer.destination)
               source.start(start)
+              if (end !== undefined) source.stop(end)
             }
             if (audio.narration) {
               const pcm = new Int16Array(bytesOf(audio.narration).buffer)
@@ -336,8 +359,11 @@ async function motionVideo(document: InteractiveDocument, container: 'webm' | 'm
                 audio.music.volume ?? (audio.narration ? 0.25 : 0.7),
                 true,
               )
-            for (const cue of audio.cues)
-              play(await mixer.decodeAudioData(bytesOf(cue.data).buffer), cue.start, cue.volume ?? 0.8)
+            for (const cue of audio.cues) {
+              // A clip without sound, or one this browser cannot decode, adds nothing rather than failing the video.
+              const buffer = await mixer.decodeAudioData(bytesOf(cue.data).buffer).catch(() => null)
+              if (buffer) play(buffer, cue.start, cue.volume ?? 0.8, false, cue.end)
+            }
             await voice.add(await mixer.startRendering())
           },
           { audio, rate: AUDIO_RATE },

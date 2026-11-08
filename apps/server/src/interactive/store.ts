@@ -162,7 +162,7 @@ export const interactiveInput = z.object({
           .uuid()
           .optional()
           .describe(
-            'An image or audio file this thread holds, such as one generate_image, make_music or make_sound made (its attachmentId): the host puts its bytes in this file, so leave content out.',
+            'An image, audio or video file this thread holds, such as one generate_image, make_music, make_sound, speak or make_video made (its attachmentId): the host puts its bytes in this file, so leave content out.',
           ),
       }),
     )

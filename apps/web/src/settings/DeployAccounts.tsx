@@ -47,6 +47,10 @@ const SCOPE_HINT: Record<
   salesforce:
     'Create a connected app in your org with OAuth on, the api and refresh_token scopes, PKCE required and no secret for the web server flow, and the callback below; then paste its consumer key here',
   expo: 'Create it for a robot user with the Developer role on the account that owns the app; a personal token reaches every account you belong to',
+  gemini:
+    'Create an API key in Google AI Studio on a project with billing turned on; video and music need the paid tier',
+  elevenlabs: 'Create an API key with access to text to speech, music and sound effects',
+  openai: 'Create a project API key; speech is billed to that project',
 }
 
 /** The headline under a platform's name: who is connected and how, or what to do. */
@@ -58,7 +62,9 @@ function deployAccountHeadline(account: HostingAccount): string {
         ? t('Not connected. Store releases of phone apps need an account.')
         : account.kind === 'service'
           ? t('Not connected. Dashboards that read it need an account.')
-          : t('Not connected. Databases for your projects need an account.')
+          : account.kind === 'media'
+            ? t('Not connected. Abilities can use it for video, speech, music or sound effects.')
+            : t('Not connected. Databases for your projects need an account.')
   if (account.error) return account.error
   if (account.platform === 'server')
     return t('Connected as {0} with an SSH key kept on this host', { 0: account.account ?? account.name })
@@ -70,7 +76,7 @@ function deployAccountHeadline(account: HostingAccount): string {
 }
 
 /** Hosting platforms and database providers: the platform's own sign-in first, a guided token page otherwise. */
-export function DeployAccounts() {
+export function DeployAccounts({ only }: { only?: HostingAccount['kind'] } = {}) {
   const invoke = useSettingsInvoke()
   const [summary, setSummary] = useState<HostingAccountsSummary | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
@@ -109,7 +115,9 @@ export function DeployAccounts() {
         .filter(
           (account) =>
             !['github-pages', 'vercel-marketplace', 'vercel-blob', 'supabase-storage'].includes(account.platform) &&
-            !account.platform.startsWith('cloudflare-'),
+            !account.platform.startsWith('cloudflare-') &&
+            // Media keys are saved beside the abilities they serve, not with the hosting accounts.
+            (only ? account.kind === only : account.kind !== 'media'),
         )
         .map((account) => (
           <DeployAccountRow
@@ -119,7 +127,7 @@ export function DeployAccounts() {
             reload={load}
           />
         ))}
-      {summary && !summary.canAdminister && (
+      {summary && !summary.canAdminister && only !== 'media' && (
         <p className="m-0 mb-3 px-4 text-caption text-muted-foreground">
           {t(
             'Paste tokens on the machine running this host. Vercel, Netlify and Railway can also be signed in from here: their sign-in runs on the host and keeps the token there.',

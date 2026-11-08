@@ -22,6 +22,12 @@ const audioTypes: Record<string, string> = {
   '.m4a': 'audio/mp4',
 }
 
+/** Video a video ability saves, by extension. */
+const videoTypes: Record<string, string> = {
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+}
+
 export const isPdf = (file: Pick<Attachment, 'mimeType'>) => file.mimeType === 'application/pdf'
 
 /** Base64 content blocks for attachments Claude reads natively: images and PDFs (as documents). */
@@ -75,6 +81,7 @@ export class AttachmentStore {
     const mimeType =
       imageTypes[extname(safeName).toLowerCase()] ??
       audioTypes[extname(safeName).toLowerCase()] ??
+      videoTypes[extname(safeName).toLowerCase()] ??
       (extname(safeName).toLowerCase() === '.pdf' ? 'application/pdf' : 'application/octet-stream')
     const attachment: Attachment = { id, name: safeName, size: bytes.length, mimeType, path }
     writeFileSync(path, bytes)

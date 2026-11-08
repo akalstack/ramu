@@ -1,3 +1,4 @@
+import { MEDIA_SERVICES } from '@ramu/shared/types/deploy'
 import { z } from 'zod'
 import { validBranchPrefix } from '@ramu/shared/workspaceDefaults'
 import { intelligenceSchema } from '../intelligence'
@@ -110,6 +111,7 @@ const abilityChoice = z.union([
   z.enum(['auto', 'off']),
   z.object({ provider: providerId, model: z.string().max(200) }),
   z.object({ connectionId: z.string().min(1).max(200), tool: z.string().min(1).max(200) }),
+  z.object({ media: z.enum(MEDIA_SERVICES) }),
 ])
 /** Auto, Off or one provider and model per ability; a project's `ramu.json` can set these over the host's. */
 export const abilityChoices = z.object(

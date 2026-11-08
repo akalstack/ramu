@@ -501,7 +501,7 @@ it.skipIf(!interactiveBrowserPath())(
       ...motion,
       files: [{ path: 'whoosh.wav', content: tone(1), encoding: 'base64' }],
     } as never)
-    expect(missing.errors.join(' ')).toContain('music.wav is not among the audio files')
+    expect(missing.errors.join(' ')).toContain('music.wav is not among the files')
     const preview = await interactive.preview('s', {
       ...motion,
       files: [
@@ -514,6 +514,49 @@ it.skipIf(!interactiveBrowserPath())(
     expect(document.files?.map((file) => file.path).sort()).toEqual(['motion.json', 'music.wav', 'whoosh.wav'])
     const video = await new ArtifactExports(db).make(document, 'webm')
     expect(Buffer.from(video.content, 'base64').includes(Buffer.from('A_OPUS'))).toBe(true)
+  },
+  300_000,
+)
+
+it.skipIf(!interactiveBrowserPath())(
+  'plays a scene’s video clip behind its html in the export, and refuses a clip it does not have',
+  async () => {
+    const { db, interactive } = setup(previewInteractive)
+    // A real WebM to use as the clip: one second of a motion exported the same way.
+    const source = await interactive.preview('s', {
+      kind: 'motion',
+      scenes: [{ seconds: 1, html: '<div style="position:absolute;inset:0;background:#d00"></div>' }],
+      title: 'Clip',
+      summary: 'C',
+      checks: [],
+    } as never)
+    const clip = (
+      await new ArtifactExports(db).make(interactive.get('s', interactive.publish('s', source.id, 'r0').id, 1), 'webm')
+    ).content
+    const motion = {
+      kind: 'motion',
+      scenes: [
+        { seconds: 1, html: '<h1 style="margin:40px">Sync</h1>', video: { path: 'clip.webm', volume: 0.5 } },
+        { seconds: 1, html: '<p style="margin:40px">Every device.</p>' },
+      ],
+      title: 'Sync',
+      summary: 'S',
+      checks: [],
+    }
+    const missing = await interactive.preview('s', motion as never)
+    expect(missing.errors.join(' ')).toContain('clip.webm is not among the files')
+    const preview = await interactive.preview('s', {
+      ...motion,
+      files: [{ path: 'clip.webm', content: clip, encoding: 'base64' }],
+    } as never)
+    expect(preview.errors).toEqual([])
+    const document = interactive.get('s', interactive.publish('s', preview.id, 'r1').id, 1)
+    expect(document.html).toContain('data-ramu-start="0"')
+    expect(document.html).toContain('<div class="ramu-scene-over">')
+    const video = await new ArtifactExports(db).make(document, 'webm')
+    const bytes = Buffer.from(video.content, 'base64')
+    expect(bytes.subarray(0, 4).toString('hex')).toBe('1a45dfa3')
+    expect(bytes.length).toBeGreaterThan(1000)
   },
   300_000,
 )

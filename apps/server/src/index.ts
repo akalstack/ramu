@@ -1,3 +1,4 @@
+import { MEDIA_SERVICES } from '@ramu/shared/types/deploy'
 import { ServiceGrants } from './interactive/serviceGrants'
 import { grafana } from './interactive/grafana'
 import { amplitude } from './interactive/amplitude'
@@ -743,6 +744,10 @@ const abilities = new AbilityService(
           return [{ connectionId: connection.id, tool: tool.name, server: connection.name }]
         })
       })
+    },
+    media: {
+      connected: () => MEDIA_SERVICES.filter((service) => deploys.accounts.connected(service)),
+      auth: async (service) => (await deploys.accounts.auth(service)).auth,
     },
     readChecks: () => workspace.getAppState<unknown>('ability-checks', []),
     writeChecks: (checks) => workspace.setAppState('ability-checks', checks),

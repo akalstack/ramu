@@ -5929,6 +5929,19 @@ export const indonesian: Readonly<Record<string, string>> = {
   'No log output.': 'Tidak ada keluaran log.',
   'No open issues': 'Tidak ada isu terbuka',
   'Paired computers': 'Komputer tertaut',
+  'No key saved': 'Belum ada kunci tersimpan',
+  'On your {0} API key': 'Dengan kunci API {0} Anda',
+  'Media accounts': 'Akun media',
+  'Video, speech, music and sound effects that no signed-in provider makes run on a media service with your own API key, billed to that account. Auto uses one after your signed-in providers.':
+    'Video, suara, musik, dan efek suara yang tidak dibuat oleh penyedia mana pun yang sudah masuk dijalankan di layanan media dengan kunci API Anda sendiri, ditagih ke akun tersebut. Otomatis memakainya setelah penyedia yang sudah masuk.',
+  'Not connected. Abilities can use it for video, speech, music or sound effects.':
+    'Belum terhubung. Kemampuan bisa memakainya untuk video, suara, musik, atau efek suara.',
+  'Create an API key in Google AI Studio on a project with billing turned on; video and music need the paid tier':
+    'Buat kunci API di Google AI Studio pada proyek dengan penagihan aktif; video dan musik memerlukan tingkat berbayar',
+  'Create an API key with access to text to speech, music and sound effects':
+    'Buat kunci API dengan akses ke teks ke suara, musik, dan efek suara',
+  'Create a project API key; speech is billed to that project':
+    'Buat kunci API proyek; suara ditagih ke proyek tersebut',
   'Roll back': 'Kembalikan',
   '{0} will show this version until the next deploy.': '{0} akan menampilkan versi ini sampai deploy berikutnya.',
   'No log yet.': 'Belum ada log.',

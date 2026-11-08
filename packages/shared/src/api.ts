@@ -1145,7 +1145,13 @@ export interface RamuMethods extends ArtifactMethods {
   ): Promise<void>
   'providers.update'(provider: ProviderStatus['provider']): Promise<ProviderStatus>
   /** Live ability checks for each provider's chosen login on its installed version, plus whether checks are running. */
-  'abilities.checks'(): { checks: AbilityCheck[]; mcpChecks: AbilityMcpCheck[]; running: boolean }
+  /** The checks, Shared MCP checks and the media services with a saved key. */
+  'abilities.checks'(): {
+    checks: AbilityCheck[]
+    mcpChecks: AbilityMcpCheck[]
+    media: import('./types/deploy').MediaService[]
+    running: boolean
+  }
   /** Runs one provider's ability checks again (one small request per ability). */
   'abilities.check'(provider: ProviderStatus['provider']): Promise<AbilityCheck[]>
   /** The model `@images`, `@search` and `@long` bring in as a teammate, for each handle a provider here can serve. */

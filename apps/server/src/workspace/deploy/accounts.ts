@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto'
 import {
   ACCOUNT_PLATFORMS,
   isHostingPlatform,
+  isMediaService,
   type AccountPlatform,
   type HostingAccount,
 } from '@ramu/shared/types/deploy'
@@ -27,6 +28,7 @@ import './resend'
 import { amplitude } from '../../interactive/amplitude'
 import { salesforce } from '../../interactive/salesforce'
 import { grafana } from '../../interactive/grafana'
+import { mediaConnector } from '../../media/mediaServices'
 import './workerResources'
 import './vercelMarketplace'
 import './vercelBlob'
@@ -42,6 +44,7 @@ function accountAdapter(platform: AccountPlatform): AccountAdapter {
   if (platform === 'grafana') return grafana
   if (platform === 'amplitude') return amplitude
   if (platform === 'salesforce') return salesforce
+  if (isMediaService(platform)) return mediaConnector(platform)
   if (!isHostingPlatform(platform)) return resourceAdapter(platform)
   const adapter = hostingAdapter(platform)
   return { name: adapter.name, tokenPage: adapter.tokenPage, account: (auth) => adapter.account(auth), kind: 'hosting' }
@@ -139,6 +142,9 @@ export class HostingAccounts {
       amplitude: saved('amplitude'),
       salesforce: saved('salesforce'),
       expo: saved('expo'),
+      gemini: saved('gemini'),
+      elevenlabs: saved('elevenlabs'),
+      openai: saved('openai'),
     }
   }
 
@@ -282,7 +288,7 @@ export class HostingAccounts {
       value = (await this.keptCredential(platform, accountId).read()) ?? value
     if (!value)
       throw new DeployError(
-        `Connect ${this.adapter(platform).name} in Settings → Git → Hosting accounts first.`,
+        `Connect ${this.adapter(platform).name} in ${isMediaService(platform) ? 'Settings → Models → Abilities' : 'Settings → Git → Hosting accounts'} first.`,
         'signed-out',
       )
     if (value.refreshToken && value.expiresAt && value.expiresAt - RENEW_BEFORE_MS < Date.now())

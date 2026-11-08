@@ -1,3 +1,4 @@
+import { MEDIA_SERVICE_NAMES } from '@ramu/shared/types/deploy'
 import { MessageSelectionMenuContext, nativeMarkdown } from './NativeMarkdown'
 import { ContinuedCard } from './ContinueOnHost'
 import { toolActivity } from '@ramu/shared/chat/toolActivity'
@@ -453,11 +454,13 @@ function AbilityCard({ call, chat }: { call: AbilityCall; chat: Chat }) {
   const image = call.ability === 'image_generation' || call.ability === 'image_edit'
   const runner = call.mcp
     ? call.mcp.server
-    : call.provider === 'ramu'
-      ? say("Ramu's search")
-      : call.provider
-        ? providerName(call.provider)
-        : ''
+    : call.media
+      ? MEDIA_SERVICE_NAMES[call.media]
+      : call.provider === 'ramu'
+        ? say("Ramu's search")
+        : call.provider
+          ? providerName(call.provider)
+          : ''
   const headline = done
     ? say(ABILITY_DONE[call.ability], { '0': runner })
     : say(call.status === 'refused' ? '{0} not used' : '{0} failed', { '0': say(ABILITY_LABELS[call.ability]) })
@@ -502,7 +505,7 @@ function AbilityCard({ call, chat }: { call: AbilityCall; chat: Chat }) {
           {done && image ? (
             <Button kind="secondary" title={say('Make another')} disabled={running} onPress={() => again(false)} />
           ) : null}
-          {done && call.provider !== 'ramu' && !call.mcp ? (
+          {done && call.provider !== 'ramu' && !call.mcp && !call.media ? (
             <Button kind="ghost" title={say('Use another provider')} disabled={running} onPress={() => again(true)} />
           ) : null}
           {call.refusal === 'unavailable' ? (

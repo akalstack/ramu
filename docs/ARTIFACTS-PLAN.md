@@ -58,12 +58,6 @@ The kind is chosen by the agent from the request, shown as a small mark on every
 
 - Slides: **Present** on a display the phone is connected to (AirPlay or a cable), with the notes on the phone. Everything else for the phone is built: kind filters, viewers per kind, editing, exports to the share sheet, Add to Home Screen and the widget for apps and dashboards.
 
-### 2. Voice-over for Motion
-
-Narration per scene, spoken on the host (`say` or `espeak-ng`) and mixed into the MP4 and WebM, with **Narration** in the toolbar to hear, change or remove each scene's words, is built ([Kinds](guide/artifacts.md#kinds)). Remaining:
-
-- **A provider's voice:** a scene's recorded `voice` comes from `speak` on a mapped Shared MCP tool today; a signed-in provider with the **speech** ability ([Abilities](ABILITIES-PLAN.md)) would record it the same way once one offers it.
-
 ## Safety
 
 - Every kind renders in the same sandboxed frame as pages, offline unless sources are declared. Exports and refreshes run on the host with the artifact's grants, never with a thread's access.
@@ -83,9 +77,9 @@ Narration per scene, spoken on the host (`say` or `espeak-ng`) and mixed into th
 - **Two editors:** two people with an editing share link type in the same Doc at once. Both see each other's place, and the text merges with no lost edits.
 - **Templates:** **Save as template** on the expense tracker and **New** from it on another host starts an App with the same code and no records.
 - **Named service:** a Dashboard on Amplitude events refreshes from the connector and shows only what the grant names.
-- **Voice-over:** the sync explainer gets narration from a signed-in speech provider, and the exported MP4 plays it in time with the scenes.
+- **Voice-over:** the sync explainer gets narration recorded on a speech service (a media account or a mapped tool), and the exported MP4 plays it in time with the scenes.
 - Checks that need a physical phone, PowerPoint, Word or Keynote, or live sources are listed under [Acceptance](roadmap.md#acceptance) until run.
 
 ## Images, video and narration
 
-Kinds that need generated images, video or narration (Design, Slides, Doc illustrations, Motion) get them through [Abilities](ABILITIES-PLAN.md), so a deck made on a Claude thread still gets its pictures from a signed-in provider that can make them.
+Kinds that need generated images, video or narration (Design, Slides, Doc illustrations, Motion) get them through [Abilities](guide/agents.md#abilities), so a deck made on a Claude thread still gets its pictures from a signed-in provider that can make them, and a motion its voice, music, sounds and clips from a media account.

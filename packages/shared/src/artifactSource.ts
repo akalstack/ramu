@@ -490,6 +490,15 @@ export const motionAudio = z.object({
   volume: z.number().min(0).max(1).optional(),
 })
 export type MotionAudio = z.infer<typeof motionAudio>
+/** A video clip in the motion's files (from make_video) that fills a scene, and how loud its own sound plays, 0 to 1. */
+export const motionClip = z.object({
+  path: z
+    .string()
+    .trim()
+    .regex(/^[\w./-]{1,200}\.(?:mp4|webm)$/i, 'Name an MP4 or WebM file in files.'),
+  volume: z.number().min(0).max(1).optional(),
+})
+export type MotionClip = z.infer<typeof motionClip>
 export const motionSceneSchema = z.object({
   seconds: z.number().min(1).max(30).describe('How long the scene shows.'),
   html: z.string().max(100_000).describe('The scene, filling a 16:9 stage.'),
@@ -510,6 +519,11 @@ export const motionSceneSchema = z.object({
   voice: motionAudio
     .optional()
     .describe("This scene's narration recorded by speak, played instead of the host speaking its narration."),
+  video: motionClip
+    .optional()
+    .describe(
+      "A clip from make_video filling the scene behind its html, playing from the scene's start; its own sound is mixed in at volume (default 0.8).",
+    ),
 })
 const motionSource = z
   .object({

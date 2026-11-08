@@ -57,11 +57,26 @@ export const NAMED_SERVICE_NAMES: Record<NamedService, string> = {
   salesforce: 'Salesforce',
 }
 
+/**
+ * Media services an ability can run on with the person's own API key, billed to that account: video, speech, music
+ * and sound effects that no signed-in coding agent makes. Their keys are saved in Settings → Models → Abilities.
+ */
+export const MEDIA_SERVICES = ['gemini', 'elevenlabs', 'openai'] as const
+export type MediaService = (typeof MEDIA_SERVICES)[number]
+export const MEDIA_SERVICE_NAMES: Record<MediaService, string> = {
+  gemini: 'Google Gemini',
+  elevenlabs: 'ElevenLabs',
+  openai: 'OpenAI',
+}
+export const isMediaService = (value: unknown): value is MediaService =>
+  typeof value === 'string' && (MEDIA_SERVICES as readonly string[]).includes(value)
+
 export const ACCOUNT_PLATFORMS = [
   ...HOSTING_PLATFORMS,
   ...RESOURCE_PROVIDERS,
   ...STORE_SERVICES,
   ...NAMED_SERVICES,
+  ...MEDIA_SERVICES,
 ] as const
 export type AccountPlatform = (typeof ACCOUNT_PLATFORMS)[number]
 
@@ -79,7 +94,7 @@ export type DeployFailureKind = 'signed-out' | 'missing-permission' | 'plan-limi
 export interface HostingAccount {
   platform: AccountPlatform
   /** Whether it deploys apps, provides a resource such as a database, or releases phone apps to the stores. */
-  kind: 'hosting' | ResourceKind | 'store' | 'service'
+  kind: 'hosting' | ResourceKind | 'store' | 'service' | 'media'
   /** The platform's name, such as "Vercel". */
   name: string
   connected: boolean

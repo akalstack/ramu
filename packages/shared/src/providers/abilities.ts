@@ -2,6 +2,7 @@
 // The list is data so the desktop, the phone and the host show the same thing; adapters declare which they provide and a
 // live check on the host decides which are offered.
 import type { AgentProvider, Attachment } from '../types'
+import type { MediaService } from '../types/deploy'
 
 export const ABILITIES = [
   'image_generation',
@@ -26,6 +27,7 @@ export const ABILITY_TOOLS = {
   make_music: 'music',
   make_sound: 'sound_effect',
   speak: 'speech',
+  make_video: 'video_generation',
 } as const satisfies Record<string, Ability>
 export type AbilityTool = keyof typeof ABILITY_TOOLS
 
@@ -92,11 +94,31 @@ export interface AbilityMcpTool {
   tool: string
 }
 
+/** A media service an ability runs on with the person's own API key. */
+export interface AbilityMediaChoice {
+  media: MediaService
+}
+
 /**
- * Auto picks the best signed-in provider; a fixed choice names one provider and model, or a Shared MCP tool; Off
- * refuses the ability.
+ * Auto picks the best signed-in provider; a fixed choice names one provider and model, a Shared MCP tool or a media
+ * service; Off refuses the ability.
  */
-export type AbilityChoice = 'auto' | 'off' | { provider: AgentProvider; model: string } | AbilityMcpTool
+export type AbilityChoice =
+  'auto' | 'off' | { provider: AgentProvider; model: string } | AbilityMcpTool | AbilityMediaChoice
+
+/** What each media service makes, in the order Auto tries the services for an ability. */
+export const MEDIA_ABILITIES: Record<MediaService, readonly Ability[]> = {
+  gemini: ['video_generation', 'speech', 'music'],
+  elevenlabs: ['speech', 'music', 'sound_effect'],
+  openai: ['speech'],
+}
+
+export const isMediaChoice = (choice: AbilityChoice | undefined): choice is AbilityMediaChoice =>
+  typeof choice === 'object' && 'media' in choice
+
+/** The connected media services that make an ability, in Auto's order. */
+export const mediaFor = (ability: Ability, connected: readonly MediaService[]): MediaService[] =>
+  connected.filter((service) => MEDIA_ABILITIES[service].includes(ability))
 
 /**
  * Abilities a Shared MCP tool can stand in for: text in (a long read's documents go in its prompt), and for image
@@ -185,8 +207,8 @@ export function abilityRoutes(
       check.accountId === currentAccount(check.provider) &&
       !exclude.has(check.provider),
   )
-  // A Shared MCP tool runs through the thread's own MCP access, never on a provider.
-  if (isMcpChoice(choice)) return []
+  // A Shared MCP tool runs through the thread's own MCP access, and a media service on its own key: never a provider.
+  if (isMcpChoice(choice) || isMediaChoice(choice)) return []
   if (typeof choice === 'object') {
     const check = passed.find((entry) => entry.provider === choice.provider)
     return check ? [{ provider: choice.provider, model: choice.model || check.model, accountId: check.accountId }] : []
@@ -220,7 +242,13 @@ export function abilityRoutes(
 
 /** What `agent_models` says about abilities: which provider offers each, and which are not available here. */
 export interface AbilityListing {
-  available: { ability: Ability; providers: { provider: AgentProvider; model: string }[]; tool?: AbilityTool }[]
+  available: {
+    ability: Ability
+    providers: { provider: AgentProvider; model: string }[]
+    /** Connected media services that make it on the person's own key. */
+    media?: MediaService[]
+    tool?: AbilityTool
+  }[]
   unavailable: Ability[]
   off: Ability[]
 }
@@ -230,17 +258,26 @@ export function abilityListing(
   checks: readonly AbilityCheck[],
   order: readonly AgentProvider[],
   currentAccount: (provider: AgentProvider) => string,
+  connectedMedia: readonly MediaService[] = [],
 ): AbilityListing {
   const listing: AbilityListing = { available: [], unavailable: [], off: [] }
   for (const ability of ABILITIES) {
     const routes = abilityRoutes(ability, preferences, checks, order, currentAccount)
+    const choice = preferences.choices[ability] ?? 'auto'
+    // A fixed media service is the only route; Auto also tries every connected one that makes the ability.
+    const media = isMediaChoice(choice)
+      ? mediaFor(ability, connectedMedia).filter((service) => service === choice.media)
+      : choice === 'auto'
+        ? mediaFor(ability, connectedMedia)
+        : []
     if (routes === null) listing.off.push(ability)
-    else if (!routes.length) listing.unavailable.push(ability)
+    else if (!routes.length && !media.length) listing.unavailable.push(ability)
     else {
       const tool = (Object.keys(ABILITY_TOOLS) as AbilityTool[]).find((name) => ABILITY_TOOLS[name] === ability)
       listing.available.push({
         ability,
         providers: routes.map(({ provider, model }) => ({ provider, model })),
+        ...(media.length ? { media } : {}),
         ...(tool ? { tool } : {}),
       })
     }
@@ -267,6 +304,8 @@ export interface AbilityCall {
   model?: string
   /** The Shared MCP server and tool that ran it, when the ability is mapped to one. */
   mcp?: { server: string; tool: string }
+  /** The media service that made it on the person's own key, billed to that account. */
+  media?: MediaService
   sent: { prompt: string; inputs: string[] }
   /** The caller's arguments, so the person can run the same call again. */
   args: Record<string, unknown>
