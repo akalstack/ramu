@@ -619,6 +619,45 @@ export class AbilityService {
     )
   }
 
+  /**
+   * An image for an artifact page's own AI, routed like `generate_image` but with no thread: the page's AI grant is
+   * the person's approval, so no approval card is asked, and a mapping to a Shared MCP tool (reached only through a
+   * thread's own access) is refused. Only the prompt is sent.
+   */
+  async pageImage(prompt: string, signal?: AbortSignal): Promise<{ bytes: Buffer; extension: string }> {
+    const choice = this.preferences().choices.image_generation
+    if (isMcpChoice(choice))
+      throw new Error(
+        'Image generation is mapped to a Shared MCP tool, which a page cannot use. Choose a provider for it.',
+      )
+    const routes = abilityRoutes('image_generation', this.preferences(), this.passed(), this.order(), providerAccountId)
+    if (routes === null) throw new Error('Image generation is turned off in Settings → Models → Abilities.')
+    return this.track(ABILITY_LABELS.image_generation, clip(prompt, 80), async () => {
+      for (const route of routes) {
+        const declaration = this.declarations(route.provider).find((entry) => entry.ability === 'image_generation')
+        if (!declaration) continue
+        let out: AbilityOutput
+        try {
+          out = await this.run(
+            route,
+            declaration,
+            { ability: 'image_generation', prompt: imagePrompt(prompt), images: [] },
+            signal ?? new AbortController().signal,
+            TIMEOUT_MS.generate_image,
+          )
+        } catch (error) {
+          if (classifyLimit(error, { provider: route.provider, channel: 'error' })?.confidence === 'high') continue
+          throw error
+        }
+        if (out.costUsd !== undefined)
+          this.checks.recordCost(route.provider, route.accountId, 'image_generation', out.costUsd)
+        const image = out.images[0]
+        if (image) return image
+      }
+      throw new Error('No signed-in provider here can make images right now.')
+    })
+  }
+
   /** Shared MCP tools approved on this host, for mapping an ability to one in Settings → Models → Abilities. */
   mcpTools(): AbilityMcpToolOption[] {
     return this.host.mcpTools?.() ?? []

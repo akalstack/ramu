@@ -172,6 +172,7 @@ const frameCall = z.discriminatedUnion('method', [
       z.object({ shape, images: z.array(z.string().max(3_000_000)).max(4).optional() }).default({}),
     ]),
   }),
+  z.object({ method: z.literal('ai.image'), args: z.tuple([z.string().trim().min(1).max(4000)]) }),
   z.object({ method: z.literal('files.add'), args: z.tuple([z.string().max(3_000_000)]) }),
   z.object({ method: z.literal('files.get'), args: z.tuple([z.string().max(100)]) }),
   z.object({ method: z.literal('notify'), args: z.tuple([z.string().max(80), z.string().max(240)]) }),
@@ -213,6 +214,8 @@ function runFrameCall(ctx: HandlerContext, artifactId: string, call: FrameCall):
         shape: call.args[1].shape as AnswerShape | undefined,
         images: call.args[1].images,
       })
+    case 'ai.image':
+      return pageImage(ctx, artifactId, call.args[0])
     case 'files.add':
       return pages.addFile(artifactId, call.args[0])
     case 'files.get':
@@ -267,6 +270,16 @@ async function readPageFolder(ctx: HandlerContext, artifactId: string, path: str
  * and states, and pull requests on threads. Threads and pull requests are those of the page's project when it has one.
  * Never transcripts, files, credentials or settings.
  */
+/** An image the page's AI asked for, within its AI grant and daily budget, as a data URL the page can show. */
+async function pageImage(ctx: HandlerContext, artifactId: string, prompt: string): Promise<string> {
+  ctx.pages!.requireGrant(artifactId, 'ai')
+  if (!ctx.abilities) throw new Error('Update this host for images in pages.')
+  ctx.pages!.spend(artifactId, 'ai')
+  const image = await ctx.abilities.pageImage(prompt)
+  const mime = image.extension === 'jpg' || image.extension === 'jpeg' ? 'image/jpeg' : `image/${image.extension}`
+  return `data:${mime};base64,${image.bytes.toString('base64')}`
+}
+
 /**
  * A named service the page declared and the person allowed, queried with the account in Settings: rows as objects
  * of the columns it asked for, at most 5,000.

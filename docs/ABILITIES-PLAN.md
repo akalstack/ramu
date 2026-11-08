@@ -14,14 +14,9 @@ Abilities let a thread's agent ask Ramu for something its provider cannot do (an
 
 ### 2. Connection with the other plans
 
-- **[Artifacts](ARTIFACTS-PLAN.md):**
-  - Motion can use `video_generation` and `speech` where they exist, and renders on the host where they do not.
-  - A page's own AI (`ramuContent.ai`) can ask for an image through the same routing, within the page's grant.
-- **[Shipping an app](SHIP-AN-APP-PLAN.md):**
-  - Section 1's per-call `model` and `agent_models` are the base this builds on.
-  - App icons, store screenshots and social images for a new project are `generate_image` calls.
-  - "Research the best hosting for this" is a `web_search` call when the thread's provider has no search.
-- **Fallback and teammates:** abilities reuse the fallback router and the accounts list, so usage limits, switch-back and "never move to another subscription on its own" apply unchanged.
+A page's own AI asks for an image through the same routing (`ramuContent.ai.image`, within its AI grant), and `project_create` points the agent to `generate_image` for icons, store screenshots and social images and to `web_search` for comparing hosting. Remaining:
+
+- **[Artifacts](ARTIFACTS-PLAN.md):** Motion uses `video_generation` and `speech` where a provider offers them, and renders on the host where none does (waiting on §1).
 
 ### 3. Abilities from Shared MCP servers
 

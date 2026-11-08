@@ -437,6 +437,18 @@ describe('abilities on a Shared MCP tool', () => {
     expect(abilities.status().mcpChecks.find((check) => check.tool === 'text')).toMatchObject({ ok: false })
   })
 
+  it('makes an image for a page with no thread, and refuses a mapping to a Shared MCP tool', async () => {
+    const abilities = service(working)
+    await abilities.refresh()
+    const image = await abilities.pageImage('a red apple')
+    expect(image.extension).toBe('png')
+    expect(image.bytes.equals(PNG)).toBe(true)
+    withAbilities({ choices: { image_generation: { connectionId: 'c1', tool: 'make' } } })
+    await expect(abilities.pageImage('a pear')).rejects.toThrow('a page cannot use')
+    withAbilities({ choices: { image_generation: 'off' } })
+    await expect(abilities.pageImage('a pear')).rejects.toThrow('turned off')
+  })
+
   it('fills the tool’s prompt or query, else its first required text', () => {
     expect(mcpArguments({ properties: { size: { type: 'number' }, prompt: { type: 'string' } } }, 'apple')).toEqual({
       prompt: 'apple',
