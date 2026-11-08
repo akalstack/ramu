@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { appForeground, holdsSentMessage, transcriptScrollState } from '../src/runtime/chatViewport.ts'
+import { appForeground, transcriptScrollState } from '../src/runtime/chatViewport.ts'
 import { transcript } from '../src/runtime/transcript.ts'
 
 test('jumping to latest stays hidden through intermediate animated scroll offsets', () => {
@@ -12,17 +12,6 @@ test('jumping to latest stays hidden through intermediate animated scroll offset
 
 test('keyboard settling does not mistake inset movement for leaving latest', () => {
   assert.deepEqual(transcriptScrollState(true, 200, true, true), { following: true, away: false })
-})
-
-test('a sent message holds the end still until its reply has filled the room under it', () => {
-  // Sending: the list has not made room yet, so nothing may jump to the end.
-  assert.equal(holdsSentMessage({ awaitingRoom: true, anchored: true, room: 0 }), true)
-  // Resting at the top while the reply streams into the room below it.
-  assert.equal(holdsSentMessage({ awaitingRoom: false, anchored: true, room: 320 }), true)
-  // The reply is longer than the screen: follow its end again.
-  assert.equal(holdsSentMessage({ awaitingRoom: false, anchored: true, room: 0 }), false)
-  // A thread opened without sending follows its end as before.
-  assert.equal(holdsSentMessage({ awaitingRoom: false, anchored: false, room: 0 }), false)
 })
 
 test('native interruptions retain foreground state; background and resume change it', () => {

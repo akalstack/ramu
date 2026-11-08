@@ -1,6 +1,6 @@
 import { HelperDetails } from '../../../components/Helpers'
 import { deliveryVisible, visibleText } from '../../../runtime/transcript'
-import { holdsSentMessage, transcriptScrollState } from '../../../runtime/chatViewport'
+import { transcriptScrollState } from '../../../runtime/chatViewport'
 import { goBackOrHome } from '../../../runtime/navigation'
 import { shareRows } from '../../../runtime/shareRows'
 import { VIEW_ONLY_WRITE_NOTICE } from '../../../runtime/viewerAccess'
@@ -225,12 +225,9 @@ export default function ChatScreen() {
     const m = metrics.current,
       cover = coverFor(to)
     const end = Math.max(restTop.current, m.content - m.viewport + cover)
-    // A sent message resting at the top stays there: the room under it shrinks or grows by what the keyboard covers.
-    keyboardTarget.current = holdsAnchor()
-      ? null
-      : following.current
-        ? end
-        : Math.max(restTop.current, Math.min(end, m.offset + cover - m.cover))
+    keyboardTarget.current = following.current
+      ? end
+      : Math.max(restTop.current, Math.min(end, m.offset + cover - m.cover))
     if (settling.current) clearTimeout(settling.current)
     settling.current = setTimeout(() => {
       settling.current = null
@@ -257,19 +254,7 @@ export default function ChatScreen() {
   const topInset = ios ? insets.top + (Number(Platform.Version) >= 26 ? 54 : 44) : 0
   const restTop = useRef(-topInset)
   restTop.current = -topInset
-  // After a send the sent message rests at the top with room below it for the reply. Until the reply fills that room
-  // the end must not be chased: the list keeps the message in place while the room shrinks, and a jump to the end in
-  // between (the composer emptying, the keyboard, a row measured late) showed the blank room first, then moved back.
-  // Set from sending until the list has measured the sent row and made room below it: only then is the end the place
-  // where that message rests at the top, so the move waits for it instead of aiming at an end that is about to change.
-  const awaitingAnchor = useRef(false)
-  const anchored = useRef(false)
-  const endSpace = useRef(0)
-  const holdsAnchor = () =>
-    holdsSentMessage({ awaitingRoom: awaitingAnchor.current, anchored: anchored.current, room: endSpace.current })
-  /** `force` is for the moves that place the sent message, and for the reader asking for the latest. */
-  const toEnd = (animated: boolean, force = false) => {
-    if (!force && holdsAnchor()) return
+  const toEnd = (animated: boolean) => {
     animated = animated && !reducedMotion
     if (!ios) return scroll.current?.scrollToEnd({ animated })
     const m = metrics.current
@@ -296,42 +281,6 @@ export default function ChatScreen() {
     held.current = Date.now()
   }, [])
   const [restore, setRestore] = useState<{ text: string; n: number }>()
-  const [exchangeStarted, setExchangeStarted] = useState(false)
-  // The move that brings a sent message to the top animates; the size changes right after it must not cut it short.
-  const exchangeScroll = useRef(0)
-  const correction = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(
-    () => () => {
-      if (correction.current) clearTimeout(correction.current)
-    },
-    [],
-  )
-  const startExchange = () => {
-    setExchangeStarted(true)
-    awaitingAnchor.current = true
-    exchangeScroll.current = Date.now()
-    // A send that never gets a row (refused at once) must not leave the list waiting: it follows the end again.
-    if (correction.current) clearTimeout(correction.current)
-    correction.current = setTimeout(() => {
-      correction.current = null
-      if (!awaitingAnchor.current) return
-      awaitingAnchor.current = false
-      if (following.current && !userScrolling.current) toEnd(false, true)
-    }, 1500)
-  }
-  /** The room under the sent message is measured: bring it to the top, then settle once on the final end. */
-  const anchorReady = (anchorKey: string | undefined) => {
-    if (!awaitingAnchor.current || !anchorKey?.startsWith('pending:')) return
-    awaitingAnchor.current = false
-    following.current = true
-    exchangeScroll.current = Date.now()
-    requestAnimationFrame(() => toEnd(true, true))
-    if (correction.current) clearTimeout(correction.current)
-    correction.current = setTimeout(() => {
-      correction.current = null
-      if (following.current && !userScrolling.current) toEnd(false, true)
-    }, 450)
-  }
   const computer = store.computers.find((x) => x.id === chat?.computerId)
   const viewOnly = computer?.access === 'viewer'
   const viewerNow = () =>
@@ -765,7 +714,6 @@ export default function ChatScreen() {
     const keep = editing.files.map((file) => file.id).filter((id) => !attachments?.includes(id))
     setEditing(null)
     following.current = true
-    if (mode === 'send') startExchange()
     await store.send(chat.id, text, mode, [...keep, ...(attachments ?? [])], context)
   }
   const offline = !store.isOnline(chat.computerId)
@@ -785,7 +733,7 @@ export default function ChatScreen() {
   handedOver.current = pending
   // A finished turn folds its steps into one "Worked for" row in their place. That row takes the key of the first step
   // it replaces, so the list knows its size at once (both are one collapsed line) instead of laying out an unmeasured
-  // row and holding the room it no longer needs until it is measured, which left a blank gap at the end.
+  // row at an estimate and moving the end when it is measured.
   const keysNow = new Set(pageRows.map(rowKey))
   pageRows.forEach((row, index) => {
     if (row.kind !== 'summary' || aliases.current.has(row.id)) return
@@ -798,13 +746,6 @@ export default function ChatScreen() {
     ? [...pageRows, ...pending.map((outbox) => ({ kind: 'pending' as const, id: `pending:${outbox.id}`, outbox }))]
     : pageRows
   shownKeys.current = listRows.map(rowKey)
-  // As in ChatGPT: once you send, your message moves to the top and space opens below it for the reply. The reply
-  // fills that space instead of growing the list, so the end stays put while it streams, folds or finishes, and the
-  // view never jumps. Only messages sent from this screen do this; opening a thread shows its end as before.
-  const anchorIndex = exchangeStarted
-    ? listRows.findLastIndex((row) => row.kind === 'user' || row.kind === 'pending')
-    : -1
-  anchored.current = anchorIndex >= 0
   const editPending = (text: string) => setRestore((r) => ({ text, n: (r?.n ?? 0) + 1 }))
   // Editing a queued message takes it out of the queue first, so it is not sent while being changed.
   const editQueued = (message: QueuedMessage) => {
@@ -1418,25 +1359,6 @@ export default function ChatScreen() {
                 initialScrollAtEnd
                 ItemSeparatorComponent={RowSeparator}
                 style={{ flex: 1 }}
-                anchoredEndSpace={
-                  anchorIndex >= 0
-                    ? {
-                        anchorIndex,
-                        // The list's end sits under the composer (an inset on iOS, padding elsewhere), so the anchor's
-                        // distance from the top counts that cover too; at the end it then rests just under the header.
-                        anchorOffset:
-                          topInset +
-                          space.m +
-                          (ios ? cover : (floatingChrome ? composerHeight + space.l : space.l) + keyboard.height),
-                        onReady: ({ anchorKey }: { anchorKey?: string }) => anchorReady(anchorKey),
-                        // The room shrinks as the reply grows, and by what the keyboard or composer covers, so the
-                        // sent message stays where it is without a scroll; the end is followed again once it is gone.
-                        onSizeChanged: (size: number) => {
-                          endSpace.current = size
-                        },
-                      }
-                    : undefined
-                }
                 contentInset={ios ? { bottom: cover } : undefined}
                 scrollIndicatorInsets={ios ? { bottom: cover } : undefined}
                 contentContainerStyle={{
@@ -1482,10 +1404,7 @@ export default function ChatScreen() {
                   // times in a row (sending, the sent message, the reply), and an animated scroll interrupted by each one
                   // moved the view up and down.
                   if (!following.current || settling.current || Date.now() - held.current <= 600) return
-                  // Right after a send the list is still making room under the message; anchorReady moves it then.
-                  if (awaitingAnchor.current) return
-                  // While that move animates, a jump to the end would cut it short; it settles once it has run.
-                  if (Date.now() - exchangeScroll.current > 450) toEnd(false)
+                  toEnd(false)
                 }}
                 keyboardDismissMode="on-drag"
                 keyboardShouldPersistTaps="handled"
@@ -1653,7 +1572,6 @@ export default function ChatScreen() {
                             .then((joined) => setRecipientId(joined.agentId))
                         }
                         following.current = true
-                        if (mode === 'send') startExchange()
                         return store.send(chat.id, text, mode, attachments, context)
                       }}
                       taskId={chat.taskId || undefined}
@@ -1820,7 +1738,7 @@ export default function ChatScreen() {
                       following.current = true
                       userScrolling.current = false
                       setAway(false)
-                      toEnd(true, true)
+                      toEnd(true)
                     }}
                   >
                     {({ pressed }) => (
