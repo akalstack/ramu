@@ -39,9 +39,11 @@ import {
   X,
   Plug,
   MessageSquarePlus,
+  Search,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
 import { belowHeader } from '../../../components/UndoToast'
+import { ChatFindBar } from '../../../components/ChatFindBar'
 import { useAutomation } from '../../../runtime/automation'
 import { useChat, useStore, type OutboxItem } from '../../../runtime/store'
 import { MODEL_WARNING_DEVICE_KEY, resolveModelChangeWarning } from '../../../runtime/busyMode'
@@ -602,6 +604,15 @@ export default function ChatScreen() {
     } catch {}
     setFound({ id: source.id, at: Date.now() })
   }
+  // Find in the loaded turns: a match scrolls into view and lights up, as a quote's source does.
+  const [finding, setFinding] = useState(false)
+  const jumpToMatch = (match: { id: string; index: number }) => {
+    following.current = false
+    try {
+      scroll.current?.scrollToIndex({ index: match.index, animated: true, viewPosition: 0.3 })
+    } catch {}
+    setFound({ id: match.id, at: Date.now() })
+  }
   // Where each message sits in time and in its turn: date labels above turns, time and copy under each turn's last answer.
   const itemMeta = useMemo(() => {
     const map = new Map<string, ItemMeta>()
@@ -895,6 +906,13 @@ export default function ChatScreen() {
     group: 'tools' | 'info'
     symbol?: import('../../../components/Screen').HeaderMenuAction['icon']
   }[] = [
+    {
+      icon: Search,
+      label: tr('Find in conversation'),
+      symbol: 'magnifyingglass' as const,
+      group: 'tools' as const,
+      onPress: () => setFinding(true),
+    },
     ...(chat.sessionId
       ? [
           {
@@ -1492,6 +1510,7 @@ export default function ChatScreen() {
                 bottom={composerHeight}
               />
               {ios ? null : <TopFade visible={scrolled} color={c.window} />}
+              {finding ? <ChatFindBar rows={pageRows} onJump={jumpToMatch} onClose={() => setFinding(false)} /> : null}
               <KeyboardLift keyboard={keyboard}>
                 <BottomFade height={composerHeight * 0.75} color={c.window} />
                 {selection ? (
