@@ -467,20 +467,26 @@ export default function SettingsSectionPage() {
         {id === 'remote' ? <Computers /> : null}
         {id === 'archived' ? <ArchivedThreads /> : null}
         {id === 'about' ? <About /> : null}
-        {id === 'providers' ? <ProviderCompatibility key={selected} hostId={selected} /> : null}
+        {id === 'providers' ? (
+          <ProviderCompatibility key={`ProviderCompatibility:${selected}`} hostId={selected} />
+        ) : null}
         {id === 'providers' ? <Usage computer={selected} /> : null}
-        {id === 'chats' ? <BusyBehavior key={selected} computerId={selected} /> : null}
-        {id === 'computer' ? <ComputerUseSettings key={selected} hostId={selected} /> : null}
-        {id === 'git' ? <HostingStatus key={selected} hostId={selected} /> : null}
-        {id === 'agent-setup' ? <AgentSetupSettings key={selected} hostId={selected} /> : null}
-        {id === 'agent-setup' ? <RulesSettings key={selected} hostId={selected} /> : null}
+        {id === 'chats' ? <BusyBehavior key={`BusyBehavior:${selected}`} computerId={selected} /> : null}
+        {id === 'computer' ? <ComputerUseSettings key={`ComputerUseSettings:${selected}`} hostId={selected} /> : null}
+        {id === 'git' ? <HostingStatus key={`HostingStatus:${selected}`} hostId={selected} /> : null}
+        {id === 'agent-setup' ? <AgentSetupSettings key={`AgentSetupSettings:${selected}`} hostId={selected} /> : null}
+        {id === 'agent-setup' ? <RulesSettings key={`RulesSettings:${selected}`} hostId={selected} /> : null}
         {section.scope === 'host' && id !== 'computer' ? (
           <HostGroups section={id} host={host} name={name} locked={locked} />
         ) : null}
-        {id === 'models' ? <AbilitySummary key={selected} hostId={selected} /> : null}
-        {id === 'memory' ? <LearningReviews key={selected} hostId={selected} locked={locked} /> : null}
-        {id === 'memory' ? <MemoryList key={selected} hostId={selected} /> : null}
-        {id === 'access' ? <SavedApprovals key={selected} hostId={selected} locked={locked} /> : null}
+        {id === 'models' ? <AbilitySummary key={`AbilitySummary:${selected}`} hostId={selected} /> : null}
+        {id === 'memory' ? (
+          <LearningReviews key={`LearningReviews:${selected}`} hostId={selected} locked={locked} />
+        ) : null}
+        {id === 'memory' ? <MemoryList key={`MemoryList:${selected}`} hostId={selected} /> : null}
+        {id === 'access' ? (
+          <SavedApprovals key={`SavedApprovals:${selected}`} hostId={selected} locked={locked} />
+        ) : null}
         {note ? <Hint>{translate(language, note)}</Hint> : null}
       </SettingScroll>
     </Screen>
