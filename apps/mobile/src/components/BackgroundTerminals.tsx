@@ -80,10 +80,12 @@ export function BackgroundTerminals({
       }
       setList({ scope, rows: previous, status: 'loading' })
       try {
-        const rows = await io.current.invoke(hostId, 'term.background.list', taskId)
+        const all = await io.current.invoke(hostId, 'term.background.list', taskId)
         if (!active || mine !== revision) return
-        if (rows.some((row) => row.taskId !== taskId))
+        if (all.some((row) => row.taskId !== taskId))
           throw new Error('Background command details changed. Refresh before continuing.')
+        // Only commands still running are listed; how a finished one ended stays in the thread's transcript.
+        const rows = all.filter(live)
         previous = rows
         setList({ scope, rows, status: 'ready' })
       } catch (error) {
@@ -183,6 +185,14 @@ export function BackgroundTerminals({
   }, [scope, hostId, taskId, open, selected, detailKey, online])
 
   const rows = list.scope === scope ? list.rows : []
+  // A command that ends leaves the list: its view goes back to the list, and the sheet closes once nothing runs.
+  const ready = list.scope === scope && list.status === 'ready'
+  useEffect(() => {
+    if (!ready) return
+    if (selected && !rows.some((row) => row.id === selected)) setSelection(null)
+    if (open && !rows.length) onClose()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the host's list changes
+  }, [ready, rows, selected, open])
   const awaited = rows.find((row) => row.agentWaiting)
   const shown = detail.key === detailKey ? detail.record : undefined
   const canControl =
@@ -236,12 +246,7 @@ export function BackgroundTerminals({
       ],
     )
   }
-  const stateLabel = (command: BackgroundTerminalInfo) =>
-    t(
-      { running: 'Running', stopping: 'Stopping', exited: 'Exited', failed: 'Failed', unknown: 'Unknown' }[
-        command.state
-      ] ?? 'Unknown',
-    )
+  const stateLabel = (command: BackgroundTerminalInfo) => t(command.state === 'stopping' ? 'Stopping' : 'Running')
   const stopLabel = (command: BackgroundTerminalInfo) =>
     `${command.startedBy ? ` · ${t('Started by a sub-agent')}` : ''}${
       command.stoppedBy
@@ -268,7 +273,7 @@ export function BackgroundTerminals({
           label={
             awaited
               ? t('Waiting on {0}', { 0: clipCommand(awaited.command) })
-              : t('{0} background terminals', { 0: rows.filter(live).length || rows.length })
+              : t('{0} background terminals', { 0: rows.length })
           }
           accessibilityLabel={t('Background terminals')}
           tone={awaited ? 'attention' : 'quiet'}
@@ -302,11 +307,7 @@ export function BackgroundTerminals({
                     {stateLabel(shown)}
                     {stopLabel(shown)} ·{' '}
                     {new Date(shown.startedAt).toLocaleString(store.language === 'id' ? 'id-ID' : 'en-US')}
-                    {shown.exitCode !== null ? ` · ${t('Exit code {0}', { 0: shown.exitCode })}` : ''}
                   </T>
-                  {shown.state === 'unknown' && (
-                    <T tone="muted">{t('Command status cannot be verified. Saved output is available.')}</T>
-                  )}
                   {shown.cursor > shown.output.length && (
                     <T tone="muted" size={font.caption}>
                       {t('Showing the most recent terminal output. Older output was truncated.')}

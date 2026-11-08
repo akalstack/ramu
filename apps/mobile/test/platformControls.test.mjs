@@ -4696,22 +4696,21 @@ for (const os of ['ios', 'android']) {
     assert.ok(f.calls.every(([, method]) => method.startsWith('term.background.')))
     f.hooks.dispose()
   })
-  test(`${os} leaves unknown records read-only and disables cached controls while offline`, async () => {
-    const unknown = managedFixture({
-      record: { state: 'unknown', capabilities: { inspect: true, stop: false, forceStop: false, input: false } },
-    })
-    let tree = await unknown.select()
-    assert.equal(find(tree, 'TerminalView').props.enabled, false)
-    assert.equal(
-      nodes(tree).some((node) => node.type === 'Button' && ['Stop', 'Force stop'].includes(node.props.title)),
-      false,
-    )
-    unknown.hooks.dispose()
+  test(`${os} lists only running commands and disables cached controls while offline`, async () => {
+    for (const state of ['exited', 'failed', 'unknown']) {
+      const finished = managedFixture({ record: { state } })
+      finished.render()
+      await settle()
+      const shown = finished.render()
+      assert.equal(find(shown, 'Row'), undefined, `a command that is ${state} is not listed`)
+      assert.equal(find(shown, 'ActivityPill'), undefined, `no pill for a command that is ${state}`)
+      finished.hooks.dispose()
+    }
     const f = managedFixture()
     await f.select()
     f.setOnline(false)
     f.render()
-    tree = f.render()
+    const tree = f.render()
     assert.equal(nodes(tree).find((node) => node.type === 'Button' && node.props.title === 'Stop').props.disabled, true)
     assert.equal(
       f.calls.some(([, method]) => method === 'term.background.stop'),

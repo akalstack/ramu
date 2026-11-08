@@ -9,7 +9,7 @@ import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { errorText } from '../lib/errors'
 import { t, useLanguage } from '../i18n'
 import { ConfirmStopDialog } from './ConfirmStopDialog'
-import { canForceStop, isLiveTerminal, readBackgroundTerminals } from './backgroundTerminalState'
+import { canForceStop, readBackgroundTerminals } from './backgroundTerminalState'
 
 /** A thread's persistent commands, kept current from the host; the thread's tray shows them once there are some. */
 export function useBackgroundTerminals(taskId: string | undefined) {
@@ -79,19 +79,11 @@ export function useBackgroundTerminals(taskId: string | undefined) {
   return { terminals, stale, error, confirming, setConfirming, stop, open }
 }
 
-/** The thread's persistent commands as a tray section, quiet until it has some and still there once the agent is idle. */
+/** The thread's running commands as a tray section, shown while there are some, even once the agent is idle. */
 export function BackgroundTerminalsSection({ state }: { state: ReturnType<typeof useBackgroundTerminals> }) {
   useLanguage()
   const { terminals, stale, error, confirming, setConfirming, stop, open } = state
-  const live = terminals.filter(isLiveTerminal).length
-  const stateLabel = (terminal: BackgroundTerminalInfo) =>
-    ({
-      running: t('Running'),
-      stopping: t('Stopping'),
-      exited: t('Exited'),
-      failed: t('Failed'),
-      unknown: t('Unknown'),
-    })[terminal.state]
+  const stateLabel = (terminal: BackgroundTerminalInfo) => t(terminal.state === 'stopping' ? 'Stopping' : 'Running')
   return (
     <>
       <ConfirmStopDialog
@@ -106,7 +98,7 @@ export function BackgroundTerminalsSection({ state }: { state: ReturnType<typeof
       <ComposerTraySection
         aria-label={t('Background terminals')}
         title={t('Background terminals')}
-        count={live || terminals.length}
+        count={terminals.length}
         icon={<SquareTerminal />}
         actions={
           stale && <span className="text-muted-foreground text-caption">{t('Offline · last-known activity')}</span>
@@ -138,15 +130,9 @@ export function BackgroundTerminalsSection({ state }: { state: ReturnType<typeof
                   {terminal.stoppedBy
                     ? ` · ${t(terminal.stoppedBy === 'user' ? 'Stop requested by you' : 'Stop requested by agent')}`
                     : ''}
-                  {terminal.exitCode !== null && terminal.state !== 'running'
-                    ? ` · ${t('Exit code {0}', { 0: terminal.exitCode })}`
-                    : ''}
-                  {terminal.state === 'unknown'
-                    ? ` · ${t('Command status cannot be verified. Saved output is available.')}`
-                    : ''}
                 </span>
               </RowButton>
-              {isLiveTerminal(terminal) && terminal.capabilities.stop && (
+              {terminal.capabilities.stop && (
                 <Button
                   variant="ghost"
                   size="sm"

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import type { BackgroundTerminalInfo } from '@ramu/shared/api'
-import { canForceStop, isLiveTerminal, readBackgroundTerminals } from '../src/chat/backgroundTerminalState'
+import { canForceStop, readBackgroundTerminals } from '../src/chat/backgroundTerminalState'
 
 const terminal = (over: Partial<BackgroundTerminalInfo> = {}): BackgroundTerminalInfo => ({
   id: 't1',
@@ -17,9 +17,16 @@ const terminal = (over: Partial<BackgroundTerminalInfo> = {}): BackgroundTermina
   ...over,
 })
 
-it('reads the host list for the thread and keeps the last known rows when the host cannot be reached', async () => {
+it('lists only the thread’s running commands, and keeps the last known rows when the host cannot be reached', async () => {
   const rows = [terminal()]
-  expect(await readBackgroundTerminals(async () => rows, 'a', [])).toEqual({ terminals: rows, stale: false })
+  const finished = ['exited', 'failed', 'unknown'].map((state, index) =>
+    terminal({ id: `done-${index}`, state: state as BackgroundTerminalInfo['state'] }),
+  )
+  const stopping = terminal({ id: 't2', state: 'stopping' })
+  expect(await readBackgroundTerminals(async () => [...rows, ...finished, stopping], 'a', [])).toEqual({
+    terminals: [...rows, stopping],
+    stale: false,
+  })
   const offline = async (): Promise<never> => {
     throw new Error('ECONNREFUSED')
   }
@@ -35,7 +42,5 @@ it('offers force stop only while stopping and when the owner supports it', () =>
     ),
   ).toBe(false)
   expect(canForceStop(terminal({ state: 'exited' }))).toBe(false)
-  expect(isLiveTerminal(terminal({ state: 'failed' }))).toBe(false)
-  expect(isLiveTerminal(terminal({ state: 'unknown' }))).toBe(false)
   expect(canForceStop(terminal({ state: 'unknown' }))).toBe(false)
 })

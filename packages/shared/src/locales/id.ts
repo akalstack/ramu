@@ -626,8 +626,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Update Ramu on this host to review background commands before deleting.':
     'Perbarui Ramu di host ini untuk meninjau perintah latar belakang sebelum menghapus.',
 
-  'Command status cannot be verified. Saved output is available.':
-    'Status perintah tidak dapat dipastikan. Output tersimpan tersedia.',
   'Showing the most recent terminal output. Older output was truncated.':
     'Menampilkan output terminal terbaru. Output yang lebih lama dipotong.',
   'Saved output · no live terminal is attached.': 'Output tersimpan · tidak terhubung ke terminal aktif.',
@@ -4288,7 +4286,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Background terminals': 'Terminal latar belakang',
   '{0} background terminals': '{0} terminal latar belakang',
   Stopping: 'Menghentikan',
-  Exited: 'Selesai',
   'Open output': 'Buka output',
   'Force stop': 'Paksa berhenti',
   'Force stop ends the command immediately without letting it clean up.':
