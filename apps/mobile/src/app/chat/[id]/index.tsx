@@ -282,9 +282,41 @@ export default function ChatScreen() {
   const [exchangeStarted, setExchangeStarted] = useState(false)
   // The move that brings a sent message to the top animates; the size changes right after it must not cut it short.
   const exchangeScroll = useRef(0)
+  // Set from sending until the list has measured the sent row and made room below it: only then is the end the place
+  // where that message rests at the top, so the move waits for it instead of aiming at an end that is about to change.
+  const awaitingAnchor = useRef(false)
+  const correction = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(
+    () => () => {
+      if (correction.current) clearTimeout(correction.current)
+    },
+    [],
+  )
   const startExchange = () => {
     setExchangeStarted(true)
+    awaitingAnchor.current = true
     exchangeScroll.current = Date.now()
+    // A send that never gets a row (refused at once) must not leave the list waiting: it follows the end again.
+    if (correction.current) clearTimeout(correction.current)
+    correction.current = setTimeout(() => {
+      correction.current = null
+      if (!awaitingAnchor.current) return
+      awaitingAnchor.current = false
+      if (following.current && !userScrolling.current) toEnd(false)
+    }, 1500)
+  }
+  /** The room under the sent message is measured: bring it to the top, then settle once on the final end. */
+  const anchorReady = (anchorKey: string | undefined) => {
+    if (!awaitingAnchor.current || !anchorKey?.startsWith('pending:')) return
+    awaitingAnchor.current = false
+    following.current = true
+    exchangeScroll.current = Date.now()
+    requestAnimationFrame(() => toEnd(true))
+    if (correction.current) clearTimeout(correction.current)
+    correction.current = setTimeout(() => {
+      correction.current = null
+      if (following.current && !userScrolling.current) toEnd(false)
+    }, 450)
   }
   const computer = store.computers.find((x) => x.id === chat?.computerId)
   const viewOnly = computer?.access === 'viewer'
@@ -1369,6 +1401,7 @@ export default function ChatScreen() {
                           topInset +
                           space.m +
                           (ios ? cover : (floatingChrome ? composerHeight + space.l : space.l) + keyboard.height),
+                        onReady: ({ anchorKey }: { anchorKey?: string }) => anchorReady(anchorKey),
                       }
                     : undefined
                 }
@@ -1417,9 +1450,10 @@ export default function ChatScreen() {
                   // times in a row (sending, the sent message, the reply), and an animated scroll interrupted by each one
                   // moved the view up and down.
                   if (!following.current || settling.current || Date.now() - held.current <= 600) return
-                  const sinceSend = Date.now() - exchangeScroll.current
-                  if (sinceSend < 120) toEnd(true)
-                  else if (sinceSend > 450) toEnd(false)
+                  // Right after a send the list is still making room under the message; anchorReady moves it then.
+                  if (awaitingAnchor.current) return
+                  // While that move animates, a jump to the end would cut it short; it settles once it has run.
+                  if (Date.now() - exchangeScroll.current > 450) toEnd(false)
                 }}
                 keyboardDismissMode="on-drag"
                 keyboardShouldPersistTaps="handled"
