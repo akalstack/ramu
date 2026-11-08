@@ -8641,3 +8641,266 @@ test('a thread offers its checkpoint only once the host has one, and the sheet s
   assert.equal(SessionCheckpointSheet({ checkpoint: null, open: true, onClose() {} }).props.open, false)
   hooks.dispose()
 })
+
+// Copy with its values filled in, so a test reads the words a person sees.
+const fillingSay = {
+  useSay:
+    () =>
+    (text, values = {}) =>
+      text.replace(/\{(\w+)\}/g, (_, key) => String(values[key])),
+}
+const proxyUi = () => new Proxy({ tap() {} }, { get: (target, key) => (key in target ? target[key] : String(key)) })
+
+for (const access of ['full', 'viewer']) {
+  test(`test devices on the phone ${access === 'viewer' ? 'stay read-only on a view-only device' : 'turn on and stop a running device'}`, async () => {
+    const hooks = hookHarness(),
+      calls = []
+    const store = {
+      ...hostStore(
+        {
+          'testDevices.status': () => ({
+            enabled: false,
+            ios: { ready: true, missing: [] },
+            android: { ready: false, missing: [{ item: 'Android SDK', fix: 'Install Android Studio' }] },
+            devices: [
+              { id: 'sim-1', platform: 'ios', name: 'iPhone 17 · iOS 26', running: true },
+              { id: 'avd:Pixel', platform: 'android', name: 'Pixel 9', running: false },
+            ],
+          }),
+        },
+        calls,
+      ),
+      computers: [{ id: 'host', access }],
+    }
+    const { TestDeviceSettings } = load('components/ComputerUseSettings.tsx', 'ios', {
+      react: hooks.react,
+      '../runtime/store': { useStore: () => store },
+      './SettingRows': { ToggleRow: 'ToggleRow', Hint: 'Hint' },
+      './ui': proxyUi(),
+    })
+    const render = () => hooks.render(() => TestDeviceSettings({ hostId: 'host' }))
+    render()
+    await settle()
+    const tree = render()
+    const toggle = find(tree, 'ToggleRow')
+    const stops = nodes(tree).filter((node) => node.type === 'Button' && node.props.title === 'Stop')
+    assert.equal(toggle.props.title, 'Let agents use test devices')
+    // Only the running device offers Stop, and each platform says what it still needs.
+    assert.equal(stops.length, 1)
+    assert.deepEqual(
+      nodes(tree)
+        .filter((node) => node.props?.title === 'Android')
+        .map((node) => node.props.value.missing[0].item),
+      ['Android SDK'],
+    )
+    if (access === 'viewer') {
+      assert.equal(toggle.props.disabled, true)
+      assert.equal(stops[0].props.disabled, true)
+      hooks.dispose()
+      return
+    }
+    toggle.props.onChange(true)
+    await settle()
+    assert.deepEqual(calls.slice(1), [['testDevices.setEnabled', true], ['testDevices.status']])
+    calls.length = 0
+    find(render(), 'Button').props.onPress()
+    await settle()
+    assert.deepEqual(calls, [['testDevices.stop', 'sim-1'], ['testDevices.status']])
+    hooks.dispose()
+  })
+}
+
+test('managed skills on the phone pin a skill, and restore an earlier revision only after confirming', async () => {
+  const skillControls = await import('../../../packages/shared/src/skillControls.ts')
+  const hooks = hookHarness(),
+    calls = [],
+    alerts = []
+  const skill = (revision, content) => ({
+    id: 'sk1',
+    name: 'deploy',
+    description: 'Ships it',
+    content,
+    status: 'active',
+    pinned: false,
+    revision,
+    updatedAt: 1,
+    useCount: 3,
+  })
+  const store = hostStore(
+    {
+      'learning.get': () => ({ skills: [skill(2, 'new steps')], jobs: [], running: false }),
+      'learning.history': () => [skill(2, 'new steps'), skill(1, 'old steps')],
+    },
+    calls,
+  )
+  store.computers = [{ id: 'host', access: 'full', status: 'online' }]
+  const { ManagedSkills } = load('components/ManagedSkills.tsx', 'ios', {
+    react: hooks.react,
+    'react-native': { Alert: { alert: (...args) => alerts.push(args) } },
+    '@ramu/shared/skillControls': skillControls,
+    '../i18n': fillingSay,
+    '../runtime/store': { useStore: () => store },
+    '../runtime/toast': { showToast() {} },
+    './SettingRows': { RowLabel: 'RowLabel' },
+    './SheetOptions': { SheetGroup: 'SheetGroup', SheetOption: 'SheetOption' },
+    './ui': proxyUi(),
+  })
+  const render = () => hooks.render(() => ManagedSkills({ hostId: 'host', locked: false }))
+  const openSkill = () =>
+    nodes(render())
+      .find((node) => node.type === 'Row' && find(node, 'RowLabel')?.props.title === 'deploy')
+      .props.onPress()
+  const options = () => nodes(render()).filter((node) => node.type === 'SheetOption')
+  const option = (title) => options().find((node) => node.props.title === title)
+  render()
+  await settle()
+  assert.equal(find(render(), 'RowLabel').props.help, 'Ships it · Read 3 times')
+  openSkill()
+  // An active skill offers Pin, Disable and Archive, not Unpin or Restore.
+  assert.deepEqual(
+    options().map((node) => node.props.title),
+    ['Pin', 'Disable', 'Archive', 'History'],
+  )
+  calls.length = 0
+  option('Pin').props.onPress()
+  await settle()
+  assert.deepEqual(calls, [['learning.control', 'sk1', 'pin'], ['learning.get']])
+
+  openSkill()
+  option('History').props.onPress()
+  await settle()
+  const restores = nodes(render()).filter((node) => node.type === 'Button' && node.props.title === 'Restore revision')
+  assert.equal(restores.length, 1, 'the current revision cannot be restored over itself')
+  calls.length = 0
+  restores[0].props.onPress()
+  assert.deepEqual(calls, [], 'nothing changes until the person confirms')
+  const [, , buttons] = alerts.at(-1)
+  buttons.find((button) => button.style === 'cancel').onPress?.()
+  assert.deepEqual(calls, [])
+  buttons.find((button) => button.style !== 'cancel').onPress()
+  await settle()
+  assert.deepEqual(calls, [['learning.revert', 'sk1', 1], ['learning.history', 'sk1'], ['learning.get']])
+  hooks.dispose()
+})
+
+test('managed skills stay off a view-only device, which may not read the learning library', async () => {
+  const hooks = hookHarness(),
+    calls = []
+  const store = { ...hostStore({}, calls), computers: [{ id: 'host', access: 'viewer' }] }
+  const { ManagedSkills } = load('components/ManagedSkills.tsx', 'ios', {
+    react: hooks.react,
+    '../runtime/store': { useStore: () => store },
+    './ui': proxyUi(),
+  })
+  assert.equal(
+    hooks.render(() => ManagedSkills({ hostId: 'host', locked: false })),
+    null,
+  )
+  await settle()
+  assert.deepEqual(calls, [])
+  hooks.dispose()
+})
+
+test('provider switches list every provider, keep the last one on, and save a new entry with its path', () => {
+  const { ProviderSwitches } = load('components/ProviderCompatibility.tsx', 'ios', {
+    '../runtime/store': { useStore: () => ({ language: 'en' }) },
+    '../runtime/settingsModel': settingsModel,
+    '@ramu/shared/providers/providers': { providerName: (id) => id },
+    './SettingRows': { Hint: 'Hint', ToggleRow: 'ToggleRow' },
+    './ui': proxyUi(),
+  })
+  const providers = ['claude-code', 'codex', 'opencode', 'cursor', 'antigravity']
+  const values = Object.fromEntries(
+    providers.filter((provider) => provider !== 'codex').map((p) => [`providerBinaries.${p}.enabled`, false]),
+  )
+  const saved = []
+  const settings = {
+    state: {
+      status: 'ready',
+      settings: providers.flatMap((p) => [
+        { path: `providerBinaries.${p}.binary` },
+        { path: `providerBinaries.${p}.enabled` },
+      ]),
+    },
+    read: (path) => values[path],
+    setAll: (edits) => saved.push(edits),
+  }
+  const rows = (writable) =>
+    nodes(
+      ProviderSwitches({ settings, statuses: [{ provider: 'codex', installed: true, version: '1.2' }], writable }),
+    ).filter((node) => node.type === 'ToggleRow')
+  const shown = rows(true)
+  // Turned-off providers stay listed so they can come back on; the only one on cannot be switched off.
+  assert.deepEqual(
+    shown.map((row) => [row.props.title, row.props.value, row.props.disabled]),
+    [
+      ['claude-code', false, false],
+      ['codex', true, true],
+      ['opencode', false, false],
+      ['cursor', false, false],
+      ['antigravity', false, false],
+    ],
+  )
+  assert.equal(shown[1].props.help, 'Keep at least one provider turned on')
+  shown[3].props.onChange(true)
+  assert.deepEqual(saved, [
+    [
+      ['providerBinaries.cursor.binary', ''],
+      ['providerBinaries.cursor.enabled', true],
+    ],
+  ])
+  assert.ok(
+    rows(false).every((row) => row.props.disabled),
+    'a device that may not change settings only reads them',
+  )
+})
+
+for (const selected of [true, false]) {
+  test(`the default browser profile ${selected ? 'lists the host browser’s profiles' : 'offers the built-in profiles when a desktop browser is in use'}`, async () => {
+    const hooks = hookHarness(),
+      calls = [],
+      saved = []
+    const store = hostStore(
+      {
+        'hostBrowser.status': () => ({ available: true, enabled: true, selected }),
+        'hostBrowser.profiles': () => ({
+          profiles: [
+            { id: 'default', name: 'Default', builtin: true },
+            { id: 'work', name: 'Work', builtin: false },
+          ],
+        }),
+      },
+      calls,
+    )
+    const { BrowserDefaultProfile } = load('components/BrowserDefaultProfile.tsx', 'ios', {
+      react: hooks.react,
+      '../i18n': fillingSay,
+      '../runtime/store': { useStore: () => store },
+      './SettingRows': { ChoiceRow: 'ChoiceRow' },
+      './ui': proxyUi(),
+    })
+    const host = {
+      computerId: 'host',
+      state: { status: 'ready', settings: [{ path: 'agentBrowser.defaultProfileId' }] },
+      read: () => 'gone',
+      set: (...args) => saved.push(args),
+    }
+    const render = () => hooks.render(() => BrowserDefaultProfile({ host, locked: false }))
+    render()
+    await settle()
+    const row = find(render(), 'ChoiceRow')
+    // The saved profile stays visible even when the host no longer has it.
+    assert.deepEqual(
+      Array.from(row.props.options, (option) => option.value),
+      selected ? ['default', 'work', 'gone'] : ['default', 'temporary', 'gone'],
+    )
+    assert.equal(row.props.options.at(-1).label, 'Unavailable profile (gone)')
+    assert.equal(
+      calls.some(([method]) => method === 'hostBrowser.profiles'),
+      selected,
+    )
+    row.props.onChange('default')
+    assert.deepEqual(saved, [['agentBrowser.defaultProfileId', 'default']])
+    hooks.dispose()
+  })
+}

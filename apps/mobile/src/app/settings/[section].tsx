@@ -39,12 +39,14 @@ import { AgentSetupSettings, MemoryList } from '../../components/AgentSetupSetti
 import { VoiceSettings } from '../../components/VoiceSettings'
 import { ProviderCompatibility } from '../../components/ProviderCompatibility'
 import { HostingStatus } from '../../components/HostingStatus'
-import { ComputerUseSettings } from '../../components/ComputerUseSettings'
+import { ComputerUseSettings, TestDeviceSettings } from '../../components/ComputerUseSettings'
 import { ThemeLibrary } from '../../components/ThemeLibrary'
 import { Hint, HostGroups, RowLabel, ToggleRow } from '../../components/SettingRows'
 import { PermissionNeeded } from '../../components/DevicePermissions'
 import { SavedApprovals } from '../../components/SavedApprovals'
 import { LearningReviews } from '../../components/LearningReviews'
+import { ManagedSkills } from '../../components/ManagedSkills'
+import { BrowserDefaultProfile } from '../../components/BrowserDefaultProfile'
 import { ScopeControl } from '../../components/ScopeControl'
 import { PhonePermissions } from '../../components/DevicePermissions'
 
@@ -421,11 +423,11 @@ function Usage({ computer }: { computer: string }) {
 
 /** What the desktop edits that the phone leaves to it, so a missing row is explained rather than puzzling. */
 const desktopOnly: Partial<Record<SettingsSection, string>> = {
-  browser: 'Browser profiles, imports and downloads are managed in Ramu on the host.',
+  browser: 'Creating, importing and clearing browser profiles, and downloads, are managed in Ramu on the host.',
   providers: 'Provider executable paths and sign-in are managed in Ramu on the host.',
   models: 'Model sets, the fallback order and the provider for each ability are edited in Ramu on the host.',
   workflows: 'Custom agents and a helper model of your own are set up in Ramu on the host.',
-  memory: 'The skills library and its model choices are managed in Ramu on the host.',
+  memory: 'Installing and editing skills, and their model choices, are managed in Ramu on the host.',
   git: 'Hosting accounts and their tokens are added in Ramu on the host.',
 }
 
@@ -468,11 +470,12 @@ export default function SettingsSectionPage() {
         {id === 'archived' ? <ArchivedThreads /> : null}
         {id === 'about' ? <About /> : null}
         {id === 'providers' ? (
-          <ProviderCompatibility key={`ProviderCompatibility:${selected}`} hostId={selected} />
+          <ProviderCompatibility key={`ProviderCompatibility:${selected}`} hostId={selected} locked={locked} />
         ) : null}
         {id === 'providers' ? <Usage computer={selected} /> : null}
         {id === 'chats' ? <BusyBehavior key={`BusyBehavior:${selected}`} computerId={selected} /> : null}
         {id === 'computer' ? <ComputerUseSettings key={`ComputerUseSettings:${selected}`} hostId={selected} /> : null}
+        {id === 'computer' ? <TestDeviceSettings key={`TestDeviceSettings:${selected}`} hostId={selected} /> : null}
         {id === 'git' ? <HostingStatus key={`HostingStatus:${selected}`} hostId={selected} /> : null}
         {id === 'agent-setup' ? <AgentSetupSettings key={`AgentSetupSettings:${selected}`} hostId={selected} /> : null}
         {id === 'agent-setup' ? <RulesSettings key={`RulesSettings:${selected}`} hostId={selected} /> : null}
@@ -483,7 +486,11 @@ export default function SettingsSectionPage() {
         {id === 'memory' ? (
           <LearningReviews key={`LearningReviews:${selected}`} hostId={selected} locked={locked} />
         ) : null}
+        {id === 'memory' ? <ManagedSkills key={`ManagedSkills:${selected}`} hostId={selected} locked={locked} /> : null}
         {id === 'memory' ? <MemoryList key={`MemoryList:${selected}`} hostId={selected} /> : null}
+        {id === 'browser' ? (
+          <BrowserDefaultProfile key={`BrowserDefaultProfile:${selected}`} host={host} locked={locked} />
+        ) : null}
         {id === 'access' ? (
           <SavedApprovals key={`SavedApprovals:${selected}`} hostId={selected} locked={locked} />
         ) : null}

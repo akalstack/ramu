@@ -16,6 +16,7 @@ import { useModelSets, modelStepName } from '../models/ModelSets'
 import { takeLibraryFocus } from '../summaries/libraryFocus'
 import { SettingsCard, SettingsCardList } from './cards'
 import { type IntelligencePreferences, type LearningSnapshot, type ManagedSkill } from '@ramu/shared/types'
+import { SKILL_ACTION_LABELS, skillActions } from '@ramu/shared/skillControls'
 
 type Props = { value: IntelligencePreferences; onChange: (value: IntelligencePreferences) => void }
 const withCurrent = (values: number[], current: number) => [...new Set([...values, current])].sort((a, b) => a - b)
@@ -412,31 +413,17 @@ export function ManagedSkills() {
             meta={`${skill.description} · ${t('Read {0} times', { 0: skill.useCount })}`}
             actions={
               <>
-                {(['pin', 'unpin', 'disable', 'archive', 'restore'] as const)
-                  .filter((action) =>
-                    action === 'pin'
-                      ? !skill.pinned
-                      : action === 'unpin'
-                        ? skill.pinned
-                        : action === 'restore'
-                          ? skill.status !== 'active'
-                          : skill.status === 'active',
-                  )
-                  .map((action) => (
-                    <Button
-                      key={action}
-                      disabled={viewOnly || busy}
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => void act(() => invoke('learning.control', skill.id, action))}
-                    >
-                      {t(
-                        { pin: 'Pin', unpin: 'Unpin', disable: 'Disable', archive: 'Archive', restore: 'Restore' }[
-                          action
-                        ],
-                      )}
-                    </Button>
-                  ))}
+                {skillActions(skill).map((action) => (
+                  <Button
+                    key={action}
+                    disabled={viewOnly || busy}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void act(() => invoke('learning.control', skill.id, action))}
+                  >
+                    {t(SKILL_ACTION_LABELS[action])}
+                  </Button>
+                ))}
                 <Button
                   disabled={viewOnly || busy}
                   variant="ghost"

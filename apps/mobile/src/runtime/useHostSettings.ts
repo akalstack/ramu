@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert } from 'react-native'
 import type { SettingsSnapshot, SharedSetting } from '@ramu/shared/settingsCompatibility'
 import { useStore } from './store'
-import { applyValue, looseInvoke, patchSetting, type SettingsHost } from './settingsModel'
+import { applyValue, looseInvoke, patchSettings, type SettingsHost } from './settingsModel'
 
 export type HostSettingsState =
   | { status: 'offline' }
@@ -65,23 +65,26 @@ export function useHostSettings(computerId: string) {
   }, [changed, online])
 
   const read = (path: string) => shown.current?.settings.find((setting) => setting.path === path)?.value
-  const set = (path: string, value: unknown) => {
-    if (!shown.current || !confirmed.current) return
+  /** Saves several settings as one change; they show at once and snap back together if the computer refuses. */
+  const setAll = (values: readonly (readonly [path: string, value: unknown])[]) => {
+    if (!shown.current || !confirmed.current || !values.length) return
     pending.current++
-    show(applyValue(shown.current, path, value))
+    show(values.reduce((snapshot, [path, value]) => applyValue(snapshot, path, value), shown.current))
     queue.current = queue.current.then(async () => {
       try {
-        const next = await patchSetting(hostRef.current, confirmed.current!, path, value)
+        const next = await patchSettings(hostRef.current, confirmed.current!, values)
         confirmed.current = next
         pending.current--
         if (!pending.current) show(next)
       } catch (error) {
         pending.current--
-        const was = confirmed.current?.settings.find((setting) => setting.path === path)?.value
-        if (shown.current) show(applyValue(shown.current, path, was))
+        const was = (path: string) => confirmed.current?.settings.find((setting) => setting.path === path)?.value
+        if (shown.current)
+          show(values.reduce((snapshot, [path]) => applyValue(snapshot, path, was(path)), shown.current))
         Alert.alert('Could not save', error instanceof Error ? error.message : String(error))
       }
     })
   }
-  return { state, read, set, reload: load, computerId }
+  const set = (path: string, value: unknown) => setAll([[path, value]])
+  return { state, read, set, setAll, reload: load, computerId }
 }

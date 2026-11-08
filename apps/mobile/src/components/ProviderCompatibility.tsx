@@ -5,9 +5,11 @@ import { compatibilitySummary } from '@ramu/shared/providers/compatibility'
 import { compatibilityPlan } from '@ramu/shared/providers/compatibilityPlan'
 import { providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
 import { useStore } from '../runtime/store'
+import { providerEnabledEdits, providerSwitches } from '../runtime/settingsModel'
+import { canWriteHost } from '../runtime/viewerAccess'
 import { font, space, useTheme } from '../theme'
 import { Button, Card, Divider, SectionLabel, T } from './ui'
-import { Hint } from './SettingRows'
+import { Hint, ToggleRow } from './SettingRows'
 import { ProviderLogins } from './ProviderLogins'
 import { ProviderIcon } from './Logos'
 import { useHostSettings } from '../runtime/useHostSettings'
@@ -16,10 +18,62 @@ import { useHostSettings } from '../runtime/useHostSettings'
 const lastKnown = new Map<string, ProviderStatus[]>()
 
 /**
+ * Which providers the host offers agents, as the desktop's provider switches: every provider is listed, so one turned
+ * off can be turned back on, and the last one on stays on because the host refuses to save none.
+ */
+export function ProviderSwitches({
+  settings,
+  statuses,
+  writable,
+}: {
+  settings: ReturnType<typeof useHostSettings>
+  statuses: ProviderStatus[] | null
+  writable: boolean
+}) {
+  const store = useStore()
+  const t = (key: string, values?: Record<string, string>) => translate(store.language, key, values)
+  if (settings.state.status !== 'ready') return null
+  const known = new Set(settings.state.settings.map((setting) => setting.path))
+  const shown = providerSwitches(settings.read).filter(({ provider }) =>
+    known.has(`providerBinaries.${provider}.enabled`),
+  )
+  if (!shown.length) return null
+  return (
+    <>
+      <SectionLabel>{t('Providers')}</SectionLabel>
+      <Card style={{ marginHorizontal: space.l }}>
+        {shown.map(({ provider, enabled, locked }, index) => {
+          const status = statuses?.find((entry) => entry.provider === provider)
+          const help = locked
+            ? t('Keep at least one provider turned on')
+            : !enabled
+              ? t('Off. Agents do not use it, and it is not checked for updates.')
+              : status && !status.installed
+                ? t('Not installed')
+                : (status?.version ?? undefined)
+          return (
+            <View key={provider}>
+              {index ? <Divider inset={space.l} /> : null}
+              <ToggleRow
+                title={providerName(provider)}
+                help={help}
+                value={enabled}
+                disabled={!writable || locked}
+                onChange={(next) => settings.setAll(providerEnabledEdits(settings.read, provider, next))}
+              />
+            </View>
+          )
+        })}
+      </Card>
+    </>
+  )
+}
+
+/**
  * Provider versions and runtime compatibility as the selected host reports them. Every probe and update runs on that host;
  * the phone never inspects itself. Path changes and Ramu updates stay on the host, so they appear as guidance.
  */
-export function ProviderCompatibility({ hostId }: { hostId: string }) {
+export function ProviderCompatibility({ hostId, locked }: { hostId: string; locked: boolean }) {
   const store = useStore()
   const { c } = useTheme()
   const t = (key: string, values?: Record<string, string>) => translate(store.language, key, values)
@@ -80,8 +134,10 @@ export function ProviderCompatibility({ hostId }: { hostId: string }) {
   }
 
   const shown = (statuses ?? []).filter((status) => status.installed && status.enabled)
+  const writable = !locked && canWriteHost(store.computers.find((computer) => computer.id === hostId))
   return (
     <>
+      <ProviderSwitches settings={settings} statuses={statuses} writable={writable} />
       <SectionLabel>{t('Runtime compatibility')}</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         {!statuses ? (

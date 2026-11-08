@@ -7,6 +7,8 @@ import {
   type LimitChoice,
 } from '@ramu/shared/chat/limitPolicy'
 import { HOST_ONLY_SECTIONS, SETTINGS_MENU, type PhoneSettingsMenuId } from '@ramu/shared/settingsMenu'
+import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
+import type { AgentProvider } from '@ramu/shared/types'
 import type { SettingEdit, SettingSchema, SettingsSnapshot, SharedSetting } from '@ramu/shared/settingsCompatibility'
 
 // The phone's settings menu: the desktop's sections (`@ramu/shared/settingsMenu`) and their names, without the ones
@@ -892,11 +894,48 @@ export interface SettingsHost {
   (method: 'settings.app.patch', edits: SettingEdit[]): Promise<SettingsSnapshot>
 }
 
-/** Saves one setting against what the computer last confirmed, so a change made on the desktop meanwhile is not overwritten blindly. */
-export async function patchSetting(host: SettingsHost, confirmed: SettingsSnapshot, path: string, value: unknown) {
-  const setting = confirmed.settings.find((entry) => entry.path === path)
-  if (!setting) throw new Error(`This host has no “${path}” setting.`)
-  return host('settings.app.patch', [buildEdit(setting, value)])
+/**
+ * Saves settings in one change against what the computer last confirmed, so a change made on the desktop meanwhile is
+ * not overwritten blindly, and values that are only valid together are never saved apart.
+ */
+export async function patchSettings(
+  host: SettingsHost,
+  confirmed: SettingsSnapshot,
+  values: readonly (readonly [path: string, value: unknown])[],
+) {
+  const edits = values.map(([path, value]) => {
+    const setting = confirmed.settings.find((entry) => entry.path === path)
+    if (!setting) throw new Error(`This host has no “${path}” setting.`)
+    return buildEdit(setting, value)
+  })
+  return host('settings.app.patch', edits)
+}
+
+export const patchSetting = (host: SettingsHost, confirmed: SettingsSnapshot, path: string, value: unknown) =>
+  patchSettings(host, confirmed, [[path, value]])
+
+/**
+ * The settings that turn a provider on or off. The host requires an executable path on every provider entry, so a
+ * provider it has never configured gets the empty path (find it automatically) in the same change.
+ */
+export function providerEnabledEdits(
+  read: (path: string) => unknown,
+  provider: AgentProvider,
+  enabled: boolean,
+): [path: string, value: unknown][] {
+  const base = `providerBinaries.${provider}`
+  return [
+    ...(read(`${base}.binary`) === undefined ? [[`${base}.binary`, ''] as [string, unknown]] : []),
+    [`${base}.enabled`, enabled],
+  ]
+}
+
+/** Each provider on or off, as the host stores it (a missing `enabled` is on), and whether it may be switched now. */
+export function providerSwitches(read: (path: string) => unknown) {
+  const on = (provider: AgentProvider) => read(`providerBinaries.${provider}.enabled`) !== false
+  const count = AGENT_PROVIDERS.filter(on).length
+  // The host keeps at least one provider on, so the last one's switch stays put rather than failing to save.
+  return AGENT_PROVIDERS.map((provider) => ({ provider, enabled: on(provider), locked: on(provider) && count <= 1 }))
 }
 
 /** Changes one setting without a page of settings open, e.g. "don't warn again" from a thread. */

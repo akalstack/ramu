@@ -9,6 +9,9 @@ import {
   limitChoiceEdits,
   limitChoiceState,
   patchSetting,
+  patchSettings,
+  providerEnabledEdits,
+  providerSwitches,
   searchSettings,
   sectionById,
   setHostSetting,
@@ -322,4 +325,60 @@ test('the advisor and the early switch show their details only while they apply'
     SETTINGS_ROWS.workflows.flatMap((group) => group.rows).find((row) => row.path === 'advisor.step').withId,
     true,
   )
+})
+
+test('turning on a provider the host never configured saves its empty path and the switch in one change', async () => {
+  const fields = [
+    setting('providerBinaries.cursor.binary', undefined, { type: 'string' }),
+    setting('providerBinaries.cursor.enabled', undefined, { type: 'boolean' }),
+    setting('providerBinaries.codex.binary', '/usr/local/bin/codex', { type: 'string' }),
+    setting('providerBinaries.codex.enabled', true, { type: 'boolean' }),
+  ]
+  const read = (path) => fields.find((field) => field.path === path)?.value
+  const absent = providerEnabledEdits(read, 'cursor', false)
+  assert.deepEqual(absent, [
+    ['providerBinaries.cursor.binary', ''],
+    ['providerBinaries.cursor.enabled', false],
+  ])
+  // A configured provider keeps its own path: only the switch changes.
+  assert.deepEqual(providerEnabledEdits(read, 'codex', false), [['providerBinaries.codex.enabled', false]])
+  const calls = []
+  await patchSettings(
+    async (method, edits) => {
+      calls.push([method, edits])
+      return snapshot()
+    },
+    snapshot(...fields),
+    absent,
+  )
+  assert.equal(calls.length, 1, 'both values reach the host together, so it never sees an entry without a path')
+  assert.deepEqual(
+    calls[0][1].map((edit) => [edit.path, edit.before, edit.value]),
+    [
+      ['providerBinaries.cursor.binary', undefined, ''],
+      ['providerBinaries.cursor.enabled', undefined, false],
+    ],
+  )
+})
+
+test('a missing provider switch reads as on, and the last provider on cannot be turned off', () => {
+  const values = {
+    'providerBinaries.claude-code.enabled': false,
+    'providerBinaries.opencode.enabled': false,
+    'providerBinaries.cursor.enabled': false,
+    'providerBinaries.antigravity.enabled': false,
+  }
+  const switches = providerSwitches((path) => values[path])
+  assert.deepEqual(
+    switches.map(({ provider, enabled, locked }) => [provider, enabled, locked]),
+    [
+      ['claude-code', false, false],
+      ['codex', true, true],
+      ['opencode', false, false],
+      ['cursor', false, false],
+      ['antigravity', false, false],
+    ],
+  )
+  // With two on, either may go off.
+  assert.ok(providerSwitches(() => undefined).every(({ enabled, locked }) => enabled && !locked))
 })

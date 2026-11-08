@@ -5351,10 +5351,22 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Lokasi program provider dan login dikelola di Ramu pada host.',
   'Model sets, the fallback order and the provider for each ability are edited in Ramu on the host.':
     'Set model, urutan cadangan, dan provider untuk setiap kemampuan diubah di Ramu pada host.',
-  'The skills library and its model choices are managed in Ramu on the host.':
-    'Pustaka skill dan pilihan modelnya dikelola di Ramu pada host.',
-  'Browser profiles, imports and downloads are managed in Ramu on the host.':
-    'Profil peramban, impor, dan unduhan dikelola di Ramu pada host.',
+  'Installing and editing skills, and their model choices, are managed in Ramu on the host.':
+    'Memasang dan mengedit skill, serta pilihan modelnya, dikelola di Ramu pada host.',
+  'Creating, importing and clearing browser profiles, and downloads, are managed in Ramu on the host.':
+    'Membuat, mengimpor, dan membersihkan profil peramban, serta unduhan, dikelola di Ramu pada host.',
+  'Restore revision {0}?': 'Pulihkan revisi {0}?',
+  '{0} goes back to this procedure. The current one stays in its history, so you can restore it later.':
+    '{0} kembali ke prosedur ini. Prosedur saat ini tetap ada di riwayatnya, jadi Anda bisa memulihkannya nanti.',
+  'No skills yet': 'Belum ada skill',
+  'Ramu adds them here when it learns a repeatable procedure.':
+    'Ramu menambahkannya di sini saat mempelajari prosedur yang bisa diulang.',
+  'Changing skills needs the Change settings permission.': 'Mengubah skill memerlukan izin Ubah pengaturan.',
+  'Keep at least one provider turned on': 'Biarkan setidaknya satu provider tetap aktif',
+  'Off. Agents do not use it, and it is not checked for updates.':
+    'Nonaktif. Agent tidak memakainya, dan pembaruannya tidak diperiksa.',
+  'Default shares website sign-ins on the host. Temporary keeps each run separate and is cleared when the run ends.':
+    'Bawaan berbagi login situs web di host. Sementara memisahkan setiap proses dan dibersihkan saat proses selesai.',
   'Not connected. This is the last activity Ramu saw; the agent keeps working on the host.':
     'Tidak terhubung. Ini aktivitas terakhir yang dilihat Ramu; agen tetap bekerja di host.',
   Path: 'Path',
