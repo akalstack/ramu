@@ -74,6 +74,7 @@ export const codexAdapter = defineAdapter({
       { ability: 'image_edit', via: { tool: 'image_gen' } },
       { ability: 'web_search', via: { tool: 'web_search' } },
       { ability: 'long_context', via: { contextWindow: LONG_CONTEXT_TOKENS } },
+      { ability: 'vision', via: { input: 'image' } },
     ],
   },
   // The ACP adapter takes no skill roots from the client, but Codex scans `.agents/skills` in the chat's folder.

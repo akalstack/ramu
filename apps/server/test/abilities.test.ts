@@ -462,6 +462,35 @@ describe('abilities on a Shared MCP tool', () => {
     )
   })
 
+  it('checks vision on a picture of one color, then reads a thread’s image for a provider that cannot', async () => {
+    DECLARED['claude-code']!.push({ ability: 'vision', via: { input: 'image' } })
+    try {
+      const seen: { prompt: string; images: string[] }[] = []
+      const run = vi.fn<AbilityRun>(async (route, declaration, request, signal, timeout) => {
+        if (request.ability !== 'vision') return working(route, declaration, request, signal, timeout)
+        seen.push({ prompt: request.prompt, images: request.images })
+        return { text: /one color/.test(request.prompt) ? 'Red.' : 'A bar chart of signups.', images: [], sources: [] }
+      })
+      const abilities = service(run, 'opencode')
+      await abilities.refresh()
+      expect(abilities.checks.list('claude-code').find((check) => check.ability === 'vision')).toMatchObject({
+        ok: true,
+      })
+      // The check sent a real PNG.
+      expect(seen[0]?.images).toHaveLength(1)
+      writeFileSync(join(cwd, 'chart.png'), PNG)
+      const answer = await abilities.call('thread', 'read_image', {
+        question: 'What does it show?',
+        images: ['chart.png'],
+      })
+      expect(answer).toMatchObject({ status: 'done' })
+      expect(seen.at(-1)?.prompt).toContain('What does it show?')
+      expect(seen.at(-1)?.images[0]).toMatch(/chart\.png$/)
+    } finally {
+      DECLARED['claude-code']!.pop()
+    }
+  })
+
   it('fills the tool’s prompt or query, else its first required text', () => {
     expect(mcpArguments({ properties: { size: { type: 'number' }, prompt: { type: 'string' } } }, 'apple')).toEqual({
       prompt: 'apple',

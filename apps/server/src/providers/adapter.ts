@@ -63,7 +63,8 @@ export interface SkillsLaunch {
  */
 export interface AbilityDeclaration {
   ability: Ability
-  via: { tool: string } | { contextWindow: number }
+  /** A tool the step may use, the context window it needs, or images it reads in its prompt. */
+  via: { tool: string } | { contextWindow: number } | { input: 'image' }
   /** Models that have it, by id; absent means the login's default model. */
   models?: string[]
 }

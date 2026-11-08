@@ -10,7 +10,9 @@ Abilities let a thread's agent ask Ramu for something its provider cannot do (an
 
 ### 1. More abilities
 
-- Tools for `vision`, `video_generation` and `speech` once a provider is verified to offer them, each with its own live check.
+`read_image` (vision) is built on Codex and Claude, with a live check on a picture of one color ([Abilities](guide/agents.md#abilities)). Remaining:
+
+- Tools for `video_generation` and `speech` once a provider is verified to offer them, each with its own live check.
 
 ### 2. Connection with the other plans
 

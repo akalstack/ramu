@@ -61,6 +61,7 @@ export const claudeCodeAdapter = defineAdapter({
     abilities: [
       { ability: 'web_search', via: { tool: 'WebSearch' } },
       { ability: 'long_context', via: { contextWindow: LONG_CONTEXT_TOKENS } },
+      { ability: 'vision', via: { input: 'image' } },
     ],
   },
   // A local plugin adds the export as `ramu-managed:<skill>` without touching ~/.claude or the project.

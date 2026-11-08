@@ -1,6 +1,6 @@
 import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import type { Ability, AbilityRoute, AbilitySource } from '@ramu/shared/providers/abilities'
 import type { AbilityDeclaration } from '../providers/adapter'
 import { codexAbility } from '../providers/codexAbility'
@@ -81,7 +81,17 @@ async function claudeAbility(
         ...(route.model ? { model: route.model } : {}),
       },
     })
-    input.push(request.prompt)
+    // Images the step reads (a vision call) go in as image blocks beside the prompt.
+    input.push(
+      request.prompt,
+      request.images.map((path, index) => ({
+        id: `image-${index + 1}`,
+        name: basename(path),
+        size: statSync(path).size,
+        mimeType: /\.jpe?g$/i.test(path) ? 'image/jpeg' : /\.webp$/i.test(path) ? 'image/webp' : 'image/png',
+        path,
+      })),
+    )
     input.close()
     let text = ''
     let tokens: AbilityOutput['tokens']

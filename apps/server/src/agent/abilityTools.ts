@@ -10,6 +10,8 @@ const DESCRIPTIONS: Record<AbilityTool, string> = {
     "Change an image (remove the background, recolor, extend) on a signed-in provider that can. images: files in this thread's folder or attachment ids from this thread. Only the description and those images are sent; the result is saved as an attachment of this thread.",
   web_search:
     "Search the web and get an answer with cited sources, on a signed-in provider with web search, or Ramu's own search when none has it. Only the query is sent.",
+  read_image:
+    "Answer a question about one to four images on a signed-in model that can see them, when yours cannot: what a screenshot shows, the text in a photo, whether a chart has a label. images: files in this thread's folder or attachment ids from this thread. Only the question and those images are sent.",
   read_long:
     "Answer one question about a large set of files or a long text on the signed-in model with the largest context window. files: paths in this thread's folder (up to about 1.2 million characters together); text: pasted text. Only the question and those inputs are sent.",
 }

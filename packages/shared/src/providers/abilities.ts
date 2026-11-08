@@ -20,6 +20,7 @@ export const ABILITY_TOOLS = {
   edit_image: 'image_edit',
   web_search: 'web_search',
   read_long: 'long_context',
+  read_image: 'vision',
 } as const satisfies Record<string, Ability>
 export type AbilityTool = keyof typeof ABILITY_TOOLS
 
