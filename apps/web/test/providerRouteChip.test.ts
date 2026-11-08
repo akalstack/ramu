@@ -183,7 +183,9 @@ it('choosing Continue with switches the thread to that provider and then tries a
   ])
 })
 
-it('previews a switch to another Claude account before Codex and reads the thread account independently', () => {
+// A limit never moves a thread to another subscription login on its own (provider terms); only API-key logins, which
+// the host knows and answers through agent.nextRoute, may take over. The local estimate goes to the next provider.
+it('previews the next provider rather than another Claude subscription, and reads the thread account independently', () => {
   state.providerBinaries = { 'claude-code': { binary: '', accounts: [{ id: 'second', name: 'Second' }] } }
   state.accountUsage = [
     { provider: 'claude-code', window: 'five_hour', usedPercent: 100, status: 'limited', updatedAt: Date.now() },
@@ -205,7 +207,7 @@ it('previews a switch to another Claude account before Codex and reads the threa
     },
   ]
   render({})
-  expect(state.menus[0]!.label).toContain('Sending with Claude:')
+  expect(state.menus[0]!.label).toContain('Sending with Codex:')
   state.menus = []
   render({ accountId: 'second' })
   expect(state.menus[0]!.label).not.toContain('Sending with')
