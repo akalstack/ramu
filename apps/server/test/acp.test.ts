@@ -3,7 +3,14 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { isLimitMessage, isLimitReply, limitResetsAt } from '../src/providers/usageLimit'
-import { acpAside, acpModels, acpSessionModels, createAcpRunner, AcpResumeUnavailable } from '../src/providers/acp'
+import {
+  acpAside,
+  acpModels,
+  acpSessionModels,
+  acpTurnTokens,
+  createAcpRunner,
+  AcpResumeUnavailable,
+} from '../src/providers/acp'
 import { DEFAULT_AGENT_SETTINGS, type AgentEvent, type Attachment, type McpConnection } from '@ramu/shared/types'
 
 let dir: string
@@ -758,3 +765,14 @@ it('keeps a turn running while the runtime keeps working after its reply, then s
   while (!states().includes('idle') && Date.now() - started < 8000) await new Promise((r) => setTimeout(r, 50))
   expect(states().at(-1)).toBe('idle')
 }, 15000)
+
+it("records a turn's tokens when the runtime sends ACP usage, with cached reads as input, and nothing otherwise", () => {
+  expect(acpTurnTokens({ totalTokens: 1500, inputTokens: 1000, outputTokens: 300, cachedReadTokens: 200 })).toEqual({
+    input: 1200,
+    output: 300,
+  })
+  expect(acpTurnTokens({ inputTokens: 10, outputTokens: 2, cachedReadTokens: null })).toEqual({ input: 10, output: 2 })
+  expect(acpTurnTokens(undefined)).toBeNull()
+  expect(acpTurnTokens({ inputTokens: -1, outputTokens: 2 })).toBeNull()
+  expect(acpTurnTokens({ outputTokens: 2 })).toBeNull()
+})

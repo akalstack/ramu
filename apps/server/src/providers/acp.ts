@@ -666,12 +666,14 @@ class AcpSession implements AgentRunner {
             ? classifyLimit(reply, { provider: this.settings.provider, channel: 'error' })
             : null)
         if (match) this.markLimited(reply, match.confidence)
+        const tokens = acpTurnTokens(r.usage)
         this.emit(
           {
             kind: 'result',
             isError: !!match || r.stopReason === 'refusal',
             text: match ? reply : r.stopReason || 'end_turn',
             costUsd: null,
+            ...(tokens ? { tokens } : {}),
           },
           limitSignal(match),
         )
@@ -1079,4 +1081,18 @@ class AcpSession implements AgentRunner {
     })
     if (!this.pending.size) this.emit({ kind: 'state', state: 'running' })
   }
+}
+
+/**
+ * A turn's tokens from ACP's prompt response, which runtimes may include as the protocol's (still experimental) `usage`;
+ * cached reads count as input, as Ramu records Claude and Codex turns. Absent or malformed usage records nothing.
+ */
+export function acpTurnTokens(usage: unknown): { input: number; output: number } | null {
+  if (!usage || typeof usage !== 'object') return null
+  const { inputTokens, outputTokens, cachedReadTokens } = usage as Record<string, unknown>
+  const count = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null)
+  const input = count(inputTokens),
+    output = count(outputTokens)
+  if (input === null || output === null) return null
+  return { input: input + (count(cachedReadTokens) ?? 0), output }
 }
