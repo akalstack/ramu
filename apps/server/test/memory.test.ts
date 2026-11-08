@@ -143,6 +143,8 @@ it('dreams: merges, rewrites and retires, but only valid ops on notes nobody tou
   ws.setAppState('app-preferences', { memory: { enabled: true, dream: true, staleAfterDays: 90 } })
   const snapshot = await memory.dream()
   expect(snapshot.error).toBeNull()
+  // Titles are what the index and message hints match on, so the dream renames ones that only say where a note came from.
+  expect(analyze.mock.calls[0]![0]).toContain('retitle a note whose title does not say when it applies')
   const byId = new Map(snapshot.memories.map((m) => [m.id, m]))
   const [kept, gone] = [byId.get(a.id)!, byId.get(b.id)!].sort((x) => (x.status === 'active' ? -1 : 1)) as [
     Memory,
@@ -228,6 +230,18 @@ it('pins long user preferences in full and lists every title while they fit, els
   expect(large.index).toHaveLength(30)
   expect(large.index[0]).toContain('[m0]') // the strongest
   expect(large.shown.has('m999') && large.shown.has('m0') && !large.shown.has('m300')).toBe(true)
+  // Pinned notes past their budget lead the index instead of dropping out with the weaker titles.
+  const crowd = Array.from({ length: 20 }, (_, i) =>
+    make(500 + i, { kind: 'feedback', title: `Rule ${i}`, content: long, source: { actor: 'user' } }),
+  )
+  const over = memoryIndex([...crowd, ...Array.from({ length: 400 }, (_, i) => make(i))], now)
+  expect(over.pinned.length).toBeLessThan(20)
+  expect(
+    over.index
+      .slice(0, 20 - over.pinned.length)
+      .every((line) => line.endsWith('(applies to every task; memory_read it)')),
+  ).toBe(true)
+  expect(crowd.every((m) => over.shown.has(m.id))).toBe(true)
 })
 
 it('matches plurals and points a message at memories the index left out, without counting it as use', () => {
