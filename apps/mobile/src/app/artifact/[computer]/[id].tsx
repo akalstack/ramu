@@ -48,7 +48,8 @@ import {
 } from '../../../runtime/artifacts'
 
 type FrameMessage = { ramuInteractive?: number; instance?: string; type?: string; value?: unknown; requestId?: string }
-type Shared = { token: string; canAdd: boolean }
+/** A share link this screen opened: whether it adds records, and the person it lets edit the text, by name. */
+type Shared = { token: string; canAdd: boolean; editor?: string }
 
 const reason = (error: unknown) =>
   error instanceof Error
@@ -102,8 +103,13 @@ export default function PageScreen() {
   useEffect(() => {
     if (!editingText) return
     let live = true
+    const token = shared?.editor ? shared.token : null
     const mark = () =>
-      void store.invoke(computerId, 'artifacts.editing', artifactId, true).then(
+      void (
+        token
+          ? store.invoke(computerId, 'artifacts.shareEditing', token, true)
+          : store.invoke(computerId, 'artifacts.editing', artifactId, true)
+      ).then(
         (others) => live && setAlsoEditing(others),
         () => {},
       )
@@ -113,10 +119,14 @@ export default function PageScreen() {
       live = false
       clearInterval(timer)
       setAlsoEditing([])
-      void store.invoke(computerId, 'artifacts.editing', artifactId, false).catch(() => {})
+      void (
+        token
+          ? store.invoke(computerId, 'artifacts.shareEditing', token, false)
+          : store.invoke(computerId, 'artifacts.editing', artifactId, false)
+      ).catch(() => {})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- marks once per opened editor; the store object changes on every update
-  }, [editingText, computerId, artifactId])
+  }, [editingText, computerId, artifactId, shared])
   const field = {
     color: c.text,
     fontSize: font.control,
@@ -195,7 +205,11 @@ export default function PageScreen() {
     try {
       if (shareToken) {
         const opened = await store.invoke(computerId, 'artifacts.openShare', shareToken)
-        setShared({ token: opened.share.token, canAdd: opened.share.canAdd })
+        setShared({
+          token: opened.share.token,
+          canAdd: opened.share.canAdd,
+          ...(opened.share.editor ? { editor: opened.share.editor } : {}),
+        })
         setPage({
           ...opened.artifact,
           pinned: false,
@@ -769,7 +783,7 @@ export default function PageScreen() {
             >
               <T>{say('Add to Home Screen or share')}</T>
             </Row>
-            {document && editableSource(document) !== null && online && !shared && !viewer ? (
+            {document && editableSource(document) !== null && online && (shared ? !!shared.editor : !viewer) ? (
               <Row
                 onPress={() => {
                   setMenu(false)
@@ -1027,7 +1041,12 @@ export default function PageScreen() {
                 setSavingEdit(true)
                 Promise.resolve()
                   .then(() => (editing.blocks ? withDocBlocks(editing.text, editing.blocks) : editing.text))
-                  .then((text) => store.invoke(computerId, 'artifacts.editSource', artifactId, editing.base, text))
+                  // Through an editing share link, the save names the link's editor.
+                  .then((text) =>
+                    shared?.editor
+                      ? store.invoke(computerId, 'artifacts.shareEditSource', shared.token, editing.base, text)
+                      : store.invoke(computerId, 'artifacts.editSource', artifactId, editing.base, text),
+                  )
                   .then(() => {
                     setEditing(null)
                     void load()

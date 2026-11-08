@@ -208,6 +208,32 @@ it('merges an edit made from an earlier version on another device, and refuses o
   ).rejects.toThrow('in the same lines you changed')
 })
 
+it('lets the person an editing link names edit the text, merged and marked with their name, and no other link', async () => {
+  const { registerArtifactHandlers } = await import('../src/ipc/handlers/artifacts')
+  const { interactive, pages } = setup()
+  const preview = await interactive.preview('s', doc('## Goals\n\nShip sync.\n'))
+  const kept = pages.keep('s', interactive.publish('s', preview.id, 'r1').id, { title: 'Launch plan' })
+  const methods = registerArtifactHandlers({
+    pages,
+    pageAi: {},
+    activity: { run: () => {} },
+    host: { callerName: () => 'MacBook' },
+  } as never)
+  const editing = (await methods['artifacts.share']!.run(kept.id, false, 'Bo')) as { token: string; editor?: string }
+  expect(editing.editor).toBe('Bo')
+  const reading = (await methods['artifacts.share']!.run(kept.id, false)) as { token: string }
+  await methods['artifacts.shareEditSource']!.run(editing.token, 1, '## Goals\n\nShip sync on Friday.\n')
+  expect(pages.document(kept.id).reference.changes).toBe('Edited by Bo')
+  await expect(
+    Promise.resolve().then(() => methods['artifacts.shareEditSource']!.run(reading.token, 2, 'x')),
+  ).rejects.toThrow('does not allow editing')
+  expect(await methods['artifacts.shareEditing']!.run(editing.token, true)).toEqual([])
+  pages.revokeShare(editing.token)
+  await expect(
+    Promise.resolve().then(() => methods['artifacts.shareEditSource']!.run(editing.token, 2, 'y')),
+  ).rejects.toThrow('expired or was revoked')
+})
+
 it('tells each device which others are editing the same text, until they stop or go quiet', async () => {
   const { EditingPresence } = await import('../src/interactive/editing')
   let now = 0

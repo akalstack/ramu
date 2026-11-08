@@ -6202,4 +6202,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Callback URL': 'URL callback',
   'Consumer key': 'Consumer key',
   'A sandbox org': 'Org sandbox',
+  'Who may edit its text': 'Siapa yang boleh menyunting teksnya',
+  'Link that lets them edit': 'Tautan agar mereka bisa menyunting',
+  '{name} can edit': '{name} bisa menyunting',
 }

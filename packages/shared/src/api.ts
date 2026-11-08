@@ -369,7 +369,18 @@ interface ArtifactMethods {
     artifactId: string,
     name?: string,
   ): { projectId: string; folder: string; thread: StartedThread }
-  'artifacts.share'(artifactId: string, canAdd: boolean): import('./artifacts').ArtifactShare
+  /** A share link; `editor` names the one person it lets edit a doc's, diagram's or deck's text. */
+  'artifacts.share'(artifactId: string, canAdd: boolean, editor?: string): import('./artifacts').ArtifactShare
+  /** The editor a share link names saves a doc's or diagram's text through it, merged like any edit. */
+  'artifacts.shareEditSource'(token: string, base: number, text: string): import('./artifacts').ArtifactInfo
+  /** The same for a deck's slide text. */
+  'artifacts.shareEditSlides'(
+    token: string,
+    base: number,
+    edits: import('./artifactSource').SlideTextEdit[],
+  ): import('./artifacts').ArtifactInfo
+  /** Says the link's editor is (or stopped) editing, and returns the others editing the same text now. */
+  'artifacts.shareEditing'(token: string, editing: boolean): string[]
   'artifacts.shares'(artifactId: string): import('./artifacts').ArtifactShare[]
   'artifacts.revokeShare'(token: string): void
   'artifacts.renewShare'(token: string): import('./artifacts').ArtifactShare

@@ -365,6 +365,76 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
     return device ? `Edited by you on ${device.slice(0, 60)}` : 'Edited by you'
   }
   const stateOf = (key: string) => ctx.workspace.getAppState<string | null>(key, null)
+  /**
+   * Saves a doc's or Mermaid diagram's text as a new version, merged onto the current one when it was edited from an
+   * earlier version; `by` is who made it, for the version's note.
+   */
+  const saveSourceEdit = async (artifactId: string, base: number, text: string, by: string) => {
+    const { pages } = need()
+    const artifact = pages.get(artifactId)
+    const started = editableSource(pages.document(artifactId, base))
+    if (started === null)
+      throw new Error('Only a doc or a Mermaid diagram is edited as text here; ask the agent to change this.')
+    // An edit made from an earlier version (on another device, or while an agent saved one) merges onto the
+    // current one when the two changed different lines.
+    const current = artifact.version
+    let merged = text
+    if (current !== base) {
+      const latest = editableSource(pages.document(artifactId, current)) ?? ''
+      const result = mergeText(started, text, latest)
+      if (result === null)
+        throw new Error(
+          `This changed while you were editing (now v${current}), in the same lines you changed. Copy your text, reopen it to see v${current}, and edit that.`,
+        )
+      merged = result
+    }
+    const source = parseArtifactSource(
+      artifact.kind === 'diagram'
+        ? { kind: 'diagram', format: 'mermaid', source: merged }
+        : { kind: 'doc', source: merged },
+    )
+    const drawn = await renderArtifactSource(source, artifact.title)
+    if (drawn.problems.length) throw new Error(drawn.problems[0])
+    return pages.saveEdit(artifactId, current, drawn, current === base ? by : `${by}, merged with v${current}`)
+  }
+  /** Saves a deck's slide text the same way, slide by slide. */
+  const saveSlideEdit = async (artifactId: string, base: number, edits: SlideTextEdit[], by: string) => {
+    const { pages } = need()
+    const artifact = pages.get(artifactId)
+    if (artifact.kind !== 'slides') throw new Error('Only a deck’s slide text is edited here.')
+    const document = pages.document(artifactId, base)
+    const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.slides)?.content
+    if (!stored) throw new Error('This deck version has no slide list. Ask the agent to publish it again.')
+    const deck = JSON.parse(stored) as { slides: Slide[]; theme?: unknown }
+    let slides = editSlideText(deck.slides, edits)
+    let theme = deck.theme
+    // Text edited from an earlier version merges onto the current deck, slide by slide, as a doc's lines do.
+    const current = artifact.version
+    const latest = current === base ? document : pages.document(artifactId, current)
+    if (current !== base) {
+      const now = latest.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.slides)?.content
+      const newer = now ? (JSON.parse(now) as { slides: Slide[]; theme?: unknown }) : null
+      const merged = newer ? mergeSlideText(deck.slides, slides, newer.slides) : null
+      if (!newer || !merged)
+        throw new Error(
+          `This deck changed while you were editing (now v${current}), in the same text or its slides. Reopen it to see v${current}, and edit that.`,
+        )
+      slides = merged
+      theme = newer.theme
+    }
+    const source = parseArtifactSource({ kind: 'slides', slides, theme })
+    const images = (latest.files ?? []).filter((file) => file.encoding === 'base64')
+    const drawn = await renderArtifactSource(source, artifact.title, images)
+    if (drawn.problems.length) throw new Error(drawn.problems[0])
+    return pages.saveEdit(artifactId, current, drawn, current === base ? by : `${by}, merged with v${current}`)
+  }
+  /** A live share link that names its editor; any other link is refused. */
+  const editingShare = (token: string) => {
+    const share = need().pages.resolveShare(token)
+    if (!share.editor) throw new Error('This share link does not allow editing.')
+    return share as typeof share & { editor: string }
+  }
+
   /** The named services a kept dashboard's tables read, and the ones it is allowed to. */
   const namedServices = (artifactId: string): { needed: NamedService[]; allowed: NamedService[] } => {
     const document = need().pages.document(artifactId)
@@ -395,39 +465,7 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
     },
     'artifacts.editSource': {
       args: z.tuple([id, z.number().int().positive(), z.string().max(DOC_MAX_SOURCE)]),
-      run: async (artifactId: string, base: number, text: string) => {
-        const { pages } = need()
-        const artifact = pages.get(artifactId)
-        const started = editableSource(pages.document(artifactId, base))
-        if (started === null)
-          throw new Error('Only a doc or a Mermaid diagram is edited as text here; ask the agent to change this.')
-        // An edit made from an earlier version (on another device, or while an agent saved one) merges onto the
-        // current one when the two changed different lines.
-        const current = artifact.version
-        let merged = text
-        if (current !== base) {
-          const latest = editableSource(pages.document(artifactId, current)) ?? ''
-          const result = mergeText(started, text, latest)
-          if (result === null)
-            throw new Error(
-              `This changed while you were editing (now v${current}), in the same lines you changed. Copy your text, reopen it to see v${current}, and edit that.`,
-            )
-          merged = result
-        }
-        const source = parseArtifactSource(
-          artifact.kind === 'diagram'
-            ? { kind: 'diagram', format: 'mermaid', source: merged }
-            : { kind: 'doc', source: merged },
-        )
-        const drawn = await renderArtifactSource(source, artifact.title)
-        if (drawn.problems.length) throw new Error(drawn.problems[0])
-        return pages.saveEdit(
-          artifactId,
-          current,
-          drawn,
-          current === base ? editedBy() : `${editedBy()}, merged with v${current}`,
-        )
-      },
+      run: (artifactId: string, base: number, text: string) => saveSourceEdit(artifactId, base, text, editedBy()),
     },
     'artifacts.designSystem': {
       args: z.tuple([id.nullable().optional()]),
@@ -573,41 +611,8 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
     },
     'artifacts.editSlides': {
       args: z.tuple([id, z.number().int().positive(), z.array(slideTextEdit).max(SLIDES_MAX)]),
-      run: async (artifactId: string, base: number, edits: SlideTextEdit[]) => {
-        const { pages } = need()
-        const artifact = pages.get(artifactId)
-        if (artifact.kind !== 'slides') throw new Error('Only a deck’s slide text is edited here.')
-        const document = pages.document(artifactId, base)
-        const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.slides)?.content
-        if (!stored) throw new Error('This deck version has no slide list. Ask the agent to publish it again.')
-        const deck = JSON.parse(stored) as { slides: Slide[]; theme?: unknown }
-        let slides = editSlideText(deck.slides, edits)
-        let theme = deck.theme
-        // Text edited from an earlier version merges onto the current deck, slide by slide, as a doc's lines do.
-        const current = artifact.version
-        const latest = current === base ? document : pages.document(artifactId, current)
-        if (current !== base) {
-          const now = latest.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.slides)?.content
-          const newer = now ? (JSON.parse(now) as { slides: Slide[]; theme?: unknown }) : null
-          const merged = newer ? mergeSlideText(deck.slides, slides, newer.slides) : null
-          if (!newer || !merged)
-            throw new Error(
-              `This deck changed while you were editing (now v${current}), in the same text or its slides. Reopen it to see v${current}, and edit that.`,
-            )
-          slides = merged
-          theme = newer.theme
-        }
-        const source = parseArtifactSource({ kind: 'slides', slides, theme })
-        const images = (latest.files ?? []).filter((file) => file.encoding === 'base64')
-        const drawn = await renderArtifactSource(source, artifact.title, images)
-        if (drawn.problems.length) throw new Error(drawn.problems[0])
-        return pages.saveEdit(
-          artifactId,
-          current,
-          drawn,
-          current === base ? editedBy() : `${editedBy()}, merged with v${current}`,
-        )
-      },
+      run: (artifactId: string, base: number, edits: SlideTextEdit[]) =>
+        saveSlideEdit(artifactId, base, edits, editedBy()),
     },
     'artifacts.editDesign': {
       args: z.tuple([id, z.number().int().positive(), designTextEdit]),
@@ -888,8 +893,38 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       run: (artifactId: string, target: StaticTarget) => publishing().publish(artifactId, target),
     },
     'artifacts.share': {
-      args: z.tuple([id, z.boolean()]),
-      run: (artifactId: string, canAdd: boolean) => need().pages.share(artifactId, canAdd),
+      args: z.tuple([id, z.boolean(), z.string().trim().min(1).max(60).optional()]),
+      run: (artifactId: string, canAdd: boolean, editor?: string) => {
+        const { pages } = need()
+        if (editor && !['doc', 'diagram', 'slides'].includes(pages.get(artifactId).kind))
+          throw new Error(
+            'Only a doc, a diagram or a deck can be shared for editing; other kinds stay one editor at a time.',
+          )
+        return pages.share(artifactId, canAdd, editor)
+      },
+    },
+    // The person an editing share link names edits the text through the link, merged like any edit and marked with
+    // their name. The link opens only on a device paired with this host, so these calls come only from one.
+    'artifacts.shareEditSource': {
+      args: z.tuple([z.string().max(80), z.number().int().positive(), z.string().max(DOC_MAX_SOURCE)]),
+      run: (token: string, base: number, text: string) => {
+        const share = editingShare(token)
+        return saveSourceEdit(share.artifactId, base, text, `Edited by ${share.editor}`)
+      },
+    },
+    'artifacts.shareEditSlides': {
+      args: z.tuple([z.string().max(80), z.number().int().positive(), z.array(slideTextEdit).max(SLIDES_MAX)]),
+      run: (token: string, base: number, edits: SlideTextEdit[]) => {
+        const share = editingShare(token)
+        return saveSlideEdit(share.artifactId, base, edits, `Edited by ${share.editor}`)
+      },
+    },
+    'artifacts.shareEditing': {
+      args: z.tuple([z.string().max(80), z.boolean()]),
+      run: (token: string, editing: boolean) => {
+        const share = editingShare(token)
+        return editingPresence.mark(share.artifactId, share.editor, editing)
+      },
     },
     'artifacts.shares': { args: z.tuple([id]), run: (artifactId: string) => need().pages.shares(artifactId) },
     'artifacts.revokeShare': {

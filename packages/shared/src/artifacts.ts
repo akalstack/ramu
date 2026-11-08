@@ -247,6 +247,8 @@ export interface ArtifactShare {
   token: string
   artifactId: string
   canAdd: boolean
+  /** The person this link lets edit the artifact's text, by name; absent for a link that only views or adds records. */
+  editor?: string
   createdAt: number
   expiresAt: number
 }

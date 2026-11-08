@@ -61,6 +61,15 @@ export const pageIcon = (icon: string | undefined) => {
  * Pages are interactive documents the host owns instead of a thread: one id, a title and icon, versions published from
  * any thread, state shared by every device, and records, runs and grants of their own.
  */
+/** What a share link allows, from its stored data. */
+const shareData = (data: string): Pick<ArtifactShare, 'canAdd' | 'editor'> => {
+  const parsed = JSON.parse(data) as { canAdd?: boolean; editor?: unknown }
+  return {
+    canAdd: !!parsed.canAdd,
+    ...(typeof parsed.editor === 'string' && parsed.editor ? { editor: parsed.editor } : {}),
+  }
+}
+
 export class PageStore {
   constructor(
     private readonly db: Db,
@@ -969,14 +978,22 @@ export class PageStore {
 
   // Share links
 
-  share(artifactId: string, canAdd: boolean): ArtifactShare {
+  /** A share link; `editor` names the one person it lets edit the artifact's text. */
+  share(artifactId: string, canAdd: boolean, editor?: string): ArtifactShare {
     this.row(artifactId)
     const token = randomBytes(18).toString('base64url')
     const now = Date.now()
-    const share: ArtifactShare = { token, artifactId, canAdd, createdAt: now, expiresAt: now + 30 * 86_400_000 }
+    const share: ArtifactShare = {
+      token,
+      artifactId,
+      canAdd,
+      ...(editor ? { editor } : {}),
+      createdAt: now,
+      expiresAt: now + 30 * 86_400_000,
+    }
     this.db
       .prepare('INSERT INTO artifact_shares(token,artifact_id,data,created_at,expires_at) VALUES(?,?,?,?,?)')
-      .run(token, artifactId, JSON.stringify({ canAdd }), now, share.expiresAt)
+      .run(token, artifactId, JSON.stringify({ canAdd, ...(editor ? { editor } : {}) }), now, share.expiresAt)
     return share
   }
   shares(artifactId: string): ArtifactShare[] {
@@ -995,7 +1012,7 @@ export class PageStore {
     ).map((row) => ({
       token: row.token,
       artifactId: row.artifact_id,
-      canAdd: !!(JSON.parse(row.data) as { canAdd?: boolean }).canAdd,
+      ...shareData(row.data),
       createdAt: row.created_at,
       expiresAt: row.expires_at,
     }))
@@ -1017,7 +1034,7 @@ export class PageStore {
     return {
       token: row.token,
       artifactId: row.artifact_id,
-      canAdd: !!(JSON.parse(row.data) as { canAdd?: boolean }).canAdd,
+      ...shareData(row.data),
       createdAt: row.created_at,
       expiresAt: row.expires_at,
     }

@@ -315,6 +315,7 @@ export function PageSettings({ page, onClose }: { page: ArtifactInfo; onClose():
   const [usage, setUsage] = useState<ArtifactUsage | null>(null)
   const [runs, setRuns] = useState<ArtifactRun[]>([])
   const [shares, setShares] = useState<ArtifactShare[]>([])
+  const [editorName, setEditorName] = useState('')
   const [hooks, setHooks] = useState<string[]>([])
   const [open, setOpen] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -418,11 +419,34 @@ export function PageSettings({ page, onClose }: { page: ArtifactInfo; onClose():
               </Button>
             )}
           </div>
+          {(page.kind === 'doc' || page.kind === 'diagram' || page.kind === 'slides') && (
+            <form
+              className="mt-2 flex items-end gap-2"
+              onSubmit={(event) => {
+                event.preventDefault()
+                const name = editorName.trim()
+                if (!name) return
+                void act(() => invoke('artifacts.share', page.id, false, name)).then(() => setEditorName(''))
+              }}
+            >
+              <label className="flex min-w-0 flex-1 flex-col gap-1 text-caption text-muted-foreground">
+                {t('Who may edit its text')}
+                <Input value={editorName} maxLength={60} onChange={(event) => setEditorName(event.target.value)} />
+              </label>
+              <Button type="submit" variant="outline" disabled={!editorName.trim()}>
+                {t('Link that lets them edit')}
+              </Button>
+            </form>
+          )}
           {shares.map((share) => (
             <div key={share.token} className="mt-1.5 flex items-center gap-1.5 text-caption">
               <span className="min-w-0 flex-1 truncate">
-                {share.canAdd ? t('Can add records') : t('Read-only')} ·{' '}
-                {t('expires {when}', { when: new Date(share.expiresAt).toLocaleDateString() })}
+                {share.editor
+                  ? t('{name} can edit', { name: share.editor })
+                  : share.canAdd
+                    ? t('Can add records')
+                    : t('Read-only')}{' '}
+                · {t('expires {when}', { when: new Date(share.expiresAt).toLocaleDateString() })}
               </span>
               <Button
                 variant="ghost"
