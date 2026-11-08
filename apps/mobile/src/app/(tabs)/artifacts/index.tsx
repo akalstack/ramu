@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshControl, TextInput, View } from 'react-native'
 import { useRouter } from 'expo-router'
-import { AppWindow, Pin, Plus } from 'lucide-react-native'
+import { AppWindow, Pin } from 'lucide-react-native'
 import { useTabActions } from '../../../components/Overlays'
-import { STANDALONE } from '../../../runtime/types'
-import { GlassButton } from '../../../components/Screen'
 import { ARTIFACT_KINDS, type ArtifactInfo, type ArtifactKind, type ArtifactTemplate } from '@ramu/shared/artifacts'
 import { font, space, useTheme } from '../../../theme'
 import { useStore } from '../../../runtime/store'
@@ -60,12 +58,6 @@ export default function PagesScreen() {
       )
     return () => offs.forEach((off) => off())
   }, [onlineKey, load, store])
-  // A page starts as a request to an agent: a new thread with no project and the request begun in the box.
-  const newPage = () =>
-    router.push({
-      pathname: '/new',
-      params: { project: STANDALONE, computer: store.selected, start: `${say('Make me a page to')} ` },
-    })
   const viewOnly = store.computers.find((x) => x.id === store.selected)?.access === 'viewer'
   // Starting points on the selected host: the person's own templates, then the set Ramu ships.
   const [templates, setTemplates] = useState<ArtifactTemplate[]>([])
@@ -84,9 +76,8 @@ export default function PagesScreen() {
         router.push({ pathname: '/artifact/[computer]/[id]', params: { computer: store.selected, id: made.id } }),
       () => {},
     )
-  const actions = useTabActions(
-    viewOnly ? null : { icon: Plus, label: say('New'), systemIcon: 'plus', onPress: newPage },
-  )
+  // Artifacts come from threads; this tab is where they are found again, so it has no New of its own.
+  const actions = useTabActions()
   const kinds = ARTIFACT_KINDS.filter((entry) =>
     hosts.some((host) => (pages[host.id] ?? []).some((page) => page.kind === entry)),
   )
@@ -181,20 +172,13 @@ export default function PagesScreen() {
             </Row>
           ))
         ) : (
-          <View>
-            <Nothing
-              icon={AppWindow}
-              title={say('No artifacts yet')}
-              detail={say(
-                'Ask an agent for something to keep, like “a tracker for …”, or choose Keep as artifact on any interactive card in a thread.',
-              )}
-            />
-            {viewOnly ? null : (
-              <View style={{ alignItems: 'center' }}>
-                <GlassButton primary title={say('New')} icon={Plus} onPress={newPage} />
-              </View>
+          <Nothing
+            icon={AppWindow}
+            title={say('No artifacts yet')}
+            detail={say(
+              'Ask an agent for something to keep, like “a tracker for …”, or choose Keep as artifact on any interactive card in a thread.',
             )}
-          </View>
+          />
         )}
         {templates.length ? (
           <View style={{ marginTop: space.l }}>

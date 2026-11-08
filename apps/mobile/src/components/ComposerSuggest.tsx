@@ -229,7 +229,7 @@ export function useComposerSuggest({
         label: '/schedules',
         description: 'Open schedules and run history',
         kind: 'Command',
-        run: go('/(tabs)/schedules'),
+        run: go('/schedules'),
       },
       { id: 'recap', label: '/recap', description: 'Open your daily recap', kind: 'Command', run: go('/(tabs)/inbox') },
       { id: 'settings', label: '/settings', description: 'Open app settings', kind: 'Command', run: go('/settings') },

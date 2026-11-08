@@ -4024,11 +4024,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   Conversation: 'Percakapan',
   'Delete the branch on the hosting service': 'Hapus branch di layanan hosting',
   'Drafted review': 'Draf review',
-  'Filter pull requests': 'Saring pull request',
   'Fixed in {0}': 'Diperbaiki di {0}',
   'From a fork': 'Dari fork',
   'From outside the project': 'Dari luar proyek',
-  'Hide merged and closed': 'Sembunyikan yang di-merge dan ditutup',
   'In {0}': 'Di {0}',
   'It can be reopened later. Its branch and threads stay.': 'Bisa dibuka lagi nanti. Branch dan thread-nya tetap ada.',
   'Mark its thread done': 'Tandai thread-nya selesai',
@@ -4037,9 +4035,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Merged and closed': 'Di-merge dan ditutup',
   'New failing checks and review comments return to this thread, even with the window closed. Its replies wait for you to send.':
     'Check gagal dan komentar review baru kembali ke thread ini, meski jendela ditutup. Balasannya menunggu kamu kirim.',
-  'No open pull requests.': 'Tidak ada pull request terbuka.',
   'No open review threads.': 'Tidak ada thread review terbuka.',
-  'No pull requests match.': 'Tidak ada pull request yang cocok.',
   'Open in thread': 'Buka di thread',
   'Open on the hosting service': 'Buka di layanan hosting',
   'Open pull request': 'Buka pull request',
@@ -4052,7 +4048,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   Outdated: 'Usang',
   'Post review': 'Kirim review',
   'Posting…': 'Mengirim…',
-  'Publish this repository to see its pull requests.': 'Publikasikan repositori ini untuk melihat pull request-nya.',
   'Pull request #{0}: {1}': 'Pull request #{0}: {1}',
   'Push and reply': 'Push dan balas',
   'Push first': 'Push dulu',
@@ -4065,7 +4060,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Review requested from {0}': 'Review diminta dari {0}',
   'Review with agent': 'Review dengan agen',
   Reviewer: 'Reviewer',
-  'Show merged and closed': 'Tampilkan yang di-merge dan ditutup',
   Someone: 'Seseorang',
   'The agent is reviewing…': 'Agen sedang meninjau…',
   'This pull request comes from a fork that cannot be checked out here.':
@@ -4084,7 +4078,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Waiting on review': 'Menunggu review',
   'Ready to merge': 'Siap di-merge',
   'Review requested': 'Review diminta',
-  'Other open': 'Lainnya yang terbuka',
   Fixed: 'Diperbaiki',
   'No change': 'Tanpa perubahan',
   Skip: 'Lewati',
@@ -6313,4 +6306,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'It opens here with its checks, review threads and merge.':
     'Pull request terbuka di sini dengan check, thread review, dan merge-nya.',
   'All pull requests in {0}': 'Semua pull request di {0}',
+  'This repository': 'Repository ini',
+  'Shows every repository again': 'Menampilkan semua repository lagi',
+  'Waiting on you': 'Menunggumu',
 }

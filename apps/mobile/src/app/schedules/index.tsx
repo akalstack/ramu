@@ -3,26 +3,19 @@ import { Platform, RefreshControl, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { CalendarClock, Plus } from 'lucide-react-native'
 import type { Schedule } from '@ramu/shared/types'
-import { font, space, useTheme } from '../../../theme'
-import { useStore } from '../../../runtime/store'
-import { useAutomation } from '../../../runtime/automation'
-import { runsOf, sortSchedules, VIEW_ONLY_SCHEDULE_NOTICE } from '../../../runtime/scheduleModel'
-import { useT } from '../../../i18n'
-import {
-  GlassButton,
-  Header,
-  LargeTitle,
-  PageScrollView,
-  Screen,
-  useScrolledUnderBar,
-} from '../../../components/Screen'
-import { TopFade } from '../../../components/Glass'
-import { Nothing } from '../../../components/InboxParts'
-import { openNeedComputer, useTabActions } from '../../../components/Overlays'
-import { HostChip } from '../../../components/HostChip'
-import { ScheduleRow } from '../../../components/ScheduleRow'
-import { PageScheduleRows } from '../../../components/PageScheduleRows'
-import { T } from '../../../components/ui'
+import { font, space, useTheme } from '../../theme'
+import { useStore } from '../../runtime/store'
+import { useAutomation } from '../../runtime/automation'
+import { runsOf, sortSchedules, VIEW_ONLY_SCHEDULE_NOTICE } from '../../runtime/scheduleModel'
+import { useT } from '../../i18n'
+import { GlassButton, Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from '../../components/Screen'
+import { TopFade } from '../../components/Glass'
+import { Nothing } from '../../components/InboxParts'
+import { openNeedComputer, useTabActions } from '../../components/Overlays'
+import { HostChip } from '../../components/HostChip'
+import { ScheduleRow } from '../../components/ScheduleRow'
+import { PageScheduleRows } from '../../components/PageScheduleRows'
+import { T } from '../../components/ui'
 
 export default function SchedulesScreen() {
   const { c } = useTheme()
@@ -77,7 +70,7 @@ export default function SchedulesScreen() {
   )
   return (
     <Screen>
-      <Header back={false} large scrollEdge collapsed={edge.scrolled} title={t.schedules} right={actions} />
+      <Header large scrollEdge collapsed={edge.scrolled} title={t.schedules} right={actions} />
       <PageScrollView
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: space.xl * 2 }}

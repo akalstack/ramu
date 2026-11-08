@@ -2,15 +2,18 @@ import { Platform } from 'react-native'
 import { NativeTabs } from 'expo-router/native-tabs'
 import { useTheme } from '../../theme'
 import { useAutomation } from '../../runtime/automation'
+import { usePullRequestsWaiting } from '../../runtime/pullRequestsWaiting'
 import { useSay, useT } from '../../i18n'
 
-// The app's places, as a native tab bar (Liquid Glass on iOS 26): Threads, Inbox, Schedules, Artifacts and New thread.
+// The app's places, as a native tab bar (Liquid Glass on iOS 26): Threads, Inbox, Pull requests, Artifacts and New
+// thread. Schedules open from the Inbox, where their results arrive.
 // Each tab holds its own stack, so a thread opened from any of them pushes on the root stack above the bar.
 export default function TabsLayout() {
   const { c, scheme } = useTheme()
   const t = useT()
   const say = useSay()
   const { inbox } = useAutomation()
+  const pullsWaiting = usePullRequestsWaiting()
   // iOS keeps UIKit's own (Liquid Glass) bar. Android gets the Material 3 navigation bar, coloured from our palette.
   const material =
     Platform.OS === 'android'
@@ -40,12 +43,10 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Label>{t.inbox}</NativeTabs.Trigger.Label>
         {inbox.needsYou > 0 ? <NativeTabs.Trigger.Badge>{String(inbox.needsYou)}</NativeTabs.Trigger.Badge> : null}
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="schedules">
-        <NativeTabs.Trigger.Icon
-          sf={{ default: 'calendar.badge.clock', selected: 'calendar.badge.clock' }}
-          md="schedule"
-        />
-        <NativeTabs.Trigger.Label>{t.schedules}</NativeTabs.Trigger.Label>
+      <NativeTabs.Trigger name="pulls">
+        <NativeTabs.Trigger.Icon sf={{ default: 'arrow.triangle.pull', selected: 'arrow.triangle.pull' }} md="merge" />
+        <NativeTabs.Trigger.Label>{say('Pull requests')}</NativeTabs.Trigger.Label>
+        {pullsWaiting > 0 ? <NativeTabs.Trigger.Badge>{String(pullsWaiting)}</NativeTabs.Trigger.Badge> : null}
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="artifacts">
         <NativeTabs.Trigger.Icon sf={{ default: 'macwindow', selected: 'macwindow' }} md="web" />

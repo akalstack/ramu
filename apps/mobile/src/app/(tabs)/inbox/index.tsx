@@ -1,7 +1,18 @@
 import { useCallback, useState } from 'react'
 import { Platform, Pressable, RefreshControl, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Activity, Bell, Inbox as InboxIcon, Loader, Newspaper, RefreshCw, Sparkles, X } from 'lucide-react-native'
+import {
+  Activity,
+  Bell,
+  CalendarClock,
+  ChevronRight,
+  Inbox as InboxIcon,
+  Loader,
+  Newspaper,
+  RefreshCw,
+  Sparkles,
+  X,
+} from 'lucide-react-native'
 import type { LibrarySummary } from '@ramu/shared/types'
 import { font, space, useTheme } from '../../../theme'
 import { useStore } from '../../../runtime/store'
@@ -361,6 +372,21 @@ export default function InboxScreen() {
           options={chips}
           lead={multi ? <HostChip all={allHosts} onAll={setAllHosts} /> : undefined}
         />
+        {tab === 'brief' ? (
+          // Schedules open from here, where what they make arrives, rather than taking a tab of their own.
+          <Row
+            accessibilityLabel={t.schedules}
+            onPress={() => {
+              tap()
+              router.push('/schedules')
+            }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l }}
+          >
+            <CalendarClock size={16} color={c.muted} />
+            <T style={{ flex: 1 }}>{t.schedules}</T>
+            <ChevronRight size={16} color={c.muted} />
+          </Row>
+        ) : null}
         {body}
       </PageScrollView>
       {Platform.OS === 'ios' ? null : <TopFade visible={edge.scrolled} />}

@@ -81,6 +81,9 @@ function Navigator() {
           <Stack.Screen name="chat/[id]/scm" />
           <Stack.Screen name="chat/[id]/revision" />
           <Stack.Screen name="chat/[id]/pull-request" />
+          <Stack.Screen name="schedules/index" />
+          <Stack.Screen name="schedules/[id]" />
+          <Stack.Screen name="pull-request" />
           <Stack.Screen name="chat/[id]/conflict" />
           <Stack.Screen name="new" options={{ presentation: 'card' }} />
           <Stack.Screen name="search" />

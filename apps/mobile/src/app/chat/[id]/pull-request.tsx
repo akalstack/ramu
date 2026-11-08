@@ -50,10 +50,21 @@ export default function PullRequestScreen() {
   const say = useSay()
   const router = useRouter()
   const { c } = useTheme()
-  const { id, repoId, url } = useLocalSearchParams<{ id: string; repoId: string; url: string }>()
-  const chat = useChat(id)
+  // Opened from a thread (`id`), or from the Pull requests page with the host and project it was listed under.
+  const params = useLocalSearchParams<{
+    id?: string
+    computer?: string
+    project?: string
+    repoId: string
+    url: string
+  }>()
+  const { repoId, url } = params
+  const chat = useChat(params.id)
   const store = useStore()
-  const computer = store.computers.find((pc) => pc.id === chat?.computerId)
+  const computerId = chat?.computerId ?? params.computer ?? ''
+  const taskId = chat?.taskId ?? (params.project ? `project:${params.project}` : '')
+  const projectId = chat?.projectId ? rawId(chat.projectId) : (params.project ?? null)
+  const computer = store.computers.find((pc) => pc.id === computerId)
   const canWrite = canWriteHost(computer)
   const [list, setList] = useState<PullRequestList | null>(null)
   const [pr, setPr] = useState<PullRequestSummary | null>(null)
@@ -66,8 +77,6 @@ export default function PullRequestScreen() {
   const [error, setError] = useState<string | null>(null)
   const [merging, setMerging] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
-  const computerId = chat?.computerId ?? ''
-  const taskId = chat?.taskId ?? ''
 
   const read = useCallback(
     async (force: boolean) => {
@@ -177,11 +186,11 @@ export default function PullRequestScreen() {
 
   const openThread = (purpose: 'work' | 'review') =>
     run(purpose, async () => {
-      if (!chat?.projectId) throw new Error(say('This checkout is not part of a project.'))
+      if (!projectId) throw new Error(say('This checkout is not part of a project.'))
       const started = await openPullRequestThread(store.invoke, {
         computerId,
         taskId,
-        projectId: rawId(chat.projectId),
+        projectId,
         repoId,
         url,
         purpose,

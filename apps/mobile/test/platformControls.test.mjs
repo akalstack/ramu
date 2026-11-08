@@ -5228,7 +5228,7 @@ test('computer-use stop revokes only the displayed thread and refreshes the shar
 })
 
 test('tab and Settings stacks have blank initial titles and no generated back labels', () => {
-  for (const layout of ['(tabs)/(threads)', '(tabs)/inbox', '(tabs)/schedules', '(tabs)/compose', 'settings']) {
+  for (const layout of ['(tabs)/(threads)', '(tabs)/inbox', '(tabs)/pulls', '(tabs)/compose', 'settings']) {
     const { default: Layout } = load('app/' + layout + '/_layout.tsx', 'ios')
     const options = Layout().props.screenOptions
     assert.equal(options.title, '')
@@ -5363,27 +5363,27 @@ for (const os of ['ios', 'android']) {
     const hooks = hookHarness()
     const store = { selected: 'a', language: 'en', computers: [{ id: 'a', status: 'online', access: 'viewer' }] }
     let primary = 'unset'
-    const { default: SchedulesScreen } = load('app/(tabs)/schedules/index.tsx', os, {
+    const { default: SchedulesScreen } = load('app/schedules/index.tsx', os, {
       react: hooks.react,
-      '../../../runtime/store': { useStore: () => store },
-      '../../../runtime/scheduleModel': scheduleModel,
-      '../../../runtime/automation': {
+      '../../runtime/store': { useStore: () => store },
+      '../../runtime/scheduleModel': scheduleModel,
+      '../../runtime/automation': {
         useAutomation: () => ({ of: () => ({ schedules: [], runs: [], loaded: true }) }),
       },
-      '../../../components/Overlays': {
+      '../../components/Overlays': {
         useTabActions: (action) => {
           primary = action
           return null
         },
       },
-      '../../../components/Screen': {
+      '../../components/Screen': {
         Screen: 'Screen',
         Header: 'Header',
         LargeTitle: 'LargeTitle',
         PageScrollView: 'PageScrollView',
         useScrolledUnderBar: () => ({ scrolled: false }),
       },
-      '../../../i18n': { useT: () => ({ schedules: 'Schedules', newSchedule: 'New schedule' }) },
+      '../../i18n': { useT: () => ({ schedules: 'Schedules', newSchedule: 'New schedule' }) },
       'react-native': { RefreshControl: 'RefreshControl' },
     })
     const tree = hooks.render(() => SchedulesScreen())

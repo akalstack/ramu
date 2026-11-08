@@ -1,11 +1,11 @@
-import { goBackOrHome } from '../../../runtime/navigation'
+import { goBackOrHome } from '../../runtime/navigation'
 import { View } from 'react-native'
 import type { Schedule } from '@ramu/shared/types'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { CalendarClock, ChevronRight, Pause, Pencil, Play, Trash2, Zap } from 'lucide-react-native'
-import { font, space, useTheme } from '../../../theme'
-import { scoped, useStore } from '../../../runtime/store'
-import { useAutomation } from '../../../runtime/automation'
+import { font, space, useTheme } from '../../theme'
+import { scoped, useStore } from '../../runtime/store'
+import { useAutomation } from '../../runtime/automation'
 import {
   NO_PROJECT,
   VIEW_ONLY_SCHEDULE_NOTICE,
@@ -15,13 +15,13 @@ import {
   nextRunText,
   runTone,
   runsOf,
-} from '../../../runtime/scheduleModel'
-import { ago, useT, useSay } from '../../../i18n'
-import { Header, HeaderButton, PageScrollView, Screen } from '../../../components/Screen'
-import { Nothing } from '../../../components/InboxParts'
-import { useScheduleCommands } from '../../../components/ScheduleRow'
-import { Button, Divider, Row, SectionLabel, T, tap } from '../../../components/ui'
-import { WebhookDeliveries } from '../../../components/WebhookDeliveries'
+} from '../../runtime/scheduleModel'
+import { ago, useT, useSay } from '../../i18n'
+import { Header, HeaderButton, PageScrollView, Screen } from '../../components/Screen'
+import { Nothing } from '../../components/InboxParts'
+import { useScheduleCommands } from '../../components/ScheduleRow'
+import { Button, Divider, Row, SectionLabel, T, tap } from '../../components/ui'
+import { WebhookDeliveries } from '../../components/WebhookDeliveries'
 
 function Fact({ label, children }: { label: string; children: string }) {
   return (

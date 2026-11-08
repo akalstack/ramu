@@ -60,7 +60,7 @@ import { Disclosure } from '../../../components/Motion'
 import { Header, HeaderButton, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
 import { Glass, floatingChrome } from '../../../components/Glass'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
-import { CurrentPullRequest, PullRequestListSection } from '../../../components/PullRequestSections'
+import { CurrentPullRequest } from '../../../components/PullRequestSections'
 import { canWriteHost } from '../../../runtime/viewerAccess'
 import {
   ALL_FILES_LABEL,
@@ -313,7 +313,7 @@ export default function SourceControl() {
   const [message, setMessage] = useState('')
   const [draft, setDraft] = useState<CommitDraft | null>(null)
   const [action, setAction] = useState<CommitAction>('commit')
-  const [tab, setTab] = useState<'changes' | 'commits' | 'stashes' | 'pulls'>('changes')
+  const [tab, setTab] = useState<'changes' | 'commits' | 'stashes'>('changes')
   const [filter, setFilter] = useState('')
   const [folded, setFolded] = useState<{ staged?: boolean; changes?: boolean; conflicts?: boolean }>({})
   const [sheet, setSheet] = useState<
@@ -446,9 +446,6 @@ export default function SourceControl() {
   const loaded = gitStatus !== null
   const hasRemote = !!gitStatus?.remote
   const canWrite = canWriteHost(store.computers.find((pc) => pc.id === chat?.computerId))
-  useEffect(() => {
-    if (tab === 'pulls' && loaded && !hasRemote) setTab('changes')
-  }, [tab, loaded, hasRemote])
   // The computer's own default (Commit, Commit & Push or Commit & Sync) until you pick another here.
   const savedAction = store.appPreferences[chat?.computerId ?? '']?.defaultCommitAction
   useEffect(() => {
@@ -992,6 +989,16 @@ export default function SourceControl() {
               onError={(text) => notify(text, true)}
             />
           ) : null}
+          {chat && binding && hasRemote ? (
+            // The repository's other pull requests are on the Pull requests page, narrowed to this repository.
+            <Button
+              kind="ghost"
+              title={tr('All pull requests in {0}', { 0: binding.repoName })}
+              onPress={() =>
+                router.navigate({ pathname: '/pulls', params: { computer: chat.computerId, repo: binding.repoId } })
+              }
+            />
+          ) : null}
           <Segmented
             value={tab}
             onChange={setTab}
@@ -999,10 +1006,8 @@ export default function SourceControl() {
               { key: 'changes', label: tr('Changes'), count: changeCount },
               { key: 'commits', label: tr('Commits'), count: commits.length },
               { key: 'stashes', label: tr('Stashes'), count: stashes.length },
-              ...(hasRemote ? [{ key: 'pulls' as const, label: tr('Pull requests') }] : []),
             ]}
           />
-          {tab === 'pulls' && chat && binding ? <PullRequestListSection chat={chat} repoId={binding.repoId} /> : null}
           {tab === 'changes' ? (
             <>
               {conflicted.length ? (
