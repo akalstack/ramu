@@ -21,7 +21,7 @@ import {
 import { EAS_PREVIEW_WORKFLOW_PATH, easPreviewWorkflow, EXPO_TOKEN_SECRET } from '@ramu/shared/easPreview'
 import { packageManagerOf } from '@ramu/shared/pagesDeploy'
 import { translate } from '@ramu/shared/i18n'
-import type { StoreBuild, StoreRelease, StoreTarget } from '@ramu/shared/types/deploy'
+import type { StoreBuild, StoreRelease, StoreTarget, UsageReport } from '@ramu/shared/types/deploy'
 import { redactSecrets } from '../../memory/secrets'
 import { commitBranchInfo } from '../git'
 import { proposeFile } from '../proposeFile'
@@ -30,6 +30,7 @@ import type { HostingAccounts } from './accounts'
 import type { EnvTarget } from './envSync'
 import { expoClient, type ExpoClient } from './expo'
 import { cliEnvironment, platformCli } from './signIn'
+import { usageReport } from './usage'
 
 const LISTED = 10
 const LOG_LINES = 200
@@ -242,6 +243,17 @@ export class StoreReleases {
     } catch (error) {
       return { ...status, error: error instanceof Error ? error.message : String(error) }
     }
+  }
+
+  /** The Expo account's usage for the project's app, or null when the project has no EAS app or no Expo account. */
+  async usage(projectId: string): Promise<UsageReport | null> {
+    const root = this.root(projectId)
+    if (!root || !this.accounts.accountName('expo')) return null
+    const easProject = easProjectId((await this.facts(root)).appJson)
+    if (!easProject) return null
+    return usageReport('expo', 'Expo', async () =>
+      this.client.usage((await this.accounts.auth('expo')).auth, easProject),
+    )
   }
 
   /**

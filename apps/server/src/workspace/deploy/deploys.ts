@@ -206,7 +206,7 @@ export function createDeploys(
     if (remote?.origin !== 'github.com' || `${remote.owner}/${remote.repo}` !== binding.repository) return null
     return { projectId: repository.projectId, binding }
   }
-  const usage = (projectId: string) => projectUsage(service, resources, projectId)
+  const usage = (projectId: string) => projectUsage(service, resources, releases, projectId)
   const notices = new UsageNotices(
     {
       getState,

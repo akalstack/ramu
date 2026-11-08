@@ -33,7 +33,7 @@ A developer can enter at any step: **Deploy** on an existing project, or **Set u
 
 ### 1. Cost and usage
 
-Usage figures for Vercel, Netlify, Railway, Neon, Supabase, Upstash, Resend and Cloudflare Workers beside the limits their APIs report, **Open billing**, notices at 80% and 100%, and `deploy_usage` are built ([Usage](guide/deploy.md#usage)). What remains: figures for each new platform's adapter as it lands, and Netlify bandwidth or credits if Netlify's API starts reporting them.
+Usage figures for Vercel, Netlify, Railway, Neon, Supabase, Upstash, Resend, Cloudflare Workers and Expo beside the limits their APIs report, **Open billing**, notices at 80% and 100%, and `deploy_usage` are built ([Usage](guide/deploy.md#usage)). What remains: figures for each new platform's adapter as it lands, and Netlify bandwidth or credits if Netlify's API starts reporting them.
 
 ### 2. The site
 

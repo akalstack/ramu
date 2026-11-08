@@ -1,8 +1,21 @@
 // Expo's GraphQL API with the person's own access token: who the token is, the app's store builds and the
 // submissions made from them, and their logs. Starting a build or a submission is not in the public API (it uploads
 // the project and resolves signing credentials), so `release.ts` runs the `eas` CLI for that.
-import type { DeploymentState, StoreBuild, StorePlatform, StoreSubmission } from '@ramu/shared/types/deploy'
-import { DeployError, platformRequest, tail, type HostingAuth, type HostingIdentity } from './adapter'
+import type {
+  DeploymentState,
+  StoreBuild,
+  StorePlatform,
+  StoreSubmission,
+  UsageFigure,
+} from '@ramu/shared/types/deploy'
+import {
+  DeployError,
+  platformRequest,
+  tail,
+  type HostingAuth,
+  type HostingIdentity,
+  type PlatformUsage,
+} from './adapter'
 
 interface RawSubmission {
   id: string
@@ -130,6 +143,19 @@ export interface ExpoClient {
     of: 'build' | 'submission',
     lines: number,
   ): Promise<string>
+  /** The app owner's build credits and update users in the current billing period, beside the plan's limits. */
+  usage(auth: HostingAuth, projectId: string): Promise<PlatformUsage>
+}
+
+interface ExpoUsageTotal {
+  billingPeriod?: { start?: string; end?: string } | null
+  planMetrics?: { serviceMetric?: string; value?: number; limit?: number }[] | null
+}
+
+/** The plan figures the usage reading shows, by Expo's service metric. */
+const EXPO_FIGURES: Record<string, { service: string; unit: string }> = {
+  BUILDS: { service: 'Build credits', unit: 'credits' },
+  UNIQUE_UPDATERS: { service: 'Update users', unit: 'users' },
 }
 
 /** Expo, reached at `api` (the real service unless a test points it at a fake server). */
@@ -236,6 +262,49 @@ export function expoClient(
     },
     async build(auth, buildId) {
       return build(await one(auth, buildId), site)
+    },
+    async usage(auth, projectId) {
+      const owner = await query<{ app: { byId: { ownerAccount: { id: string; name: string } } } }>(
+        auth,
+        'query AppOwner($appId: String!) { app { byId(appId: $appId) { ownerAccount { id name } } } }',
+        { appId: projectId },
+        'reading the app',
+      )
+      const account = owner.app.byId.ownerAccount
+      const total = 'billingPeriod { start end } planMetrics { serviceMetric value limit }'
+      const data = await query<{
+        account: { byId: { usageMetrics: { builds?: ExpoUsageTotal | null; updates?: ExpoUsageTotal | null } } }
+      }>(
+        auth,
+        `query Usage($accountId: String!, $date: DateTime!) { account { byId(accountId: $accountId) { usageMetrics { builds: byBillingPeriod(date: $date, service: BUILDS) { ${total} } updates: byBillingPeriod(date: $date, service: UPDATES) { ${total} } } } } }`,
+        { accountId: account.id, date: new Date().toISOString() },
+        'reading usage',
+      )
+      const { builds, updates } = data.account.byId.usageMetrics
+      const figures: UsageFigure[] = [builds, updates].flatMap((metrics) =>
+        (metrics?.planMetrics ?? []).flatMap((metric) => {
+          const shown = metric.serviceMetric ? EXPO_FIGURES[metric.serviceMetric] : undefined
+          return shown && typeof metric.value === 'number'
+            ? [
+                {
+                  metric: 'service' as const,
+                  ...shown,
+                  used: metric.value,
+                  // Expo reports 0 for a metric the plan does not cap.
+                  limit: metric.limit ? metric.limit : null,
+                },
+              ]
+            : []
+        }),
+      )
+      const period = (builds ?? updates)?.billingPeriod
+      const start = period?.start ? Date.parse(period.start) : NaN
+      const end = period?.end ? Date.parse(period.end) : NaN
+      return {
+        period: Number.isNaN(start) ? null : { start, end: Number.isNaN(end) ? null : end },
+        figures,
+        billingPage: `${site}/accounts/${encodeURIComponent(account.name)}/settings/usage`,
+      }
     },
     async logs(auth, projectId, buildId, of, lines) {
       const raw = await one(auth, buildId)

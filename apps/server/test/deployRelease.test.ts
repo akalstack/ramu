@@ -129,6 +129,42 @@ describe('Expo client', () => {
     expect(seen.find((entry) => entry.url.startsWith('/logs/'))?.auth).toBeUndefined()
   })
 
+  it('reads the app owner’s build credits and update users for the billing period, beside the plan’s limits', async () => {
+    let usageVariables: Record<string, unknown> = {}
+    const { client } = await fakeExpo((operation, variables) => {
+      if (operation === 'AppOwner')
+        return { data: { app: { byId: { ownerAccount: { id: 'acct-1', name: 'barbershop' } } } } }
+      usageVariables = variables
+      const period = { start: '2026-11-01T00:00:00.000Z', end: '2026-12-01T00:00:00.000Z' }
+      return {
+        data: {
+          account: {
+            byId: {
+              usageMetrics: {
+                builds: { billingPeriod: period, planMetrics: [{ serviceMetric: 'BUILDS', value: 12, limit: 30 }] },
+                updates: {
+                  billingPeriod: period,
+                  planMetrics: [
+                    { serviceMetric: 'UNIQUE_UPDATERS', value: 340, limit: 1000 },
+                    { serviceMetric: 'BANDWIDTH_USAGE', value: 5, limit: 100 },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      }
+    })
+    const usage = await client.usage({ token: 'expo_token_1' }, APP)
+    expect(usageVariables.accountId).toBe('acct-1')
+    expect(usage.figures).toEqual([
+      { metric: 'service', service: 'Build credits', unit: 'credits', used: 12, limit: 30 },
+      { metric: 'service', service: 'Update users', unit: 'users', used: 340, limit: 1000 },
+    ])
+    expect(usage.period).toEqual({ start: Date.parse('2026-11-01T00:00:00Z'), end: Date.parse('2026-12-01T00:00:00Z') })
+    expect(usage.billingPage).toBe('https://expo.dev/accounts/barbershop/settings/usage')
+  })
+
   it('maps GraphQL refusals to the shared kinds without showing their text', async () => {
     const { client } = await fakeExpo(() => ({
       errors: [{ message: 'secret detail', extensions: { errorCode: 'UNAUTHENTICATED' } }],

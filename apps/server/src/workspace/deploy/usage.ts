@@ -5,6 +5,7 @@ import type { AccountPlatform, UsageFigure, UsageReport } from '@ramu/shared/typ
 import type { InboxNotice } from '@ramu/shared/chat/notices'
 import { DeployError, type PlatformUsage } from './adapter'
 import type { ResourceService } from './resources'
+import type { StoreReleases } from './release'
 import type { DeployService } from './service'
 
 const BILLING_PAGES: Record<AccountPlatform, string> = {
@@ -70,14 +71,19 @@ export async function usageReport(
   }
 }
 
-/** Every report for a project: its hosting platform's, then its resources'. */
+/** Every report for a project: its hosting platform's, then its resources', then its app store builds'. */
 export async function projectUsage(
   service: Pick<DeployService, 'usage'>,
   resources: Pick<ResourceService, 'usage'>,
+  releases: Pick<StoreReleases, 'usage'>,
   projectId: string,
 ): Promise<UsageReport[]> {
-  const [hosting, owned] = await Promise.all([service.usage(projectId), resources.usage(projectId)])
-  return [...(hosting ? [hosting] : []), ...owned]
+  const [hosting, owned, store] = await Promise.all([
+    service.usage(projectId),
+    resources.usage(projectId),
+    releases.usage(projectId),
+  ])
+  return [...(hosting ? [hosting] : []), ...owned, ...(store ? [store] : [])]
 }
 
 const CHECK_EVERY = 6 * 60 * 60_000
