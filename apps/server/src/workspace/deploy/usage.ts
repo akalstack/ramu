@@ -105,6 +105,14 @@ const FIXES: Partial<Record<UsageFigure['metric'], { what: string; fix: string }
   },
 }
 
+/** The same for a platform's own `service` figure that has a limit, by its name. */
+const SERVICE_FIXES: Record<string, { what: string; fix: string }> = {
+  'Build credits': {
+    what: 'build credits',
+    fix: 'build only when native code or dependencies change, and ship JavaScript changes as EAS updates',
+  },
+}
+
 /** What the notices need from the host, so tests can run them without a database. */
 export interface UsageNoticeHost {
   getState<T>(key: string, fallback: T): T
@@ -151,12 +159,13 @@ export class UsageNotices {
 
   private notify(project: { id: string; name: string }, report: UsageReport, now: number): void {
     for (const figure of report.figures) {
-      const words = FIXES[figure.metric]
+      const words = figure.metric === 'service' ? SERVICE_FIXES[figure.service ?? ''] : FIXES[figure.metric]
       if (!words || !figure.limit) continue
       const share = figure.used / figure.limit
       const level = LEVELS.find((entry) => share * 100 >= entry)
       if (!level) continue
-      const key = `${report.platform}:${figure.metric}:${report.period?.start ?? 'current'}:${level}`
+      const metric = figure.metric === 'service' ? `service-${figure.service}` : figure.metric
+      const key = `${report.platform}:${metric}:${report.period?.start ?? 'current'}:${level}`
       const sent = this.host.getState<string[]>(sentKey(project.id), [])
       // 100% after 80% in the same period is its own notice; 80% after 100% is not.
       if (sent.some((entry) => entry === key || (level === 80 && entry === key.replace(/:80$/, ':100')))) continue

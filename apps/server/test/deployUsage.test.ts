@@ -78,4 +78,22 @@ describe('usage notices', () => {
     await check()
     expect(raised).toEqual([])
   })
+
+  it('raises one for a platform’s own figure it has a fix for, such as Expo build credits, and not for others', async () => {
+    const expo: UsageReport = {
+      platform: 'expo',
+      name: 'Expo',
+      period: { start: Date.UTC(2026, 10, 1), end: null },
+      figures: [
+        { metric: 'service', service: 'Build credits', used: 27, unit: 'credits', limit: 30 },
+        { metric: 'service', service: 'Update users', used: 990, unit: 'users', limit: 1000 },
+      ],
+      unavailable: null,
+      billingPage: 'https://expo.dev/accounts/ana/settings/usage',
+    }
+    const { raised, check } = setup([[expo]])
+    await check()
+    expect(raised.map((notice) => notice.title)).toEqual(['Shop: Expo build credits at 80%'])
+    expect(raised[0]?.body).toContain('EAS updates')
+  })
 })

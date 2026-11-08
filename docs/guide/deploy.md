@@ -148,7 +148,7 @@ For an Expo app (an `app.json` or `app.config.*` at the repository root, as the 
 
 When the API reports no figures for an account or plan (Vercel refuses billing data to some roles; Cloudflare refuses analytics to a token without Account Analytics read; Netlify plans billed in credits have no build minutes), the sheet says so instead of showing numbers.
 
-Every six hours the host reads the same figures. A figure with a reported limit that reaches 80%, and again at 100%, raises one notice per billing period in the notifications (on the phone, under **Missed**), naming what grows and the cheapest fix, such as building only when the app's files change, or deleting data and branches the app no longer needs. The notice opens the project's most recent thread, where an agent can read the figures with `deploy_usage` and propose a fix as a pull request.
+Every six hours the host reads the same figures. A figure with a reported limit that reaches 80%, and again at 100%, raises one notice per billing period in the notifications (on the phone, under **Missed**), naming what grows and the cheapest fix, such as building only when the app's files change, deleting data and branches the app no longer needs, or shipping JavaScript changes as EAS updates instead of new Expo builds. The notice opens the project's most recent thread, where an agent can read the figures with `deploy_usage` and propose a fix as a pull request.
 
 ## Uptime
 
