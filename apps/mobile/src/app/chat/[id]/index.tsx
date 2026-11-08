@@ -163,6 +163,8 @@ export default function ChatScreen() {
   // The host's row for a message sent from here keeps the key its sending row had (see listRows).
   const aliases = useRef(new Map<string, string>())
   const handedOver = useRef<OutboxItem[]>([])
+  // The keys the list showed last render, so a row that replaces others can keep one of their keys.
+  const shownKeys = useRef<string[]>([])
   const rowKey = (item: ListRow) => aliases.current.get(item.id) ?? item.id
   const [contentScreenFocused, setContentScreenFocused] = useState(false)
   const toolActivity = useThreadToolActivity(chat, contentScreenFocused)
@@ -769,9 +771,21 @@ export default function ChatScreen() {
       if (arrived) aliases.current.set(arrived.id, `pending:${sent.id}`)
     }
   handedOver.current = pending
+  // A finished turn folds its steps into one "Worked for" row in their place. That row takes the key of the first step
+  // it replaces, so the list knows its size at once (both are one collapsed line) instead of laying out an unmeasured
+  // row and holding the room it no longer needs until it is measured, which left a blank gap at the end.
+  const keysNow = new Set(pageRows.map(rowKey))
+  pageRows.forEach((row, index) => {
+    if (row.kind !== 'summary' || aliases.current.has(row.id)) return
+    const before = index > 0 ? rowKey(pageRows[index - 1]!) : null
+    const at = before === null ? 0 : shownKeys.current.indexOf(before) + 1
+    const replaced = at > 0 || before === null ? shownKeys.current[at] : undefined
+    if (replaced && !keysNow.has(replaced) && !replaced.startsWith('pending:')) aliases.current.set(row.id, replaced)
+  })
   const listRows: ListRow[] = pending.length
     ? [...pageRows, ...pending.map((outbox) => ({ kind: 'pending' as const, id: `pending:${outbox.id}`, outbox }))]
     : pageRows
+  shownKeys.current = listRows.map(rowKey)
   // As in ChatGPT: once you send, your message moves to the top and space opens below it for the reply. The reply
   // fills that space instead of growing the list, so the end stays put while it streams, folds or finishes, and the
   // view never jumps. Only messages sent from this screen do this; opening a thread shows its end as before.
