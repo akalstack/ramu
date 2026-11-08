@@ -54,20 +54,15 @@ The kind is chosen by the agent from the request, shown as a small mark on every
 
 ## Delivery
 
-### 1. Kinds in the engine
-
-App, Doc, Diagram, Slides, Dashboard (over tables the agent fills in), Design (fixed-size frames of HTML and CSS) and Motion (timed scenes played by CSS) are in the engine, with PDF for every kind, PowerPoint and slide images for decks, Word for docs and PNG for diagrams, kept per version (see [Kinds](guide/artifacts.md#kinds)). The remaining kinds and exports follow the same path: `artifact_publish` and `artifact_preview` take the kind and its source, validated by a zod schema per kind in `packages/shared/src/artifactSource.ts`, and the host draws the source into HTML for the sandboxed frame in `apps/server/src/interactive/kinds.ts`.
-
-- **Narration in video:** MP4 and WebM are made today (frames stepped with the Web Animations API, encoded with the browser's WebCodecs and packaged by Mediabunny); narration still to be mixed in.
-
-### 2. Phone
+### 1. Phone
 
 - Slides: **Present** on a display the phone is connected to (AirPlay or a cable), with the notes on the phone. Everything else for the phone is built: kind filters, viewers per kind, editing, exports to the share sheet, Add to Home Screen and the widget for apps and dashboards.
 
-### 3. Voice-over for Motion
+### 2. Voice-over for Motion
 
-- A Motion artifact can have narration: the agent writes a script per scene, and the **speech** ability ([Abilities](ABILITIES-PLAN.md)) turns it into audio on a signed-in provider that offers it. The host mixes the audio into the MP4 with the browser's own audio encoder, timed to the scenes.
-- **Narration** in the artifact's toolbar previews, re-records one scene, or removes the narration. The grant sheet says which provider receives the script, and no other content leaves the host.
+Narration per scene, spoken on the host (`say` or `espeak-ng`) and mixed into the MP4 and WebM, with **Narration** in the toolbar to hear, change or remove each scene's words, is built ([Kinds](guide/artifacts.md#kinds)). Remaining:
+
+- **A provider's voice:** where a signed-in provider offers the **speech** ability ([Abilities](ABILITIES-PLAN.md)), narration uses it instead of the host's voice, and the grant sheet says which provider receives the script.
 
 ## Safety
 

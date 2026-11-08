@@ -234,6 +234,30 @@ it('lets the person an editing link names edit the text, merged and marked with 
   ).rejects.toThrow('expired or was revoked')
 })
 
+it('saves a motion’s narration line by line as a new version, an empty line removing it', async () => {
+  const { registerArtifactHandlers } = await import('../src/ipc/handlers/artifacts')
+  const { interactive, pages } = setup()
+  const preview = await interactive.preview('s', {
+    kind: 'motion',
+    scenes: [
+      { seconds: 2, html: '<h1>Sync</h1>', narration: 'Old words.' },
+      { seconds: 1, html: '<p>Offline</p>' },
+    ],
+    title: 'Sync',
+    summary: 'S',
+    checks: [],
+  } as never)
+  const kept = pages.keep('s', interactive.publish('s', preview.id, 'r1').id, { title: 'Sync' })
+  const methods = registerArtifactHandlers({ pages, pageAi: {}, activity: { run: () => {} }, host: {} } as never)
+  await methods['artifacts.editNarration']!.run(kept.id, 1, ['', 'Works offline too.'])
+  const stored = pages.document(kept.id).files?.find((file) => file.path === 'motion.json')?.content
+  const scenes = (JSON.parse(stored!) as { scenes: { narration?: string }[] }).scenes
+  expect(scenes.map((scene) => scene.narration)).toEqual([undefined, 'Works offline too.'])
+  await expect(
+    Promise.resolve().then(() => methods['artifacts.editNarration']!.run(kept.id, 2, ['only one'])),
+  ).rejects.toThrow('scenes changed')
+})
+
 it('tells each device which others are editing the same text, until they stop or go quiet', async () => {
   const { EditingPresence } = await import('../src/interactive/editing')
   let now = 0

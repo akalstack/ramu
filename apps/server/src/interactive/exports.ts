@@ -1,3 +1,4 @@
+import { narrationTrack, type NarrationTrack } from './narration'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -152,20 +153,32 @@ function frameImages(document: InteractiveDocument): Promise<Buffer> {
 
 const require = createRequire(import.meta.url)
 const VIDEO_FPS = 12
+const AUDIO_RATE = 48_000
+
+/** The track at another sample rate, by the nearest sample: speech survives it, and it keeps the timing exact. */
+function atRate(track: NarrationTrack, rate: number): Int16Array {
+  if (track.rate === rate) return track.samples
+  const out = new Int16Array(Math.round((track.samples.length * rate) / track.rate))
+  const step = track.rate / rate
+  for (let index = 0; index < out.length; index++)
+    out[index] = track.samples[Math.min(track.samples.length - 1, Math.floor(index * step))]!
+  return out
+}
 
 /**
  * A motion as a WebM video: its CSS animations are paused and stepped to each frame's exact time with the Web
  * Animations API, so frames never depend on how fast the browser is, then encoded with the browser's own WebCodecs
  * (VP9) and packaged by Mediabunny in a blank page that the artifact never touches. No ffmpeg is involved.
  */
-function motionVideo(document: InteractiveDocument, container: 'webm' | 'mp4' = 'webm'): Promise<Buffer> {
+async function motionVideo(document: InteractiveDocument, container: 'webm' | 'mp4' = 'webm'): Promise<Buffer> {
   const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.motion)?.content
   if (!stored) throw new Error('This motion version has no scenes. Ask the agent to publish it again.')
-  const seconds = (JSON.parse(stored) as { scenes: { seconds: number }[] }).scenes.reduce(
-    (total, scene) => total + scene.seconds,
-    0,
-  )
+  const scenes = (JSON.parse(stored) as { scenes: { seconds: number; narration?: string }[] }).scenes
+  const seconds = scenes.reduce((total, scene) => total + scene.seconds, 0)
   const frames = Math.ceil(seconds * VIDEO_FPS)
+  // Narration is spoken on this computer and mixed in at 48 kHz, the rate every audio encoder here takes.
+  const track = await narrationTrack(scenes)
+  const audio = track ? Buffer.from(atRate(track, AUDIO_RATE).buffer).toString('base64') : null
   return withPage(
     document,
     { width: 1280, height: 720 },
@@ -188,19 +201,33 @@ function motionVideo(document: InteractiveDocument, container: 'webm' | 'mp4' = 
         content: `var module={exports:{}};var exports=module.exports;${readFileSync(join(dirname(require.resolve('mediabunny')), 'mediabunny.min.cjs'), 'utf8')}`,
       })
       const ready = await encoder.evaluate(
-        async ({ fps, container }: { fps: number; container: 'webm' | 'mp4' }) => {
+        async ({
+          fps,
+          container,
+          voiced,
+          rate,
+        }: {
+          fps: number
+          container: 'webm' | 'mp4'
+          voiced: boolean
+          rate: number
+        }) => {
           const {
             Output,
             WebMOutputFormat,
             Mp4OutputFormat,
             BufferTarget,
             CanvasSource,
+            AudioBufferSource,
             QUALITY_HIGH,
             canEncodeVideo,
+            canEncodeAudio,
           } = (window as unknown as { Mediabunny: typeof import('mediabunny') }).Mediabunny
           const codec = container === 'mp4' ? 'avc' : 'vp9'
           // H.264 comes with Google Chrome, not every Chromium build; say so instead of failing midway.
           if (!(await canEncodeVideo(codec, { width: 1280, height: 720 }))) return false
+          const audioCodec = container === 'mp4' ? 'aac' : 'opus'
+          if (voiced && !(await canEncodeAudio(audioCodec, { numberOfChannels: 1, sampleRate: rate }))) return false
           const canvas = new OffscreenCanvas(1280, 720)
           const target = new BufferTarget()
           const output = new Output({
@@ -209,15 +236,17 @@ function motionVideo(document: InteractiveDocument, container: 'webm' | 'mp4' = 
           })
           const source = new CanvasSource(canvas, { codec, bitrate: QUALITY_HIGH })
           output.addVideoTrack(source, { frameRate: fps })
+          const voice = voiced ? new AudioBufferSource({ codec: audioCodec, bitrate: 96_000 }) : null
+          if (voice) output.addAudioTrack(voice)
           await output.start()
-          Object.assign(window, { video: { canvas, target, output, source } })
+          Object.assign(window, { video: { canvas, target, output, source, voice } })
           return true
         },
-        { fps: VIDEO_FPS, container },
+        { fps: VIDEO_FPS, container, voiced: !!audio, rate: AUDIO_RATE },
       )
       if (!ready)
         throw new Error(
-          "This computer's browser cannot make MP4 video. Export WebM instead, or install Google Chrome for MP4.",
+          "This computer's browser cannot make this video. Export WebM instead, or install Google Chrome for MP4.",
           { cause: 'codec' },
         )
       for (let index = 0; index < frames; index++) {
@@ -240,6 +269,21 @@ function motionVideo(document: InteractiveDocument, container: 'webm' | 'mp4' = 
           { shot, index, fps: VIDEO_FPS },
         )
       }
+      if (audio)
+        await encoder.evaluate(
+          async ({ audio, rate }: { audio: string; rate: number }) => {
+            const { voice } = (window as unknown as { video: { voice: { add(b: AudioBuffer): Promise<void> } } }).video
+            const bytes = Uint8Array.from(atob(audio), (char) => char.charCodeAt(0))
+            const pcm = new Int16Array(bytes.buffer)
+            const buffer = new AudioBuffer({ length: pcm.length, numberOfChannels: 1, sampleRate: rate })
+            buffer.copyToChannel(
+              Float32Array.from(pcm, (value) => value / 32768),
+              0,
+            )
+            await voice.add(buffer)
+          },
+          { audio, rate: AUDIO_RATE },
+        )
       const encoded = await encoder.evaluate(async () => {
         const { output, target } = (
           window as unknown as {

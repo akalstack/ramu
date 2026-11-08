@@ -18,7 +18,7 @@ Abilities let a thread's agent ask Ramu for something its provider cannot do (an
 
 A page's own AI asks for an image through the same routing (`ramuContent.ai.image`, within its AI grant), and `project_create` points the agent to `generate_image` for icons, store screenshots and social images and to `web_search` for comparing hosting. Remaining:
 
-- **[Artifacts](ARTIFACTS-PLAN.md):** Motion uses `video_generation` and `speech` where a provider offers them, and renders on the host where none does (waiting on §1).
+- **[Artifacts](ARTIFACTS-PLAN.md):** Motion narration is spoken on the host today; it uses `speech` (and scenes `video_generation`) where a provider offers them (waiting on §1).
 
 ### 3. Abilities from Shared MCP servers
 

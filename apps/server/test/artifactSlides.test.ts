@@ -1,4 +1,5 @@
 import JSZip from 'jszip'
+import { speaker } from '../src/interactive/narration'
 import { afterEach, expect, it, vi } from 'vitest'
 import { editSlideText, parseArtifactSource, type Slide } from '@ramu/shared/artifactSource'
 import { STARTER_TEMPLATES } from '@ramu/shared/starterTemplates'
@@ -431,8 +432,30 @@ it.skipIf(!interactiveBrowserPath())(
       expect(video).toMatchObject({ name: 'Sync.mp4', mimeType: 'video/mp4' })
       expect(Buffer.from(video.content, 'base64').subarray(4, 8).toString()).toBe('ftyp')
     } catch (error) {
-      expect((error as Error).message).toContain('cannot make MP4 video')
+      expect((error as Error).message).toContain('cannot make this video')
     }
+  },
+  300_000,
+)
+
+it.skipIf(!interactiveBrowserPath() || !speaker())(
+  'speaks each scene’s narration on this computer and mixes it into the video',
+  async () => {
+    const { db, interactive } = setup(previewInteractive)
+    const preview = await interactive.preview('s', {
+      kind: 'motion',
+      scenes: [
+        { seconds: 2, html: '<h1 style="margin:40px">Sync</h1>', narration: 'Sync keeps every device up to date.' },
+        { seconds: 1, html: '<p style="margin:40px">Offline too.</p>' },
+      ],
+      title: 'Sync',
+      summary: 'S',
+      checks: [],
+    } as never)
+    const document = interactive.get('s', interactive.publish('s', preview.id, 'r1').id, 1)
+    const video = await new ArtifactExports(db).make(document, 'webm')
+    // WebM names its audio codec in the track entry; Opus is what the browser encodes.
+    expect(Buffer.from(video.content, 'base64').includes(Buffer.from('A_OPUS'))).toBe(true)
   },
   300_000,
 )

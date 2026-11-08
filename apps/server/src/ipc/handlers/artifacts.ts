@@ -7,6 +7,7 @@ import { grafana } from '../../interactive/grafana'
 import { salesforce } from '../../interactive/salesforce'
 import { EditingPresence } from '../../interactive/editing'
 import { LiveEditing } from '../../interactive/liveEditing'
+import { speak, wavOf } from '../../interactive/narration'
 import { formatFigure } from '../../interactive/dashboard'
 import { designTextEdit, withDesignTexts, type DesignTextEdit } from '@ramu/shared/designText'
 import { readdir, readFile, realpath, stat } from 'node:fs/promises'
@@ -22,6 +23,7 @@ import {
 import { NO_PROJECT } from '@ramu/shared/types'
 import {
   DOC_MAX_SOURCE,
+  MOTION_SCENES_MAX,
   SLIDES_MAX,
   DASHBOARD_RANGE_MAX,
   editSlideText,
@@ -671,6 +673,35 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
         if (!stored) throw new Error('This dashboard version has no tables. Ask the agent to publish it again.')
         const { rangeDays: _was, ...board } = JSON.parse(stored) as { rangeDays?: number }
         const source = parseArtifactSource({ kind: 'dashboard', ...board, ...(days ? { rangeDays: days } : {}) })
+        return pages.saveEdit(artifactId, base, await renderArtifactSource(source, artifact.title), editedBy())
+      },
+    },
+    // A motion's narration: each scene's words, heard here before they are kept, and saved as a new version; an empty
+    // line removes that scene's narration. The words are spoken on this computer, so nothing leaves it.
+    'artifacts.narrationPreview': {
+      args: z.tuple([z.string().trim().min(1).max(600)]),
+      run: async (text: string) => {
+        const track = await speak(text)
+        return `data:audio/wav;base64,${wavOf(track).toString('base64')}`
+      },
+    },
+    'artifacts.editNarration': {
+      args: z.tuple([id, z.number().int().positive(), z.array(z.string().max(600)).max(MOTION_SCENES_MAX)]),
+      run: async (artifactId: string, base: number, lines: string[]) => {
+        const { pages } = need()
+        const artifact = pages.get(artifactId)
+        if (artifact.kind !== 'motion') throw new Error('Only a motion has narration.')
+        const stored = pages
+          .document(artifactId, base)
+          .files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.motion)?.content
+        if (!stored) throw new Error('This motion version has no scenes. Ask the agent to publish it again.')
+        const motion = JSON.parse(stored) as { scenes: { narration?: string }[] }
+        if (lines.length !== motion.scenes.length)
+          throw new Error('The motion’s scenes changed while you edited its narration. Open it again.')
+        const scenes = motion.scenes.map(({ narration: _was, ...scene }, index) =>
+          lines[index]!.trim() ? { ...scene, narration: lines[index]!.trim() } : scene,
+        )
+        const source = parseArtifactSource({ ...motion, kind: 'motion', scenes })
         return pages.saveEdit(artifactId, base, await renderArtifactSource(source, artifact.title), editedBy())
       },
     },

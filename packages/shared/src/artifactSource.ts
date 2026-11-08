@@ -489,6 +489,14 @@ export const motionSceneSchema = z.object({
     .max(50_000)
     .optional()
     .describe('Styles for this scene only. Start its animations at animation-delay: var(--scene-start).'),
+  narration: z
+    .string()
+    .trim()
+    .max(600)
+    .optional()
+    .describe(
+      'Words spoken over this scene in the exported video, read aloud on the host. Keep it short enough to say within the scene (about 2.5 words a second).',
+    ),
 })
 const motionSource = z
   .object({

@@ -121,6 +121,8 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
     null,
   )
   const [savingEdit, setSavingEdit] = useState(false)
+  // A motion's narration lines while the person edits them, one per scene.
+  const [narrating, setNarrating] = useState<{ base: number; lines: string[] } | null>(null)
   // Live typing on a deck's words, while its slides keep their order; moving a slide pauses it until Save.
   const slidesNow = useRef(editingSlides)
   slidesNow.current = editingSlides
@@ -648,6 +650,26 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
               <PenLine size={13} /> {t('Edit text')}
             </Button>
           )}
+          {page.kind === 'motion' && !narrating && (
+            <Button
+              variant="ghost"
+              className={GHOST_TEXT_BUTTON_CLASS}
+              disabled={viewOnly || !document}
+              title={t('Words spoken over each scene in the exported video, read aloud on this computer')}
+              onClick={() => {
+                const stored = document?.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.motion)?.content
+                if (document && stored)
+                  setNarrating({
+                    base: document.reference.version,
+                    lines: (JSON.parse(stored) as { scenes: { narration?: string }[] }).scenes.map(
+                      (scene) => scene.narration ?? '',
+                    ),
+                  })
+              }}
+            >
+              <PenLine size={13} /> {t('Narration')}
+            </Button>
+          )}
           {page.kind === 'diagram' &&
             !editingLabels &&
             document &&
@@ -993,6 +1015,75 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
               {t('Cancel')}
             </Button>
             <Button type="submit" variant="default" disabled={savingEdit}>
+              {t('Save')}
+            </Button>
+          </div>
+        </form>
+      )}
+      {narrating && (
+        <form
+          aria-label={t('Narration')}
+          className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto p-3"
+          onSubmit={(event) => {
+            event.preventDefault()
+            setSavingEdit(true)
+            invoke('artifacts.editNarration', artifactId, narrating.base, narrating.lines)
+              .then(() => {
+                setNarrating(null)
+                void load()
+              })
+              .catch((error) => notifyError(message(error), page.title))
+              .finally(() => setSavingEdit(false))
+          }}
+        >
+          <p className="m-0 text-caption text-muted-foreground">
+            {t(
+              'Each scene’s words are spoken on this computer when the video is exported, starting with the scene and cut at its end. Leave a scene empty for no narration.',
+            )}
+          </p>
+          {narrating.lines.map((line, index) => (
+            <label key={index} className="flex flex-col gap-1 text-caption">
+              <span className="flex items-center gap-2">
+                <strong className="flex-1 text-muted-foreground">{t('Scene {number}', { number: index + 1 })}</strong>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={GHOST_TEXT_BUTTON_CLASS}
+                  disabled={!line.trim()}
+                  onClick={() =>
+                    void Promise.resolve(invoke('artifacts.narrationPreview', line))
+                      .then((url) => void new Audio(url).play())
+                      .catch((error) => notifyError(message(error), page.title))
+                  }
+                >
+                  {t('Listen')}
+                </Button>
+              </span>
+              <Textarea
+                value={line}
+                maxLength={600}
+                rows={2}
+                onChange={(event) =>
+                  setNarrating({
+                    ...narrating,
+                    lines: narrating.lines.map((entry, at) => (at === index ? event.target.value : entry)),
+                  })
+                }
+              />
+            </label>
+          ))}
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setNarrating({ ...narrating, lines: narrating.lines.map(() => '') })}
+            >
+              {t('Remove narration')}
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setNarrating(null)}>
+              {t('Cancel')}
+            </Button>
+            <Button type="submit" disabled={savingEdit}>
               {t('Save')}
             </Button>
           </div>

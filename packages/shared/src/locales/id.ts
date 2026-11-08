@@ -6205,4 +6205,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Who may edit its text': 'Siapa yang boleh menyunting teksnya',
   'Link that lets them edit': 'Tautan agar mereka bisa menyunting',
   '{name} can edit': '{name} bisa menyunting',
+  'Narration': 'Narasi',
+  'Words spoken over each scene in the exported video, read aloud on this computer': 'Kata yang diucapkan di setiap adegan pada video yang diekspor, dibacakan di komputer ini',
+  'Each scene’s words are spoken on this computer when the video is exported, starting with the scene and cut at its end. Leave a scene empty for no narration.': 'Kata setiap adegan diucapkan di komputer ini saat video diekspor, dimulai bersama adegan dan dipotong di akhirnya. Kosongkan adegan untuk tanpa narasi.',
+  'Scene {number}': 'Adegan {number}',
+  'Listen': 'Dengarkan',
+  'Remove narration': 'Hapus narasi',
 }
