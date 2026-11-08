@@ -205,7 +205,7 @@ export function PullRequestsPage() {
       <section
         aria-label={t('Pull requests')}
         className={cn(
-          'flex min-h-0 w-full flex-col @min-[900px]:w-[420px] @min-[900px]:flex-none @min-[900px]:border-r @min-[900px]:border-(--line)',
+          'flex min-h-0 w-full flex-col @min-[900px]:w-[460px] @min-[900px]:flex-none @min-[900px]:border-r @min-[900px]:border-(--line)',
           selected && '@max-[899px]:hidden',
         )}
       >
@@ -249,10 +249,7 @@ export function PullRequestsPage() {
             />
           )}
           <Tabs value={filter} onValueChange={(value) => setFilter(value as PullRequestFilter)}>
-            <TabsList
-              variant="line"
-              className="h-9! w-full justify-start gap-3 overflow-x-auto border-b border-(--line) p-0"
-            >
+            <TabsList variant="line" className="h-9! w-full justify-start gap-2.5 border-b border-(--line) p-0">
               {PULL_REQUEST_FILTERS.map((entry) => (
                 <TabsTrigger key={entry} value={entry} className="flex-none gap-1.5 px-0.5 text-control">
                   {t(PULL_REQUEST_FILTER_LABEL[entry])}

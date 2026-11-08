@@ -119,7 +119,7 @@ export const PULL_REQUEST_FILTER_LABEL: Record<PullRequestFilter, string> = {
   mine: 'Yours',
   review: 'Review requested',
   open: 'All open',
-  closed: 'Merged and closed',
+  closed: 'Closed',
 }
 
 /** One row of the Pull requests page: a pull request with the repository it came from and where it stands. */
