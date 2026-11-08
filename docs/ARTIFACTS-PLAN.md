@@ -71,11 +71,10 @@ App, Doc, Diagram, Slides, Dashboard (over tables the agent fills in), Design (f
 
 ### 4. Two people editing one artifact
 
-Merging edits from the person's own devices, saying who else is editing, and an editing share link that names one person on a paired device are built ([Kinds](guide/artifacts.md#kinds), [Sharing and shipping](guide/artifacts.md#sharing-and-shipping)). Remaining:
+Merging edits on save, saying who else is editing, an editing share link that names one person on a paired device, and live typing on a doc's or Mermaid diagram's text (a Yjs copy on the host, synced about once a second, saved as a version after a quiet minute) are built ([Kinds](guide/artifacts.md#kinds), [Sharing and shipping](guide/artifacts.md#sharing-and-shipping)). Remaining:
 
-- **Live merging:** a Doc's and a deck's text kept as a CRDT (Yjs) on the host, so two people typing at once see each other's words as they type. A version is still saved when either stops editing for a minute, so Restore and Compare keep working.
+- **Live typing on a deck's slide text,** field by field, the way a doc's text is.
 - **Presence by part:** on which slide or heading each person is.
-- **One editor at a time** for kinds without text (Dashboard, Motion), with "Being edited by …" shown to the other.
 
 ### 5. Voice-over for Motion
 

@@ -379,6 +379,21 @@ interface ArtifactMethods {
     base: number,
     edits: import('./artifactSource').SlideTextEdit[],
   ): import('./artifacts').ArtifactInfo
+  /** Joins live typing on a doc's or diagram's text: the shared document's state and the version it started from. */
+  'artifacts.liveJoin'(artifactId: string): { state: string; version: number }
+  /** Sends what this editor typed since its last sync (or null) with its state, and returns what it lacks. */
+  'artifacts.liveSync'(
+    artifactId: string,
+    update: string | null,
+    stateVector: string,
+  ): import('./liveText').LiveTextReply
+  /** The same two through an editing share link, as the person it names. */
+  'artifacts.shareLiveJoin'(token: string): { state: string; version: number }
+  'artifacts.shareLiveSync'(
+    token: string,
+    update: string | null,
+    stateVector: string,
+  ): import('./liveText').LiveTextReply
   /** Says the link's editor is (or stopped) editing, and returns the others editing the same text now. */
   'artifacts.shareEditing'(token: string, editing: boolean): string[]
   'artifacts.shares'(artifactId: string): import('./artifacts').ArtifactShare[]

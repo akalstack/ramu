@@ -37,6 +37,7 @@ import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { notifyError } from '../chat/Notifications'
 import { NAMED_SERVICE_NAMES, type NamedService } from '@ramu/shared/types/deploy'
+import { LiveTextEditor, syncLiveText } from '@ramu/shared/liveText'
 import { useViewOnly } from '../composer/useViewOnly'
 import { ContentFrame } from '../interactive/ContentFrame'
 import { useContentDocument } from '../interactive/useContentDocument'
@@ -151,6 +152,46 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
       window.clearInterval(timer)
       setAlsoEditing([])
       void Promise.resolve(invoke('artifacts.editing', artifactId, false)).catch(() => {})
+    }
+  }, [editingText, invoke, artifactId])
+  // Live typing: the text box is synced with the host's shared copy about once a second, so others' words appear
+  // as they type them; a version is saved by the host once nobody types for a minute, or by Save.
+  const editingNow = useRef(editing)
+  editingNow.current = editing
+  useEffect(() => {
+    if (!editingText) return
+    let stopped = false
+    let editor: LiveTextEditor | null = null
+    let busy = false
+    void invoke('artifacts.liveJoin', artifactId).then(
+      (joined) => {
+        if (stopped) return
+        editor = new LiveTextEditor(joined.state)
+        // The shared copy may hold others' typing not saved yet; it replaces the version's text in the box.
+        const text = editor.text
+        setEditing((current) => (current ? { ...current, text, base: joined.version } : current))
+      },
+      () => {},
+    )
+    const timer = window.setInterval(() => {
+      if (!editor || busy) return
+      busy = true
+      void syncLiveText(
+        editor,
+        () => editingNow.current?.text ?? null,
+        (update, stateVector) => Promise.resolve(invoke('artifacts.liveSync', artifactId, update, stateVector)),
+      )
+        .then((merged) => {
+          if (merged !== null && !stopped) setEditing((current) => (current ? { ...current, text: merged } : current))
+        })
+        .catch(() => {})
+        .finally(() => {
+          busy = false
+        })
+    }, 1000)
+    return () => {
+      stopped = true
+      window.clearInterval(timer)
     }
   }, [editingText, invoke, artifactId])
   // Which design this host draws new visual artifacts with, for a design's menu.

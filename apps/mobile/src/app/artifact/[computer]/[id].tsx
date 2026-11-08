@@ -1,4 +1,5 @@
 import { NAMED_SERVICE_NAMES } from '@ramu/shared/types/deploy'
+import { LiveTextEditor, syncLiveText } from '@ramu/shared/liveText'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Image, PanResponder, Pressable, Share, Text, TextInput, View, useWindowDimensions } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -126,6 +127,63 @@ export default function PageScreen() {
       ).catch(() => {})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- marks once per opened editor; the store object changes on every update
+  }, [editingText, computerId, artifactId, shared])
+  // Live typing: the text is synced with the host's shared copy about once a second, so others' words appear as
+  // they type them; the host saves a version once nobody types for a minute, or Save does.
+  const editingNow = useRef(editing)
+  editingNow.current = editing
+  useEffect(() => {
+    if (!editingText) return
+    let stopped = false
+    let editor: LiveTextEditor | null = null
+    let busy = false
+    const token = shared?.editor ? shared.token : null
+    const textOf = (value: NonNullable<typeof editing>) =>
+      value.blocks ? withDocBlocks(value.text, value.blocks) : value.text
+    void (
+      token
+        ? store.invoke(computerId, 'artifacts.shareLiveJoin', token)
+        : store.invoke(computerId, 'artifacts.liveJoin', artifactId)
+    ).then(
+      (joined) => {
+        if (stopped) return
+        editor = new LiveTextEditor(joined.state)
+        const text = editor.text
+        setEditing((current) =>
+          current
+            ? { ...current, text, base: joined.version, ...(current.blocks ? { blocks: docBlocks(text) } : {}) }
+            : current,
+        )
+      },
+      () => {},
+    )
+    const timer = setInterval(() => {
+      if (!editor || busy) return
+      busy = true
+      void syncLiveText(
+        editor,
+        () => (editingNow.current ? textOf(editingNow.current) : null),
+        (update, stateVector) =>
+          token
+            ? store.invoke(computerId, 'artifacts.shareLiveSync', token, update, stateVector)
+            : store.invoke(computerId, 'artifacts.liveSync', artifactId, update, stateVector),
+      )
+        .then((merged) => {
+          if (merged === null || stopped) return
+          setEditing((current) =>
+            current ? { ...current, text: merged, ...(current.blocks ? { blocks: docBlocks(merged) } : {}) } : current,
+          )
+        })
+        .catch(() => {})
+        .finally(() => {
+          busy = false
+        })
+    }, 1000)
+    return () => {
+      stopped = true
+      clearInterval(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- syncs once per opened editor; the store object changes on every update
   }, [editingText, computerId, artifactId, shared])
   const field = {
     color: c.text,

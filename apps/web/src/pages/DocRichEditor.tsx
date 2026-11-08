@@ -36,6 +36,23 @@ export function DocRichEditor({
       created.dispose()
     }
   }, [])
+  // Text from outside (others' live typing) goes into the model as one edit over the span that changed, so the
+  // cursor and selection elsewhere stay where they were.
+  useEffect(() => {
+    if (!model || model.getValue() === text) return
+    const from = model.getValue()
+    let start = 0
+    while (start < from.length && start < text.length && from[start] === text[start]) start++
+    let end = 0
+    while (
+      end < from.length - start &&
+      end < text.length - start &&
+      from[from.length - 1 - end] === text[text.length - 1 - end]
+    )
+      end++
+    const range = monaco.Range.fromPositions(model.getPositionAt(start), model.getPositionAt(from.length - end))
+    model.applyEdits([{ range, text: text.slice(start, text.length - end) }])
+  }, [model, text])
   if (!model) return null
   return (
     <div className="min-h-0 flex-1 overflow-auto rounded-md border border-(--line)">

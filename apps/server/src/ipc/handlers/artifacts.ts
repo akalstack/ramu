@@ -5,6 +5,7 @@ import { amplitude } from '../../interactive/amplitude'
 import { grafana } from '../../interactive/grafana'
 import { salesforce } from '../../interactive/salesforce'
 import { EditingPresence } from '../../interactive/editing'
+import { LiveEditing } from '../../interactive/liveEditing'
 import { formatFigure } from '../../interactive/dashboard'
 import { designTextEdit, withDesignTexts, type DesignTextEdit } from '@ramu/shared/designText'
 import { readdir, readFile, realpath, stat } from 'node:fs/promises'
@@ -51,6 +52,8 @@ import type { StaticTarget } from '../../hosting/staticSite'
 
 /** Shared by every connection, so the desktop and the phone see each other editing. */
 const editingPresence = new EditingPresence()
+/** Live typing, shared by every connection; set up by the first registration, which also saves its versions. */
+let liveEditing: LiveEditing | null = null
 
 const field = z.enum([
   'string',
@@ -427,6 +430,28 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
     const drawn = await renderArtifactSource(source, artifact.title, images)
     if (drawn.problems.length) throw new Error(drawn.problems[0])
     return pages.saveEdit(artifactId, current, drawn, current === base ? by : `${by}, merged with v${current}`)
+  }
+  if (!liveEditing && ctx.pages) {
+    const pages = ctx.pages
+    liveEditing = new LiveEditing({
+      current: (artifactId) => {
+        const artifact = pages.get(artifactId)
+        const text = editableSource(pages.document(artifactId, artifact.version))
+        return text === null ? null : { version: artifact.version, text }
+      },
+      save: async (artifactId, base, text, by) => {
+        // A version the person saved with Save meanwhile may already hold this text; it is not saved twice.
+        const artifact = pages.get(artifactId)
+        if (editableSource(pages.document(artifactId, artifact.version)) === text) return artifact.version
+        return (await saveSourceEdit(artifactId, base, text, by)).version
+      },
+    })
+    const live = liveEditing
+    setInterval(() => void live.flush(), 15_000).unref()
+  }
+  const live = () => {
+    if (!liveEditing) throw new Error('Update this host for live editing.')
+    return liveEditing
   }
   /** A live share link that names its editor; any other link is refused. */
   const editingShare = (token: string) => {
@@ -917,6 +942,28 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       run: (token: string, base: number, edits: SlideTextEdit[]) => {
         const share = editingShare(token)
         return saveSlideEdit(share.artifactId, base, edits, `Edited by ${share.editor}`)
+      },
+    },
+    'artifacts.liveJoin': {
+      args: z.tuple([id]),
+      run: (artifactId: string) => live().join(artifactId),
+    },
+    'artifacts.liveSync': {
+      args: z.tuple([id, z.string().max(4_000_000).nullable(), z.string().max(100_000)]),
+      run: (artifactId: string, update: string | null, stateVector: string) => {
+        const device = ctx.host.callerName?.()?.slice(0, 60)
+        return live().sync(artifactId, device ? `you on ${device}` : 'you', update, stateVector)
+      },
+    },
+    'artifacts.shareLiveJoin': {
+      args: z.tuple([z.string().max(80)]),
+      run: (token: string) => live().join(editingShare(token).artifactId),
+    },
+    'artifacts.shareLiveSync': {
+      args: z.tuple([z.string().max(80), z.string().max(4_000_000).nullable(), z.string().max(100_000)]),
+      run: (token: string, update: string | null, stateVector: string) => {
+        const share = editingShare(token)
+        return live().sync(share.artifactId, share.editor, update, stateVector)
       },
     },
     'artifacts.shareEditing': {
