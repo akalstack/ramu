@@ -240,6 +240,11 @@ it('tells each device which others are editing the same text, until they stop or
   const presence = new EditingPresence(() => now)
   expect(presence.mark('a1', 'MacBook', true)).toEqual([])
   expect(presence.mark('a1', 'iPhone', true)).toEqual(['MacBook'])
+  // Each says where it is; the others see it beside the name, and it stays until a new one comes.
+  presence.mark('a1', 'MacBook', true, 'Goals')
+  expect(presence.mark('a1', 'iPhone', true, 'Slide 2')).toEqual(['MacBook · Goals'])
+  presence.mark('a1', 'MacBook', true)
+  expect(presence.mark('a1', 'iPhone', true)).toEqual(['MacBook · Goals'])
   presence.mark('a1', 'MacBook', false)
   expect(presence.mark('a1', 'iPhone', true)).toEqual([])
   presence.mark('a1', 'MacBook', true)

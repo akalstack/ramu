@@ -1,5 +1,7 @@
 import { NAMED_SERVICE_NAMES } from '@ramu/shared/types/deploy'
 import { LiveTextEditor, syncLiveText } from '@ramu/shared/liveText'
+import { deckText, slideWords } from '@ramu/shared/deckText'
+import { changedAt, headingAt } from '@ramu/shared/editingPart'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Image, PanResponder, Pressable, Share, Text, TextInput, View, useWindowDimensions } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -97,25 +99,49 @@ export default function PageScreen() {
   // A doc's Markdown while the person edits it on the phone, and the version that edit started from.
   // A doc's or diagram's text while the person edits it; a doc's blocks when edited as formatted text.
   const [editing, setEditing] = useState<{ base: number; text: string; blocks?: DocBlock[] } | null>(null)
+  const [editingSlides, setEditingSlides] = useState<{ base: number; slides: (Slide & { from: number })[] } | null>(
+    null,
+  )
+  // A motion played as the host's MP4 in the phone's own video player.
+  const [playing, setPlaying] = useState(false)
+  // A flowchart's labels while the person changes its words without its Mermaid syntax.
+  const [editingLabels, setEditingLabels] = useState<{ base: number; source: string; labels: string[] } | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
   // The person's other devices editing this text too; saving merges edits that changed different lines.
   const [alsoEditing, setAlsoEditing] = useState<string[]>([])
   const editingText = !!editing
+  const editingNowRef = useRef(editing)
+  editingNowRef.current = editing
+  // Where this phone last typed (a heading, or a slide), sent with its presence so others see the part it is on. The
+  // doc's part comes from what changed since the last look, which moves on whenever others' typing is merged in.
+  const partNow = useRef<string | null>(null)
+  const seenText = useRef<string | null>(null)
+  const editingAny = editingText || !!editingSlides
   useEffect(() => {
-    if (!editingText) return
+    if (!editingAny) return
     let live = true
+    partNow.current = null
+    seenText.current = null
     const token = shared?.editor ? shared.token : null
-    const mark = () =>
+    const mark = () => {
+      const current = editingNowRef.current
+      if (current) {
+        const text = current.blocks ? withDocBlocks(current.text, current.blocks) : current.text
+        const at = seenText.current === null ? null : changedAt(seenText.current, text)
+        if (at !== null) partNow.current = headingAt(text, at)
+        seenText.current = text
+      }
       void (
         token
-          ? store.invoke(computerId, 'artifacts.shareEditing', token, true)
-          : store.invoke(computerId, 'artifacts.editing', artifactId, true)
+          ? store.invoke(computerId, 'artifacts.shareEditing', token, true, partNow.current)
+          : store.invoke(computerId, 'artifacts.editing', artifactId, true, partNow.current)
       ).then(
         (others) => live && setAlsoEditing(others),
         () => {},
       )
+    }
     mark()
-    const timer = setInterval(mark, 30_000)
+    const timer = setInterval(mark, 5000)
     return () => {
       live = false
       clearInterval(timer)
@@ -127,7 +153,7 @@ export default function PageScreen() {
       ).catch(() => {})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- marks once per opened editor; the store object changes on every update
-  }, [editingText, computerId, artifactId, shared])
+  }, [editingAny, computerId, artifactId, shared])
   // Live typing: the text is synced with the host's shared copy about once a second, so others' words appear as
   // they type them; the host saves a version once nobody types for a minute, or Save does.
   const editingNow = useRef(editing)
@@ -170,6 +196,7 @@ export default function PageScreen() {
       )
         .then((merged) => {
           if (merged === null || stopped) return
+          seenText.current = merged
           setEditing((current) =>
             current ? { ...current, text: merged, ...(current.blocks ? { blocks: docBlocks(merged) } : {}) } : current,
           )
@@ -194,13 +221,58 @@ export default function PageScreen() {
     paddingVertical: space.s,
   } as const
   // A deck's slide text and order while the person edits it on the phone, and the version it started from.
-  const [editingSlides, setEditingSlides] = useState<{ base: number; slides: (Slide & { from: number })[] } | null>(
-    null,
-  )
-  // A motion played as the host's MP4 in the phone's own video player.
-  const [playing, setPlaying] = useState(false)
-  // A flowchart's labels while the person changes its words without its Mermaid syntax.
-  const [editingLabels, setEditingLabels] = useState<{ base: number; source: string; labels: string[] } | null>(null)
+  // Live typing on a deck's words, while its slides keep their order; moving a slide pauses it until Save.
+  const slidesNow = useRef(editingSlides)
+  slidesNow.current = editingSlides
+  const editingDeck = !!editingSlides
+  useEffect(() => {
+    if (!editingDeck) return
+    let stopped = false
+    let editor: LiveTextEditor | null = null
+    let busy = false
+    const withWords = (text: string) =>
+      setEditingSlides((current) => {
+        if (!current) return current
+        const words = slideWords(text, current.slides.length)
+        return words
+          ? { ...current, slides: current.slides.map((slide, index) => ({ ...slide, ...words[index] })) }
+          : current
+      })
+    void store.invoke(computerId, 'artifacts.liveJoin', artifactId).then(
+      (joined) => {
+        if (stopped) return
+        editor = new LiveTextEditor(joined.state)
+        withWords(editor.text)
+      },
+      () => {},
+    )
+    const timer = setInterval(() => {
+      if (!editor || busy) return
+      busy = true
+      void syncLiveText(
+        editor,
+        () => {
+          const current = slidesNow.current
+          return current && current.slides.every((slide, index) => slide.from === index)
+            ? deckText(current.slides)
+            : null
+        },
+        (update, stateVector) => store.invoke(computerId, 'artifacts.liveSync', artifactId, update, stateVector),
+      )
+        .then((merged) => {
+          if (merged !== null && !stopped) withWords(merged)
+        })
+        .catch(() => {})
+        .finally(() => {
+          busy = false
+        })
+    }, 1000)
+    return () => {
+      stopped = true
+      clearInterval(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- syncs once per opened editor; the store object changes on every update
+  }, [editingDeck, computerId, artifactId])
   // A design's frame words while the person edits them, one list per frame, and the version they started from.
   const [editingDesign, setEditingDesign] = useState<{
     base: number
@@ -1255,11 +1327,13 @@ export default function PageScreen() {
         {editingSlides ? (
           <View style={{ padding: space.l, gap: space.l }}>
             {editingSlides.slides.map((slide, index) => {
-              const change = (patch: Partial<Slide>) =>
+              const change = (patch: Partial<Slide>) => {
+                partNow.current = say('Slide {number}', { number: index + 1 })
                 setEditingSlides({
                   ...editingSlides,
                   slides: editingSlides.slides.map((entry, at) => (at === index ? { ...entry, ...patch } : entry)),
                 })
+              }
               const move = (by: number) => {
                 const slides = [...editingSlides.slides]
                 const [moved] = slides.splice(index, 1)

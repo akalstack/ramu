@@ -1,4 +1,5 @@
 import { mergeSlideText, mergeText } from '@ramu/shared/textMerge'
+import { deckText, slideWords } from '@ramu/shared/deckText'
 import { NAMED_SERVICE_NAMES, NAMED_SERVICES, type NamedService } from '@ramu/shared/types/deploy'
 import { DASHBOARD_ROWS_MAX } from '@ramu/shared/artifactSource'
 import { amplitude } from '../../interactive/amplitude'
@@ -436,18 +437,43 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
     liveEditing = new LiveEditing({
       current: (artifactId) => {
         const artifact = pages.get(artifactId)
-        const text = editableSource(pages.document(artifactId, artifact.version))
+        const text = liveTextOf(artifactId, artifact.version)
         return text === null ? null : { version: artifact.version, text }
       },
       save: async (artifactId, base, text, by) => {
         // A version the person saved with Save meanwhile may already hold this text; it is not saved twice.
         const artifact = pages.get(artifactId)
-        if (editableSource(pages.document(artifactId, artifact.version)) === text) return artifact.version
-        return (await saveSourceEdit(artifactId, base, text, by)).version
+        if (liveTextOf(artifactId, artifact.version) === text) return artifact.version
+        if (artifact.kind !== 'slides') return (await saveSourceEdit(artifactId, base, text, by)).version
+        const count = deckSlides(artifactId, base)?.length ?? 0
+        const words = slideWords(text, count)
+        if (!words) throw new Error('The deck’s slides changed while it was edited live.')
+        return (
+          await saveSlideEdit(
+            artifactId,
+            base,
+            words.map((slide, from) => ({ ...slide, from })),
+            by,
+          )
+        ).version
       },
     })
     const live = liveEditing
     setInterval(() => void live.flush(), 15_000).unref()
+  }
+  /** A version's slides, for a deck. */
+  function deckSlides(artifactId: string, version: number): Slide[] | null {
+    const stored = need()
+      .pages.document(artifactId, version)
+      .files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.slides)?.content
+    return stored ? (JSON.parse(stored) as { slides: Slide[] }).slides : null
+  }
+  /** The text live typing shares: a doc's or diagram's source, or a deck's words joined into one text. */
+  function liveTextOf(artifactId: string, version: number): string | null {
+    const document = need().pages.document(artifactId, version)
+    if (document.reference.kind !== 'slides') return editableSource(document)
+    const slides = deckSlides(artifactId, version)
+    return slides ? deckText(slides) : null
   }
   const live = () => {
     if (!liveEditing) throw new Error('Update this host for live editing.')
@@ -599,10 +625,11 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       },
     },
     'artifacts.editing': {
-      args: z.tuple([id, z.boolean()]),
-      run: (artifactId: string, editing: boolean) => {
+      args: z.tuple([id, z.boolean(), z.string().trim().max(80).nullable().optional()]),
+      run: (artifactId: string, editing: boolean, part?: string | null) => {
         need().pages.get(artifactId)
-        return editingPresence.mark(artifactId, ctx.host.callerName?.()?.slice(0, 60) ?? 'this computer', editing)
+        const device = ctx.host.callerName?.()?.slice(0, 60) ?? 'this computer'
+        return editingPresence.mark(artifactId, device, editing, part ?? null)
       },
     },
     'artifacts.turnSlide': {
@@ -967,10 +994,10 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       },
     },
     'artifacts.shareEditing': {
-      args: z.tuple([z.string().max(80), z.boolean()]),
-      run: (token: string, editing: boolean) => {
+      args: z.tuple([z.string().max(80), z.boolean(), z.string().trim().max(80).nullable().optional()]),
+      run: (token: string, editing: boolean, part?: string | null) => {
         const share = editingShare(token)
-        return editingPresence.mark(share.artifactId, share.editor, editing)
+        return editingPresence.mark(share.artifactId, share.editor, editing, part ?? null)
       },
     },
     'artifacts.shares': { args: z.tuple([id]), run: (artifactId: string) => need().pages.shares(artifactId) },

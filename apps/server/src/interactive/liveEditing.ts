@@ -1,4 +1,4 @@
-// The host's side of live typing on a doc's or Mermaid diagram's text: one Yjs document per artifact while anyone is
+// The host's side of live typing on a doc's or Mermaid diagram's text, or a deck's words: one Yjs document per artifact while anyone is
 // editing it, started from the current version's text. Editors join, then sync about once a second. When nobody has
 // typed for a minute, the text is saved as a version (merged onto any version an agent saved meanwhile) naming who
 // typed, so Restore and Compare keep working; a document nobody synced for five minutes is dropped after that save.
@@ -39,7 +39,7 @@ export class LiveEditing {
     let session = this.sessions.get(artifactId)
     if (!session) {
       const current = this.host.current(artifactId)
-      if (!current) throw new Error('Only a doc or a Mermaid diagram is edited live.')
+      if (!current) throw new Error('Only a doc, a Mermaid diagram or a deck’s words are edited live.')
       session = {
         host: new LiveTextHost(current.text),
         base: current.version,

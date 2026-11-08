@@ -38,6 +38,8 @@ import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { notifyError } from '../chat/Notifications'
 import { NAMED_SERVICE_NAMES, type NamedService } from '@ramu/shared/types/deploy'
 import { LiveTextEditor, syncLiveText } from '@ramu/shared/liveText'
+import { deckText, slideWords } from '@ramu/shared/deckText'
+import { changedAt, headingAt } from '@ramu/shared/editingPart'
 import { useViewOnly } from '../composer/useViewOnly'
 import { ContentFrame } from '../interactive/ContentFrame'
 import { useContentDocument } from '../interactive/useContentDocument'
@@ -119,6 +121,57 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
     null,
   )
   const [savingEdit, setSavingEdit] = useState(false)
+  // Live typing on a deck's words, while its slides keep their order; moving a slide pauses it until Save.
+  const slidesNow = useRef(editingSlides)
+  slidesNow.current = editingSlides
+  const editingDeck = !!editingSlides
+  useEffect(() => {
+    if (!editingDeck) return
+    let stopped = false
+    let editor: LiveTextEditor | null = null
+    let busy = false
+    const withWords = (text: string) =>
+      setEditingSlides((current) => {
+        if (!current) return current
+        const words = slideWords(text, current.slides.length)
+        return words
+          ? { ...current, slides: current.slides.map((slide, index) => ({ ...slide, ...words[index] })) }
+          : current
+      })
+    void invoke('artifacts.liveJoin', artifactId).then(
+      (joined) => {
+        if (stopped) return
+        editor = new LiveTextEditor(joined.state)
+        withWords(editor.text)
+      },
+      () => {},
+    )
+    const timer = window.setInterval(() => {
+      if (!editor || busy) return
+      busy = true
+      void syncLiveText(
+        editor,
+        () => {
+          const current = slidesNow.current
+          return current && current.slides.every((slide, index) => slide.from === index)
+            ? deckText(current.slides)
+            : null
+        },
+        (update, stateVector) => Promise.resolve(invoke('artifacts.liveSync', artifactId, update, stateVector)),
+      )
+        .then((merged) => {
+          if (merged !== null && !stopped) withWords(merged)
+        })
+        .catch(() => {})
+        .finally(() => {
+          busy = false
+        })
+    }, 1000)
+    return () => {
+      stopped = true
+      window.clearInterval(timer)
+    }
+  }, [editingDeck, invoke, artifactId])
   // Named services this dashboard reads, and the ones the person allowed it to.
   const [services, setServices] = useState<{ needed: NamedService[]; allowed: NamedService[] } | null>(null)
   const dashboardVersion = page?.kind === 'dashboard' ? page.version : null
@@ -137,27 +190,37 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   // The person's other devices editing this text too; saving merges edits that changed different lines.
   const [alsoEditing, setAlsoEditing] = useState<string[]>([])
   const editingText = !!editing
+  // Where this device last typed (a heading, or a slide), sent with its presence so others see the part it is on.
+  const partNow = useRef<string | null>(null)
+  const editingAny = editingText || editingDeck
   useEffect(() => {
-    if (!editingText) return
+    if (!editingAny) return
     let live = true
+    partNow.current = null
     const mark = () =>
-      void invoke('artifacts.editing', artifactId, true).then(
+      void invoke('artifacts.editing', artifactId, true, partNow.current).then(
         (others) => live && setAlsoEditing(others),
         () => {},
       )
     mark()
-    const timer = window.setInterval(mark, 30_000)
+    const timer = window.setInterval(mark, 5000)
     return () => {
       live = false
       window.clearInterval(timer)
       setAlsoEditing([])
       void Promise.resolve(invoke('artifacts.editing', artifactId, false)).catch(() => {})
     }
-  }, [editingText, invoke, artifactId])
+  }, [editingAny, invoke, artifactId])
   // Live typing: the text box is synced with the host's shared copy about once a second, so others' words appear
   // as they type them; a version is saved by the host once nobody types for a minute, or by Save.
   const editingNow = useRef(editing)
   editingNow.current = editing
+  /** Text the person typed (not merged in from others), noting the heading above the change. */
+  const typed = (text: string) => {
+    const previous = editingNow.current?.text
+    if (previous !== undefined && previous !== text) partNow.current = headingAt(text, changedAt(previous, text) ?? 0)
+    setEditing((current) => (current ? { ...current, text } : current))
+  }
   useEffect(() => {
     if (!editingText) return
     let stopped = false
@@ -896,7 +959,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
             <DocRichEditor
               artifactId={artifactId}
               text={editing.text}
-              onChange={(text) => setEditing((current) => (current ? { ...current, text } : current))}
+              onChange={typed}
               onSave={() => editForm.current?.requestSubmit()}
             />
           ) : (
@@ -904,7 +967,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
               aria-label={t('Markdown')}
               className="min-h-0 flex-1 resize-none font-mono text-control"
               value={editing.text}
-              onChange={(event) => setEditing({ ...editing, text: event.target.value })}
+              onChange={(event) => typed(event.target.value)}
             />
           )}
           <div className="flex items-center justify-end gap-2">
@@ -960,6 +1023,13 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           }}
         >
           <ol className="m-0 flex min-h-0 flex-1 list-none flex-col gap-4 overflow-auto p-0">
+            {alsoEditing.length > 0 && (
+              <p role="status" className="m-0 text-caption text-muted-foreground">
+                {t('Also being edited on {0}. Saving keeps both edits where they changed different lines.', {
+                  0: alsoEditing.join(', '),
+                })}
+              </p>
+            )}
             {editingSlides.slides.map((slide, index) => {
               const move = (by: number) => {
                 const slides = [...editingSlides.slides]
@@ -967,11 +1037,13 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
                 slides.splice(index + by, 0, moved!)
                 setEditingSlides({ ...editingSlides, slides })
               }
-              const change = (patch: Partial<Slide>) =>
+              const change = (patch: Partial<Slide>) => {
+                partNow.current = t('Slide {number}', { number: index + 1 })
                 setEditingSlides({
                   ...editingSlides,
                   slides: editingSlides.slides.map((entry, at) => (at === index ? { ...entry, ...patch } : entry)),
                 })
+              }
               return (
                 <li key={slide.from} className="flex flex-col gap-1.5">
                   <div className="flex items-center gap-1">

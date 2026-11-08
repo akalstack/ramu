@@ -281,7 +281,8 @@ interface ArtifactMethods {
     allowed: boolean,
   ): { needed: import('./types/deploy').NamedService[]; allowed: import('./types/deploy').NamedService[] }
   /** Says this device is (or stopped) editing an artifact's text, and returns the other devices editing it now. */
-  'artifacts.editing'(artifactId: string, editing: boolean): string[]
+  /** `part` is where this device is: the heading above its last change, or the slide it changed. */
+  'artifacts.editing'(artifactId: string, editing: boolean, part?: string | null): string[]
   /** Tells this host's other devices which slide of a deck the person is on, so a desktop presenting it follows. */
   'artifacts.turnSlide'(artifactId: string, index: number): void
   /** Saves the person's text for each slide of a deck as a new version on top of `base`; refused if another came since. */
@@ -395,7 +396,7 @@ interface ArtifactMethods {
     stateVector: string,
   ): import('./liveText').LiveTextReply
   /** Says the link's editor is (or stopped) editing, and returns the others editing the same text now. */
-  'artifacts.shareEditing'(token: string, editing: boolean): string[]
+  'artifacts.shareEditing'(token: string, editing: boolean, part?: string | null): string[]
   'artifacts.shares'(artifactId: string): import('./artifacts').ArtifactShare[]
   'artifacts.revokeShare'(token: string): void
   'artifacts.renewShare'(token: string): import('./artifacts').ArtifactShare

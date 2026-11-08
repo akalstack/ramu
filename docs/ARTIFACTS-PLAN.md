@@ -64,19 +64,7 @@ App, Doc, Diagram, Slides, Dashboard (over tables the agent fills in), Design (f
 
 - Slides: **Present** on a display the phone is connected to (AirPlay or a cable), with the notes on the phone. Everything else for the phone is built: kind filters, viewers per kind, editing, exports to the share sheet, Add to Home Screen and the widget for apps and dashboards.
 
-### 3. Documentation
-
-- The site's feature list names the kinds, with the [shipping plan's](SHIP-AN-APP-PLAN.md) site rewrite.
-- Each new behavior above is described in [Artifacts](guide/artifacts.md), the mobile README and VERIFICATION.md as it lands.
-
-### 4. Two people editing one artifact
-
-Merging edits on save, saying who else is editing, an editing share link that names one person on a paired device, and live typing on a doc's or Mermaid diagram's text (a Yjs copy on the host, synced about once a second, saved as a version after a quiet minute) are built ([Kinds](guide/artifacts.md#kinds), [Sharing and shipping](guide/artifacts.md#sharing-and-shipping)). Remaining:
-
-- **Live typing on a deck's slide text,** field by field, the way a doc's text is.
-- **Presence by part:** on which slide or heading each person is.
-
-### 5. Voice-over for Motion
+### 3. Voice-over for Motion
 
 - A Motion artifact can have narration: the agent writes a script per scene, and the **speech** ability ([Abilities](ABILITIES-PLAN.md)) turns it into audio on a signed-in provider that offers it. The host mixes the audio into the MP4 with the browser's own audio encoder, timed to the scenes.
 - **Narration** in the artifact's toolbar previews, re-records one scene, or removes the narration. The grant sheet says which provider receives the script, and no other content leaves the host.
