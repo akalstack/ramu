@@ -147,4 +147,34 @@ describe('Resend', () => {
     // A key's value is shown only once, so a lost reply cannot be recovered by name.
     expect(await adapter.find(auth, 'shop')).toBeNull()
   })
+
+  it('counts this month’s sent emails across pages, stopping at the first one from last month', async () => {
+    const month = new Date()
+    const thisMonth = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth(), 1, 12)).toISOString()
+    const lastMonth = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() - 1, 20)).toISOString()
+    const { url, requests } = await fake(({ line }) =>
+      line === 'GET /emails?limit=100'
+        ? {
+            has_more: true,
+            data: Array.from({ length: 100 }, (_, index) => ({ id: `e${index}`, created_at: thisMonth })),
+          }
+        : line === 'GET /emails?limit=100&after=e99'
+          ? {
+              has_more: true,
+              data: [
+                { id: 'f1', created_at: thisMonth },
+                { id: 'f2', created_at: lastMonth },
+              ],
+            }
+          : undefined,
+    )
+    const usage = await resendAdapter({ api: url, pause: async () => {} }).usage!(
+      { token: 're_full_access', scope: null },
+      'shop',
+    )
+    expect(usage.figures).toEqual([
+      { metric: 'service', service: 'Emails sent', used: 101, unit: 'emails', limit: null },
+    ])
+    expect(requests).toHaveLength(2)
+  })
 })

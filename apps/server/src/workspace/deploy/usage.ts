@@ -25,8 +25,7 @@ const BILLING_PAGES: Record<AccountPlatform, string> = {
   neon: 'https://console.neon.tech/app/billing',
   supabase: 'https://supabase.com/dashboard/org/_/usage',
   upstash: 'https://console.upstash.com/account/billing',
-  // Resend reports no usage through the API Ramu uses, so no report is made for it.
-  resend: 'https://resend.com/settings/billing',
+  resend: 'https://resend.com/settings/usage',
   'vercel-marketplace': 'https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings%2Fbilling&title=Billing',
   'vercel-blob': 'https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings%2Fbilling&title=Billing',
   'supabase-storage': 'https://supabase.com/dashboard/org/_/billing',

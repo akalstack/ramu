@@ -142,6 +142,7 @@ For an Expo app (an `app.json` or `app.config.*` at the repository root, as the 
 | Upstash | The cache's storage now, and its requests and data transfer this calendar month | Not reported by Upstash's API; **Open billing** shows the plan |
 | Cloudflare Workers | The Worker's requests and errors this calendar month, from Cloudflare's analytics (the token needs Account Analytics read; without it the sheet says so) | Not reported by Cloudflare's API; **Open billing** opens the Workers overview |
 | Supabase | The project's Database API, Auth, Storage and Realtime requests over the last seven days, the longest span Supabase's API reports | Not reported by Supabase's API; **Open billing** opens the organization's usage page |
+| Resend | The account's emails sent this calendar month, counted from Resend's list of sent emails (all of the account's apps together; past 10,000 the sheet says so instead) | Not reported by Resend's API; **Open billing** opens the usage page |
 | Neon | The main branch's size, compute time and data transfer for the billing period (Neon's own counters, which lag a little) | Storage against Neon's branch size limit; compute against the plan's compute time; transfer has none |
 
 When the API reports no figures for an account or plan (Vercel refuses billing data to some roles; Cloudflare refuses analytics to a token without Account Analytics read; Netlify plans billed in credits have no build minutes), the sheet says so instead of showing numbers.
