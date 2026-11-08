@@ -6296,4 +6296,21 @@ export const indonesian: Readonly<Record<string, string>> = {
   Sound: 'Suara',
   'How loud the music and scene sounds play in the exported video':
     'Seberapa keras musik dan suara adegan diputar di video yang diekspor',
+  'All open': 'Semua yang terbuka',
+  'Show pull requests': 'Tampilkan pull request',
+  'Search pull requests': 'Cari pull request',
+  'Search title, author, branch or repository': 'Cari judul, penulis, branch, atau repository',
+  'No repositories with a hosting service': 'Belum ada repository dengan layanan hosting',
+  'No pull requests match': 'Tidak ada pull request yang cocok',
+  'Nothing waiting on you': 'Tidak ada yang menunggumu',
+  'No pull requests here': 'Tidak ada pull request di sini',
+  'Publish a project to GitHub, GitLab, Bitbucket or Azure DevOps to see its pull requests here.':
+    'Publikasikan project ke GitHub, GitLab, Bitbucket, atau Azure DevOps untuk melihat pull request-nya di sini.',
+  'Reviews asked of you and your pull requests that are ready or blocked show here.':
+    'Review yang diminta darimu dan pull request-mu yang siap atau terhambat muncul di sini.',
+  'Try another tab or repository.': 'Coba tab atau repository lain.',
+  'Choose a pull request': 'Pilih pull request',
+  'It opens here with its checks, review threads and merge.':
+    'Pull request terbuka di sini dengan check, thread review, dan merge-nya.',
+  'All pull requests in {0}': 'Semua pull request di {0}',
 }

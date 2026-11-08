@@ -89,10 +89,17 @@ export interface TerminalGroup {
   layout: 'horizontal' | 'vertical'
 }
 
+/** The places that fill the main area instead of a thread. */
+export type GlobalPage = 'schedules' | 'inbox' | 'artifacts' | 'pulls'
+
+export function isGlobalPage(sidebar: string): sidebar is GlobalPage {
+  return sidebar === 'schedules' || sidebar === 'inbox' || sidebar === 'artifacts' || sidebar === 'pulls'
+}
+
 export interface WorkspaceUiState {
   openTaskIds: string[]
   activeTaskId: string | null
-  sidebar: 'projects' | 'explorer' | 'search' | 'scm' | 'schedules' | 'inbox' | 'artifacts'
+  sidebar: 'projects' | 'explorer' | 'search' | 'scm' | GlobalPage
   /** Sidebar sections and projects the user folded (`section:pinned`, `project:<id>`); everything else is open. */
   collapsed?: string[]
   /** What the right-side toggle hid (tool panel and/or workspace), restored when it is toggled back. */

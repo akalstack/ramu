@@ -7,7 +7,9 @@ import { GIT_INSPECTOR } from './classes'
 import { CommitsPane } from './CommitsPane'
 import { GitInspectorHead } from './GitInspectorHead'
 import { StashesPane } from './StashesPane'
-import { PullRequestsPane } from './PullRequestsPane'
+import { Button } from '@/components/desktop-button'
+import { showPullRequests } from '../../git/PullRequestsPage'
+import { useWorkspace } from '../../workspace/workspace'
 import type { GitTab } from './types'
 
 /** The pinned Git section: branch, tracking state, commit history and stashes of one repository. */
@@ -62,6 +64,7 @@ export function GitInspector({
   onDropStash: (stash: GitStash) => void
   onStash: () => void
 }) {
+  const ws = useWorkspace()
   return (
     <Tabs
       value={tab}
@@ -104,13 +107,19 @@ export function GitInspector({
                 </span>
               )}
             </TabsTrigger>
-            {!!status?.remote && (
-              <TabsTrigger value="pulls" className="git-tab" aria-label={t('Pull requests')}>
-                <GitPullRequest size={14} className="flex-none" aria-hidden="true" />
-                {t('Pull requests')}
-              </TabsTrigger>
-            )}
           </TabsList>
+          {!!status?.remote && (
+            // The repository's other pull requests live on the Pull requests page; the branch's own one is above.
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mx-1 h-7 justify-start gap-1.5 px-1.5 text-caption text-muted-foreground"
+              onClick={() => showPullRequests(ws, binding.repoId)}
+            >
+              <GitPullRequest size={13} className="flex-none" aria-hidden="true" />
+              {t('All pull requests in {0}', { '0': binding.repoName })}
+            </Button>
+          )}
           <CommitsPane
             taskId={taskId}
             binding={binding}
@@ -132,7 +141,6 @@ export function GitInspector({
             onDrop={onDropStash}
             onStash={onStash}
           />
-          {!!status?.remote && <PullRequestsPane taskId={taskId} binding={binding} enabled={tab === 'pulls'} />}
         </>
       )}
     </Tabs>

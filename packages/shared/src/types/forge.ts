@@ -111,6 +111,18 @@ export interface PullRequestList {
   threads?: Record<string, { taskId: string; title: string }[]>
 }
 
+/** One repository's pull requests on the Pull requests page, with the project it belongs to. */
+export interface RepositoryPullRequests extends PullRequestList {
+  projectId: string
+  projectName: string
+  repoId: string
+  repoName: string
+  /** Why this repository could not be read this time; the rest of the page still shows. */
+  error?: string
+  /** Ramu's own state per pull request URL: replies drafted, or an agent working on its feedback. */
+  local: Record<string, { draftsReady?: boolean; agentWorking?: boolean }>
+}
+
 /** What opening a pull request in a thread needs: the thread already on it, or how to start one. */
 export interface PullRequestHandoff {
   existing: { taskId: string; title: string } | null

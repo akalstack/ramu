@@ -30,6 +30,7 @@ import {
   History,
   Folders,
   GitBranch,
+  GitPullRequest,
   MessageCircle,
   Pencil,
   PanelLeftClose,
@@ -72,10 +73,11 @@ import { SchedulesPage } from './Automation'
 import { PagesPage } from './pages/PagesPage'
 import { PageNotices } from './pages/PageNotices'
 import { InboxPage } from './inbox/InboxPage'
+import { PullRequestsPage, usePullRequestsWaiting } from './git/PullRequestsPage'
 import { useInboxModel } from './inbox/useBrief'
 import { LiveView } from './liveView/LiveView'
 import { openComputer } from './chat/openComputer'
-import { AUTO_PROJECT, DEFAULT_SIDEBAR_WIDTH, NO_PROJECT, SIDEBAR_WIDTH_RANGE } from '@ramu/shared/types'
+import { AUTO_PROJECT, DEFAULT_SIDEBAR_WIDTH, NO_PROJECT, SIDEBAR_WIDTH_RANGE, isGlobalPage } from '@ramu/shared/types'
 import { SettingsPanel } from './settings/SettingsPanel'
 import { UsageFooter, UsageRings } from './settings/Usage'
 import { ProjectSwitcher } from './workspace/ProjectSwitcher'
@@ -361,7 +363,7 @@ function Shell() {
     window.addEventListener('ramu:open-page', show)
     return () => window.removeEventListener('ramu:open-page', show)
   }, [ws])
-  const globalPage = ui.sidebar === 'schedules' || ui.sidebar === 'inbox' || ui.sidebar === 'artifacts'
+  const globalPage = isGlobalPage(ui.sidebar)
   const workspaceTool = ui.sidebar === 'explorer' || ui.sidebar === 'search' || ui.sidebar === 'scm' ? ui.sidebar : null
   // Chats with nothing open is the home page: the start box and a line leading to the Inbox. New chat without a project lands here too.
   const landing = ui.sidebar === 'projects' && !ui.activeTaskId
@@ -428,6 +430,7 @@ function Shell() {
   )
   // What the Brief holds, so the badge and the list always agree.
   const inboxCount = useInboxModel({ everyHost: true }).model.needsYou
+  const pullsWaiting = usePullRequestsWaiting()
   const attentionChats = ws.tasks.filter(
     (task) => task.status !== 'archived' && (ws.unread.has(task.id) || task.status === 'needs-input'),
   ).length
@@ -627,7 +630,7 @@ function Shell() {
         {globalPage ? (
           <header className="task-header [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_.chat-switch-btn:hover_.header-secondary]:text-soft [&_.header-center]:flex [&_.header-center]:items-center [&_.header-center]:gap-2 [&_.header-center]:flex-1 [&_.header-center]:min-w-0 [&_.header-center]:overflow-hidden [&::after]:[content:''] [&::after]:flex-1 [&_.header-title]:relative [&_.header-title]:top-[-1px] [&_.header-title]:leading-[20px] [&_.header-secondary]:relative [&_.header-secondary]:top-[-1px] [&_.header-secondary]:leading-[20px] [&_.header-meta]:relative [&_.header-meta]:top-[-1px] [&_.header-meta]:leading-[20px] [&_.header-meta]:shrink-0 [&_.header-meta]:max-w-[25%] [&_.header-meta]:overflow-hidden [&_.header-meta]:text-ellipsis [&_.chat-switch-btn]:justify-start [&_.chat-switch-btn]:w-[fit-content] [&_.chat-switch-btn]:max-w-[none] [&_.chat-switch-btn]:flex-initial [&_.chat-switch-btn_.header-title]:flex-initial [&_.chat-switch-btn_.header-title]:min-w-0 [&_.chat-switch-btn_.header-title]:max-w-[none] [&_.chat-switch-btn_.header-title]:text-left [&_.chat-switch-btn_.header-secondary]:flex-initial [&_.chat-switch-btn_.header-secondary]:min-w-0 [&_.chat-switch-btn_.header-secondary]:max-w-[none] [&_.chat-switch-btn_.header-secondary]:text-left [&:has(.workspace-tool-buttons)::after]:hidden [&_.workspace-tool-buttons]:ml-auto [&_.header-center_>_svg]:flex-none [&_.header-center_.chat-switch-btn]:max-w-full [&_.header-center_.chat-switch-btn]:min-w-0 flex-none flex items-center gap-2.5 p-[0_12px_0_16px] [-webkit-app-region:drag] min-w-0 h-[46px] [border-bottom-color:var(--line)] [border-bottom:0]">
             <span className="header-title [.chat-switch-btn_&]:min-w-0 [.chat-switch-btn_&]:max-w-[none] font-medium text-body text-soft overflow-hidden text-ellipsis whitespace-nowrap max-w-full cursor-default">
-              {ui.sidebar === 'inbox' ? t('Inbox') : t('Schedules')}
+              {ui.sidebar === 'inbox' ? t('Inbox') : ui.sidebar === 'pulls' ? t('Pull requests') : t('Schedules')}
             </span>
           </header>
         ) : (
@@ -708,6 +711,16 @@ function Shell() {
               </Button>
               <Button
                 variant="secondary"
+                className={`nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start${ui.sidebar === 'pulls' ? ' active' : ''}`}
+                aria-pressed={ui.sidebar === 'pulls'}
+                aria-description={pullsWaiting ? t('{0} waiting', { 0: pullsWaiting }) : undefined}
+                onClick={() => ws.setSidebar(ui.sidebar === 'pulls' ? 'projects' : 'pulls')}
+              >
+                <GitPullRequest size={15} /> <span className="grow flex-1 min-w-0 text-left">{t('Pull requests')}</span>
+                {badge(pullsWaiting)}
+              </Button>
+              <Button
+                variant="secondary"
                 className={`nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start${ui.sidebar === 'schedules' ? ' active' : ''}`}
                 aria-pressed={ui.sidebar === 'schedules'}
                 onClick={() => ws.setSidebar(ui.sidebar === 'schedules' ? 'projects' : 'schedules')}
@@ -760,6 +773,7 @@ function Shell() {
               {landing && <HomePage />}
               {ui.sidebar === 'inbox' && <InboxPage />}
               {ui.sidebar === 'artifacts' && <PagesPage />}
+              {ui.sidebar === 'pulls' && <PullRequestsPage />}
               {ui.sidebar === 'schedules' && (
                 <SchedulesPage
                   createRequested={createScheduleRequested}

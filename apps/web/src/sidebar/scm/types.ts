@@ -10,7 +10,7 @@ export type Confirmation =
   | { kind: 'delete-branch'; name: string }
   | { kind: 'drop-stash'; oid: string; title: string }
 
-export type GitTab = 'commits' | 'stashes' | 'pulls'
+export type GitTab = 'commits' | 'stashes'
 
 /** Runs a Git operation under the repository's busy flag, reports failures and refreshes. */
 export type GitRun = (fn: () => Promise<unknown>) => Promise<void>

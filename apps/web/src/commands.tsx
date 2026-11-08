@@ -9,6 +9,7 @@ import { focusKeepsKey } from './shortcutFocus'
 import { notifyError } from './chat/Notifications'
 import { errorText } from './workspace/TaskPane'
 import type { RamuBridge } from '@ramu/shared/api'
+import type { WorkspaceUiState } from '@ramu/shared/types'
 import { invoke } from './ipc'
 import { withGitBusy } from './git/gitBusy'
 import { commitAndPush } from './git/commitShortcut'
@@ -41,7 +42,7 @@ export interface ShellControls {
   openPalette(mode: PaletteMode): void
   toggleSidebar(): void
   showSearch(): void
-  showSidebar?(tab: 'projects' | 'explorer' | 'search' | 'scm' | 'schedules' | 'inbox' | 'artifacts'): void
+  showSidebar?(tab: WorkspaceUiState['sidebar']): void
   createSchedule(): void
   addProject?(): void
   /** The bound `invoke` of the host on screen (`useHost().invoke`); thread and Git commands run there. */
@@ -476,6 +477,12 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       category: t('View'),
       keys: 'mod+shift+i',
       run: () => (shell.showSidebar ? shell.showSidebar('inbox') : ws.setSidebar('inbox')),
+    },
+    {
+      id: 'view.pulls',
+      title: t('Show pull requests'),
+      category: t('View'),
+      run: () => (shell.showSidebar ? shell.showSidebar('pulls') : ws.setSidebar('pulls')),
     },
     {
       id: 'view.schedules',

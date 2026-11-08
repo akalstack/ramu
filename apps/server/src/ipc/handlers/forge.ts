@@ -410,6 +410,13 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
         return { ...list, threads }
       },
     },
+    'forge.allPullRequests': {
+      args: z.tuple([z.boolean(), z.boolean()]),
+      run: (includeClosed: boolean, force: boolean) => {
+        if (!ctx.pullRequestIndex) throw new Error('Pull requests are unavailable on this host.')
+        return ctx.pullRequestIndex.overview({ includeClosed, force })
+      },
+    },
     'forge.mergeOptions': {
       args: z.tuple([id, id, prUrl]),
       run: (taskId: string, repoId: string, url: string) =>

@@ -1,4 +1,10 @@
-import type { PullRequestChecksState, PullRequestGroup, PullRequestStage, PullRequestSummary } from './types'
+import type {
+  PullRequestChecksState,
+  PullRequestGroup,
+  PullRequestStage,
+  PullRequestSummary,
+  RepositoryPullRequests,
+} from './types'
 
 /** Ramu's own facts about a pull request that the hosting service does not know. */
 export interface PullRequestLocalState {
@@ -100,4 +106,77 @@ export function checksRollup(
   if (checks.some((check) => check.state === 'failure')) return 'failure'
   if (checks.some((check) => check.state === 'pending')) return 'pending'
   return checks.some((check) => check.state === 'success') ? 'success' : null
+}
+
+/** The tabs of the Pull requests page, the same on the desktop and the phone. */
+export type PullRequestFilter = 'needs-you' | 'mine' | 'review' | 'open' | 'closed'
+
+export const PULL_REQUEST_FILTERS: PullRequestFilter[] = ['needs-you', 'mine', 'review', 'open', 'closed']
+
+/** English source strings for `t()`. */
+export const PULL_REQUEST_FILTER_LABEL: Record<PullRequestFilter, string> = {
+  'needs-you': 'Needs you',
+  mine: 'Yours',
+  review: 'Review requested',
+  open: 'All open',
+  closed: 'Merged and closed',
+}
+
+/** One row of the Pull requests page: a pull request with the repository it came from and where it stands. */
+export interface PullRequestRow {
+  pr: PullRequestSummary
+  stage: PullRequestStage
+  projectId: string
+  projectName: string
+  repoId: string
+  repoName: string
+  threads: { taskId: string; title: string }[]
+}
+
+/** Every repository's pull requests as one list, newest change first. */
+export function pullRequestRows(repositories: RepositoryPullRequests[]): PullRequestRow[] {
+  return repositories
+    .flatMap((repo) =>
+      repo.pullRequests.map((pr) => ({
+        pr,
+        stage: pullRequestStage(pr, repo.local[pr.url]),
+        projectId: repo.projectId,
+        projectName: repo.projectName,
+        repoId: repo.repoId,
+        repoName: repo.repoName,
+        threads: repo.threads?.[pr.url] ?? [],
+      })),
+    )
+    .sort((a, b) => b.pr.updatedAt - a.pr.updatedAt)
+}
+
+/**
+ * Whether the next step on an open pull request is the person's: a review someone asked of them, or one of their own
+ * that is ready to merge, has replies drafted, or is blocked on conflicts, failing checks or requested changes.
+ */
+export function pullRequestNeedsYou(row: Pick<PullRequestRow, 'pr' | 'stage'>): boolean {
+  if (row.pr.state !== 'open') return false
+  if (row.pr.group === 'review') return true
+  return (
+    row.pr.group === 'mine' &&
+    (stageNeedsYou(row.stage) || row.stage === 'checks-failing' || row.stage === 'changes-requested')
+  )
+}
+
+export function inPullRequestFilter(row: Pick<PullRequestRow, 'pr' | 'stage'>, filter: PullRequestFilter): boolean {
+  if (filter === 'closed') return row.pr.state !== 'open'
+  if (row.pr.state !== 'open') return false
+  if (filter === 'needs-you') return pullRequestNeedsYou(row)
+  if (filter === 'mine') return row.pr.group === 'mine'
+  if (filter === 'review') return row.pr.group === 'review'
+  return true
+}
+
+/** The search on the Pull requests page also matches the project and repository a row came from. */
+export function matchesPullRequestRow(row: PullRequestRow, search: string): boolean {
+  const words = search.trim().toLowerCase().replace(/^#/, '').split(/\s+/).filter(Boolean)
+  if (!words.length) return true
+  const haystack =
+    `${row.pr.number} ${row.pr.title} ${row.pr.author ?? ''} ${row.pr.headBranch} ${row.projectName} ${row.repoName}`.toLowerCase()
+  return words.every((word) => haystack.includes(word))
 }

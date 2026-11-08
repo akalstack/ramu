@@ -1,3 +1,4 @@
+import { isGlobalPage } from '@ramu/shared/types'
 import { t, useLanguage } from '../i18n'
 import { Check, ChevronDown, Folder, FolderPlus, GitBranch, Laptop } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -52,7 +53,7 @@ export function ProjectSwitcher() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [active, project?.id, workspace] by design; the values it reads beyond these are current as of that run
   }, [active, project?.id, workspace])
-  if (ws.ui.sidebar === 'schedules' || ws.ui.sidebar === 'inbox' || ws.ui.sidebar === 'artifacts' || !project)
+  if (isGlobalPage(ws.ui.sidebar) || !project)
     return null
   const valid = (context: string | undefined, projectId: string) =>
     context && ws.projectOf(context)?.id === projectId && (!ws.task(context) || ws.task(context)?.status !== 'archived')

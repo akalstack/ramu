@@ -12,7 +12,7 @@ import { useHostSelection } from '../workspace/HostSelection'
 import { useHost } from '../workspace/HostProvider'
 import { TOAST_MS, notices, useNotificationPanelOpen } from './notificationCenter'
 import type { InboxNotice } from '@ramu/shared/chat/notices'
-import type { ModelNotice } from '@ramu/shared/types'
+import { isGlobalPage, type ModelNotice } from '@ramu/shared/types'
 
 type Notification = { id: string; message: string; source: string }
 
@@ -262,14 +262,7 @@ export function Notifications() {
   }, [])
   const watching = useRef<(taskId: string, sessionId: string) => boolean>(() => false)
   watching.current = (taskId, sessionId) => {
-    if (
-      ws.ui.activeTaskId !== taskId ||
-      ws.composing ||
-      ws.ui.sidebar === 'schedules' ||
-      ws.ui.sidebar === 'inbox' ||
-      ws.ui.sidebar === 'artifacts'
-    )
-      return false
+    if (ws.ui.activeTaskId !== taskId || ws.composing || isGlobalPage(ws.ui.sidebar)) return false
     const state = ws.taskUi[taskId]
     const active = state?.views.find((view) => view.id === state.activeViewId)
     if (active?.kind === 'agent') return active.sessionId === sessionId

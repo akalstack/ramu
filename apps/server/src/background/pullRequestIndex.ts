@@ -3,9 +3,13 @@ import type {
   PullRequestList,
   PullRequestSummary,
   RepositoryBinding,
+  RepositoryPullRequests,
   Task,
   TaskPullRequest,
 } from '@ramu/shared/types'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+import { NO_PROJECT } from '@ramu/shared/types'
 import { pullRequestStage } from '@ramu/shared/pullRequests'
 import type { Workspace } from '../workspace/workspace'
 import type { AgentService } from '../agent'
@@ -18,6 +22,8 @@ const STALE = 2 * 60_000
 /** A repository whose service is unavailable (signed out, no CLI) is asked again only this often. */
 const UNAVAILABLE_PAUSE = 10 * 60_000
 const RATE_LIMIT_PAUSE = 10 * 60_000
+/** Repositories read at once for the Pull requests page; each read is a CLI or API call. */
+const OVERVIEW_READS = 4
 
 /** A thread's pull request, kept with what was last seen of it so the row stays right between looks. */
 interface Link {
@@ -108,14 +114,7 @@ export class PullRequestIndex {
     const links = this.links()[task.id]
     if (!links?.length) return null
     const chosen = links.findLast((entry) => entry.snapshot.state === 'open') ?? links.at(-1)!
-    const batch = this.drafts().find((entry) => entry.url === chosen.url)
-    const drafted =
-      batch?.kind === 'review'
-        ? !!batch.body || batch.comments.length > 0
-        : !!batch && batch.drafts.some((draft) => draft.outcome !== 'skipped' && !draft.postedId)
-    const working =
-      !!batch &&
-      this.agents.list(task.id).some((session) => session.id === batch.sessionId && session.state === 'running')
+    const { draftsReady, agentWorking } = this.localState(chosen.url, [task.id])
     return {
       repoId: chosen.repoId,
       number: chosen.number,
@@ -123,15 +122,89 @@ export class PullRequestIndex {
       url: chosen.url,
       state: chosen.snapshot.state,
       draft: chosen.snapshot.draft,
-      stage: pullRequestStage(chosen.snapshot, { draftsReady: drafted && !working, agentWorking: working }),
+      stage: pullRequestStage(chosen.snapshot, { draftsReady, agentWorking }),
     }
+  }
+
+  /** What Ramu itself knows about a pull request: replies drafted for it, or an agent of these threads working on it. */
+  private localState(url: string, taskIds: string[]): { draftsReady: boolean; agentWorking: boolean } {
+    const batch = this.drafts().find((entry) => entry.url === url)
+    if (!batch) return { draftsReady: false, agentWorking: false }
+    const drafted =
+      batch.kind === 'review'
+        ? !!batch.body || batch.comments.length > 0
+        : batch.drafts.some((draft) => draft.outcome !== 'skipped' && !draft.postedId)
+    const working = taskIds.some((taskId) =>
+      this.agents.list(taskId).some((session) => session.id === batch.sessionId && session.state === 'running'),
+    )
+    return { draftsReady: drafted && !working, agentWorking: working }
+  }
+
+  /**
+   * Every Git repository of every project, read through the same cache as the per-repository list, a few at a time.
+   * One repository failing leaves its error on its own entry rather than failing the page.
+   */
+  async overview(options: { includeClosed: boolean; force: boolean }): Promise<RepositoryPullRequests[]> {
+    const repositories = this.workspace
+      .listProjects()
+      .filter((project) => project.id !== NO_PROJECT)
+      .flatMap((project) =>
+        this.workspace
+          .listRepositories(project.id)
+          .filter((repo) => existsSync(join(repo.root, '.git')))
+          .map((repo) => ({ project, repo })),
+      )
+    const titles = new Map(
+      this.workspace
+        .listTasks()
+        .filter((task) => task.status !== 'archived')
+        .map((task) => [task.id, task.title]),
+    )
+    const results: RepositoryPullRequests[] = new Array(repositories.length)
+    let next = 0
+    const worker = async () => {
+      while (next < repositories.length) {
+        const position = next++
+        const { project, repo } = repositories[position]!
+        const base = { projectId: project.id, projectName: project.name, repoId: repo.id, repoName: repo.name }
+        try {
+          // The page refreshes on its own timer and on request; a list the background look read recently is current enough.
+          const list = await this.list(repo.root, repo.id, { ...options, maxAge: STALE })
+          const threads: Record<string, { taskId: string; title: string }[]> = {}
+          const local: RepositoryPullRequests['local'] = {}
+          for (const pr of list.pullRequests) {
+            const linked = this.threadsFor(pr.url).filter((taskId) => titles.has(taskId))
+            if (linked.length) threads[pr.url] = linked.map((taskId) => ({ taskId, title: titles.get(taskId)! }))
+            const state = this.localState(pr.url, linked)
+            if (state.draftsReady || state.agentWorking) local[pr.url] = state
+          }
+          results[position] = { ...base, ...list, threads, local }
+        } catch (error) {
+          results[position] = {
+            ...base,
+            availability: 'ready',
+            viewer: null,
+            pullRequests: [],
+            local: {},
+            error: error instanceof Error ? error.message : String(error),
+          }
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(OVERVIEW_READS, repositories.length) }, worker))
+    const seen = new Set<string>()
+    return results.map((entry) => {
+      const pullRequests = entry.pullRequests.filter((pr) => !seen.has(pr.url))
+      for (const pr of pullRequests) seen.add(pr.url)
+      return { ...entry, pullRequests }
+    })
   }
 
   /** The list for the Pull requests tab: the cached one when fresh, otherwise a new read. */
   async list(
     cwd: string,
     repoId: string,
-    options: { includeClosed: boolean; force: boolean },
+    options: { includeClosed: boolean; force: boolean; maxAge?: number },
   ): Promise<PullRequestList> {
     if (options.includeClosed) {
       const list = await listPullRequests(cwd, { includeClosed: true })
@@ -139,7 +212,7 @@ export class PullRequestIndex {
       return list
     }
     const entry = this.entries.get(repoId)
-    if (!options.force && entry?.list && Date.now() - entry.at < 15_000) return entry.list
+    if (!options.force && entry?.list && Date.now() - entry.at < (options.maxAge ?? 15_000)) return entry.list
     return (await this.read(repoId, cwd)) ?? { availability: 'ready', viewer: null, pullRequests: [] }
   }
 

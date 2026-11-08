@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { PullRequestSummary } from '../src/types'
-import { groupPullRequests, matchesPullRequest, pullRequestGlyph, pullRequestStage } from '../src/pullRequests'
+import type { PullRequestSummary, RepositoryPullRequests } from '../src/types'
+import {
+  groupPullRequests,
+  inPullRequestFilter,
+  matchesPullRequest,
+  matchesPullRequestRow,
+  pullRequestGlyph,
+  pullRequestRows,
+  pullRequestStage,
+} from '../src/pullRequests'
 
 const pr = (overrides: Partial<PullRequestSummary> = {}): PullRequestSummary => ({
   number: 4,
@@ -68,5 +76,53 @@ describe('pull request lists', () => {
     expect(matchesPullRequest(pr(), 'csv ana')).toBe(true)
     expect(matchesPullRequest(pr(), 'export bo')).toBe(false)
     expect(matchesPullRequest(pr(), '  ')).toBe(true)
+  })
+})
+
+describe('the Pull requests page', () => {
+  const repo = (overrides: Partial<RepositoryPullRequests>): RepositoryPullRequests => ({
+    projectId: 'p',
+    projectName: 'Bakery',
+    repoId: 'r',
+    repoName: 'site',
+    availability: 'ready',
+    viewer: 'ana',
+    pullRequests: [],
+    local: {},
+    ...overrides,
+  })
+  const rows = pullRequestRows([
+    repo({
+      pullRequests: [
+        pr({ url: 'u/1', number: 1, updatedAt: 1, reviewDecision: 'approved' }),
+        pr({ url: 'u/2', number: 2, updatedAt: 5 }),
+        pr({ url: 'u/3', number: 3, updatedAt: 3, group: 'review', author: 'bo' }),
+      ],
+      local: { 'u/2': { draftsReady: true } },
+      threads: { 'u/2': [{ taskId: 't', title: 'CSV' }] },
+    }),
+    repo({
+      projectName: 'Shop',
+      repoName: 'api',
+      pullRequests: [pr({ url: 'u/4', number: 4, updatedAt: 4, state: 'merged' }), pr({ url: 'u/5', group: 'other' })],
+    }),
+  ])
+
+  it('joins every repository newest first, with Ramu’s own stage and threads', () => {
+    expect(rows.map((row) => row.pr.number)).toEqual([2, 4, 3, 1, 4])
+    expect(rows[0]).toMatchObject({ stage: 'replies-ready', threads: [{ taskId: 't', title: 'CSV' }] })
+  })
+
+  it('puts reviews asked of you and your own pull requests waiting on you under Needs you', () => {
+    const numbers = (filter: Parameters<typeof inPullRequestFilter>[1]) =>
+      rows.filter((row) => inPullRequestFilter(row, filter)).map((row) => row.pr.number)
+    expect(numbers('needs-you')).toEqual([2, 3, 1])
+    expect(numbers('review')).toEqual([3])
+    expect(numbers('closed')).toEqual([4])
+    expect(numbers('open')).toHaveLength(4)
+  })
+
+  it('finds a row by its project or repository', () => {
+    expect(rows.filter((row) => matchesPullRequestRow(row, 'shop api'))).toHaveLength(2)
   })
 })

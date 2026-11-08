@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PullRequestSummary, RepositoryBinding, Task } from '@ramu/shared/types'
 import { openDb, type Db } from '../src/db'
@@ -131,5 +132,40 @@ describe('pull requests on thread rows', () => {
       },
     ]
     expect(index.forTask(tasks[0]!)?.stage).toBe('replies-ready')
+  })
+})
+
+/** This repository's own checkout: the page lists only folders with Git. */
+const CHECKOUT = fileURLToPath(new URL('../../..', import.meta.url))
+
+describe('the Pull requests page', () => {
+  beforeEach(() => {
+    vi.spyOn(ws, 'listProjects').mockReturnValue([
+      { id: 'p', name: 'Shop' },
+      { id: 'q', name: 'Shop again' },
+      { id: 'no-project', name: 'No project' },
+    ] as ReturnType<Workspace['listProjects']>)
+    vi.spyOn(ws, 'listRepositories').mockImplementation((projectId: string) =>
+      projectId === 'no-project' ? [] : [{ id: `repo-${projectId}`, projectId, name: 'r', root: CHECKOUT }],
+    )
+  })
+
+  it('lists every project repository once, with the threads on each pull request', async () => {
+    await at(0)
+    const pages = await index.overview({ includeClosed: false, force: true })
+    expect(pages.map((entry) => entry.projectName)).toEqual(['Shop', 'Shop again'])
+    // The same remote reached from two projects shows its pull requests only under the first.
+    expect(pages[0]!.pullRequests.map((entry) => entry.number)).toEqual([1, 2, 3])
+    expect(pages[1]!.pullRequests).toEqual([])
+    expect(pages[0]!.threads?.['https://github.com/o/r/pull/1']).toEqual([{ taskId: 'worktree', title: 'worktree' }])
+  })
+
+  it('keeps the other repositories when one cannot be read', async () => {
+    vi.mocked(listPullRequests)
+      .mockRejectedValueOnce(new Error('gh: not signed in'))
+      .mockResolvedValue({ availability: 'ready', viewer: 'me', pullRequests: [pr({})] })
+    const pages = await index.overview({ includeClosed: false, force: true })
+    expect(pages.map((entry) => entry.error ?? null)).toEqual(['gh: not signed in', null])
+    expect(pages[1]!.pullRequests).toHaveLength(1)
   })
 })
