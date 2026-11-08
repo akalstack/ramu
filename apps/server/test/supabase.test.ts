@@ -66,6 +66,13 @@ async function fake(projects: Project[]) {
           },
         ])
       if (project[2] === '/database/password' && req.method === 'PATCH') return send({ message: 'ok' })
+      if (project[2] === '/analytics/endpoints/usage.api-counts?interval=7day')
+        return send({
+          result: [
+            { total_rest_requests: 100, total_auth_requests: 5, total_storage_requests: 2, total_realtime_requests: 0 },
+            { total_rest_requests: 40, total_auth_requests: 1, total_storage_requests: 0, total_realtime_requests: 3 },
+          ],
+        })
       res.writeHead(500).end(`no recorded reply for ${line}`)
     })
   })
@@ -113,6 +120,20 @@ describe('Supabase', () => {
     expect(requests.some((request) => request.line === 'PATCH /projects/ref2/database/password')).toBe(true)
     // No branch per pull request: Supabase branching needs a paid plan.
     expect(adapter.removeBranch).toBeUndefined()
+  })
+
+  it('reports the last seven days of requests per service, the span Supabase’s API covers', async () => {
+    const { adapter } = await fake([
+      { id: 'ref1', ref: 'ref1', name: 'shop', status: 'ACTIVE_HEALTHY', created_at: '' },
+    ])
+    const usage = await adapter.usage!(auth, 'ref1')
+    expect(usage.figures.map((figure) => [figure.service, figure.used, figure.limit])).toEqual([
+      ['Database API requests', 140, null],
+      ['Auth requests', 6, null],
+      ['Storage requests', 2, null],
+      ['Realtime requests', 3, null],
+    ])
+    expect(usage.period!.end! - usage.period!.start).toBe(7 * 24 * 60 * 60_000)
   })
 
   it('never takes over an older project of the same name', async () => {

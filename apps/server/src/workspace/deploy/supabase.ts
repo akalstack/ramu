@@ -3,7 +3,7 @@
 // `<name>-preview`, and never touch production data. Pull requests share that project; there is no branch per pull
 // request. Ramu sets each project's database password itself and keeps it only in this host's credential store.
 import { randomBytes } from 'node:crypto'
-import { platformCall, type HostingAuth } from './adapter'
+import { DeployError, platformCall, type HostingAuth } from './adapter'
 import { registerResourceAdapter, type ProvisionedResource, type ResourceAdapter } from './resource'
 
 interface SupabaseProject {
@@ -37,6 +37,15 @@ const READY_TIMEOUT_MS = 5 * 60_000
 
 const password = () => randomBytes(24).toString('base64url')
 const refOf = (project: SupabaseProject) => project.ref ?? project.id
+
+/** The request counts Supabase's usage endpoint reports, with the name the sheet shows for each. */
+const SUPABASE_REQUESTS = [
+  ['total_rest_requests', 'Database API requests'],
+  ['total_auth_requests', 'Auth requests'],
+  ['total_storage_requests', 'Storage requests'],
+  ['total_realtime_requests', 'Realtime requests'],
+] as const
+type SupabaseRequestCount = (typeof SUPABASE_REQUESTS)[number][0]
 
 /** Supabase, reached at `api` (the real API unless a test points it at a fake server). */
 export function supabaseAdapter(
@@ -139,6 +148,29 @@ export function supabaseAdapter(
       return found ? reuse(auth, found) : null
     },
     page: (id) => `https://supabase.com/dashboard/project/${encodeURIComponent(id)}`,
+    async usage(auth, id) {
+      // Supabase's API counts requests over at most the last seven days, so the figures cover that span, not the
+      // billing period, and its plan quotas are not in the API, so none is shown or guessed.
+      const counts = await call<{ result?: Partial<Record<SupabaseRequestCount, number>>[]; error?: unknown }>(
+        `${project(id)}/analytics/endpoints/usage.api-counts?interval=7day`,
+        auth,
+        'reading usage',
+      )
+      if (counts.error) throw new DeployError('Supabase did not report usage for this project.', 'not-found')
+      const rows = counts.result ?? []
+      const end = Date.now()
+      return {
+        period: { start: end - 7 * 24 * 60 * 60_000, end },
+        figures: SUPABASE_REQUESTS.map(([key, service]) => ({
+          metric: 'service' as const,
+          service,
+          used: rows.reduce((sum, row) => sum + (row[key] ?? 0), 0),
+          unit: 'requests',
+          limit: null,
+        })),
+        billingPage: 'https://supabase.com/dashboard/org/_/usage',
+      }
+    },
     async branch(auth, id, name) {
       const { name: main } = await call<SupabaseProject>(project(id), auth, 'reading the project')
       return (await ensure(auth, `${main}-${name}`)).variables
