@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   branchActionBlock,
   branchOptionBlock,
+  routeMergeConflicts,
   deletableBranches,
   runBranchAction,
 } from '../src/runtime/branchActions.ts'
@@ -115,4 +116,18 @@ test('a new or renamed branch needs a valid name no branch has yet', () => {
   assert.equal(branchActionBlock({ kind: 'create-from', name: 'fix', from: 'main' }, context), null)
   const detached = { ...context, status: { branch: null, entries: [] } }
   assert.equal(branchOptionBlock('rename', detached), 'Switch to a branch before renaming it.')
+})
+
+test('a merge that stopped on conflicts shows Merge changes, says what to do, then opens the first file', () => {
+  const steps = []
+  const screen = {
+    showConflicts: () => steps.push('changes'),
+    notify: (message) => steps.push(`notice: ${message}`),
+    openConflict: (path) => steps.push(`open ${path}`),
+  }
+  routeMergeConflicts(['src/a.ts', 'src/b.ts'], screen, 'Choose a side')
+  assert.deepEqual(steps, ['changes', 'notice: Choose a side', 'open src/a.ts'])
+  steps.length = 0
+  routeMergeConflicts([], screen, 'Choose a side')
+  assert.deepEqual(steps, [])
 })

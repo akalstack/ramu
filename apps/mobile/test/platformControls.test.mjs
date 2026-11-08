@@ -8190,6 +8190,49 @@ test('a device without Change settings sees a host’s settings rows read-only',
   assert.deepEqual(rows(false), [false])
 })
 
+test('a choice with an unset option shows it while unset and removes the setting when chosen', () => {
+  const row = {
+    path: 'agentBrowser.providerOverrides.codex',
+    kind: 'choice',
+    title: 'Codex',
+    unsetLabel: 'Use default',
+    options: [
+      { value: 'provider', label: 'Provider browser setup' },
+      { value: 'integrated', label: 'Ramu integrated browser' },
+    ],
+  }
+  const { HostGroups } = load('components/SettingRows.tsx', 'ios', {
+    '../runtime/store': { useStore: () => ({ language: 'en' }) },
+    '../runtime/settingsModel': { ...settingsModel, visibleGroups: () => [{ title: null, rows: [row] }] },
+  })
+  const sets = []
+  let value
+  const choice = () => {
+    const host = {
+      state: { status: 'ready', settings: [{ path: row.path, schema: { enum: ['integrated', 'provider'] }, value }] },
+      read: () => value,
+      set: (path, next) => sets.push([path, next]),
+    }
+    const element = nodes(HostGroups({ section: 'browser', host })).find((node) => node.props?.row)
+    return element.type(element.props)
+  }
+  let rendered = choice()
+  assert.equal(rendered.props.value, null)
+  assert.deepEqual(
+    Array.from(rendered.props.options, (option) => option.value),
+    [null, 'provider', 'integrated'],
+  )
+  rendered.props.onChange('integrated')
+  value = 'integrated'
+  rendered = choice()
+  assert.equal(rendered.props.value, 'integrated')
+  rendered.props.onChange(null)
+  assert.deepEqual(sets, [
+    [row.path, 'integrated'],
+    [row.path, undefined],
+  ])
+})
+
 test('an error toast sits under the header and never blocks a press, while an Undo toast stays within reach', () => {
   const render = (toast) => {
     const { UndoToast } = load('components/UndoToast.tsx', 'ios', {

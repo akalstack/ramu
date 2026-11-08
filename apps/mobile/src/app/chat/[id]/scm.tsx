@@ -63,7 +63,7 @@ import { Glass, floatingChrome } from '../../../components/Glass'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { CurrentPullRequest } from '../../../components/PullRequestSections'
 import { canWriteHost } from '../../../runtime/viewerAccess'
-import { runBranchAction, type BranchAction } from '../../../runtime/branchActions'
+import { routeMergeConflicts, runBranchAction, type BranchAction } from '../../../runtime/branchActions'
 import { BranchActionOptions, BranchActionSheets, type BranchSheet } from '../../../components/BranchActionSheets'
 import {
   ALL_FILES_LABEL,
@@ -837,13 +837,20 @@ export default function SourceControl() {
         { computerId: chat.computerId, taskId: chat.taskId, repoId: binding.repoId },
         action,
       ))
-    }, BRANCH_DONE[action.kind]).then(() => {
-      if (!conflicts.length) return
-      setTab('changes')
-      setFolded((f) => ({ ...f, conflicts: false }))
-      notify(tr('Merge stopped on conflicts. Choose a side for each, then Continue.'), true)
-      openConflict(conflicts[0]!)
-    })
+    }, BRANCH_DONE[action.kind]).then(() =>
+      routeMergeConflicts(
+        conflicts,
+        {
+          showConflicts: () => {
+            setTab('changes')
+            setFolded((f) => ({ ...f, conflicts: false }))
+          },
+          notify: (message) => notify(message, true),
+          openConflict,
+        },
+        tr('Merge stopped on conflicts. Choose a side for each, then Continue.'),
+      ),
+    )
   }
   const createBranch = () => {
     const name = branchName.trim()

@@ -95,3 +95,20 @@ export async function runBranchAction(
     }
   return { conflicts: [] }
 }
+
+/**
+ * Where a merge that stopped on conflicts leads: the Changes tab with its Merge changes group open, a notice saying what
+ * to do, and the first conflicted file; the rest follow from that file's Next conflicted file. Nothing happens without
+ * conflicts.
+ */
+export function routeMergeConflicts(
+  conflicts: readonly string[],
+  screen: { showConflicts(): void; notify(message: string): void; openConflict(path: string): void },
+  message: string,
+): void {
+  const first = conflicts[0]
+  if (first === undefined) return
+  screen.showConflicts()
+  screen.notify(message)
+  screen.openConflict(first)
+}

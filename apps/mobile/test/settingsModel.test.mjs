@@ -382,3 +382,26 @@ test('a missing provider switch reads as on, and the last provider on cannot be 
   // With two on, either may go off.
   assert.ok(providerSwitches(() => undefined).every(({ enabled, locked }) => enabled && !locked))
 })
+
+test('each provider can override the agent browser, and Use default removes its override', async () => {
+  const field = setting('agentBrowser.providerOverrides.codex', 'provider', {
+    type: 'string',
+    enum: ['integrated', 'provider'],
+  })
+  const row = visibleGroups('browser', [field])
+    .flatMap((group) => group.rows)
+    .find((entry) => entry.path === field.path)
+  assert.equal(row.title, 'Codex')
+  assert.equal(row.unsetLabel, 'Use default')
+  const calls = []
+  await patchSetting(
+    async (method, edits) => {
+      calls.push(edits)
+      return snapshot({ ...field, value: undefined })
+    },
+    snapshot(field),
+    field.path,
+    undefined,
+  )
+  assert.deepEqual(calls[0], [{ ...field, before: 'provider', value: undefined }])
+})

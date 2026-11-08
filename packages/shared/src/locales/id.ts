@@ -6369,4 +6369,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Showing the first {0} matches. Refine your search.': 'Menampilkan {0} hasil pertama. Persempit pencarian.',
   'No matches in these files.': 'Tidak ada yang cocok di berkas ini.',
   'Line {0}: {1}': 'Baris {0}: {1}',
+  'Provider browser setup uses its existing browser tools and sessions, which Ramu cannot show or import.':
+    'Pengaturan browser provider memakai alat dan sesi browser yang sudah ada, yang tidak bisa ditampilkan atau diimpor Ramu.',
 }

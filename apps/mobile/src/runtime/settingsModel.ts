@@ -7,7 +7,7 @@ import {
   type LimitChoice,
 } from '@ramu/shared/chat/limitPolicy'
 import { HOST_ONLY_SECTIONS, SETTINGS_MENU, type PhoneSettingsMenuId } from '@ramu/shared/settingsMenu'
-import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
+import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
 import type { AgentProvider } from '@ramu/shared/types'
 import type { SettingEdit, SettingSchema, SettingsSnapshot, SharedSetting } from '@ramu/shared/settingsCompatibility'
 
@@ -87,7 +87,8 @@ interface RowBase {
 }
 export type SettingRow =
   | (RowBase & { kind: 'toggle' })
-  | (RowBase & { kind: 'choice'; options: Option[] })
+  /** `unsetLabel` adds a first choice that removes the setting, such as "Use default" for a per-provider override. */
+  | (RowBase & { kind: 'choice'; options: Option[]; unsetLabel?: string })
   | (RowBase & { kind: 'text'; placeholder?: string; maxLength?: number })
   /**
    * One of the host's model steps, stored as provider, model and effort (and the step's id with `withId`, for a setting
@@ -281,6 +282,19 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
             { value: 'integrated', label: 'Ramu integrated browser' },
           ],
         },
+        // One provider can use another setup than the default, as on the desktop.
+        ...AGENT_PROVIDERS.map((provider): SettingRow => ({
+          kind: 'choice',
+          path: `agentBrowser.providerOverrides.${provider}`,
+          title: providerName(provider),
+          help: 'Provider browser setup uses its existing browser tools and sessions, which Ramu cannot show or import.',
+          words: 'browser provider override integrated',
+          unsetLabel: 'Use default',
+          options: [
+            { value: 'provider', label: 'Provider browser setup' },
+            { value: 'integrated', label: 'Ramu integrated browser' },
+          ],
+        })),
       ],
     },
   ],

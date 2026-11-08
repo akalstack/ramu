@@ -286,14 +286,20 @@ function HostRow({ row, host, disabled }: { row: SettingRow; host: Host; disable
     )
   const schema =
     host.state.status === 'ready' ? host.state.settings.find((s) => s.path === row.path)?.schema : undefined
+  // An unset setting shows as its unset choice; choosing it removes the setting rather than storing null.
+  const unset = row.unsetLabel !== undefined
+  const shown = unset && (value === undefined || value === null) ? null : value
   return (
     <ChoiceRow
       title={row.title}
       help={row.help}
-      value={value}
-      options={allowedOptions(row.options, schema, value)}
+      value={shown}
+      options={[
+        ...(unset ? [{ value: null, label: row.unsetLabel! }] : []),
+        ...allowedOptions(row.options, schema, shown === null ? undefined : shown),
+      ]}
       disabled={disabled}
-      onChange={(next) => host.set(row.path, next)}
+      onChange={(next) => host.set(row.path, unset && next === null ? undefined : next)}
     />
   )
 }
