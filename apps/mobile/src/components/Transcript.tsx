@@ -44,6 +44,9 @@ import {
   SquareTerminal,
   Wrench,
   X,
+  Target,
+  Play,
+  CirclePause,
   CircleAlert,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
@@ -787,7 +790,7 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
         </TurnSummary>
       )
     case 'note':
-      return <NoteRow item={item} chat={chat} />
+      return item.goalNote ? <GoalNote item={item} /> : <NoteRow item={item} chat={chat} />
     case 'end':
       return null
   }
@@ -1955,6 +1958,64 @@ function ChangesCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: '
         </Pressable>
       ) : null}
     </Card>
+  )
+}
+
+/**
+ * A turning point in a goal's life (set, paused, failed check…), left where it happened as the same quiet activity row
+ * as a finished goal, as on the desktop; tapping it shows the goal and what happened.
+ */
+function GoalNote({ item }: { item: Extract<TranscriptItem, { kind: 'note' }> }) {
+  const { c } = useTheme()
+  const strings = useT()
+  const [open, setOpen] = useState(false)
+  const toggled = useContext(RowToggle)
+  const type = item.goalNote!
+  const warn = type === 'blocked' || type === 'stalled' || type === 'verify-failed' || type === 'turn-limit'
+  const Icon = warn
+    ? CircleAlert
+    : type === 'paused'
+      ? CirclePause
+      : type === 'resumed'
+        ? Play
+        : type === 'cleared'
+          ? X
+          : Target
+  const color = warn ? c.warn : type === 'paused' || type === 'cleared' ? c.muted : c.accent
+  const title = strings.goalNotes[type] ?? item.title
+  return (
+    <View style={{ gap: space.s }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={item.objective ? `${title}: ${item.objective}` : title}
+        accessibilityState={{ expanded: open }}
+        onPress={() => {
+          tap()
+          toggled()
+          setOpen((value) => !value)
+        }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
+      >
+        <Icon size={14} color={color} strokeWidth={1.8} />
+        <T size={font.control} tone="soft">
+          {title}
+        </T>
+        <T size={font.control} tone="muted" numberOfLines={1} style={{ flex: 1 }}>
+          {item.objective ?? ''}
+        </T>
+        <Disclosure open={open} color={c.muted} />
+      </Pressable>
+      <Collapse open={open}>
+        <View style={{ gap: space.s, paddingLeft: 14 + space.s }}>
+          {item.objective ? <T>{item.objective}</T> : null}
+          {item.detail ? (
+            <T size={font.caption} tone={warn ? 'warn' : 'muted'} copyable={item.detail}>
+              {item.detail}
+            </T>
+          ) : null}
+        </View>
+      </Collapse>
+    </View>
   )
 }
 

@@ -6920,7 +6920,7 @@ test('plan usage uses a full-screen settings surface and groups windows under re
     },
   })
   const render = () => hooks.render(() => PlanUsageSheet({ hosts: ['host'], open: true, onClose() {} }))
-  let tree = render()
+  const tree = render()
   assert.equal(find(tree, 'Sheet').props.presentation, 'screen')
   const headings = nodes(tree)
     .filter((node) => node.type === 'T' && node.props.weight === '600')
@@ -6940,10 +6940,7 @@ test('plan usage uses a full-screen settings surface and groups windows under re
     !nodes(tree).some((node) => node.props?.children === account),
     'opaque IDs stay out of the normal reading flow',
   )
-  find(tree, 'Toggle').props.onValueChange(true)
-  tree = render()
-  assert.ok(!nodes(tree).some((node) => node.props?.children === account), 'details never show the raw id')
-  assert.equal(store.drafts['usage-show-details'], 'yes')
+  assert.ok(!nodes(tree).some((node) => node.type === 'Toggle'), 'account details show on the plan, with no toggle')
   hooks.dispose()
 })
 

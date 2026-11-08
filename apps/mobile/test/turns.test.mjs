@@ -129,6 +129,9 @@ test('a failed verification, a stall and the completion evidence get their own l
   )
   assert.equal(notes[1].detail, 'pnpm test · Exit 1\nFAIL login.test.ts\nexpected 200, got 500')
   assert.match(notes[3].detail, /^No progress/)
+  // Each note names its goal for the activity row; only a failure or a stall adds a detail beneath it.
+  assert.ok(notes.every((note) => note.objective === goal().objective))
+  assert.equal(notes[0].detail, undefined)
   const done = items.find((item) => item.kind === 'goal')
   assert.equal(done.detail, 'Checks: pnpm test (passed)\nChanged: src/login.ts')
 })

@@ -279,6 +279,18 @@ interface Store extends State {
   dismissNotification(index: number): void
 }
 const Context = createContext<Store | null>(null)
+/** One entry per id, the latest kept: a saved profile from an interrupted write can hold the same host or send twice. */
+function uniqueById<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Set<string>()
+  const kept: T[] = []
+  for (let index = items.length - 1; index >= 0; index--) {
+    const item = items[index]!
+    if (seen.has(item.id)) continue
+    seen.add(item.id)
+    kept.push(item)
+  }
+  return kept.length === items.length ? items : kept.reverse()
+}
 const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 export const scoped = (computer: string, id: string) => `${computer}:${id}`
 const raw = (id: string) => id.slice(id.indexOf(':') + 1)
@@ -314,9 +326,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ...defaults,
       ...saved,
       ready: false,
-      chats: saved.chats.map((chat) => ({ ...chat, items: normalizeHelperGroups(chat.items) })),
-      computers: saved.computers.map((c) => ({ ...c, status: restoredStatus(c.status) })),
-      outbox: restoreOutbox(saved.outbox, sendJournal),
+      chats: uniqueById(saved.chats).map((chat) => ({ ...chat, items: normalizeHelperGroups(chat.items) })),
+      computers: uniqueById(saved.computers).map((c) => ({ ...c, status: restoredStatus(c.status) })),
+      outbox: uniqueById(restoreOutbox(saved.outbox, sendJournal)),
       // The drafts file is newer than the profile's copy whenever both exist.
       drafts: readDrafts() ?? saved.drafts,
     }
@@ -408,7 +420,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   inboxRef.current = inbox
   const change = (fn: (s: State) => State) => {
     const changed = fn(ref.current)
-    const next = { ...changed, outbox: reconcileDelivered(changed.outbox, changed.chats) }
+    const next = {
+      ...changed,
+      computers: uniqueById(changed.computers),
+      outbox: uniqueById(reconcileDelivered(changed.outbox, changed.chats)),
+    }
     ref.current = next
     setState(next)
   }

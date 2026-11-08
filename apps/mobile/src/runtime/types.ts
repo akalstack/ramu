@@ -160,6 +160,8 @@ export type TranscriptItem = (
       failed?: boolean
       /** Set on a goal's turning-point note, so the title follows the app language. */
       goalNote?: import('@ramu/shared/chat/goalHistory').GoalChangeType
+      /** The goal a turning-point note is about. */
+      objective?: string
       wait?: boolean
       /** Set on the usage-limit note: when it is expected to lift, and whether that time is only a guess. */
       limit?: { retryAt: number; guessed: boolean; provider?: import('@ramu/shared/types').AgentProvider }

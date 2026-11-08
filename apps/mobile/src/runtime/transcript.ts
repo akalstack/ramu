@@ -152,7 +152,8 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
         id,
         title: verb,
         goalNote: type,
-        detail: facts.length ? facts.join('\n') : goal.objective,
+        objective: goal.objective,
+        ...(facts.length ? { detail: facts.join('\n') } : {}),
         failed: type === 'blocked' || type === 'stalled' || type === 'verify-failed',
       })
     } else if (e.kind === 'schedule')

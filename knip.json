@@ -37,7 +37,7 @@
     "apps/mobile": {
       "ignoreBinaries": ["eas"],
       "ignoreDependencies": ["expo-updates", "escape-string-regexp"],
-      "entry": ["plugins/*.cjs"]
+      "entry": ["plugins/*.cjs", "src/runtime/isomorphicWebcrypto.ts"]
     },
     "apps/server": {
       "ignoreBinaries": ["osascript"],

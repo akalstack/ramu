@@ -26,6 +26,10 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
       return { type: 'sourceFile', filePath: path.join(root, esm ? 'esm' : '', 'crypto.js') }
     }
   }
+  // lib0, which Yjs uses, imports this on React Native without installing it; it only needs random numbers.
+  if (moduleName === 'isomorphic-webcrypto/src/react-native') {
+    return { type: 'sourceFile', filePath: path.join(__dirname, 'src', 'runtime', 'isomorphicWebcrypto.ts') }
+  }
   if (pinned.has(name)) {
     return context.resolveRequest({ ...context, originModulePath: path.join(local, 'index.js') }, moduleName, platform)
   }

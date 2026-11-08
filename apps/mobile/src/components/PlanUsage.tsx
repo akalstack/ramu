@@ -1,5 +1,5 @@
 import { UsageAcrossHosts } from './UsageAcrossHosts'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ProviderIcon } from './Logos'
 import { Pressable, View } from 'react-native'
 import { Gauge, Monitor, Network, Settings } from 'lucide-react-native'
@@ -21,22 +21,21 @@ import { useAccountLogins } from '../runtime/useAccountLogins'
 import { useSay } from '../i18n'
 import { providerNames } from '../runtime/types'
 import { font, space, useTheme } from '../theme'
-import { Card, Divider, Row, SectionLabel, Sheet, T, Toggle } from './ui'
+import { Card, Divider, Row, SectionLabel, Sheet, T } from './ui'
 import { SheetGroup, SheetOption } from './SheetOptions'
 
 export function PlanUsageReading({
   reading: r,
   offline = false,
   compact = false,
-  details = true,
   account,
 }: {
   /** The login's name as people read it; without one only the provider is named. */
   account?: string
   reading: UsageReading
   offline?: boolean
+  /** Inside an account's card, which names the plan and how fresh its readings are once for all its windows. */
   compact?: boolean
-  details?: boolean
 }) {
   const { c } = useTheme()
   const { language } = useStore()
@@ -116,8 +115,8 @@ export function PlanUsageReading({
       <T tone="muted" size={font.caption}>
         {[
           reset,
-          r.plan ? planName(r.plan) : null,
-          details
+          !compact && r.plan ? planName(r.plan) : null,
+          !compact
             ? `${lastKnown ? (id ? 'terakhir dilaporkan' : 'last reported') : id ? 'diperbarui' : 'updated'} ${relative(r.updatedAt, id)}`
             : null,
         ]
@@ -125,6 +124,27 @@ export function PlanUsageReading({
           .join(' · ')}
       </T>
     </View>
+  )
+}
+
+/**
+ * An account's plan, and when its readings are old how long ago they were updated, as the desktop shows them: once
+ * for the account, not on every window.
+ */
+function AccountFacts({ readings, offline }: { readings: UsageReading[]; offline: boolean }) {
+  const { language } = useStore()
+  const id = language === 'id'
+  const now = Date.now()
+  const plan = [...readings].filter((r) => r.plan).sort((a, b) => b.updatedAt - a.updatedAt)[0]?.plan
+  const newest = Math.max(...readings.map((r) => r.updatedAt))
+  const stale = offline || readings.every((r) => usageStale(r, now))
+  if (!plan && !stale) return null
+  return (
+    <T size={font.caption} tone={stale ? 'warn' : 'muted'}>
+      {[plan ? planName(plan) : null, stale ? `${id ? 'Diperbarui' : 'Updated'} ${relative(newest, id)}` : null]
+        .filter(Boolean)
+        .join(' · ')}
+    </T>
   )
 }
 
@@ -145,7 +165,7 @@ function relative(at: number, id: boolean): string {
 }
 
 export function PlanUsageSheet({
-  hosts,
+  hosts: hostList,
   open,
   onClose,
   provider,
@@ -165,8 +185,10 @@ export function PlanUsageSheet({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [filter, setFilter] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [details, setDetails] = useState(() => store.drafts?.['usage-show-details'] === 'yes')
   const say = useSay()
+  const hostKey = hostList.join('\n')
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the ids, so a caller's new array of the same hosts keeps it
+  const hosts = useMemo(() => Array.from(new Set(hostList)), [hostKey])
   const logins = useAccountLogins(hosts, open)
   const refreshing = useRef<number | null>(null)
   const generation = useRef(0)
@@ -261,26 +283,6 @@ export function PlanUsageSheet({
       title={store.language === 'id' ? 'Penggunaan paket' : 'Plan usage'}
     >
       {context}
-      <Card style={{ marginHorizontal: space.m, marginTop: space.m }}>
-        <Row>
-          <View style={{ flex: 1, gap: space.xs }}>
-            <T>{store.language === 'id' ? 'Detail akun' : 'Account details'}</T>
-            <T size={font.caption} tone="muted">
-              {store.language === 'id'
-                ? 'Tampilkan kapan setiap batas terakhir diperbarui.'
-                : 'Show when each limit was last updated.'}
-            </T>
-          </View>
-          <Toggle
-            accessibilityLabel={store.language === 'id' ? 'Detail akun' : 'Account details'}
-            value={details}
-            onValueChange={(value) => {
-              setDetails(value)
-              store.setDraft('usage-show-details', value ? 'yes' : '')
-            }}
-          />
-        </Row>
-      </Card>
       <T tone="muted" style={{ padding: space.m }}>
         {store.language === 'id' ? 'Dibagikan antar thread pada akun ini' : 'Shared across threads on this account'}
       </T>
@@ -391,16 +393,12 @@ export function PlanUsageSheet({
                                   {providerNames[group.provider]} · {title}
                                 </T>
                               </View>
+                              <AccountFacts readings={readings} offline={!store.isOnline(id)} />
                             </View>
                             {readings.map((reading) => (
                               <View key={`${reading.window}:${reading.scope ?? ''}`}>
                                 <Divider />
-                                <PlanUsageReading
-                                  reading={reading}
-                                  compact
-                                  details={details}
-                                  offline={!store.isOnline(id)}
-                                />
+                                <PlanUsageReading reading={reading} compact offline={!store.isOnline(id)} />
                               </View>
                             ))}
                           </Card>
