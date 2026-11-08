@@ -22,7 +22,7 @@ Schedules run once, daily, weekly, monthly or every few minutes (at least five).
 
 The host also follows deployed apps without a schedule: it wakes a thread when a deployment it started, or one of a push or merge from Ramu, finishes ([When a deployment finishes](deploy.md#when-a-deployment-finishes)), and when a store build and its upload finish ([Store releases](deploy.md#store-releases)); it checks each watched live address every five minutes and opens an incident thread when it stops answering ([Uptime](deploy.md#uptime)).
 
-With several hosts connected, **Runs on** saves a schedule on another host, and Schedules lists each host's schedules. A schedule always runs on its own host.
+On the phone, **Schedules** opens from the top of the Inbox. With several hosts connected, **Runs on** saves a schedule on another host, and Schedules lists each host's schedules. A schedule always runs on its own host.
 
 ### When a request arrives
 

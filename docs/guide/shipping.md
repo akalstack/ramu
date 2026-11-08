@@ -43,7 +43,7 @@ The same sheet covers the rest:
 
 ## 6. Every later change
 
-The agent works on a branch and opens a pull request. Its card in Source Control and on the phone shows the checks and, on Vercel or Netlify, the preview address ([Pull requests in Source Control](git-hosting.md#pull-requests-in-source-control)). Merging deploys it.
+The agent works on a branch and opens a pull request. Its card in Source Control and on the phone shows the checks and, on Vercel or Netlify, the preview address ([The Pull requests page](git-hosting.md#the-pull-requests-page)). Merging deploys it.
 
 - **When a deployment finishes**, Ramu wakes the thread that deployed, pushed or merged, with the live address or the end of the build log ([When a deployment finishes](deploy.md#when-a-deployment-finishes)). For pushes from outside Ramu, a **Deployment failed** webhook schedule starts a thread instead ([When a request arrives](background-work.md#when-a-request-arrives)).
 - **When CI breaks the default branch** after a push from a thread, the failing jobs go back to that thread ([Set up CI](git-hosting.md#set-up-ci)).
