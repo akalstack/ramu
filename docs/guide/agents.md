@@ -101,7 +101,7 @@ With **Auto** as the destination, Home also weighs the projects on your other co
 
 ## Continue in a new worktree
 
-**Continue in new thread** (thread menu) offers **In a new worktree, with the uncommitted changes** for a thread on the project's own checkout; on the phone it is **Continue in a new worktree**. The new thread starts on a new branch in its own worktree with this conversation and a copy of every uncommitted change, new files included, so your checkout is free for other work. The original thread and its checkout stay as they are, and the two threads are linked. An agent can do the same when you ask it to move the work off your checkout; outside Full access it asks first.
+**Continue in new thread** (thread menu) offers **In a new worktree, with the uncommitted changes** for a thread on the project's own checkout; on the phone, the thread's menu has **Continue in new thread** (same checkout, opening the new thread) and **Continue in a new worktree**. The new thread starts on a new branch in its own worktree with this conversation and a copy of every uncommitted change, new files included, so your checkout is free for other work. The original thread and its checkout stay as they are, and the two threads are linked. An agent can do the same when you ask it to move the work off your checkout; outside Full access it asks first.
 
 ## Continue on another host
 

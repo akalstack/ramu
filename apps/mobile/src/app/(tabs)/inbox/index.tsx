@@ -8,7 +8,8 @@ import { useStore } from '../../../runtime/store'
 import { useAutomation } from '../../../runtime/automation'
 import { buildInbox, INBOX_TABS, inboxTabOf, type InboxChat, type InboxTab } from '../../../runtime/inbox'
 import { STANDALONE, type Chat } from '../../../runtime/types'
-import { ago, useT, type Strings } from '../../../i18n'
+import { ago, useSay, useT, type Strings } from '../../../i18n'
+import { showToast } from '../../../runtime/toast'
 import { Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from '../../../components/Screen'
 import { TopFade } from '../../../components/Glass'
 import { InboxBrief } from '../../../components/InboxBrief'
@@ -201,8 +202,27 @@ export default function InboxScreen() {
     </Section>
   ) : null
   const background = store.computers.flatMap((pc) =>
-    (store.activity[pc.id] ?? []).map((item) => ({ computer: pc.name, item })),
+    (store.activity[pc.id] ?? []).map((item) => ({ computerId: pc.id, computer: pc.name, item })),
   )
+  const say = useSay()
+  const [stopping, setStopping] = useState<Set<string>>(() => new Set())
+  // As on the desktop: only work whose owner can stop it safely offers Stop; the host's list then drops it.
+  const stopActivity = (computerId: string, activityId: string) => {
+    const key = `${computerId}:${activityId}`
+    if (stopping.has(key)) return
+    tap()
+    setStopping((all) => new Set(all).add(key))
+    void store
+      .invoke(computerId, 'activity.cancel', activityId)
+      .catch((error: unknown) => showToast(error instanceof Error ? error.message : String(error)))
+      .finally(() =>
+        setStopping((all) => {
+          const next = new Set(all)
+          next.delete(key)
+          return next
+        }),
+      )
+  }
   const recapsOn = store.computers.some((pc) => store.appPreferences[pc.id]?.recapsEnabled !== false)
   const generating = store.computers.some((pc) => auto.of(pc.id).recaps?.generating)
   const actions = useTabActions()
@@ -239,19 +259,32 @@ export default function InboxScreen() {
         {background.length ? (
           <Section title={t.onComputer}>
             <View>
-              {background.map(({ computer, item }, index) => (
-                <View key={`${computer}:${item.id}`}>
+              {background.map(({ computerId, computer, item }, index) => (
+                <View key={`${computerId}:${item.id}`}>
                   {index ? <Divider inset={ROW_INSET} /> : null}
                   <Row disabled style={{ paddingVertical: 11 }}>
                     <Activity size={16} color={c.soft} />
                     <View style={{ flex: 1 }}>
                       <T weight="500" numberOfLines={1}>
-                        {item.label}
+                        {say(item.label)}
                       </T>
                       <T size={font.caption} tone="muted" numberOfLines={1}>
                         {[multi ? computer : '', item.detail].filter(Boolean).join(' · ')}
                       </T>
                     </View>
+                    {item.cancellable && store.isOnline(computerId) ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={say('Stop {0}', { 0: say(item.label) })}
+                        disabled={stopping.has(`${computerId}:${item.id}`)}
+                        hitSlop={8}
+                        onPress={() => stopActivity(computerId, item.id)}
+                      >
+                        <T size={font.caption} weight="600" tone="accent">
+                          {stopping.has(`${computerId}:${item.id}`) ? say('Stopping…') : say('Stop')}
+                        </T>
+                      </Pressable>
+                    ) : null}
                   </Row>
                 </View>
               ))}

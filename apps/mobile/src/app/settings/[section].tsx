@@ -43,6 +43,8 @@ import { ComputerUseSettings } from '../../components/ComputerUseSettings'
 import { ThemeLibrary } from '../../components/ThemeLibrary'
 import { Hint, HostGroups, RowLabel, ToggleRow } from '../../components/SettingRows'
 import { PermissionNeeded } from '../../components/DevicePermissions'
+import { SavedApprovals } from '../../components/SavedApprovals'
+import { LearningReviews } from '../../components/LearningReviews'
 import { ScopeControl } from '../../components/ScopeControl'
 import { PhonePermissions } from '../../components/DevicePermissions'
 
@@ -422,7 +424,6 @@ const desktopOnly: Partial<Record<SettingsSection, string>> = {
   browser: 'Browser profiles, imports and downloads are managed in Ramu on the host.',
   providers: 'Provider executable paths and sign-in are managed in Ramu on the host.',
   models: 'Model sets, the fallback order and the provider for each ability are edited in Ramu on the host.',
-  access: 'Permission rules are edited in Ramu on the host.',
   workflows: 'Sub-agent routing and the advisor are set up in Ramu on the host.',
   memory: 'The skills library and its model choices are managed in Ramu on the host.',
   git: 'The commit message model is chosen in Ramu on the host.',
@@ -477,7 +478,9 @@ export default function SettingsSectionPage() {
           <HostGroups section={id} host={host} name={name} locked={locked} />
         ) : null}
         {id === 'models' ? <AbilitySummary key={selected} hostId={selected} /> : null}
+        {id === 'memory' ? <LearningReviews key={selected} hostId={selected} locked={locked} /> : null}
         {id === 'memory' ? <MemoryList key={selected} hostId={selected} /> : null}
+        {id === 'access' ? <SavedApprovals key={selected} hostId={selected} locked={locked} /> : null}
         {note ? <Hint>{translate(language, note)}</Hint> : null}
       </SettingScroll>
     </Screen>

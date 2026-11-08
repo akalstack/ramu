@@ -8268,3 +8268,136 @@ for (const readOnly of [false, true]) {
     )
   })
 }
+
+const hostStore = (answers, calls) => ({
+  language: 'en',
+  computers: [{ id: 'host', access: 'full' }],
+  isOnline: () => true,
+  invoke: async (_host, method, ...args) => {
+    calls.push([method, ...args])
+    return answers[method]?.(...args)
+  },
+})
+const pressByText = (tree, text) => {
+  const pressable = nodes(tree).find(
+    (node) => node.type === 'Pressable' && nodes(node.props.children).some((child) => child.props?.children === text),
+  )
+  assert.ok(pressable, `a ${text} action`)
+  pressable.props.onPress()
+}
+
+test('saved approvals list the host’s Always allow rules and remove one from the phone', async () => {
+  const hooks = hookHarness(),
+    calls = []
+  const store = hostStore(
+    {
+      'settings.permissions.list': () => [
+        { id: 'r1', provider: 'claude-code', scope: 'user', label: 'Bash(git status)', createdAt: 1 },
+      ],
+    },
+    calls,
+  )
+  const { SavedApprovals } = load('components/SavedApprovals.tsx', 'ios', {
+    react: hooks.react,
+    '../runtime/store': { useStore: () => store },
+    '../runtime/types': { providerNames: { 'claude-code': 'Claude Code' } },
+    '../runtime/toast': { showToast() {} },
+    './ui': new Proxy({ tap() {} }, { get: (target, key) => (key in target ? target[key] : String(key)) }),
+  })
+  const render = () => hooks.render(() => SavedApprovals({ hostId: 'host', locked: false }))
+  render()
+  await settle()
+  const tree = render()
+  assert.ok(nodes(tree).some((node) => node.props?.children === 'Bash(git status)'))
+  pressByText(tree, 'Remove')
+  await settle()
+  assert.deepEqual(
+    calls.map((call) => call[0]),
+    ['settings.permissions.list', 'settings.permissions.remove', 'settings.permissions.list'],
+  )
+  assert.equal(calls[1][1], 'r1')
+  hooks.dispose()
+})
+
+test('learning reviews show only what waits for the person, and Apply applies that review', async () => {
+  const hooks = hookHarness(),
+    calls = []
+  const job = (id, status) => ({ id, status, sessionId: 's', projectId: null, seq: 1, createdAt: 1, error: null })
+  const store = hostStore(
+    {
+      'learning.get': () => ({
+        skills: [],
+        running: false,
+        jobs: [
+          {
+            ...job('pending-1', 'pending'),
+            sessionTitle: 'Fix login',
+            proposal: JSON.stringify({ memories: [{ title: 'Use pnpm', reason: 'The repo has a pnpm lockfile' }] }),
+          },
+          job('applied-1', 'applied'),
+        ],
+      }),
+    },
+    calls,
+  )
+  const { LearningReviews } = load('components/LearningReviews.tsx', 'ios', {
+    react: hooks.react,
+    '../runtime/store': { useStore: () => store },
+    '../runtime/toast': { showToast() {} },
+    './ui': new Proxy({ tap() {} }, { get: (target, key) => (key in target ? target[key] : String(key)) }),
+  })
+  const render = () => hooks.render(() => LearningReviews({ hostId: 'host', locked: false }))
+  render()
+  await settle()
+  const tree = render()
+  const texts = nodes(tree).map((node) => [node.props?.children].flat().join(''))
+  assert.ok(texts.includes('Fix login · pending'))
+  assert.ok(texts.includes('Memory: Use pnpm — The repo has a pnpm lockfile'))
+  assert.ok(!texts.some((text) => text.includes('applied')), 'an applied review stays on the desktop’s full list')
+  pressByText(tree, 'Apply')
+  await settle()
+  assert.deepEqual(calls[1], ['learning.apply', 'pending-1'])
+  hooks.dispose()
+})
+
+test('artifact settings on the phone revoke a share link and close a page opened to anyone', async () => {
+  const sharedArtifacts = await import('../../../packages/shared/src/artifacts.ts')
+  const hooks = hookHarness(),
+    calls = []
+  const store = hostStore(
+    {
+      'artifacts.shares': () => [{ token: 'tok', artifactId: 'a1', canAdd: false, createdAt: 1, expiresAt: 2 }],
+      'artifacts.runs': () => [],
+      'artifacts.publicStatus': () => ({ state: 'running', url: 'https://tunnel.example', error: null, since: 1 }),
+    },
+    calls,
+  )
+  const { ArtifactSettings } = load('components/ArtifactSettings.tsx', 'ios', {
+    react: hooks.react,
+    '@ramu/shared/artifacts': sharedArtifacts,
+    '../runtime/store': { useStore: () => store },
+    '../runtime/toast': { showToast() {} },
+    './ui': new Proxy({ tap() {} }, { get: (target, key) => (key in target ? target[key] : String(key)) }),
+  })
+  const page = { id: 'a1', title: 'Report', kind: 'doc', capabilities: {}, grants: {} }
+  const render = () =>
+    hooks.render(() =>
+      ArtifactSettings({ computerId: 'host', page, open: true, onClose() {}, onChanged() {}, onDeleted() {} }),
+    )
+  render()
+  await settle()
+  let tree = render()
+  assert.ok(nodes(tree).some((node) => node.props?.children === 'https://tunnel.example'))
+  nodes(tree)
+    .find((node) => node.props?.label === 'Revoke')
+    .props.onPress()
+  await settle()
+  assert.ok(calls.some((call) => call[0] === 'artifacts.revokeShare' && call[1] === 'tok'))
+  tree = render()
+  const close = nodes(tree).find((node) => node.type === 'Button' && node.props.title === 'Close to everyone')
+  assert.ok(close, 'an open page offers Close to everyone')
+  close.props.onPress()
+  await settle()
+  assert.ok(calls.some((call) => call[0] === 'artifacts.closePublic' && call[1] === 'a1'))
+  hooks.dispose()
+})

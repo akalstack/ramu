@@ -60,7 +60,7 @@ An artifact you allow to use AI calls the host's signed-in providers, never a ke
 - **Auto:** Ramu's own tools run without asking; everything else follows the provider's automatic review, so risky commands still ask.
 - **Full access:** commands and edits run without asking, except the few that can destroy work or the machine: deleting outside the thread's folders, a whole project or `.git`; `git reset --hard`, `git clean -f`, force-pushes and other history rewrites; running as administrator; formatting disks; and shutting down. Those ask once each, with the reason, and cannot be saved as rules. Claude's own safety checks, and ask rules in your Claude settings, also still ask. Cursor's SDK cannot pause a command, so Cursor threads in Full access never ask. Use it only for work you trust.
 
-Approvals default to **Allow once**. For a command you can save a prefix rule (such as `git diff *`) for the project or for every project, from the card in the thread on desktop or on the phone (**Don't ask again…**). A saved approval can be forgotten from the card. **Settings → Permissions → Saved approvals** lists and removes them.
+Approvals default to **Allow once**. For a command you can save a prefix rule (such as `git diff *`) for the project or for every project, from the card in the thread on desktop or on the phone (**Don't ask again…**). A saved approval can be forgotten from the card. **Settings → Permissions → Saved approvals** lists and removes them; on the phone, **Settings → Access** lists them with **Remove**, and **Remove displayed approvals** clears them all.
 
 ## Plan usage
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Linking, View } from 'react-native'
-import { ExternalLink, RotateCcw } from 'lucide-react-native'
+import { ActivityIndicator, Alert, Linking, Platform, ScrollView, View } from 'react-native'
+import { ExternalLink, Rocket, RotateCcw, ScrollText } from 'lucide-react-native'
 import { accountBrand } from '@ramu/shared/brands'
 import { translate } from '@ramu/shared/i18n'
 import type {
@@ -61,6 +61,7 @@ export function ProjectDeployments({
   runtime.current = store
   const [data, setData] = useState<Loaded>({ key })
   const [busy, setBusy] = useState(false)
+  const [logs, setLogs] = useState<{ id: string; text: string } | null>(null)
   const online = store.isOnline(hostId)
   const viewOnly = store.computers?.find((host) => host.id === hostId)?.access === 'viewer'
   const writable = () =>
@@ -158,6 +159,51 @@ export function ProjectDeployments({
     ])
   }
 
+  // The build's log, as the desktop's Logs shows it: why a deploy failed, readable away from the computer.
+  const showLogs = (deploymentId: string) => {
+    if (!runtime.current.isOnline(hostId) || busy) return
+    setBusy(true)
+    void runtime.current
+      .invoke(hostId, 'deploy.logs', projectId, deploymentId)
+      .then(
+        (text) => {
+          if (active.current === key) setLogs({ id: deploymentId, text: text || t('No log output.') })
+        },
+        (reason: unknown) =>
+          Alert.alert(t('That didn’t work'), reason instanceof Error ? reason.message : String(reason)),
+      )
+      .finally(() => setBusy(false))
+  }
+  // As on the desktop: the button says what it builds and where, and the second press is the approval.
+  const deployProduction = () => {
+    if (!status?.binding || !writable() || busy) return
+    Alert.alert(
+      t('Deploy to production'),
+      t('This builds {0} and replaces what visitors see at {1}.', {
+        0: status.binding.productionBranch,
+        1: status.productionUrl ?? status.binding.siteName,
+      }),
+      [
+        { text: t('Cancel'), style: 'cancel' },
+        {
+          text: t('Deploy now'),
+          onPress: () => {
+            if (!writable()) return
+            setBusy(true)
+            void runtime.current
+              .invoke(hostId, 'deploy.production', projectId)
+              .then(
+                () => read(),
+                (reason: unknown) =>
+                  Alert.alert(t('That didn’t work'), reason instanceof Error ? reason.message : String(reason)),
+              )
+              .finally(() => setBusy(false))
+          },
+        },
+      ],
+    )
+  }
+
   const rollBack = (deploymentId: string) => {
     const target = status?.deployments.find((entry) => entry.id === deploymentId)
     if (!status || !target || !writable() || busy) return
@@ -217,6 +263,15 @@ export function ProjectDeployments({
               </View>
             ) : null}
             {view.error ? <T tone="bad">{view.error}</T> : null}
+            {status.capabilities.includes('deployProduction') ? (
+              <Button
+                title={t('Deploy to production')}
+                icon={Rocket}
+                kind="secondary"
+                disabled={viewOnly || !online || busy}
+                onPress={deployProduction}
+              />
+            ) : null}
           </>
         ) : null}
       </View>
@@ -239,28 +294,45 @@ export function ProjectDeployments({
                     {row.message}
                   </T>
                 ) : null}
-                {row.url || row.rollBack ? (
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
-                    {row.url ? (
-                      <Button
-                        title={t('Open')}
-                        accessibilityLabel={t('Open {0}', { 0: row.url })}
-                        icon={ExternalLink}
-                        kind="ghost"
-                        onPress={() => open(row.url!)}
-                      />
-                    ) : null}
-                    {row.rollBack ? (
-                      <Button
-                        title={t('Roll back')}
-                        accessibilityLabel={`${t('Roll back')}: ${row.detail}`}
-                        icon={RotateCcw}
-                        kind="secondary"
-                        disabled={viewOnly || !online || busy}
-                        onPress={() => rollBack(row.id)}
-                      />
-                    ) : null}
-                  </View>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
+                  <Button
+                    title={t('Logs')}
+                    accessibilityLabel={`${t('Logs')}: ${row.detail}`}
+                    icon={ScrollText}
+                    kind="ghost"
+                    disabled={!online || busy}
+                    onPress={() => (logs?.id === row.id ? setLogs(null) : showLogs(row.id))}
+                  />
+                  {row.url ? (
+                    <Button
+                      title={t('Open')}
+                      accessibilityLabel={t('Open {0}', { 0: row.url })}
+                      icon={ExternalLink}
+                      kind="ghost"
+                      onPress={() => open(row.url!)}
+                    />
+                  ) : null}
+                  {row.rollBack ? (
+                    <Button
+                      title={t('Roll back')}
+                      accessibilityLabel={`${t('Roll back')}: ${row.detail}`}
+                      icon={RotateCcw}
+                      kind="secondary"
+                      disabled={viewOnly || !online || busy}
+                      onPress={() => rollBack(row.id)}
+                    />
+                  ) : null}
+                </View>
+                {logs?.id === row.id ? (
+                  <ScrollView horizontal style={{ maxHeight: 320 }}>
+                    <T
+                      size={font.caption}
+                      selectable
+                      style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}
+                    >
+                      {logs.text}
+                    </T>
+                  </ScrollView>
                 ) : null}
               </View>
             ))}

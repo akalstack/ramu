@@ -12,7 +12,7 @@ Every new thread starts with your own preferences and corrections, and any note 
 
 ## Learning
 
-**Learning & skills** offers **Off**, **Review first** (default) and **Automatic**. After a substantive turn, Ramu reviews it and proposes memories, reusable skills and a session checkpoint. In Review first you apply or dismiss each proposal. Reviews wait until you're idle, share a daily limit (five by default), and skip turns with nothing new.
+**Learning & skills** offers **Off**, **Review first** (default) and **Automatic**. After a substantive turn, Ramu reviews it and proposes memories, reusable skills and a session checkpoint. In Review first you apply or dismiss each proposal, on the desktop or under **Settings → Memory** on the phone, which lists the reviews waiting for you with what each would save and **Apply**, **Retry review** and **Dismiss**. Reviews wait until you're idle, share a daily limit (five by default), and skip turns with nothing new.
 
 Every proposal is checked for credentials before it can be saved. Model-written learning can be wrong, so your own notes and current instructions always outrank it.
 

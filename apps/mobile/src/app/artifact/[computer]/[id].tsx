@@ -34,6 +34,7 @@ import { contentStorage } from '../../../storage'
 import { Header, HeaderButton, Screen } from '../../../components/Screen'
 import { Button, Card, IconButton, Row, Sheet, T } from '../../../components/ui'
 import InteractiveFrame from '../../../components/InteractiveFrame'
+import { ArtifactSettings } from '../../../components/ArtifactSettings'
 import MotionVideo from '../../../components/MotionVideo'
 import { hostShareLabel, SHARE_LABELS } from '../../../components/ArtifactKindMark'
 import { shareFile } from '../../../components/interactiveShare'
@@ -87,6 +88,7 @@ export default function PageScreen() {
   const [error, setError] = useState('')
   const [messages, setMessages] = useState<{ id: number; data: object }[]>([])
   const [menu, setMenu] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [versions, setVersions] = useState<ArtifactVersion[] | null>(null)
   const [running, setRunning] = useState<ArtifactRun | null>(null)
   const [confirm, setConfirm] = useState<{ id: string; text: string } | null>(null)
@@ -901,6 +903,16 @@ export default function PageScreen() {
                 </T>
               </Row>
             ) : null}
+            {page && !shared && !viewer ? (
+              <Row
+                onPress={() => {
+                  setMenu(false)
+                  setSettingsOpen(true)
+                }}
+              >
+                <T>{say('Page settings')}</T>
+              </Row>
+            ) : null}
             <Row
               onPress={() => {
                 setMenu(false)
@@ -1476,6 +1488,19 @@ export default function PageScreen() {
             />
           </View>
         </Sheet>
+      ) : null}
+      {page && settingsOpen ? (
+        <ArtifactSettings
+          computerId={computerId}
+          page={page}
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          onChanged={() => void load()}
+          onDeleted={() => {
+            setSettingsOpen(false)
+            router.back()
+          }}
+        />
       ) : null}
     </Screen>
   )

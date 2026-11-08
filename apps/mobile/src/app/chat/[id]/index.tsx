@@ -37,6 +37,7 @@ import {
   Users,
   X,
   Plug,
+  MessageSquarePlus,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
 import { belowHeader } from '../../../components/UndoToast'
@@ -770,6 +771,30 @@ export default function ChatScreen() {
       setRefresh((n) => n + 1)
     }
   }
+  // As on the desktop: the host writes a hand-off of this conversation, and a new thread on the same checkout starts
+  // with it as its first message, on this thread's settings. A thread made but not started is removed again.
+  const continueInNewThread = () =>
+    act(async () => {
+      const host = chat.computerId
+      const projectId =
+        chat.projectId === STANDALONE ? STANDALONE : chat.projectId.slice(chat.projectId.indexOf(':') + 1)
+      const prompt = await store.invoke(host, 'agent.continuationPrompt', chat.sessionId!)
+      const task = await store.invoke(host, 'tasks.create', {
+        projectId,
+        title: `Continue: ${chat.title}`.slice(0, 60),
+        mode: chat.mode,
+        workspaceId: chat.workspaceId ?? undefined,
+      })
+      try {
+        await store.invoke(host, 'agent.start', task.id, prompt, chat.settings ?? undefined, [], [])
+      } catch (error) {
+        await store.invoke(host, 'tasks.delete', task.id, false).catch(() => {})
+        throw error
+      }
+      await store.refresh(host)
+      router.push({ pathname: '/chat/[id]', params: { id: `${host}:${task.id}` } })
+      return tr('Continued in {0}', { 0: task.title })
+    })
   const changed = live?.changed ?? 0
   // One repository: Commit & push is a true one-tap shortcut. With several, it would commit only one, so it opens Source Control.
   const quickCommit = () => {
@@ -821,6 +846,25 @@ export default function ChatScreen() {
             symbol: 'powerplug' as const,
             group: 'tools' as const,
             onPress: () => setMcpOpen(true),
+          },
+        ]
+      : []),
+    ...(chat.sessionId && chat.taskId && computer?.access !== 'viewer'
+      ? [
+          {
+            icon: MessageSquarePlus,
+            label: tr('Continue in new thread'),
+            symbol: 'plus.bubble' as const,
+            group: 'tools' as const,
+            onPress: () =>
+              Alert.alert(
+                tr('Continue in a new thread?'),
+                tr('Start a new thread in this checkout using the current conversation as context.'),
+                [
+                  { text: tr('Cancel'), style: 'cancel' },
+                  { text: tr('Continue'), onPress: () => void continueInNewThread() },
+                ],
+              ),
           },
         ]
       : []),
