@@ -16,6 +16,8 @@ const DESCRIPTIONS: Record<AbilityTool, string> = {
     'Make background music for a Motion artifact from a description (mood, tempo, instruments) and a length in seconds, on the Shared MCP tool the person mapped to music. The audio is saved as an attachment of this thread; give its attachmentId as the motion file named by music.path. Say the license terms the tool returned.',
   make_sound:
     'Make one short sound effect (a whoosh, a chime, a click) from a description, on the Shared MCP tool the person mapped to sound effects. The audio is saved as an attachment; give its attachmentId as the motion file a scene names in sound.path.',
+  speak:
+    "Record a motion scene's narration in a voice, on the Shared MCP tool the person mapped to speech. The audio is saved as an attachment; give its attachmentId as the motion file the scene names in voice.path, and it plays instead of the computer's own voice.",
   read_long:
     "Answer one question about a large set of files or a long text on the signed-in model with the largest context window. files: paths in this thread's folder (up to about 1.2 million characters together); text: pasted text. Only the question and those inputs are sent.",
 }

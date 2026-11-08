@@ -517,3 +517,23 @@ it.skipIf(!interactiveBrowserPath())(
   },
   300_000,
 )
+
+it.skipIf(!interactiveBrowserPath())(
+  'plays a scene’s recorded voice instead of speaking its narration on this computer',
+  async () => {
+    const { db, interactive } = setup(previewInteractive)
+    const preview = await interactive.preview('s', {
+      kind: 'motion',
+      scenes: [{ seconds: 1, html: '<h1>Sync</h1>', narration: 'Sync.', voice: { path: 'voice.wav' } }],
+      files: [{ path: 'voice.wav', content: tone(1), encoding: 'base64' }],
+      title: 'Sync',
+      summary: 'S',
+      checks: [],
+    } as never)
+    expect(preview.errors).toEqual([])
+    const document = interactive.get('s', interactive.publish('s', preview.id, 'r1').id, 1)
+    const video = await new ArtifactExports(db).make(document, 'webm')
+    expect(Buffer.from(video.content, 'base64').includes(Buffer.from('A_OPUS'))).toBe(true)
+  },
+  300_000,
+)

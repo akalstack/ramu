@@ -62,7 +62,7 @@ The kind is chosen by the agent from the request, shown as a small mark on every
 
 Narration per scene, spoken on the host (`say` or `espeak-ng`) and mixed into the MP4 and WebM, with **Narration** in the toolbar to hear, change or remove each scene's words, is built ([Kinds](guide/artifacts.md#kinds)). Remaining:
 
-- **A provider's voice:** where a signed-in provider offers the **speech** ability ([Abilities](ABILITIES-PLAN.md)), narration uses it instead of the host's voice, and the grant sheet says which provider receives the script.
+- **A provider's voice:** a scene's recorded `voice` comes from `speak` on a mapped Shared MCP tool today; a signed-in provider with the **speech** ability ([Abilities](ABILITIES-PLAN.md)) would record it the same way once one offers it.
 
 ## Safety
 

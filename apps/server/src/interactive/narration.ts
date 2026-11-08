@@ -84,7 +84,7 @@ export async function speak(text: string, voice: Speaker | null = speaker()): Pr
  * has any. Scenes are spoken one after another, in order.
  */
 export async function narrationTrack(
-  scenes: readonly { seconds: number; narration?: string }[],
+  scenes: readonly { seconds: number; narration?: string | undefined }[],
   say: (text: string) => Promise<NarrationTrack> = (text) => speak(text),
 ): Promise<NarrationTrack | null> {
   if (!scenes.some((scene) => scene.narration?.trim())) return null

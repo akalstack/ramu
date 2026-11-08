@@ -25,6 +25,7 @@ export const ABILITY_TOOLS = {
   read_image: 'vision',
   make_music: 'music',
   make_sound: 'sound_effect',
+  speak: 'speech',
 } as const satisfies Record<string, Ability>
 export type AbilityTool = keyof typeof ABILITY_TOOLS
 
@@ -108,6 +109,7 @@ export const MCP_ABILITIES: readonly Ability[] = [
   'long_context',
   'music',
   'sound_effect',
+  'speech',
 ]
 /** The ones Auto can also try on a Shared MCP tool, which have a sample check to run first. */
 export const AUTO_MCP_ABILITIES: readonly Ability[] = ['image_generation', 'web_search']

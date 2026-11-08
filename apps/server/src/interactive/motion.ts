@@ -17,7 +17,9 @@ const AUDIO = /\.(?:mp3|wav|ogg|m4a)$/i
 
 export function renderMotion(motion: MotionSource, title: string, files: InteractiveFile[] = []): RenderedKind {
   // The audio the motion names (music, scene sounds) is kept with the version; anything else in files is refused.
-  const named = new Set([motion.music?.path, ...motion.scenes.map((scene) => scene.sound?.path)].filter(Boolean))
+  const named = new Set(
+    [motion.music?.path, ...motion.scenes.flatMap((scene) => [scene.sound?.path, scene.voice?.path])].filter(Boolean),
+  )
   const audio = files.filter((file) => file.encoding === 'base64' && AUDIO.test(file.path))
   const problems = [
     ...[...named]

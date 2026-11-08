@@ -20,13 +20,7 @@ A page's own AI asks for an image through the same routing (`ramuContent.ai.imag
 
 - **[Artifacts](ARTIFACTS-PLAN.md):** Motion narration is spoken on the host today; it uses `speech` (and scenes `video_generation`) where a provider offers them (waiting on §1).
 
-### 3. Abilities from Shared MCP servers
-
-Image generation, image editing, web search and long reads can be mapped to an approved Shared MCP tool (images as data URLs in its image field, a long read's files in its prompt), and image generation and search offered to Auto after the providers once their check passes (see [Abilities](guide/agents.md#abilities)). Remaining:
-
-- **Speech on an MCP tool,** with the `speech` ability of §1: audio a tool returns as MCP `audio` content, kept with the Motion artifact.
-
-### 4. Music and sound effects
+### 3. Music and sound effects
 
 `make_music` and `make_sound` on a mapped Shared MCP tool (its audio kept as an attachment, its license words on the row), a motion's music and scene sounds mixed into the MP4 and WebM under the narration, and **Sound** in the Motion toolbar are built ([Abilities](guide/agents.md#abilities), [Kinds](guide/artifacts.md#kinds)). Remaining:
 

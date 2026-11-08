@@ -183,7 +183,7 @@ async function motionVideo(document: InteractiveDocument, container: 'webm' | 'm
   const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.motion)?.content
   if (!stored) throw new Error('This motion version has no scenes. Ask the agent to publish it again.')
   const motion = JSON.parse(stored) as {
-    scenes: { seconds: number; narration?: string; sound?: MotionAudio }[]
+    scenes: { seconds: number; narration?: string; sound?: MotionAudio; voice?: MotionAudio }[]
     music?: MotionAudio
   }
   const scenes = motion.scenes
@@ -191,17 +191,21 @@ async function motionVideo(document: InteractiveDocument, container: 'webm' | 'm
   const frames = Math.ceil(seconds * VIDEO_FPS)
   // Narration is spoken on this computer, and the music and scene sounds come from the version's own files; they are
   // mixed at 48 kHz, the rate every audio encoder here takes.
-  const track = await narrationTrack(scenes)
   const fileOf = (audio: MotionAudio | undefined) => {
     const file = audio && document.files?.find((entry) => entry.path === audio.path && entry.encoding === 'base64')
     return file ? { data: file.content, volume: audio!.volume ?? null } : null
   }
+  // A scene with a recorded voice plays that instead of the host speaking its narration.
+  const track = await narrationTrack(
+    scenes.map((scene) => (fileOf(scene.voice) ? { ...scene, narration: undefined } : scene)),
+  )
   let at = 0
   const cues = scenes.flatMap((scene) => {
     const start = at
     at += scene.seconds
-    const file = fileOf(scene.sound)
-    return file ? [{ ...file, start }] : []
+    const voice = fileOf(scene.voice)
+    const sound = fileOf(scene.sound)
+    return [...(sound ? [{ ...sound, start }] : []), ...(voice ? [{ ...voice, volume: voice.volume ?? 1, start }] : [])]
   })
   const mix: Mix = {
     narration: track ? Buffer.from(atRate(track, AUDIO_RATE).buffer).toString('base64') : null,

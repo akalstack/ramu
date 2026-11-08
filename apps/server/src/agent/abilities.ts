@@ -95,6 +95,7 @@ export const abilityInputs = {
     seconds: z.number().int().min(5).max(120).optional(),
   },
   make_sound: { prompt: z.string().trim().min(1).max(500) },
+  speak: { text: z.string().trim().min(1).max(600) },
   read_image: {
     question: z.string().trim().min(1).max(4000),
     images: z.array(z.string().min(1).max(1024)).min(1).max(4),
@@ -114,6 +115,7 @@ const TIMEOUT_MS: Record<AbilityTool, number> = {
   read_image: 120_000,
   make_music: 300_000,
   make_sound: 120_000,
+  speak: 120_000,
 }
 /** Text a long read may send, in characters: within a 400,000-token window with room for the answer. */
 const LONG_READ_CHARS = 1_200_000
@@ -841,7 +843,7 @@ export class AbilityService {
     const text =
       base.ability === 'long_context'
         ? prepared.request.prompt
-        : String(base.args.prompt ?? base.args.query ?? prepared.sent.prompt)
+        : String(base.args.prompt ?? base.args.query ?? base.args.text ?? prepared.sent.prompt)
     const inputs =
       base.ability === 'image_edit'
         ? prepared.request.images.map((path) => {
@@ -854,7 +856,7 @@ export class AbilityService {
     const attachments = [...images, ...audio].map((file, index) =>
       this.host.attachments.add(`${slug(text)}-${index + 1}.${file.extension}`, file.bytes),
     )
-    if ((base.ability === 'music' || base.ability === 'sound_effect') && !audio.length)
+    if ((base.ability === 'music' || base.ability === 'sound_effect' || base.ability === 'speech') && !audio.length)
       throw new Error(`${server} returned no audio. ${clip(texts.join(' '), 300)}`.trim())
     if ((base.ability === 'image_generation' || base.ability === 'image_edit') && !attachments.length)
       throw new Error(`${server} returned no image. ${clip(texts.join(' '), 300)}`.trim())
@@ -928,6 +930,14 @@ export class AbilityService {
           ability,
           request: { ability, prompt: searchPrompt(input.query), images: [] },
           sent: { prompt: input.query, inputs: [] },
+        }
+      }
+      case 'speak': {
+        const input = z.object(abilityInputs.speak).parse(args)
+        return {
+          ability,
+          request: { ability, prompt: input.text, images: [] },
+          sent: { prompt: input.text, inputs: [] },
         }
       }
       case 'make_music':

@@ -507,6 +507,9 @@ export const motionSceneSchema = z.object({
       'Words spoken over this scene in the exported video, read aloud on the host. Keep it short enough to say within the scene (about 2.5 words a second).',
     ),
   sound: motionAudio.optional().describe('A sound effect played when this scene starts, from make_sound.'),
+  voice: motionAudio
+    .optional()
+    .describe("This scene's narration recorded by speak, played instead of the host speaking its narration."),
 })
 const motionSource = z
   .object({

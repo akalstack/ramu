@@ -519,6 +519,25 @@ describe('abilities on a Shared MCP tool', () => {
     })
   })
 
+  it('records a scene’s narration on the Shared MCP tool mapped to speech, sending only the words', async () => {
+    const sent: Record<string, unknown>[] = []
+    const mcp = vi.fn<NonNullable<AbilityHost['mcp']>>(async (_session, _connection, _tool, build) => {
+      sent.push(build({ properties: { text: { type: 'string' } } }))
+      return {
+        server: 'Voices',
+        result: { content: [{ type: 'audio', data: Buffer.from('RIFF').toString('base64'), mimeType: 'audio/wav' }] },
+      }
+    })
+    const abilities = service(working, 'claude-code', undefined, { mcp })
+    withAbilities({ choices: { speech: { connectionId: 'c1', tool: 'say' } } })
+    expect(await abilities.call('thread', 'speak', { text: 'Sync keeps every device current.' })).toMatchObject({
+      status: 'done',
+    })
+    expect(sent).toEqual([{ text: 'Sync keeps every device current.' }])
+    const recorded = (events.at(-1) as { call: AbilityCall }).call
+    expect(recorded.attachments?.[0]).toMatchObject({ mimeType: 'audio/wav' })
+  })
+
   it('fills the tool’s prompt or query, else its first required text', () => {
     expect(mcpArguments({ properties: { size: { type: 'number' }, prompt: { type: 'string' } } }, 'apple')).toEqual({
       prompt: 'apple',
