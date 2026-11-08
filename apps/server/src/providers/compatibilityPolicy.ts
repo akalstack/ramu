@@ -7,7 +7,7 @@ import type { AgentProvider } from '@ramu/shared/types'
  * guessed to fill a matrix. Rules are exact releases until a wider range has been tested.
  */
 export const COMPATIBILITY_POLICY: CompatibilityPolicy = {
-  revision: 7,
+  revision: 8,
   rules: [
     {
       id: 'claude-code-sdk-2.1.308',
@@ -99,6 +99,36 @@ export const COMPATIBILITY_POLICY: CompatibilityPolicy = {
       evidence:
         'codex-cli 0.166.0 on macOS, 2026-11-02: `codex app-server --stdio` answered initialize, then model/list (3 models) and account/rateLimits/read, with no model call.',
     },
+    {
+      id: 'codex-app-server-0.167.0',
+      provider: 'codex',
+      runtime: 'app-server',
+      min: '0.167.0',
+      below: '0.167.1',
+      status: 'supported',
+      evidence:
+        'codex-cli 0.167.0 on macOS, 2026-11-08: `codex app-server` answered initialize, then model/list (3 models) and account/rateLimits/read, with no model call.',
+    },
+    {
+      id: 'claude-code-sdk-2.1.319',
+      provider: 'claude-code',
+      runtime: 'sdk',
+      min: '2.1.319',
+      below: '2.1.320',
+      status: 'supported',
+      evidence:
+        'Claude Code 2.1.319 (the installed executable) driven by @anthropic-ai/claude-agent-sdk 0.3.295 on macOS, 2026-11-08: initializationResult (58 commands and 6 agents with no setting sources loaded, 13 models), supportedCommands and getContextUsage answered, with no model call.',
+    },
+    {
+      id: 'antigravity-acp-1.4.3',
+      provider: 'antigravity',
+      runtime: 'acp',
+      min: '1.4.3',
+      below: '1.4.4',
+      status: 'supported',
+      evidence:
+        "Google's antigravity-acp 1.4.3 (agy_acp_server.par as Ramu downloads it) on macOS, 2026-11-08: ACP initialize answered protocol version 1 with agentInfo 1.4.3, loadSession, session list and resume, and its four sign-in methods, with no model call and no sign-in.",
+    },
   ],
 }
 
@@ -107,4 +137,5 @@ export const COMPATIBILITY_RUNTIME: Partial<Record<AgentProvider, RuntimeKind>> 
   codex: 'app-server',
   opencode: 'http',
   'claude-code': 'sdk',
+  antigravity: 'acp',
 }
