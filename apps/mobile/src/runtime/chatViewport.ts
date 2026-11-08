@@ -8,3 +8,11 @@ export function transcriptScrollState(following: boolean, gap: number, dragging:
 export function appForeground(previous: boolean, next: string): boolean {
   return next === 'inactive' ? previous : next === 'active'
 }
+
+/**
+ * Whether the end of the transcript is held still for a sent message: from sending until the list has made room under
+ * it, and then while the reply has not filled that room. Following the end then would show the empty room first.
+ */
+export function holdsSentMessage(sent: { awaitingRoom: boolean; anchored: boolean; room: number }): boolean {
+  return sent.awaitingRoom || (sent.anchored && sent.room > 0)
+}
