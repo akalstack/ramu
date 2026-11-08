@@ -219,133 +219,106 @@ export default function ChatScreen() {
   const slack = Math.max(0, insets.bottom - space.s)
   const coverFor = (keys: number) => composerHeight + (keys ? keys - slack : 0)
   const metrics = useRef({ offset: 0, content: 0, viewport: 0, cover: 0 })
-  const settling = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const keyboardTarget = useRef<number | null>(null)
-  // Set by sending: the keyboard closes and the chat stays where it is while it slides away.
-  const sentClosing = useRef(false)
-  const keyboard = useKeyboardHeight((to) => {
-    if (!ios) return
-    const m = metrics.current,
-      cover = coverFor(to)
-    const end = Math.max(restTop.current, m.content - m.viewport + cover)
-    const keep = Math.max(restTop.current, Math.min(end, m.offset))
-    keyboardTarget.current = sentClosing.current
-      ? keep !== m.offset
-        ? keep
-        : null
-      : following.current
-        ? end
-        : Math.max(restTop.current, Math.min(end, m.offset + cover - m.cover))
-    if (settling.current) clearTimeout(settling.current)
-    settling.current = setTimeout(() => {
-      settling.current = null
-      const sent = sentClosing.current
-      sentClosing.current = false
-      // Rows that arrived while the keyboard moved were not followed then. After a send, the message and the working
-      // line take the room the keyboard left, and one gentle move shows whatever did not fit.
-      if (sent && canFollow()) toEnd(true)
-      else follow()
-    }, 500)
-  })
+  // The list keeps itself at the end (maintainScrollAtEnd) once the chat is taller than the screen; a chat that fits
+  // rests at its top, where UIKit puts it. That following pauses while the keyboard moves, so the list's own jump
+  // never interrupts the scroll that moves with the keyboard, and right after a row is opened by hand, which keeps
+  // its place.
+  const [overflowing, setOverflowing] = useState(false)
+  const [followPaused, setFollowPaused] = useState(false)
+  const pauseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const settling = useRef(false)
+  const pauseFollow = (ms: number, keyboardMoving: boolean) => {
+    settling.current ||= keyboardMoving
+    setFollowPaused(true)
+    if (pauseTimer.current) clearTimeout(pauseTimer.current)
+    pauseTimer.current = setTimeout(() => {
+      pauseTimer.current = null
+      const keyboardMoved = settling.current
+      settling.current = false
+      setFollowPaused(false)
+      if (!keyboardMoved) return
+      // Rows that arrived meanwhile were not followed; catch up once.
+      if (following.current && !userScrolling.current) toEnd(false)
+    }, ms)
+  }
   useEffect(
     () => () => {
-      if (settling.current) clearTimeout(settling.current)
+      if (pauseTimer.current) clearTimeout(pauseTimer.current)
     },
     [],
   )
-  // After the new inset is mounted; the native scroll animation runs alongside the keyboard's.
+  // When the keyboard moves, the list moves with it: at the end it stays on the end (worked out once the new inset and
+  // any just-sent message are laid out, so it is one motion), elsewhere the same lines stay above the keys.
+  const keyboardMove = useRef<'end' | number | null>(null)
+  const keyboard = useKeyboardHeight((to) => {
+    pauseFollow(500, true)
+    const m = metrics.current
+    const cover = coverFor(to)
+    keyboardMove.current = following.current
+      ? 'end'
+      : ios
+        ? Math.max(restTop.current, Math.min(m.content - m.viewport + cover, m.offset + cover - m.cover))
+        : null
+  })
   useEffect(() => {
-    const target = keyboardTarget.current
-    if (target == null) return
-    keyboardTarget.current = null
-    const frame = requestAnimationFrame(() => scroll.current?.scrollToOffset({ offset: target, animated: true }))
+    const move = keyboardMove.current
+    if (move == null) return
+    keyboardMove.current = null
+    const frame = requestAnimationFrame(() =>
+      move === 'end' ? toEnd(true) : scroll.current?.scrollToOffset({ offset: move, animated: true }),
+    )
     return () => cancelAnimationFrame(frame)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [keyboard.height] by design; the values it reads beyond these are current as of that run
   }, [keyboard.height])
   const cover = ios ? coverFor(keyboard.height) : 0
   metrics.current.cover = cover
-  // scrollToEnd ignores contentInset, so on iOS it stops `cover` points short; aim past the inset instead.
   // Native scroll-edge chrome overlays the list; UIKit supplies its top inset.
   const topInset = ios ? insets.top + (Number(Platform.Version) >= 26 ? 54 : 44) : 0
   // Where UIKit rests a chat that fits on screen: read from the list while it is short, since the bar's real height can
-  // differ from the guess above, and a guess off by a few points either hid the newest rows or slid the first one under
-  // the bar.
+  // differ from the guess above.
   const measuredRest = useRef<number | null>(null)
   const restTop = useRef(-topInset)
   restTop.current = measuredRest.current ?? -topInset
+  /** The end of a chat taller than the screen, past the composer and keyboard inset; a chat that fits stays put. */
+  const endOffset = () => {
+    const m = metrics.current
+    // Not measured yet: an offset worked out from a zero-height viewport lands far down and hides the first messages.
+    if (!m.viewport || !m.content) return null
+    const end = m.content - m.viewport + m.cover
+    return end > restTop.current + 1 ? end : null
+  }
   const toEnd = (animated: boolean) => {
     animated = animated && !reducedMotion
     if (!ios) return scroll.current?.scrollToEnd({ animated })
-    const m = metrics.current
-    // Not measured yet: an offset worked out from a zero-height viewport lands far down and hides the first messages.
-    if (!m.viewport || !m.content) return
-    const end = m.content - m.viewport + m.cover
-    // A short chat fits on screen: its end is its top, where UIKit already rests it.
-    if (end <= restTop.current + 1) return
-    scroll.current?.scrollToOffset({ offset: end, animated })
+    const end = endOffset()
+    if (end !== null) scroll.current?.scrollToOffset({ offset: end, animated })
   }
-  // A row opened or closed by hand keeps the scroll position; content growth from the agent still follows the end.
-  const held = useRef(0)
-  // Every change that can move the end (a row, its measured size, the footer, the composer, the keyboard, the
-  // viewport) asks for one follow. It jumps without animating, as the desktop's transcript does: on the next frame, once
-  // the list has laid the change out, and again shortly after for rows measured late. Several changes in a row share
-  // the same two jumps, so sending (the message, the host's copy, the working line, the reply) never moves the view up
-  // and down, and the last jump always lands on the true end.
-  const followFrame = useRef<number | null>(null)
-  const followLate = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const canFollow = () =>
-    following.current &&
-    !userScrolling.current &&
-    !settling.current &&
-    !sentClosing.current &&
-    Date.now() - held.current > 600
-  const follow = () => {
-    if (!canFollow()) return
-    followFrame.current ??= requestAnimationFrame(() => {
-      followFrame.current = null
-      if (canFollow()) toEnd(false)
-    })
-    if (followLate.current) clearTimeout(followLate.current)
-    followLate.current = setTimeout(() => {
-      followLate.current = null
-      if (canFollow()) toEnd(false)
-    }, 180)
-  }
-  useEffect(
-    () => () => {
-      if (followFrame.current != null) cancelAnimationFrame(followFrame.current)
-      if (followLate.current) clearTimeout(followLate.current)
-    },
-    [],
-  )
   /**
-   * Sending closes the keyboard and leaves the chat where it is: at the end, the sent message and the working line fill
-   * the room the keyboard leaves; scrolled up to read, it stays there with Scroll to latest.
+   * The list follows the end itself once its end is past offset 0, since the native scroll to the end stops at 0. A
+   * chat taller than the screen by less than the bar under it is followed here, and so is the change that first makes
+   * the list follow (a long reply, the keyboard, a sent message), which the list does not follow itself.
    */
-  const followSend = () => {
-    held.current = 0
-    if (keyboard.height > 0) {
-      // iOS moves the list with the keyboard itself (see the keyboard handler); Android follows the freed room.
-      sentClosing.current = ios
-      SystemKeyboard.dismiss()
-      // A keyboard that was already on its way down sends no new move; following must not wait for one.
-      if (followLate.current) clearTimeout(followLate.current)
-      followLate.current = setTimeout(() => {
-        followLate.current = null
-        if (!sentClosing.current || settling.current) return
-        sentClosing.current = false
-        follow()
-      }, 700)
-    }
-    follow()
+  const catchUp = () => {
+    const end = endOffset()
+    const listFollows = end !== null && end > 0
+    const was = overflowing
+    setOverflowing(listFollows)
+    if (end === null || followPaused || !following.current || userScrolling.current) return
+    if (!listFollows || !was) toEnd(false)
   }
-  // The first measured composer height replaces the estimate; stay on the end when that moves the inset.
-  useEffect(
-    follow,
+  /** Sending closes the keyboard; the list stays on the end if it was there, and stays put if the reader scrolled up. */
+  const followSend = () => {
+    if (keyboard.height > 0) SystemKeyboard.dismiss()
+  }
+  // The composer growing or shrinking moves the inset under the list; stay on the end.
+  useEffect(() => {
+    if (following.current && !followPaused && !userScrolling.current) toEnd(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [composerHeight] by design; the values it reads beyond these are current as of that run
-    [composerHeight],
-  )
+  }, [composerHeight])
+  // A row opened or closed by hand keeps its place; the agent's own output still follows the end afterwards.
   const holdScroll = useCallback(() => {
-    held.current = Date.now()
+    pauseFollow(600, false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pauseFollow only touches refs and stable setters
   }, [])
   const [restore, setRestore] = useState<{ text: string; n: number }>()
   const computer = store.computers.find((x) => x.id === chat?.computerId)
@@ -1432,6 +1405,9 @@ export default function ChatScreen() {
                 drawDistance={400}
                 // Lays out the newest rows first instead of the whole page from the top.
                 initialScrollAtEnd
+                // Pinned to the end without animating, as the desktop's transcript is; the list stops following once
+                // the reader scrolls up past its threshold, and a chat that fits on screen is left where UIKit rests it.
+                maintainScrollAtEnd={overflowing && !followPaused ? { animated: false } : false}
                 ItemSeparatorComponent={RowSeparator}
                 style={{ flex: 1 }}
                 contentInset={ios ? { bottom: cover } : undefined}
@@ -1444,7 +1420,7 @@ export default function ChatScreen() {
                 }}
                 onLayout={(event) => {
                   metrics.current.viewport = event.nativeEvent.layout.height
-                  follow()
+                  catchUp()
                 }}
                 onScroll={(event) => {
                   const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
@@ -1484,7 +1460,7 @@ export default function ChatScreen() {
                 onContentSizeChange={(_, height) => {
                   metrics.current.content = height
                   settleReveal()
-                  follow()
+                  catchUp()
                 }}
                 keyboardDismissMode="on-drag"
                 keyboardShouldPersistTaps="handled"
