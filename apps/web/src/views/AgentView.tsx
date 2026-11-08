@@ -1,4 +1,5 @@
 import { useViewOnly } from '../composer/useViewOnly'
+import { MAKE_PAGE_PROMPT } from '@ramu/shared/artifacts'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { McpStatusDialog } from './agent/components/McpStatusDialog'
 import { ComputerActivity, ComputerGrantDialog, useComputerActivity } from '../chat/ComputerActivity'
@@ -784,18 +785,7 @@ export const AgentView = memo(function AgentView({
         continuing={continuing}
         onContinue={() => setConfirmContinue(true)}
         onContinueOnHost={setContinueHost}
-        onMakePage={() =>
-          void act(() =>
-            invoke(
-              'agent.submit',
-              view.sessionId,
-              'Make a page I can keep from what this thread found or built (results, comparisons, checklists, numbers): use the real data from this conversation, preview it, and publish it with artifact: true, a short title and one emoji icon.',
-              'queue',
-              [],
-              [],
-            ),
-          )
-        }
+        onMakePage={() => void act(() => invoke('agent.submit', view.sessionId, MAKE_PAGE_PROMPT, 'queue', [], []))}
         latestRequest={
           events.findLast(
             (event): event is Extract<typeof event, { kind: 'user' }> => event.kind === 'user' && !event.agentId,

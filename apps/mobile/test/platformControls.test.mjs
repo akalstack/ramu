@@ -3899,13 +3899,18 @@ for (const os of ['ios', 'android']) {
     const render = () =>
       hooks.render(() =>
         ProjectActionsSheet({
-          project: { id: 'remote:p', computerId: 'remote', name: 'Project' },
+          project: { id: 'remote:p', computerId: 'remote', name: 'Project', repos: ['repo'] },
           open: true,
           onClose: () => {
             closed++
           },
         }),
       )
+    const titles = nodes(render())
+      .filter((node) => node.type === 'SheetOption')
+      .map((node) => node.props.title)
+    // A project with a repository can tell people what shipped, as on the desktop.
+    assert.ok(titles.includes('Make a release note') && titles.includes('Make a launch deck'))
     nodes(render())
       .find((node) => node.type === 'SheetOption' && node.props.title === 'Manage actions')
       .props.onPress()
@@ -5843,7 +5848,7 @@ for (const os of ['ios', 'android']) {
     const render = () =>
       hooks.render(() =>
         ProjectActionsSheet({
-          project: { id: 'a:p', computerId: 'a', name: 'Project', root: '/project' },
+          project: { id: 'a:p', computerId: 'a', name: 'Project', root: '/project', repos: [] },
           open: true,
           onClose() {},
         }),

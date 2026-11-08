@@ -1,4 +1,5 @@
 import { usePageIndex } from '../../pages/pageIndex'
+import { LAUNCH_DECK_PROMPT, RELEASE_NOTE_PROMPT } from '@ramu/shared/artifacts'
 import { openPage } from '../../pages/openPage'
 import { useHostWriteAccess } from '../../composer/useHostWriteAccess'
 import { VIEW_ONLY_WRITE_NOTICE } from '../../composer/viewerAccess'
@@ -187,22 +188,12 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
               {
                 key: 'release-note',
                 label: t('Make a release note'),
-                onSelect: () =>
-                  writeUp(
-                    t(
-                      'Make a release note as a Doc artifact from the pull requests merged since the last release: what changed for the people who use it, grouped by what they would notice, with each pull request linked.',
-                    ),
-                  ),
+                onSelect: () => writeUp(t(RELEASE_NOTE_PROMPT)),
               },
               {
                 key: 'launch-deck',
                 label: t('Make a launch deck'),
-                onSelect: () =>
-                  writeUp(
-                    t(
-                      'Make a short launch deck as a Slides artifact from the pull requests merged since the last release: the problem, what is new, how it looks, and what comes next, with speaker notes.',
-                    ),
-                  ),
+                onSelect: () => writeUp(t(LAUNCH_DECK_PROMPT)),
               },
             ],
           } as MenuEntry,

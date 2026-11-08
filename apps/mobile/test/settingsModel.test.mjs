@@ -291,3 +291,35 @@ test('the phone menu has every desktop section a phone can use, arranged for a p
   assert.equal(sectionById('remote').label, 'Paired computers')
   assert.ok(searchSettings('izin', null, (text) => (text === 'Permissions' ? 'Izin' : text)).length > 0)
 })
+
+test('the advisor and the early switch show their details only while they apply', () => {
+  const rows = (settings) =>
+    visibleGroups('workflows', settings)
+      .concat(visibleGroups('models', settings))
+      .flatMap((group) => group.rows)
+      .map((row) => row.path)
+  const off = [
+    setting('advisor.enabled', false),
+    setting('advisor.step', null),
+    setting('advisor.wait', false),
+    setting('defaultAutoFallback', false),
+    setting('fallback.autoResume', true),
+    setting('fallback.switchAt', null),
+  ]
+  assert.deepEqual(
+    rows(off).filter((path) => path.startsWith('advisor') || path === 'fallback.switchAt'),
+    ['advisor.enabled'],
+  )
+  const on = off.map((entry) =>
+    entry.path === 'advisor.enabled' || entry.path === 'defaultAutoFallback' ? { ...entry, value: true } : entry,
+  )
+  assert.deepEqual(
+    rows(on).filter((path) => path.startsWith('advisor') || path === 'fallback.switchAt'),
+    ['advisor.enabled', 'advisor.step', 'advisor.wait', 'fallback.switchAt'],
+  )
+  // The advisor's model is a whole step, kept with its id as the host stores it.
+  assert.equal(
+    SETTINGS_ROWS.workflows.flatMap((group) => group.rows).find((row) => row.path === 'advisor.step').withId,
+    true,
+  )
+})

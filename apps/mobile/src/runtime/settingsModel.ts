@@ -87,8 +87,11 @@ export type SettingRow =
   | (RowBase & { kind: 'toggle' })
   | (RowBase & { kind: 'choice'; options: Option[] })
   | (RowBase & { kind: 'text'; placeholder?: string; maxLength?: number })
-  /** One of the host's model steps, stored as provider, model and effort; `emptyLabel` names the choice of none. */
-  | (RowBase & { kind: 'model'; emptyLabel: string })
+  /**
+   * One of the host's model steps, stored as provider, model and effort (and the step's id with `withId`, for a setting
+   * that stores a whole step such as the advisor's); `emptyLabel` names the choice of none.
+   */
+  | (RowBase & { kind: 'model'; emptyLabel: string; withId?: boolean })
   /** "When a usage limit is reached": one choice stored as two settings, `path` (fallback on or off) and `resumePath`. */
   | (RowBase & { kind: 'limit'; resumePath: string })
 export interface RowGroup {
@@ -415,6 +418,20 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
           help: LIMIT_CHOICE_HELP,
           words: 'provider fallback limit switch wait stop resume automatic model usage reset auto-resume',
         },
+        {
+          kind: 'choice',
+          path: 'fallback.switchAt',
+          title: 'When to switch',
+          help: 'Switch at a usage limit, or earlier at the selected percentage.',
+          words: 'fallback threshold percent early usage limit switch',
+          when: { path: 'defaultAutoFallback', equals: true },
+          options: [
+            { value: 80, label: 'At 80%' },
+            { value: 90, label: 'At 90%' },
+            { value: 95, label: 'At 95%' },
+            { value: null, label: 'Only at the limit' },
+          ],
+        },
       ],
     },
     {
@@ -509,6 +526,36 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
             { value: 'auto', label: 'A model chosen for each task' },
             { value: 'pick', label: 'A model picked on the desktop' },
           ],
+        },
+      ],
+    },
+    {
+      title: 'Advisor',
+      rows: [
+        {
+          kind: 'toggle',
+          path: 'advisor.enabled',
+          title: 'Advisor',
+          help: 'Send the thread transcript to the advisor model. Uses model tokens. Applies when a thread starts or restarts.',
+          words: 'advisor second opinion consult stuck model',
+        },
+        {
+          kind: 'model',
+          path: 'advisor.step',
+          title: 'Advisor model',
+          help: 'Choose the model used for advice.',
+          words: 'advisor model consult',
+          emptyLabel: 'Choose a model',
+          withId: true,
+          when: { path: 'advisor.enabled', equals: true },
+        },
+        {
+          kind: 'toggle',
+          path: 'advisor.wait',
+          title: 'Always wait for advice',
+          help: 'Pause until advice arrives. When off, the agent can continue independent work.',
+          words: 'advisor wait pause advice',
+          when: { path: 'advisor.enabled', equals: true },
         },
       ],
     },

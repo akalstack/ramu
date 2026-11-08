@@ -424,9 +424,9 @@ const desktopOnly: Partial<Record<SettingsSection, string>> = {
   browser: 'Browser profiles, imports and downloads are managed in Ramu on the host.',
   providers: 'Provider executable paths and sign-in are managed in Ramu on the host.',
   models: 'Model sets, the fallback order and the provider for each ability are edited in Ramu on the host.',
-  workflows: 'Sub-agent routing and the advisor are set up in Ramu on the host.',
+  workflows: 'Custom agents and a helper model of your own are set up in Ramu on the host.',
   memory: 'The skills library and its model choices are managed in Ramu on the host.',
-  git: 'The commit message model is chosen in Ramu on the host.',
+  git: 'Hosting accounts and their tokens are added in Ramu on the host.',
 }
 
 export default function SettingsSectionPage() {

@@ -5351,13 +5351,10 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Lokasi program provider dan login dikelola di Ramu pada host.',
   'Model sets, the fallback order and the provider for each ability are edited in Ramu on the host.':
     'Set model, urutan cadangan, dan provider untuk setiap kemampuan diubah di Ramu pada host.',
-  'Sub-agent routing and the advisor are set up in Ramu on the host.':
-    'Rute sub-agen dan penasihat diatur di Ramu pada host.',
   'The skills library and its model choices are managed in Ramu on the host.':
     'Pustaka skill dan pilihan modelnya dikelola di Ramu pada host.',
   'Browser profiles, imports and downloads are managed in Ramu on the host.':
     'Profil peramban, impor, dan unduhan dikelola di Ramu pada host.',
-  'The commit message model is chosen in Ramu on the host.': 'Model pesan commit dipilih di Ramu pada host.',
   'Not connected. This is the last activity Ramu saw; the agent keeps working on the host.':
     'Tidak terhubung. Ini aktivitas terakhir yang dilihat Ramu; agen tetap bekerja di host.',
   Path: 'Path',
@@ -6309,4 +6306,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'This repository': 'Repository ini',
   'Shows every repository again': 'Menampilkan semua repository lagi',
   'Waiting on you': 'Menunggumu',
+  'Choose a model': 'Pilih model',
+  'Custom agents and a helper model of your own are set up in Ramu on the host.':
+    'Agen kustom dan model helper pilihanmu diatur di Ramu pada host.',
+  'Hosting accounts and their tokens are added in Ramu on the host.':
+    'Akun hosting dan token-nya ditambahkan di Ramu pada host.',
 }

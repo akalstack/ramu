@@ -40,10 +40,12 @@ import {
   Plug,
   MessageSquarePlus,
   Search,
+  AppWindow,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
 import { belowHeader } from '../../../components/UndoToast'
 import { ChatFindBar } from '../../../components/ChatFindBar'
+import { MAKE_PAGE_PROMPT } from '@ramu/shared/artifacts'
 import { useAutomation } from '../../../runtime/automation'
 import { useChat, useStore, type OutboxItem } from '../../../runtime/store'
 import { MODEL_WARNING_DEVICE_KEY, resolveModelChangeWarning } from '../../../runtime/busyMode'
@@ -945,6 +947,21 @@ export default function ChatScreen() {
       group: 'tools' as const,
       onPress: () => setFinding(true),
     },
+    // As on the desktop: one tap asks the agent to turn what the thread found into an artifact, after its current work.
+    ...(chat.sessionId && chat.items.length && computer?.access !== 'viewer'
+      ? [
+          {
+            icon: AppWindow,
+            label: tr('Make a page from this thread'),
+            symbol: 'macwindow' as const,
+            group: 'tools' as const,
+            onPress: () => {
+              followSend()
+              void store.send(chat.id, MAKE_PAGE_PROMPT, 'queue')
+            },
+          },
+        ]
+      : []),
     ...(chat.sessionId
       ? [
           {

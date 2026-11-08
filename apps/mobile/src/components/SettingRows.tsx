@@ -217,7 +217,17 @@ function ModelStepRow({
       disabled={disabled}
       onChange={(id) => {
         const step = steps.find((entry) => entry.id === id)
-        host.set(row.path, step ? { provider: step.provider, model: step.model, effort: step.effort } : null)
+        host.set(
+          row.path,
+          step
+            ? {
+                ...(row.withId ? { id: step.id } : {}),
+                provider: step.provider,
+                model: step.model,
+                effort: step.effort,
+              }
+            : null,
+        )
       }}
     />
   )
