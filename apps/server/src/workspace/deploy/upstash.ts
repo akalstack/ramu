@@ -1,6 +1,7 @@
 // Upstash Redis through its Developer API, with the person's account email and a Developer API key saved together as
 // `email:key` (the API takes them as Basic authentication). A database is the cache; previews and development get a
 // second database, `<name>-preview`, so they never read or clear production's keys.
+import type { UsageFigure } from '@ramu/shared/types/deploy'
 import { platformCall, type HostingAuth } from './adapter'
 import { registerResourceAdapter, type ProvisionedResource, type ResourceAdapter } from './resource'
 
@@ -103,6 +104,39 @@ export function upstashAdapter(options: { api?: string; fetch?: typeof fetch } =
     provision: (auth, target) => ensure(auth, target.name),
     find: (auth, name) => named(auth, name),
     page: (id) => `https://console.upstash.com/redis/${encodeURIComponent(id)}`,
+    async usage(auth, id) {
+      // This month's figures as Upstash counts them; its API reports no plan limits, so none is shown or guessed.
+      const stats = await call<{
+        current_storage?: number
+        total_monthly_requests?: number
+        total_monthly_bandwidth?: number
+      }>(`/redis/stats/${encodeURIComponent(id)}`, auth, 'reading usage')
+      const figures: UsageFigure[] = []
+      if (typeof stats.current_storage === 'number')
+        figures.push({ metric: 'storage', service: null, used: stats.current_storage, unit: 'bytes', limit: null })
+      if (typeof stats.total_monthly_requests === 'number')
+        figures.push({
+          metric: 'service',
+          service: 'Requests',
+          used: stats.total_monthly_requests,
+          unit: 'requests',
+          limit: null,
+        })
+      if (typeof stats.total_monthly_bandwidth === 'number')
+        figures.push({
+          metric: 'transfer',
+          service: null,
+          used: stats.total_monthly_bandwidth,
+          unit: 'bytes',
+          limit: null,
+        })
+      const now = new Date()
+      return {
+        period: { start: Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1), end: null },
+        figures,
+        billingPage: 'https://console.upstash.com/account/billing',
+      }
+    },
     async branch(auth, id, name) {
       const main = await call<UpstashDatabase>(`/redis/database/${encodeURIComponent(id)}`, auth, 'reading the cache')
       return (await ensure(auth, `${main.database_name}-${name}`)).variables

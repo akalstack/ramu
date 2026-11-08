@@ -58,6 +58,8 @@ describe('Upstash', () => {
         databases.push(made)
         return made
       }
+      if (/^GET \/redis\/stats\/db1/.test(line))
+        return { current_storage: 2048, total_monthly_requests: 1500, total_monthly_bandwidth: 4096 }
       const one = /^GET \/redis\/database\/(\w+)$/.exec(line)
       return one ? databases.find((entry) => entry.database_id === one[1]) : undefined
     })
@@ -95,6 +97,18 @@ describe('Upstash', () => {
     // Asking again reuses the preview database instead of making a third.
     await adapter.branch!(auth, 'db1', 'preview')
     expect(databases).toHaveLength(2)
+  })
+
+  it('reports this month’s storage, requests and bandwidth, with no limit Upstash does not state', async () => {
+    databases.length = 0
+    const { url } = await upstash()
+    const usage = await upstashAdapter({ api: url }).usage!(auth, 'db1')
+    expect(usage.figures).toEqual([
+      { metric: 'storage', service: null, used: 2048, unit: 'bytes', limit: null },
+      { metric: 'service', service: 'Requests', used: 1500, unit: 'requests', limit: null },
+      { metric: 'transfer', service: null, used: 4096, unit: 'bytes', limit: null },
+    ])
+    expect(usage.billingPage).toBe('https://console.upstash.com/account/billing')
   })
 
   it('never takes over an older database of the same name', async () => {

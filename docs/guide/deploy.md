@@ -139,6 +139,7 @@ For an Expo app (an `app.json` or `app.config.*` at the repository root, as the 
 | Vercel | Each service's usage this calendar month (such as data transfer and function invocations), summed from Vercel's billing charges, for the account or team the project is linked under | Not reported by Vercel's API; **Open billing** shows it |
 | Netlify | The team's build minutes for the billing period | The minutes included in the plan, with any add-on packs |
 | Railway | The project's outbound data transfer in the workspace's billing period | Not reported by Railway's API; **Open billing** shows the usage page |
+| Upstash | The cache's storage now, and its requests and data transfer this calendar month | Not reported by Upstash's API; **Open billing** shows the plan |
 | Neon | The main branch's size, compute time and data transfer for the billing period (Neon's own counters, which lag a little) | Storage against Neon's branch size limit; compute against the plan's compute time; transfer has none |
 
 When the API reports no figures for an account or plan (Vercel refuses billing data to some roles; Netlify plans billed in credits have no build minutes), the sheet says so instead of showing numbers.
@@ -179,7 +180,7 @@ The sheet also shows **Cache** when the code reads `REDIS_URL` or `UPSTASH_REDIS
 
 - **Cache on Upstash:** connect Upstash with your account email and a Developer API key joined by a colon (`you@example.com:key`), which its API takes as Basic credentials. **Provision** creates a TLS Redis database in `us-east-1` named after the project, and a second one, `<name>-preview`, for previews, this host and GitHub Actions. It sets `REDIS_URL`, `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`. A database of the same name that Ramu did not make in the last hour is refused rather than taken over.
 - **Email on Resend:** connect Resend with a Full access key, which creating keys needs. That key never reaches the app: **Provision** creates a sending-only key named after the project for production and `<name>-preview` for previews, this host and GitHub Actions, each set as `RESEND_API_KEY`. Add and verify your sending domain on Resend. Resend shows a key's value only once, so if its reply is lost the key is not recovered; remove it on Resend's page.
-- Neither reports usage through the API Ramu uses.
+- Upstash's figures are under [Usage](#usage); Resend reports no usage through the API Ramu uses.
 
 The project stays linked to the account that linked it. If you connect a different account later, deploy actions are refused until you connect that account again or link the project again.
 

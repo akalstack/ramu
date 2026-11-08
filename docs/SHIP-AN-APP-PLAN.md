@@ -7,7 +7,7 @@ A person who has never written code describes an app, and Ramu takes it from an 
 The path is built ([Shipping an app](guide/shipping.md)): a project from one sentence, the repository published from the deploy sheet, hosting on Vercel, Netlify, Railway, Fly.io, Cloudflare, GitHub Pages or the person's own server, databases, caches, file storage and email on their own accounts, CI that GitHub or GitLab requires before merge, variables synced to GitHub Actions, GitLab CI and the platform, and store releases of an Expo app. What is still missing:
 
 - **Showing people:** the site describes the path in words; real screenshots of each step are still to come.
-- **Usage for newer platforms:** the deploy sheet's usage figures cover Vercel, Netlify and Neon; others report none through their APIs yet.
+- **Usage for newer platforms:** the deploy sheet's usage figures cover Vercel, Netlify, Railway, Neon and Upstash; others report none through the APIs Ramu uses yet.
 
 **Easier for the person:** one sentence becomes a running app. One action (**Deploy**) turns it into a public URL on an account they own. Every later change goes through a pull request with checks and a preview URL, and merging to the default branch deploys it. The agent knows the target, the live URL and the last deployment's result, so "it's broken in production" is a task it can act on: read the logs, fix the bug, open a pull request, watch the deploy.
 
@@ -33,7 +33,7 @@ A developer can enter at any step: **Deploy** on an existing project, or **Set u
 
 ### 1. Cost and usage
 
-Usage figures for Vercel, Netlify and Neon beside the limits their APIs report, **Open billing**, notices at 80% and 100%, and `deploy_usage` are built ([Usage](guide/deploy.md#usage)). What remains: figures for each new platform's adapter as it lands, and Netlify bandwidth or credits if Netlify's API starts reporting them.
+Usage figures for Vercel, Netlify, Railway, Neon and Upstash beside the limits their APIs report, **Open billing**, notices at 80% and 100%, and `deploy_usage` are built ([Usage](guide/deploy.md#usage)). What remains: figures for each new platform's adapter as it lands, and Netlify bandwidth or credits if Netlify's API starts reporting them.
 
 ### 2. The site
 
