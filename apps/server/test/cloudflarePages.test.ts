@@ -140,4 +140,29 @@ describe('Cloudflare Workers', () => {
       await workers.productionUrl({ token: 'cf', scope: 'acc1' }, { siteId: 'ana/api', siteName: 'api-worker' }),
     ).toBe('https://api-worker.ana.workers.dev')
   })
+
+  it('reports this month’s requests and errors from the analytics API, and refuses plainly without analytics access', async () => {
+    let sent: { query: string; variables: Record<string, string> } | undefined
+    let answer: unknown = {
+      data: { viewer: { accounts: [{ workersInvocationsAdaptive: [{ sum: { requests: 1200, errors: 3 } }] }] } },
+    }
+    const fetcher = (async (url: string, init: RequestInit) => {
+      expect(url).toBe('https://cf.test/graphql')
+      sent = JSON.parse(String(init.body)) as typeof sent
+      return new Response(JSON.stringify(answer))
+    }) as unknown as typeof fetch
+    const workers = cloudflareWorkersAdapter({ api: 'https://cf.test', fetch: fetcher })
+    const auth = { token: 'cf', scope: 'acc1' }
+    const site = { siteId: 'ana/api', siteName: 'api-worker' }
+    const usage = await workers.capabilities.usage!(auth, site)
+    expect(sent?.variables).toMatchObject({ account: 'acc1', script: 'api-worker' })
+    expect(sent?.query).toContain('workersInvocationsAdaptive')
+    expect(usage.figures).toEqual([
+      { metric: 'service', service: 'Requests', used: 1200, unit: 'requests', limit: null },
+      { metric: 'service', service: 'Errors', used: 3, unit: 'requests', limit: null },
+    ])
+    expect(usage.period?.end).toBeNull()
+    answer = { data: null, errors: [{ message: 'not authorized for that account' }] }
+    await expect(workers.capabilities.usage!(auth, site)).rejects.toThrow('Account Analytics read')
+  })
 })

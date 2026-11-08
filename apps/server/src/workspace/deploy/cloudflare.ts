@@ -44,8 +44,25 @@ export function cloudflareApi(options: { api?: string; fetch?: typeof fetch } = 
   const call = async <T>(auth: HostingAuth, path: string, what: string, init: RequestInit = {}) =>
     (await platformCall<Envelope<T>>('Cloudflare', fetcher, `${api}${path}`, { ...init, token: auth.token }, what))
       .result
+  /** Cloudflare's GraphQL Analytics API, which answers 200 with `errors` when the token cannot read analytics. */
+  const graphql = async <T>(auth: HostingAuth, query: string, variables: Record<string, unknown>, what: string) => {
+    const answer = await platformCall<{ data?: T | null; errors?: { message?: string }[] | null }>(
+      'Cloudflare',
+      fetcher,
+      `${api}/graphql`,
+      { method: 'POST', token: auth.token, body: JSON.stringify({ query, variables }) },
+      what,
+    )
+    if (answer.errors?.length || !answer.data)
+      throw new DeployError(
+        `Cloudflare refused ${what}. Give the token Account Analytics read to see usage here.`,
+        'missing-permission',
+      )
+    return answer.data
+  }
   return {
     call,
+    graphql,
     /** Whether the account has a Pages project of that name. */
     async projectExists(auth: HostingAuth, account: string, name: string) {
       try {
@@ -211,6 +228,32 @@ export function cloudflareWorkersAdapter(
       return subdomain ? `https://${site.siteName}.${subdomain}.workers.dev` : null
     },
     capabilities: {
+      async usage(auth, site) {
+        // This month's requests and errors as Cloudflare's analytics count them; the plan's daily request limit is not
+        // in the API, so none is shown or guessed.
+        if (!WORKER.test(site.siteName) || !auth.scope)
+          throw new DeployError('This project’s Worker is not one Ramu set up. Link it again.', 'not-found')
+        const now = new Date()
+        const start = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
+        const data = await cloudflare.graphql<{
+          viewer: { accounts: { workersInvocationsAdaptive: { sum: { requests: number; errors: number } }[] }[] }
+        }>(
+          auth,
+          'query Usage($account: string!, $script: string!, $start: Time!, $end: Time!) { viewer { accounts(filter: { accountTag: $account }) { workersInvocationsAdaptive(limit: 10000, filter: { scriptName: $script, datetime_geq: $start, datetime_leq: $end }) { sum { requests errors } } } } }',
+          { account: auth.scope, script: site.siteName, start: new Date(start).toISOString(), end: now.toISOString() },
+          'reading usage',
+        )
+        const rows = data.viewer.accounts.flatMap((account) => account.workersInvocationsAdaptive)
+        const total = (key: 'requests' | 'errors') => rows.reduce((sum, row) => sum + (row.sum[key] ?? 0), 0)
+        return {
+          period: { start, end: null },
+          figures: [
+            { metric: 'service', service: 'Requests', used: total('requests'), unit: 'requests', limit: null },
+            { metric: 'service', service: 'Errors', used: total('errors'), unit: 'requests', limit: null },
+          ],
+          billingPage: `https://dash.cloudflare.com/${encodeURIComponent(auth.scope)}/workers/overview`,
+        }
+      },
       deployProduction: (auth, site, ref) => job.deploy(auth, site, ref),
       rollback: (auth, site, id) => job.rollback(auth, site, id),
     },

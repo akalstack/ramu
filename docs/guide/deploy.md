@@ -140,9 +140,10 @@ For an Expo app (an `app.json` or `app.config.*` at the repository root, as the 
 | Netlify | The team's build minutes for the billing period | The minutes included in the plan, with any add-on packs |
 | Railway | The project's outbound data transfer in the workspace's billing period | Not reported by Railway's API; **Open billing** shows the usage page |
 | Upstash | The cache's storage now, and its requests and data transfer this calendar month | Not reported by Upstash's API; **Open billing** shows the plan |
+| Cloudflare Workers | The Worker's requests and errors this calendar month, from Cloudflare's analytics (the token needs Account Analytics read; without it the sheet says so) | Not reported by Cloudflare's API; **Open billing** opens the Workers overview |
 | Neon | The main branch's size, compute time and data transfer for the billing period (Neon's own counters, which lag a little) | Storage against Neon's branch size limit; compute against the plan's compute time; transfer has none |
 
-When the API reports no figures for an account or plan (Vercel refuses billing data to some roles; Netlify plans billed in credits have no build minutes), the sheet says so instead of showing numbers.
+When the API reports no figures for an account or plan (Vercel refuses billing data to some roles; Cloudflare refuses analytics to a token without Account Analytics read; Netlify plans billed in credits have no build minutes), the sheet says so instead of showing numbers.
 
 Every six hours the host reads the same figures. A figure with a reported limit that reaches 80%, and again at 100%, raises one notice per billing period in the notifications (on the phone, under **Missed**), naming what grows and the cheapest fix, such as building only when the app's files change, or deleting data and branches the app no longer needs. The notice opens the project's most recent thread, where an agent can read the figures with `deploy_usage` and propose a fix as a pull request.
 
