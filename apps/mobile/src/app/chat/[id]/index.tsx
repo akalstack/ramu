@@ -1,6 +1,6 @@
 import { HelperDetails } from '../../../components/Helpers'
 import { deliveryVisible, visibleText } from '../../../runtime/transcript'
-import { transcriptScrollState } from '../../../runtime/chatViewport'
+import { finishedAnswerRow, transcriptScrollState } from '../../../runtime/chatViewport'
 import { goBackOrHome } from '../../../runtime/navigation'
 import { shareRows } from '../../../runtime/shareRows'
 import { VIEW_ONLY_WRITE_NOTICE } from '../../../runtime/viewerAccess'
@@ -613,6 +613,38 @@ export default function ChatScreen() {
     } catch {}
     setFound({ id: match.id, at: Date.now() })
   }
+  // When a turn finishes while the reader follows its end, an answer taller than the screen is read from its first line:
+  // the list glides to its top and stops following, rather than leaving the reader at its last line.
+  const latestRows = useRef(pageRows)
+  latestRows.current = pageRows
+  const isRunning = chat?.status === 'running'
+  const wasRunning = useRef(isRunning)
+  useEffect(() => {
+    const finished = wasRunning.current && !isRunning
+    wasRunning.current = isRunning
+    if (!finished || !revealed || !following.current || userScrolling.current) return
+    // After the finished turn folds under Worked for and its answer is measured.
+    const timer = setTimeout(() => {
+      if (!following.current || userScrolling.current) return
+      const m = metrics.current
+      const index = finishedAnswerRow(
+        latestRows.current,
+        (at) => scroll.current?.getState().sizeAtIndex(at) ?? 0,
+        m.viewport ? m.viewport - m.cover - topInset - space.l : 0,
+      )
+      if (index === null) return
+      following.current = false
+      pauseFollow(800, false)
+      scroll.current?.scrollToIndex({
+        index,
+        animated: !reducedMotion,
+        viewPosition: 0,
+        viewOffset: topInset + space.s,
+      })
+    }, 350)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the turn stops; the rest is read from refs then
+  }, [isRunning])
   // Where each message sits in time and in its turn: date labels above turns, time and copy under each turn's last answer.
   const itemMeta = useMemo(() => {
     const map = new Map<string, ItemMeta>()
