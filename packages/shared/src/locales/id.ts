@@ -6351,4 +6351,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   'This branch is checked out in another worktree.': 'Branch ini sedang di-checkout di worktree lain.',
   'This device is view-only, so it cannot change branches.':
     'Perangkat ini hanya dapat melihat, jadi tidak dapat mengubah branch.',
+  'File names': 'Nama berkas',
+  'File contents': 'Isi berkas',
+  'Search text in these files': 'Cari teks di berkas ini',
+  'Showing the first {0} matches. Refine your search.': 'Menampilkan {0} hasil pertama. Persempit pencarian.',
+  'No matches in these files.': 'Tidak ada yang cocok di berkas ini.',
+  'Line {0}: {1}': 'Baris {0}: {1}',
 }

@@ -8502,3 +8502,142 @@ test('Source Control branch actions confirm, refuse the checked-out branch and s
   assert.deepEqual(runs.at(-1), { kind: 'create-from', name: 'fix', from: 'main' })
   hooks.dispose()
 })
+
+const sayWithValues =
+  () =>
+  (text, values = {}) =>
+    text.replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ''))
+
+test('searching file contents asks the host for the checkout, ignores a stale answer and groups lines by file', async () => {
+  const contentSearch = await import('../src/runtime/contentSearch.ts')
+  const searchLimits = await import('../../../packages/shared/src/search/searchLimits.ts')
+  const hooks = hookHarness()
+  const requests = []
+  const store = {
+    language: 'en',
+    invoke: (...args) => {
+      const request = { args, ...deferred() }
+      requests.push(request)
+      return request.promise
+    },
+  }
+  const { ExplorerContentSearch } = load('components/ExplorerContentSearch.tsx', 'ios', {
+    react: hooks.react,
+    '../runtime/store': { useStore: () => store },
+    '../runtime/contentSearch': contentSearch,
+    '@ramu/shared/search/searchLimits': searchLimits,
+    '../i18n': { useSay: sayWithValues },
+  })
+  const opened = []
+  let query = 'todo'
+  const render = () =>
+    hooks.render(() =>
+      ExplorerContentSearch({
+        host: 'laptop',
+        context: 'project:laptop:site',
+        query,
+        online: true,
+        onOpen: (...args) => opened.push(args),
+      }),
+    )
+  const match = (path, line, text) => ({
+    repoId: 'r',
+    path,
+    line,
+    column: 1,
+    endColumn: 5,
+    text,
+    start: text.indexOf('TODO'),
+    end: text.indexOf('TODO') + 4,
+  })
+  render()
+  await new Promise((resolve) => setTimeout(resolve, 350))
+  assert.equal(requests.length, 1, 'typing is debounced into one host search')
+  assert.deepEqual(requests[0].args, [
+    'laptop',
+    'files.search',
+    'project:laptop:site',
+    { query: 'todo', caseSensitive: false, wholeWord: false, regex: false, include: '', exclude: '' },
+  ])
+  query = 'todo:'
+  render()
+  await new Promise((resolve) => setTimeout(resolve, 350))
+  assert.equal(requests.length, 2)
+  requests[1].resolve({
+    matches: [
+      match('src/a.ts', 3, '// TODO: one'),
+      match('src/b.ts', 1, 'TODO: two'),
+      match('src/a.ts', 9, 'x // TODO: three'),
+    ],
+    limited: false,
+  })
+  await settle()
+  requests[0].resolve({ matches: [match('old.ts', 1, 'TODO stale')], limited: true })
+  await settle()
+  const list = render()
+  const rows = list.props.data
+  assert.deepEqual(
+    rows.map((row) => (row.kind === 'file' ? `${row.path} (${row.count})` : row.match.line)),
+    ['src/a.ts (2)', 3, 9, 'src/b.ts (1)', 1],
+    'the newer answer wins and each file lists its own lines',
+  )
+  assert.ok(
+    !nodes(list.props.ListHeaderComponent).some((node) => String(node.props?.children).startsWith('Showing the first')),
+  )
+  const line = list.props.renderItem({ item: rows[2] })
+  assert.equal(line.props.accessibilityLabel, 'Line 9: x // TODO: three')
+  line.props.onPress()
+  assert.deepEqual(opened, [['r', 'src/a.ts', 9]])
+  hooks.dispose()
+})
+
+test('a thread offers its checkpoint only once the host has one, and the sheet shows the saved summary', async () => {
+  const checkpointMarkdown = await import('../../../packages/shared/src/chat/checkpointMarkdown.ts')
+  const hooks = hookHarness()
+  const calls = []
+  let saved = null
+  const store = {
+    language: 'en',
+    invoke: async (...args) => {
+      calls.push(args)
+      return saved
+    },
+  }
+  const copied = []
+  const { useSessionCheckpoint, SessionCheckpointSheet } = load('components/SessionCheckpoint.tsx', 'ios', {
+    react: hooks.react,
+    '../runtime/store': { useStore: () => store },
+    '../i18n': { useSay: sayWithValues },
+    '@ramu/shared/chat/checkpointMarkdown': checkpointMarkdown,
+    'expo-clipboard': { setStringAsync: async (text) => copied.push(text) },
+  })
+  let session = null
+  let turn = null
+  const read = () => hooks.render(() => useSessionCheckpoint('laptop', session, true, turn))
+  assert.equal(read(), null)
+  await settle()
+  assert.equal(calls.length, 0, 'a thread without a session has no checkpoint to read')
+  session = 's1'
+  read()
+  await settle()
+  assert.deepEqual(calls, [['laptop', 'agent.checkpoint', 's1']])
+  assert.equal(read(), null, 'no checkpoint yet, so nothing is offered')
+  saved = { sessionId: 's1', seq: 4, summary: '## Objective\n\nShip the bakery site.', updatedAt: Date.now() }
+  turn = 1
+  read()
+  await settle()
+  const checkpoint = read()
+  assert.equal(checkpoint?.summary, saved.summary, 'a finished turn reads the newer checkpoint')
+
+  const sheet = SessionCheckpointSheet({ checkpoint, open: true, onClose() {} })
+  assert.equal(sheet.props.title, 'Session checkpoint')
+  assert.equal(sheet.props.open, true)
+  assert.ok(nodes(sheet).some((node) => node.type === 'Markdown' && node.props.text === saved.summary))
+  nodes(sheet)
+    .find((node) => node.type === 'Button' && node.props.title === 'Copy')
+    .props.onPress()
+  await settle()
+  assert.deepEqual(copied, [saved.summary])
+  assert.equal(SessionCheckpointSheet({ checkpoint: null, open: true, onClose() {} }).props.open, false)
+  hooks.dispose()
+})

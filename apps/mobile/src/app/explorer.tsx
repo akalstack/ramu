@@ -1,4 +1,5 @@
 import { BottomSearch } from '../components/BottomSearch'
+import { ExplorerContentSearch } from '../components/ExplorerContentSearch'
 import { FileIcon } from '../components/FileIcon'
 import { translate } from '@ramu/shared/i18n'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -34,14 +35,14 @@ import {
 } from '@ramu/shared/workspace/explorer'
 import { useStore } from '../runtime/store'
 import { useWorkspaces } from '../runtime/useWorkspaces'
-import { fill, useT } from '../i18n'
+import { fill, useSay, useT } from '../i18n'
 import { duplicateName, explorerActions, parentFolder, planMove, planRename } from '../runtime/explorerActions'
 import { shareDownloadedFile } from '../runtime/explorerShare'
 import { HostError } from '../runtime/transport'
 import { readExplorerNavigation } from '../runtime/explorerNavigation'
 import { font, radius, space, useTheme } from '../theme'
 import { Header, HeaderButton, PageFlatList, Screen } from '../components/Screen'
-import { Button, Row, Sheet, T } from '../components/ui'
+import { Button, Row, Segmented, Sheet, T } from '../components/ui'
 import { SheetGroup, SheetOption } from '../components/SheetOptions'
 
 type ExplorerScope = { host: string; context: string; label?: string }
@@ -62,6 +63,7 @@ export default function Explorer() {
   const store = useStore()
   const router = useRouter()
   const t = useT()
+  const say = useSay()
   const { c } = useTheme()
   const routeKey = JSON.stringify([params.computer, params.ctx])
   const routeScope: ExplorerScope | null =
@@ -105,6 +107,9 @@ export default function Explorer() {
   // Repository roots start open; this holds the folded ones, apart from `expanded` so saved folder keys keep their shape.
   const [closedRoots, setClosedRoots] = useState<ReadonlySet<string>>(new Set())
   const [query, setQuery] = useState('')
+  // What a search looks in: file names and paths (from the file list), or the files' text (searched on the host).
+  const [searchIn, setSearchIn] = useState<'names' | 'contents'>('names')
+  const searchingContents = searchIn === 'contents' && !!query.trim()
   const [matches, setMatches] = useState<{ repoId: string; path: string }[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -374,7 +379,7 @@ export default function Explorer() {
   useEffect(() => {
     let alive = true
     setMatches([])
-    if (!scope || !online || !query.trim()) return
+    if (!scope || !online || !query.trim() || searchIn !== 'names') return
     const timer = setTimeout(() => {
       void store.invoke(scope.host, 'files.all', scope.context).then(
         (all) => {
@@ -389,8 +394,8 @@ export default function Explorer() {
       alive = false
       clearTimeout(timer)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [scope?.host, scope?.context, online, query, revision] by design; the values it reads beyond these are current as of that run
-  }, [scope?.host, scope?.context, online, query, revision])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [scope?.host, scope?.context, online, query, searchIn, revision] by design; the values it reads beyond these are current as of that run
+  }, [scope?.host, scope?.context, online, query, searchIn, revision])
   const multiRoot = bindings.length > 1
   const rows = useMemo<ExplorerRow[]>(
     () =>
@@ -438,7 +443,7 @@ export default function Explorer() {
     return () => cancelAnimationFrame(frame)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [rows, loading, query, selected?.repoId, selected?.path, scopeIdentity] by design; the values it reads beyond these are current as of that run
   }, [rows, loading, query, selected?.repoId, selected?.path, scopeIdentity])
-  const open = (repoId: string, path: string) =>
+  const open = (repoId: string, path: string, line?: number) =>
     scope &&
     activeScope.current === scopeIdentity &&
     router.push({
@@ -448,6 +453,7 @@ export default function Explorer() {
         ctx: scope.context,
         repoId,
         path,
+        ...(line ? { line: String(line) } : {}),
         ...(params.composerProject && params.computer === scope.host && params.ctx === scope.context
           ? {
               composerProject: params.composerProject,
@@ -456,6 +462,16 @@ export default function Explorer() {
           : {}),
       },
     })
+  const searchChoice = query.trim() ? (
+    <Segmented
+      value={searchIn}
+      onChange={setSearchIn}
+      options={[
+        { key: 'names', label: say('File names') },
+        { key: 'contents', label: say('File contents') },
+      ]}
+    />
+  ) : null
   const available = acting ? explorerActions({ online, viewOnly, kind: acting.entry.kind }) : []
   return (
     <Screen>
@@ -589,6 +605,27 @@ export default function Explorer() {
             )
           }
         />
+      ) : searchingContents ? (
+        <ExplorerContentSearch
+          host={scope.host}
+          context={scope.context}
+          query={query}
+          online={online}
+          repoNames={
+            multiRoot ? Object.fromEntries(bindings.map((binding) => [binding.repoId, binding.repoName])) : undefined
+          }
+          header={
+            <>
+              {searchChoice}
+              {!online ? (
+                <T tone="muted" style={{ padding: space.m }}>
+                  {t.explorerOffline}
+                </T>
+              ) : null}
+            </>
+          }
+          onOpen={open}
+        />
       ) : (
         <>
           <PageFlatList
@@ -608,6 +645,7 @@ export default function Explorer() {
             contentInsetAdjustmentBehavior="automatic"
             ListHeaderComponent={
               <View style={{ paddingHorizontal: space.m, gap: space.s }}>
+                {searchChoice}
                 {!online ? (
                   <T tone="muted" style={{ padding: space.m }}>
                     {t.explorerOffline}
@@ -1084,7 +1122,12 @@ export default function Explorer() {
         )}
       </Sheet>
       {scope ? (
-        <BottomSearch value={query} onChangeText={setQuery} placeholder={t.searchFilePaths} label={t.searchCheckout} />
+        <BottomSearch
+          value={query}
+          onChangeText={setQuery}
+          placeholder={searchIn === 'contents' ? say('Search text in these files') : t.searchFilePaths}
+          label={t.searchCheckout}
+        />
       ) : null}
     </Screen>
   )

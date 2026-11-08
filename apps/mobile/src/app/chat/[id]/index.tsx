@@ -41,6 +41,7 @@ import {
   MessageSquarePlus,
   Search,
   AppWindow,
+  BookmarkCheck,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
 import { belowHeader } from '../../../components/UndoToast'
@@ -58,6 +59,7 @@ import { fill, useT, useSay } from '../../../i18n'
 import { LoadingMark } from '../../../components/AnimatedMark'
 import { ProviderIcon } from '../../../components/Logos'
 import { McpStatusSheet } from '../../../components/McpStatusSheet'
+import { SessionCheckpointSheet, useSessionCheckpoint } from '../../../components/SessionCheckpoint'
 import { editFromHere } from '../../../runtime/editFromHere'
 import { looseInvoke } from '../../../runtime/settingsModel'
 import { formatChatDate, needsChatDate } from '@ramu/shared/chat/chatDates'
@@ -145,6 +147,7 @@ export default function ChatScreen() {
   const { seeFailure } = useAutomation()
   const [continueHost, setContinueHost] = useState<string | null>(null)
   const [mcpOpen, setMcpOpen] = useState(false)
+  const [checkpointOpen, setCheckpointOpen] = useState(false)
   // What the composer changed for a teammate the draft brings in, kept for that target only.
   const [joinEdits, setJoinEdits] = useState<{
     key: string
@@ -710,6 +713,12 @@ export default function ChatScreen() {
       row
     )
   }
+  const checkpoint = useSessionCheckpoint(
+    chat?.computerId ?? '',
+    chat?.sessionId ?? null,
+    !!chat && store.isOnline(chat.computerId),
+    chat?.turnStartedAt ?? null,
+  )
   if (!chat)
     return (
       <Screen>
@@ -970,6 +979,17 @@ export default function ChatScreen() {
             symbol: 'powerplug' as const,
             group: 'tools' as const,
             onPress: () => setMcpOpen(true),
+          },
+        ]
+      : []),
+    ...(checkpoint
+      ? [
+          {
+            icon: BookmarkCheck,
+            label: tr('Session checkpoint'),
+            symbol: 'bookmark' as const,
+            group: 'tools' as const,
+            onPress: () => setCheckpointOpen(true),
           },
         ]
       : []),
@@ -2017,6 +2037,7 @@ export default function ChatScreen() {
         ))}
       </Sheet>
       <ContinueOnHostSheet chat={chat} targetId={continueHost} onClose={() => setContinueHost(null)} />
+      <SessionCheckpointSheet checkpoint={checkpoint} open={checkpointOpen} onClose={() => setCheckpointOpen(false)} />
       {chat.sessionId ? (
         <McpStatusSheet
           open={mcpOpen}
