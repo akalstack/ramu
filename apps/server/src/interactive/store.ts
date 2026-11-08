@@ -24,6 +24,7 @@ import {
   DESIGN_FRAMES_MAX,
   MOTION_SCENES_MAX,
   designFrameSchema,
+  motionAudio,
   motionSceneSchema,
   dashboardChartSchema,
   DASHBOARD_RANGE_MAX,
@@ -84,6 +85,11 @@ export const interactiveInput = z.object({
     .max(MOTION_SCENES_MAX)
     .optional()
     .describe('The scenes of a motion (kind motion), in order, at most two minutes together.'),
+  music: motionAudio
+    .optional()
+    .describe(
+      "A motion's background music: an audio file in files (make_music's attachment), looped under the video and quieter under narration.",
+    ),
   refreshMinutes: z
     .number()
     .int()
@@ -156,7 +162,7 @@ export const interactiveInput = z.object({
           .uuid()
           .optional()
           .describe(
-            'An image this thread holds, such as one generate_image made (its attachmentId): the host puts its bytes in this file, so leave content out.',
+            'An image or audio file this thread holds, such as one generate_image, make_music or make_sound made (its attachmentId): the host puts its bytes in this file, so leave content out.',
           ),
       }),
     )
@@ -323,7 +329,11 @@ export class InteractiveStore {
     signal: AbortSignal | undefined,
     kept: InteractiveInput['checks'],
   ) {
-    if (input.html !== undefined || (input.files !== undefined && input.kind !== 'slides' && input.kind !== 'design'))
+    // Decks and designs carry their images and fonts in files, and a motion its music and sounds.
+    if (
+      input.html !== undefined ||
+      (input.files !== undefined && input.kind !== 'slides' && input.kind !== 'design' && input.kind !== 'motion')
+    )
       throw new Error(
         input.kind === 'slides'
           ? 'A deck is written in slides; html is for apps.'
@@ -332,7 +342,7 @@ export class InteractiveStore {
             : input.kind === 'design'
               ? 'A design is written in frames, each with its own html and css; html and files are for apps.'
               : input.kind === 'motion'
-                ? 'A motion is written in scenes, each with its seconds, html and css; html and files are for apps.'
+                ? 'A motion is written in scenes, each with its seconds, html and css; html is for apps.'
                 : `A ${input.kind} is written in source; html and files are for apps.`,
       )
     const source = parseArtifactSource({ ...input, kind: input.kind ?? 'app' })

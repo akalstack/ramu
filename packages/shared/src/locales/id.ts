@@ -6211,4 +6211,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Scene {number}': 'Adegan {number}',
   'Listen': 'Dengarkan',
   'Remove narration': 'Hapus narasi',
+  'Music': 'Musik',
+  'Sound effects': 'Efek suara',
+  'Music made with {0}': 'Musik dibuat dengan {0}',
+  'Sound made with {0}': 'Suara dibuat dengan {0}',
+  'Sound': 'Suara',
+  'How loud the music and scene sounds play in the exported video': 'Seberapa keras musik dan suara adegan diputar di video yang diekspor',
 }

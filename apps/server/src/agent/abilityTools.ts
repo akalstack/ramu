@@ -12,6 +12,10 @@ const DESCRIPTIONS: Record<AbilityTool, string> = {
     "Search the web and get an answer with cited sources, on a signed-in provider with web search, or Ramu's own search when none has it. Only the query is sent.",
   read_image:
     "Answer a question about one to four images on a signed-in model that can see them, when yours cannot: what a screenshot shows, the text in a photo, whether a chart has a label. images: files in this thread's folder or attachment ids from this thread. Only the question and those images are sent.",
+  make_music:
+    'Make background music for a Motion artifact from a description (mood, tempo, instruments) and a length in seconds, on the Shared MCP tool the person mapped to music. The audio is saved as an attachment of this thread; give its attachmentId as the motion file named by music.path. Say the license terms the tool returned.',
+  make_sound:
+    'Make one short sound effect (a whoosh, a chime, a click) from a description, on the Shared MCP tool the person mapped to sound effects. The audio is saved as an attachment; give its attachmentId as the motion file a scene names in sound.path.',
   read_long:
     "Answer one question about a large set of files or a long text on the signed-in model with the largest context window. files: paths in this thread's folder (up to about 1.2 million characters together); text: pasted text. Only the question and those inputs are sent.",
 }

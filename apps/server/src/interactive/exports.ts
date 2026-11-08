@@ -1,3 +1,4 @@
+import type { MotionAudio } from '@ramu/shared/artifactSource'
 import { narrationTrack, type NarrationTrack } from './narration'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -153,6 +154,14 @@ function frameImages(document: InteractiveDocument): Promise<Buffer> {
 
 const require = createRequire(import.meta.url)
 const VIDEO_FPS = 12
+
+/** The mix the encoder page builds: the narration's samples, and the music and scene sounds with where they play. */
+interface Mix {
+  narration: string | null
+  music: { data: string; volume: number | null } | null
+  cues: { data: string; volume: number | null; start: number }[]
+  seconds: number
+}
 const AUDIO_RATE = 48_000
 
 /** The track at another sample rate, by the nearest sample: speech survives it, and it keeps the timing exact. */
@@ -173,12 +182,34 @@ function atRate(track: NarrationTrack, rate: number): Int16Array {
 async function motionVideo(document: InteractiveDocument, container: 'webm' | 'mp4' = 'webm'): Promise<Buffer> {
   const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.motion)?.content
   if (!stored) throw new Error('This motion version has no scenes. Ask the agent to publish it again.')
-  const scenes = (JSON.parse(stored) as { scenes: { seconds: number; narration?: string }[] }).scenes
+  const motion = JSON.parse(stored) as {
+    scenes: { seconds: number; narration?: string; sound?: MotionAudio }[]
+    music?: MotionAudio
+  }
+  const scenes = motion.scenes
   const seconds = scenes.reduce((total, scene) => total + scene.seconds, 0)
   const frames = Math.ceil(seconds * VIDEO_FPS)
-  // Narration is spoken on this computer and mixed in at 48 kHz, the rate every audio encoder here takes.
+  // Narration is spoken on this computer, and the music and scene sounds come from the version's own files; they are
+  // mixed at 48 kHz, the rate every audio encoder here takes.
   const track = await narrationTrack(scenes)
-  const audio = track ? Buffer.from(atRate(track, AUDIO_RATE).buffer).toString('base64') : null
+  const fileOf = (audio: MotionAudio | undefined) => {
+    const file = audio && document.files?.find((entry) => entry.path === audio.path && entry.encoding === 'base64')
+    return file ? { data: file.content, volume: audio!.volume ?? null } : null
+  }
+  let at = 0
+  const cues = scenes.flatMap((scene) => {
+    const start = at
+    at += scene.seconds
+    const file = fileOf(scene.sound)
+    return file ? [{ ...file, start }] : []
+  })
+  const mix: Mix = {
+    narration: track ? Buffer.from(atRate(track, AUDIO_RATE).buffer).toString('base64') : null,
+    music: fileOf(motion.music),
+    cues,
+    seconds,
+  }
+  const audio = mix.narration || mix.music || cues.length ? mix : null
   return withPage(
     document,
     { width: 1280, height: 720 },
@@ -271,16 +302,39 @@ async function motionVideo(document: InteractiveDocument, container: 'webm' | 'm
       }
       if (audio)
         await encoder.evaluate(
-          async ({ audio, rate }: { audio: string; rate: number }) => {
+          async ({ audio, rate }: { audio: Mix; rate: number }) => {
             const { voice } = (window as unknown as { video: { voice: { add(b: AudioBuffer): Promise<void> } } }).video
-            const bytes = Uint8Array.from(atob(audio), (char) => char.charCodeAt(0))
-            const pcm = new Int16Array(bytes.buffer)
-            const buffer = new AudioBuffer({ length: pcm.length, numberOfChannels: 1, sampleRate: rate })
-            buffer.copyToChannel(
-              Float32Array.from(pcm, (value) => value / 32768),
-              0,
-            )
-            await voice.add(buffer)
+            const bytesOf = (base64: string) => Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))
+            const mixer = new OfflineAudioContext(1, Math.ceil(audio.seconds * rate), rate)
+            const play = (buffer: AudioBuffer, start: number, volume: number, loop = false) => {
+              const source = mixer.createBufferSource()
+              source.buffer = buffer
+              source.loop = loop
+              const gain = mixer.createGain()
+              gain.gain.value = volume
+              source.connect(gain).connect(mixer.destination)
+              source.start(start)
+            }
+            if (audio.narration) {
+              const pcm = new Int16Array(bytesOf(audio.narration).buffer)
+              const buffer = mixer.createBuffer(1, pcm.length, rate)
+              buffer.copyToChannel(
+                Float32Array.from(pcm, (value) => value / 32768),
+                0,
+              )
+              play(buffer, 0, 1)
+            }
+            // Music loops under the whole video, quieter under narration.
+            if (audio.music)
+              play(
+                await mixer.decodeAudioData(bytesOf(audio.music.data).buffer),
+                0,
+                audio.music.volume ?? (audio.narration ? 0.25 : 0.7),
+                true,
+              )
+            for (const cue of audio.cues)
+              play(await mixer.decodeAudioData(bytesOf(cue.data).buffer), cue.start, cue.volume ?? 0.8)
+            await voice.add(await mixer.startRendering())
           },
           { audio, rate: AUDIO_RATE },
         )

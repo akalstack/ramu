@@ -481,6 +481,15 @@ export type DesignSource = z.infer<typeof designSource>
 
 export const MOTION_SCENES_MAX = 20
 export const MOTION_SECONDS_MAX = 120
+/** An audio file in the motion's files (from make_music or make_sound) and how loud it plays, 0 to 1. */
+export const motionAudio = z.object({
+  path: z
+    .string()
+    .trim()
+    .regex(/^[\w./-]{1,200}\.(?:mp3|wav|ogg|m4a)$/i, 'Name an MP3, WAV, OGG or M4A file in files.'),
+  volume: z.number().min(0).max(1).optional(),
+})
+export type MotionAudio = z.infer<typeof motionAudio>
 export const motionSceneSchema = z.object({
   seconds: z.number().min(1).max(30).describe('How long the scene shows.'),
   html: z.string().max(100_000).describe('The scene, filling a 16:9 stage.'),
@@ -497,6 +506,7 @@ export const motionSceneSchema = z.object({
     .describe(
       'Words spoken over this scene in the exported video, read aloud on the host. Keep it short enough to say within the scene (about 2.5 words a second).',
     ),
+  sound: motionAudio.optional().describe('A sound effect played when this scene starts, from make_sound.'),
 })
 const motionSource = z
   .object({
@@ -505,6 +515,11 @@ const motionSource = z
       .array(motionSceneSchema)
       .min(1, 'A motion needs at least one scene in scenes.')
       .max(MOTION_SCENES_MAX, `A motion has at most ${MOTION_SCENES_MAX} scenes.`),
+    music: motionAudio
+      .optional()
+      .describe(
+        'Background music under the whole video, from make_music; it loops if shorter, and plays quietly under narration.',
+      ),
   })
   .refine((motion) => motion.scenes.reduce((total, scene) => total + scene.seconds, 0) <= MOTION_SECONDS_MAX, {
     message: `A motion runs at most ${MOTION_SECONDS_MAX} seconds. Shorten its scenes or split it.`,

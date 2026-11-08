@@ -372,6 +372,12 @@ interface ArtifactMethods {
   ): { projectId: string; folder: string; thread: StartedThread }
   /** A motion scene's narration spoken on this computer, as a WAV data URL to hear before keeping it. */
   'artifacts.narrationPreview'(text: string): string
+  /** Sets how loud a motion's music and each scene's sound play (0 to 1), or removes one with null, as a new version. */
+  'artifacts.editSound'(
+    artifactId: string,
+    base: number,
+    levels: { music: number | null; sounds: (number | null)[] },
+  ): import('./artifacts').ArtifactInfo
   /** Saves each scene's narration (an empty line removes it) as a new version on top of `base`. */
   'artifacts.editNarration'(artifactId: string, base: number, lines: string[]): import('./artifacts').ArtifactInfo
   /** A share link; `editor` names the one person it lets edit a doc's, diagram's or deck's text. */

@@ -494,6 +494,17 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
     if (!liveEditing) throw new Error('Update this host for live editing.')
     return liveEditing
   }
+  /** A motion's changed source saved as a new version, keeping the audio files it still names. */
+  const saveMotion = async (artifactId: string, base: number, motion: object) => {
+    const { pages } = need()
+    const artifact = pages.get(artifactId)
+    const audio = (pages.document(artifactId, base).files ?? []).filter((file) => file.encoding === 'base64')
+    const source = parseArtifactSource({ ...motion, kind: 'motion' })
+    const drawn = await renderArtifactSource(source, artifact.title, audio)
+    // A file no longer named (a removed track) is dropped by the renderer, not refused.
+    if (drawn.problems.length) throw new Error(drawn.problems[0])
+    return pages.saveEdit(artifactId, base, drawn, editedBy())
+  }
   /** A live share link that names its editor; any other link is refused. */
   const editingShare = (token: string) => {
     const share = need().pages.resolveShare(token)
@@ -701,8 +712,44 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
         const scenes = motion.scenes.map(({ narration: _was, ...scene }, index) =>
           lines[index]!.trim() ? { ...scene, narration: lines[index]!.trim() } : scene,
         )
-        const source = parseArtifactSource({ ...motion, kind: 'motion', scenes })
-        return pages.saveEdit(artifactId, base, await renderArtifactSource(source, artifact.title), editedBy())
+        return saveMotion(artifactId, base, { ...motion, scenes })
+      },
+    },
+    // A motion's music and scene sounds: how loud each plays (0 to 1), or null to remove it.
+    'artifacts.editSound': {
+      args: z.tuple([
+        id,
+        z.number().int().positive(),
+        z.object({
+          music: z.number().min(0).max(1).nullable(),
+          sounds: z.array(z.number().min(0).max(1).nullable()).max(MOTION_SCENES_MAX),
+        }),
+      ]),
+      run: async (artifactId: string, base: number, levels: { music: number | null; sounds: (number | null)[] }) => {
+        const { pages } = need()
+        if (pages.get(artifactId).kind !== 'motion') throw new Error('Only a motion has sound.')
+        const stored = pages
+          .document(artifactId, base)
+          .files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.motion)?.content
+        if (!stored) throw new Error('This motion version has no scenes. Ask the agent to publish it again.')
+        const motion = JSON.parse(stored) as {
+          scenes: { sound?: { path: string; volume?: number } }[]
+          music?: { path: string; volume?: number }
+        }
+        if (levels.sounds.length !== motion.scenes.length)
+          throw new Error('The motion’s scenes changed while you edited its sound. Open it again.')
+        const { music, ...rest } = motion
+        const scenes = motion.scenes.map(({ sound, ...scene }, index) => {
+          const level = levels.sounds[index]
+          return sound && level !== null && level !== undefined
+            ? { ...scene, sound: { ...sound, volume: level } }
+            : scene
+        })
+        return saveMotion(artifactId, base, {
+          ...rest,
+          scenes,
+          ...(music && levels.music !== null ? { music: { ...music, volume: levels.music } } : {}),
+        })
       },
     },
     'artifacts.editSlides': {

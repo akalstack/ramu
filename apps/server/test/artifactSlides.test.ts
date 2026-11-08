@@ -459,3 +459,61 @@ it.skipIf(!interactiveBrowserPath() || !speaker())(
   },
   300_000,
 )
+
+/** A short WAV tone, as a music or sound tool might return. */
+function tone(seconds: number): string {
+  const rate = 8000
+  const data = Buffer.alloc(seconds * rate * 2)
+  for (let index = 0; index < seconds * rate; index++)
+    data.writeInt16LE(Math.round(Math.sin((index / rate) * 2 * Math.PI * 440) * 8000), index * 2)
+  const header = Buffer.alloc(44)
+  header.write('RIFF', 0, 'ascii')
+  header.writeUInt32LE(36 + data.length, 4)
+  header.write('WAVEfmt ', 8, 'ascii')
+  header.writeUInt32LE(16, 16)
+  header.writeUInt16LE(1, 20)
+  header.writeUInt16LE(1, 22)
+  header.writeUInt32LE(rate, 24)
+  header.writeUInt32LE(rate * 2, 28)
+  header.writeUInt16LE(2, 32)
+  header.writeUInt16LE(16, 34)
+  header.write('data', 36, 'ascii')
+  header.writeUInt32LE(data.length, 40)
+  return Buffer.concat([header, data]).toString('base64')
+}
+
+it.skipIf(!interactiveBrowserPath())(
+  'mixes a motion’s music and a scene’s sound into the video, and refuses an audio file it does not have',
+  async () => {
+    const { db, interactive } = setup(previewInteractive)
+    const motion = {
+      kind: 'motion',
+      scenes: [
+        { seconds: 1, html: '<h1>Sync</h1>', sound: { path: 'whoosh.wav' } },
+        { seconds: 1, html: '<p>Offline</p>' },
+      ],
+      music: { path: 'music.wav', volume: 0.5 },
+      title: 'Sync',
+      summary: 'S',
+      checks: [],
+    }
+    const missing = await interactive.preview('s', {
+      ...motion,
+      files: [{ path: 'whoosh.wav', content: tone(1), encoding: 'base64' }],
+    } as never)
+    expect(missing.errors.join(' ')).toContain('music.wav is not among the audio files')
+    const preview = await interactive.preview('s', {
+      ...motion,
+      files: [
+        { path: 'whoosh.wav', content: tone(1), encoding: 'base64' },
+        { path: 'music.wav', content: tone(1), encoding: 'base64' },
+      ],
+    } as never)
+    expect(preview.errors).toEqual([])
+    const document = interactive.get('s', interactive.publish('s', preview.id, 'r1').id, 1)
+    expect(document.files?.map((file) => file.path).sort()).toEqual(['motion.json', 'music.wav', 'whoosh.wav'])
+    const video = await new ArtifactExports(db).make(document, 'webm')
+    expect(Buffer.from(video.content, 'base64').includes(Buffer.from('A_OPUS'))).toBe(true)
+  },
+  300_000,
+)

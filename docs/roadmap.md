@@ -26,7 +26,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 - **Helpers on another host:** `ramu_agent` with a `host` would mirror a helper's events into the parent live, which needs an event channel between hosts; a thread started there with its report covers the need until then.
 - **From an idea to a deployed app:** real screenshots for the site's five steps. See [the plan](SHIP-AN-APP-PLAN.md).
 - **Artifacts:** widened from Apps to every kind an agent makes (Doc, Slides, Design, Dashboard, Motion, App, Diagram, Live), each with in-place editing where it fits, host-side exports (PPTX, DOCX, PDF, MP4), design systems, live refresh, two-person editing, templates, named-service dashboards and Motion voice-over, connected to the shipping plan. See [the plan](ARTIFACTS-PLAN.md).
-- **Abilities:** tools for video and speech, speech on Shared MCP servers, and music and sound effects for Motion, each once a signed-in provider offers it. See [the plan](ABILITIES-PLAN.md).
+- **Abilities:** video, speech, music and sound effects on a signed-in provider, and speech on Shared MCP servers, each once a provider offers it. See [the plan](ABILITIES-PLAN.md).
 - **Code quality:** push events are checked for channel and shape where they enter the phone and the desktop, and RPC results take each method's declared type; checking RPC results against runtime schemas is still to do. About 140 `react-hooks/exhaustive-deps` disables name the trigger they are keyed on and are mostly deliberate; convert one only when touching it, after checking it neither loops nor refetches.
 
 ## Acceptance

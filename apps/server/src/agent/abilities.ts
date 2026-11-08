@@ -90,6 +90,11 @@ export const abilityInputs = {
     images: z.array(z.string().min(1).max(1024)).min(1).max(4),
   },
   web_search: { query: z.string().trim().min(1).max(1000) },
+  make_music: {
+    prompt: z.string().trim().min(1).max(1000),
+    seconds: z.number().int().min(5).max(120).optional(),
+  },
+  make_sound: { prompt: z.string().trim().min(1).max(500) },
   read_image: {
     question: z.string().trim().min(1).max(4000),
     images: z.array(z.string().min(1).max(1024)).min(1).max(4),
@@ -107,11 +112,23 @@ const TIMEOUT_MS: Record<AbilityTool, number> = {
   web_search: 120_000,
   read_long: 300_000,
   read_image: 120_000,
+  make_music: 300_000,
+  make_sound: 120_000,
 }
 /** Text a long read may send, in characters: within a 400,000-token window with room for the answer. */
 const LONG_READ_CHARS = 1_200_000
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif'])
 const REFRESH_EVERY_MS = 10 * 60_000
+
+/** A Shared MCP audio file's extension, from the media type it reports. */
+const AUDIO_TYPES: Record<string, string> = {
+  'audio/mpeg': 'mp3',
+  'audio/mp3': 'mp3',
+  'audio/wav': 'wav',
+  'audio/x-wav': 'wav',
+  'audio/ogg': 'ogg',
+  'audio/mp4': 'm4a',
+}
 
 /** A Shared MCP image's file extension, from the media type it reports. */
 const IMAGE_TYPES: Record<string, string> = {
@@ -738,7 +755,14 @@ export class AbilityService {
         ? [{ bytes: Buffer.from(part.data, 'base64'), extension }]
         : []
     })
-    return { server, texts, images }
+    // Audio a music or sound tool returns as MCP `audio` content.
+    const audio = content.flatMap((part) => {
+      const extension = typeof part.mimeType === 'string' ? AUDIO_TYPES[part.mimeType] : undefined
+      return part.type === 'audio' && typeof part.data === 'string' && extension
+        ? [{ bytes: Buffer.from(part.data, 'base64'), extension }]
+        : []
+    })
+    return { server, texts, images, audio }
   }
 
   /**
@@ -826,10 +850,12 @@ export class AbilityService {
             return `data:${mime};base64,${readFileSync(path).toString('base64')}`
           })
         : []
-    const { server, texts, images } = await this.mcpCall(session, choice, text, signal, inputs)
-    const attachments = images.map((image, index) =>
-      this.host.attachments.add(`${slug(text)}-${index + 1}.${image.extension}`, image.bytes),
+    const { server, texts, images, audio } = await this.mcpCall(session, choice, text, signal, inputs)
+    const attachments = [...images, ...audio].map((file, index) =>
+      this.host.attachments.add(`${slug(text)}-${index + 1}.${file.extension}`, file.bytes),
     )
+    if ((base.ability === 'music' || base.ability === 'sound_effect') && !audio.length)
+      throw new Error(`${server} returned no audio. ${clip(texts.join(' '), 300)}`.trim())
     if ((base.ability === 'image_generation' || base.ability === 'image_edit') && !attachments.length)
       throw new Error(`${server} returned no image. ${clip(texts.join(' '), 300)}`.trim())
     return {
@@ -904,6 +930,14 @@ export class AbilityService {
           sent: { prompt: input.query, inputs: [] },
         }
       }
+      case 'make_music':
+      case 'make_sound': {
+        const input = z
+          .object({ prompt: z.string().trim().min(1).max(1000), seconds: z.number().optional() })
+          .parse(args)
+        const text = input.seconds ? `${input.prompt} (${input.seconds} seconds)` : input.prompt
+        return { ability, request: { ability, prompt: text, images: [] }, sent: { prompt: text, inputs: [] } }
+      }
       case 'read_image': {
         const input = z.object(abilityInputs.read_image).parse(args)
         const images = await Promise.all(input.images.map((ref) => this.image(session, ref)))
@@ -960,6 +994,22 @@ export class AbilityService {
     if (!held) throw new Error('That attachment is not in this thread.')
     const attachment = this.host.attachments.get(ref)
     if (!attachment.mimeType.startsWith('image/')) throw new Error(`${attachment.name} is not an image.`)
+    return { path: attachment.path, name: attachment.name, mimeType: attachment.mimeType }
+  }
+
+  /** An image or audio attachment this thread holds, for an artifact file filled from it. */
+  heldFile(sessionId: string, ref: string): { path: string; name: string; mimeType: string } {
+    const held = this.host
+      .events(sessionId)
+      .some((event) =>
+        event.kind === 'user'
+          ? event.attachments?.some((file) => file.id === ref)
+          : event.kind === 'ability' && event.call.attachments?.some((file) => file.id === ref),
+      )
+    if (!held) throw new Error('That attachment is not in this thread.')
+    const attachment = this.host.attachments.get(ref)
+    if (!/^(image|audio)\//.test(attachment.mimeType))
+      throw new Error(`${attachment.name} is not an image or audio file.`)
     return { path: attachment.path, name: attachment.name, mimeType: attachment.mimeType }
   }
 

@@ -14,6 +14,14 @@ const imageTypes: Record<string, string> = {
   '.gif': 'image/gif',
 }
 
+/** Audio a music or sound ability saves, by extension, so it can fill a motion's audio file. */
+const audioTypes: Record<string, string> = {
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.ogg': 'audio/ogg',
+  '.m4a': 'audio/mp4',
+}
+
 export const isPdf = (file: Pick<Attachment, 'mimeType'>) => file.mimeType === 'application/pdf'
 
 /** Base64 content blocks for attachments Claude reads natively: images and PDFs (as documents). */
@@ -66,6 +74,7 @@ export class AttachmentStore {
     const path = join(dir, `content${extname(safeName)}`)
     const mimeType =
       imageTypes[extname(safeName).toLowerCase()] ??
+      audioTypes[extname(safeName).toLowerCase()] ??
       (extname(safeName).toLowerCase() === '.pdf' ? 'application/pdf' : 'application/octet-stream')
     const attachment: Attachment = { id, name: safeName, size: bytes.length, mimeType, path }
     writeFileSync(path, bytes)

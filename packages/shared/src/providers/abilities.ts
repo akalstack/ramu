@@ -11,6 +11,8 @@ export const ABILITIES = [
   'vision',
   'video_generation',
   'speech',
+  'music',
+  'sound_effect',
 ] as const
 export type Ability = (typeof ABILITIES)[number]
 
@@ -21,6 +23,8 @@ export const ABILITY_TOOLS = {
   web_search: 'web_search',
   read_long: 'long_context',
   read_image: 'vision',
+  make_music: 'music',
+  make_sound: 'sound_effect',
 } as const satisfies Record<string, Ability>
 export type AbilityTool = keyof typeof ABILITY_TOOLS
 
@@ -44,6 +48,8 @@ export const ABILITY_LABELS: Record<Ability, string> = {
   vision: 'Reading images',
   video_generation: 'Video generation',
   speech: 'Speech',
+  music: 'Music',
+  sound_effect: 'Sound effects',
 }
 
 /** The row's headline once a call finished, as a translation key with the provider as {0}. */
@@ -55,6 +61,8 @@ export const ABILITY_DONE: Record<Ability, string> = {
   vision: 'Image read with {0}',
   video_generation: 'Video made with {0}',
   speech: 'Narration made with {0}',
+  music: 'Music made with {0}',
+  sound_effect: 'Sound made with {0}',
 }
 
 /** The live check's outcome for one ability of one provider login on one installed version. */
@@ -93,7 +101,14 @@ export type AbilityChoice = 'auto' | 'off' | { provider: AgentProvider; model: s
  * Abilities a Shared MCP tool can stand in for: text in (a long read's documents go in its prompt), and for image
  * editing the images as data URLs in the tool's image field.
  */
-export const MCP_ABILITIES: readonly Ability[] = ['image_generation', 'image_edit', 'web_search', 'long_context']
+export const MCP_ABILITIES: readonly Ability[] = [
+  'image_generation',
+  'image_edit',
+  'web_search',
+  'long_context',
+  'music',
+  'sound_effect',
+]
 /** The ones Auto can also try on a Shared MCP tool, which have a sample check to run first. */
 export const AUTO_MCP_ABILITIES: readonly Ability[] = ['image_generation', 'web_search']
 

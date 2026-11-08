@@ -36,6 +36,7 @@ import { t, useLanguage } from '../i18n'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { notifyError } from '../chat/Notifications'
+import { StepSlider } from '@/components/step-slider'
 import { NAMED_SERVICE_NAMES, type NamedService } from '@ramu/shared/types/deploy'
 import { LiveTextEditor, syncLiveText } from '@ramu/shared/liveText'
 import { deckText, slideWords } from '@ramu/shared/deckText'
@@ -121,6 +122,10 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
     null,
   )
   const [savingEdit, setSavingEdit] = useState(false)
+  // A motion's music and scene sound levels while the person changes them; null marks one removed.
+  const [sounding, setSounding] = useState<{ base: number; music: number | null; sounds: (number | null)[] } | null>(
+    null,
+  )
   // A motion's narration lines while the person edits them, one per scene.
   const [narrating, setNarrating] = useState<{ base: number; lines: string[] } | null>(null)
   // Live typing on a deck's words, while its slides keep their order; moving a slide pauses it until Save.
@@ -215,6 +220,12 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   }, [editingAny, invoke, artifactId])
   // Live typing: the text box is synced with the host's shared copy about once a second, so others' words appear
   // as they type them; a version is saved by the host once nobody types for a minute, or by Save.
+  const motionHasSound = useMemo(() => {
+    const stored = document?.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.motion)?.content
+    if (!stored) return false
+    const motion = JSON.parse(stored) as { scenes: { sound?: unknown }[]; music?: unknown }
+    return !!motion.music || motion.scenes.some((scene) => scene.sound)
+  }, [document])
   const editingNow = useRef(editing)
   editingNow.current = editing
   /** Text the person typed (not merged in from others), noting the heading above the change. */
@@ -650,6 +661,29 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
               <PenLine size={13} /> {t('Edit text')}
             </Button>
           )}
+          {page.kind === 'motion' && !sounding && motionHasSound && (
+            <Button
+              variant="ghost"
+              className={GHOST_TEXT_BUTTON_CLASS}
+              disabled={viewOnly || !document}
+              title={t('How loud the music and scene sounds play in the exported video')}
+              onClick={() => {
+                const stored = document?.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.motion)?.content
+                if (!document || !stored) return
+                const motion = JSON.parse(stored) as {
+                  scenes: { sound?: { volume?: number } }[]
+                  music?: { volume?: number }
+                }
+                setSounding({
+                  base: document.reference.version,
+                  music: motion.music ? (motion.music.volume ?? 0.25) : null,
+                  sounds: motion.scenes.map((scene) => (scene.sound ? (scene.sound.volume ?? 0.8) : null)),
+                })
+              }}
+            >
+              <PenLine size={13} /> {t('Sound')}
+            </Button>
+          )}
           {page.kind === 'motion' && !narrating && (
             <Button
               variant="ghost"
@@ -1015,6 +1049,72 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
               {t('Cancel')}
             </Button>
             <Button type="submit" variant="default" disabled={savingEdit}>
+              {t('Save')}
+            </Button>
+          </div>
+        </form>
+      )}
+      {sounding && (
+        <form
+          aria-label={t('Sound')}
+          className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-3"
+          onSubmit={(event) => {
+            event.preventDefault()
+            setSavingEdit(true)
+            invoke('artifacts.editSound', artifactId, sounding.base, { music: sounding.music, sounds: sounding.sounds })
+              .then(() => {
+                setSounding(null)
+                void load()
+              })
+              .catch((error) => notifyError(message(error), page.title))
+              .finally(() => setSavingEdit(false))
+          }}
+        >
+          {[{ key: -1, level: sounding.music }, ...sounding.sounds.map((level, key) => ({ key, level }))]
+            .filter((entry) => entry.level !== null)
+            .map(({ key, level }) => (
+              <label key={key} className="flex items-center gap-3 text-caption">
+                <span className="w-24 flex-none text-muted-foreground">
+                  {key < 0 ? t('Music') : t('Scene {number}', { number: key + 1 })}
+                </span>
+                <StepSlider
+                  className="flex-1"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={Math.round((level ?? 0) * 100)}
+                  thumbLabel={key < 0 ? t('Music') : t('Scene {number}', { number: key + 1 })}
+                  valueText={`${Math.round((level ?? 0) * 100)}%`}
+                  onValueChange={(next) => {
+                    const value = (next as number) / 100
+                    setSounding(
+                      key < 0
+                        ? { ...sounding, music: value }
+                        : { ...sounding, sounds: sounding.sounds.map((entry, at) => (at === key ? value : entry)) },
+                    )
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={GHOST_TEXT_BUTTON_CLASS}
+                  onClick={() =>
+                    setSounding(
+                      key < 0
+                        ? { ...sounding, music: null }
+                        : { ...sounding, sounds: sounding.sounds.map((entry, at) => (at === key ? null : entry)) },
+                    )
+                  }
+                >
+                  {t('Remove')}
+                </Button>
+              </label>
+            ))}
+          <div className="flex items-center justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setSounding(null)}>
+              {t('Cancel')}
+            </Button>
+            <Button type="submit" disabled={savingEdit}>
               {t('Save')}
             </Button>
           </div>

@@ -491,6 +491,34 @@ describe('abilities on a Shared MCP tool', () => {
     }
   })
 
+  it('makes music on the mapped Shared MCP tool, keeping its audio and license words, and refuses one with no audio', async () => {
+    const mcp = vi.fn<NonNullable<AbilityHost['mcp']>>(async (_session, _connection, tool) => ({
+      server: 'Tunes',
+      result: {
+        content:
+          tool === 'compose'
+            ? [
+                { type: 'text', text: 'License: free for any use, credit Tunes.' },
+                { type: 'audio', data: Buffer.from('ID3fake').toString('base64'), mimeType: 'audio/mpeg' },
+              ]
+            : [{ type: 'text', text: 'No audio today.' }],
+      },
+    }))
+    const abilities = service(working, 'claude-code', undefined, { mcp })
+    withAbilities({ choices: { music: { connectionId: 'c1', tool: 'compose' } } })
+    const answer = await abilities.call('thread', 'make_music', { prompt: 'calm piano', seconds: 30 })
+    expect(answer).toMatchObject({ status: 'done' })
+    const recorded = (events.at(-1) as { call: AbilityCall }).call
+    expect(recorded.attachments?.[0]).toMatchObject({ mimeType: 'audio/mpeg' })
+    expect(recorded.summary).toContain('License: free for any use')
+    expect(abilities.heldFile('thread', recorded.attachments![0]!.id).mimeType).toBe('audio/mpeg')
+    withAbilities({ choices: { music: { connectionId: 'c1', tool: 'silent' } } })
+    expect(await abilities.call('thread', 'make_music', { prompt: 'x' })).toMatchObject({
+      status: 'failed',
+      message: expect.stringContaining('returned no audio'),
+    })
+  })
+
   it('fills the tool’s prompt or query, else its first required text', () => {
     expect(mcpArguments({ properties: { size: { type: 'number' }, prompt: { type: 'string' } } }, 'apple')).toEqual({
       prompt: 'apple',

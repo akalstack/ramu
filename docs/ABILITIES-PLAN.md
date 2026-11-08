@@ -28,8 +28,9 @@ Image generation, image editing, web search and long reads can be mapped to an a
 
 ### 4. Music and sound effects
 
-- `music` and `sound_effect` abilities, offered where a provider or a mapped MCP server provides them, for Motion artifacts' background music and cues. Each comes with the license terms its provider states, shown on the row and kept with the artifact.
-- The host mixes them into the MP4 with the voice-over, and **Sound** in the Motion toolbar adjusts levels or removes a track.
+`make_music` and `make_sound` on a mapped Shared MCP tool (its audio kept as an attachment, its license words on the row), a motion's music and scene sounds mixed into the MP4 and WebM under the narration, and **Sound** in the Motion toolbar are built ([Abilities](guide/agents.md#abilities), [Kinds](guide/artifacts.md#kinds)). Remaining:
+
+- **From a provider:** `music` and `sound_effect` on a signed-in provider that offers them, with a live check, once one does.
 
 ## Acceptance
 

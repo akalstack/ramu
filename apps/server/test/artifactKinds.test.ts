@@ -258,6 +258,35 @@ it('saves a motion’s narration line by line as a new version, an empty line re
   ).rejects.toThrow('scenes changed')
 })
 
+it('sets how loud a motion’s music and sounds play, and removing the music drops its file', async () => {
+  const { registerArtifactHandlers } = await import('../src/ipc/handlers/artifacts')
+  const { interactive, pages } = setup()
+  const audio = Buffer.from('RIFF0000WAVE').toString('base64')
+  const preview = await interactive.preview('s', {
+    kind: 'motion',
+    scenes: [{ seconds: 2, html: '<h1>Sync</h1>', sound: { path: 'chime.wav' } }],
+    music: { path: 'music.wav' },
+    files: [
+      { path: 'chime.wav', content: audio, encoding: 'base64' },
+      { path: 'music.wav', content: audio, encoding: 'base64' },
+    ],
+    title: 'Sync',
+    summary: 'S',
+    checks: [],
+  } as never)
+  const kept = pages.keep('s', interactive.publish('s', preview.id, 'r1').id, { title: 'Sync' })
+  const methods = registerArtifactHandlers({ pages, pageAi: {}, activity: { run: () => {} }, host: {} } as never)
+  await methods['artifacts.editSound']!.run(kept.id, 1, { music: null, sounds: [0.3] })
+  const document = pages.document(kept.id)
+  const motion = JSON.parse(document.files!.find((file) => file.path === 'motion.json')!.content) as {
+    music?: unknown
+    scenes: { sound?: { volume?: number } }[]
+  }
+  expect(motion.music).toBeUndefined()
+  expect(motion.scenes[0]?.sound?.volume).toBe(0.3)
+  expect(document.files?.map((file) => file.path).sort()).toEqual(['chime.wav', 'motion.json'])
+})
+
 it('tells each device which others are editing the same text, until they stop or go quiet', async () => {
   const { EditingPresence } = await import('../src/interactive/editing')
   let now = 0
