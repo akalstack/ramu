@@ -237,8 +237,8 @@ export default function ChatScreen() {
       settling.current = false
       setFollowPaused(false)
       if (!keyboardMoved) return
-      // Rows that arrived meanwhile were not followed; catch up once.
-      if (following.current && !userScrolling.current) toEnd(false)
+      // Rows that arrived meanwhile were not followed; glide to them once.
+      if (following.current && !userScrolling.current) toEnd(true)
     }, ms)
   }
   useEffect(
@@ -304,7 +304,8 @@ export default function ChatScreen() {
     const was = overflowing
     setOverflowing(listFollows)
     if (end === null || followPaused || !following.current || userScrolling.current) return
-    if (!listFollows || !was) toEnd(false)
+    // Before the chat is shown it lands on its end at once; afterwards a reply or a sent message glides into view.
+    if (!listFollows || !was) toEnd(revealed)
   }
   /** Sending closes the keyboard; the list stays on the end if it was there, and stays put if the reader scrolled up. */
   const followSend = () => {
@@ -1405,9 +1406,11 @@ export default function ChatScreen() {
                 drawDistance={400}
                 // Lays out the newest rows first instead of the whole page from the top.
                 initialScrollAtEnd
-                // Pinned to the end without animating, as the desktop's transcript is; the list stops following once
-                // the reader scrolls up past its threshold, and a chat that fits on screen is left where UIKit rests it.
-                maintainScrollAtEnd={overflowing && !followPaused ? { animated: false } : false}
+                // Pinned to the end, gliding as a reply streams in or a message is sent (the list gathers the changes of
+                // half a second into one motion), and without motion before the chat is shown or with Reduce Motion on.
+                // It stops following once the reader scrolls up past its threshold, and a chat that fits on screen is
+                // left where UIKit rests it.
+                maintainScrollAtEnd={overflowing && !followPaused ? { animated: revealed && !reducedMotion } : false}
                 ItemSeparatorComponent={RowSeparator}
                 style={{ flex: 1 }}
                 contentInset={ios ? { bottom: cover } : undefined}
