@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-<p align="center">A free, open-source workspace for coding with agents, on desktop and mobile.</p>
+<p align="center">Describe it. Ramu builds it, puts it online and keeps it working, on accounts you own. A free, open-source workspace for coding with agents, on desktop and mobile.</p>
 
 <p align="center">
   <a href="https://github.com/akalstack/ramu/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-8b5cf6" alt="License: MIT" /></a>

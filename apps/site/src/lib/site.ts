@@ -24,5 +24,3 @@ export const PROVIDERS: Provider[] = [
     signIn: 'Sign in with Google in Settings',
   },
 ]
-
-export const providerById = (id: string) => PROVIDERS.find((p) => p.id === id)!

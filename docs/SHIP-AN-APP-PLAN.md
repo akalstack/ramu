@@ -6,7 +6,7 @@ A person who has never written code describes an app, and Ramu takes it from an 
 
 The path is built ([Shipping an app](guide/shipping.md)): a project from one sentence, the repository published from the deploy sheet, hosting on Vercel, Netlify, Railway, Fly.io, Cloudflare, GitHub Pages or the person's own server, databases, caches, file storage and email on their own accounts, CI that GitHub or GitLab requires before merge, variables synced to GitHub Actions, GitLab CI and the platform, and store releases of an Expo app. What is still missing:
 
-- **Telling people:** the site still describes only keeping coding agents moving, not taking an idea to a live app.
+- **Showing people:** the site describes the path in words; real screenshots of each step are still to come.
 - **Usage for newer platforms:** the deploy sheet's usage figures cover Vercel, Netlify and Neon; others report none through their APIs yet.
 
 **Easier for the person:** one sentence becomes a running app. One action (**Deploy**) turns it into a public URL on an account they own. Every later change goes through a pull request with checks and a preview URL, and merging to the default branch deploys it. The agent knows the target, the live URL and the last deployment's result, so "it's broken in production" is a task it can act on: read the logs, fix the bug, open a pull request, watch the deploy.
@@ -37,12 +37,9 @@ Usage figures for Vercel, Netlify and Neon beside the limits their APIs report, 
 
 ### 2. The site
 
-The site (`apps/site`, one Astro page) is about keeping coding agents moving. With this plan, Ramu also takes someone from an idea to a live app, so the site gets new copy throughout, written once the features ship and only claiming what they do:
+The rewrite is built (`apps/site`): the hero leads with "Describe it. Ramu builds it, puts it online and keeps it working." and the developer line second, **From an idea to a live app** in five steps, **Every change, safely**, hosting platforms and data providers named in text beside the agents, the demo playing one sentence through the questions, the build, the preview and **Deploy** to the live address, the title, description and social image, the README's opening line, and the sponsor links. Remaining:
 
-- **Positioning:** two readers, one product. Someone with an idea and no code ("Describe it. Ramu builds it, puts it online and keeps it working, on accounts you own.") and a developer ("New project, deploy, CI and previews in one flow, with the agents you already use."). The hero leads with the idea-to-live-app line, with the developer line second (chosen with the person); keep **free and open source**, **your accounts** and the phone companion.
-- **Sections, rewritten in order:** hero; **Idea to live app** (the person's path, five steps with real screenshots); **Every change, safely** (pull request, preview URL, CI, merge to deploy, roll back from the phone); **Your agents, your accounts** (providers, then hosting platforms and databases by name, with brand marks only where their guidelines allow); the existing agents, review, mobile and source sections tightened around the new story; download.
-- **Demo:** `components/demo.tsx` plays the new loop (one sentence, questions, the app in the preview, **Deploy**, the live URL) instead of today's thread-only demo.
-- **Around the page:** title, description and the social-sharing image; the README's opening lines match the hero; the sponsor links (GitHub Sponsors and Trakteer) stay.
+- **Screenshots:** a real capture of each of the five steps from the app, beside its text, once the captures are made on a release build.
 - **Claims:** no comparison with another app without matched-task evidence (the [evidence rule](roadmap.md#decisions-and-deferred-scope)), and no "anyone can ship an app" until the non-coder acceptance task has passed with real people.
 
 ## Safety

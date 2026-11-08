@@ -6,16 +6,16 @@ import { ProviderLogo } from '@/components/provider-logo'
 import { LinkButton } from '@/components/site-button'
 import { AKALSTACK, MOBILE_SETUP, PROVIDERS, RELEASES, REPO } from '@/lib/site'
 
-const title = 'Ramu — Keep your agents moving'
+const title = 'Ramu — Describe it. Ramu puts it online.'
 const description =
-  'One open-source workspace for your coding agents, editor, terminals, and Git. Keep working across provider limits, share memory between models, and continue on iOS or Android.'
+  'Describe an app and Ramu builds it, puts it online and keeps it working, on accounts you own. For developers: a new project, deploy, CI and previews in one flow, with the coding agents you already use. Free and open source, with an iOS and Android companion.'
 const canonical = new URL('/', Astro.site)
 // Shorter copy for link previews (WhatsApp, Slack, X...), which cut the description after a line or two.
-const shareTitle = 'Ramu: Keep your agents moving'
+const shareTitle = 'Ramu: Describe it. Ramu puts it online.'
 const shareDescription =
-  'One open-source workspace for Claude Code, Codex, Cursor and more. Keep working through usage limits and continue from your phone.'
+  'Ramu builds your app, puts it online and keeps it working, on accounts you own. Free and open source, with Claude Code, Codex, Cursor and more.'
 const ogImage = new URL('/og.png', Astro.site).href
-const ogImageAlt = 'Ramu: Keep your agents moving. One open-source workspace for your coding agents, editor, terminals and Git.'
+const ogImageAlt = 'Ramu: Describe it. Ramu builds it, puts it online and keeps it working, on accounts you own.'
 
 const structuredData = {
   '@context': 'https://schema.org',
@@ -32,6 +32,49 @@ const structuredData = {
   sameAs: [REPO],
   publisher: { '@type': 'Organization', name: 'Akalstack', url: AKALSTACK, sameAs: ['https://github.com/akalstack'] },
 }
+
+/** The person's path from an idea to a live app, as Ramu runs it today. */
+const PATH = [
+  {
+    title: 'Say what you want',
+    body: 'Type it into the same box as any task. Ramu asks at most three questions, each with a recommended answer, and proposes a stack in one line you accept or change.',
+  },
+  {
+    title: 'Ramu makes the project',
+    body: 'It runs the framework’s own generator in a new folder, commits, and gives the thread a goal: the build and tests pass and the main page loads.',
+  },
+  {
+    title: 'Watch it take shape',
+    body: 'The app opens in the browser panel as soon as it serves. Questions come as cards; anything only you know is asked once and kept with the project.',
+  },
+  {
+    title: 'Deploy to your account',
+    body: 'One sheet picks the target, signs in to your account, publishes the repository and sets the variables the app needs, with its database, cache, storage or email made on your own account too. Then it shows the live address.',
+  },
+  {
+    title: 'Keep changing it',
+    body: 'Each change arrives as a pull request with CI and a preview address. Merging deploys it, and a failed deployment wakes the thread that made it, with the build log.',
+  },
+]
+
+const SAFELY = [
+  'A preview address for every pull request, and CI that GitHub or GitLab requires before merging',
+  'Migrations held until a production build goes live, and roll back from the desktop or your phone',
+  'Uptime watched on the live address, with an incident thread when it goes down',
+  'The first production deploy, domains and DNS always ask you first',
+]
+
+const PLATFORMS = [
+  'Vercel',
+  'Netlify',
+  'Cloudflare',
+  'GitHub Pages',
+  'Railway',
+  'Fly.io',
+  'Your own server',
+  'Expo for the app stores',
+]
+const DATA = ['Neon', 'Supabase', 'Cloudflare D1, KV and R2', 'Vercel Marketplace and Blob', 'Upstash', 'Resend']
 
 const WORK = [
   {
@@ -92,7 +135,7 @@ const WORK = [
     <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
   </head>
   <body>
-    <a class="skip" href="#work">Skip to content</a>
+    <a class="skip" href="#path">Skip to content</a>
 
     <header class="nav">
       <div class="nav-inner">
@@ -100,8 +143,9 @@ const WORK = [
           <img src="/wordmark.svg" alt="Ramu" height="22" />
         </a>
         <nav class="nav-links" aria-label="Primary">
-          <a href="#providers">Providers</a>
-          <a href="#work">Features</a>
+          <a href="#path">How it works</a>
+          <a href="#providers">Accounts</a>
+          <a href="#work">Agents</a>
           <a href="#review">Review</a>
           <a href="#mobile">Mobile</a>
           <a href={`${REPO}#guides`}>Docs</a>
@@ -113,10 +157,10 @@ const WORK = [
     <main>
       <section class="hero" id="top">
         <Backdrop client:idle />
-        <h1>Keep your agents moving.</h1>
+        <h1>Describe it. Ramu builds it, puts it online and keeps it working.</h1>
         <p class="hero-sub">
-          Bring your coding agents, editor, terminals, and Git together. Keep work moving across provider limits, carry
-          context between models, and continue from your phone.
+          On accounts you own. For developers: a new project, deploy, CI and previews in one flow, with the coding agents
+          you already use.
         </p>
         <div class="hero-actions">
           <LinkButton tone="primary" href="#download">Get Ramu</LinkButton>
@@ -126,14 +170,45 @@ const WORK = [
         <Demo client:load />
       </section>
 
+      <section class="section section-split" id="path">
+        <div class="section-head sticky">
+          <h2>From an idea to a live app.</h2>
+          <p>
+            The same path whether you have never opened a terminal or ship every day. A developer can start at any step:
+            Deploy on an existing project, or Set up CI alone.
+          </p>
+        </div>
+        <ol class="rows">
+          {
+            PATH.map((step) => (
+              <li>
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+              </li>
+            ))
+          }
+        </ol>
+      </section>
+
+      <section class="section section-split" id="safely">
+        <div class="section-head">
+          <h2>Every change, safely.</h2>
+          <p>
+            Ramu works on a branch and opens a pull request for each change, so you see it running before anyone else
+            does. Merging is what puts it live.
+          </p>
+        </div>
+        <ul class="checks">{SAFELY.map((line) => <li>{line}</li>)}</ul>
+      </section>
+
       <section class="section" id="providers">
         <div class="section-head">
           <h2>Your agents. Your accounts. Their official tools.</h2>
           <p>
             Ramu runs Claude Code, Codex, OpenCode, Cursor, and Antigravity through each provider's own CLI, SDK, or
-            runtime, signed in with the plan or API key you already have. We don't resell tokens or route your work
-            through our servers, so your provider bills you exactly as before. API keys you save stay in your
-            computer's keychain.
+            runtime, signed in with the plan or API key you already have. Your app runs on hosting and data accounts you
+            own, which you can take anywhere. Ramu is free, resells nothing and runs no hosting, so each provider bills
+            you exactly as before. Keys you save stay in your computer's keychain.
           </p>
         </div>
         <ul class="ingredients">
@@ -149,6 +224,12 @@ const WORK = [
             ))
           }
         </ul>
+        <div class="section-head">
+          <ul class="checks">
+            <li>Hosting: {PLATFORMS.join(', ')}</li>
+            <li>Data: {DATA.join(', ')}</li>
+          </ul>
+        </div>
       </section>
 
       <section class="section section-split" id="work">
@@ -236,10 +317,10 @@ const WORK = [
 
       <section class="download" id="download">
         <div class="download-inner">
-          <h2>Bring your next task to Ramu.</h2>
+          <h2>Bring your next idea to Ramu.</h2>
           <p>
-            Download the desktop alpha, connect a provider, and open a repository. Add the mobile companion to keep up
-            from your phone.
+            Download the desktop alpha, connect a provider, and describe what you want, or open a repository you already
+            have. Add the mobile companion to keep up from your phone.
           </p>
           <div class="hero-actions">
             <LinkButton tone="primary" href={RELEASES}>macOS (Apple silicon and Intel)</LinkButton>
@@ -265,6 +346,8 @@ const WORK = [
         <a href={RELEASES}>Releases</a>
         <a href={`${REPO}/blob/main/CONTRIBUTING.md`}>Contributing</a>
         <a href={`${REPO}/blob/main/SECURITY.md`}>Security</a>
+        <a href="https://github.com/sponsors/akalstack">Sponsor</a>
+        <a href="https://trakteer.id/akalstack">Trakteer</a>
       </nav>
     </footer>
   </body>
