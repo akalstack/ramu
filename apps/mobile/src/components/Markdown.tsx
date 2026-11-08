@@ -12,7 +12,7 @@ import { font, radius, space, useTheme } from '../theme'
 import { UITextView } from '@bsky.app/react-native-uitextview'
 import { selectedText, type TextRun } from '../runtime/selectedText'
 import { NativeMarkdown, nativeMarkdown } from './NativeMarkdown'
-import { nativeMarkdownSource } from '../runtime/nativeMarkdownSource'
+import { markdownBlocks, nativeMarkdownSource } from '../runtime/nativeMarkdownSource'
 
 // Native markdown for agent replies: headings, lists, tasks, quotes, tables, rules, coloured code, emphasis and links.
 // Kept native: shared's react-markdown renderer depends on the DOM.
@@ -468,9 +468,27 @@ export function Markdown({
     () => (source === null ? parseBlocks(streaming ? closePartial(text) : text) : []),
     [source, text, streaming],
   )
+  // While a reply streams, the native view draws it a block at a time so each new block can fade in; once it has
+  // arrived it is one view again, so a selection runs across all of it.
+  const nativeBlocks = useMemo(
+    () => (source !== null && streaming ? markdownBlocks(closePartial(source)) : null),
+    [source, streaming],
+  )
   // Blocks on screen when the reply mounts (a chat opened mid-stream) stay put; blocks that appear later fade in whole,
   // once, on the native driver, so a busy JavaScript thread never stalls them.
-  const [settledCount] = useState(() => (fresh ? 0 : blocks.length))
+  const [settledCount] = useState(() =>
+    fresh ? 0 : (nativeBlocks?.length ?? (source !== null ? markdownBlocks(source).length : blocks.length)),
+  )
+  if (source !== null && nativeBlocks)
+    return (
+      <View>
+        {nativeBlocks.map((block, index) => (
+          <Arrive key={index} animate={index >= settledCount}>
+            <NativeMarkdown source={block} streaming muted={muted} actions={actions} />
+          </Arrive>
+        ))}
+      </View>
+    )
   if (source !== null) return <NativeMarkdown source={source} streaming={streaming} muted={muted} actions={actions} />
   return (
     <View style={{ gap: space.m, opacity: muted ? 0.8 : 1 }}>

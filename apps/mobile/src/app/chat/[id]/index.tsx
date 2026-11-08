@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } 
 import {
   ActivityIndicator,
   Alert,
+  Keyboard as SystemKeyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -220,17 +221,30 @@ export default function ChatScreen() {
   const metrics = useRef({ offset: 0, content: 0, viewport: 0, cover: 0 })
   const settling = useRef<ReturnType<typeof setTimeout> | null>(null)
   const keyboardTarget = useRef<number | null>(null)
+  // Set by sending: the keyboard closes and the chat stays where it is while it slides away.
+  const sentClosing = useRef(false)
   const keyboard = useKeyboardHeight((to) => {
     if (!ios) return
     const m = metrics.current,
       cover = coverFor(to)
     const end = Math.max(restTop.current, m.content - m.viewport + cover)
-    keyboardTarget.current = following.current
-      ? end
-      : Math.max(restTop.current, Math.min(end, m.offset + cover - m.cover))
+    const keep = Math.max(restTop.current, Math.min(end, m.offset))
+    keyboardTarget.current = sentClosing.current
+      ? keep !== m.offset
+        ? keep
+        : null
+      : following.current
+        ? end
+        : Math.max(restTop.current, Math.min(end, m.offset + cover - m.cover))
     if (settling.current) clearTimeout(settling.current)
     settling.current = setTimeout(() => {
       settling.current = null
+      const sent = sentClosing.current
+      sentClosing.current = false
+      // Rows that arrived while the keyboard moved were not followed then. After a send, the message and the working
+      // line take the room the keyboard left, and one gentle move shows whatever did not fit.
+      if (sent && canFollow()) toEnd(true)
+      else follow()
     }, 500)
   })
   useEffect(
@@ -252,8 +266,12 @@ export default function ChatScreen() {
   // scrollToEnd ignores contentInset, so on iOS it stops `cover` points short; aim past the inset instead.
   // Native scroll-edge chrome overlays the list; UIKit supplies its top inset.
   const topInset = ios ? insets.top + (Number(Platform.Version) >= 26 ? 54 : 44) : 0
+  // Where UIKit rests a chat that fits on screen: read from the list while it is short, since the bar's real height can
+  // differ from the guess above, and a guess off by a few points either hid the newest rows or slid the first one under
+  // the bar.
+  const measuredRest = useRef<number | null>(null)
   const restTop = useRef(-topInset)
-  restTop.current = -topInset
+  restTop.current = measuredRest.current ?? -topInset
   const toEnd = (animated: boolean) => {
     animated = animated && !reducedMotion
     if (!ios) return scroll.current?.scrollToEnd({ animated })
@@ -261,22 +279,71 @@ export default function ChatScreen() {
     // Not measured yet: an offset worked out from a zero-height viewport lands far down and hides the first messages.
     if (!m.viewport || !m.content) return
     const end = m.content - m.viewport + m.cover
-    // A short chat fits on screen: its end is its top. Only move if it was pushed past the top, and then back to the rest.
-    // The header height is a guess until UIKit applies it, so a chat that only just overflows is left to UIKit: moving it would
-    // slide its first message under the bar. Only clearly long chats are pinned to their end.
-    if (end <= restTop.current + 80) return
+    // A short chat fits on screen: its end is its top, where UIKit already rests it.
+    if (end <= restTop.current + 1) return
     scroll.current?.scrollToOffset({ offset: end, animated })
   }
-  // The first measured composer height replaces the estimate; stay on the end when that moves the inset.
-  useEffect(() => {
-    if (following.current && !settling.current) {
-      const frame = requestAnimationFrame(() => toEnd(false))
-      return () => cancelAnimationFrame(frame)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [composerHeight] by design; the values it reads beyond these are current as of that run
-  }, [composerHeight])
   // A row opened or closed by hand keeps the scroll position; content growth from the agent still follows the end.
   const held = useRef(0)
+  // Every change that can move the end (a row, its measured size, the footer, the composer, the keyboard, the
+  // viewport) asks for one follow. It jumps without animating, as the desktop's transcript does: on the next frame, once
+  // the list has laid the change out, and again shortly after for rows measured late. Several changes in a row share
+  // the same two jumps, so sending (the message, the host's copy, the working line, the reply) never moves the view up
+  // and down, and the last jump always lands on the true end.
+  const followFrame = useRef<number | null>(null)
+  const followLate = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const canFollow = () =>
+    following.current &&
+    !userScrolling.current &&
+    !settling.current &&
+    !sentClosing.current &&
+    Date.now() - held.current > 600
+  const follow = () => {
+    if (!canFollow()) return
+    followFrame.current ??= requestAnimationFrame(() => {
+      followFrame.current = null
+      if (canFollow()) toEnd(false)
+    })
+    if (followLate.current) clearTimeout(followLate.current)
+    followLate.current = setTimeout(() => {
+      followLate.current = null
+      if (canFollow()) toEnd(false)
+    }, 180)
+  }
+  useEffect(
+    () => () => {
+      if (followFrame.current != null) cancelAnimationFrame(followFrame.current)
+      if (followLate.current) clearTimeout(followLate.current)
+    },
+    [],
+  )
+  /**
+   * Sending closes the keyboard and leaves the chat where it is: at the end, the sent message and the working line fill
+   * the room the keyboard leaves; scrolled up to read, it stays there with Scroll to latest.
+   */
+  const followSend = () => {
+    held.current = 0
+    if (keyboard.height > 0) {
+      // iOS moves the list with the keyboard itself (see the keyboard handler); Android follows the freed room.
+      sentClosing.current = ios
+      SystemKeyboard.dismiss()
+      // A keyboard that was already on its way down sends no new move; following must not wait for one.
+      if (followLate.current) clearTimeout(followLate.current)
+      followLate.current = setTimeout(() => {
+        followLate.current = null
+        if (!sentClosing.current || settling.current) return
+        sentClosing.current = false
+        follow()
+      }, 700)
+    }
+    follow()
+  }
+  // The first measured composer height replaces the estimate; stay on the end when that moves the inset.
+  useEffect(
+    follow,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [composerHeight] by design; the values it reads beyond these are current as of that run
+    [composerHeight],
+  )
   const holdScroll = useCallback(() => {
     held.current = Date.now()
   }, [])
@@ -713,7 +780,7 @@ export default function ChatScreen() {
     if (!editing) return
     const keep = editing.files.map((file) => file.id).filter((id) => !attachments?.includes(id))
     setEditing(null)
-    following.current = true
+    followSend()
     await store.send(chat.id, text, mode, [...keep, ...(attachments ?? [])], context)
   }
   const offline = !store.isOnline(chat.computerId)
@@ -1369,11 +1436,20 @@ export default function ChatScreen() {
                 }}
                 onLayout={(event) => {
                   metrics.current.viewport = event.nativeEvent.layout.height
-                  if (following.current) toEnd(false)
+                  follow()
                 }}
                 onScroll={(event) => {
                   const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
                   metrics.current.offset = contentOffset.y
+                  if (
+                    ios &&
+                    !userScrolling.current &&
+                    contentOffset.y < 0 &&
+                    contentSize.height + metrics.current.cover <= layoutMeasurement.height + contentOffset.y
+                  ) {
+                    measuredRest.current = contentOffset.y
+                    restTop.current = contentOffset.y
+                  }
                   const gap = contentSize.height - contentOffset.y - layoutMeasurement.height + metrics.current.cover
                   // Only the reader's own scrolling decides whether to follow the end. The list's first, programmatic offset
                   // (resting at the top before it is measured) used to switch following off, so a chat opened at its top.
@@ -1400,11 +1476,7 @@ export default function ChatScreen() {
                 onContentSizeChange={(_, height) => {
                   metrics.current.content = height
                   settleReveal()
-                  // Pinned to the end without animating, as the desktop's transcript is: sending changes the content several
-                  // times in a row (sending, the sent message, the reply), and an animated scroll interrupted by each one
-                  // moved the view up and down.
-                  if (!following.current || settling.current || Date.now() - held.current <= 600) return
-                  toEnd(false)
+                  follow()
                 }}
                 keyboardDismissMode="on-drag"
                 keyboardShouldPersistTaps="handled"
@@ -1571,7 +1643,7 @@ export default function ChatScreen() {
                             )
                             .then((joined) => setRecipientId(joined.agentId))
                         }
-                        following.current = true
+                        followSend()
                         return store.send(chat.id, text, mode, attachments, context)
                       }}
                       taskId={chat.taskId || undefined}
@@ -1677,12 +1749,12 @@ export default function ChatScreen() {
                       onResume={
                         limit && !running && limit.primary && !stopped
                           ? () => {
-                              following.current = true
+                              followSend()
                               void store.retryLimitNow(chat.id)
                             }
                           : stopped
                             ? () => {
-                                following.current = true
+                                followSend()
                                 void store.send(
                                   chat.id,
                                   '\n\n<ramu-context>\nContinue where you left off.\n</ramu-context>',
