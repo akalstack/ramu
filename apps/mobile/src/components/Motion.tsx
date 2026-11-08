@@ -214,6 +214,48 @@ export function Arrive({ animate, identity, children }: { animate: boolean; iden
   return <Reanimated.View style={style}>{children}</Reanimated.View>
 }
 
+/** How far below its place a sent message starts: about where the message box is, so it reads as rising out of it. */
+const SENT_RISE = 56
+const SENT_MS = 340
+/** When each sent message began rising, so the host's copy that replaces it mid-way carries on instead of restarting. */
+const sentStarts = new Map<string, number>()
+
+/**
+ * A message you just sent rises from the composer into its place, as in WhatsApp: it starts lower and a little smaller,
+ * grows from its bottom-right corner, and settles. Only the drawing moves, never the layout, so the list's measured
+ * sizes and its scroll position are untouched. `start` begins the rise; a row with the same `identity` mounted while it
+ * runs (the host's copy of the message) continues it.
+ */
+export function SentArrive({ identity, start, children }: { identity: string; start: boolean; children: ReactNode }) {
+  const reduced = useReducedMotion()
+  const [from] = useState(() => {
+    if (reduced) return 1
+    const now = Date.now()
+    if (start && !sentStarts.has(identity)) sentStarts.set(identity, now)
+    const began = sentStarts.get(identity)
+    return began === undefined ? 1 : Math.min(1, (now - began) / SENT_MS)
+  })
+  const progress = useSharedValue(from)
+  useEffect(() => {
+    if (from >= 1) return
+    progress.value = withTiming(1, { duration: SENT_MS * (1 - from), easing: ReEasing.bezier(0.2, 0.9, 0.3, 1.08) })
+    const forget = setTimeout(() => sentStarts.delete(identity), SENT_MS * 3)
+    return () => {
+      cancelAnimation(progress)
+      clearTimeout(forget)
+    }
+  }, [from, identity, progress])
+  const style = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 0.3], [0, 1], Extrapolation.CLAMP),
+    transformOrigin: 'right bottom',
+    transform: [
+      { translateY: (1 - progress.value) * SENT_RISE },
+      { scale: interpolate(progress.value, [0, 1], [0.92, 1], Extrapolation.CLAMP) },
+    ],
+  }))
+  return <Reanimated.View style={style}>{children}</Reanimated.View>
+}
+
 /** Height and opacity disclosure motion, shared by every expandable transcript block. */
 export function Collapse({ open, children }: { open: boolean; children: ReactNode }) {
   const reduced = useReducedMotion()

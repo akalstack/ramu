@@ -106,7 +106,7 @@ import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../componen
 import { PendingBubble } from '../../../components/Outbox'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { ContextMeter } from '../../../components/ContextMeter'
-import { Arrive, Presence, PressGrow, useReducedMotion } from '../../../components/Motion'
+import { Presence, PressGrow, SentArrive, useReducedMotion } from '../../../components/Motion'
 import { ChatActionsSheet, confirmChatDeletion, offerThreadUndo } from '../../../components/ChatActions'
 import * as Clipboard from 'expo-clipboard'
 
@@ -658,11 +658,11 @@ export default function ChatScreen() {
     seen.current.add(key)
     if (item.kind === 'pending')
       return (
-        <Arrive animate={fresh && item.outbox.createdAt >= openedAt.current}>
+        <SentArrive identity={key} start={fresh && item.outbox.createdAt >= openedAt.current}>
           <PendingBubble item={item.outbox} computer={computer?.name ?? 'the host'} onEdit={editPending} />
-        </Arrive>
+        </SentArrive>
       )
-    return (
+    const row = (
       <TranscriptListRow
         found={found?.id === item.id ? found.at : undefined}
         item={item}
@@ -674,6 +674,14 @@ export default function ChatScreen() {
         fresh={fresh && item.kind !== 'user'}
         visible={contentScreenFocused && visibleContentRows.has(item.id)}
       />
+    )
+    // The host's copy of a message sent from here keeps its row's key, and finishes the rise the sent one began.
+    return item.kind === 'user' && key.startsWith('pending:') ? (
+      <SentArrive identity={key} start={false}>
+        {row}
+      </SentArrive>
+    ) : (
+      row
     )
   }
   if (!chat)
