@@ -40,6 +40,7 @@ import {
   type GitStash,
   type CommitDraft,
   type GitStatus,
+  type GitBranchInfo,
 } from '@ramu/shared/types'
 import type { ConflictChoice } from '@ramu/shared/conflicts'
 import { validBranchName } from '@ramu/shared/workspaceDefaults'
@@ -62,6 +63,8 @@ import { Glass, floatingChrome } from '../../../components/Glass'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { CurrentPullRequest } from '../../../components/PullRequestSections'
 import { canWriteHost } from '../../../runtime/viewerAccess'
+import { runBranchAction, type BranchAction } from '../../../runtime/branchActions'
+import { BranchActionOptions, BranchActionSheets, type BranchSheet } from '../../../components/BranchActionSheets'
 import {
   ALL_FILES_LABEL,
   ALL_FILES_TITLE,
@@ -94,6 +97,13 @@ const ACTIONS: { key: CommitAction; label: string; help: string }[] = [
   { key: 'amend', label: 'Commit (Amend)', help: 'Fold the changes into the last commit.' },
   { key: 'branch', label: 'Commit on new branch', help: 'Put the commit on a new branch and leave this one.' },
 ]
+
+const BRANCH_DONE: Record<BranchAction['kind'], string> = {
+  merge: 'Merged branch',
+  'create-from': 'Created branch',
+  rename: 'Renamed branch',
+  delete: 'Deleted branch',
+}
 
 interface FileState extends ChangedFile {
   staged: boolean | 'all'
@@ -300,7 +310,8 @@ export default function SourceControl() {
   const binding = bindings.find((b) => b.repoName === repo)
   const [files, setFiles] = useState<FileState[]>([])
   const [branch, setBranch] = useState('')
-  const [branches, setBranches] = useState<string[]>([])
+  const [branchList, setBranchList] = useState<GitBranchInfo[]>([])
+  const branches = branchList.map((b) => b.name)
   const [ahead, setAhead] = useState(0)
   const [behind, setBehind] = useState(0)
   const [published, setPublished] = useState(false)
@@ -319,6 +330,7 @@ export default function SourceControl() {
   const [sheet, setSheet] = useState<
     'repo' | 'branch' | 'newBranch' | 'action' | 'menu' | 'conflicts' | 'conflict' | null
   >(null)
+  const [branchSheet, setBranchSheet] = useState<BranchSheet | null>(null)
   const [conflictPath, setConflictPath] = useState<string | null>(null)
   const [branchName, setBranchName] = useState('')
   const [busy, setBusy] = useState(false)
@@ -352,7 +364,7 @@ export default function SourceControl() {
   const read = async () => {
     if (!chat || !binding) return
     const args = [chat.taskId, binding.repoId] as const
-    const [status, history, branchList, stashList] = await Promise.all([
+    const [status, history, branchInfo, stashList] = await Promise.all([
       store.invoke(chat.computerId, 'git.status', ...args),
       store.invoke(chat.computerId, 'git.history', ...args),
       store.invoke(chat.computerId, 'git.branches', ...args),
@@ -364,7 +376,7 @@ export default function SourceControl() {
     setAhead(status.ahead)
     setBehind(status.behind)
     setPublished(Boolean(status.upstream))
-    setBranches(branchList.map((b) => b.name))
+    setBranchList(branchInfo)
     setCommits(
       history.map((h) => ({ oid: h.oid, subject: h.subject, author: h.author, at: h.timestamp, pushed: !h.outgoing })),
     )
@@ -810,6 +822,29 @@ export default function SourceControl() {
       ],
     },
   ]
+  const branchContext = {
+    canWrite,
+    status: gitStatus ?? { branch: null, entries: [] },
+    branches: branchList,
+  }
+  /** A merge that stops on conflicts opens the first conflicted file; the rest follow from its Next conflicted file. */
+  const branchAction = (action: BranchAction) => {
+    if (!chat || !binding) return
+    let conflicts: string[] = []
+    void run(async () => {
+      ;({ conflicts } = await runBranchAction(
+        store.invoke,
+        { computerId: chat.computerId, taskId: chat.taskId, repoId: binding.repoId },
+        action,
+      ))
+    }, BRANCH_DONE[action.kind]).then(() => {
+      if (!conflicts.length) return
+      setTab('changes')
+      setFolded((f) => ({ ...f, conflicts: false }))
+      notify(tr('Merge stopped on conflicts. Choose a side for each, then Continue.'), true)
+      openConflict(conflicts[0]!)
+    })
+  }
   const createBranch = () => {
     const name = branchName.trim()
     if (!validBranchName(name)) return
@@ -1422,7 +1457,22 @@ export default function SourceControl() {
             }}
           />
         </SheetGroup>
+        <BranchActionOptions
+          context={branchContext}
+          busy={busy}
+          onPick={(next) => {
+            setSheet(null)
+            setTimeout(() => setBranchSheet(next), 300)
+          }}
+        />
       </Sheet>
+      <BranchActionSheets
+        sheet={branchSheet}
+        context={branchContext}
+        busy={busy}
+        onClose={() => setBranchSheet(null)}
+        onRun={branchAction}
+      />
 
       <Sheet
         open={sheet === 'newBranch'}

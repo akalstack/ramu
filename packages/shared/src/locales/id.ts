@@ -6311,4 +6311,44 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Agen kustom dan model helper pilihanmu diatur di Ramu pada host.',
   'Hosting accounts and their tokens are added in Ramu on the host.':
     'Akun hosting dan token-nya ditambahkan di Ramu pada host.',
+  'Branch actions': 'Aksi branch',
+  'Merge a branch…': 'Gabungkan branch…',
+  'Bring another branch’s commits into {branch}.': 'Bawa commit dari branch lain ke {branch}.',
+  'Start a new branch from another branch and switch to it.': 'Mulai branch baru dari branch lain lalu pindah ke sana.',
+  'Rename {branch} on this computer.': 'Ganti nama {branch} di komputer ini.',
+  'Remove a branch you no longer need.': 'Hapus branch yang tidak diperlukan lagi.',
+  'Merge into {branch}': 'Gabungkan ke {branch}',
+  'The branch you pick is merged into {branch}. If files conflict, the merge stops so you can choose a side for each.':
+    'Branch yang kamu pilih digabungkan ke {branch}. Jika ada file yang konflik, penggabungan berhenti agar kamu bisa memilih sisi untuk masing-masing.',
+  'Merge {name} into {branch}?': 'Gabungkan {name} ke {branch}?',
+  'Its commits are added to {branch} on this computer. Nothing is pushed.':
+    'Commit-nya ditambahkan ke {branch} di komputer ini. Tidak ada yang di-push.',
+  'Delete branch': 'Hapus branch',
+  'The branch checked out here is not listed. Git keeps a branch that is not merged yet, and the branch on the remote stays.':
+    'Branch yang sedang di-checkout di sini tidak ditampilkan. Git mempertahankan branch yang belum digabungkan, dan branch di remote tetap ada.',
+  'The branch is removed from this computer. Git refuses if it is not merged yet.':
+    'Branch dihapus dari komputer ini. Git menolak jika branch belum digabungkan.',
+  'Create branch from': 'Buat branch dari',
+  'The new branch starts at the tip of the branch you pick.': 'Branch baru dimulai dari ujung branch yang kamu pilih.',
+  'Renames {branch} on this computer. Its branch on the remote keeps its name.':
+    'Mengganti nama {branch} di komputer ini. Branch-nya di remote tetap memakai nama lama.',
+  'A branch with this name already exists.': 'Branch dengan nama ini sudah ada.',
+  'Choose a different branch to merge into this one.': 'Pilih branch lain untuk digabungkan ke branch ini.',
+  'Commit or stash your changes first.': 'Commit atau stash perubahanmu dulu.',
+  'Created branch': 'Branch dibuat',
+  'Deleted branch': 'Branch dihapus',
+  'Merged branch': 'Branch digabungkan',
+  'Renamed branch': 'Nama branch diganti',
+  'Merge stopped on conflicts. Choose a side for each, then Continue.':
+    'Penggabungan berhenti karena konflik. Pilih sisi untuk masing-masing, lalu Lanjut.',
+  'Select an existing local branch to start from.': 'Pilih branch lokal yang ada sebagai titik awal.',
+  'Select an existing local branch.': 'Pilih branch lokal yang ada.',
+  'Switch to a branch before merging into it.': 'Pindah ke sebuah branch sebelum menggabungkan ke dalamnya.',
+  'Switch to a branch before renaming it.': 'Pindah ke sebuah branch sebelum mengganti namanya.',
+  'Switch to another branch before deleting this one.': 'Pindah ke branch lain sebelum menghapus branch ini.',
+  'There is no other branch to delete.': 'Tidak ada branch lain untuk dihapus.',
+  'There is no other branch to merge.': 'Tidak ada branch lain untuk digabungkan.',
+  'This branch is checked out in another worktree.': 'Branch ini sedang di-checkout di worktree lain.',
+  'This device is view-only, so it cannot change branches.':
+    'Perangkat ini hanya dapat melihat, jadi tidak dapat mengubah branch.',
 }

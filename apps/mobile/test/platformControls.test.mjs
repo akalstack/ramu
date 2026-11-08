@@ -19,6 +19,7 @@ import * as computerGestures from '../src/runtime/computerGestures.ts'
 import * as sharedViewerAccess from '../../../packages/shared/src/viewerAccess.ts'
 import * as viewerAccess from '../src/runtime/viewerAccess.ts'
 import * as scheduleModel from '../src/runtime/scheduleModel.ts'
+import * as branchActions from '../src/runtime/branchActions.ts'
 import { goBackOrHome } from '../src/runtime/navigation.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -8415,5 +8416,89 @@ test('artifact settings on the phone revoke a share link and close a page opened
   close.props.onPress()
   await settle()
   assert.ok(calls.some((call) => call[0] === 'artifacts.closePublic' && call[1] === 'a1'))
+  hooks.dispose()
+})
+
+test('Source Control branch actions confirm, refuse the checked-out branch and stay closed to a viewer', async () => {
+  const hooks = hookHarness(),
+    alerts = [],
+    runs = [],
+    picked = []
+  let closed = 0
+  const { BranchActionOptions, BranchActionSheets } = load('components/BranchActionSheets.tsx', 'ios', {
+    react: hooks.react,
+    '../runtime/branchActions': branchActions,
+    './SheetOptions': { SheetGroup: 'SheetGroup', SheetOption: 'SheetOption', useSheetInputStyle: () => ({}) },
+    'react-native': { Alert: { alert: (...args) => alerts.push(args) } },
+  })
+  const branches = [
+    { name: 'main', current: false, worktree: '' },
+    { name: 'feature', current: true, worktree: '/repo' },
+    { name: 'merged', current: false, worktree: '' },
+  ]
+  const context = { canWrite: true, status: { branch: 'feature', entries: [] }, branches }
+  const options = (canWrite) =>
+    nodes(
+      BranchActionOptions({ context: { ...context, canWrite }, busy: false, onPick: (kind) => picked.push(kind) }),
+    ).filter((node) => node.type === 'SheetOption')
+  assert.equal(options(false).length, 4)
+  assert.ok(options(false).every((option) => option.props.disabled))
+  const writable = options(true)
+  assert.ok(writable.every((option) => !option.props.disabled))
+  writable.find((option) => option.props.title === 'Merge a branch…').props.onPress()
+  assert.deepEqual(picked, ['merge'])
+
+  let sheet = 'delete'
+  const render = () =>
+    hooks.render(() =>
+      BranchActionSheets({
+        sheet,
+        context,
+        busy: false,
+        onClose: () => closed++,
+        onRun: (action) => runs.push({ ...action }),
+      }),
+    )
+  const openSheet = () => nodes(render()).find((node) => node.type === 'Sheet' && node.props.open)
+  const option = (title) => nodes(openSheet()).find((node) => node.type === 'SheetOption' && node.props.title === title)
+  const afterSheet = () => new Promise((resolve) => setTimeout(resolve, 350))
+  // The checked-out branch is never offered for deletion.
+  assert.deepEqual(
+    nodes(openSheet())
+      .filter((node) => node.type === 'SheetOption')
+      .map((node) => node.props.title),
+    ['main', 'merged'],
+  )
+  option('merged').props.onPress()
+  assert.equal(closed, 1)
+  await afterSheet()
+  assert.deepEqual(runs, [])
+  alerts[0][2].find((button) => button.style === 'destructive').onPress()
+  assert.deepEqual(runs, [{ kind: 'delete', name: 'merged' }])
+
+  sheet = 'merge'
+  option('main').props.onPress()
+  await afterSheet()
+  alerts[1][2].find((button) => button.text === 'Merge').onPress()
+  assert.deepEqual(runs.at(-1), { kind: 'merge', name: 'main' })
+
+  const button = (tree) => nodes(tree).find((node) => node.type === 'Button')
+  sheet = 'rename'
+  render()
+  let tree = render()
+  assert.equal(find(tree, 'TextInput').props.value, 'feature')
+  find(tree, 'TextInput').props.onChangeText('main')
+  tree = render()
+  assert.equal(button(tree).props.disabled, true)
+  find(tree, 'TextInput').props.onChangeText('feature-2')
+  button(render()).props.onPress()
+  assert.deepEqual(runs.at(-1), { kind: 'rename', name: 'feature-2' })
+
+  sheet = 'create-from'
+  render()
+  option('main').props.onPress()
+  find(render(), 'TextInput').props.onChangeText('fix')
+  button(render()).props.onPress()
+  assert.deepEqual(runs.at(-1), { kind: 'create-from', name: 'fix', from: 'main' })
   hooks.dispose()
 })
