@@ -36,6 +36,7 @@ import type { Chat } from '../runtime/types'
 import { Disclosure } from './Motion'
 import { Button, Card, Divider, IconButton, Sheet, T, tap } from './ui'
 import { SheetGroup, SheetOption } from './SheetOptions'
+import { CreatePullRequest } from './CreatePullRequest'
 import { ChecksLine, PullRequestGlyph, StageText } from './PullRequestParts'
 
 const GROUP_LABEL: Record<PullRequestGroup, string> = {
@@ -124,6 +125,7 @@ export function CurrentPullRequest({
   const [picking, setPicking] = useState(false)
   const [watching, setWatching] = useState(false)
   const [preview, setPreview] = useState<Deployment | null>(null)
+  const [creating, setCreating] = useState(false)
   const { computerId, taskId } = chat
   const read = useCallback(async () => {
     const next = await store.invoke(computerId, 'forge.pullRequest', taskId, repoId)
@@ -167,7 +169,24 @@ export function CurrentPullRequest({
         {say(note)}
       </T>
     )
-  if (!pr) return null
+  // As on the desktop: a branch without a pull request can open one, drafted from its commits.
+  if (!pr)
+    return readOnly || !status ? null : (
+      <>
+        <Button kind="secondary" title={say('Create pull request')} onPress={() => setCreating(true)} />
+        <CreatePullRequest
+          computerId={computerId}
+          taskId={taskId}
+          repoId={repoId}
+          open={creating}
+          onClose={() => setCreating(false)}
+          onCreated={() => {
+            setCreating(false)
+            void read().catch(() => {})
+          }}
+        />
+      </>
+    )
   const stage = pullRequestStage(
     summary?.url === pr.url
       ? summary

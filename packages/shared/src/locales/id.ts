@@ -5930,6 +5930,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   Production: 'Produksi',
   Logs: 'Log',
   'No log output.': 'Tidak ada keluaran log.',
+  'No open issues': 'Tidak ada isu terbuka',
   'Roll back': 'Kembalikan',
   '{0} will show this version until the next deploy.': '{0} akan menampilkan versi ini sampai deploy berikutnya.',
   'No log yet.': 'Belum ada log.',

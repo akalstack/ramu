@@ -111,6 +111,8 @@ export interface OutboxItem {
   chatId: string
   kind: 'message' | 'chat'
   text: string
+  /** The issue a new thread starts from, linked once the host has made it so its pull request closes the issue. */
+  issue?: import('@ramu/shared/types').IssueLink
   mode: 'send' | 'queue' | 'steer'
   createdAt: number
   state?: 'waiting' | 'sending' | 'accepted' | 'uncertain' | 'review'
@@ -198,6 +200,7 @@ interface Store extends State {
     attachments?: string[]
     settings?: Pick<AgentSettings, 'access' | 'autoFallback' | 'serviceTier'>
     context?: FileContext[]
+    issue?: import('@ramu/shared/types').IssueLink
   }): Promise<string>
   previewOutbox(id: string): Promise<WorktreePlanEntry[]>
   resumeOutbox(id: string, plan: WorktreePlanEntry[]): Promise<void>
@@ -919,6 +922,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           item.context,
         )
         adopt(result.task)
+        // The link lets this thread's pull request close the issue; losing it only loses that line.
+        if (item.issue) void invoke(item.computerId, 'forge.linkIssue', result.task.id, item.issue).catch(() => {})
         if (result.error || !result.session) throw new Error(result.error ?? 'The agent did not start.')
         taskId = result.task.id
         sessionId = result.session.id
@@ -1800,6 +1805,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         createdAt: Date.now(),
         projectId: input.projectId,
         checkout: input.mode,
+        ...(input.issue ? { issue: input.issue } : {}),
         workspaceId: input.workspaceId,
         branchNaming:
           input.mode === 'worktree' && !input.workspaceId

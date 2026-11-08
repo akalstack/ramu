@@ -7189,6 +7189,18 @@ const newThread = {
   effort: '',
 }
 
+test('a thread started from an issue is linked to it once the host has made the thread', async () => {
+  const h = deliveryStoreHarness()
+  h.attach()
+  const issue = { repoId: 'r1', number: 12, title: 'Login fails', url: 'https://github.com/a/b/issues/12' }
+  await h.render().createChat({ ...newThread, issue })
+  await settle()
+  const link = h.calls.find(([method]) => method === 'forge.linkIssue')
+  assert.ok(link, 'the issue is linked')
+  assert.deepEqual(link.slice(-2), ['new-task', issue])
+  h.dispose()
+})
+
 test('a thread whose start failed on the host is kept, so the retry starts it instead of creating another', async () => {
   const h = deliveryStoreHarness()
   h.attach()

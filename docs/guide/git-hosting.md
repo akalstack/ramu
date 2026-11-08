@@ -4,8 +4,8 @@
 
 Ramu uses the [GitHub CLI](https://cli.github.com) sign-ins you already have (`gh auth login`), or a token saved in **Settings → Git → Hosting accounts**, where **Create a fine-grained token on GitHub** opens GitHub's form named Ramu, expiring in 90 days, with the permissions Ramu uses already chosen (pull requests, issues, checks, Actions, secrets, workflows and Pages); you pick the repositories. Saved tokens stay in the host's OS credential store and go only to their own server.
 
-- **Start a thread from an issue:** pick an issue on the new-thread screen. Its text becomes the first message, and a pull request from that checkout closes it.
-- **Open a pull request:** **Create pull request** in Source Control drafts the title and description from the branch's commits.
+- **Start a thread from an issue:** pick an issue on the new-thread screen (on the phone, **Start from an issue** above the box, once a project with issues is chosen). Its text becomes the first message, and a pull request from that checkout closes it.
+- **Open a pull request:** **Create pull request** in Source Control, on the desktop or the phone, drafts the title and description from the branch's commits.
 - **Follow it:** Source Control shows the branch's pull request with its checks, draft state and review decision. **Fix failing checks** and **Address review comments** send the details to a thread, which commits fixes but never pushes.
 - **Watch in a thread:** a thread can watch a pull request while Ramu runs in the background. New failing checks and new review comments return to it as one round, but only comments from people with write access, requested reviewers, the author and bots. Comments from anyone else show as **From outside the project** and never wake the agent. **Automatically watch pull requests** (Settings → Git) does this for pull requests you create.
 

@@ -21,6 +21,7 @@ import { Header, HeaderButton, PageScrollView, Screen } from '../../../component
 import { Nothing } from '../../../components/InboxParts'
 import { useScheduleCommands } from '../../../components/ScheduleRow'
 import { Button, Divider, Row, SectionLabel, T, tap } from '../../../components/ui'
+import { WebhookDeliveries } from '../../../components/WebhookDeliveries'
 
 function Fact({ label, children }: { label: string; children: string }) {
   return (
@@ -164,6 +165,7 @@ function Detail({
             </T>
           )}
         </View>
+        <WebhookDeliveries computer={computer} schedule={schedule} />
         <View style={{ paddingHorizontal: space.l }}>
           <Button
             title={t.delete}

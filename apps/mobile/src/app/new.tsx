@@ -1,6 +1,12 @@
 import { goBackOrHome } from '../runtime/navigation'
 import { translate } from '@ramu/shared/i18n'
-import { DEFAULT_AGENT_SETTINGS, type AgentSettings, type WorktreePlanEntry } from '@ramu/shared/types'
+import {
+  DEFAULT_AGENT_SETTINGS,
+  type AgentSettings,
+  type IssueLink,
+  type IssueSummary,
+  type WorktreePlanEntry,
+} from '@ramu/shared/types'
 import { routedAgentSettings } from '@ramu/shared/workspace/agentDefaults'
 import type { RamuMethods } from '@ramu/shared/api'
 import { currentBranchChoice, validBranchName, resolveCheckoutMode } from '@ramu/shared/workspaceDefaults'
@@ -25,6 +31,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Check,
   ChevronDown,
+  CircleDot,
   ChevronLeft,
   X,
   Folder,
@@ -264,7 +271,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
   const branchChoice = currentBranchChoice(choice.branch, branchTitle, namingIntent)
   const reviewKey = JSON.stringify([selected, projectId, branchTitle, namingIntent, branchPrefix, branchChoice])
   const [reviewed, setReviewed] = useState<{ key: string; plan: WorktreePlanEntry[] } | null>(null)
-  type Picker = 'project' | 'mode' | 'host' | 'choice' | null
+  type Picker = 'project' | 'mode' | 'host' | 'choice' | 'issue' | null
   const [picker, setPickerState] = useState<Picker>(() =>
     opensOnComposer({ project: params.project, auto, offline, projects: list.length }) ? null : 'project',
   )
@@ -312,6 +319,40 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
     })
   const project = list.find((p) => p.id === projectId)
   const rawId = (id: string) => id.slice(id.indexOf(':') + 1)
+  // As on the desktop: a project's open issues can start the thread; its text fills the box, and the thread is linked
+  // to the issue once the host makes it, so its pull request closes it. They are read only when the picker opens.
+  const [issues, setIssues] = useState<(IssueSummary & { repoId: string; repoName: string })[] | null>(null)
+  const [issue, setIssue] = useState<IssueLink | null>(null)
+  const issueProject = project && project.kind !== 'workspace' && !offline ? rawId(project.id) : null
+  useEffect(() => {
+    setIssues(null)
+    setIssue(null)
+  }, [selected, issueProject])
+  const openIssues = async () => {
+    setPicker('issue')
+    if (!issueProject || issues) return
+    const repos = await store.invoke(selected, 'repos.list', issueProject).catch(() => [])
+    const lists = await Promise.all(
+      repos.map((repo) =>
+        store
+          .invoke(selected, 'forge.issues', repo.id, '')
+          .then((found) => found.map((entry) => ({ ...entry, repoId: repo.id, repoName: repo.name })))
+          .catch(() => []),
+      ),
+    )
+    setIssues(lists.flat())
+  }
+  const pickIssue = async (picked: NonNullable<typeof issues>[number] | null) => {
+    setPicker(null)
+    if (!picked) return setIssue(null)
+    try {
+      const details = await store.invoke(selected, 'forge.issue', picked.repoId, picked.number)
+      setIssue(details.link)
+      setQuoted((current) => ({ text: details.prompt, n: (current?.n ?? 0) + 1 }))
+    } catch (error) {
+      Alert.alert(say('Start from an issue'), error instanceof Error ? error.message : String(error))
+    }
+  }
   const hasProjects = list.some((p) => rawId(p.id) !== STANDALONE)
   type Send = Parameters<NonNullable<React.ComponentProps<typeof Composer>['onSend']>>
   /** A project on another online host: the thread starts there, as it would here, and opens. Text only. */
@@ -726,6 +767,13 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
                     onPress={() => setPicker('mode')}
                   />
                 ) : null}
+                {issueProject ? (
+                  <TrayButton
+                    icon={CircleDot}
+                    label={issue ? `#${issue.number}` : say('Start from an issue')}
+                    onPress={() => void openIssues()}
+                  />
+                ) : null}
               </>
             }
             draftKey={composerKey}
@@ -796,6 +844,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
                 branchPrefix,
                 attachments,
                 context,
+                ...(issue ? { issue } : {}),
                 ...sendModel,
               })
               if (storeRef.current.drafts[composerKey] === text) agentDraft.consume()
@@ -813,6 +862,27 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
         </View>
       </KeyboardPadding>
 
+      <Sheet open={picker === 'issue'} onClose={() => setPicker(null)} title={say('Start from an issue')}>
+        <SheetGroup>
+          <SheetOption icon={X} title={say('No issue')} selected={!issue} onPress={() => void pickIssue(null)} />
+          {issues === null ? <ActivityIndicator style={{ padding: space.m }} /> : null}
+          {issues?.length === 0 ? (
+            <T tone="muted" style={{ padding: space.m }}>
+              {say('No open issues')}
+            </T>
+          ) : null}
+          {(issues ?? []).map((entry) => (
+            <SheetOption
+              key={`${entry.repoId}:${entry.number}`}
+              icon={CircleDot}
+              title={`#${entry.number} ${entry.title}`}
+              help={new Set((issues ?? []).map((other) => other.repoId)).size > 1 ? entry.repoName : undefined}
+              selected={issue?.repoId === entry.repoId && issue.number === entry.number}
+              onPress={() => void pickIssue(entry)}
+            />
+          ))}
+        </SheetGroup>
+      </Sheet>
       <Sheet open={picker === 'host'} onClose={() => setPicker(null)} title={t.computers}>
         <SheetGroup>
           {computers.map((computer) => (
