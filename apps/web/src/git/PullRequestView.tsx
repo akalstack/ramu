@@ -498,17 +498,14 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
                 </p>
               )}
               {shownThreads.map((entry) => (
-                <article key={entry.id} className="flex flex-col gap-2 rounded-(--radius-m) border border-line p-3">
+                <article key={entry.id} className="flex flex-col gap-2 rounded-(--radius-m) bg-fill p-3">
                   <div className="font-mono text-caption text-muted-foreground">
                     {entry.path ? `${entry.path}${entry.line ? `:${entry.line}` : ''}` : t('Conversation')}
                     {entry.outdated && ` · ${t('Outdated')}`}
                     {entry.resolved && ` · ${t('Resolved')}`}
                   </div>
                   {entry.comments.map((comment) => (
-                    <div
-                      key={comment.id}
-                      className="flex flex-col gap-1 border-t border-line pt-2 first-of-type:border-t-0 first-of-type:pt-0"
-                    >
+                    <div key={comment.id} className="flex flex-col gap-1 pt-2 first-of-type:pt-0">
                       <div className="flex items-center gap-1.5 text-control">
                         <span className="font-medium">{comment.author ?? t('Someone')}</span>
                         {comment.bot && (

@@ -522,7 +522,7 @@ export function PullRequestFiles({
         </div>
       </div>
       {finishing && (
-        <div className="flex flex-col gap-2.5 rounded-(--radius-m) border border-line bg-card p-3">
+        <div className="flex flex-col gap-2.5 rounded-(--radius-m) bg-card p-3">
           <Textarea
             value={body}
             onChange={(event) => setBody(event.target.value)}

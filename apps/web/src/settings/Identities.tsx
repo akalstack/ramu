@@ -121,7 +121,7 @@ function RuleEditor({
         <ul className="m-0 flex flex-wrap gap-1 p-0" aria-label={t('Rules')}>
           {rules.map((entry) => (
             <li key={ruleText(entry)} className="list-none">
-              <span className="inline-flex h-6 items-center gap-1.5 rounded-full border border-line bg-fill pr-0.5 pl-2 font-mono text-caption text-foreground">
+              <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-fill pr-0.5 pl-2 font-mono text-caption text-foreground">
                 {entry.kind === 'folder' ? (
                   <Folder size={11} aria-hidden className="text-muted-foreground" />
                 ) : (

@@ -94,7 +94,7 @@ export function PullRequestReadiness({
   return (
     <section
       aria-label={t('Readiness')}
-      className="flex flex-col gap-2 rounded-(--radius-m) border border-line bg-card px-4 py-3"
+      className="flex flex-col gap-2 rounded-(--radius-m) bg-card px-4 py-3"
     >
       <ul className="m-0 flex list-none flex-col p-0">
         <Row tone={checks.tone} icon={checks.icon}>

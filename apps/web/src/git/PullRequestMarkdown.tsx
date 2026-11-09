@@ -11,8 +11,8 @@ import { t } from '../i18n'
 function Suggestion({ source }: { source: string }) {
   const lines = source.replace(/\n$/, '')
   return (
-    <figure className="my-2 overflow-hidden rounded-(--radius-s) border border-line">
-      <figcaption className="border-b border-line bg-fill px-2.5 py-1 text-caption text-muted-foreground">
+    <figure className="my-2 overflow-hidden rounded-(--radius-s) bg-[color-mix(in_srgb,var(--foreground)_5%,transparent)]">
+      <figcaption className="px-2.5 pt-1.5 text-caption text-muted-foreground">
         {lines ? t('Suggested change') : t('Suggests removing these lines')}
       </figcaption>
       {lines && (
@@ -40,7 +40,7 @@ const components: Components = {
   },
   // A review bot folds long parts away; they stay folded here too, with a summary that reads as a control.
   details: ({ children }) => (
-    <details className="my-1.5 rounded-(--radius-s) border border-line px-2.5 py-1.5 [&[open]>summary]:mb-1.5">
+    <details className="my-1.5 rounded-(--radius-s) bg-[color-mix(in_srgb,var(--foreground)_5%,transparent)] px-2.5 py-1.5 [&[open]>summary]:mb-1.5">
       {children}
     </details>
   ),
