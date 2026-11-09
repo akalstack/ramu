@@ -10,6 +10,9 @@ import { Glass } from './Glass'
 import { belowHeader } from './UndoToast'
 import { IconButton, T } from './ui'
 
+/** The bar's height, so a match the list scrolls to lands just under it. */
+export const FIND_BAR_HEIGHT = 44
+
 /**
  * Find in the loaded turns of a thread, as the desktop's thread header does: how many matches there are, and up and
  * down between them. It starts on the newest match, nearest where a chat is read, and Up goes back in time.
@@ -20,7 +23,7 @@ export function ChatFindBar({
   onClose,
 }: {
   rows: readonly (TranscriptItem | { kind: string; id: string })[]
-  onJump: (match: { id: string; index: number }) => void
+  onJump: (match: { id: string; index: number }, query: string) => void
   onClose: () => void
 }) {
   const { c } = useTheme()
@@ -34,7 +37,7 @@ export function ChatFindBar({
   const shown = Math.min(current, Math.max(0, matches.length - 1))
   const target = matches[shown]
   useEffect(() => {
-    if (target) onJump(target)
+    if (target) onJump(target, query.trim())
     // eslint-disable-next-line react-hooks/exhaustive-deps -- jumps when the match being read changes, not when the callback does
   }, [target?.id, target?.index, shown, query])
   const step = (delta: number) => {
@@ -55,7 +58,7 @@ export function ChatFindBar({
           autoCorrect={false}
           returnKeyType="search"
           onSubmitEditing={() => step(-1)}
-          style={{ flex: 1, minHeight: 44, marginLeft: space.s, color: c.text, fontSize: font.control }}
+          style={{ flex: 1, minHeight: FIND_BAR_HEIGHT, marginLeft: space.s, color: c.text, fontSize: font.control }}
         />
         {query.trim() ? (
           <T

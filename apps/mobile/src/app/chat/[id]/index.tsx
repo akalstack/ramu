@@ -46,7 +46,8 @@ import {
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
 import { belowHeader } from '../../../components/UndoToast'
-import { ChatFindBar } from '../../../components/ChatFindBar'
+import { ChatFindBar, FIND_BAR_HEIGHT } from '../../../components/ChatFindBar'
+import { quoteNeedles } from '../../../runtime/textMark'
 import { MAKE_PAGE_PROMPT } from '@ramu/shared/artifacts'
 import { useAutomation } from '../../../runtime/automation'
 import { useChat, useStore, type OutboxItem } from '../../../runtime/store'
@@ -601,8 +602,23 @@ export default function ChatScreen() {
     return { pageRows, hiddenTurns: hidden }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [rows, turnsShown, staged, chat?.id, chat?.provider, chat?.settings] by design; the values it reads beyond these are current as of that run
   }, [rows, turnsShown, staged, chat?.id, chat?.provider, chat?.settings])
-  // A quote in the composer leads back to the message it came from: that row scrolls into view and lights up.
-  const [found, setFound] = useState<{ id: string; at: number } | null>(null)
+  // A quote in the composer leads back to the message it came from: that row scrolls to the top and the quoted words
+  // light up in it, as a find's match does.
+  const [found, setFound] = useState<{ id: string; at: number; mark?: readonly string[] } | null>(null)
+  const [finding, setFinding] = useState(false)
+  /** Lands a row at the top of the list, under the header and, while finding, the find bar over it. */
+  const toTop = (index: number, underFind: boolean) => {
+    following.current = false
+    // A row not laid out yet can refuse to be scrolled to; the highlight still marks it once it is.
+    try {
+      scroll.current?.scrollToIndex({
+        index,
+        animated: !reducedMotion,
+        viewPosition: 0,
+        viewOffset: topInset + space.s + (underFind ? FIND_BAR_HEIGHT + space.s : 0),
+      })
+    } catch {}
+  }
   const findQuote = (quote: string) => {
     const messages = pageRows.flatMap((row, index) =>
       row.kind === 'text' || row.kind === 'user' || row.kind === 'report'
@@ -614,21 +630,16 @@ export default function ChatScreen() {
       showToast(translate(store.language, 'The quoted message is not in the loaded turns.'))
       return
     }
-    following.current = false
-    // A row not laid out yet can refuse to be scrolled to; the highlight still marks it once it is.
-    try {
-      scroll.current?.scrollToIndex({ index: source.index, animated: true, viewPosition: 0.3 })
-    } catch {}
-    setFound({ id: source.id, at: Date.now() })
+    toTop(source.index, finding)
+    const at = Date.now()
+    setFound({ id: source.id, at, mark: quoteNeedles(quote) })
+    // A quote's highlight is a pointer, not a state: it fades back to plain text once the reader has seen it.
+    setTimeout(() => setFound((current) => (current?.at === at ? null : current)), 2600)
   }
   // Find in the loaded turns: a match scrolls into view and lights up, as a quote's source does.
-  const [finding, setFinding] = useState(false)
-  const jumpToMatch = (match: { id: string; index: number }) => {
-    following.current = false
-    try {
-      scroll.current?.scrollToIndex({ index: match.index, animated: true, viewPosition: 0.3 })
-    } catch {}
-    setFound({ id: match.id, at: Date.now() })
+  const jumpToMatch = (match: { id: string; index: number }, query: string) => {
+    toTop(match.index, true)
+    setFound({ id: match.id, at: Date.now(), mark: [query] })
   }
   // When a turn finishes while the reader follows its end, an answer taller than the screen is read from its first line:
   // the list glides to its top and stops following, rather than leaving the reader at its last line.
@@ -701,6 +712,7 @@ export default function ChatScreen() {
     const row = (
       <TranscriptListRow
         found={found?.id === item.id ? found.at : undefined}
+        mark={found?.id === item.id ? found.mark : undefined}
         item={item}
         chat={chat!}
         date={itemMeta.get(item.id)?.date}
@@ -1630,7 +1642,17 @@ export default function ChatScreen() {
                 bottom={composerHeight}
               />
               {ios ? null : <TopFade visible={scrolled} color={c.window} />}
-              {finding ? <ChatFindBar rows={pageRows} onJump={jumpToMatch} onClose={() => setFinding(false)} /> : null}
+              {finding ? (
+                <ChatFindBar
+                  rows={pageRows}
+                  onJump={jumpToMatch}
+                  onClose={() => {
+                    setFinding(false)
+                    // The highlight belongs to the find; closing it leaves plain text.
+                    setFound(null)
+                  }}
+                />
+              ) : null}
               <KeyboardLift keyboard={keyboard}>
                 <BottomFade height={composerHeight * 0.75} color={c.window} />
                 {selection ? (

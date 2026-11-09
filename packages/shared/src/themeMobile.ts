@@ -22,6 +22,8 @@ export interface MobilePalette {
   accent: string
   accentWash: string
   accentSoft: string
+  /** Words a find or quote led to in a message. */
+  mark: string
   ok: string
   okWash: string
   warn: string
@@ -71,6 +73,7 @@ export function mobilePalette(variant: ThemeVariant): MobilePalette {
     accent: c.accent,
     accentWash: rgba(c.accent, 0.1),
     accentSoft: rgba(c.accent, dark ? 0.18 : 0.13),
+    mark: rgba(c.accent, dark ? 0.38 : 0.24),
     ok: c.ok,
     okWash: rgba(c.ok, dark ? 0.08 : 0.1),
     warn: c.warn,

@@ -11,7 +11,8 @@ import { inlineCodeFileLink, localFileLink } from '@ramu/shared/workspace/fileLi
 import { font, radius, space, useTheme } from '../theme'
 import { UITextView } from '@bsky.app/react-native-uitextview'
 import { selectedText, type TextRun } from '../runtime/selectedText'
-import { NativeMarkdown, nativeMarkdown } from './NativeMarkdown'
+import { NativeMarkdown, TextMarkContext, nativeMarkdown } from './NativeMarkdown'
+import { markSource } from '../runtime/textMark'
 import { markdownBlocks, nativeMarkdownSource } from '../runtime/nativeMarkdownSource'
 
 // Native markdown for agent replies: headings, lists, tasks, quotes, tables, rules, coloured code, emphasis and links.
@@ -464,6 +465,11 @@ export function Markdown({
 }) {
   const actions = useContext(ReferenceContext)
   const source = useMemo(() => (nativeMarkdown ? nativeMarkdownSource(text) : null), [text])
+  const marks = useContext(TextMarkContext)
+  const marked = useMemo(
+    () => (source !== null && !streaming && marks?.length ? markSource(source, marks) : null),
+    [source, streaming, marks],
+  )
   const blocks = useMemo(
     () => (source === null ? parseBlocks(streaming ? closePartial(text) : text) : []),
     [source, text, streaming],
@@ -489,7 +495,16 @@ export function Markdown({
         ))}
       </View>
     )
-  if (source !== null) return <NativeMarkdown source={source} streaming={streaming} muted={muted} actions={actions} />
+  if (source !== null)
+    return (
+      <NativeMarkdown
+        source={marked ?? source}
+        marked={marked !== null}
+        streaming={streaming}
+        muted={muted}
+        actions={actions}
+      />
+    )
   return (
     <View style={{ gap: space.m, opacity: muted ? 0.8 : 1 }}>
       {blocks.map((block, index) => (

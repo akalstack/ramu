@@ -32,6 +32,9 @@ export interface MessageSelectionMenu {
 }
 export const MessageSelectionMenuContext = createContext<MessageSelectionMenu | null>(null)
 
+/** The words a find or a quote led to in this row; its messages highlight them instead of the whole row lighting up. */
+export const TextMarkContext = createContext<readonly string[] | null>(null)
+
 const HEADING = [22, 19, 17, 16, 15, 15]
 
 /**
@@ -42,11 +45,14 @@ export function NativeMarkdown({
   source,
   streaming,
   muted,
+  marked,
   actions,
 }: {
   source: string
   streaming?: boolean
   muted?: boolean
+  /** The source carries `==` highlight markers, so the parser reads them as highlights. */
+  marked?: boolean
   actions: ReferenceActions
 }) {
   const { c, scheme } = useTheme()
@@ -127,6 +133,7 @@ export function NativeMarkdown({
         cellPaddingVertical: 7,
       },
       taskList: { checkedColor: c.accent, checkedTextColor: c.body, borderColor: c.muted, checkedStrikethrough: false },
+      highlight: { color: c.text, backgroundColor: c.mark },
     } as MarkdownStyle
   }, [c, scheme])
   const menuItems = useMemo<ContextMenuItem[] | undefined>(
@@ -149,6 +156,7 @@ export function NativeMarkdown({
         markdown={source}
         markdownStyle={style}
         flavor="github"
+        md4cFlags={marked ? { highlight: true } : undefined}
         selectable
         selectionColor={c.accent}
         streamingAnimation={streaming}

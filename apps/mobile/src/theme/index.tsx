@@ -42,6 +42,8 @@ const dark = {
   accentWash: 'rgba(183,166,243,0.10)',
   // Selected chips and toggles: a quiet tonal violet, not the loud filled primary.
   accentSoft: 'rgba(183,166,243,0.18)',
+  // Words a find or quote led to: strong enough to spot in a long reply, still readable under.
+  mark: 'rgba(183,166,243,0.38)',
   ok: '#30d158',
   okWash: 'rgba(48,209,88,0.08)',
   warn: '#ffb340',
@@ -75,6 +77,7 @@ const light: Palette = {
   accent: '#6a46c8',
   accentWash: 'rgba(118,82,212,0.10)',
   accentSoft: 'rgba(106,70,200,0.13)',
+  mark: 'rgba(106,70,200,0.24)',
   ok: '#1f9d45',
   okWash: 'rgba(31,157,69,0.10)',
   warn: '#b26b00',

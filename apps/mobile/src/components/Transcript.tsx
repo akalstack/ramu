@@ -1,5 +1,6 @@
 import { MEDIA_SERVICE_NAMES } from '@ramu/shared/types/deploy'
-import { MessageSelectionMenuContext, nativeMarkdown } from './NativeMarkdown'
+import { MessageSelectionMenuContext, TextMarkContext, nativeMarkdown } from './NativeMarkdown'
+import { markSource } from '../runtime/textMark'
 import { ContinuedCard } from './ContinueOnHost'
 import { toolActivity } from '@ramu/shared/chat/toolActivity'
 import { FileIcon } from './FileIcon'
@@ -562,8 +563,10 @@ interface RowProps {
   streaming: boolean
   fresh: boolean
   visible: boolean
-  /** Set when a quote's Show in conversation led here: the row lights up once per value. */
+  /** Set when a quote's Show in conversation or a find led here: the row lights up once per value. */
   found?: number
+  /** The words that led here. A message highlights them in place; the whole row lights up only when it cannot. */
+  mark?: readonly string[]
 }
 /** Rows that read the rest of the chat: an error offers Retry only while it ended the thread; teammates read it whole. */
 const READS_ITEMS = new Set<TranscriptItem['kind']>(['error', 'agents'])
@@ -581,14 +584,23 @@ export const TranscriptListRow = memo(function TranscriptListRow({
   fresh,
   visible,
   found,
+  mark,
 }: RowProps) {
   const meta = useMemo(() => ({ date, footer, streaming, fresh }), [date, footer, streaming, fresh])
+  const inText = useMemo(() => {
+    if (!mark?.length || !nativeMarkdown) return false
+    // A report opens folded, so words inside it would not show; it lights up whole instead.
+    const text = item.kind === 'user' || item.kind === 'text' || item.kind === 'teammate-message' ? item.text : null
+    return text !== null && markSource(text, mark) !== null
+  }, [item, mark])
   return (
     <Arrive animate={fresh}>
       <InteractiveVisibility.Provider value={visible}>
-        <Glow pulse={found ?? null} delay={350}>
-          <TranscriptItemView item={item} chat={chat} meta={meta} />
-        </Glow>
+        <TextMarkContext.Provider value={inText ? mark! : null}>
+          <Glow pulse={inText ? null : (found ?? null)} delay={350}>
+            <TranscriptItemView item={item} chat={chat} meta={meta} />
+          </Glow>
+        </TextMarkContext.Provider>
       </InteractiveVisibility.Provider>
     </Arrive>
   )
@@ -603,6 +615,7 @@ function sameRow(previous: RowProps, next: RowProps): boolean {
     previous.fresh === next.fresh &&
     previous.visible === next.visible &&
     previous.found === next.found &&
+    previous.mark === next.mark &&
     (previous.chat === next.chat ||
       (!READS_ITEMS.has(next.item.kind) && rowChatKey(previous.chat) === rowChatKey(next.chat)))
   )
@@ -1250,15 +1263,23 @@ export function LongMessage({
   onToggle: () => void
 }) {
   const preview = useMemo(() => messagePreview(text), [text])
+  const marks = useContext(TextMarkContext)
+  // Words a find or quote led to past the preview show the whole message, or they would be highlighted out of sight.
+  const reveal = useMemo(
+    () => Boolean(preview && marks?.length && markSource(preview, marks) === null),
+    [preview, marks],
+  )
   if (!preview) return <Markdown text={text} />
   return (
     <>
-      <Markdown text={expanded ? text : preview} />
-      <Pressable accessibilityRole="button" accessibilityState={{ expanded }} hitSlop={8} onPress={onToggle}>
-        <T size={font.control} weight="500" style={{ color: accent }}>
-          {label}
-        </T>
-      </Pressable>
+      <Markdown text={expanded || reveal ? text : preview} />
+      {reveal && !expanded ? null : (
+        <Pressable accessibilityRole="button" accessibilityState={{ expanded }} hitSlop={8} onPress={onToggle}>
+          <T size={font.control} weight="500" style={{ color: accent }}>
+            {label}
+          </T>
+        </Pressable>
+      )}
     </>
   )
 }
