@@ -57,11 +57,6 @@ Live video and **Take control** ship: Simlock's H.264 stream feeds Ramu's WebRTC
 - **Advanced** adds how many devices may run (automatic from this host's memory, or a number) and slim simulators, beside **Keep a spare device ready**.
 - **Resources** shows each Simlock device's memory and CPU under the thread holding it, as emulators Ramu started did before.
 
-### 4. Settings conventions
-
-- **Defaults show as defaults.** A changed row shows the same small dot as a row an agent changed (`AgentChangeMark`) and its own **Reset**; each page keeps one **Reset defaults** at the foot.
-- **Advanced stays folded** on every page: rows few people change sit under a closed **Advanced** disclosure.
-
 ## Services to extend
 
 - `apps/server/src/testDevice/testDevices.ts` (`video`, `placeOf`), the phone's computer viewer (`apps/mobile/src/components/useComputerVideo.ts`), and the thread's device pill.
