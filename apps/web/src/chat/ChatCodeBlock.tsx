@@ -11,7 +11,8 @@ import {
   CodeBlockHeader,
   CodeBlockTitle,
 } from '@/components/ui/code-block'
-import { codeLanguage } from '@ramu/shared/workspace/codeLanguage'
+import { codeBlockLabel, codeLanguage } from '@ramu/shared/workspace/codeLanguage'
+import { FileIcon } from '../editor/FileIcon'
 import { copyText } from '../ipc'
 import { errorText } from '../lib/errors'
 import { notifyError } from './Notifications'
@@ -29,6 +30,7 @@ export function ChatCodeBlock({ source, hint }: { source: string; hint?: string 
   }, [copied, source])
   useEffect(() => setCopied(false), [source])
   const language = codeLanguage(source, hint)
+  const header = codeBlockLabel(source, hint)
   const [highlighted, setHighlighted] = useState<{ source: string; language: string; html: string } | null>(null)
   useEffect(() => {
     let cancelled = false
@@ -67,8 +69,13 @@ export function ChatCodeBlock({ source, hint }: { source: string; hint?: string 
   return (
     <CodeBlock className="mt-1 mb-3 border-transparent bg-(--code-bg) dark:bg-(--code-bg)">
       <CodeBlockHeader className="border-b border-line px-3.5 py-1.5 pt-1.5">
-        <CodeBlockTitle className="font-normal text-caption text-muted-foreground">
-          {language.includes('.') ? language : `.${language}`}
+        {/* As on the phone: the file the fence names, "Path" for a lone path, or the language, with its file icon. */}
+        <CodeBlockTitle
+          className="flex min-w-0 items-center gap-1.5 font-normal text-caption text-muted-foreground"
+          title={header.title}
+        >
+          <FileIcon path={header.icon} size={14} className="flex-none" />
+          <span className="truncate">{header.label === 'Path' ? t('Path') : header.label}</span>
         </CodeBlockTitle>
         <CodeBlockActions>
           <Button

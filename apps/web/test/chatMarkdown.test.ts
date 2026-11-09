@@ -22,6 +22,9 @@ describe('chatMarkdownComponents', () => {
     expect(html).toContain('data-slot="table-head"')
     expect(html).toContain('data-slot="table-cell"')
     expect(html).toContain('text-align:right')
+
+    // Copy sits over the top-right corner, so the header's last cell keeps room for it.
+    expect(html).toContain('thead_th:last-child]:pr-10')
   })
 
   it('draws task lists with disabled shadcn checkboxes and no bullets', () => {

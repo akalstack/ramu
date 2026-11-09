@@ -32,7 +32,10 @@ function CopyableTable({ children }: { children: ReactNode }) {
   return (
     <div ref={frame} className="group/table relative my-3 w-fit max-w-full">
       <div className="overflow-hidden rounded-lg border border-line bg-card/50">
-        <Table className="w-auto border-collapse border-spacing-0 text-control">{children}</Table>
+        {/* The header's last cell keeps room for Copy, which sits over its top-right corner. */}
+        <Table className="w-auto border-collapse border-spacing-0 text-control [&_thead_th:last-child]:pr-10">
+          {children}
+        </Table>
       </div>
       <Button
         variant="secondary"
