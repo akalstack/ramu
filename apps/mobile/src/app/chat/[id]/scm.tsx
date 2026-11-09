@@ -23,6 +23,7 @@ import {
   FileWarning,
   GitBranch,
   GitBranchPlus,
+  GitPullRequest,
   Minus,
   Plus,
   RefreshCcw,
@@ -159,10 +160,13 @@ function FileRow({
         alignItems: 'center',
         gap: space.s,
         paddingLeft: space.l,
-        paddingRight: 4,
-        minHeight: 46,
+        paddingRight: space.s,
+        minHeight: 52,
       }}
     >
+      <View style={{ width: 24, alignItems: 'center' }}>
+        <StatusLetter status={file.status} />
+      </View>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Open ${file.staged === 'all' ? 'all' : file.staged ? 'staged' : 'unstaged'} changes in ${file.path}`}
@@ -197,9 +201,6 @@ function FileRow({
           onPress={onStage}
         />
       ) : null}
-      <View style={{ width: 28, alignItems: 'center' }}>
-        <StatusLetter status={file.status} />
-      </View>
     </View>
   )
 }
@@ -216,10 +217,15 @@ function ConflictRow({ path, onOpen, onMenu }: { path: string; onOpen: () => voi
         alignItems: 'center',
         gap: space.s,
         paddingLeft: space.l,
-        paddingRight: 4,
-        minHeight: 46,
+        paddingRight: space.s,
+        minHeight: 52,
       }}
     >
+      <View style={{ width: 24, alignItems: 'center' }}>
+        <Pill tone="warn" wash={c.warnWash}>
+          U
+        </Pill>
+      </View>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={say('Choose a side for each conflict in {0}', { 0: path })}
@@ -239,11 +245,6 @@ function ConflictRow({ path, onOpen, onMenu }: { path: string; onOpen: () => voi
       {onMenu ? (
         <IconButton icon={Ellipsis} label={say('Resolve {0}', { 0: path })} size={34} tone="muted" onPress={onMenu} />
       ) : null}
-      <View style={{ width: 28, alignItems: 'center' }}>
-        <Pill tone="warn" wash={c.warnWash}>
-          U
-        </Pill>
-      </View>
     </View>
   )
 }
@@ -266,7 +267,8 @@ function Group({
   const { c } = useTheme()
   return (
     <View style={{ gap: space.xs }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 2, minHeight: 32 }}>
+      {/* The action reaches into the page margin so it sits in the rows' trailing column. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: -space.s, minHeight: 36 }}>
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ expanded: open }}
@@ -285,7 +287,7 @@ function Group({
           </T>
         </Pressable>
         {action ? (
-          <IconButton icon={action.icon} label={action.label} size={30} tone="muted" onPress={action.onPress} />
+          <IconButton icon={action.icon} label={action.label} size={34} tone="soft" onPress={action.onPress} />
         ) : null}
       </View>
       {/* Lists reach the screen edges, out of the page's margin, as every list on the phone does. */}
@@ -1033,13 +1035,29 @@ export default function SourceControl() {
           ) : null}
           {chat && binding && hasRemote ? (
             // The repository's other pull requests are on the Pull requests page, narrowed to this repository.
-            <Button
-              kind="ghost"
-              title={tr('All pull requests in {0}', { 0: binding.repoName })}
-              onPress={() =>
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => {
+                tap()
                 router.navigate({ pathname: '/pulls', params: { computer: chat.computerId, repo: binding.repoId } })
-              }
-            />
+              }}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.s,
+                height: 44,
+                marginTop: -space.s,
+                paddingHorizontal: space.m,
+                borderRadius: radius.m,
+                backgroundColor: pressed ? c.raised : c.raised2,
+              })}
+            >
+              <GitPullRequest size={15} color={c.soft} />
+              <T weight="500" numberOfLines={1} style={{ flex: 1 }}>
+                {tr('All pull requests in {0}', { 0: binding.repoName })}
+              </T>
+              <ChevronRight size={15} color={c.muted} />
+            </Pressable>
           ) : null}
           <Segmented
             value={tab}
@@ -1262,7 +1280,16 @@ export default function SourceControl() {
             }}
           >
             <View style={{ gap: space.s }}>
-              <View style={{ backgroundColor: c.raised2, borderRadius: radius.m }}>
+              {/* The draft button stays on the last line as the message grows, centred on a single line. */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'flex-end',
+                  backgroundColor: c.raised2,
+                  borderRadius: radius.m,
+                  paddingRight: space.xs,
+                }}
+              >
                 <TextInput
                   value={message}
                   onChangeText={setMessage}
@@ -1270,19 +1297,21 @@ export default function SourceControl() {
                   placeholder={tr('Message (leave empty for AI to write one)')}
                   placeholderTextColor={c.placeholder}
                   style={{
+                    flex: 1,
                     color: c.text,
-                    fontSize: font.body,
-                    minHeight: 48,
+                    fontSize: font.control,
+                    minHeight: 44,
                     maxHeight: 140,
-                    padding: space.m,
-                    paddingRight: 44,
+                    paddingHorizontal: space.m,
+                    paddingTop: 12,
+                    paddingBottom: 12,
                   }}
                 />
-                <View style={{ position: 'absolute', right: 4, top: 4 }}>
+                <View style={{ height: 44, justifyContent: 'center' }}>
                   <IconButton
                     icon={Sparkles}
                     label={tr('Draft a commit message from staged changes')}
-                    size={34}
+                    size={36}
                     tone="accent"
                     onPress={() => void run(generate, 'Drafted commit message')}
                   />
@@ -1353,7 +1382,7 @@ export default function SourceControl() {
               <T
                 size={font.caption}
                 tone={blocked && blocked !== 'No changes in this checkout.' ? 'warn' : 'muted'}
-                style={{ paddingHorizontal: 2 }}
+                style={{ textAlign: 'center' }}
               >
                 {blocked
                   ? tr(blocked)
