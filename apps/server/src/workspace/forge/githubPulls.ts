@@ -17,7 +17,8 @@ import { ForgeError, forgeRemoteOf, githubAvailability, githubGraphql, githubRes
 
 const PR_FRAGMENT = `fragment pr on PullRequest {
   id number title url state isDraft baseRefName headRefName headRefOid updatedAt isCrossRepository
-  reviewDecision mergeable mergeStateStatus
+  reviewDecision mergeable mergeStateStatus additions deletions
+  labels(first: 10) { nodes { name } }
   author { login }
   reviewRequests(first: 10) { nodes { requestedReviewer { ... on User { login } ... on Team { slug } } } }
   reviewThreads(first: 100) { nodes { isResolved } }
@@ -39,6 +40,9 @@ export interface RawListPullRequest {
   reviewDecision?: string | null
   mergeable?: string | null
   mergeStateStatus?: string | null
+  additions?: number
+  deletions?: number
+  labels?: { nodes: { name: string }[] }
   author: { login: string } | null
   reviewRequests?: { nodes: { requestedReviewer: { login?: string; slug?: string } | null }[] }
   reviewThreads?: { nodes: { isResolved: boolean }[] }
@@ -130,7 +134,51 @@ export function parseListPullRequest(
           ? 'review'
           : 'other',
     updatedAt: Date.parse(raw.updatedAt) || 0,
+    ...(typeof raw.additions === 'number' ? { additions: raw.additions } : {}),
+    ...(typeof raw.deletions === 'number' ? { deletions: raw.deletions } : {}),
+    ...(raw.labels?.nodes.length ? { labels: raw.labels.nodes.map((label) => label.name) } : {}),
   }
+}
+
+interface RawInvolved {
+  viewer: { login: string }
+  involved: { nodes: ((RawListPullRequest & { repository: { nameWithOwner: string } }) | Record<string, never>)[] }
+  review: { nodes: ({ url: string } | Record<string, never>)[] }
+}
+
+const INVOLVED_QUERY = `query {
+  viewer { login }
+  involved: search(query: "is:pr is:open involves:@me archived:false sort:updated-desc", type: ISSUE, first: 50) {
+    nodes { ...pr ... on PullRequest { repository { nameWithOwner } } }
+  }
+  review: search(query: "is:pr is:open review-requested:@me archived:false", type: ISSUE, first: 50) {
+    nodes { ... on PullRequest { url } }
+  }
+}
+${PR_FRAGMENT}`
+
+/**
+ * Open pull requests anywhere on GitHub that involve the account this checkout signs in with (authored, assigned,
+ * mentioned or asked to review), each with the repository it belongs to; empty when GitHub is not available here.
+ */
+export async function listInvolvedPullRequests(
+  cwd: string,
+): Promise<{ viewer: string; repository: string; pr: PullRequestSummary }[]> {
+  if ((await githubAvailability(cwd)) !== 'ready') return []
+  const raw = await githubGraphql<RawInvolved>(cwd, INVOLVED_QUERY, {})
+  const viewer = raw.viewer.login
+  const review = new Set(raw.review.nodes.filter((node) => 'url' in node).map((node) => node.url))
+  type Involved = RawListPullRequest & { repository: { nameWithOwner: string } }
+  return raw.involved.nodes
+    .filter((node): node is Involved => isPull(node))
+    .map((node) => {
+      const pr = parseListPullRequest(node, viewer, new Set())
+      return {
+        viewer,
+        repository: node.repository.nameWithOwner,
+        pr: pr.group === 'mine' || !review.has(pr.url) ? pr : { ...pr, group: 'review' as const },
+      }
+    })
 }
 
 const isPull = (node: RawListPullRequest | Record<string, never>): node is RawListPullRequest =>

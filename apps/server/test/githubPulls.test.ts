@@ -46,6 +46,18 @@ describe('GitHub pull request lists', () => {
     expect(parseListPullRequest(raw({ state: 'MERGED' }), 'me', new Set()).state).toBe('merged')
   })
 
+  it('carries the lines changed and labels when GitHub reports them, and leaves them out when it does not', () => {
+    expect(
+      parseListPullRequest(
+        raw({ additions: 12, deletions: 3, labels: { nodes: [{ name: 'bug' }, { name: 'ui' }] } }),
+        'me',
+        new Set(),
+      ),
+    ).toMatchObject({ additions: 12, deletions: 3, labels: ['bug', 'ui'] })
+    const bare = parseListPullRequest(raw(), 'me', new Set())
+    expect('additions' in bare || 'labels' in bare).toBe(false)
+  })
+
   it('reads the number from a pull request link and refuses anything else', () => {
     expect(pullNumber('https://github.com/o/r/pull/12/files')).toBe(12)
     expect(() => pullNumber('https://github.com/o/r/issues/12')).toThrow()

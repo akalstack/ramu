@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { chatMarkdownComponents } from '../chat/ChatMarkdown'
 import { useQuery } from '@tanstack/react-query'
 import {
   Bot,
@@ -85,6 +88,11 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
   const drafts = useQuery({
     queryKey: ipcQueryKeyOn(host.id, 'forge.drafts', view.url),
     queryFn: () => call('forge.drafts', view.url),
+  })
+  const description = useQuery({
+    queryKey: ipcQueryKeyOn(host.id, 'forge.pullRequestDescription', taskId, view.repoId, view.url),
+    queryFn: () => call('forge.pullRequestDescription', taskId, view.repoId, view.url),
+    staleTime: 60_000,
   })
   const threads = useQuery({
     queryKey: ipcQueryKeyOn(host.id, 'forge.reviewThreads', taskId, view.repoId, view.url),
@@ -331,6 +339,17 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
         )}
 
         {batch && <ReviewDraftsCard key={batch.id} batch={batch} onDone={() => void refresh()} />}
+
+        {!!description.data?.trim() && (
+          <section className="flex flex-col gap-1">
+            <h3 className="m-0 text-control font-semibold">{t('Description')}</h3>
+            <div className="min-w-0 text-body text-soft [overflow-wrap:anywhere]">
+              <Markdown remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>
+                {description.data}
+              </Markdown>
+            </div>
+          </section>
+        )}
 
         <section className="flex flex-col gap-2">
           <h3 className="m-0 text-control font-semibold">

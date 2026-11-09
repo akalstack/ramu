@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   ArrowLeft,
   CircleCheck,
+  ExternalLink,
   CircleDot,
   CircleX,
   GitPullRequest,
@@ -24,8 +25,10 @@ import {
   inPullRequestFilter,
   matchesPullRequestRow,
   pullRequestRows,
+  sortPullRequestRows,
   type PullRequestFilter,
   type PullRequestRow,
+  type PullRequestSort,
 } from '@ramu/shared/pullRequests'
 import { cn } from 'cn'
 import { t, useLanguage } from '../i18n'
@@ -35,10 +38,21 @@ import { useHost } from '../workspace/HostProvider'
 import { projectCtx, type useWorkspace } from '../workspace/workspace'
 import { ForgeAccessPanel } from '../sidebar/scm/ForgeAccessPanel'
 import { queryInvokerFor } from './hostQuery'
+import { invoke as openOnThisComputer } from '../ipc'
 import { PullRequestIcon, StageChip } from './PullRequestIcon'
 import { PullRequestView } from './PullRequestView'
 
 const ALL = ''
+const SORT_KEY = 'ramu.pull-requests-sort'
+
+/** The order last chosen on this device; storage may be unavailable, which leaves the default. */
+function savedSort(): PullRequestSort {
+  try {
+    return localStorage.getItem(SORT_KEY) === 'readiness' ? 'readiness' : 'updated'
+  } catch {
+    return 'updated'
+  }
+}
 const FILTER_EVENT = 'ramu:pull-requests-filter'
 /** A repository asked for before the page mounted, such as from a thread's Source Control. */
 let pendingRepo: string | null = null
@@ -96,6 +110,7 @@ export function PullRequestsPage() {
   const [repoId, setRepoId] = useState<string>(() => pendingRepo ?? ALL)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<PullRequestRow | null>(null)
+  const [sort, setSort] = useState<PullRequestSort>(savedSort)
   const [refreshing, setRefreshing] = useState(false)
   const open = useAllPullRequests(false)
   const closed = useAllPullRequests(true, filter === 'closed')
@@ -124,7 +139,10 @@ export function PullRequestsPage() {
   const scoped = allRows.filter(
     (row) => (repoId === ALL || row.repoId === repoId) && matchesPullRequestRow(row, search),
   )
-  const rows = scoped.filter((row) => inPullRequestFilter(row, filter))
+  const rows = sortPullRequestRows(
+    scoped.filter((row) => inPullRequestFilter(row, filter)),
+    sort,
+  )
   // Counts come from the open list, so switching to Merged and closed does not blank them.
   const openRows = useMemo(() => pullRequestRows(open.data ?? []), [open.data])
   const count = (entry: PullRequestFilter) =>
@@ -166,12 +184,22 @@ export function PullRequestsPage() {
         stacked
         className="py-1.5"
         aria-selected={active}
-        title={pr.title}
-        onClick={() => setSelected(entry)}
+        title={entry.outside ? `${pr.title} (${t('Opens on the hosting service')})` : pr.title}
+        // Ramu has no checkout of a repository outside every project, so its pull request opens on the service.
+        onClick={() => (entry.outside ? void openOnThisComputer('app.openExternal', pr.url) : setSelected(entry))}
       >
         <span className="flex w-full min-w-0 items-center gap-2">
           <PullRequestIcon pr={pr} stage={entry.stage} />
           <span className="min-w-0 flex-1 truncate text-foreground">{pr.title}</span>
+          {entry.outside && <ExternalLink size={11} className="flex-none text-muted-foreground" aria-hidden="true" />}
+          {pr.additions !== undefined && pr.deletions !== undefined && (
+            <span
+              className="flex-none text-caption tabular-nums"
+              title={t('{0} lines added, {1} removed', { '0': pr.additions, '1': pr.deletions })}
+            >
+              <span className="text-ok">+{pr.additions}</span> <span className="text-bad">−{pr.deletions}</span>
+            </span>
+          )}
           <span className="flex-none text-caption text-muted-foreground tabular-nums">{timeAgo(pr.updatedAt)}</span>
         </span>
         <span className="flex w-full min-w-0 items-center gap-1.5 pl-[21px] text-caption text-muted-foreground">
@@ -186,6 +214,11 @@ export function PullRequestsPage() {
               {pr.openThreads}
             </span>
           )}
+          {pr.labels?.slice(0, 2).map((label) => (
+            <span key={label} className="flex-none rounded-full bg-fill px-1.5 text-[11px] leading-4">
+              {label}
+            </span>
+          ))}
           <span className="min-w-0 truncate">
             {pr.author ?? ''}
             {thread ? ` · ${t('In {0}', { '0': thread.title })}` : ''}
@@ -236,18 +269,38 @@ export function PullRequestsPage() {
               <RefreshCw size={14} className={cn((refreshing || query.isFetching) && 'animate-spin')} />
             </Button>
           </div>
-          {repositories.length > 1 && (
+          <div className="flex items-center gap-1.5">
             <Dropdown
-              label={t('Repository')}
-              value={repoId}
-              options={repoOptions}
+              label={t('Sort')}
+              value={sort}
+              options={[
+                { value: 'updated', label: t('Recently updated') },
+                { value: 'readiness', label: t('Closest to merging') },
+              ]}
               onChange={(value) => {
-                setRepoId(value)
-                setSelected(null)
+                const next = value === 'readiness' ? 'readiness' : 'updated'
+                setSort(next)
+                try {
+                  localStorage.setItem(SORT_KEY, next)
+                } catch {
+                  // The choice still applies until the page closes.
+                }
               }}
-              className="w-full"
+              className="flex-1"
             />
-          )}
+            {repositories.length > 1 && (
+              <Dropdown
+                label={t('Repository')}
+                value={repoId}
+                options={repoOptions}
+                onChange={(value) => {
+                  setRepoId(value)
+                  setSelected(null)
+                }}
+                className="flex-1"
+              />
+            )}
+          </div>
           <Tabs value={filter} onValueChange={(value) => setFilter(value as PullRequestFilter)}>
             <TabsList variant="line" className="h-9! w-full justify-start gap-2.5 border-b border-(--line) p-0">
               {PULL_REQUEST_FILTERS.map((entry) => (

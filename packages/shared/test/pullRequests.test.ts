@@ -8,6 +8,7 @@ import {
   pullRequestGlyph,
   pullRequestRows,
   pullRequestStage,
+  sortPullRequestRows,
 } from '../src/pullRequests'
 
 const pr = (overrides: Partial<PullRequestSummary> = {}): PullRequestSummary => ({
@@ -124,5 +125,24 @@ describe('the Pull requests page', () => {
 
   it('finds a row by its project or repository', () => {
     expect(rows.filter((row) => matchesPullRequestRow(row, 'shop api'))).toHaveLength(2)
+  })
+})
+
+describe('sorting the Pull requests page', () => {
+  const row = (stage: ReturnType<typeof pullRequestStage>, updatedAt: number) => ({ pr: pr({ updatedAt }), stage })
+  const rows = [row('checks-failing', 9), row('ready', 1), row('draft', 5), row('ready', 3), row('checks-pending', 7)]
+
+  it('puts the ones closest to merging first, newest first within a stage', () => {
+    expect(sortPullRequestRows(rows, 'readiness').map((entry) => [entry.stage, entry.pr.updatedAt])).toEqual([
+      ['ready', 3],
+      ['ready', 1],
+      ['checks-pending', 7],
+      ['checks-failing', 9],
+      ['draft', 5],
+    ])
+  })
+
+  it('or simply by the most recent change', () => {
+    expect(sortPullRequestRows(rows, 'updated').map((entry) => entry.pr.updatedAt)).toEqual([9, 7, 5, 3, 1])
   })
 })

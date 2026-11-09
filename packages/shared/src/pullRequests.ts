@@ -131,6 +131,8 @@ export interface PullRequestRow {
   repoId: string
   repoName: string
   threads: { taskId: string; title: string }[]
+  /** From a repository in no project: it opens on the hosting service, since Ramu has no checkout of it. */
+  outside: boolean
 }
 
 /** Every repository's pull requests as one list, newest change first. */
@@ -145,6 +147,7 @@ export function pullRequestRows(repositories: RepositoryPullRequests[]): PullReq
         repoId: repo.repoId,
         repoName: repo.repoName,
         threads: repo.threads?.[pr.url] ?? [],
+        outside: !!repo.outside,
       })),
     )
     .sort((a, b) => b.pr.updatedAt - a.pr.updatedAt)
@@ -179,4 +182,32 @@ export function matchesPullRequestRow(row: PullRequestRow, search: string): bool
   const haystack =
     `${row.pr.number} ${row.pr.title} ${row.pr.author ?? ''} ${row.pr.headBranch} ${row.projectName} ${row.repoName}`.toLowerCase()
   return words.every((word) => haystack.includes(word))
+}
+
+/** How the Pull requests page orders its rows. */
+export type PullRequestSort = 'updated' | 'readiness'
+
+/** Closest to merging first: ready, then waiting on checks or review, then blocked, drafts last. */
+const READINESS: PullRequestStage[] = [
+  'ready',
+  'checks-pending',
+  'review-required',
+  'replies-ready',
+  'agent-working',
+  'changes-requested',
+  'checks-failing',
+  'conflicts',
+  'draft',
+  'merged',
+  'closed',
+]
+
+/** Rows by most recent change, or by how close each is to merging (newest first within a stage). */
+export function sortPullRequestRows<T extends Pick<PullRequestRow, 'pr' | 'stage'>>(
+  rows: T[],
+  sort: PullRequestSort,
+): T[] {
+  const sorted = [...rows].sort((a, b) => b.pr.updatedAt - a.pr.updatedAt)
+  if (sort === 'updated') return sorted
+  return sorted.sort((a, b) => READINESS.indexOf(a.stage) - READINESS.indexOf(b.stage))
 }

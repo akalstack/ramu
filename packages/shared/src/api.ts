@@ -1440,6 +1440,8 @@ export interface RamuMethods extends ArtifactMethods {
    * reachable from two projects is listed once, under the first.
    */
   'forge.allPullRequests'(includeClosed: boolean, force: boolean): import('./types').RepositoryPullRequests[]
+  /** The pull request's description as Markdown, for its full view. */
+  'forge.pullRequestDescription'(taskId: string, repoId: string, url: string): string
   'forge.mergeOptions'(taskId: string, repoId: string, url: string): import('./types').MergeOptions
   /** Merge, close, reopen, mark ready or update the branch. Never available to agents. */
   'forge.pullRequestAction'(

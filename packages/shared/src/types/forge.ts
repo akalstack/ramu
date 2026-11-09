@@ -99,6 +99,11 @@ export interface PullRequestSummary {
   requestedReviewers: string[]
   group: PullRequestGroup
   updatedAt: number
+  /** Lines added and removed, where the service reports them. */
+  additions?: number
+  deletions?: number
+  /** The service's labels on it, where it reports them. */
+  labels?: string[]
 }
 
 export interface PullRequestList {
@@ -121,6 +126,11 @@ export interface RepositoryPullRequests extends PullRequestList {
   error?: string
   /** Ramu's own state per pull request URL: replies drafted, or an agent working on its feedback. */
   local: Record<string, { draftsReady?: boolean; agentWorking?: boolean }>
+  /**
+   * A repository in no project, listed for the pull requests that involve the person there (theirs, or a review asked of
+   * them). Ramu has no checkout of it, so its rows open on the hosting service.
+   */
+  outside?: boolean
 }
 
 /** What opening a pull request in a thread needs: the thread already on it, or how to start one. */

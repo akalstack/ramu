@@ -5,10 +5,10 @@ import { openDb, type Db } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
 import type { AgentService } from '../src/agent'
 import { PullRequestIndex } from '../src/background/pullRequestIndex'
-import { listPullRequests } from '../src/workspace/forge'
+import { listInvolvedPullRequests, listPullRequests } from '../src/workspace/forge'
 import { currentBranch } from '../src/workspace/git'
 
-vi.mock('../src/workspace/forge', () => ({ listPullRequests: vi.fn() }))
+vi.mock('../src/workspace/forge', () => ({ listPullRequests: vi.fn(), listInvolvedPullRequests: vi.fn() }))
 vi.mock('../src/workspace/git', () => ({ currentBranch: vi.fn() }))
 
 let db: Db, ws: Workspace, index: PullRequestIndex, changed: () => void
@@ -58,6 +58,7 @@ beforeEach(() => {
   ])
   vi.spyOn(ws, 'getRepository').mockReturnValue({ id: 'repo', projectId: 'p', name: 'r', root: '/repo' })
   vi.mocked(currentBranch).mockResolvedValue('shared-branch')
+  vi.mocked(listInvolvedPullRequests).mockResolvedValue([])
   vi.mocked(listPullRequests).mockResolvedValue({
     availability: 'ready',
     viewer: 'me',
@@ -167,5 +168,37 @@ describe('the Pull requests page', () => {
     const pages = await index.overview({ includeClosed: false, force: true })
     expect(pages.map((entry) => entry.error ?? null)).toEqual(['gh: not signed in', null])
     expect(pages[1]!.pullRequests).toHaveLength(1)
+  })
+})
+
+describe('pull requests elsewhere', () => {
+  beforeEach(() => {
+    vi.spyOn(ws, 'listProjects').mockReturnValue([{ id: 'p', name: 'Shop' }] as ReturnType<Workspace['listProjects']>)
+    vi.spyOn(ws, 'listRepositories').mockReturnValue([{ id: 'repo-p', projectId: 'p', name: 'r', root: CHECKOUT }])
+  })
+
+  it('adds the open pull requests that involve the account in repositories no project holds, once', async () => {
+    vi.mocked(listInvolvedPullRequests).mockResolvedValue([
+      // Already listed under the project: not repeated.
+      { viewer: 'me', repository: 'o/r', pr: pr({}) },
+      { viewer: 'me', repository: 'friend/site', pr: pr({ number: 7, url: 'https://github.com/friend/site/pull/7' }) },
+    ])
+    const pages = await index.overview({ includeClosed: false, force: true })
+    expect(pages.map((entry) => [entry.repoName, entry.outside ?? false, entry.pullRequests.length])).toEqual([
+      ['r', false, 3],
+      ['friend/site', true, 1],
+    ])
+    expect(listInvolvedPullRequests).toHaveBeenCalledTimes(1)
+    // The merged and closed list stays to the projects' own repositories.
+    vi.mocked(listInvolvedPullRequests).mockClear()
+    await index.overview({ includeClosed: true, force: false })
+    expect(listInvolvedPullRequests).not.toHaveBeenCalled()
+  })
+
+  it('keeps the page when the search elsewhere fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(listInvolvedPullRequests).mockRejectedValue(new Error('rate limited'))
+    const pages = await index.overview({ includeClosed: false, force: true })
+    expect(pages.map((entry) => entry.repoName)).toEqual(['r'])
   })
 })

@@ -13,7 +13,7 @@ import { NO_PROJECT } from '@ramu/shared/types'
 import { pullRequestStage } from '@ramu/shared/pullRequests'
 import type { Workspace } from '../workspace/workspace'
 import type { AgentService } from '../agent'
-import { listPullRequests } from '../workspace/forge'
+import { listInvolvedPullRequests, listPullRequests } from '../workspace/forge'
 import { currentBranch } from '../workspace/git'
 
 const LINKS_KEY = 'pull-request-links'
@@ -193,11 +193,74 @@ export class PullRequestIndex {
     }
     await Promise.all(Array.from({ length: Math.min(OVERVIEW_READS, repositories.length) }, worker))
     const seen = new Set<string>()
-    return results.map((entry) => {
+    const listed = results.map((entry) => {
       const pullRequests = entry.pullRequests.filter((pr) => !seen.has(pr.url))
       for (const pr of pullRequests) seen.add(pr.url)
       return { ...entry, pullRequests }
     })
+    if (options.includeClosed) return listed
+    return [...listed, ...(await this.involvedElsewhere(listed, repositories, seen, options.force))]
+  }
+
+  /** The last search for pull requests involving each GitHub account, by the checkout it signed in through. */
+  private involved = new Map<string, { at: number; rows: Awaited<ReturnType<typeof listInvolvedPullRequests>> }>()
+
+  /**
+   * Open pull requests that involve the person in repositories no project holds, one search per GitHub account (read
+   * through the first signed-in checkout of that account), so the page also shows their work and the reviews asked of
+   * them elsewhere. A failed search leaves the page as it is.
+   */
+  private async involvedElsewhere(
+    listed: RepositoryPullRequests[],
+    repositories: { repo: { id: string; root: string } }[],
+    seen: Set<string>,
+    force: boolean,
+  ): Promise<RepositoryPullRequests[]> {
+    const roots = new Map<string, string>()
+    for (const entry of listed)
+      if (
+        (entry.service ?? 'github') === 'github' &&
+        entry.availability === 'ready' &&
+        !entry.error &&
+        entry.viewer &&
+        !roots.has(entry.viewer)
+      ) {
+        const root = repositories.find(({ repo }) => repo.id === entry.repoId)?.repo.root
+        if (root) roots.set(entry.viewer, root)
+      }
+    const byRepository = new Map<string, RepositoryPullRequests>()
+    for (const root of roots.values()) {
+      let cached = this.involved.get(root)
+      if (force || !cached || Date.now() - cached.at >= STALE) {
+        try {
+          cached = { at: Date.now(), rows: await listInvolvedPullRequests(root) }
+          this.involved.set(root, cached)
+        } catch (error) {
+          console.error('Pull requests elsewhere:', error)
+          continue
+        }
+      }
+      for (const { viewer, repository, pr } of cached.rows) {
+        if (seen.has(pr.url)) continue
+        seen.add(pr.url)
+        const entry = byRepository.get(repository) ?? {
+          projectId: '',
+          projectName: repository,
+          repoId: `outside:${repository}`,
+          repoName: repository,
+          availability: 'ready' as const,
+          service: 'github' as const,
+          viewer,
+          pullRequests: [],
+          threads: {},
+          local: {},
+          outside: true,
+        }
+        entry.pullRequests.push(pr)
+        byRepository.set(repository, entry)
+      }
+    }
+    return [...byRepository.values()]
   }
 
   /** The list for the Pull requests tab: the cached one when fresh, otherwise a new read. */
