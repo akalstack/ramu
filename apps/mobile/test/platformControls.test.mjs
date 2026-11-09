@@ -340,7 +340,7 @@ for (const os of ['ios', 'android']) {
     assert.deepEqual(opened, ['https://www.example.com'])
     assert.ok(
       nodes(render()).some(
-        (node) => node.props.children === 'Open this local or private address on its owning computer.',
+        (node) => node.props.children === 'Open this local or private address on the computer it belongs to.',
       ),
     )
     hooks.dispose()
@@ -4523,7 +4523,7 @@ for (const os of ['ios', 'android']) {
   test(`${os} unknown ownership requires acknowledgement and never offers worktree removal`, async () => {
     const f = deletion([{ id: 'unknown', taskId: 'task', command: 'old server', state: 'unknown' }])
     await f.confirmChatDeletion(f.store, f.chat)
-    assert.ok(f.alerts[0][1].includes('Unknown commands cannot be stopped'))
+    assert.ok(f.alerts[0][1].includes('Commands with unknown status cannot be stopped'))
     assert.equal(
       f.alerts[0][2].some((button) => button.text === 'Delete and remove worktree'),
       false,

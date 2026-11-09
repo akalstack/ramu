@@ -206,7 +206,7 @@ export function ThemeLibrary() {
       {notice ? <Hint>{notice}</Hint> : null}
       <Hint>
         {t(
-          'A theme changes colors only, on this phone. Importing shows it first; nothing is applied until you keep it.',
+          'Themes change colors only, on this phone. Importing shows a preview first, and nothing applies until you keep it.',
         )}
       </Hint>
       <Sheet open={importing} onClose={() => setImporting(false)} title={t('Import theme')}>
@@ -243,7 +243,7 @@ export function ThemeLibrary() {
               <SheetOption
                 icon={Copy}
                 title={kept(acting) ? t('Duplicate') : t('Save a copy')}
-                help={t('Opens it as a trial; keep it to add it to your themes.')}
+                help={t('Opens it as a trial. Keep it to add it to your themes.')}
                 onPress={() => {
                   const item = acting
                   setActing(null)

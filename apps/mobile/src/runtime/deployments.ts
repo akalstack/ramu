@@ -86,7 +86,12 @@ export function deploymentsView(
       lines: [
         ...report.figures.map((figure) => ({ text: words.usageFigure(figure), warn: nearLimit(figure) })),
         ...(report.figures.length && report.figures.every((figure) => !figure.limit)
-          ? [{ text: t('{0}’s API reports no plan limits; Open billing shows them.', { 0: report.name }), warn: false }]
+          ? [
+              {
+                text: t('{0}’s API does not report plan limits. Open billing to see them.', { 0: report.name }),
+                warn: false,
+              },
+            ]
           : []),
         ...(report.unavailable ? [{ text: report.unavailable, warn: false }] : []),
       ],

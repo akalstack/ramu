@@ -210,7 +210,7 @@ export function ChangeReviewTab({
             <EmptyDescription>
               {error
                 ? t('Check the connection to the host, then try again.')
-                : t('Changed files will appear here after the agent finishes.')}
+                : t('Changed files appear here after the agent finishes.')}
             </EmptyDescription>
           </EmptyHeader>
           {error && (

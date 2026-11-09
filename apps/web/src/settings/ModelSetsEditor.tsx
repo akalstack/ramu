@@ -102,7 +102,7 @@ export function ModelSetsEditor({
             <SettingsLabel
               title={t('Phones and tablets')}
               help={t(
-                'Applies to phones and tablets that use this computer. A phone with its own choice keeps it; clear it on the phone to follow this one.',
+                'Applies to phones and tablets that use this computer. A phone with its own choice keeps it. Clear it on the phone to follow this one.',
               )}
             />
             <Dropdown

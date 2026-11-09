@@ -1267,7 +1267,7 @@ export default function SourceControl() {
                   value={message}
                   onChangeText={setMessage}
                   multiline
-                  placeholder={tr('Message (empty drafts one with AI)')}
+                  placeholder={tr('Message (leave empty for AI to write one)')}
                   placeholderTextColor={c.placeholder}
                   style={{
                     color: c.text,

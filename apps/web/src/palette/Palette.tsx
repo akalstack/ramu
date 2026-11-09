@@ -196,7 +196,7 @@ export function Palette({
       case 'limited':
         return (
           <div className="px-2 py-1 text-caption text-muted-foreground truncate">
-            {t('Showing first {0}. Refine the search to narrow the results.', { '0': row.shown.toLocaleString() })}
+            {t('Showing the first {0}. Narrow your search to see the rest.', { '0': row.shown.toLocaleString() })}
           </div>
         )
       case 'more':

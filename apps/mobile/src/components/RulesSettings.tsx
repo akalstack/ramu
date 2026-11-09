@@ -319,7 +319,7 @@ export function RuleEditor({
             />
             <T tone="muted" size={font.caption}>
               {t(
-                'One pattern per line, relative to each repository. Claude Code applies the rule itself when it works on matching files; other providers receive it at the start of a thread with its patterns.',
+                'One pattern per line, relative to each repository. Claude Code applies the rule when it works on matching files. Other providers get it, with its patterns, at the start of a thread.',
               )}
             </T>
             {pathsProblem ? (

@@ -127,7 +127,7 @@ function UndoFiles({
             <p className="undo-description m-[0_0_12px] text-muted-foreground">
               {reviewId
                 ? t(
-                    'Undo selected changes from this turn. Later edits are preserved when possible. Thread history stays available.',
+                    'Undo the selected changes from this turn. Later edits are kept when possible, and thread history stays.',
                   )
                 : t(
                     'Restore selected file changes from this message and later runs, then send your revised message. Thread history stays available.',
@@ -246,7 +246,7 @@ function UndoFiles({
             </div>
             <p className="muted text-muted-foreground small text-caption undo-note m-[12px_0_0]">
               {t(
-                'Later edits are preserved when they merge cleanly. Conflicted files stay untouched. Files are checked again before restoring; local backups are retained.',
+                'Later edits are kept when they merge cleanly. Files with conflicts stay untouched. Files are checked again before restoring, and local backups are kept.',
               )}
             </p>
           </div>

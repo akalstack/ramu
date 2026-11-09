@@ -143,7 +143,7 @@ export function AgentSetupSettings({ hostId }: { hostId: string }) {
         ))}
       </Card>
       <T size={13} tone="muted" style={{ paddingHorizontal: space.l }}>
-        {t('Sharing is changed in Settings → Agent setup on the host.')}
+        {t('Change sharing in Settings → Agent setup on the host.')}
       </T>
       <SectionLabel>{t('Ramu connections')}</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
@@ -184,7 +184,7 @@ export function AgentSetupSettings({ hostId }: { hostId: string }) {
         ))}
       </Card>
       <T size={13} tone="muted" style={{ paddingHorizontal: space.l }}>
-        {t('Adding servers, signing in and approving their tools happen on the host, which keeps the credentials.')}
+        {t('Add servers, sign in and approve their tools on the host. It keeps the credentials.')}
       </T>
       <SectionLabel>{t('Skills')}</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>

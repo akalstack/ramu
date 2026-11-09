@@ -84,7 +84,7 @@ export function ConfirmationDialog({
         <>
           <p>
             {t(
-              'Tracked edits return to their staged version. Untracked files are deleted permanently. Staged changes are kept.',
+              'Tracked edits go back to their staged version. Untracked files are deleted permanently. Staged changes are kept.',
             )}
           </p>
           <pre className="confirm-paths max-h-[240px] overflow-auto p-2.5 [border:1px_solid_transparent] rounded-(--radius-s) text-caption bg-fill">
@@ -121,7 +121,7 @@ export function ConfirmationDialog({
                   ? t('Renames the current local branch. Its remote branch is not changed.')
                   : confirmation.kind === 'stash' && confirmation.staged
                     ? t('Saves only staged changes and removes them from the checkout. Unstaged edits stay.')
-                    : t('Preserves tracked and untracked changes. Ignored files stay in place.')}
+                    : t('Saves tracked and untracked changes. Ignored files stay in place.')}
           </p>
         </>
       ) : (

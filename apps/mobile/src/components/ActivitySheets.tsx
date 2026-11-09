@@ -81,7 +81,7 @@ export function OfflineCard({ chat, onDone }: { chat: Chat; onDone(): void }) {
             icon={WifiOff}
             tone="off"
             title={host}
-            detail={t('Not connected. This is the last activity Ramu saw; the agent keeps working on the host.')}
+            detail={t('Not connected. This is the last activity Ramu saw. The agent keeps working on the host.')}
           />,
         ]}
       </ActivityList>

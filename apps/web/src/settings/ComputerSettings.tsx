@@ -192,7 +192,7 @@ export function ComputerSettings({
       />
       <p className="m-[0_0_12px] text-caption text-muted-foreground">
         {t(
-          'macOS asks for Screen Recording and Accessibility the first time. Display control pauses when you use the mouse or keyboard where supported. Choose Take control to step in. Turning this off ends every thread’s access.',
+          'macOS asks for Screen Recording and Accessibility the first time. Where supported, display control pauses when you use the mouse or keyboard. Choose Take control to step in. Turning this off ends every thread’s access.',
         )}
       </p>
       <SettingsRow>
@@ -302,7 +302,7 @@ function LockedUseRow({ hostId, visible, canWrite }: { hostId: string; visible: 
         : stopped
           ? t('Almost done: {0}', { 0: state.blockers[0] ?? state.stage })
           : t('Off. The agent stops at the lock screen.')
-  const where = here ? '' : ` ${t('Change it in Ramu on that Mac; it asks for that Mac’s administrator password.')}`
+  const where = here ? '' : ` ${t('Change it in Ramu on that Mac. It asks for that Mac’s administrator password.')}`
   return (
     <>
       <SettingsRow>
@@ -333,7 +333,7 @@ function LockedUseRow({ hostId, visible, canWrite }: { hostId: string; visible: 
         >
           <p>
             {t(
-              'This installs signed Open Computer Use components into macOS sign-in. macOS will ask for your administrator password and for Accessibility, Screen Recording and Input Monitoring on this Mac. Only Ramu’s approved client can use it, and you can turn it off here at any time. Anyone who controls Ramu on this Mac could then act while it is locked.',
+              'This installs signed Open Computer Use components into macOS sign-in. macOS will ask for your administrator password and for Accessibility, Screen Recording and Input Monitoring. Only Ramu’s approved client can use it, and you can turn it off here anytime. Anyone who controls Ramu on this Mac can then act while it is locked.',
             )}
           </p>
         </ConfirmDialog>

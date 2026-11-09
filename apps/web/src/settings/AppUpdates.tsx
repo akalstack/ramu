@@ -86,7 +86,7 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
           <span>
             <SettingsTitle>{t('Auto-update Ramu')}</SettingsTitle>
             <span className="muted text-muted-foreground block block small text-caption">
-              {t('Download updates automatically. Restart when ready; threads keep running.')}
+              {t('Download updates automatically, then restart when ready. Threads keep running.')}
             </span>
           </span>
           <Switch
@@ -150,7 +150,7 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
       )}
       {(!APP_AUTO_UPDATE || state?.supported === false) && (
         <p className="muted text-muted-foreground small text-caption">
-          {t('Automatic installation requires a signed macOS app. Other builds use manual installation.')}
+          {t('Automatic install needs a signed macOS app. Other builds install manually.')}
         </p>
       )}
       <SettingsRow className="">
@@ -162,7 +162,7 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
           <span className="muted text-muted-foreground block block small text-caption">
             {service?.updateAvailable
               ? t(
-                  'Service update available. Restart app & service to apply it. Agents stop; unfinished threads recover.',
+                  'Service update available. Restart app & service to apply it. Agents stop, and unfinished threads resume.',
                 )
               : t('Matches the installed app. App-only restarts keep threads running.')}
           </span>
@@ -232,7 +232,7 @@ export function AppUpdateButton() {
         size="sm"
         className={className}
         disabled={!state.nativeReady || busy}
-        title={t('Ramu {0} is ready. Restart when you’re ready; threads stay running.', { '0': release.version })}
+        title={t('Ramu {0} is ready. Restart when it suits you. Threads keep running.', { '0': release.version })}
         onClick={() => void run('updates.restart')}
       >
         <RefreshCw size={13} />

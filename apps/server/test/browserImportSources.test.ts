@@ -23,7 +23,7 @@ it('keeps Windows unsupported with a specific reason, supports Linux Chromium/Fi
   // Only Firefox reads on Windows: its cookies are plain SQLite, while Chromium's are app-bound encrypted.
   expect(windows.filter((source) => source.supported).map((source) => source.id)).toEqual(['firefox'])
   expect(windows.find((source) => source.id === 'firefox')!.reason).toBeUndefined()
-  expect(windows.find((source) => source.id === 'chrome')!.reason).toMatch(/protected credentials/)
+  expect(windows.find((source) => source.id === 'chrome')!.reason).toMatch(/credentials are protected/)
   const linux = browserImportSources('linux', {}, exists)
   expect(linux.every((source) => source.supported && !source.reason)).toBe(true)
   // Discovery only asks whether an app exists.

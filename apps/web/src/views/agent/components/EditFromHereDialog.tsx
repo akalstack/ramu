@@ -121,7 +121,7 @@ export function EditFromHereDialog({
         )}
         {(error || offlineHost) && (
           <p role="alert" className="mx-5 mb-3 text-caption text-bad">
-            {error ?? t('{0} is offline. Rewinding needs it connected.', { '0': offlineHost })}
+            {error ?? t('{0} is offline. Connect it to rewind.', { '0': offlineHost })}
           </p>
         )}
         <div className="flex items-center gap-2 px-4 py-3 [border-top:1px_solid_var(--line)]">

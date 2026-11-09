@@ -57,7 +57,7 @@ const cleanName = (value: unknown): string => {
   const name = value.trim()
   // eslint-disable-next-line no-control-regex -- rejects control characters on purpose
   if (!name || name.length > 80 || /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(name))
-    throw new Error('Use a profile name of 1 to 80 characters without control characters.')
+    throw new Error('Use 1 to 80 characters, without control characters.')
   return name
 }
 
@@ -106,7 +106,7 @@ export class BrowserProfiles {
       this.records = []
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
         this.error =
-          'Browser profile metadata could not be read. Restore the profile catalog before adding or changing profiles; existing website data has not been removed.'
+          'Could not read browser profile details. Restore the profile catalog before adding or changing profiles. Website data was not removed.'
     }
   }
 

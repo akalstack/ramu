@@ -126,7 +126,7 @@ test('usage marks a figure at 80% of its limit and says when the platform report
   assert.equal(view.usage[0].lines[0].warn, true)
   assert.match(view.usage[0].lines[0].text, /^Build minutes: 250 minutes of 300 minutes \(83%\)$/)
   assert.equal(view.usage[1].lines.length, 2)
-  assert.match(view.usage[1].lines[1].text, /reports no plan limits/)
+  assert.match(view.usage[1].lines[1].text, /does not report plan limits/)
 })
 
 test('the rollback confirmation names the version and the address that changes', () => {

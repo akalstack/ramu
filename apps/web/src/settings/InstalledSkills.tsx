@@ -155,7 +155,7 @@ export function InstalledSkills() {
         </div>
         {currentHost && !own.length && !draft && (
           <SettingsEmpty>
-            {t('No skills of your own yet. Create one to give agents instructions they reuse.')}
+            {t('No skills of your own yet. Create one to give agents instructions they can reuse.')}
           </SettingsEmpty>
         )}
         <SettingsCardList>
@@ -228,9 +228,7 @@ export function InstalledSkills() {
               {skill.bundle && Object.keys(skill.bundle.files).some((path) => path !== 'SKILL.md') && (
                 <details className="text-caption text-muted-foreground">
                   <summary className="cursor-pointer">{t('Supporting files')}</summary>
-                  <p>
-                    {t('Approved files are retained in this copy. Source updates never replace them automatically.')}
-                  </p>
+                  <p>{t('Approved files stay in this copy. Source updates never replace them.')}</p>
                   <ul className="max-h-32 overflow-auto font-mono">
                     {Object.keys(skill.bundle.files)
                       .filter((path) => path !== 'SKILL.md')
@@ -350,7 +348,7 @@ export function InstalledSkills() {
                   {skill.description}
                   {skill.installation && (
                     <span className="block text-muted-foreground [overflow-wrap:anywhere]">
-                      {t('From {source}. Update brings in its changes; make a copy to edit it yourself.', {
+                      {t('From {source}. Update brings in its changes. Make a copy to edit it yourself.', {
                         source: skill.installation.source,
                       })}
                     </span>

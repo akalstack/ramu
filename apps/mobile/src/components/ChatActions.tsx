@@ -98,14 +98,14 @@ export async function confirmChatDeletion(
       ...(live
         ? [
             t(
-              'Background commands must stop before deletion. If one keeps running, the thread is kept so you can inspect or force stop it.',
+              'Background commands must stop before the thread is deleted. If one keeps running, the thread stays so you can inspect or force stop it.',
             ),
           ]
         : []),
       ...(unknown
         ? [
             t(
-              'Unknown commands cannot be stopped from these records. Deleting forgets their saved output and keeps the checkout files. Verify those commands on the host.',
+              'Commands with unknown status cannot be stopped from here. Deleting forgets their saved output and keeps the checkout files. Check those commands on the host.',
             ),
           ]
         : []),

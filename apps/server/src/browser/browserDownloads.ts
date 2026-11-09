@@ -51,7 +51,7 @@ export class BrowserDownloads {
   }
   warning(): string | undefined {
     return this.cleanupFailed
-      ? 'Browser download staging could not be cleaned. Restart Ramu to retry; unsaved files are never opened automatically.'
+      ? 'Could not clean up browser download staging. Restart Ramu to try again. Unsaved files are never opened automatically.'
       : undefined
   }
   private erase(path: string): void {

@@ -74,7 +74,7 @@ export function ReleaseSection({ projectId }: { projectId: string }) {
       <p className="m-0 text-caption text-muted-foreground">
         {status.connected
           ? t(
-              'Release builds {0} on EAS with your Expo account {1}, then uploads iOS to TestFlight and Android to Play’s internal testing track. Submitting for review is your step on each store.',
+              'Release builds {0} on EAS with your Expo account {1}, then uploads iOS to TestFlight and Android to Play’s internal testing track. You submit for review on each store yourself.',
               { 0: status.app.name, 1: status.account ?? '' },
             )
           : t('Connect Expo in Settings → Deploy to build and upload the app.')}
@@ -225,7 +225,7 @@ export function ReleaseSection({ projectId }: { projectId: string }) {
       {confirming && (
         <p role="status" className="m-0 text-caption">
           {t(
-            'This builds the default branch on EAS and uploads it for testers. Nothing is submitted for review, and the project’s latest thread hears how each build and upload finished.',
+            'This builds the default branch on EAS and uploads it for testers. Nothing is submitted for review. The project’s latest thread hears how each build and upload went.',
           )}
         </p>
       )}

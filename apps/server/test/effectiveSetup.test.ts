@@ -129,7 +129,7 @@ it('marks a server only the provider reports as provider-managed, and never list
       ],
     }),
   )
-  const managed = items.filter((item) => item.reason.startsWith('Provider-managed'))
+  const managed = items.filter((item) => item.reason.startsWith('Managed by the provider'))
   expect(managed.map((item) => [item.name, item.state])).toEqual([
     ['claude.ai Figma', 'runtime-confirmed'],
     ['claude.ai Atlassian', 'configured'],
@@ -182,8 +182,8 @@ it('reports, per server, whether the MCP tools a skill asks for are ready for th
     ['shared_mcp', 'sign-in-required'],
     ['nowhere', 'missing'],
   ])
-  expect(triage.reason).toContain('not ready')
+  expect(triage.reason).toContain("aren't ready")
   const plain = snapshot.items.find((item) => item.kind === 'skill' && item.name === 'plain')!
   expect(plain.requires).toBeUndefined()
-  expect(plain.reason).not.toContain('not ready')
+  expect(plain.reason).not.toContain("aren't ready")
 })

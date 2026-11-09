@@ -20,7 +20,7 @@ describe('app languages', () => {
     expect(resolveLanguage('id', ['en-US'])).toBe('id')
   })
   it('uses friendly Indonesian with English fallback and preserves adjacent spacing', () => {
-    expect(translate('id', 'What should we work on?')).toBe('Mau kerjain apa hari ini?')
+    expect(translate('id', 'What should we work on?')).toBe('Mau mengerjakan apa?')
     expect(translate('id', ' Save changes ')).toBe(' Simpan perubahan ')
     expect(translate('en', ' Save changes ')).toBe(' Save changes ')
     expect(translate('id', 'New untranslated copy')).toBe('New untranslated copy')

@@ -12,11 +12,11 @@ export const accessName = (access: AgentSettings['access'], provider?: AgentProv
       : { edits: 'Allow edits', auto: 'Auto', full: 'Full access' }[access],
   )
 const accessModes = [
-  { key: 'edits', label: 'Allow edits', description: 'File edits go through; commands still ask first.', Icon: Pencil },
+  { key: 'edits', label: 'Allow edits', description: 'File edits go through. Commands still ask first.', Icon: Pencil },
   {
     key: 'auto',
     label: 'Auto',
-    description: 'Routine actions are approved for you where the provider supports it; the rest still ask.',
+    description: 'Approves routine actions where the provider supports it. Everything else still asks.',
     Icon: Sparkles,
   },
   {
@@ -88,7 +88,7 @@ export function AgentControls({
                   <span className="muted text-muted-foreground block block">
                     {t(
                       key === 'auto' && asksInAuto(settings.provider)
-                        ? 'Edits run automatically. Read-only command rules skip routine prompts; other commands ask.'
+                        ? 'Edits run automatically. Read-only command rules skip routine prompts. Other commands ask.'
                         : key === 'auto' && settings.provider === 'opencode'
                           ? 'Approves permission requests automatically. OpenCode deny rules still apply.'
                           : key === 'full' && settings.provider === 'opencode'

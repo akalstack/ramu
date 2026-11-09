@@ -91,7 +91,7 @@ export function TestDeviceSettings({ hostId, readOnly }: { hostId: string; readO
         <SettingsLabel
           title={t('Let agents use test devices')}
           help={t(
-            'Agents boot iOS Simulators and Android emulators on this host, install the app they built and check it like computer use. Xcode and the Android SDK stay your install.',
+            'Agents boot iOS Simulators and Android emulators on this host, install the app they built and check it like computer use. You install Xcode and the Android SDK yourself.',
           )}
         />
         <Switch

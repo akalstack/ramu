@@ -47,7 +47,7 @@ it('bounds and validates names and identities and preserves built-ins', () => {
 it('never overwrites a corrupt catalog or publishes a failed metadata write', () => {
   const write = vi.fn()
   const damaged = new BrowserProfiles('profiles', { read: () => '{"version":1,"profiles":[{"id":"default"}]}', write })
-  expect(damaged.catalog().error).toContain('could not be read')
+  expect(damaged.catalog().error).toContain('Could not read browser profile details')
   expect(() => damaged.create('New')).toThrow('Restore the profile catalog')
   expect(write).not.toHaveBeenCalled()
   const storage: BrowserProfileFiles = {

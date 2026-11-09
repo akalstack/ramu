@@ -375,7 +375,7 @@ export function AgentTaskPanel({
           ) : (
             <p className="agent-panel-hint flex-none m-0 p-[10px_14px_14px] min-w-0 muted text-muted-foreground small text-caption">
               {task.taskType === 'advisor'
-                ? translate("The advisor answers the thread's agent and does not take messages.")
+                ? translate('The advisor answers the thread’s agent and does not take messages.')
                 : task.recovered
                   ? translate('This sub-agent’s previous process ended. Continue through the main thread.')
                   : task.canMessage

@@ -135,7 +135,7 @@ export function createAgentNotifier(options: {
         if (!resetsSeen.has(key)) {
           resetsSeen.add(key)
           if (resetsSeen.size > 500) resetsSeen.delete(resetsSeen.values().next().value!)
-          void deliver(sessionId, 'input', 'Limit has reset. Nothing ran on its own: resume to continue.')
+          void deliver(sessionId, 'input', 'Limit has reset. Nothing ran on its own. Resume to continue.')
         }
       }
       if (event.kind === 'goal' && event.goal && ['blocked', 'turn-limit'].includes(event.goal.status))
@@ -152,7 +152,7 @@ export function createAgentNotifier(options: {
       ) {
         questionsSeen.add(event.requestId)
         if (questionsSeen.size > 500) questionsSeen.delete(questionsSeen.values().next().value!)
-        void deliver(sessionId, 'input', 'Has a question. Independent work can continue.')
+        void deliver(sessionId, 'input', 'Has a question. Other work can continue.')
       }
       if (event.kind !== 'state' || !event.state) return
       const previous = last.get(sessionId)

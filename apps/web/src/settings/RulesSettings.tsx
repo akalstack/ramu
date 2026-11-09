@@ -179,9 +179,7 @@ function RuleEditor({
           void save()
         }}
       >
-        <p>
-          {t('Rules are instructions for how agents work. They never grant permissions; use Permissions for access.')}
-        </p>
+        <p>{t('Rules tell agents how to work. They never grant access; use Permissions for that.')}</p>
         <fieldset disabled={readOnly || busy} className="m-0 flex flex-col gap-4 border-0 p-0">
           <Field>
             <FieldLabel htmlFor={`${id}-name`}>{t('Name')}</FieldLabel>
@@ -261,7 +259,7 @@ function RuleEditor({
               />
               <p id={`${id}-paths-help`} className={CAPTION}>
                 {t(
-                  'One pattern per line, relative to each repository. Claude Code applies the rule itself when it works on matching files; other providers receive it at the start of a thread with its patterns.',
+                  'One pattern per line, relative to each repository. Claude Code applies the rule when it works on matching files. Other providers get it, with its patterns, at the start of a thread.',
                 )}
               </p>
               {pathsProblem && (

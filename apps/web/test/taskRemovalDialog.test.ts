@@ -109,7 +109,7 @@ it('shows unknown ownership and keeps the worktree while submitting only the rev
   await flush()
   const dialog = render()
   expect(dialog.props.confirmLabel).toBe('Delete thread and forget records')
-  expect(text(dialog)).toContain('Unknown commands cannot be stopped')
+  expect(text(dialog)).toContain('Commands with unknown status cannot be stopped')
   expect(find(dialog, 'checkbox')?.props).toMatchObject({ checked: false, disabled: true })
   await dialog.props.onConfirm()
   expect(state.host.invoke).toHaveBeenLastCalledWith('tasks.delete', 'task', false, {

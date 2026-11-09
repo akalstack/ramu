@@ -40,7 +40,7 @@ it.skipIf(!posix)('launches once, lists across idle time, and keeps other thread
   const other = service.launchBackground('b', null, tmpdir(), 'echo ready; sleep 300')
   expect(other.id).not.toBe(first.id)
   expect(first).toMatchObject({ state: 'running', command: 'echo ready; sleep 300', exitCode: null, endedAt: null })
-  expect(() => service.stopBackground('a', first.id, true)).toThrow(/graceful stop/)
+  expect(() => service.stopBackground('a', first.id, true)).toThrow(/normal stop/)
   expect(service.listBackground('a').map((t) => t.id)).toEqual([first.id])
   await until(() => service.inspectBackground('a', first.id).output.includes('ready'))
   // The ordinary list marks it so terminal panels never adopt it as a shell on their own.

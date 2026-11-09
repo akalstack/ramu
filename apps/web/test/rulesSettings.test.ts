@@ -42,9 +42,9 @@ it('names the rules a duplicate repeats and suggests the fix for its kind', () =
     { id: 'b', name: 'Testing' },
   ]
   expect(duplicateNote({ kind: 'text', others: ['a', 'b'] }, rules)).toBe(
-    'Same text as Tests first, Testing. Both apply; turn one off or delete it.',
+    'Same text as Tests first, Testing. Both apply, so turn one off or delete it.',
   )
   expect(duplicateNote({ kind: 'name', others: ['a'] }, rules)).toBe(
-    'Same name as Tests first. Both apply; rename one or turn it off.',
+    'Same name as Tests first. Both apply, so rename one or turn it off.',
   )
 })

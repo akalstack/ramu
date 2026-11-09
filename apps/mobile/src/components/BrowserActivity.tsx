@@ -121,7 +121,7 @@ export function BrowserActivity({ chat, open, onClose }: { chat: Chat; open: boo
                         }}
                       />
                     ) : (
-                      <T tone="muted">{t('Open this local or private address on its owning computer.')}</T>
+                      <T tone="muted">{t('Open this local or private address on the computer it belongs to.')}</T>
                     )}
                   </View>
                 ))}

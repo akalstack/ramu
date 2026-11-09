@@ -150,7 +150,7 @@ export function SelectionActions({
         variant="secondary"
         type="button"
         className={SELECTION_ACTION_CLASS}
-        title={translate('Ask a side question about this, without interrupting the thread ({0})', {
+        title={translate('Ask a side question without interrupting the thread ({0})', {
           '0': formatKeys('mod+shift+a'),
         })}
         disabled={readOnly}

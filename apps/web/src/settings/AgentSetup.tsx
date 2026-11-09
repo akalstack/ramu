@@ -198,7 +198,7 @@ function ImportDialog({
       {secretNames.length > 0 && (
         <p>
           {t(
-            'Its values for {names} stay in the original file. Ramu copies none of them; enter them as write-only secrets after importing.',
+            'Its values for {names} stay in the original file. Ramu does not copy them. Enter them as write-only secrets after importing.',
             { names: secretNames.join(', ') },
           )}
         </p>

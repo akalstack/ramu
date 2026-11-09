@@ -165,7 +165,7 @@ it.skipIf(process.platform === 'win32')(
     const commands = f.terminals.listBackground(f.task.id)
     expect(commands[0]!.state).toBe('unknown')
     await expect(f.remove(false, { backgroundIds: commands.map((command) => command.id) })).rejects.toThrow(
-      /Unknown commands cannot be stopped/,
+      /Commands with unknown status cannot be stopped/,
     )
     await expect(f.remove(true, removalReview(commands))).rejects.toThrow(/Keep the worktree/)
     expect(f.workspace.getTask(f.task.id).id).toBe(f.task.id)
