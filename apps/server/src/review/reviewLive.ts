@@ -54,6 +54,36 @@ export async function reviewRenames(cwd: string, head?: string): Promise<Map<str
   return result
 }
 
+const strictUtf8 = new TextDecoder('utf-8', { fatal: true })
+
+/** A file's text when it has a readable diff, or undefined for binary, invalid UTF-8 or files over 1 MB. */
+export function reviewText(bytes: Uint8Array): string | undefined {
+  if (bytes.length > 1_000_000 || bytes.includes(0)) return
+  try {
+    return strictUtf8.decode(bytes)
+  } catch {
+    return
+  }
+}
+
+/**
+ * A file's bytes once no write is landing on it. Agents and editors rewrite files in place, so a read can catch one half
+ * written, cut through a multi-byte character, and make a text file look binary for the rest of the review. A read that
+ * changed under it, or a just-written file that does not decode, is read again.
+ */
+export async function readSettledFile(absolute: string): Promise<Buffer> {
+  let bytes = Buffer.alloc(0)
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt) await new Promise((resolve) => setTimeout(resolve, 50))
+    const before = await stat(absolute)
+    bytes = await readFile(absolute)
+    const after = await stat(absolute)
+    const steady = before.mtimeMs === after.mtimeMs && after.size === bytes.length
+    if (steady && (Date.now() - after.mtimeMs > 2000 || reviewText(bytes) !== undefined)) break
+  }
+  return bytes
+}
+
 export async function readReviewCurrent(
   cwd: string,
   path: string,
@@ -63,9 +93,9 @@ export async function readReviewCurrent(
     const info = await stat(absolute)
     if (!info.isFile()) throw new Error('This path is no longer a file')
     if (info.size > 50_000_000) return { hash: `${info.size}:${info.mtimeMs}`, content: '', binary: true }
-    const bytes = await readFile(absolute)
-    const binary = bytes.length > 1_000_000 || bytes.includes(0) || bytes.toString('utf8').includes('\ufffd')
-    return { hash: hashOf(bytes), content: binary ? '' : bytes.toString('utf8'), binary }
+    const bytes = await readSettledFile(absolute)
+    const content = reviewText(bytes)
+    return { hash: hashOf(bytes), content: content ?? '', binary: content === undefined }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
     throw error

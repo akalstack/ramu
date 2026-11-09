@@ -1,7 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
-import { readdir, readFile, stat } from 'node:fs/promises'
+import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { gunzip, gzip } from 'node:zlib'
@@ -13,7 +13,14 @@ import { resolveInRoot } from '../workspace/files'
 import { commitBranchInfo } from '../workspace/git'
 import { RunUndo } from './undo'
 import { combineChatUndo } from './chatUndo'
-import { readReviewCurrent, reviewCheckout, reviewRenames, type ReviewCheckout } from './reviewLive'
+import {
+  readReviewCurrent,
+  readSettledFile,
+  reviewCheckout,
+  reviewRenames,
+  reviewText,
+  type ReviewCheckout,
+} from './reviewLive'
 import { reviewCommentOutdated } from '@ramu/shared/review/reviewOutdated'
 import { reviewLineStats } from './reviewStats'
 import {
@@ -71,7 +78,7 @@ const findingSchema = z.object({
 const execBuffer = promisify(execFile) as unknown as (
   file: string,
   args: string[],
-  options: { cwd: string; maxBuffer: number; timeout: number; encoding?: 'buffer' },
+  options: { cwd: string; maxBuffer: number; timeout: number; encoding: 'buffer' },
 ) => Promise<{ stdout: Buffer }>
 /** Paths in a Git checkout that differ from HEAD; undefined for non-Git folders. */
 async function dirtyPaths(root: { cwd: string }): Promise<{ paths: string[]; head: boolean } | undefined> {
@@ -445,7 +452,7 @@ export class ReviewService {
     const base = { repoId: root.repoId, repoName: root.repoName, path }
     // Track large/binary files by digest; text diffs are bounded to 1 MB each.
     if (info.size > 50000000) return { ...base, hash: `${info.size}:${info.mtimeMs}`, content: '', binary: true }
-    return this.entryFromBytes(base, await readFile(absolute), budget, info.mode & 0o777)
+    return this.entryFromBytes(base, await readSettledFile(absolute), budget, info.mode & 0o777)
   }
   private entryFromBytes(
     base: Pick<SnapshotFile, 'repoId' | 'repoName' | 'path'>,
@@ -453,8 +460,9 @@ export class ReviewService {
     budget: { total: number },
     mode?: number,
   ): SnapshotFile {
-    const binary = bytes.length > 1000000 || bytes.includes(0) || bytes.toString('utf8').includes('\ufffd')
-    const content = binary ? '' : bytes.toString('utf8')
+    const text = reviewText(bytes)
+    const binary = text === undefined
+    const content = text ?? ''
     // Past the shared text budget a file is tracked by digest only, so one large repo can't drop review cards for the rest.
     const overBudget = budget.total + content.length > 50000000
     if (!overBudget) budget.total += content.length
@@ -477,6 +485,7 @@ export class ReviewService {
         cwd: root.cwd,
         maxBuffer: 50000000,
         timeout: 30000,
+        encoding: 'buffer',
       })
       return this.entryFromBytes({ repoId: root.repoId, repoName: root.repoName, path }, stdout, budget)
     } catch {

@@ -277,7 +277,7 @@ export function ReviewFileCard({
       {!collapsed && (
         <>
           {file.binary ? (
-            <p className="review-binary muted text-muted-foreground">
+            <p className="review-binary m-0 p-3 text-control text-muted-foreground">
               {t('This binary or large file has no text diff.')}
             </p>
           ) : (

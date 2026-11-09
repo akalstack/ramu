@@ -74,6 +74,7 @@ describe('saved reviews and live workspaces', () => {
     writeFileSync(join(cwd, 'f5.txt'), 'local edit\n')
     const id = await service.begin(review.taskId, { cwd } as never)
     service.bind(id, 'session')
+    writeFileSync(join(cwd, 'f0.txt'), 'zero\n')
     writeFileSync(join(cwd, 'f1.txt'), 'edited\n')
     rmSync(join(cwd, 'f2.txt'))
     writeFileSync(join(cwd, 'f5.txt'), '5\n')
@@ -82,12 +83,15 @@ describe('saved reviews and live workspaces', () => {
     const files = service.get(id).files
     expect(service.get(id).state).toBe('ready')
     expect(files.map((f) => `${f.path}:${f.status}`).sort()).toEqual([
+      'f0.txt:modified',
       'f1.txt:modified',
       'f2.txt:deleted',
       'f5.txt:modified',
       'new.txt:added',
     ])
     expect(files.find((f) => f.path === 'f1.txt')).toMatchObject({ oldContent: '1\n', newContent: 'edited\n' })
+    // Its starting copy has a "0" in it, which once read as a null byte and hid the diff as binary.
+    expect(files.find((f) => f.path === 'f0.txt')).toMatchObject({ binary: false, oldContent: '0\n' })
     expect(files.find((f) => f.path === 'f5.txt')).toMatchObject({ oldContent: 'local edit\n', newContent: '5\n' })
   }, 60_000)
   it('records added and removed line counts from the run, independent of current edits', async () => {
