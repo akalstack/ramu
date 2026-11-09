@@ -80,6 +80,7 @@ const reviewInput = z.object({
       z.object({
         path: z.string().min(1).max(1000),
         line: z.number().int().positive(),
+        startLine: z.number().int().positive().optional(),
         body: z.string().min(1).max(8_000),
       }),
     )
@@ -421,7 +422,11 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
         taskId: string,
         repoId: string,
         url: string,
-        review: { verdict: ReviewVerdict; body: string; comments: { path: string; line: number; body: string }[] },
+        review: {
+          verdict: ReviewVerdict
+          body: string
+          comments: { path: string; line: number; startLine?: number; body: string }[]
+        },
       ) => {
         // The person's own review, written in the pull request's full view; agents never reach this method.
         await redacted(() =>

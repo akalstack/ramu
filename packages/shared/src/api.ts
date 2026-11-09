@@ -1446,7 +1446,7 @@ export interface RamuMethods extends ArtifactMethods {
     review: {
       verdict: import('./types').ReviewVerdict
       body: string
-      comments: { path: string; line: number; body: string }[]
+      comments: { path: string; line: number; startLine?: number; body: string }[]
     },
   ): void
   /** The files the pull request changes with their diffs; null where the service is not supported yet. */

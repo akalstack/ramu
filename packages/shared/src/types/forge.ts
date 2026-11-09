@@ -258,6 +258,8 @@ export interface ReviewCommentDraft {
   id: string
   path: string
   line: number
+  /** Where a comment on a block of lines starts; GitHub keeps the range, other services place it on `line`. */
+  startLine?: number
   body: string
 }
 

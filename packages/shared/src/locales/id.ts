@@ -6448,4 +6448,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Waiting for checks to finish.': 'Menunggu check selesai.',
   'Waiting for a review.': 'Menunggu review.',
   'An agent is working on the feedback.': 'Agen sedang mengerjakan masukan.',
+  'Comment on line {0}. Shift-click to comment on a block.': 'Komentari baris {0}. Shift-klik untuk mengomentari satu blok.',
+  'Commenting on line {0}. Shift-click another + to comment on a block.': 'Mengomentari baris {0}. Shift-klik + lain untuk mengomentari satu blok.',
+  'Commenting on lines {0}–{1}': 'Mengomentari baris {0}–{1}',
+  'Line {0}': 'Baris {0}',
+  'Lines {0}–{1}': 'Baris {0}–{1}',
+  Wrap: 'Bungkus',
+  'Wrap long lines': 'Bungkus baris panjang',
 }

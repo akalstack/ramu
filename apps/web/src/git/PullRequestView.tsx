@@ -387,7 +387,11 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
 
         {/* As on the services: the conversation and the changed files, one tab each. */}
         <Tabs value={tab} onValueChange={(value) => setTab(value as 'overview' | 'files')} className="gap-4">
-          <TabsList variant="line" className="h-9! w-full justify-start gap-4 border-b border-(--line) p-0">
+          <TabsList
+            variant="line"
+            // Pinned while scrolling, so either tab is one click away from anywhere in a long pull request.
+            className="sticky top-0 z-20 h-9! w-full justify-start gap-4 border-b border-(--line) bg-canvas p-0"
+          >
             <TabsTrigger value="overview" className="flex-none gap-1.5 px-0.5 text-control">
               <LayoutList size={14} />
               {t('Overview')}

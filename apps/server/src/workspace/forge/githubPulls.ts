@@ -558,6 +558,10 @@ export async function submitReview(
       path: comment.path,
       line: comment.line,
       side: 'RIGHT',
+      // A comment on a block of lines names where the block starts.
+      ...(comment.startLine && comment.startLine < comment.line
+        ? { start_line: comment.startLine, start_side: 'RIGHT' }
+        : {}),
       body: comment.body,
     })),
   })

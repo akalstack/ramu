@@ -1,11 +1,12 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import { pullRequestFiles } from '../src/workspace/forge/githubPulls'
-import { forgeRemoteOf, githubRest } from '../src/workspace/forge/github'
+import { pullRequestFiles, submitReview } from '../src/workspace/forge/githubPulls'
+import { forgeRemoteOf, githubGraphql, githubRest } from '../src/workspace/forge/github'
 
 vi.mock('../src/workspace/forge/github', async (load) => ({
   ...(await load<typeof import('../src/workspace/forge/github')>()),
   forgeRemoteOf: vi.fn(),
   githubRest: vi.fn(),
+  githubGraphql: vi.fn(),
 }))
 
 beforeEach(() => {
@@ -40,4 +41,22 @@ it('says when there are more files than one page', async () => {
     Array.from({ length: 100 }, (_, i) => ({ filename: `f${i}`, status: 'added', additions: 1, deletions: 0 })),
   )
   expect((await pullRequestFiles('/repo', 'https://github.com/o/r/pull/7')).more).toBe(true)
+})
+
+it('sends a comment on a block of lines with where the block starts, and a single line without it', async () => {
+  vi.mocked(githubGraphql).mockResolvedValue({
+    repository: { pullRequest: { number: 7, headRefOid: 'abc' } },
+  } as never)
+  vi.mocked(githubRest).mockResolvedValue(null)
+  await submitReview('/repo', 'https://github.com/o/r/pull/7', {
+    verdict: 'comment',
+    body: '',
+    comments: [
+      { id: '1', path: 'a.ts', line: 12, startLine: 9, body: 'block' },
+      { id: '2', path: 'a.ts', line: 20, body: 'one' },
+    ],
+  })
+  const payload = vi.mocked(githubRest).mock.calls.at(-1)![3] as { comments: Record<string, unknown>[] }
+  expect(payload.comments[0]).toMatchObject({ line: 12, start_line: 9, start_side: 'RIGHT', side: 'RIGHT' })
+  expect(payload.comments[1]).not.toHaveProperty('start_line')
 })
