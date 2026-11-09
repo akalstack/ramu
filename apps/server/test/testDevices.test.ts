@@ -251,3 +251,40 @@ it('finds a device’s own process for Resources: launchd_sim by UDID, qemu by i
   expect(processFor(table, 'android', 'emulator-5588')).toBe(303)
   expect(processFor(table, 'ios', 'UDID-2')).toBeNull()
 })
+
+it('gives back devices an earlier run of Ramu held, since Simlock keeps renewing them after Ramu stops', async () => {
+  const calls: string[][] = []
+  const exec = vi.fn(async (_file: string, args: string[]) => {
+    const command = args.slice(1)
+    calls.push(command)
+    if (command[0] === 'config') return command[1] === 'get' ? 'unchanged' : ''
+    if (command[0] === 'daemon') return 'Daemon running'
+    if (command.join(' ') === 'token list')
+      return JSON.stringify({
+        tokens: [
+          { id: 'tok_old', role: 'agent', label: 'ramu thread-a' },
+          { id: 'tok_mine', role: 'agent', label: 'agent-device on this Mac' },
+        ],
+      })
+    if (command[0] === 'token' && command[1] === 'create')
+      return JSON.stringify({ secret: 'operator-secret', token: { id: 'tok_op' } })
+    return ''
+  })
+  const http = vi.fn(
+    async () =>
+      new Response(
+        JSON.stringify({
+          leases: [
+            { id: 'lease-old', ownerId: 'tok_old' },
+            { id: 'lease-other', ownerId: 'tok_someone' },
+          ],
+        }),
+      ),
+  )
+  const real = await vi.importActual<typeof import('../src/testDevice/simlock')>('../src/testDevice/simlock')
+  await new real.SimlockHost(() => ({}), exec, http as unknown as typeof fetch).ready()
+  expect(calls).toContainEqual(['token', 'revoke', 'tok_old'])
+  expect(calls).not.toContainEqual(['token', 'revoke', 'tok_mine'])
+  expect(calls).toContainEqual(['release', 'lease-old'])
+  expect(calls).not.toContainEqual(['release', 'lease-other'])
+})

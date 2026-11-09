@@ -248,9 +248,17 @@ export class SimlockHost {
     if (!running || changed) await simlock(['daemon', 'start'], this.exec)
     // Tokens from an earlier start are useless now that their secrets are gone, so they are revoked.
     const { tokens } = lastJson<{ tokens: TokenRecord[] }>(await simlock(['token', 'list'], this.exec))
-    for (const token of tokens.filter((entry) => entry.label?.startsWith(RAMU_TOKEN_LABEL)))
-      await simlock(['token', 'revoke', token.id], this.exec).catch(() => {})
+    const stale = tokens.filter((entry) => entry.label?.startsWith(RAMU_TOKEN_LABEL)).map((entry) => entry.id)
+    for (const id of stale) await simlock(['token', 'revoke', id], this.exec).catch(() => {})
     this.operator = (await this.createToken('operator', RAMU_TOKEN_LABEL)).secret
+    // A device an earlier run held stays leased after Ramu stops: Simlock's own agent-device keeps renewing it. Its
+    // thread is gone with that run, so the device goes back now instead of staying booted.
+    const response = await this.http(`${simlockUrl()}/v1/leases`, {
+      headers: { authorization: `Bearer ${this.operator}` },
+    })
+    const leases = response.ok ? ((await response.json()) as { leases: SimlockLease[] }).leases : []
+    for (const lease of leases.filter((entry) => entry.ownerId && stale.includes(entry.ownerId)))
+      await simlock(['release', lease.id], this.exec).catch(() => {})
   }
 
   /** A token for one thread's agent-device session, so each thread is its own requester with its own lease. */
