@@ -28,7 +28,7 @@ Deployed apps reach you as notifications instead of Brief rows: a usage notice a
 
 ### Running and Resources
 
-**Running** lists working threads. On owner devices it also shows what they use: one line per host (memory used, Ramu's share, **Low memory**), then threads heaviest first. Expand a thread to see its agent, terminals, commands and test devices, each with **Stop**. A command still alive under finished work reads **Still running**. Figures are approximate and read only while the tab is open. Ramu never stops work by itself. On the phone, the host's own work (such as learning or recaps being generated) is listed under **On the computer**, with **Stop** for the work that can be stopped safely.
+**Running** lists working threads. On owner devices it also shows what they use: a memory bar per host (Ramu's threads, Ramu itself, other apps and what is available, with Ramu's share of the CPU and **Low memory**), then threads heaviest first, each with a memory bar beside the heaviest thread's and a CPU bar where full is one busy core. A thread with servers shows how many. Expand a thread to see its agent, terminals, commands, test devices and servers, each with **Stop**. A command still alive under finished work reads **Still running**. Figures are approximate and read only while the tab is open. Ramu never stops work by itself. On the phone, the host's own work (such as learning or recaps being generated) is listed under **On the computer**, with **Stop** for the work that can be stopped safely.
 
 ### Recaps, Learned and Completed
 

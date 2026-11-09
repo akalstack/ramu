@@ -68,6 +68,7 @@ export interface Services {
   workspace: Workspace
   terminals: TerminalService
   resources?: import('../background/resources').ResourceService
+  servers?: import('../background/servers').ServerService
   customAgents?: import('../agent/customAgents').CustomAgentStore
   testDevices?: import('../testDevice/testDevices').TestDevices
   agents: AgentService

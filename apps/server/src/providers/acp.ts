@@ -1,4 +1,4 @@
-import { trackProcess } from '../agent/processOwners'
+import { ownedEnvironment, trackProcess } from '../agent/processOwners'
 import { modelLegacyMetadata } from './modelLifecycle'
 import { modelContextWindow } from './modelContext'
 // Native OpenCode, Cursor and Google Antigravity ACP runtimes; JSON-RPC 2.0, newline framing.
@@ -114,7 +114,7 @@ export class AcpRpc {
       spawn(command, args, {
         cwd,
         stdio: 'pipe',
-        env: providerEnvironment(provider, undefined, accountId, cwd),
+        env: ownedEnvironment(providerEnvironment(provider, undefined, accountId, cwd)),
       }),
     )
     this.child.stderr.resume()

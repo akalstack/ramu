@@ -11,6 +11,8 @@ import { CustomAgentStore } from './agent/customAgents'
 import { TEST_DEVICE_GUIDE, TestDevices } from './testDevice/testDevices'
 import { customAgentList } from '@ramu/shared/customAgents'
 import { ResourceService } from './background/resources'
+import { ServerService } from './background/servers'
+import type { ProcessRoot } from '@ramu/shared/resources'
 import { processRoots } from './agent/processOwners'
 import { writeEvent } from './remote/eventStream'
 import { DEFAULT_AGENT_BROWSER_PREFERENCES } from '@ramu/shared/browser'
@@ -561,29 +563,32 @@ const refreshTestPlatforms = () =>
 setTimeout(refreshTestPlatforms, 5000).unref?.()
 setInterval(refreshTestPlatforms, 10 * 60_000).unref?.()
 agents.customAgents = () => customAgents.list()
+/** Everything still running that this service started and a thread owns: agents, terminals and commands. */
+const threadRoots = (): ProcessRoot[] => {
+  const sessions = new Map(agents.all().map((session) => [session.id, session]))
+  return [
+    ...terminals.processes().map(({ pid, taskId, id, kind, name }) => ({ pid, taskId, item: { kind, id, name } })),
+    ...testDevices
+      .processes()
+      .map(({ pid, taskId, id, name }) => ({ pid, taskId, item: { kind: 'device' as const, id, name } })),
+    ...[...processRoots()].flatMap(([pid, sessionId]) => {
+      const session = sessions.get(sessionId)
+      return session
+        ? [
+            {
+              pid,
+              taskId: session.taskId,
+              item: { kind: 'agent' as const, id: sessionId, name: session.title || session.provider },
+            },
+          ]
+        : []
+    }),
+  ]
+}
+const servers = new ServerService(threadRoots)
 const resources = new ResourceService(
   {
-    roots: () => {
-      const sessions = new Map(agents.all().map((session) => [session.id, session]))
-      return [
-        ...terminals.processes().map(({ pid, taskId, id, kind, name }) => ({ pid, taskId, item: { kind, id, name } })),
-        ...testDevices
-          .processes()
-          .map(({ pid, taskId, id, name }) => ({ pid, taskId, item: { kind: 'device' as const, id, name } })),
-        ...[...processRoots()].flatMap(([pid, sessionId]) => {
-          const session = sessions.get(sessionId)
-          return session
-            ? [
-                {
-                  pid,
-                  taskId: session.taskId,
-                  item: { kind: 'agent' as const, id: sessionId, name: session.title || session.provider },
-                },
-              ]
-            : []
-        }),
-      ]
-    },
+    roots: threadRoots,
     idleThreads: () => {
       const sessions = agents.all()
       const busy = new Set(
@@ -1325,6 +1330,7 @@ const dispatcher = createDispatcher(
     computerVideo,
     terminals,
     resources,
+    servers,
     customAgents,
     testDevices,
     agents,

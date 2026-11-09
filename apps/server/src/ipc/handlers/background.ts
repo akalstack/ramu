@@ -13,6 +13,7 @@ export const registerBackgroundHandlers: RegisterHandlers = ({
   recaps,
   notices,
   resources,
+  servers,
   hostUpdates,
   host,
 }) => ({
@@ -21,6 +22,17 @@ export const registerBackgroundHandlers: RegisterHandlers = ({
     run: () => {
       if (!resources) throw new Error('Resources are not available on this host.')
       return resources.snapshot()
+    },
+  },
+  'servers.list': {
+    args: z.tuple([id.optional()]),
+    run: (taskId?: string) => servers?.list(taskId) ?? [],
+  },
+  'servers.stop': {
+    args: z.tuple([id, z.number().int().positive(), z.number().int().min(1).max(65535)]),
+    run: (taskId: string, pid: number, port: number) => {
+      if (!servers) throw new Error('Servers are not available on this host.')
+      return servers.stop(taskId, pid, port)
     },
   },
   'resources.host': { args: z.tuple([]), run: () => resources?.host() ?? { memory: null, low: null } },

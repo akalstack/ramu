@@ -1,4 +1,5 @@
 // What Ramu's work uses on a host. Pure parsing and attribution, so the service stays a thin reader and tests need no `ps`.
+import { processOwners } from './servers'
 
 export interface HostMemory {
   totalBytes: number
@@ -26,6 +27,8 @@ export interface ResourceSnapshot {
   threads: ThreadResources[]
   /** The service and whatever it started that belongs to no thread. */
   ramuBytes: number
+  /** Logical cores, so CPU reads as a share of the whole host. */
+  cores?: number
 }
 
 /** What the Brief needs from a host that is low on memory; the idle figures are read only while it is low. */
@@ -102,40 +105,30 @@ export const isLowMemory = ({ totalBytes, availableBytes }: HostMemory) =>
  * Ramu's own, so nothing is counted twice and nothing the service started goes missing.
  */
 export function attributeProcesses(rows: ProcessRow[], servicePid: number, roots: ProcessRoot[]) {
-  const children = new Map<number, ProcessRow[]>()
-  const byPid = new Map(rows.map((row) => [row.pid, row]))
-  for (const row of rows) children.set(row.ppid, [...(children.get(row.ppid) ?? []), row])
-  const claimed = new Set<number>()
-  const claim = (pid: number) => {
-    const taken: ProcessRow[] = []
-    const stack = byPid.has(pid) ? [byPid.get(pid)!] : []
-    while (stack.length) {
-      const row = stack.pop()!
-      if (claimed.has(row.pid)) continue
-      claimed.add(row.pid)
-      taken.push(row)
-      stack.push(...(children.get(row.pid) ?? []))
-    }
-    return taken
-  }
+  const owners = processOwners(rows, roots)
   const threads = new Map<string, ThreadResources>()
-  // A nested root is claimed before the root above it, so a command started by an agent keeps its own line.
-  const depth = (pid: number) => {
-    let level = 0
-    for (let row = byPid.get(pid); row && level < 64; row = byPid.get(row.ppid)) level++
-    return level
-  }
-  for (const root of [...roots].sort((a, b) => depth(b.pid) - depth(a.pid))) {
-    const taken = claim(root.pid)
-    if (!taken.length) continue
-    const rssBytes = taken.reduce((sum, row) => sum + row.rssBytes, 0)
+  const items = new Map<ProcessRoot, ResourceItem>()
+  for (const row of rows) {
+    const root = owners.get(row.pid)
+    if (!root) continue
     const thread = threads.get(root.taskId) ?? { taskId: root.taskId, rssBytes: 0, cpu: 0, items: [] }
-    thread.rssBytes += rssBytes
-    thread.cpu += taken.reduce((sum, row) => sum + row.cpu, 0)
-    thread.items.push({ ...root.item, rssBytes })
+    thread.rssBytes += row.rssBytes
+    thread.cpu += row.cpu
+    let item = items.get(root)
+    if (!item) {
+      item = { ...root.item, rssBytes: 0 }
+      items.set(root, item)
+      thread.items.push(item)
+    }
+    item.rssBytes += row.rssBytes
     threads.set(root.taskId, thread)
   }
-  const ramuBytes = claim(servicePid).reduce((sum, row) => sum + row.rssBytes, 0)
+  // Whatever remains under the service is Ramu's own.
+  const service = processOwners(
+    rows.filter((row) => !owners.has(row.pid)),
+    [{ pid: servicePid, taskId: '', item: { kind: 'agent', id: '', name: '' } }],
+  )
+  const ramuBytes = rows.reduce((sum, row) => sum + (service.has(row.pid) ? row.rssBytes : 0), 0)
   for (const thread of threads.values()) thread.items.sort((a, b) => b.rssBytes - a.rssBytes)
   return { threads: [...threads.values()].sort((a, b) => b.rssBytes - a.rssBytes), ramuBytes }
 }
@@ -169,3 +162,23 @@ export const stopItemCall = (taskId: string, item: Pick<ResourceItem, 'kind' | '
       : item.kind === 'terminal'
         ? (['term.close', item.id] as const)
         : (['term.background.stop', taskId, item.id] as const)
+
+export interface MemoryBreakdown {
+  threads: number
+  ramu: number
+  /** Everything else on the host: other apps and the system. */
+  other: number
+  free: number
+}
+
+/** The host's memory split for a bar: Ramu's threads, Ramu itself, everything else, and what is available. */
+export function memoryBreakdown(memory: HostMemory, threadBytes: number, ramuBytes: number): MemoryBreakdown {
+  const used = Math.max(0, memory.totalBytes - memory.availableBytes)
+  // Resident sizes count shared pages more than once, so Ramu's part never exceeds what the host says is used.
+  const threads = Math.min(threadBytes, used)
+  const ramu = Math.min(ramuBytes, used - threads)
+  return { threads, ramu, other: used - threads - ramu, free: memory.totalBytes - used }
+}
+
+/** CPU as a share of the whole host (0–1), from a percent of one core summed over processes. */
+export const cpuShare = (cpu: number, cores = 1) => Math.min(1, Math.max(0, cpu / (100 * Math.max(1, cores))))

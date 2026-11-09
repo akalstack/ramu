@@ -878,6 +878,10 @@ export interface RamuMethods extends ArtifactMethods {
   'activity.status'(): BackgroundActivity[]
   /** What Ramu's work uses on this host. Owner devices only: it names running work. */
   'resources.snapshot'(): import('./resources').ResourceSnapshot
+  /** Servers a thread's agents, terminals and commands are listening on; every thread's without one. */
+  'servers.list'(taskId?: string): import('./servers').ThreadServer[]
+  /** Stops one of the thread's servers; refused for anything it did not start. */
+  'servers.stop'(taskId: string, pid: number, port: number): void
   /** Host memory and the low-memory state, without reading the process table. */
   'resources.host'(): import('./resources').HostResources
   'activity.cancel'(id: string): void

@@ -1,4 +1,4 @@
-import { trackProcess } from '../agent/processOwners'
+import { ownedEnvironment, trackProcess } from '../agent/processOwners'
 import { addTokens } from './turnTokens'
 import { permissionKey } from '../agent/permissionApprovals'
 // OpenCode 2 chats through its HTTP API (`@opencode/client`). Each chat runs its own `opencode serve`, so the
@@ -234,7 +234,7 @@ async function startServer(
   const child = trackProcess(
     spawn(providerBinary('opencode'), ['serve', '--hostname', '127.0.0.1', '--port', String(port)], {
       cwd,
-      env,
+      env: ownedEnvironment(env),
       stdio: ['ignore', 'pipe', 'pipe'],
     }),
   )

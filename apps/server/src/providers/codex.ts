@@ -1,4 +1,4 @@
-import { trackProcess } from '../agent/processOwners'
+import { ownedEnvironment, trackProcess } from '../agent/processOwners'
 import { addTokens } from './turnTokens'
 import { modelLegacyMetadata } from './modelLifecycle'
 import { modelContextWindow } from './modelContext'
@@ -68,10 +68,10 @@ export class CodexRpc {
         ],
         {
           stdio: 'pipe',
-          env: {
+          env: ownedEnvironment({
             ...providerEnvironment('codex', undefined, accountId, cwd),
             ...(connection ? { RAMU_MCP_TOKEN: connection.token } : {}),
-          },
+          }),
         },
       ),
     )

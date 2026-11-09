@@ -5,6 +5,7 @@ import { McpStatusDialog } from './agent/components/McpStatusDialog'
 import { ComputerActivity, ComputerGrantDialog, useComputerActivity } from '../chat/ComputerActivity'
 import { BrowserActivity, useBrowserActivity } from '../chat/BrowserActivity'
 import { BackgroundTerminalsSection, useBackgroundTerminals } from '../chat/BackgroundTerminals'
+import { ThreadServersSection, useThreadServers } from '../chat/ThreadServers'
 import { ConfirmStopDialog } from '../chat/ConfirmStopDialog'
 import { helperActive, helperGroups } from '@ramu/shared/chat/helperPresentation'
 import { useDeferredRequests } from './agent/hooks/useDeferredRequests'
@@ -360,6 +361,7 @@ export const AgentView = memo(function AgentView({
     void act(() => invoke('agent.backgroundTool', view.sessionId, toolUseId))
   const browserActivity = useBrowserActivity(session && !session.parentId ? session.taskId : undefined, visible)
   const backgroundTerminals = useBackgroundTerminals(session?.taskId)
+  const threadServers = useThreadServers(session?.taskId, visible)
   const computerActivity = useComputerActivity(session && !session.parentId ? session.taskId : undefined, visible)
   const [stopping, setStopping] = useState<AgentTask | null>(null)
   const runStopTask = (task: AgentTask) => void act(() => invoke('agent.stopTask', view.sessionId, task.agentId))
@@ -978,6 +980,7 @@ export const AgentView = memo(function AgentView({
               />
               {(hostOffline ||
                 backgroundTerminals.terminals.length > 0 ||
+                threadServers.servers.length > 0 ||
                 browserActivity.tabs.length > 0 ||
                 !!computerActivity.session ||
                 providerWait ||
@@ -1015,6 +1018,7 @@ export const AgentView = memo(function AgentView({
                     {computerActivity.taskId && computerActivity.session && (
                       <ComputerActivity state={computerActivity} />
                     )}
+                    {threadServers.servers.length > 0 && <ThreadServersSection state={threadServers} />}
                     {backgroundTerminals.terminals.length > 0 && (
                       <BackgroundTerminalsSection state={backgroundTerminals} />
                     )}

@@ -1,15 +1,19 @@
 import { useState } from 'react'
 import { useQueries } from '@tanstack/react-query'
-import { ChevronDown, ChevronRight, MemoryStick, Square, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Globe, MemoryStick, Square, X } from 'lucide-react'
 import {
+  cpuShare,
   gigabytes,
   isBusy,
   isLowMemory,
+  memoryBreakdown,
   stopItemCall,
   threadActivity,
+  type HostMemory,
   type ResourceItem,
   type ThreadResources,
 } from '@ramu/shared/resources'
+import type { ThreadServer } from '@ramu/shared/servers'
 import type { Task } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
@@ -21,6 +25,9 @@ import { invokeOn, ramu } from '../ipc'
 import { errorText } from '../lib/errors'
 import { useComputers } from '../workspace/computers'
 import { useHostOverviews } from '../workspace/hostOverview'
+import { useHost } from '../workspace/HostProvider'
+import { ServerRow, useOpenServer } from './ThreadServers'
+import { cn } from 'cn'
 
 type Invoke = (hostId: string, method: string, ...args: unknown[]) => Promise<unknown>
 const anyHost = invokeOn as unknown as Invoke
@@ -41,6 +48,14 @@ function useResources() {
       retry: false,
     })),
   })
+  const servers = useQueries({
+    queries: ids.map((id) => ({
+      queryKey: ['servers', id, undefined],
+      queryFn: () => invokeOn(id, 'servers.list'),
+      refetchInterval: POLL_MS,
+      retry: false,
+    })),
+  })
   const appMemory = useQueries({
     queries: [
       {
@@ -56,7 +71,19 @@ function useResources() {
     appMemory: typeof appMemory === 'number' ? appMemory : 0,
     snapshots: ids.flatMap((id, index) => {
       const data = queries[index]?.data
-      return data ? [{ id, data, refetch: queries[index]!.refetch }] : []
+      return data
+        ? [
+            {
+              id,
+              data,
+              servers: servers[index]?.data ?? [],
+              refetch: () => {
+                void queries[index]!.refetch()
+                void servers[index]?.refetch()
+              },
+            },
+          ]
+        : []
     }),
   }
 }
@@ -66,6 +93,106 @@ function Figure({ bytes }: { bytes: number }) {
     <span className="flex-none text-caption text-muted-foreground tabular-nums">
       {t('{0} GB', { 0: gigabytes(bytes) })}
     </span>
+  )
+}
+
+const percent = (part: number, whole: number) => `${whole > 0 ? (part / whole) * 100 : 0}%`
+
+/** The host's memory as one bar: Ramu's threads in the accent, Ramu itself lighter, everything else neutral. */
+function HostMeter({
+  name,
+  memory,
+  threadBytes,
+  ramuBytes,
+  cpu,
+  cores,
+}: {
+  name: string
+  memory: HostMemory
+  threadBytes: number
+  ramuBytes: number
+  cpu: number
+  cores?: number
+}) {
+  const split = memoryBreakdown(memory, threadBytes, ramuBytes)
+  const low = isLowMemory(memory)
+  const used = memory.totalBytes - memory.availableBytes
+  const parts = [
+    { key: 'threads', label: t('Threads'), bytes: split.threads, className: 'bg-brand' },
+    { key: 'ramu', label: t('Ramu'), bytes: split.ramu, className: 'bg-brand/40' },
+    { key: 'other', label: t('Other apps'), bytes: split.other, className: low ? 'bg-warn/70' : 'bg-foreground/25' },
+  ]
+  const summary = t('{0} of {1} GB used', { 0: gigabytes(used), 1: gigabytes(memory.totalBytes) })
+  return (
+    <div className="flex flex-col gap-1.5 pb-1">
+      <div className="flex items-baseline gap-2 text-caption">
+        <span className="min-w-0 flex-1 truncate text-foreground">{name || t('Memory')}</span>
+        {low && <span className="text-warn">{t('Low memory')}</span>}
+        <span className="flex-none text-muted-foreground tabular-nums" role="status">
+          {summary}
+        </span>
+      </div>
+      <div
+        role="img"
+        aria-label={[
+          summary,
+          ...parts.map((part) => `${part.label} ${t('{0} GB', { 0: gigabytes(part.bytes) })}`),
+        ].join(', ')}
+        className="flex h-2 w-full overflow-hidden rounded-full bg-foreground/10"
+      >
+        {parts.map((part) => (
+          <span
+            key={part.key}
+            className={cn('h-full transition-[width] duration-500 ease-out', part.className)}
+            style={{ width: percent(part.bytes, memory.totalBytes) }}
+          />
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-muted-foreground">
+        {parts.map((part) => (
+          <span key={part.key} className="inline-flex items-center gap-1.5 tabular-nums">
+            <span aria-hidden="true" className={cn('size-2 rounded-full', part.className)} />
+            {part.label} {gigabytes(part.bytes)}
+          </span>
+        ))}
+        <span className="inline-flex items-center gap-1.5 tabular-nums">
+          <span aria-hidden="true" className="size-2 rounded-full bg-foreground/10" />
+          {t('Available')} {gigabytes(split.free)}
+        </span>
+        <span className="ml-auto tabular-nums" title={t('Ramu’s share of all CPU cores')}>
+          {t('CPU {0}%', { 0: Math.round(cpuShare(cpu, cores) * 100) })}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+/** A thread's memory next to the heaviest thread's, and its CPU where a full bar is one busy core. */
+function ThreadMeters({ thread, heaviest }: { thread: ThreadResources; heaviest: number }) {
+  const busy = isBusy(thread)
+  return (
+    <div className="flex items-center gap-3 pl-8 pr-1 text-caption text-muted-foreground tabular-nums">
+      <span className="flex min-w-0 flex-1 items-center gap-2" title={t('Memory')}>
+        <span className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-foreground/10">
+          <span
+            className="block h-full rounded-full bg-brand transition-[width] duration-500 ease-out"
+            style={{ width: percent(thread.rssBytes, heaviest) }}
+          />
+        </span>
+      </span>
+      <span className="flex flex-none items-center gap-1.5" title={t('CPU, where a full bar is one core')}>
+        <span className="h-1 w-8 overflow-hidden rounded-full bg-foreground/10">
+          <span
+            className={cn(
+              'block h-full rounded-full transition-[width] duration-500 ease-out',
+              busy ? 'bg-warn' : 'bg-foreground/40',
+            )}
+            style={{ width: percent(cpuShare(thread.cpu), 1) }}
+          />
+        </span>
+        <span className={cn('w-10 text-right', busy && 'text-warn')}>{Math.round(thread.cpu)}%</span>
+      </span>
+    </div>
   )
 }
 
@@ -101,13 +228,23 @@ function ThreadRow({
   hostId,
   thread,
   task,
+  servers,
+  heaviest,
   onStopped,
 }: {
   hostId: string
   thread: ThreadResources
   task?: Task
+  servers: ThreadServer[]
+  heaviest: number
   onStopped: () => void
 }) {
+  const active = useHost().id
+  const { local, open: openServer } = useOpenServer(hostId)
+  const stopServer = (server: ThreadServer) =>
+    void anyHost(hostId, 'servers.stop', server.taskId, server.pid, server.port).then(onStopped, (error) =>
+      notifyError(errorText(error)),
+    )
   const [open, setOpen] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const activity = threadActivity(task, thread)
@@ -137,6 +274,12 @@ function ThreadRow({
           {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </Button>
         <span className="min-w-0 flex-1 truncate text-body">{title}</span>
+        {servers.length > 0 && (
+          <span className="inline-flex flex-none items-center gap-1 rounded-full bg-brand/10 px-1.5 text-caption text-brand tabular-nums">
+            <Globe size={11} />
+            {servers.length}
+          </span>
+        )}
         <span
           className={`flex-none text-caption ${activity === 'left-running' ? 'text-warn' : 'text-muted-foreground'}`}
         >
@@ -158,10 +301,27 @@ function ThreadRow({
           </Button>
         )}
       </div>
+      <ThreadMeters thread={thread} heaviest={heaviest} />
       {open &&
         thread.items.map((item) => (
           <ItemRow key={item.id} hostId={hostId} thread={thread} item={item} onStopped={onStopped} />
         ))}
+      {open && servers.length > 0 && (
+        <ul className="my-0 ml-5 flex list-none flex-col p-0">
+          {servers.map((server) => (
+            <ServerRow
+              key={`${server.pid}:${server.port}`}
+              server={server}
+              local={local}
+              // The browser pane belongs to the host on screen; another host's server opens in the person's browser.
+              onOpen={(entry, external) =>
+                hostId === active ? openServer(entry, external) : local && openServer(entry, true)
+              }
+              onStop={stopServer}
+            />
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
@@ -177,32 +337,40 @@ function ResourcesPanel() {
     return <p className="m-0 px-3.5 py-3 text-caption text-muted-foreground">{t('Reading resources…')}</p>
   return (
     <section className="flex flex-col gap-3 px-3.5 py-3" aria-label={t('Resources')}>
-      {resources.snapshots.map(({ id, data, refetch }, index) => {
+      {resources.snapshots.map(({ id, data, servers, refetch }, index) => {
         const ramuBytes = data.ramuBytes + (id === resources.current ? resources.appMemory : 0)
-        const used = data.memory ? data.memory.totalBytes - data.memory.availableBytes : null
+        const threadBytes = data.threads.reduce((sum, thread) => sum + thread.rssBytes, 0)
+        const heaviest = Math.max(0, ...data.threads.map((thread) => thread.rssBytes))
         return (
           <div key={id} className="flex flex-col">
-            <p className="m-0 text-caption text-muted-foreground" role="status">
-              {[
-                resources.snapshots.length > 1 ? name(id) : '',
-                used !== null && data.memory
-                  ? t('{0} of {1} GB used', { 0: gigabytes(used), 1: gigabytes(data.memory.totalBytes) })
-                  : '',
-                t('Ramu {0} GB', {
-                  0: gigabytes(ramuBytes + data.threads.reduce((sum, thread) => sum + thread.rssBytes, 0)),
-                }),
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-              {data.memory && isLowMemory(data.memory) && <span className="text-warn"> · {t('Low memory')}</span>}
-            </p>
+            {data.memory ? (
+              <HostMeter
+                name={resources.snapshots.length > 1 ? name(id) : ''}
+                memory={data.memory}
+                threadBytes={threadBytes}
+                ramuBytes={ramuBytes}
+                cpu={data.threads.reduce((sum, thread) => sum + thread.cpu, 0)}
+                cores={data.cores}
+              />
+            ) : (
+              <p className="m-0 text-caption text-muted-foreground" role="status">
+                {[
+                  resources.snapshots.length > 1 ? name(id) : '',
+                  t('Ramu {0} GB', { 0: gigabytes(ramuBytes + threadBytes) }),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            )}
             {data.threads.map((thread) => (
               <ThreadRow
                 key={thread.taskId}
                 hostId={id}
                 thread={thread}
                 task={overviews[index]?.data?.tasks.find((task) => task.id === thread.taskId)}
-                onStopped={() => void refetch()}
+                servers={servers.filter((server) => server.taskId === thread.taskId)}
+                heaviest={heaviest}
+                onStopped={refetch}
               />
             ))}
             {ramuBytes > 0 && data.threads.length > 0 && (

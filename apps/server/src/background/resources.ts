@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
-import { totalmem } from 'node:os'
+import { availableParallelism, totalmem } from 'node:os'
 import { promisify } from 'node:util'
 import {
   attributeProcesses,
@@ -32,7 +32,7 @@ export async function readHostMemory(platform = process.platform): Promise<HostM
   return null
 }
 
-async function readProcesses() {
+export async function readProcesses() {
   const { stdout } = await run('/bin/ps', ['-axo', 'pid=,ppid=,rss=,pcpu='], { timeout: 3000, maxBuffer: 8_000_000 })
   return parseProcessTable(stdout)
 }
@@ -108,7 +108,11 @@ export class ResourceService {
 
   private async read(): Promise<ResourceSnapshot> {
     const [memory, rows] = await Promise.all([this.readMemory(), this.readTable()])
-    const value = { memory, ...attributeProcesses(rows, process.pid, this.sources.roots()) }
+    const value = {
+      memory,
+      cores: availableParallelism(),
+      ...attributeProcesses(rows, process.pid, this.sources.roots()),
+    }
     this.cached = { at: Date.now(), value }
     return value
   }

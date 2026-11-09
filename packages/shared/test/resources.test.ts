@@ -1,5 +1,7 @@
 import { expect, it } from 'vitest'
 import {
+  cpuShare,
+  memoryBreakdown,
   attributeProcesses,
   gigabytes,
   isLowMemory,
@@ -81,4 +83,16 @@ it('labels commands left running under finished work, and stops each kind its ow
   expect(stopItemCall('t', { kind: 'terminal', id: 'x' })).toEqual(['term.close', 'x'])
   expect(stopItemCall('t', { kind: 'command', id: 'c' })).toEqual(['term.background.stop', 't', 'c'])
   expect(stopItemCall('t', { kind: 'device', id: 'avd:pixel' })).toEqual(['testDevices.stop', 'avd:pixel'])
+})
+
+it('splits host memory for the bar without letting Ramu exceed what is used', () => {
+  const memory = { totalBytes: 16, availableBytes: 6 }
+  expect(memoryBreakdown(memory, 3, 1)).toEqual({ threads: 3, ramu: 1, other: 6, free: 6 })
+  expect(memoryBreakdown(memory, 12, 4)).toEqual({ threads: 10, ramu: 0, other: 0, free: 6 })
+})
+
+it('reads CPU as a share of the whole host', () => {
+  expect(cpuShare(200, 8)).toBe(0.25)
+  expect(cpuShare(1200, 8)).toBe(1)
+  expect(cpuShare(50)).toBe(0.5)
 })

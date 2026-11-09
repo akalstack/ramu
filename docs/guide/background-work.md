@@ -12,6 +12,8 @@ On the phone, **Settings → Threads** sets the choice, and the warning before c
 
 Agents can start a development server, watcher or long test run that keeps going after their reply. It runs on the thread's host, in its checkout; outside Full access you approve each exact command first, and Full access still asks before a command that can destroy work or the machine. Background terminals, above the composer on the desktop and as a pill on the phone, lists the ones still running, with their output and **Stop**; a command leaves it when it ends, and the thread says how it ended.
 
+**Servers**, above the composer on the desktop, lists what the thread's agents, terminals and commands are listening on, such as `localhost:5173 · npm run dev · node`. Click one that serves pages to open it in the browser pane; ⌘-click (Ctrl-click) opens it in your own browser when the host is this device. **Stop** ends that server only. A server started with `nohup` or `&` still shows under the thread that started it, and one that outlived its terminal or agent says so. On the phone, servers are listed with **Stop** under Resources. Ports an agent's own program uses are left out.
+
 Instead of sleeping and checking again, an agent waits on a command: until it exits, prints text it names (such as "ready" or "error"), stops printing for a while, or a time limit passes. The thread shows what came of it, such as **Saw "ready"** or **Background command failed** with the exit code. Stopping the turn ends the wait; stopping the command ends it too, and the agent does not restart a command you stopped.
 
 ## Restart recovery
