@@ -18,6 +18,8 @@ export function CommentForm({
   onChange,
   onCancel,
   onSave,
+  hint: savedHint,
+  saveLabel,
 }: {
   inputRef: React.RefObject<HTMLTextAreaElement | null>
   path: string
@@ -30,6 +32,9 @@ export function CommentForm({
   onChange: (value: string) => void
   onCancel: () => void
   onSave: () => void
+  /** Where the comment goes once saved, when that is not the next message to the agent. */
+  hint?: string
+  saveLabel?: string
 }) {
   useLanguage()
   const host = useHostConnection()
@@ -41,7 +46,7 @@ export function CommentForm({
     ? t('Your draft is kept. Saving needs {0} online.', { 0: host.name })
     : unchanged
       ? t('Nothing changed yet.')
-      : t('Goes with your next message to the agent.')
+      : (savedHint ?? t('Goes with your next message to the agent.'))
   return (
     <div
       className={`${NOTE_CLASS} editing`}
@@ -94,7 +99,7 @@ export function CommentForm({
           title={formatKeys('mod+enter')}
           onClick={save}
         >
-          {editing ? t('Save') : t('Comment')}
+          {editing ? t('Save') : (saveLabel ?? t('Comment'))}
         </Button>
       </div>
     </div>

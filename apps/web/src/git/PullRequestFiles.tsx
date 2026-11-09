@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, type MouseEvent } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronRight, MessageSquare, Plus, Trash2, WrapText } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
@@ -11,6 +11,9 @@ import { ipcQueryKeyOn } from '../dataQueries'
 import { FileIcon } from '../editor/FileIcon'
 import { useHost } from '../workspace/HostProvider'
 import { errorText } from '../workspace/TaskPane'
+import { CommentForm } from '../changes/CommentForm'
+import { ICON_BUTTON_CLASS, NOTE_CLASS, WHERE_CLASS } from '../changes/styles'
+import { commentLabel } from './ReviewChip'
 import { queryInvokerFor } from './hostQuery'
 
 /** Files that start open; a larger pull request starts folded so its list can be read first. */
@@ -43,9 +46,8 @@ interface Pending {
   body: string
 }
 
-/** The lines a comment covers, in words. */
-const lines = (start: number | undefined, end: number) =>
-  start && start < end ? t('Lines {0}–{1}', { '0': start, '1': end }) : t('Line {0}', { '0': end })
+/** The lines a comment covers, as the Changes tab labels them. */
+const where = (start: number | undefined, end: number) => commentLabel('new', start ?? end, end)
 
 /** The wrap choice last made on this device; storage may be unavailable, which leaves lines unwrapped. */
 function savedWrap(): boolean {
@@ -86,20 +88,29 @@ function FilePath({ file }: { file: PullRequestFile }) {
   )
 }
 
-/** A review thread shown under the line it is on. */
+/** A review thread shown under the line it is on, in the same card as a comment in the Changes tab. */
 function InlineThread({ thread }: { thread: PullRequestThread }) {
   return (
-    <div className="flex flex-col gap-1.5 border-y border-line bg-card px-4 py-2.5 font-sans">
+    <article className={NOTE_CLASS}>
       {thread.comments.map((comment) => (
-        <div key={comment.id} className="text-control [overflow-wrap:anywhere] whitespace-pre-wrap">
-          <span className="font-medium text-foreground">{comment.author ?? t('Someone')}</span>
-          {comment.bot && <span className="ml-1 text-caption text-muted-foreground">{t('bot')}</span>}
-          {thread.resolved && <span className="ml-1 text-caption text-muted-foreground">{t('Resolved')}</span>}
-          <div className="text-soft">{comment.body}</div>
-        </div>
+        <Fragment key={comment.id}>
+          <header>
+            <span className="text-control font-medium text-foreground">{comment.author ?? t('Someone')}</span>
+            {comment.bot && <span className="text-caption text-muted-foreground">{t('bot')}</span>}
+            {thread.resolved && <span className="text-caption text-muted-foreground">{t('Resolved')}</span>}
+          </header>
+          <p className="text-soft">{comment.body}</p>
+        </Fragment>
       ))}
-    </div>
+    </article>
   )
+}
+
+/** The new lines a comment is being written on, with the line the pick started from. */
+interface Range {
+  anchor: number
+  start: number
+  end: number
 }
 
 function FileDiff({
@@ -120,15 +131,56 @@ function FileDiff({
   onRemove: (id: string) => void
 }) {
   const rows = useMemo(() => (file.patch ? patchRows(file.patch) : []), [file.patch])
-  // The block of new lines a comment is being written on: one line, or a range picked with Shift.
-  const [range, setRange] = useState<{ anchor: number; start: number; end: number } | null>(null)
+  // Lines are picked as in the Changes tab: press on a line number and drag, or click one and Shift-click another.
+  const [range, setRange] = useState<Range | null>(null)
   const [draft, setDraft] = useState('')
-  const pick = (line: number, event: MouseEvent) => {
-    if (event.shiftKey && range)
-      setRange({ anchor: range.anchor, start: Math.min(range.anchor, line), end: Math.max(range.anchor, line) })
-    else {
-      setDraft('')
-      setRange({ anchor: line, start: line, end: line })
+  const [draftError, setDraftError] = useState<string | null>(null)
+  // The form opens on release, as on GitHub, so the rows under the pointer stay put while a block is dragged out.
+  const dragging = useRef(false)
+  const [held, setHeld] = useState(false)
+  const input = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    const up = () => {
+      if (!dragging.current) return
+      dragging.current = false
+      setHeld(false)
+      requestAnimationFrame(() => input.current?.focus())
+    }
+    window.addEventListener('pointerup', up)
+    return () => window.removeEventListener('pointerup', up)
+  }, [])
+  const extend = (line: number) =>
+    setRange(
+      (current) =>
+        current && {
+          anchor: current.anchor,
+          start: Math.min(current.anchor, line),
+          end: Math.max(current.anchor, line),
+        },
+    )
+  /** Starts or extends a pick; false when a written draft elsewhere has to be finished first. */
+  const pick = (line: number, extending: boolean) => {
+    if (extending && range) {
+      extend(line)
+      return true
+    }
+    if (draft.trim() && range) {
+      setDraftError(t('Add or cancel your current draft before starting another comment.'))
+      input.current?.focus()
+      return false
+    }
+    setDraft('')
+    setDraftError(null)
+    setRange({ anchor: line, start: line, end: line })
+    return true
+  }
+  const press = (line: number, event: PointerEvent<HTMLElement>) => {
+    if (!canComment || event.button !== 0) return
+    // Keeps the drag from selecting code text.
+    event.preventDefault()
+    if (pick(line, event.shiftKey)) {
+      dragging.current = true
+      setHeld(true)
     }
   }
   const inRange = (line: number | undefined) =>
@@ -137,68 +189,63 @@ function FileDiff({
     if (line === undefined) return null
     const here = threads.filter((thread) => thread.line === line)
     const mine = pending.filter((comment) => comment.line === line)
-    const writing = range?.end === line
+    const writing = !held && range?.end === line
     if (!here.length && !mine.length && !writing) return null
     return (
       <tr>
         <td colSpan={3} className="p-0">
-          {here.map((thread) => (
-            <InlineThread key={thread.id} thread={thread} />
-          ))}
-          {mine.map((comment) => (
-            <div
-              key={comment.id}
-              className="flex items-start gap-2 border-y border-line bg-card px-4 py-2.5 font-sans text-control"
-            >
-              <div className="min-w-0 flex-1 [overflow-wrap:anywhere] whitespace-pre-wrap">
-                <span className="mr-1.5 rounded-full bg-fill px-1.5 text-caption text-muted-foreground">
-                  {t('Pending')} · {lines(comment.startLine, comment.line)}
-                </span>
-                {comment.body}
-              </div>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={t('Remove comment')}
-                title={t('Remove comment')}
-                onClick={() => onRemove(comment.id)}
-              >
-                <Trash2 size={13} />
-              </Button>
-            </div>
-          ))}
-          {writing && range && (
-            <div className="flex flex-col gap-2 border-y border-line bg-card px-4 py-2.5 font-sans">
-              <span className="text-caption text-muted-foreground">
-                {range.start === range.end
-                  ? t('Commenting on line {0}. Shift-click another + to comment on a block.', { '0': range.end })
-                  : t('Commenting on lines {0}–{1}', { '0': range.start, '1': range.end })}
-              </span>
-              <Textarea
-                autoFocus
+          {/* As wide as the visible diff and pinned to its left, so a long line never pushes the form out of view. */}
+          <div className="sticky left-0 w-[100cqw] px-3 font-sans">
+            {here.map((thread) => (
+              <InlineThread key={thread.id} thread={thread} />
+            ))}
+            {mine.map((comment) => (
+              <article key={comment.id} className={NOTE_CLASS}>
+                <header>
+                  <span className={WHERE_CLASS}>{where(comment.startLine, comment.line)}</span>
+                  <span className="text-caption text-muted-foreground">{t('Pending')}</span>
+                  <span className="min-w-0 flex-1" />
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className={ICON_BUTTON_CLASS}
+                    aria-label={t('Remove comment')}
+                    title={t('Remove comment')}
+                    onClick={() => onRemove(comment.id)}
+                  >
+                    <Trash2 size={13} />
+                  </Button>
+                </header>
+                <p>{comment.body}</p>
+              </article>
+            ))}
+            {writing && range && (
+              <CommentForm
+                inputRef={input}
+                path={file.path}
+                where={where(range.start, range.end)}
+                editing={false}
                 value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                placeholder={t('Leave a comment')}
-                className="min-h-16 text-control"
+                unchanged={false}
+                error={draftError}
+                busy={false}
+                hint={t('Goes into your review when you finish it.')}
+                saveLabel={t('Add to review')}
+                onChange={setDraft}
+                onCancel={() => {
+                  setRange(null)
+                  setDraft('')
+                  setDraftError(null)
+                }}
+                onSave={() => {
+                  onAdd(range.end, range.start < range.end ? range.start : undefined, draft.trim())
+                  setDraft('')
+                  setDraftError(null)
+                  setRange(null)
+                }}
               />
-              <div className="flex justify-end gap-1.5">
-                <Button variant="ghost" size="sm" onClick={() => setRange(null)}>
-                  {t('Cancel')}
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={!draft.trim()}
-                  onClick={() => {
-                    onAdd(range.end, range.start < range.end ? range.start : undefined, draft.trim())
-                    setDraft('')
-                    setRange(null)
-                  }}
-                >
-                  {t('Add to review')}
-                </Button>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </td>
       </tr>
     )
@@ -210,7 +257,7 @@ function FileDiff({
       </p>
     )
   return (
-    <div className="overflow-x-auto rounded-b-(--radius-m) border-x border-b border-line">
+    <div className="@container overflow-x-auto rounded-b-(--radius-m) border-x border-b border-line">
       <table className="w-full min-w-max border-collapse font-mono text-[12px] leading-[20px]">
         <tbody>
           {rows.map((row, index) =>
@@ -227,24 +274,44 @@ function FileDiff({
                     'group/line',
                     row.kind === 'add' && 'bg-[color-mix(in_srgb,var(--ok)_12%,transparent)]',
                     row.kind === 'del' && 'bg-[color-mix(in_srgb,var(--bad)_12%,transparent)]',
-                    inRange(row.new) && 'bg-[color-mix(in_srgb,var(--brand)_18%,transparent)]!',
+                    inRange(row.new) && 'bg-(--accent-wash)!',
                   )}
+                  onPointerEnter={() => {
+                    if (dragging.current && row.new !== undefined) extend(row.new)
+                  }}
                 >
-                  <td className="w-[1%] select-none px-2.5 text-right align-top text-muted-foreground/70 tabular-nums">
+                  <td
+                    className={cn(
+                      'w-[1%] px-2.5 text-right align-top text-muted-foreground/70 tabular-nums select-none',
+                      inRange(row.new) && 'shadow-[inset_3px_0_0_var(--brand)]',
+                    )}
+                  >
                     {row.old ?? ''}
                   </td>
-                  <td className="relative w-[1%] select-none px-2.5 text-right align-top text-muted-foreground/70 tabular-nums">
-                    {canComment && row.new !== undefined && (
+                  <td
+                    className={cn(
+                      'relative w-[1%] px-2.5 text-right align-top text-muted-foreground/70 tabular-nums select-none',
+                      canComment && row.new !== undefined && 'cursor-pointer hover:text-foreground',
+                      inRange(row.new) && 'text-foreground',
+                    )}
+                    onPointerDown={row.new === undefined ? undefined : (event) => press(row.new!, event)}
+                  >
+                    {canComment && row.new !== undefined && !inRange(row.new) && (
                       <Button
                         variant="default"
                         size="icon-xs"
-                        className={cn(
-                          'absolute top-0.5 -right-2 z-1 size-4 rounded-sm p-0 opacity-0 group-hover/line:opacity-100 focus-visible:opacity-100',
-                          inRange(row.new) && 'opacity-100',
-                        )}
+                        className="absolute top-0.5 -right-2 z-1 size-4 rounded-sm p-0 opacity-0 group-hover/line:opacity-100 focus-visible:opacity-100"
                         aria-label={t('Comment on line {0}', { '0': row.new })}
-                        title={t('Comment on line {0}. Shift-click to comment on a block.', { '0': row.new })}
-                        onClick={(event) => pick(row.new!, event)}
+                        title={t('Click or drag to comment on lines')}
+                        onPointerDown={(event) => {
+                          event.stopPropagation()
+                          press(row.new!, event)
+                        }}
+                        // Pointer presses are handled above; this is the keyboard's way in, Shift extending the block.
+                        onClick={(event) => {
+                          if (event.detail === 0 && pick(row.new!, event.shiftKey))
+                            requestAnimationFrame(() => input.current?.focus())
+                        }}
                       >
                         <Plus size={11} />
                       </Button>
@@ -257,7 +324,7 @@ function FileDiff({
                       wrap ? 'whitespace-pre-wrap [overflow-wrap:anywhere]' : 'whitespace-pre',
                     )}
                   >
-                    <span className="mr-2 inline-block w-2 select-none text-muted-foreground">
+                    <span className="mr-2 inline-block w-2 text-muted-foreground select-none">
                       {row.kind === 'add' ? '+' : row.kind === 'del' ? '−' : ''}
                     </span>
                     {row.kind === 'note' ? <span className="text-muted-foreground">{row.text}</span> : row.text || ' '}

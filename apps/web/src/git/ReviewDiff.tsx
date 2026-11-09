@@ -219,7 +219,7 @@ export function ReviewDiff({
                 range: new monaco.Range(line, 1, line, 1),
                 options: {
                   glyphMarginClassName: 'review-add-glyph',
-                  glyphMarginHoverMessage: { value: 'Click or drag to comment on lines' },
+                  glyphMarginHoverMessage: { value: t('Click or drag to comment on lines') },
                 },
               },
             ])
