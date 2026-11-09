@@ -92,6 +92,30 @@ export async function ensureRuntime(
   throw new Error(`Background service could not start. See ${join(userData, 'background.log')}`)
 }
 /**
+ * Waits for a service told to restart to let go of its socket. It drains running agents and jobs first and stops
+ * answering while it does, so an unanswered call does not mean it is gone; it removes its socket file last.
+ */
+export async function waitForRuntimeExit(socketPath: string, timeoutMs = 120_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  try {
+    while (existsSync(socketPath)) {
+      if (Date.now() > deadline)
+        throw new Error('The background service is still stopping its running agents. Open Ramu again in a moment.')
+      // A fresh connection each time, so a refused one is reported at once rather than retried on the old one.
+      forgetHostSocket({ kind: 'socket', path: socketPath })
+      try {
+        await runtimeInvoke(socketPath, 'background.status', [], { timeoutMs: 1000 })
+      } catch (error) {
+        // A socket file nothing listens on is left from a service that has already exited.
+        if (['ECONNREFUSED', 'ENOENT'].includes((error as NodeJS.ErrnoException).code ?? '')) return
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    }
+  } finally {
+    forgetHostSocket({ kind: 'socket', path: socketPath })
+  }
+}
+/**
  * The installed app, so the service can open it to show a pairing request while it is closed. Development runs
  * (`electron .`) leave it out: their executable is a bare Electron.
  */

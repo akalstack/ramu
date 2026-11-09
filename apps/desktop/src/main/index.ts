@@ -86,7 +86,7 @@ import type { DeviceOs } from '@ramu/shared/types'
 import { ComputerBroadcaster } from './computerBroadcast'
 import { ComputerRegistry, LOCAL } from './computers'
 import { BrowserImporter, type ImportSourceId } from './browserImport'
-import { ensureRuntime, loginService, loginEnabled, loginPreferred } from './runtimeLauncher'
+import { ensureRuntime, waitForRuntimeExit, loginService, loginEnabled, loginPreferred } from './runtimeLauncher'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'ramu-content', privileges: { standard: true, secure: true } },
@@ -173,14 +173,7 @@ async function main() {
       unloadLoginService(userData)
     }
     await runtimeInvoke(runtime, 'background.restart').catch(() => {})
-    for (let attempt = 0; attempt < 300; attempt++) {
-      try {
-        await runtimeInvoke(runtime, 'background.status')
-      } catch {
-        break
-      }
-      await new Promise((resolve) => setTimeout(resolve, 100))
-    }
+    await waitForRuntimeExit(runtime)
     await ensureRuntime(userData, daemonPath)
     if (startup) loginService(userData, daemonPath, true)
   }
