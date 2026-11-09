@@ -1,8 +1,9 @@
-import type { CSSProperties } from 'react'
 import { Laptop, Server, Smartphone, Tablet } from 'lucide-react'
 import type { DeviceOs } from '@ramu/shared/types'
 import { guessForm, osMark, type OsMark } from '@ramu/shared/deviceOs'
+import { useResolvedAppearance } from '../appearance'
 import apple from '../assets/os/apple.svg'
+import appleDark from '../assets/os/apple-dark.svg'
 import android from '../assets/os/android.svg'
 import ubuntu from '../assets/os/ubuntu.svg'
 import debian from '../assets/os/debian.svg'
@@ -38,23 +39,15 @@ export function DeviceIcon({ os, name = '', size = 16 }: { os?: DeviceOs; name?:
   const Shape = SHAPES[os?.form ?? guessForm(name)]
   const mark = osMark(os)
   const badge = Math.round(size * 0.7)
-  const style: CSSProperties | undefined = mark
-    ? {
-        width: badge,
-        height: badge,
-        backgroundColor: 'currentColor',
-        maskImage: `url("${MARKS[mark]}")`,
-        maskSize: 'contain',
-        maskRepeat: 'no-repeat',
-        maskPosition: 'center',
-      }
-    : undefined
+  const appearance = useResolvedAppearance()
+  // Each OS mark keeps its own colors; Apple's black mark turns white on dark surfaces.
+  const src = mark && (mark === 'apple' && appearance === 'dark' ? appleDark : MARKS[mark])
   return (
     <span className="relative inline-flex flex-none" aria-hidden="true">
       <Shape size={size} />
-      {style && (
-        <span className="absolute -right-1.5 -bottom-1.5 flex items-center justify-center rounded-full bg-raised p-[1.5px] text-foreground">
-          <span className="block" style={style} />
+      {src && (
+        <span className="absolute -right-1.5 -bottom-1.5 flex items-center justify-center rounded-full bg-raised p-[1.5px]">
+          <img src={src} alt="" draggable={false} className="block object-contain" width={badge} height={badge} />
         </span>
       )}
     </span>

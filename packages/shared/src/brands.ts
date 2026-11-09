@@ -1,5 +1,5 @@
 // Which brand mark the desktop, the phone and the site show beside a forge, platform or service's name.
-import type { AccountPlatform, MediaService } from './types/deploy'
+import type { AccountPlatform } from './types/deploy'
 import type { ForgeService } from './types/forge'
 
 /** Every brand whose mark ships in `apps/web/src/assets/brands/`. */
@@ -22,6 +22,9 @@ export const BRAND_IDS = [
   'googleplay',
   'grafana',
   'salesforce',
+  'gemini',
+  'openai',
+  'elevenlabs',
 ] as const
 
 export type BrandId = (typeof BRAND_IDS)[number]
@@ -40,11 +43,12 @@ export function forgeBrand(service: ForgeService): BrandId {
   return FORGE_BRANDS[service]
 }
 
-/** The mark beside a hosting account: the platform's own; none for a service without a mark here. */
+/** The mark beside an account: the platform's own; none for a service without a mark here. */
 export function accountBrand(platform: AccountPlatform): BrandId | undefined {
-  // Amplitude's mark is not in Simple Icons and its guidelines are for its partners, so it shows the generic shape; so do
-  // the media services, whose marks are only listed beside their names.
-  if (platform === 'amplitude' || platform === 'gemini' || platform === 'elevenlabs' || platform === 'openai')
-    return undefined
-  return platform as Exclude<AccountPlatform, 'amplitude' | MediaService>
+  // Amplitude's mark is in neither SVGL nor Simple Icons and its guidelines are for its partners, so it shows the
+  // generic shape.
+  if (platform === 'amplitude') return undefined
+  // Typed, so a new account platform without a mark fails here rather than showing nothing.
+  const brand: BrandId = platform
+  return brand
 }

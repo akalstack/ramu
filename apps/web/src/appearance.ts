@@ -64,5 +64,6 @@ export function useAppearance() {
 }
 
 export function useResolvedAppearance() {
-  return useSyncExternalStore(subscribeAppearance, resolvedAppearance)
+  // Marks drawn in static markup (tests, prerendered pages) read the same appearance.
+  return useSyncExternalStore(subscribeAppearance, resolvedAppearance, resolvedAppearance)
 }

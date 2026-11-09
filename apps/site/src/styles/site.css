@@ -529,16 +529,6 @@ main > section {
   box-shadow: inset 0 0 0 1px var(--line-strong);
   border-radius: 28%;
 }
-.logo-claude {
-  color: #d97757;
-}
-.logo-mark {
-  display: block;
-  background: currentColor;
-  mask-size: contain;
-  mask-repeat: no-repeat;
-  mask-position: center;
-}
 .logo-tile img {
   display: block;
   object-fit: contain;

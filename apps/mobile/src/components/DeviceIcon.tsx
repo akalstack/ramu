@@ -1,10 +1,9 @@
-import { useMemo } from 'react'
 import { View } from 'react-native'
 import { SvgXml } from 'react-native-svg'
 import { Laptop, Server, Smartphone, Tablet } from 'lucide-react-native'
 import type { DeviceOs } from '@ramu/shared/types'
 import { guessForm, osMark } from '@ramu/shared/deviceOs'
-import { svgs } from '../assets/svgs'
+import { markXml } from './Logos'
 import { useTheme } from '../theme'
 
 const SHAPES = { phone: Smartphone, tablet: Tablet, computer: Laptop, server: Server }
@@ -14,15 +13,12 @@ const SHAPES = { phone: Smartphone, tablet: Tablet, computer: Laptop, server: Se
  * Mac, an Ubuntu server). A device that has not said what it runs on shows its shape alone, guessed from its name.
  */
 export function DeviceIcon({ os, name = '', size = 17 }: { os?: DeviceOs; name?: string; size?: number }) {
-  const { c } = useTheme()
+  const { c, scheme } = useTheme()
   const Shape = SHAPES[os?.form ?? guessForm(name)]
   const mark = osMark(os)
   const badge = Math.round(size * 0.68)
-  // The marks set their color through a missing fill; it is written in so they follow the theme.
-  const xml = useMemo(
-    () => (mark ? svgs[`os:${mark}`].replace(/<path\b/g, `<path fill="${c.text}"`) : null),
-    [mark, c.text],
-  )
+  // Each OS mark keeps its own colors; Apple's black mark turns white on dark surfaces.
+  const xml = mark ? markXml(`os:${mark}`, scheme) : undefined
   return (
     <View>
       <Shape size={size} color={c.soft} strokeWidth={1.8} />

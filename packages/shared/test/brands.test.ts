@@ -6,11 +6,16 @@ import { SOURCE_DEFAULTS } from '../src/webhooks'
 const brandFile = (id: string) => new URL(`../../../apps/web/src/assets/brands/${id}.svg`, import.meta.url)
 
 describe('brand marks', () => {
-  it('ships a one-color mark for every brand, so the desktop, phone and site never miss one', () => {
+  it('ships every brand’s own full-color mark, with a version for dark surfaces where the mark is black', () => {
     for (const id of BRAND_IDS) {
       expect(existsSync(brandFile(id)), id).toBe(true)
-      // A fixed fill would ignore the theme's color when drawn as a mask tint on the phone.
-      expect(readFileSync(brandFile(id), 'utf8'), id).not.toMatch(/fill="#/)
+      const svg = readFileSync(brandFile(id), 'utf8')
+      // The files are drawn as images on the desktop, the phone and the site: nothing in them may run or load.
+      expect(svg, id).not.toMatch(/<script|<foreignObject|\son[a-z]+=|href="(?!#)/i)
+      // A mark with no color of its own would draw black, unreadable on dark surfaces, unless a dark version ships.
+      const colored =
+        /fill(?:="|:)\s*#(?!0{3}\b|0{6}\b|000020\b|1b1f23\b)|stop-color|linearGradient|radialGradient/i.test(svg)
+      expect(colored || existsSync(brandFile(`${id}-dark`)), id).toBe(true)
     }
   })
 

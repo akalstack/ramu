@@ -1,6 +1,6 @@
 // Copies the desktop's brand and provider SVGs into a TS module for react-native-svg.
 // Run after changing assets/wordmark.svg or the SVGs in apps/web/src/assets/providers, os or brands.
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 
 const root = new URL('../../../', import.meta.url)
 const read = (path) => readFileSync(new URL(path, root), 'utf8')
@@ -27,21 +27,29 @@ const clean = (svg) =>
     .replace(/\s+/g, ' ')
     .trim()
 
+// A mark in its own colors, plus its version for dark surfaces under `<key>:dark` when the mark is black.
+const mark = (key, path) => {
+  const dark = path.replace(/\.svg$/, '-dark.svg')
+  return [[key, clean(read(path))], ...(existsSync(new URL(dark, root)) ? [[`${key}:dark`, clean(read(dark))]] : [])]
+}
+
 const svgs = {
   wordmark: clean(read('assets/wordmark.svg')),
-  'claude-code': clean(read('apps/web/src/assets/providers/claude.svg')),
-  codex: clean(read('apps/web/src/assets/providers/openai.svg')),
-  opencode: clean(read('apps/web/src/assets/providers/opencode.svg')),
-  cursor: clean(read('apps/web/src/assets/providers/cursor.svg')),
-  antigravity: clean(read('apps/web/src/assets/providers/antigravity.svg')),
+  ...Object.fromEntries([
+    ...mark('claude-code', 'apps/web/src/assets/providers/claude.svg'),
+    ...mark('codex', 'apps/web/src/assets/providers/openai.svg'),
+    ...mark('opencode', 'apps/web/src/assets/providers/opencode.svg'),
+    ...mark('cursor', 'apps/web/src/assets/providers/cursor.svg'),
+    ...mark('antigravity', 'apps/web/src/assets/providers/antigravity.svg'),
+  ]),
   // Operating system marks shared with the desktop's device icons (Simple Icons, CC0).
   ...Object.fromEntries(
-    ['apple', 'android', 'ubuntu', 'debian', 'fedora', 'arch', 'mint', 'redhat', 'raspberrypi', 'linux', 'windows'].map(
-      (mark) => [`os:${mark}`, clean(read(`apps/web/src/assets/os/${mark}.svg`))],
-    ),
+    ['apple', 'android', 'ubuntu', 'debian', 'fedora', 'arch', 'mint', 'redhat', 'raspberrypi', 'linux', 'windows']
+      .map((os) => mark(`os:${os}`, `apps/web/src/assets/os/${os}.svg`))
+      .flat(),
   ),
   // Forge, hosting and service marks shared with the desktop's BrandIcon (see apps/web/src/assets/brands/SOURCES.md).
-  ...Object.fromEntries(BRAND_IDS.map((id) => [`brand:${id}`, clean(read(`apps/web/src/assets/brands/${id}.svg`))])),
+  ...Object.fromEntries(BRAND_IDS.flatMap((id) => mark(`brand:${id}`, `apps/web/src/assets/brands/${id}.svg`))),
 }
 
 const body = Object.entries(svgs)

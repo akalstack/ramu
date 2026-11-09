@@ -1,9 +1,10 @@
-// The desktop's own marks, bundled at build time so the site never keeps copies that drift.
+// The desktop's own marks, bundled at build time so the site never keeps copies that drift. The site is dark, so it
+// takes each mark's version for dark surfaces.
 import antigravityLogo from '../../../web/src/assets/providers/antigravity.svg?url'
 import claudeLogo from '../../../web/src/assets/providers/claude.svg?url'
-import cursorLogo from '../../../web/src/assets/providers/cursor.svg?url'
-import openaiLogo from '../../../web/src/assets/providers/openai.svg?url'
-import opencodeLogo from '../../../web/src/assets/providers/opencode.svg?url'
+import cursorLogo from '../../../web/src/assets/providers/cursor-dark.svg?url'
+import openaiLogo from '../../../web/src/assets/providers/openai-dark.svg?url'
+import opencodeLogo from '../../../web/src/assets/providers/opencode-dark.svg?url'
 
 export const REPO = 'https://github.com/akalstack/ramu'
 export const AKALSTACK = 'https://akalstack.com'

@@ -997,14 +997,6 @@ kbd {
   }
 }
 
-/* Model picker: provider/favorite rail beside a searchable list. */
-.provider-icon.claude {
-  @apply [color:#d97757];
-}
-.provider-icon.codex {
-  @apply text-soft;
-}
-
 /* Switch thumb: placed by coordinates, so nothing about flex or line height can shift it. */
 /* A step between the canvas and the composer, so the box reads as resting on the tray. */
 :root {
