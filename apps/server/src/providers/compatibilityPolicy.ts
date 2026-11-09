@@ -7,7 +7,7 @@ import type { AgentProvider } from '@ramu/shared/types'
  * guessed to fill a matrix. Rules are exact releases until a wider range has been tested.
  */
 export const COMPATIBILITY_POLICY: CompatibilityPolicy = {
-  revision: 8,
+  revision: 9,
   rules: [
     {
       id: 'claude-code-sdk-2.1.308',
@@ -129,6 +129,17 @@ export const COMPATIBILITY_POLICY: CompatibilityPolicy = {
       evidence:
         "Google's antigravity-acp 1.4.3 (agy_acp_server.par as Ramu downloads it) on macOS, 2026-11-08: ACP initialize answered protocol version 1 with agentInfo 1.4.3, loadSession, session list and resume, and its four sign-in methods, with no model call and no sign-in.",
     },
+    {
+      id: 'cursor-acp-2026.11.05',
+      provider: 'cursor',
+      runtime: 'acp',
+      // Cursor numbers releases by date; builds of one day cannot be ordered apart, so the rule spans that day.
+      min: '2026.11.05-86047df',
+      below: '2026.11.06-0',
+      status: 'supported',
+      evidence:
+        'Cursor Agent 2026.11.05-86047df (from cursor.com/install, the script Ramu runs) on macOS, 2026-11-09: `cursor-agent acp` answered ACP initialize with protocol version 1, loadSession, session list, image prompts and its Cursor Login method, with no model call and no sign-in.',
+    },
   ],
 }
 
@@ -138,4 +149,5 @@ export const COMPATIBILITY_RUNTIME: Partial<Record<AgentProvider, RuntimeKind>> 
   opencode: 'http',
   'claude-code': 'sdk',
   antigravity: 'acp',
+  cursor: 'acp',
 }

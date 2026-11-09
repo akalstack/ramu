@@ -4,7 +4,7 @@ import { COMPATIBILITY_POLICY, COMPATIBILITY_RUNTIME } from '../src/providers/co
 
 it('the bundled policy is valid and only audited runtimes are evaluated', () => {
   expect(validatePolicy(COMPATIBILITY_POLICY)).toEqual([])
-  expect(Object.keys(COMPATIBILITY_RUNTIME)).toEqual(['codex', 'opencode', 'claude-code', 'antigravity'])
+  expect(Object.keys(COMPATIBILITY_RUNTIME)).toEqual(['codex', 'opencode', 'claude-code', 'antigravity', 'cursor'])
 })
 
 it('marks the exact Codex release that was probed as supported and every other release unverified', () => {
@@ -53,4 +53,12 @@ it('evaluates the Antigravity ACP runtime it was probed on, and leaves other rel
   expect(evaluate('1.4.3')).toMatchObject({ status: 'supported', ruleId: 'antigravity-acp-1.4.3' })
   expect(evaluate('1.4.4').status).toBe('unverified')
   expect(evaluate(null).status).toBe('unverified')
+})
+
+it('evaluates the Cursor build it was probed on by its date-style version', () => {
+  const evaluate = (version: string | null) =>
+    evaluateCompatibility(COMPATIBILITY_POLICY, 'cursor', COMPATIBILITY_RUNTIME.cursor!, version)
+  expect(evaluate('2026.11.05-86047df')).toMatchObject({ status: 'supported', ruleId: 'cursor-acp-2026.11.05' })
+  expect(evaluate('2026.11.06-aaaaaaa').status).toBe('unverified')
+  expect(evaluate('2026.10.30-bbbbbbb').status).toBe('unverified')
 })
