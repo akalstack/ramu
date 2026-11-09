@@ -6218,8 +6218,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Runs the project’s own app.config code on this computer to read the configuration it computes':
     'Menjalankan kode app.config proyek di komputer ini untuk membaca konfigurasi yang dihitungnya',
   'Create a fine-grained token on GitHub': 'Buat token fine-grained di GitHub',
-  'Paste tokens on the machine running this host. Vercel, Netlify and Railway can also be signed in from here: their sign-in runs on the host and keeps the token there.':
-    'Tempel token di mesin yang menjalankan host ini. Vercel, Netlify, dan Railway juga bisa login dari sini: proses loginnya berjalan di host dan tokennya tetap di sana.',
+  'Paste tokens on the machine running this host. Vercel, Netlify, Railway and Expo can also be signed in from here: their sign-in runs on the host and keeps the token there.':
+    'Tempel token di mesin yang menjalankan host ini. Vercel, Netlify, Railway, dan Expo juga bisa login dari sini: proses loginnya berjalan di host dan tokennya tetap di sana.',
   'Cloudflare token with DNS edit, used once': 'Token Cloudflare dengan DNS edit, dipakai sekali',
   'DNS at Cloudflare? Create them there…': 'DNS di Cloudflare? Buat di sana…',
   'Next: push {0}, or merge a pull request into it, and the platform builds the first deployment. The project’s latest thread hears how it went.':

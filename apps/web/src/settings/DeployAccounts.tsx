@@ -127,7 +127,7 @@ export function DeployAccounts({ only }: { only?: HostingAccount['kind'] } = {})
                 'Paste API keys in Ramu on the machine running this host. The key stays in that host’s credential store.',
               )
             : t(
-                'Paste tokens on the machine running this host. Vercel, Netlify and Railway can also be signed in from here: their sign-in runs on the host and keeps the token there.',
+                'Paste tokens on the machine running this host. Vercel, Netlify, Railway and Expo can also be signed in from here: their sign-in runs on the host and keeps the token there.',
               )}
         </p>
       )}
@@ -436,6 +436,21 @@ function DeployAccountRow({
                 </Button>
               </span>
             </form>
+          )}
+          {/* Without the token form (Salesforce, or a paired device), the panel still shows what failed and can be closed. */}
+          {(!canAdminister || account.platform === 'salesforce') && (
+            <>
+              {error && (
+                <p role="alert" className="m-0 text-destructive">
+                  {error}
+                </p>
+              )}
+              <span>
+                <Button type="button" variant="ghost" size="sm" onClick={close}>
+                  {t('Cancel')}
+                </Button>
+              </span>
+            </>
           )}
         </div>
       )}
