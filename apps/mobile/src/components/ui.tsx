@@ -417,7 +417,13 @@ export function SheetScrollView({
   const report = useContext(SheetScroll)
   return (
     <ScrollView
+      // A sheet that scrolls itself keeps the field being typed in above the keyboard; iOS's own sheet scroll does not
+      // know about text fields inside it.
+      automaticallyAdjustKeyboardInsets
+      keyboardDismissMode="interactive"
+      keyboardShouldPersistTaps="handled"
       {...props}
+      contentContainerStyle={[{ paddingBottom: space.l }, props.contentContainerStyle]}
       ref={ref}
       scrollEventThrottle={16}
       onScroll={(event) => {
@@ -483,9 +489,6 @@ function SheetBody({
           onScroll={onScroll}
           scrollEventThrottle={16}
           keyboardShouldPersistTaps="handled"
-          // iOS shows every sheet natively, so the keyboard lifts the content and keeps the line being typed in view.
-          automaticallyAdjustKeyboardInsets
-          keyboardDismissMode="interactive"
           bounces={false}
           style={{ flexGrow: 0 }}
           contentContainerStyle={{ paddingBottom: space.m }}

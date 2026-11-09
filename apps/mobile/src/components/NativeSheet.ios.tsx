@@ -45,8 +45,9 @@ export function NativeSheet({ open, onClose, title, children, scroll = true, pre
         style={{
           width: hosted.width,
           backgroundColor: c.window,
-          paddingBottom: space.l,
-          ...(scroll ? {} : { flex: 1 }),
+          // Content that scrolls itself reaches the sheet's bottom edge, so the line being typed can sit right above the
+          // keyboard instead of under a strip of padding.
+          ...(scroll ? { paddingBottom: space.l } : { flex: 1 }),
         }}
       >
         {children}

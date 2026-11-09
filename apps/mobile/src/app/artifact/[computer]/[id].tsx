@@ -2,7 +2,7 @@ import { NAMED_SERVICE_NAMES } from '@ramu/shared/types/deploy'
 import { joinedText, LiveTextEditor, syncLiveText } from '@ramu/shared/liveText'
 import { deckText, slideWords } from '@ramu/shared/deckText'
 import { caretAfter, changedAt, headingAt } from '@ramu/shared/editingPart'
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ComponentRef } from 'react'
 import { Alert, Image, PanResponder, Pressable, Share, Text, TextInput, View, useWindowDimensions } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react-native'
@@ -32,7 +32,7 @@ import { useStore } from '../../../runtime/store'
 import { useSay } from '../../../i18n'
 import { contentStorage } from '../../../storage'
 import { Header, HeaderButton, Screen } from '../../../components/Screen'
-import { Button, Card, IconButton, Row, SHEET_SETTLE_MS, Sheet, T } from '../../../components/ui'
+import { Button, Card, IconButton, Row, SHEET_SETTLE_MS, Sheet, SheetScrollView, T } from '../../../components/ui'
 import InteractiveFrame from '../../../components/InteractiveFrame'
 import { ArtifactSettings } from '../../../components/ArtifactSettings'
 import MotionVideo from '../../../components/MotionVideo'
@@ -89,24 +89,35 @@ function BlockInput({
   text: string
   onChangeText: (text: string) => void
 }) {
+  const input = useRef<ComponentRef<typeof TextInput>>(null)
   // What this box last typed, so only text from elsewhere moves the caret; and where the caret is while focused.
   const sent = useRef(text)
   const caret = useRef<Caret | null>(null)
   const [shown, setShown] = useState(text)
-  const [selection, setSelection] = useState<Caret | undefined>(undefined)
+  const [moveTo, setMoveTo] = useState<Caret | null>(null)
   if (text !== shown) {
     setShown(text)
     const at = caret.current
     if (text !== sent.current && at)
-      setSelection({ start: caretAfter(shown, text, at.start), end: caretAfter(shown, text, at.end) })
+      setMoveTo({ start: caretAfter(shown, text, at.start), end: caretAfter(shown, text, at.end) })
   }
+  // Placed a frame after the merged text lands: iOS applies the new text after any selection sent with it, and moving
+  // the caret again for that text would undo the placement.
+  useEffect(() => {
+    if (!moveTo) return
+    const frame = requestAnimationFrame(() => {
+      input.current?.setSelection(moveTo.start, moveTo.end)
+      caret.current = moveTo
+      setMoveTo(null)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [moveTo])
   return (
     <TextInput
       {...props}
-      selection={selection}
+      ref={input}
       onSelectionChange={(event) => {
         caret.current = event.nativeEvent.selection
-        if (selection) setSelection(undefined)
       }}
       onBlur={() => {
         caret.current = null
@@ -1160,9 +1171,15 @@ export default function PageScreen() {
           ))}
         </View>
       </Sheet>
-      <Sheet presentation="screen" open={!!editing} onClose={() => setEditing(null)} title={say('Edit text')}>
+      <Sheet
+        presentation="screen"
+        scroll={false}
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title={say('Edit text')}
+      >
         {editing ? (
-          <View style={{ padding: space.l, gap: space.m, flex: 1 }}>
+          <SheetScrollView contentContainerStyle={{ padding: space.l, gap: space.m }}>
             {page?.kind === 'doc' ? (
               <Button
                 title={editing.blocks ? say('Edit Markdown') : say('Edit as formatted text')}
@@ -1300,7 +1317,7 @@ export default function PageScreen() {
                   .finally(() => setSavingEdit(false))
               }}
             />
-          </View>
+          </SheetScrollView>
         ) : null}
       </Sheet>
       <Sheet open={playing} onClose={() => setPlaying(false)} title={page?.title ?? say('Play as video')}>
@@ -1324,9 +1341,10 @@ export default function PageScreen() {
         open={!!editingLabels}
         onClose={() => setEditingLabels(null)}
         title={say('Edit labels')}
+        scroll={false}
       >
         {editingLabels ? (
-          <View style={{ padding: space.l, gap: space.m }}>
+          <SheetScrollView contentContainerStyle={{ padding: space.l, gap: space.m }}>
             {editingLabels.labels.map((label, index) => (
               <TextInput
                 key={index}
@@ -1362,7 +1380,7 @@ export default function PageScreen() {
                   .finally(() => setSavingEdit(false))
               }}
             />
-          </View>
+          </SheetScrollView>
         ) : null}
       </Sheet>
       <Sheet
@@ -1370,9 +1388,10 @@ export default function PageScreen() {
         open={!!editingDesign}
         onClose={() => setEditingDesign(null)}
         title={say('Edit text')}
+        scroll={false}
       >
         {editingDesign ? (
-          <View style={{ padding: space.l, gap: space.l }}>
+          <SheetScrollView contentContainerStyle={{ padding: space.l, gap: space.l }}>
             {editingDesign.frames.map((frame, index) => (
               <View key={index} style={{ gap: space.s }}>
                 <T size={font.caption} tone="muted">
@@ -1429,7 +1448,7 @@ export default function PageScreen() {
                   .finally(() => setSavingEdit(false))
               }}
             />
-          </View>
+          </SheetScrollView>
         ) : null}
       </Sheet>
       <Sheet
@@ -1437,9 +1456,10 @@ export default function PageScreen() {
         open={!!editingSlides}
         onClose={() => setEditingSlides(null)}
         title={say('Edit text')}
+        scroll={false}
       >
         {editingSlides ? (
-          <View style={{ padding: space.l, gap: space.l }}>
+          <SheetScrollView contentContainerStyle={{ padding: space.l, gap: space.l }}>
             {editingSlides.slides.map((slide, index) => {
               const change = (patch: Partial<Slide>) => {
                 partNow.current = say('Slide {number}', { number: index + 1 })
@@ -1562,7 +1582,7 @@ export default function PageScreen() {
                   .finally(() => setSavingEdit(false))
               }}
             />
-          </View>
+          </SheetScrollView>
         ) : null}
       </Sheet>
       {page && pending.length ? (
