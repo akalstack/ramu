@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { keptPullRequestRead } from './keptPullRequests'
 import { useQueries } from '@tanstack/react-query'
 import {
   ArrowLeft,
@@ -83,6 +84,7 @@ function useHostsPullRequests(includeClosed: boolean, enabled = true) {
     queries: hosts.map((host) => ({
       queryKey: ipcQueryKeyOn(host.id, 'forge.allPullRequests', includeClosed),
       queryFn: () => queryInvokerFor(host.id)('forge.allPullRequests', includeClosed, false),
+      ...keptPullRequestRead(host.id, 'forge.allPullRequests', includeClosed),
       // An offline host is named on the page instead; it lists again once it is back.
       enabled: enabled && host.status === 'connected',
       refetchInterval: () => (document.hasFocus() ? 120_000 : false),

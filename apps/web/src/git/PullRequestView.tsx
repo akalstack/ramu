@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { keptPullRequestRead } from './keptPullRequests'
 import { PullRequestTimeline } from './PullRequestTimeline'
 import { PullRequestFiles, usePullRequestFiles } from './PullRequestFiles'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -109,12 +110,14 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
   const list = useQuery({
     queryKey: ipcQueryKeyOn(host.id, 'forge.pullRequests', taskId, view.repoId, false),
     queryFn: () => call('forge.pullRequests', taskId, view.repoId, false, false),
+    ...keptPullRequestRead(host.id, 'forge.pullRequests', taskId, view.repoId, false),
     refetchInterval: () => (document.hasFocus() ? 60_000 : false),
   })
   const inOpen = list.data?.pullRequests.find((pr) => pr.url === view.url)
   const closedList = useQuery({
     queryKey: ipcQueryKeyOn(host.id, 'forge.pullRequests', taskId, view.repoId, true),
     queryFn: () => call('forge.pullRequests', taskId, view.repoId, true, false),
+    ...keptPullRequestRead(host.id, 'forge.pullRequests', taskId, view.repoId, true),
     enabled: list.isSuccess && !inOpen,
   })
   const pr: PullRequestSummary | undefined =
@@ -125,15 +128,18 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
   const drafts = useQuery({
     queryKey: ipcQueryKeyOn(host.id, 'forge.drafts', view.url),
     queryFn: () => call('forge.drafts', view.url),
+    ...keptPullRequestRead(host.id, 'forge.drafts', view.url),
   })
   const description = useQuery({
     queryKey: ipcQueryKeyOn(host.id, 'forge.pullRequestDescription', taskId, view.repoId, view.url),
     queryFn: () => call('forge.pullRequestDescription', taskId, view.repoId, view.url),
+    ...keptPullRequestRead(host.id, 'forge.pullRequestDescription', taskId, view.repoId, view.url),
     staleTime: 60_000,
   })
   const threads = useQuery({
     queryKey: ipcQueryKeyOn(host.id, 'forge.reviewThreads', taskId, view.repoId, view.url),
     queryFn: () => call('forge.reviewThreads', taskId, view.repoId, view.url),
+    ...keptPullRequestRead(host.id, 'forge.reviewThreads', taskId, view.repoId, view.url),
     enabled: !!pr,
   })
   const { refetch: refetchDrafts } = drafts

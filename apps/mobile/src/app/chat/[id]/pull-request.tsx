@@ -50,6 +50,7 @@ import { ReviewDrafts } from '../../../components/ReviewDrafts'
 import { PeopleSheet, PullRequestComments, ReactionRow } from '../../../components/PullRequestComments'
 import { supportsPullRequest } from '@ramu/shared/pullRequestSupport'
 import type { ForgeService, PullRequestWrite } from '@ramu/shared/types'
+import { pullRequestCopy } from '../../../runtime/pullRequestCopy'
 
 const METHOD_LABEL: Record<MergeMethod, string> = {
   squash: 'Squash and merge',
@@ -120,17 +121,37 @@ export default function PullRequestScreen() {
   const projectId = chat?.projectId ? rawId(chat.projectId) : (params.project ?? null)
   const computer = store.computers.find((pc) => pc.id === computerId)
   const canWrite = canWriteHost(computer)
-  const [list, setList] = useState<PullRequestList | null>(null)
-  const [pr, setPr] = useState<PullRequestSummary | null>(null)
-  const [batch, setBatch] = useState<PullRequestDraftBatch | null>(null)
-  const [threads, setThreads] = useState<PullRequestThread[] | null>(null)
+  // What this phone last read of this pull request, so the screen opens on it and then reads again.
+  const [kept] = useState(() => {
+    if (!computerId || !taskId) return null
+    const read = pullRequestCopy.read
+    const open = read(computerId, 'forge.pullRequests', taskId, repoId, false, false)
+    const inOpen = open?.pullRequests.find((entry) => entry.url === url)
+    const list = inOpen ? open : read(computerId, 'forge.pullRequests', taskId, repoId, true, false)
+    const found = inOpen ?? list?.pullRequests.find((entry) => entry.url === url)
+    if (!list || !found) return null
+    return {
+      list,
+      pr: found,
+      batch: read(computerId, 'forge.drafts', url) ?? null,
+      threads: read(computerId, 'forge.reviewThreads', taskId, repoId, url) ?? null,
+      description: read(computerId, 'forge.pullRequestDescription', taskId, repoId, url) ?? null,
+      timeline: read(computerId, 'forge.pullRequestTimeline', taskId, repoId, url) ?? null,
+      files: read(computerId, 'forge.pullRequestFiles', taskId, repoId, url) ?? null,
+    }
+  })
+  const [list, setList] = useState<PullRequestList | null>(kept?.list ?? null)
+  const [pr, setPr] = useState<PullRequestSummary | null>(kept?.pr ?? null)
+  const [batch, setBatch] = useState<PullRequestDraftBatch | null>(kept?.batch ?? null)
+  const [threads, setThreads] = useState<PullRequestThread[] | null>(kept?.threads ?? null)
   const [threadsError, setThreadsError] = useState<string | null>(null)
-  const [description, setDescription] = useState<string | null>(null)
-  const [files, setFiles] = useState<{ files: PullRequestFile[]; more: boolean } | null>(null)
+  const [description, setDescription] = useState<string | null>(kept?.description ?? null)
+  const [files, setFiles] = useState<{ files: PullRequestFile[]; more: boolean } | null>(kept?.files ?? null)
   const [tab, setTab] = useState<'overview' | 'files'>('overview')
-  const [timeline, setTimeline] = useState<PullRequestTimelineEvent[] | null>(null)
+  const [timeline, setTimeline] = useState<PullRequestTimelineEvent[] | null>(kept?.timeline ?? null)
   const [timelineOpen, setTimelineOpen] = useState(false)
-  const [loaded, setLoaded] = useState(false)
+  // Kept data shows at once; only a pull request this phone never read waits on the spinner.
+  const [loaded, setLoaded] = useState(!!kept)
   const [refreshing, setRefreshing] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -147,11 +168,14 @@ export default function PullRequestScreen() {
       if (!computerId || !taskId) return
       if (force) await store.invoke(computerId, 'forge.pullRequests', taskId, repoId, false, true).catch(() => {})
       try {
+        const keep = pullRequestCopy.keep
         let next = await store.invoke(computerId, 'forge.pullRequests', taskId, repoId, false, false)
+        keep(computerId, 'forge.pullRequests', next, taskId, repoId, false, false)
         let found = next.pullRequests.find((entry) => entry.url === url)
         // Merged and closed ones are only in the longer list.
         if (!found) {
           next = await store.invoke(computerId, 'forge.pullRequests', taskId, repoId, true, force)
+          keep(computerId, 'forge.pullRequests', next, taskId, repoId, true, false)
           found = next.pullRequests.find((entry) => entry.url === url)
         }
         setList(next)
@@ -163,6 +187,7 @@ export default function PullRequestScreen() {
             ? store.invoke(computerId, 'forge.reviewThreads', taskId, repoId, url).then(
                 (value) => {
                   setThreadsError(null)
+                  keep(computerId, 'forge.reviewThreads', value, taskId, repoId, url)
                   return value
                 },
                 (e: unknown) => {
@@ -172,21 +197,35 @@ export default function PullRequestScreen() {
               )
             : Promise.resolve(null),
         ])
+        if (drafts) keep(computerId, 'forge.drafts', drafts, url)
         setBatch(drafts)
-        setThreads(open)
+        // A thread read that failed keeps what was shown; its error says why.
+        if (open || !found) setThreads(open)
         // The description is extra: a host that cannot read it still shows everything else.
         if (found)
-          void store
-            .invoke(computerId, 'forge.pullRequestDescription', taskId, repoId, url)
-            .then(setDescription, () => setDescription(null))
+          void store.invoke(computerId, 'forge.pullRequestDescription', taskId, repoId, url).then(
+            (value) => {
+              keep(computerId, 'forge.pullRequestDescription', value, taskId, repoId, url)
+              setDescription(value)
+            },
+            () => setDescription(null),
+          )
         if (found)
-          void store
-            .invoke(computerId, 'forge.pullRequestTimeline', taskId, repoId, url)
-            .then(setTimeline, () => setTimeline(null))
+          void store.invoke(computerId, 'forge.pullRequestTimeline', taskId, repoId, url).then(
+            (value) => {
+              keep(computerId, 'forge.pullRequestTimeline', value, taskId, repoId, url)
+              setTimeline(value)
+            },
+            () => setTimeline(null),
+          )
         if (found)
-          void store
-            .invoke(computerId, 'forge.pullRequestFiles', taskId, repoId, url)
-            .then(setFiles, () => setFiles(null))
+          void store.invoke(computerId, 'forge.pullRequestFiles', taskId, repoId, url).then(
+            (value) => {
+              keep(computerId, 'forge.pullRequestFiles', value, taskId, repoId, url)
+              setFiles(value)
+            },
+            () => setFiles(null),
+          )
       } catch (e) {
         setError(message(e))
       } finally {
@@ -208,7 +247,10 @@ export default function PullRequestScreen() {
       timer = setTimeout(
         () =>
           void store.invoke(computerId, 'forge.drafts', url).then(
-            (drafts) => setBatch(drafts),
+            (drafts) => {
+              pullRequestCopy.keep(computerId, 'forge.drafts', drafts, url)
+              setBatch(drafts)
+            },
             () => {},
           ),
         400,

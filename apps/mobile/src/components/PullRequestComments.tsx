@@ -8,6 +8,7 @@ import { font, radius, space, useTheme } from '../theme'
 import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
 import { PullRequestMarkdown } from './PullRequestMarkdown'
+import { pullRequestCopy } from '../runtime/pullRequestCopy'
 import { Button, Card, IconButton, Sheet, T } from './ui'
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
@@ -130,7 +131,10 @@ export function PullRequestComments({
 }) {
   const say = useSay()
   const store = useStore()
-  const [comments, setComments] = useState<PullRequestConversationComment[] | null>(null)
+  // What this phone last read, shown while the comments are read again.
+  const [comments, setComments] = useState<PullRequestConversationComment[] | null>(
+    () => pullRequestCopy.read(computerId, 'forge.pullRequestConversation', taskId, repoId, url) ?? null,
+  )
   const [readError, setReadError] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [editing, setEditing] = useState<{ id: string; body: string } | null>(null)
@@ -139,6 +143,7 @@ export function PullRequestComments({
     () =>
       store.invoke(computerId, 'forge.pullRequestConversation', taskId, repoId, url).then(
         (list) => {
+          pullRequestCopy.keep(computerId, 'forge.pullRequestConversation', list, taskId, repoId, url)
           setComments(list)
           setReadError(null)
         },

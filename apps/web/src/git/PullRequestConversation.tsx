@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { keptPullRequestRead } from './keptPullRequests'
 import { useQuery } from '@tanstack/react-query'
 import { Pencil, SmilePlus, Trash2 } from 'lucide-react'
 import type { ForgeService, PullRequestReaction, PullRequestWrite } from '@ramu/shared/types'
@@ -82,6 +83,7 @@ export function PullRequestConversation({
   const comments = useQuery({
     queryKey: ipcQueryKeyOn(host.id, 'forge.pullRequestConversation', taskId, repoId, url),
     queryFn: () => call('forge.pullRequestConversation', taskId, repoId, url),
+    ...keptPullRequestRead(host.id, 'forge.pullRequestConversation', taskId, repoId, url),
   })
   const { refetch } = comments
   const { write, busy, error } = usePullRequestWrite(taskId, repoId, url, () => void refetch())

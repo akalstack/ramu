@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Linking, RefreshControl, ScrollView, TextInput, View } from 'react-native'
+import { ActivityIndicator, Linking, RefreshControl, ScrollView, TextInput, View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ExternalLink, GitPullRequest, MessageSquare, Search, X } from 'lucide-react-native'
 import type { ForgeService, RepositoryPullRequests } from '@ramu/shared/types'
@@ -28,6 +28,7 @@ import { Nothing } from '../../../components/InboxParts'
 import { Chip, Divider, IconButton, Row, SectionLabel, T, tap } from '../../../components/ui'
 import { ChecksLine, PullRequestGlyph, StageText } from '../../../components/PullRequestParts'
 import { unavailableText } from '../../../components/PullRequestSections'
+import { pullRequestCopy } from '../../../runtime/pullRequestCopy'
 
 type HostRow = PullRequestRow & { computerId: string; hostName: string }
 
@@ -61,9 +62,18 @@ export default function PullRequestsScreen() {
   const [sort, setSort] = useState<PullRequestSort>('updated')
   // Narrows to one hosting service when the hosts' repositories span several.
   const [service, setService] = useState<ForgeService | null>(null)
+  // Each host's lists as this phone last read them, so the page opens on them (an offline host's too) and reads again.
   const [lists, setLists] = useState<
     Record<string, { open?: RepositoryPullRequests[]; closed?: RepositoryPullRequests[] }>
-  >({})
+  >(() =>
+    Object.fromEntries(
+      store.computers.flatMap((pc) => {
+        const open = pullRequestCopy.read(pc.id, 'forge.allPullRequests', false, false)
+        const closed = pullRequestCopy.read(pc.id, 'forge.allPullRequests', true, false)
+        return open || closed ? [[pc.id, { open, closed }]] : []
+      }),
+    ),
+  )
   const [failed, setFailed] = useState<Record<string, string>>({})
   const [refreshing, setRefreshing] = useState(false)
   const online = store.computers.filter((pc) => pc.status === 'online')
@@ -74,6 +84,7 @@ export default function PullRequestsScreen() {
     async (computerId: string, force: boolean) => {
       try {
         const next = await store.invoke(computerId, 'forge.allPullRequests', closed, force)
+        pullRequestCopy.keep(computerId, 'forge.allPullRequests', next, closed, false)
         setLists((all) => ({ ...all, [computerId]: { ...all[computerId], [closed ? 'closed' : 'open']: next } }))
         setFailed(({ [computerId]: _gone, ...rest }) => rest)
       } catch (error) {
@@ -133,6 +144,9 @@ export default function PullRequestsScreen() {
       }))
       .filter((entry) => !!entry.text),
   )
+  // Only a page with nothing kept waits on a spinner; kept lists show while every host reads again.
+  const waiting =
+    !Object.values(lists).some((entry) => entry[closed ? 'closed' : 'open']) && online.some((pc) => !failed[pc.id])
   const anyReachable = Object.values(lists).some((entry) =>
     (entry.open ?? []).some((item) => item.availability === 'ready' && !item.error),
   )
@@ -350,6 +364,8 @@ export default function PullRequestsScreen() {
               )
             })}
           </View>
+        ) : waiting ? (
+          <ActivityIndicator color={c.muted} style={{ paddingVertical: space.xl }} />
         ) : (
           <Nothing
             icon={GitPullRequest}

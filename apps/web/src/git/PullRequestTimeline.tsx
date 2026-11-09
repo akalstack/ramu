@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { keptPullRequestRead } from './keptPullRequests'
 import { useQuery } from '@tanstack/react-query'
 import {
   ChevronRight,
@@ -185,6 +186,7 @@ export function PullRequestTimeline({ taskId, repoId, url }: { taskId: string; r
   const timeline = useQuery({
     queryKey: ipcQueryKeyOn(host.id, 'forge.pullRequestTimeline', taskId, repoId, url),
     queryFn: () => call('forge.pullRequestTimeline', taskId, repoId, url),
+    ...keptPullRequestRead(host.id, 'forge.pullRequestTimeline', taskId, repoId, url),
     staleTime: 60_000,
   })
   const rows = useMemo(() => entries(timeline.data ?? []), [timeline.data])

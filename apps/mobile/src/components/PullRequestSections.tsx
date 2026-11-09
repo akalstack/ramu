@@ -29,6 +29,7 @@ import { Button, Card, Sheet, T, tap } from './ui'
 import { SheetGroup, SheetOption } from './SheetOptions'
 import { CreatePullRequest } from './CreatePullRequest'
 import { ChecksLine, PullRequestGlyph, StageText } from './PullRequestParts'
+import { pullRequestCopy } from '../runtime/pullRequestCopy'
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
@@ -102,10 +103,18 @@ export function CurrentPullRequest({
   const store = useStore()
   const router = useRouter()
   const { c } = useTheme()
-  const [status, setStatus] = useState<ForgeStatus | null>(null)
+  // This branch's pull request as this phone last read it, so the card shows at once and then reads again.
+  const [kept] = useState(() => {
+    const saved = pullRequestCopy.read(chat.computerId, 'forge.pullRequest', chat.taskId, repoId)
+    const pr = saved?.pullRequest
+    if (!saved || !pr || pr.headBranch !== branch) return null
+    const list = pullRequestCopy.read(chat.computerId, 'forge.pullRequests', chat.taskId, repoId, false, false)
+    return { status: saved, summary: list?.pullRequests.find((entry) => entry.url === pr.url) ?? null }
+  })
+  const [status, setStatus] = useState<ForgeStatus | null>(kept?.status ?? null)
   const [draftsReady, setDraftsReady] = useState(false)
   const [starting, setStarting] = useState<PullRequestFeedbackKind | null>(null)
-  const [summary, setSummary] = useState<PullRequestSummary | null>(null)
+  const [summary, setSummary] = useState<PullRequestSummary | null>(kept?.summary ?? null)
   const [watch, setWatch] = useState<PullRequestWatchStatus | null>(null)
   const [picking, setPicking] = useState(false)
   const [watching, setWatching] = useState(false)
@@ -114,6 +123,7 @@ export function CurrentPullRequest({
   const { computerId, taskId } = chat
   const read = useCallback(async () => {
     const next = await store.invoke(computerId, 'forge.pullRequest', taskId, repoId)
+    pullRequestCopy.keep(computerId, 'forge.pullRequest', next, taskId, repoId)
     setStatus(next)
     const pr = next.pullRequest
     if (pr?.state === 'open') {
@@ -126,6 +136,7 @@ export function CurrentPullRequest({
         store.invoke(computerId, 'deploy.preview', taskId, repoId, pr.headBranch).catch(() => null),
       ])
       setDraftsReady(!!batch)
+      if (list) pullRequestCopy.keep(computerId, 'forge.pullRequests', list, taskId, repoId, false, false)
       setSummary(list?.pullRequests.find((entry) => entry.url === pr.url) ?? null)
       setWatch(watched)
       setPreview(deployed)
@@ -140,7 +151,8 @@ export function CurrentPullRequest({
   const openUrl = status?.pullRequest?.state === 'open' ? status.pullRequest.url : null
   useEffect(() => {
     // Read again when the branch changes, since that changes which pull request it has.
-    void read().catch(() => setStatus(null))
+    // A failed read (an offline host) keeps this branch's last known pull request; another branch's is cleared.
+    void read().catch(() => setStatus((current) => (current?.pullRequest?.headBranch === branch ? current : null)))
   }, [read, branch])
   useEffect(() => {
     // Drafts and the watch change while the agent works, and an agent may open the pull request; the host announces
