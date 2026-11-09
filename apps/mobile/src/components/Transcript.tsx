@@ -1032,7 +1032,8 @@ function TurnSummary({ label, children }: { label: string; children: ReactNode }
           borderBottomColor: c.line,
         }}
       >
-        <T size={font.control} tone="muted" style={{ flex: 1, fontVariant: ['tabular-nums'] }}>
+        {/* A section heading over the steps, so its chevron stays beside the label as on the desktop; the row is the target. */}
+        <T size={font.control} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
           {label}
         </T>
         <Disclosure open={open} color={c.muted} />
