@@ -1222,7 +1222,7 @@ function ToolGroup({ item, thinking }: { item: Extract<TranscriptItem, { kind: '
         ) : (
           <Icon size={14} color={tint} />
         )}
-        <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={{ flexShrink: 1, minWidth: 0 }}>
           {/* The headline follows the current tool; each change fades instead of jumping. */}
           <Arrive animate={false} identity={headline}>
             <ActivityText active={running > 0 || thinking}>{headline}</ActivityText>
@@ -1270,7 +1270,7 @@ function PlanCard({ item }: { item: Extract<TranscriptItem, { kind: 'plan' }> })
         }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
       >
-        <T weight="600" size={font.control} style={{ flex: 1 }}>
+        <T weight="600" size={font.control} style={{ flexShrink: 1 }}>
           {translate(language, 'Plan')} · {completed}/{item.entries.length}
         </T>
         <Disclosure open={open} color={c.muted} />
@@ -1347,14 +1347,14 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
           toggled()
           setOpen((o) => !o)
         }}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingVertical: 3 }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
       >
         {item.ramu ? (
           <RamuGlyph size={14} color={failed ? c.bad : c.muted} />
         ) : (
           <I size={14} color={failed ? c.bad : c.muted} strokeWidth={1.8} />
         )}
-        <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={{ flexShrink: 1, minWidth: 0 }}>
           <ActivityText active={running}>{title}</ActivityText>
         </View>
         {item.file?.added || item.file?.removed ? (
@@ -1369,7 +1369,7 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
             {storeLanguage === 'id' ? 'Gagal' : 'Failed'}
           </T>
         ) : null}
-        {openable ? <Disclosure open={open} size={13} color={c.placeholder} /> : null}
+        {openable ? <Disclosure open={open} color={c.muted} /> : null}
       </Pressable>
       <Collapse open={open}>
         {/* Opened, a file tool shows where the file lives and opens it; an edit shows its diff instead of raw input. */}
@@ -2013,7 +2013,7 @@ function GoalNote({ item }: { item: Extract<TranscriptItem, { kind: 'note' }> })
         <T size={font.control} tone="soft">
           {title}
         </T>
-        <T size={font.control} tone="muted" numberOfLines={1} style={{ flex: 1 }}>
+        <T size={font.control} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
           {item.objective ?? ''}
         </T>
         <Disclosure open={open} color={c.muted} />
@@ -2050,7 +2050,7 @@ function GoalDone({ item }: { item: Extract<TranscriptItem, { kind: 'goal' }> })
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
       >
         <Flag size={14} color={c.ok} strokeWidth={1.8} />
-        <T size={font.control} tone="muted" style={{ flex: 1 }}>
+        <T size={font.control} tone="muted" style={{ flexShrink: 1 }}>
           {fill(strings.goalReached, item.turns, item.objective)}
         </T>
         <Disclosure open={open} color={c.muted} />
@@ -2316,6 +2316,7 @@ function ThinkingRow({ text, live }: { text: string; live: boolean }) {
   const { c } = useTheme()
   const say = useSay()
   const [open, setOpen] = useState(false)
+  const toggled = useContext(RowToggle)
   if (live)
     return (
       <View style={{ gap: space.xs }}>
@@ -2333,9 +2334,13 @@ function ThinkingRow({ text, live }: { text: string; live: boolean }) {
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
-        hitSlop={6}
-        onPress={() => setOpen((value) => !value)}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: 2 }}
+        onPress={() => {
+          tap()
+          toggled()
+          setOpen((value) => !value)
+        }}
+        // The whole row width takes the tap; the chevron stays beside the label.
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 32 }}
       >
         <Brain size={14} color={c.muted} style={{ marginRight: space.s - 4 }} />
         <T size={font.control} tone="muted">
