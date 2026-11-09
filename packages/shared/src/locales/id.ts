@@ -6789,4 +6789,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Written by you": "Ditulis oleh Anda",
   "Memory & learning": "Memori & pembelajaran",
   "Computer & devices": "Komputer & perangkat",
+  "Android emulator": "Emulator Android",
+  "Needs setup": "Perlu disiapkan",
+  "iOS Simulator": "Simulator iOS",
 }

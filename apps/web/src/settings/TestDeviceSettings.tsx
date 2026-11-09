@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Check, Copy, Smartphone } from 'lucide-react'
+import { Check, CircleCheck, Copy, Smartphone, TriangleAlert } from 'lucide-react'
 import type { PlatformReadiness, TestDeviceStatus } from '@ramu/shared/testDevices'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
@@ -27,17 +27,24 @@ function Readiness({
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1500)
     })
+  // A row of the same card as the switch, so a platform's readiness reads as part of the setting.
   return (
-    <div className="flex flex-col gap-0.5 py-1 text-caption">
-      <p className={`m-0 ${value.ready ? 'text-foreground' : 'text-muted-foreground'}`}>
-        {title} · {value.ready ? t('Ready') : t('Not ready')}
-      </p>
+    <SettingsRow className="settings-stack gap-1.5!">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-control">{title}</span>
+        <span
+          className={`inline-flex items-center gap-1 text-caption ${value.ready ? 'text-[var(--ok)]' : 'text-warn'}`}
+        >
+          {value.ready ? <CircleCheck size={13} aria-hidden /> : <TriangleAlert size={13} aria-hidden />}
+          {value.ready ? t('Ready') : t('Needs setup')}
+        </span>
+      </div>
       {value.missing.map((entry) => (
-        <p key={entry.item} className="m-0 text-muted-foreground">
-          {entry.item}: {entry.fix}
+        <p key={entry.item} className="m-0 text-caption text-muted-foreground">
+          <span className="text-foreground">{entry.item}</span> · {entry.fix}
         </p>
       ))}
-      {value.note && <p className="m-0 text-muted-foreground">{t(value.note)}</p>}
+      {value.note && <p className="m-0 text-caption text-muted-foreground">{t(value.note)}</p>}
       {value.install && (
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <Button size="xs" disabled={!canInstall || installing} onClick={onInstall}>
@@ -47,12 +54,12 @@ function Readiness({
             {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
             {copied ? t('Copied') : t('Copy command')}
           </Button>
-          <code className="min-w-0 flex-1 truncate text-muted-foreground" title={value.install}>
+          <code className="min-w-0 flex-1 truncate text-caption text-muted-foreground" title={value.install}>
             {value.install}
           </code>
         </div>
       )}
-    </div>
+    </SettingsRow>
   )
 }
 
@@ -87,7 +94,8 @@ export function TestDeviceSettings({ hostId, readOnly }: { hostId: string; readO
   return (
     <section className="flex flex-col" aria-label={t('Test devices')}>
       <SettingsGroupTitle>{t('Test devices')}</SettingsGroupTitle>
-      <SettingsRow setting="testDevices" className="settings-toggle">
+      {/* Not a host preference: it is turned on with its own call, so the row names no setting path. */}
+      <SettingsRow className="settings-toggle">
         <SettingsLabel
           title={t('Let agents use test devices')}
           help={t(
@@ -106,14 +114,14 @@ export function TestDeviceSettings({ hostId, readOnly }: { hostId: string; readO
       {status && (
         <>
           <Readiness
-            title="iOS"
+            title={t('iOS Simulator')}
             value={status.ios}
             installing={installing}
             canInstall={!readOnly}
             onInstall={installHelper}
           />
           <Readiness
-            title="Android"
+            title={t('Android emulator')}
             value={status.android}
             installing={installing}
             canInstall={!readOnly}
@@ -122,7 +130,7 @@ export function TestDeviceSettings({ hostId, readOnly }: { hostId: string; readO
         </>
       )}
       {running.map((device) => (
-        <div key={device.id} className="flex items-center gap-2 py-1 text-control">
+        <SettingsRow key={device.id} className="gap-2!">
           <Smartphone size={13} className="text-muted-foreground" aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate">{device.name}</span>
           <Button
@@ -133,7 +141,7 @@ export function TestDeviceSettings({ hostId, readOnly }: { hostId: string; readO
           >
             {t('Stop')}
           </Button>
-        </div>
+        </SettingsRow>
       ))}
       {error && (
         <p role="alert" className="m-0 text-caption text-bad">
