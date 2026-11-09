@@ -110,7 +110,7 @@ it('offers OAuth sign-in on a remote server only to the host administrator', () 
 it('renders administration unavailable for a paired client while preserving status', () => {
   const html = render(false)
   expect(html).toContain('Manage MCP connections and credentials on the host running Ramu')
-  expect(html).toMatch(/<button[^>]*disabled[^>]*>Add server<\/button>/)
+  expect(html).toMatch(/<button[^>]*disabled[^>]*>(?:<svg[^>]*>(?:(?!<\/svg>)[\s\S])*<\/svg>)?Add server<\/button>/)
   expect(html).toMatch(/<button[^>]*disabled[^>]*>Connect<\/button>/)
   expect(html).toContain('Project tracker')
 })
@@ -136,6 +136,6 @@ it('keeps authentication failures distinct and presents an actionable empty stat
 it('does not reuse a cached administrator grant after viewer access is known', () => {
   const html = render(true, snapshot, true)
   expect(html).toContain('Project tracker')
-  expect(html).toMatch(/<button[^>]*disabled[^>]*>Add server<\/button>/)
+  expect(html).toMatch(/<button[^>]*disabled[^>]*>(?:<svg[^>]*>(?:(?!<\/svg>)[\s\S])*<\/svg>)?Add server<\/button>/)
   expect(html).toMatch(/<button[^>]*disabled[^>]*>Connect<\/button>/)
 })

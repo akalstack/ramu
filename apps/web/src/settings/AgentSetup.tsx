@@ -4,6 +4,7 @@ import { InlineAction, InlineLink } from '@/components/inline-action'
 import { useStaging } from './stagedChanges'
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Globe, SquareTerminal } from 'lucide-react'
 import type { AgentProvider } from '@ramu/shared/types'
 import {
   setupFromText,
@@ -68,7 +69,7 @@ function ProviderStrip({ providers }: { providers: AgentProvider[] }) {
           title={`${providerName(provider)}${missing.includes(provider) ? ` · ${t('Not available')}` : ''}`}
           className={missing.includes(provider) ? 'opacity-25' : 'text-foreground'}
         >
-          <ProviderIcon provider={provider} size={13} />
+          <ProviderIcon provider={provider} size={14} />
         </span>
       ))}
     </span>
@@ -95,9 +96,12 @@ function ShareRow({
   onShare,
   onReset,
   extra,
+  icon,
 }: {
   name: string
   detail: string
+  /** What kind of thing it is, as a small tile before the name so a long list scans by shape. */
+  icon?: ReactNode
   item: Shareable
   providers: AgentProvider[]
   sources: ProjectSetupSource[]
@@ -110,38 +114,47 @@ function ShareRow({
   extra?: ReactNode
 }) {
   return (
-    <SettingsRow>
-      <span>
-        <span className="flex min-w-0 items-center gap-2">
-          <strong className="min-w-0 truncate">{name}</strong>
-          <ProviderStrip providers={providers} />
-        </span>
-        <span className="block truncate small text-caption text-muted-foreground" title={detail}>
-          {detail}
-        </span>
-        <span className="block small text-caption text-muted-foreground">
-          {reach(item)} · {t('From {places}', { places: fromText(sources) })}
-          {!!item.exceptions && (
-            <>
-              {' '}
-              ·{' '}
-              {t(item.exceptions === 1 ? 'Different in 1 project' : 'Different in {count} projects', {
-                count: item.exceptions,
-              })}
-            </>
-          )}
-          {onReset && item.shareScope === 'project' && (
-            <>
-              {' · '}
-              <InlineAction disabled={disabled} onClick={onReset}>
-                {t('Use the all-projects setting')}
-              </InlineAction>
-            </>
-          )}
+    // The meta line runs the row's full width, so where it comes from does not wrap after a word or two.
+    <SettingsRow className="[&_>_span:first-child_.block]:max-w-none!">
+      <span className="flex items-start gap-3">
+        {icon && (
+          <span
+            aria-hidden
+            className="mt-0.5 flex size-8 flex-none items-center justify-center rounded-(--radius-s) bg-fill text-muted-foreground"
+          >
+            {icon}
+          </span>
+        )}
+        <span className="min-w-0 flex-1">
+          <strong className="block min-w-0 truncate">{name}</strong>
+          <span className="block truncate font-mono text-caption text-muted-foreground" title={detail}>
+            {detail}
+          </span>
+          <span className="block small text-caption text-muted-foreground">
+            {reach(item)} · {t('From {places}', { places: fromText(sources) })}
+            {!!item.exceptions && (
+              <>
+                {' '}
+                ·{' '}
+                {t(item.exceptions === 1 ? 'Different in 1 project' : 'Different in {count} projects', {
+                  count: item.exceptions,
+                })}
+              </>
+            )}
+            {onReset && item.shareScope === 'project' && (
+              <>
+                {' · '}
+                <InlineAction disabled={disabled} onClick={onReset}>
+                  {t('Use the all-projects setting')}
+                </InlineAction>
+              </>
+            )}
+          </span>
         </span>
       </span>
-      <span className="flex flex-none items-center gap-2">
+      <span className="flex flex-none items-center gap-3">
         {extra}
+        <ProviderStrip providers={providers} />
         <Switch
           aria-label={label}
           checked={item.shared}
@@ -370,6 +383,7 @@ export function AgentSetup({
       <ShareRow
         key={server.key}
         name={server.name}
+        icon={server.transport.type === 'http' ? <Globe size={15} /> : <SquareTerminal size={15} />}
         detail={
           server.transport.type === 'http'
             ? server.transport.url

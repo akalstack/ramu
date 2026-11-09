@@ -3,10 +3,11 @@ import { useQuery } from '@tanstack/react-query'
 import type { AgentProvider, Project } from '@ramu/shared/types'
 import type { SharedMcpConnection, SharedMcpInspection, SharedMcpSelection } from '@ramu/shared/mcp'
 import { namesPrivateHost, serverNameFromUrl } from '@ramu/shared/mcp'
-import { Globe, SquareTerminal } from 'lucide-react'
+import { Globe, Plus, RefreshCw, SquareTerminal } from 'lucide-react'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ExpandRow } from '@/components/expand-row'
 import { AGENT_PROVIDERS, providerName, providerAccountRows } from '@ramu/shared/providers/providers'
+import { ProviderIcon } from '../models/ProviderIcon'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
@@ -14,7 +15,6 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { SettingsGroupTitle } from '@/components/settings-row'
 import { Dialog, Dropdown } from '../Menu'
 import { accountKey } from '@ramu/shared/identities'
 import { AccountIdentityPicker, IdentityDropdown, IdentityName, useAccountIdentities } from './AccountIdentity'
@@ -562,10 +562,30 @@ export function McpSettings() {
     )
   return (
     <div className="flex flex-col gap-3">
-      <SettingsGroupTitle className="m-0">{t('Connected through Ramu')}</SettingsGroupTitle>
-      <p className="m-0 text-caption text-muted-foreground">
-        {t('Add a remote server no provider has yet. Ramu connects it, and you review its tools first.')}
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h5 className="m-0 text-control font-medium">{t('Connected through Ramu')}</h5>
+          <p className="m-0 mt-0.5 text-caption text-muted-foreground">
+            {t('Add a remote server no provider has yet. Ramu connects it, and you review its tools first.')}
+          </p>
+        </div>
+        <div className="flex flex-none items-center gap-1">
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={t('Refresh')}
+            title={t('Refresh')}
+            disabled={busy || query.isFetching || Boolean(scope && (!scope.ready || scope.stale))}
+            onClick={() => void query.refetch()}
+          >
+            <RefreshCw size={14} className={query.isFetching ? 'animate-spin' : undefined} />
+          </Button>
+          <Button size="sm" disabled={!canAdminister || busy} onClick={() => setEditing('new')}>
+            <Plus size={14} />
+            {t('Add server')}
+          </Button>
+        </div>
+      </div>
       {(error || query.error || projects.error) && (
         <Alert variant="destructive">
           <AlertDescription>{error || errorText(query.error ?? projects.error)}</AlertDescription>
@@ -576,18 +596,6 @@ export function McpSettings() {
           <AlertDescription>{t('Manage MCP connections and credentials on the host running Ramu')}</AlertDescription>
         </Alert>
       )}
-      <div className="flex flex-wrap gap-2">
-        <Button disabled={!canAdminister || busy} onClick={() => setEditing('new')}>
-          {t('Add server')}
-        </Button>
-        <Button
-          variant="ghost"
-          disabled={busy || query.isFetching || Boolean(scope && (!scope.ready || scope.stale))}
-          onClick={() => void query.refetch()}
-        >
-          {t('Refresh')}
-        </Button>
-      </div>
       {notice && (
         <p role="status" className="m-0 text-caption text-muted-foreground">
           {t(notice)}
@@ -596,19 +604,30 @@ export function McpSettings() {
       {!data && !query.error && <p role="status">{t('Loading…')}</p>}
       <ListToolbar view={view} label={t('Search MCP servers')} />
       <ListCount view={view} />
-      {data && (
-        <ListEmpty
-          view={view}
-          none="No servers connected through Ramu yet."
-          filtered="No MCP servers match your search."
-        />
+      {data && view.empty !== 'ok' && (
+        <div className="rounded-(--radius-m) bg-fill">
+          <ListEmpty
+            view={view}
+            none="No servers connected through Ramu yet."
+            filtered="No MCP servers match your search."
+          />
+        </div>
       )}
       <SettingsCardList>
         {data &&
           view.paged.shown.map(({ connection, status, reason, checkedAt, toolCount }) => (
             <SettingsCard
               key={connection.id}
-              title={connection.name}
+              title={
+                <span className="inline-flex min-w-0 items-center gap-2">
+                  {connection.transport.type === 'http' ? (
+                    <Globe size={14} className="flex-none text-muted-foreground" aria-hidden />
+                  ) : (
+                    <SquareTerminal size={14} className="flex-none text-muted-foreground" aria-hidden />
+                  )}
+                  <span className="truncate">{connection.name}</span>
+                </span>
+              }
               badges={
                 <>
                   <Badge variant="secondary">{t(statusLabels[status])}</Badge>
@@ -621,21 +640,34 @@ export function McpSettings() {
               meta={`${connection.providers.map(providerName).join(', ')} · ${connection.scope.hostWide ? t('All projects') : connection.scope.projectIds.map((id) => projects.data?.find((project) => project.id === id)?.name ?? id).join(', ')}`}
             >
               {reason && <p className="m-0 text-caption text-muted-foreground">{t(reason)}</p>}
-              <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-0.5 p-0 text-caption text-muted-foreground">
-                {AGENT_PROVIDERS.map((provider) => {
-                  const availability = connectionAvailability(
+              <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0 text-caption text-muted-foreground">
+                {AGENT_PROVIDERS.map((provider) => ({
+                  provider,
+                  availability: connectionAvailability(
                     connection,
                     status,
                     data.readiness,
                     provider,
                     data.providerManaged,
+                  ),
+                }))
+                  // A provider the connection is not for has nothing to report; listing it only buries the rest.
+                  .filter(
+                    ({ provider, availability }) =>
+                      connection.providers.includes(provider) || availability.state === 'native-only',
                   )
-                  return (
-                    <li key={provider} title={t(availability.reason)}>
-                      {providerName(provider)}: {t(availabilityLabels[availability.state])}
+                  .map(({ provider, availability }) => (
+                    <li
+                      key={provider}
+                      title={t(availability.reason)}
+                      className={`inline-flex items-center gap-1.5 rounded-full bg-fill py-0.5 pr-2.5 pl-1.5 ${availability.state === 'shared' ? 'text-foreground' : ''}`}
+                    >
+                      <ProviderIcon provider={provider} size={13} />
+                      <span>
+                        {providerName(provider)} · {t(availabilityLabels[availability.state])}
+                      </span>
                     </li>
-                  )
-                })}
+                  ))}
               </ul>
               {checkedAt && (
                 <p className="m-0 text-caption text-muted-foreground">
@@ -643,7 +675,7 @@ export function McpSettings() {
                   {toolCount !== undefined && `· ${toolCount} ${t('tools')}`}
                 </p>
               )}
-              <div className="flex flex-wrap gap-2">
+              <div className="mt-1 flex flex-wrap items-center gap-1.5 border-t border-(--line) pt-2.5">
                 {!connection.split && (
                   <AccountIdentityPicker accountKey={accountKey('mcp', connection.id)} name={connection.name} />
                 )}
@@ -723,6 +755,7 @@ export function McpSettings() {
                 <Button
                   size="sm"
                   variant="ghost"
+                  className="ml-auto"
                   disabled={!canAdminister || busy}
                   onClick={() => setEditing(connection)}
                 >
@@ -758,6 +791,7 @@ export function McpSettings() {
                 <Button
                   size="sm"
                   variant="ghost"
+                  className="hover:text-bad"
                   disabled={!canAdminister || busy}
                   onClick={() => setRemoving(connection)}
                 >
