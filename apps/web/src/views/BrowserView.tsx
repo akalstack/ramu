@@ -50,7 +50,7 @@ export function BrowserView(props: {
         .invoke('hostBrowser.status')
         .then((status) => {
           // This computer's own native browser, unless the host's Chromium is the engine in use (or the host is remote).
-          if (active) setHosted(!host.isLocal || (status.selected ?? !!status.enabled))
+          if (active) setHosted(!host.isLocal || (status.selected ?? true))
         })
         .catch(() => {})
     }

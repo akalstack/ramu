@@ -132,7 +132,8 @@ export const registerHostBrowserHandlers: RegisterHandlers = ({
     'hostBrowser.importKeep': { args: z.tuple([importText]), run: (profileId) => admin().importKeep(profileId) },
     'hostBrowser.importDiscard': { args: z.tuple([importText]), run: (profileId) => admin().importDiscard(profileId) },
     'hostBrowser.setup': { args: z.tuple([]), run: () => admin().setup() },
-    'hostBrowser.disable': { args: z.tuple([]), run: () => admin().disable() },
+    // Frees the running Chromium; the next tab starts it again.
+    'hostBrowser.stop': { args: z.tuple([]), run: () => admin().close() },
     'hostBrowser.setEngine': {
       args: z.tuple([z.enum(['auto', 'chromium'])]),
       run: (engine: 'auto' | 'chromium') => admin().setEngine(engine),

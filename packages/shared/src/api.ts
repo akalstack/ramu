@@ -508,7 +508,6 @@ export interface RamuMethods extends ArtifactMethods {
   'computer.disconnect'(threadId: string): void
   'hostBrowser.status'(): {
     available: boolean
-    enabled?: boolean
     /** `auto` prefers the connected desktop's native browser; `chromium` always uses this host's Chromium. */
     engine?: 'auto' | 'chromium'
     /** Whether the browser agents use right now is this host's Chromium (false: the connected desktop's native one). */
@@ -527,7 +526,8 @@ export interface RamuMethods extends ArtifactMethods {
     remove: boolean,
   ): { token: string; id: string; name: string; tabs: number; remove: boolean }
   'hostBrowser.profileConfirm'(token: string): void
-  'hostBrowser.disable'(): void
+  /** Closes this host's Chromium and its tabs; the next tab starts it again. */
+  'hostBrowser.stop'(): void
   'hostBrowser.importSources'(): BrowserImportSource[]
   'hostBrowser.importProfiles'(source: string): BrowserImportProfile[]
   'hostBrowser.importInspect'(source: string, profileId: string): { token: string; domains: BrowserImportDomain[] }

@@ -57,6 +57,7 @@ vi.mock('../src/summaries/libraryFocus', () => ({ takeLibraryFocus: () => null }
 vi.mock('../src/chat/Notifications', () => ({ notifyError: state.notify }))
 vi.mock('../src/i18n', () => ({ t: (text: string) => text }))
 vi.mock('../src/Menu', () => ({ Dropdown: 'Dropdown' }))
+vi.mock('../src/settings/ModelChoice', () => ({ ModelChoice: 'ModelChoice' }))
 vi.mock('@/components/settings-row', () => ({ SettingsGroupTitle: 'h4', SettingsRow: 'div', SettingsLabel: 'label' }))
 vi.mock('@/components/desktop-button', () => ({ Button: 'Button' }))
 vi.mock('@/components/ui/switch', () => ({ Switch: 'Switch' }))

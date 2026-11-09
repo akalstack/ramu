@@ -22,7 +22,7 @@ export function useThreadToolActivity(chat: Chat | undefined, visible: boolean) 
       loading = true
       const browser = async () => {
         const status = await io.current.invoke(host, 'hostBrowser.status').catch(() => null)
-        return status?.enabled
+        return status?.engine
           ? (await io.current.invoke(host, 'hostBrowser.list', task)).length > 0
           : (await io.current.invoke(host, 'browser.activity', task)).tabs.length > 0
       }

@@ -54,7 +54,7 @@ describe('host browser handlers', () => {
     const remote = setup({ admin: false })
     expect(() => remote.call('hostBrowser.setup')).toThrow(/owning host/)
     expect(() => remote.call('hostBrowser.grant', 'phone', THREAD)).toThrow(/owning host/)
-    expect(() => remote.call('hostBrowser.disable')).toThrow(/owning host/)
+    expect(() => remote.call('hostBrowser.stop')).toThrow(/owning host/)
     const owner = setup({ admin: true })
     owner.call('hostBrowser.setup')
     expect(owner.hostBrowser.setup).toHaveBeenCalled()

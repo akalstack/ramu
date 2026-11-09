@@ -4,22 +4,13 @@ import { branchForTitle, validBranchPrefix } from '@ramu/shared/workspaceDefault
 import { Textarea } from '@/components/ui/textarea'
 import { t } from '../i18n'
 import { Dropdown } from '../Menu'
-import { modelStepName, useModelSets } from '../models/ModelSets'
+import { ModelChoice } from './ModelChoice'
 import { SETTINGS_FORM_CLASS } from './constants'
 import { ToggleRow, type DraftProps } from './ToggleRow'
 import { HostingAccounts } from './HostingAccounts'
 
 export function GitSettings({ draft, onChange, busy }: DraftProps) {
   const toggleProps = { draft, onChange, busy }
-  const models = useModelSets()
-  const steps = models.preferences.sets.flatMap((set) => set.steps)
-  const commitStepId =
-    steps.find(
-      (step) =>
-        step.provider === draft.commitModel?.provider &&
-        step.model === draft.commitModel.model &&
-        step.effort === draft.commitModel.effort,
-    )?.id ?? ''
   return (
     <div className={SETTINGS_FORM_CLASS}>
       <HostingAccounts />
@@ -142,20 +133,11 @@ export function GitSettings({ draft, onChange, busy }: DraftProps) {
           title={t('Writing model')}
           help={t('Writes commit messages and pull request titles and descriptions. Default uses your default model.')}
         />
-        <Dropdown
+        <ModelChoice
           label={t('Writing model')}
-          value={commitStepId}
-          options={[
-            { value: '', label: t('Default model') },
-            ...steps.map((step) => ({ value: step.id, label: modelStepName(step, models.catalogs) })),
-          ]}
-          onChange={(id) => {
-            const step = steps.find((step) => step.id === id)
-            onChange({
-              ...draft,
-              commitModel: step ? { provider: step.provider, model: step.model, effort: step.effort } : null,
-            })
-          }}
+          value={draft.commitModel}
+          emptyLabel={t('Default model')}
+          onChange={(commitModel) => onChange({ ...draft, commitModel })}
         />
       </SettingsRow>
       <SettingsRow setting="commitStyle">

@@ -12,11 +12,12 @@ import { Dropdown } from '../Menu'
 import { t } from '../i18n'
 import { notifyError } from '../chat/Notifications'
 import { errorText } from '../lib/errors'
-import { useModelSets, modelStepName } from '../models/ModelSets'
 import { takeLibraryFocus } from '../summaries/libraryFocus'
 import { SettingsCard, SettingsCardList } from './cards'
+import { ModelChoice } from './ModelChoice'
 import { type IntelligencePreferences, type LearningSnapshot, type ManagedSkill } from '@ramu/shared/types'
 import { SKILL_ACTION_LABELS, skillActions } from '@ramu/shared/skillControls'
+import { readableJobError } from '@ramu/shared/jobErrors'
 
 type Props = { value: IntelligencePreferences; onChange: (value: IntelligencePreferences) => void }
 const withCurrent = (values: number[], current: number) => [...new Set([...values, current])].sort((a, b) => a - b)
@@ -44,15 +45,6 @@ export function EfficiencySettings({ value, onChange }: Props) {
 
 /** One model for the background work of both memory cleanup and learning reviews. */
 export function MaintenanceModelSettings({ value, onChange, cleanup }: Props & { cleanup: boolean }) {
-  const models = useModelSets()
-  const steps = models.preferences.sets.flatMap((set) => set.steps)
-  const modelId =
-    steps.find(
-      (step) =>
-        step.provider === value.maintenanceModel?.provider &&
-        step.model === value.maintenanceModel.model &&
-        step.effort === value.maintenanceModel.effort,
-    )?.id ?? ''
   if (value.learning === 'off' && !cleanup) return null
   return (
     <div className="settings-form flex flex-col gap-0 mt-6">
@@ -62,20 +54,11 @@ export function MaintenanceModelSettings({ value, onChange, cleanup }: Props & {
           title={t('Model for background maintenance')}
           help={t('Used for learning reviews and memory cleanup. A cheaper model keeps token use low.')}
         />
-        <Dropdown
+        <ModelChoice
           label={t('Model for background maintenance')}
-          value={modelId}
-          options={[
-            { value: '', label: t('Same as thread') },
-            ...steps.map((step) => ({ value: step.id, label: modelStepName(step, models.catalogs) })),
-          ]}
-          onChange={(id) => {
-            const step = steps.find((step) => step.id === id)
-            onChange({
-              ...value,
-              maintenanceModel: step ? { provider: step.provider, model: step.model, effort: step.effort } : null,
-            })
-          }}
+          value={value.maintenanceModel}
+          emptyLabel={t('Same as thread')}
+          onChange={(maintenanceModel) => onChange({ ...value, maintenanceModel })}
         />
       </SettingsRow>
     </div>
@@ -187,6 +170,7 @@ export function LearningSettings({ value, onChange }: Props) {
     filterKey: reviewStatus,
   })
   const pagedReviews = reviewView.paged
+  const failedReviews = (reviews ?? []).filter((job) => job.status === 'failed')
   return (
     <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0 mt-6">
       <SettingsGroupTitle>{t('Learning & skills')}</SettingsGroupTitle>
@@ -246,7 +230,37 @@ export function LearningSettings({ value, onChange }: Props) {
             },
           ]}
         />
-        <ListCount view={reviewView} />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <ListCount view={reviewView} />
+          {failedReviews.length > 1 && (
+            <span className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={viewOnly || busy}
+                onClick={() =>
+                  void act(async () => {
+                    for (const job of failedReviews) await invoke('learning.retry', job.id)
+                  })
+                }
+              >
+                {t('Retry {count} failed', { count: failedReviews.length })}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={viewOnly || busy}
+                onClick={() =>
+                  void act(async () => {
+                    for (const job of failedReviews) await invoke('learning.dismiss', job.id)
+                  })
+                }
+              >
+                {t('Dismiss failed')}
+              </Button>
+            </span>
+          )}
+        </div>
         {reviewView.empty === 'filtered' && (
           <ListEmpty
             view={reviewView}
@@ -302,8 +316,8 @@ export function LearningSettings({ value, onChange }: Props) {
               }
             >
               {job.error && (
-                <p role="alert" className="text-bad small text-caption m-0!">
-                  {job.error}
+                <p role="alert" className="m-0! line-clamp-2 text-caption text-bad" title={job.error}>
+                  {t(readableJobError(job.error))}
                 </p>
               )}
               {job.proposal && (

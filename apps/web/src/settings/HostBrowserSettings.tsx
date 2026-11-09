@@ -16,8 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { SettingsGroupTitle } from '@/components/settings-row'
-import { Switch } from '@/components/ui/switch'
+import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Dropdown } from '../Menu'
 import { BrowserImportPanel } from './BrowserImportPanel'
 import { useStagedValue } from './stagedChanges'
@@ -51,7 +50,7 @@ export function HostBrowserSettings({
     const status = await invokeOn(hostId, 'hostBrowser.status')
     if (access.current.readOnly || access.current.hostId !== hostId) return
     setStatus(status)
-    if (local && status.enabled) {
+    if (local) {
       setProfiles(await invokeOn(hostId, 'hostBrowser.profiles'))
     }
   }, [hostId, local, readOnly])
@@ -64,9 +63,6 @@ export function HostBrowserSettings({
       active = false
     }
   }, [refresh])
-  const [hostBrowser, stageHostBrowser] = useStagedValue('hostBrowser.enabled', !!status?.enabled, (enabled) =>
-    act(() => invokeOn(hostId, enabled ? 'hostBrowser.setup' : 'hostBrowser.disable')),
-  )
   const [engine, stageEngine] = useStagedValue<string>('hostBrowser.engine', status?.engine ?? 'auto', (value) =>
     act(() => invokeOn(hostId, 'hostBrowser.setEngine', value === 'chromium' ? 'chromium' : 'auto')),
   )
@@ -92,43 +88,26 @@ export function HostBrowserSettings({
     )
   return (
     <div className="flex flex-col gap-3">
-      <SettingsGroupTitle>{t('Host browser')}</SettingsGroupTitle>
-      <p className="text-caption text-muted-foreground">
-        {t(
-          'The browser runs on this host, like terminals. Paired owner devices can open it without extra setup. Chromium downloads on first use, and website sign-ins stay on this host.',
-        )}
-      </p>
-      {status?.reason && status.selected !== false && (
-        <p role="status" className="text-caption">
-          {t(status.reason)}
-        </p>
-      )}
+      <SettingsGroupTitle>{t('Which browser agents use')}</SettingsGroupTitle>
       {error && (
-        <p role="alert" className="text-caption">
+        <p role="alert" className="m-0 text-caption text-bad">
           {error}
         </p>
       )}
-      <div className="flex gap-2">
-        <Switch
-          aria-label={t('Host browser')}
-          checked={hostBrowser}
-          disabled={busy || !local || !status}
-          onCheckedChange={stageHostBrowser}
-        />
-        {local &&
-          status?.enabled &&
-          !status.available &&
-          status.reason !== 'The browser starts automatically when you open a tab.' && (
-            <Button size="sm" disabled={busy} onClick={() => void act(() => invokeOn(hostId, 'hostBrowser.setup'))}>
-              {t('Retry')}
-            </Button>
-          )}
-        <Button variant="ghost" size="sm" disabled={busy} onClick={() => void act(async () => {})}>
-          {t('Refresh')}
-        </Button>
-      </div>
-      {local && status?.enabled && (
-        <div className="flex flex-col gap-1">
+      {local && (
+        <SettingsRow>
+          <SettingsLabel
+            title={t('Browser')}
+            help={
+              engine === 'chromium'
+                ? t(
+                    'Always this host’s own Chromium, so tabs and sign-ins are the same from the desktop, a phone or a remote thread.',
+                  )
+                : t(
+                    'This app’s built-in browser while Ramu is open here, so pages run natively. Otherwise this host’s Chromium, which phones and remote threads use too.',
+                  )
+            }
+          />
           <Dropdown
             label={t('Browser engine')}
             value={engine}
@@ -139,16 +118,51 @@ export function HostBrowserSettings({
             ]}
             onChange={stageEngine}
           />
-          <p className="text-caption text-muted-foreground">
-            {t(
-              'Automatic uses this computer’s own browser while Ramu is open, so pages run natively instead of streaming. Otherwise it uses Host Chromium, which always runs the page on the host. Running threads keep the browser they started with.',
-            )}
-          </p>
-        </div>
+        </SettingsRow>
       )}
-      {local && status?.enabled && status.selected !== false && (
+      <SettingsRow>
+        <SettingsLabel
+          title={t('Host Chromium')}
+          help={
+            status?.available
+              ? t(
+                  'Running. Website sign-ins stay on this host. Stopping it closes its tabs; the next tab starts it again.',
+                )
+              : t(
+                  status?.reason ||
+                    'Starts by itself when a tab opens; it downloads once on first use. Website sign-ins stay on this host.',
+                )
+          }
+        />
+        <span className="flex items-center gap-2">
+          {local && status && !status.available && status.reason && !status.reason.startsWith('The browser starts') && (
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => void act(() => invokeOn(hostId, 'hostBrowser.setup'))}
+            >
+              {t('Retry')}
+            </Button>
+          )}
+          {local && status?.available && (
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => void act(() => invokeOn(hostId, 'hostBrowser.stop'))}
+            >
+              {t('Stop browser')}
+            </Button>
+          )}
+        </span>
+      </SettingsRow>
+      {local && status?.selected !== false && (
         <>
-          <p className="text-caption text-muted-foreground">{t('Host browser profiles')}</p>
+          <SettingsGroupTitle className="mt-3">{t('Host browser profiles')}</SettingsGroupTitle>
+          <p className="m-0 text-caption text-muted-foreground">
+            {t('Each profile keeps its own website sign-ins. Threads pick one when they open a tab.')}
+          </p>
           <form
             className="flex gap-2"
             onSubmit={(event) => {
@@ -161,6 +175,8 @@ export function HostBrowserSettings({
           >
             <Input
               aria-label={t('Profile name')}
+              className="min-w-0 flex-1"
+              placeholder={t('New profile, such as Work or Testing')}
               value={name}
               maxLength={80}
               onChange={(event) => setName(event.target.value)}

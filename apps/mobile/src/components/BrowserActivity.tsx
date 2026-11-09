@@ -34,9 +34,9 @@ export function BrowserActivity({ chat, open, onClose }: { chat: Chat; open: boo
       .invoke(chat.computerId, 'hostBrowser.status')
       .then((status) => {
         if (!active) return
-        const viewable = status.viewable ?? status.enabled ?? status.available
+        const viewable = status.viewable ?? (!!status.engine || status.available)
         setHosted(viewable)
-        setHostManaged(status.enabled === true)
+        setHostManaged(!!status.engine)
         setHostReason(
           !viewable
             ? 'No browser is running for this thread yet. Open Ramu on the computer, or turn on Host browser in Settings → Browser.'

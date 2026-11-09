@@ -26,7 +26,7 @@ vi.mock('react', async () => ({
     if (!(index in state.slots))
       state.slots[index] =
         state.hostPanel && index === 1
-          ? { enabled: true, available: true }
+          ? { available: true, engine: 'auto', selected: true }
           : typeof value === 'function'
             ? value()
             : value
@@ -54,7 +54,6 @@ vi.mock('@/components/settings-row', () => ({
 }))
 vi.mock('@/components/desktop-button', () => ({ Button: 'Button' }))
 vi.mock('@/components/desktop-input', () => ({ Input: 'Input' }))
-vi.mock('@/components/ui/switch', () => ({ Switch: 'Switch' }))
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: 'Dialog',
   DialogContent: 'div',
@@ -120,12 +119,12 @@ it('keeps device link/search/profile controls while disabling host browser prefe
 })
 it.each(['viewer', 'host switch'])('refuses retained host-browser administration after a %s change', async (change) => {
   const before = nodes(RenderHost())
-  const toggle = before.find((node) => node.type === 'Switch')!
-  const refresh = before.find((node) => node.type === 'Button' && node.props.children === 'Refresh')!
+  const engine = before.find((node) => node.props?.label === 'Browser engine')!
+  const stop = before.find((node) => node.type === 'Button' && node.props.children === 'Stop browser')!
   const after = nodes(RenderHost(change === 'viewer', change === 'viewer' ? 'local' : 'other'))
   if (change === 'viewer') expect(after.some((node) => node.props?.role === 'status')).toBe(true)
-  toggle.props.onCheckedChange(false)
-  refresh.props.onClick()
+  engine.props.onChange('chromium')
+  stop.props.onClick()
   await Promise.resolve()
   expect(state.invoke).not.toHaveBeenCalled()
 })

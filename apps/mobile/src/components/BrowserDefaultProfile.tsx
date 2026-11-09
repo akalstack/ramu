@@ -50,7 +50,7 @@ export function BrowserDefaultProfile({ host, locked }: { host: ReturnType<typeo
     // list to itself, so the built-in profiles are the choices offered then.
     void (async () => {
       const status = await runtime.current.invoke(hostId, 'hostBrowser.status')
-      if (!status.enabled || status.selected === false) return
+      if (!status.engine || status.selected === false) return
       const catalog = await runtime.current.invoke(hostId, 'hostBrowser.profiles')
       if (active && catalog.profiles.length) setProfiles(catalog.profiles)
     })().catch(() => undefined)

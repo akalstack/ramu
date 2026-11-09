@@ -32,7 +32,7 @@ afterEach(async () => {
 it('enables fresh hosts without downloading a browser at startup', () => {
   const fresh = new HostBrowser(join(dir, 'fresh'), () => {})
   expect(fresh.selected()).toBe(true)
-  expect(fresh.status()).toMatchObject({ enabled: true, available: false })
+  expect(fresh.status()).toMatchObject({ available: false })
 })
 
 it('reviews and clears a profile before any browser has started', async () => {

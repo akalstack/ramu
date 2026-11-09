@@ -336,8 +336,8 @@ if (command === 'start') {
       await runtimeInvoke(config.socketPath, 'hostBrowser.setup')
       console.log('Host browser ready. No website was opened. Use browser grant <device> <thread> for remote viewing.')
     } else if (action === 'stop') {
-      await runtimeInvoke(config.socketPath, 'hostBrowser.disable')
-      console.log('Host browser stopped; device grants revoked.')
+      await runtimeInvoke(config.socketPath, 'hostBrowser.stop')
+      console.log('Host browser stopped; device grants revoked. The next tab starts it again.')
     } else if (action === 'threads')
       for (const task of await runtimeInvoke(config.socketPath, 'tasks.list')) console.log(`${task.id}  ${task.title}`)
     else if (action === 'grants')

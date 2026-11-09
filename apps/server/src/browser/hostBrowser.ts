@@ -34,7 +34,6 @@ export interface HostedBrowserBackend {
 /** Host-owned browser. Paired owner devices share terminal-style access; tabs remain scoped to their thread. */
 export type BrowserEngine = 'auto' | 'chromium'
 export class HostBrowser implements HostedBrowserBackend {
-  private enabled = true
   /** `auto` uses the desktop app's own native browser while it is connected; `chromium` always uses this host's. */
   private engine: BrowserEngine = 'auto'
   private nativeAvailable: () => boolean = () => false
@@ -64,9 +63,6 @@ export class HostBrowser implements HostedBrowserBackend {
   ) {
     this.profiles = new BrowserProfiles(join(root, 'profiles.json'))
     try {
-      this.enabled = readFileSync(join(root, 'enabled'), 'utf8') === '1'
-    } catch {}
-    try {
       this.engine = readFileSync(join(root, 'engine'), 'utf8') === 'chromium' ? 'chromium' : 'auto'
     } catch {}
   }
@@ -76,7 +72,7 @@ export class HostBrowser implements HostedBrowserBackend {
   }
   /** Whether the browser agents and viewers use is this host's Chromium rather than the connected desktop's. */
   selected() {
-    return this.enabled && (this.engine === 'chromium' || !this.nativeAvailable())
+    return this.engine === 'chromium' || !this.nativeAvailable()
   }
   /** Re-announces which browser is in use, after a desktop connects or leaves. */
   announce() {
@@ -90,13 +86,11 @@ export class HostBrowser implements HostedBrowserBackend {
     this.changed()
   }
   async prepare(): Promise<void> {
-    if (!this.enabled) throw new Error('The host browser is turned off. Turn it on in Browser settings.')
     await this.setup()
   }
   status() {
     return {
       available: !!this.runtime,
-      enabled: this.enabled,
       engine: this.engine,
       selected: this.selected(),
       location: 'execution-host-chromium' as const,
@@ -162,13 +156,6 @@ export class HostBrowser implements HostedBrowserBackend {
         await factory.close()
         throw new Error('Host browser setup was cancelled.')
       }
-      try {
-        mkdirSync(this.root, { recursive: true, mode: 0o700 })
-        writeFileSync(join(this.root, 'enabled'), '1', { mode: 0o600 })
-      } catch (error) {
-        await factory.close()
-        throw error
-      }
       this.factory = factory
       this.runtime = new BrowserRuntime(
         factory,
@@ -180,7 +167,6 @@ export class HostBrowser implements HostedBrowserBackend {
       this.runtime.startIdleSweep()
       // A copy the person never kept before a restart is not left behind.
       void this.imports().cleanup()
-      this.enabled = true
       this.reason = ''
       this.changed()
     } catch (error) {
@@ -547,11 +533,5 @@ export class HostBrowser implements HostedBrowserBackend {
     await factory?.close()
     this.reason = 'The browser starts automatically when you open a tab.'
     this.changed()
-  }
-  async disable(): Promise<void> {
-    mkdirSync(this.root, { recursive: true, mode: 0o700 })
-    writeFileSync(join(this.root, 'enabled'), '0', { mode: 0o600 })
-    this.enabled = false
-    await this.close()
   }
 }
