@@ -59,6 +59,7 @@ import {
 import { markFailureSeen } from '../inbox/failureSeen'
 import { commitUnread, inboxUnread, loadUnread, statusUnread } from './unread'
 import { createUiPersistence } from './uiPersistence'
+import { keepsOfflineCopy, readOfflineCopy, saveOfflineCopy } from './offlineCopy'
 import {
   EMPTY_TASK_UI,
   activateWorkspaceContext,
@@ -496,6 +497,7 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
     setRepos(rs)
     setTasks((current) => keepNewerTasks(current, chats))
     setWorkspaces(isolated)
+    saveOfflineCopy(hostId, { projects: ps, tasks: chats, workspaces: isolated, repos: rs })
     const known = new Set([
       ...chats.map((t) => t.id),
       ...ps.map((p) => projectCtx(p.id)),
@@ -520,7 +522,7 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
     })
     return { projects: ps, tasks: chats, workspaces: isolated }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [invoke] by design; the values it reads beyond these are current as of that run
-  }, [invoke])
+  }, [invoke, hostId])
 
   const refreshBindings = useCallback(
     async (taskId: string) => {
@@ -531,16 +533,41 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
     [invoke],
   )
 
+  // An unreachable host opens from this device's copy of its lists. When it answers again the lists are read anew, and
+  // what the person opened meanwhile stays open instead of being replaced by the host's saved layout.
+  const offlineCopy = useRef(false)
+  const openOfflineCopy = useCallback(() => {
+    if (offlineCopy.current || snapshot.current.loaded) return
+    const copy = readOfflineCopy(hostId)
+    if (!copy) return
+    offlineCopy.current = true
+    setProjects(copy.projects)
+    setRepos(copy.repos)
+    setTasks((current) => (current.length ? current : copy.tasks))
+    setWorkspaces(copy.workspaces)
+    setLoaded(true)
+  }, [hostId])
+
   // Restore the previous session's UI. A host that is still connecting refuses the first calls, so a failed attempt
   // tries again until the host answers; otherwise its store would never load.
   const [restoreAttempt, setRestoreAttempt] = useState(0)
   useEffect(() => {
     let cancelled = false
     let retry: ReturnType<typeof setTimeout> | undefined
+    // A host that is still connecting may not refuse at once; its copy is shown while the read waits.
+    const slow = keepsOfflineCopy(hostId) ? setTimeout(openOfflineCopy, 2000) : undefined
     void (async () => {
       try {
         // A newer refresh won meanwhile; this attempt still needs the lists to restore against.
         const [read, saved] = await Promise.all([refresh(), invoke('ui.get')])
+        if (cancelled) return
+        if (offlineCopy.current) {
+          await mapBounded(snapshot.current.ui.openTaskIds, HOST_READ_CONCURRENCY, (id) =>
+            refreshBindings(id).catch(() => undefined),
+          )
+          offlineCopy.current = false
+          return
+        }
         const lists = read ?? {
           projects: await invoke('projects.list'),
           tasks: await invoke('tasks.list'),
@@ -610,15 +637,18 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
           storage.removeItem('ramu.workspace.resume')
         }
       } catch {
-        if (!cancelled) retry = setTimeout(() => setRestoreAttempt((count) => count + 1), 1500)
+        if (cancelled) return
+        if (keepsOfflineCopy(hostId)) openOfflineCopy()
+        retry = setTimeout(() => setRestoreAttempt((count) => count + 1), 1500)
       }
     })()
     return () => {
       cancelled = true
       clearTimeout(retry)
+      clearTimeout(slow)
     }
     // `restoreAttempt` re-runs the restore after a failed attempt.
-  }, [refresh, refreshBindings, invoke, storage, persistence, restoreAttempt])
+  }, [refresh, refreshBindings, invoke, storage, persistence, restoreAttempt, hostId, openOfflineCopy])
   useEffect(
     () =>
       onWorkspaceVisibility(() => {
@@ -908,7 +938,7 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
         setComposingWorkspace(null)
         const ctx = projectCtx(projectId)
         setComposing(null)
-        void refreshBindings(ctx)
+        void refreshBindings(ctx).catch(() => {})
         setUi((u) => ({
           ...activateWorkspaceContext(u, ctx),
           openTaskIds: u.openTaskIds.includes(ctx) ? u.openTaskIds : [...u.openTaskIds, ctx],
@@ -931,9 +961,10 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
         }),
       openTask(taskId) {
         setComposing(null)
-        void refreshBindings(taskId)
+        // An unreachable host's thread opens from what is kept here; its bindings are read once it is back.
+        void refreshBindings(taskId).catch(() => {})
         const shared = workspaceOf(taskId)
-        if (shared !== taskId) void refreshBindings(shared)
+        if (shared !== taskId) void refreshBindings(shared).catch(() => {})
         // Opening a chat while the workspace shows only the editor would otherwise change nothing on screen.
         showChat(shared, storage)
         setUi((u) => ({

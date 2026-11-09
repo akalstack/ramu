@@ -9,6 +9,13 @@ it('switches connected hosts in the shell and keeps unavailable hosts off screen
   expect(routeSelection({ host: 'local', active: 'local', status: null })).toBe('here')
 })
 
+it('opens a host that is away from its copy on this device, but never one that refused this device', () => {
+  for (const status of ['offline', 'connecting', 'paused'] as const)
+    expect(routeSelection({ host: 'studio', active: 'local', status, offlineCopy: true })).toBe('switch')
+  expect(routeSelection({ host: 'studio', active: 'local', status: 'rejected', offlineCopy: true })).toBe('unavailable')
+  expect(routeSelection({ host: 'studio', active: 'local', status: null, offlineCopy: true })).toBe('unavailable')
+})
+
 it('opens a destination only in the supplied host store, and a host-only selection preserves its tabs', () => {
   const store = {
     tasks: [{ id: 'same' }],

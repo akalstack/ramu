@@ -9,6 +9,9 @@ import { useHost } from '../../../workspace/HostProvider'
 import { useHostRuntime } from '../../../workspace/workspace'
 import { heldTranscript, holdTranscript, lastSeqOf } from '../lib/heldTranscripts'
 import { followThread } from '../lib/threadFollow'
+import { createTranscriptKeeper } from '../lib/keptTranscripts'
+import { storeForHost } from '../../../hostStorage'
+import { keepsOfflineCopy } from '../../../workspace/offlineCopy'
 
 /** Longest a streamed event waits to be shown: a burst rebuilds the transcript once, not once per event. */
 const STREAM_FRAME_MS = 33
@@ -21,13 +24,22 @@ const latestQueue = (events: readonly AgentEvent[]) => {
   return queue?.kind === 'queue' ? queue : undefined
 }
 
-/** What a chat shows first: the rows this client kept, else the query cache (which has no host sequence numbers). */
+/** Another host's recent threads on disk, so they open while it is unreachable and after a restart. */
+const kept = createTranscriptKeeper((host) => (keepsOfflineCopy(host) ? storeForHost(host) : null))
+globalThis.addEventListener?.('pagehide', () => kept.flushAll())
+
+/**
+ * What a chat shows first: the rows this client holds in memory, else the query cache (which has no host sequence
+ * numbers), else the rows kept on disk (read in full once the host answers, as they carry no change cursor).
+ */
 function seedOf(host: string, sessionId: string) {
-  const kept = heldTranscript(host, sessionId)
-  if (kept) return { events: eventsOf(kept.rows), rows: kept.rows, cursor: kept.cursor }
+  const held = heldTranscript(host, sessionId)
+  if (held) return { events: eventsOf(held.rows), rows: held.rows, cursor: held.cursor }
   const events = cachedDataOn(host, 'agent.events', sessionId)
-  if (!events) return null
-  return { events, rows: new Map(events.map((event, index) => [index + 1, { event }])), cursor: 0 }
+  if (events) return { events, rows: new Map(events.map((event, index) => [index + 1, { event }])), cursor: 0 }
+  const saved = kept.read(host, sessionId)
+  if (!saved?.rows.size) return null
+  return { events: eventsOf(saved.rows), rows: saved.rows, cursor: 0 }
 }
 
 /**
@@ -36,7 +48,10 @@ function seedOf(host: string, sessionId: string) {
  */
 export function useAgentStream(sessionId: string, visible = true) {
   // The chat's host: its cache entries, its calls and its events.
-  const { id: host, invoke } = useHost()
+  const { id: host, invoke, status } = useHost()
+  // A host that is away cannot be read; what is kept here is shown and its composer queues into the outbox.
+  const away = useRef(false)
+  away.current = keepsOfflineCopy(host) && !!status && status !== 'connected'
   const { on } = useHostRuntime()
   // Uncached reads for the query functions below (the cached `invoke` would read through the same keys).
   const own = host === ownHostId()
@@ -62,7 +77,7 @@ export function useAgentStream(sessionId: string, visible = true) {
   const [queued, setQueued] = useState<QueuedMessage[]>(() => latestQueue(initial?.events ?? [])?.messages ?? [])
   const [hydrating, setHydrating] = useState(() => !initial)
   const [session, setSession] = useState<AgentSessionInfo | null>(
-    () => cachedDataOn(host, 'agent.get', sessionId) ?? null,
+    () => cachedDataOn(host, 'agent.get', sessionId) ?? kept.read(host, sessionId)?.session ?? null,
   )
   const [events, setEvents] = useState<AgentEvent[]>(() => initial?.events ?? [])
   const [liveText, setLiveText] = useState<AgentEvent | null>(null)
@@ -107,6 +122,7 @@ export function useAgentStream(sessionId: string, visible = true) {
         setQueuePaused(!!queue.paused)
       }
       holdTranscript(host, sessionId, { rows: stored, cursor })
+      kept.keep(host, sessionId, { rows: stored })
     }
     const refreshSoon = () => {
       frame ??= setTimeout(refreshEvents, STREAM_FRAME_MS)
@@ -155,10 +171,10 @@ export function useAgentStream(sessionId: string, visible = true) {
     catchUp.current = () => void hydrate().catch(() => {})
     if (!cached) void showTail()
     void hydrate().catch((e) => {
-      if (!cancelled) {
-        setError(errorText(e))
-        setHydrating(false)
-      }
+      if (cancelled) return
+      // Away is not a failure of this thread: it reads again on reconnect, and the composer queues meanwhile.
+      if (!away.current) setError(errorText(e))
+      setHydrating(false)
     })
     const reconnect = on('background:connection', ({ connected }) => {
       if (connected) void hydrate().catch(() => {})
@@ -209,7 +225,9 @@ export function useAgentStream(sessionId: string, visible = true) {
   }, [sessionId, host, invoke, on])
 
   useEffect(() => {
-    if (session) queryClient.setQueryData(ipcQueryKeyOn(host, 'agent.get', sessionId), session)
+    if (!session) return
+    queryClient.setQueryData(ipcQueryKeyOn(host, 'agent.get', sessionId), session)
+    kept.keep(host, sessionId, { session })
   }, [session, sessionId, host])
 
   return { session, setSession, events, eventSequences, liveText, queued, queuePaused, hydrating, error, setError }

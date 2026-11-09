@@ -27,14 +27,15 @@ it('keeps a host’s last rows on this device, so an offline host lists its thre
     },
   })
   vi.useFakeTimers()
-  const { rememberHostRows, readLastOverview } = await import('../src/workspace/hostOverview')
+  const { rememberHostRows } = await import('../src/workspace/hostOverview')
+  const { readLastOverview } = await import('../src/workspace/lastOverview')
   const task = { id: 't1', title: 'Fix login', lastActiveAt: 5, projectId: 'p1' } as unknown as Task
   rememberHostRows('studio', { tasks: [task], projects: [{ id: 'p1', name: 'app' } as never] })
   expect(readLastOverview('studio')).toBeUndefined()
   vi.advanceTimersByTime(2500)
   // A fresh start of the app reads it back for that host alone.
   vi.resetModules()
-  const fresh = await import('../src/workspace/hostOverview')
+  const fresh = await import('../src/workspace/lastOverview')
   expect(fresh.readLastOverview('studio')).toMatchObject({
     tasks: [{ id: 't1' }],
     projects: [{ id: 'p1' }],

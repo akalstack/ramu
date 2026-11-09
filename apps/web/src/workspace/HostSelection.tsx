@@ -16,6 +16,7 @@ import { t } from '../i18n'
 import { openSummary } from '../summaries/openSummary'
 import { useComputers } from './computers'
 import { applyDestination, needsRefresh, routeSelection } from './selectionRoute'
+import { hasOfflineCopy } from './offlineCopy'
 import { publishedStore, requestHostStore, subscribePublished } from './workspace'
 import { stableContext } from '../lib/stableContext'
 
@@ -65,6 +66,7 @@ export function HostSelectionProvider({ children }: { children: (activeHost: str
       active: current.activeHost,
       ready: !!current.computers,
       status,
+      offlineCopy: hasOfflineCopy(host),
     })
     if (route === 'pending') {
       early.current = { host, destination }
@@ -79,7 +81,12 @@ export function HostSelectionProvider({ children }: { children: (activeHost: str
       )
       return
     }
-    if (route === 'switch') requestHostStore(host)
+    if (route === 'switch') {
+      requestHostStore(host)
+      // A host that is away is mounted only once it is on screen, where its store loads from this device's copy.
+      // Until then the shell keeps showing the host it had.
+      if (status !== 'connected') setActiveHost(host)
+    }
     // Decided when the store is available, not here: on a first switch it has not loaded yet.
     setPending({ seq: ++sequence.current, host, destination, refreshed: false })
   }, [])

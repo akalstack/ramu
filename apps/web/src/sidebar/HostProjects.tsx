@@ -42,6 +42,8 @@ import { mergedThreads, sidebarThreads, threadNeedsYou, threadProjectName } from
 import { useSidebarExpansion } from './projects/sidebarExpansion'
 import { EMBEDDED_THREAD_LIMIT, ThreadPreviewList, useThreadPreview } from './projects/ThreadPreviewList'
 import { hostRows } from './hostRows'
+import { hasOfflineCopy } from '../workspace/offlineCopy'
+import { canOpenOffline } from '../workspace/selectionRoute'
 
 /** One host's rows: from its own store once loaded (live, no polling), else from its last known overview. */
 function useHostGroupRows(id: string) {
@@ -101,6 +103,8 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
   const addProject = useAddProject(computer.id)
   const open = !grouped || tree.isExpanded('host')
   const available = computer.status === 'connected'
+  // Away, but kept here: its threads open from this device's copy, and new ones wait in the outbox.
+  const openable = available || (canOpenOffline(computer.status) && hasOfflineCopy(computer.id))
   // The count drops to zero between a turn's steps; keep the last number through that gap.
   const lastWorking = useRef(0)
   if (computer.running > 0) lastWorking.current = computer.running
@@ -166,7 +170,7 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
               variant="ghost"
               size="icon-xs"
               className={ICON_BUTTON_CLASS}
-              disabled={!available}
+              disabled={!openable}
               aria-label={`${t('New thread')} · ${computer.name}`}
               title={t('New thread')}
               onClick={() => select(computer.id, { kind: 'new' })}
@@ -190,6 +194,8 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
   const { preferences } = useAppSettings()
   const rows = useHostGroupRows(computer.id)
   const available = computer.status === 'connected'
+  // Away, but kept here: its threads open from this device's copy, and new ones wait in the outbox.
+  const openable = available || (canOpenOffline(computer.status) && hasOfflineCopy(computer.id))
   const all = rows.tasks
   const projects = rows.projects
   const { active, done } = sidebarThreads(all)
@@ -288,6 +294,7 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
                     project={project}
                     tasks={all}
                     available={available}
+                    openable={openable}
                     limit={
                       embedded ? Math.min(preferences.recentChats, EMBEDDED_THREAD_LIMIT) : preferences.recentChats
                     }
@@ -303,7 +310,7 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
                 variant="ghost"
                 size="icon-xs"
                 className={ICON_BUTTON_CLASS}
-                disabled={!available}
+                disabled={!openable}
                 aria-label={t('New thread without a project')}
                 onClick={() => select(computer.id, { kind: 'new', projectId: NO_PROJECT })}
               >
@@ -325,12 +332,14 @@ function OtherHostProject({
   project,
   tasks: all,
   available,
+  openable,
   limit,
 }: {
   host: string
   project: Project
   tasks: Task[]
   available: boolean
+  openable: boolean
   limit: number
 }) {
   const tree = useSidebarExpansion(host)
@@ -388,13 +397,13 @@ function OtherHostProject({
       <div className={STICKY_PROJECT_CLASS}>
         <div
           role="button"
-          tabIndex={available ? 0 : -1}
-          aria-disabled={!available || undefined}
+          tabIndex={openable ? 0 : -1}
+          aria-disabled={!openable || undefined}
           aria-label={t('Open {0}', { '0': project.name })}
           title={project.root ?? project.name}
           className="project-row group/project flex min-h-[30px] items-center gap-2 rounded-(--radius-s) px-2 text-body leading-5 text-soft hover:bg-accent hover:text-foreground"
           onClick={() => {
-            if (available) {
+            if (openable) {
               tree.setExpanded(key, true)
               openProject()
             }
@@ -402,7 +411,7 @@ function OtherHostProject({
           onContextMenu={contextMenu.onContextMenu}
           onKeyDown={(event) => {
             contextMenu.onKeyDown(event)
-            if (event.key === 'Enter' && available) openProject()
+            if (event.key === 'Enter' && openable) openProject()
           }}
         >
           {open ? (
@@ -434,7 +443,7 @@ function OtherHostProject({
               variant="ghost"
               size="icon-xs"
               className={ICON_BUTTON_CLASS}
-              disabled={!available}
+              disabled={!openable}
               aria-label={t('New thread in {0}', { '0': project.name })}
               title={t('New thread')}
               onClick={(event) => {

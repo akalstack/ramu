@@ -74,6 +74,8 @@ import { useOtherHostTargets } from './workspace/otherHostTargets'
 import { routedAgentSettings } from '@ramu/shared/workspace/agentDefaults'
 import { PROJECT_NAME } from '@ramu/shared/stacks'
 import { NewProjectFields, type NewProjectDraft } from './composer/NewProjectFields'
+import { hasOfflineCopy } from './workspace/offlineCopy'
+import { canOpenOffline } from './workspace/selectionRoute'
 
 /** A task's title is the first line of what you asked for. */
 
@@ -750,7 +752,12 @@ export function NewThread({
   const computerItems = (computers?.computers ?? []).map((c) => ({
     key: c.id,
     selected: c.id === activeHost,
-    disabled: !c.local && c.id !== activeHost && c.status !== 'connected',
+    // An away host with a copy here still opens: the new thread waits on this device and starts there once it is back.
+    disabled:
+      !c.local &&
+      c.id !== activeHost &&
+      c.status !== 'connected' &&
+      !(canOpenOffline(c.status) && hasOfflineCopy(c.id)),
     label: (
       <span className="flex min-w-0 grow items-center gap-2">
         <StatusDot status={c.status} />

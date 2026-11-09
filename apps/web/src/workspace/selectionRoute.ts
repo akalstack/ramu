@@ -4,22 +4,33 @@ import type { HostDestination } from '@ramu/shared/hostOverview'
 import type { ComputerStatus } from '@ramu/shared/types'
 import type { WorkspaceApi } from './workspace'
 
-/** Selection stays in the shell; unavailable hosts report an error without changing the active host. */
+/**
+ * Selection stays in the shell. A host that is away still opens from this device's copy of it (`offlineCopy`), so its
+ * threads can be read and answered through the outbox; one with no copy, or that refused this device, reports an
+ * error without changing the active host.
+ */
 export function routeSelection({
   host,
   active,
   status,
   ready = true,
+  offlineCopy = false,
 }: {
   host: string
   active: string
   status: ComputerStatus | null
   ready?: boolean
+  offlineCopy?: boolean
 }): 'here' | 'switch' | 'unavailable' | 'pending' {
   if (!ready) return 'pending'
   if (host === active) return 'here'
-  return status === 'connected' ? 'switch' : 'unavailable'
+  if (status === 'connected') return 'switch'
+  return offlineCopy && canOpenOffline(status) ? 'switch' : 'unavailable'
 }
+
+/** A host that refused this device is not shown from its copy: what it holds is no longer this device's to read. */
+export const canOpenOffline = (status: ComputerStatus | null) =>
+  status === 'offline' || status === 'connecting' || status === 'paused'
 
 /**
  * A thread or project may have been created elsewhere (a phone, another window), so a destination the store does not

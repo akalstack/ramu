@@ -43,6 +43,8 @@ import { HoverCard, HoverCardTrigger } from '@/components/ui/hover-card'
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
 import { threadSelection, useThreadSelection } from './threadSelection'
 import { useBulkActionsContext } from './ThreadSelectionBar'
+import { hasOfflineCopy } from '../../workspace/offlineCopy'
+import { canOpenOffline } from '../../workspace/selectionRoute'
 
 /**
  * One thread in the sidebar, on whichever host it lives: the host comes from the nearest `HostScope` (or the store on
@@ -79,6 +81,8 @@ export function TaskRow({
   const onScreen = host.id === activeHost
   // Another host's rows act once its store has loaded and while it is connected; until then they show what is known.
   const unavailable = !ws || (!onScreen && host.status !== 'connected')
+  // An unreachable host still opens from this device's copy, so its thread can be read and answered through the outbox.
+  const openable = !unavailable || (!onScreen && canOpenOffline(host.status) && hasOfflineCopy(host.id))
   const computers = useComputers()
   const hostName =
     (projectName || merged) && computers && computers.computers.length > 1
@@ -94,7 +98,7 @@ export function TaskRow({
   const forget = () => ws?.forgetTask(task.id)
   const open = () => {
     if (onScreen) ws?.openTask(task.id)
-    else if (!unavailable) select(host.id, { kind: 'task', taskId: task.id })
+    else if (openable) select(host.id, { kind: 'task', taskId: task.id })
     else return
     onOpen?.()
   }
@@ -429,7 +433,7 @@ export function TaskRow({
           className={`task-row [&:hover_.row-actions]:opacity-100 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:opacity-100 [&:focus-within_.row-actions]:flex [&:hover]:bg-accent [&:hover]:text-foreground [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&.archived]:[opacity:0.6] [&_.row-actions]:hidden [&_.row-actions]:mr-0 [&_.row-actions:has([aria-expanded='true'])]:flex [&_>_:not(.task-title)]:mt-0 [&_.task-actions]:hidden [&_.task-actions]:opacity-100 [&_.task-actions]:gap-1 [&_.task-actions_button]:size-5 [&:hover_.task-actions]:flex [&:focus-within_.task-actions]:flex [&:hover_.task-trailing]:hidden [&:focus-within_.task-trailing]:hidden [&:hover_.task-head_.task-pin]:hidden [&:focus-within_.task-head_.task-pin]:hidden [&:hover_.task-head_.agent-stack]:hidden [&:focus-within_.task-head_.agent-stack]:hidden [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 text-soft cursor-default [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] text-body leading-5 ${context ? 'min-h-11' : 'min-h-[30px]'} rounded-(--radius-s) p-[0_8px] ${active ? ' active' : ''}${selected ? ' selected bg-accent [box-shadow:inset_2px_0_0_var(--primary)]' : ''}${archived ? ' archived' : ''}${nested ? ' pl-[31px]' : ''}`}
           role="button"
           tabIndex={0}
-          aria-disabled={unavailable || undefined}
+          aria-disabled={!openable || undefined}
           onClick={(e: React.MouseEvent<HTMLElement>) => {
             if (renaming) return
             if (selectable && (e.metaKey || e.ctrlKey)) return threadSelection.toggle(task.id)
@@ -449,9 +453,8 @@ export function TaskRow({
             if (!unavailable && canWrite()) setRenaming(true)
           }}
           onKeyDown={(e) => {
-            if (unavailable) return
-            contextMenu.onKeyDown(e)
-            if (e.key === 'Enter' && !renaming) open()
+            if (!unavailable) contextMenu.onKeyDown(e)
+            if (openable && e.key === 'Enter' && !renaming) open()
           }}
         >
           {done && <Check size={14} className="flex-none text-muted-foreground" aria-label={t('Done')} />}
