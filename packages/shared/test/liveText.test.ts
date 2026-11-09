@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LiveTextEditor, LiveTextHost } from '../src/liveText'
+import { joinedText, LiveTextEditor, LiveTextHost } from '../src/liveText'
 
 /** One round between an editor and the host, as the editor's sync does it. */
 const sync = (editor: LiveTextEditor, host: LiveTextHost) => {
@@ -44,5 +44,18 @@ describe('live text', () => {
     ana.edit('a\nc\n')
     sync(ana, host)
     expect(sync(bo, host)).toBe('a\nc\n')
+  })
+
+  it('keeps what the person typed before the join answered', () => {
+    const opened = '# Plan\n\nShip it.\n\nNotes\n'
+    // Another device typed in the last paragraph, not saved yet; this one typed in the first while joining.
+    const joined = '# Plan\n\nShip it.\n\nNotes from Bo\n'
+    expect(joinedText(opened, joined, '# Plan v2\n\nShip it.\n\nNotes\n')).toBe(
+      '# Plan v2\n\nShip it.\n\nNotes from Bo\n',
+    )
+    expect(joinedText(opened, joined, opened)).toBe(joined)
+    expect(joinedText(opened, joined, '# Plan\n\nShip it.\n\nNotes by me\n')).toBe(
+      '# Plan\n\nShip it.\n\nNotes by me\n',
+    )
   })
 })

@@ -483,6 +483,9 @@ function SheetBody({
           onScroll={onScroll}
           scrollEventThrottle={16}
           keyboardShouldPersistTaps="handled"
+          // iOS shows every sheet natively, so the keyboard lifts the content and keeps the line being typed in view.
+          automaticallyAdjustKeyboardInsets
+          keyboardDismissMode="interactive"
           bounces={false}
           style={{ flexGrow: 0 }}
           contentContainerStyle={{ paddingBottom: space.m }}

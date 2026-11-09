@@ -1,5 +1,5 @@
 import { NAMED_SERVICE_NAMES } from '@ramu/shared/types/deploy'
-import { LiveTextEditor, syncLiveText } from '@ramu/shared/liveText'
+import { joinedText, LiveTextEditor, syncLiveText } from '@ramu/shared/liveText'
 import { deckText, slideWords } from '@ramu/shared/deckText'
 import { changedAt, headingAt } from '@ramu/shared/editingPart'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -185,6 +185,7 @@ export default function PageScreen() {
     const token = shared?.editor ? shared.token : null
     const textOf = (value: NonNullable<typeof editing>) =>
       value.blocks ? withDocBlocks(value.text, value.blocks) : value.text
+    const opened = editingNow.current ? textOf(editingNow.current) : ''
     void (
       token
         ? store.invoke(computerId, 'artifacts.shareLiveJoin', token)
@@ -193,12 +194,18 @@ export default function PageScreen() {
       (joined) => {
         if (stopped) return
         editor = new LiveTextEditor(joined.state)
-        const text = editor.text
-        setEditing((current) =>
-          current
-            ? { ...current, text, base: joined.version, ...(current.blocks ? { blocks: docBlocks(text) } : {}) }
-            : current,
-        )
+        const fromHost = editor.text
+        setEditing((current) => {
+          if (!current) return current
+          const typed = textOf(current)
+          const text = joinedText(opened, fromHost, typed)
+          return {
+            ...current,
+            text,
+            base: joined.version,
+            ...(current.blocks && text !== typed ? { blocks: docBlocks(text) } : {}),
+          }
+        })
       },
       () => {},
     )
@@ -261,11 +268,20 @@ export default function PageScreen() {
           ? { ...current, slides: current.slides.map((slide, index) => ({ ...slide, ...words[index] })) }
           : current
       })
-    void store.invoke(computerId, 'artifacts.liveJoin', artifactId).then(
+    const inOrder = (current: NonNullable<typeof editingSlides>) =>
+      current.slides.every((slide, index) => slide.from === index)
+    const opened = slidesNow.current ? deckText(slidesNow.current.slides) : ''
+    const token = shared?.editor ? shared.token : null
+    void (
+      token
+        ? store.invoke(computerId, 'artifacts.shareLiveJoin', token)
+        : store.invoke(computerId, 'artifacts.liveJoin', artifactId)
+    ).then(
       (joined) => {
         if (stopped) return
         editor = new LiveTextEditor(joined.state)
-        withWords(editor.text)
+        const current = slidesNow.current
+        withWords(joinedText(opened, editor.text, current && inOrder(current) ? deckText(current.slides) : opened))
         setEditingSlides((current) => movedBase(current, joined.version))
       },
       () => {},
@@ -277,12 +293,13 @@ export default function PageScreen() {
         editor,
         () => {
           const current = slidesNow.current
-          return current && current.slides.every((slide, index) => slide.from === index)
-            ? deckText(current.slides)
-            : null
+          return current && inOrder(current) ? deckText(current.slides) : null
         },
         (update, stateVector) =>
-          store.invoke(computerId, 'artifacts.liveSync', artifactId, update, stateVector).then((reply) => {
+          (token
+            ? store.invoke(computerId, 'artifacts.shareLiveSync', token, update, stateVector)
+            : store.invoke(computerId, 'artifacts.liveSync', artifactId, update, stateVector)
+          ).then((reply) => {
             if (reply.version !== undefined && !stopped)
               setEditingSlides((current) => movedBase(current, reply.version!))
             return reply
@@ -301,7 +318,7 @@ export default function PageScreen() {
       clearInterval(timer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- syncs once per opened editor; the store object changes on every update
-  }, [editingDeck, computerId, artifactId])
+  }, [editingDeck, computerId, artifactId, shared])
   // A design's frame words while the person edits them, one list per frame, and the version they started from.
   const [editingDesign, setEditingDesign] = useState<{
     base: number
@@ -975,7 +992,7 @@ export default function PageScreen() {
                 <T>{say('Edit text')}</T>
               </Row>
             ) : null}
-            {page?.kind === 'slides' && document && online && !shared && !viewer ? (
+            {page?.kind === 'slides' && document && online && (shared ? !!shared.editor : !viewer) ? (
               <Row
                 onPress={() =>
                   afterMenu(() => {
@@ -1487,8 +1504,11 @@ export default function PageScreen() {
                   notes: notes ?? '',
                   ...(columns ? { columns } : {}),
                 }))
-                store
-                  .invoke(computerId, 'artifacts.editSlides', artifactId, editingSlides.base, edits)
+                // Through an editing share link, the save names the link's editor.
+                ;(shared?.editor
+                  ? store.invoke(computerId, 'artifacts.shareEditSlides', shared.token, editingSlides.base, edits)
+                  : store.invoke(computerId, 'artifacts.editSlides', artifactId, editingSlides.base, edits)
+                )
                   .then(() => {
                     setEditingSlides(null)
                     void load()

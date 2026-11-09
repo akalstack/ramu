@@ -37,7 +37,7 @@ import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { notifyError } from '../chat/Notifications'
 import { StepSlider } from '@/components/step-slider'
 import { NAMED_SERVICE_NAMES, type NamedService } from '@ramu/shared/types/deploy'
-import { LiveTextEditor, syncLiveText } from '@ramu/shared/liveText'
+import { joinedText, LiveTextEditor, syncLiveText } from '@ramu/shared/liveText'
 import { deckText, slideWords } from '@ramu/shared/deckText'
 import { changedAt, headingAt } from '@ramu/shared/editingPart'
 import { useViewOnly } from '../composer/useViewOnly'
@@ -125,6 +125,8 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   const [editingSlides, setEditingSlides] = useState<{ base: number; slides: (Slide & { from: number })[] } | null>(
     null,
   )
+  // A text editor takes the page's place, so the deck cannot be presented or turned until it closes.
+  const stageHidden = !!editing || !!editingSlides || !!editingDesign
   const [savingEdit, setSavingEdit] = useState(false)
   // A motion's music and scene sound levels while the person changes them; null marks one removed.
   const [sounding, setSounding] = useState<{ base: number; music: number | null; sounds: (number | null)[] } | null>(
@@ -164,11 +166,15 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           ? { ...current, slides: current.slides.map((slide, index) => ({ ...slide, ...words[index] })) }
           : current
       })
+    const inOrder = (current: NonNullable<typeof editingSlides>) =>
+      current.slides.every((slide, index) => slide.from === index)
+    const opened = slidesNow.current ? deckText(slidesNow.current.slides) : ''
     void invoke('artifacts.liveJoin', artifactId).then(
       (joined) => {
         if (stopped) return
         editor = new LiveTextEditor(joined.state)
-        withWords(editor.text)
+        const current = slidesNow.current
+        withWords(joinedText(opened, editor.text, current && inOrder(current) ? deckText(current.slides) : opened))
         setBase(setEditingSlides, joined.version)
       },
       () => {},
@@ -180,9 +186,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
         editor,
         () => {
           const current = slidesNow.current
-          return current && current.slides.every((slide, index) => slide.from === index)
-            ? deckText(current.slides)
-            : null
+          return current && inOrder(current) ? deckText(current.slides) : null
         },
         (update, stateVector) => liveSync(update, stateVector, (version) => setBase(setEditingSlides, version)),
       )
@@ -259,13 +263,16 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
     let stopped = false
     let editor: LiveTextEditor | null = null
     let busy = false
+    const opened = editingNow.current?.text ?? ''
     void invoke('artifacts.liveJoin', artifactId).then(
       (joined) => {
         if (stopped) return
         editor = new LiveTextEditor(joined.state)
-        // The shared copy may hold others' typing not saved yet; it replaces the version's text in the box.
-        const text = editor.text
-        setEditing((current) => (current ? { ...current, text, base: joined.version } : current))
+        // The shared copy may hold others' typing not saved yet; it joins what was typed while the join was on its way.
+        const fromHost = editor.text
+        setEditing((current) =>
+          current ? { ...current, text: joinedText(opened, fromHost, current.text), base: joined.version } : current,
+        )
       },
       () => {},
     )
@@ -598,7 +605,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           </a>
         )}
         <div className="ml-auto flex flex-none items-center gap-0.5">
-          {slides > 0 && <SlideToolbar controls={slideControls} count={slides} disabled={!ready} />}
+          {slides > 0 && <SlideToolbar controls={slideControls} count={slides} disabled={!ready || stageHidden} />}
           {outline.length > 1 && <DocOutline frame={frame} instance={instance} headings={outline} disabled={!ready} />}
           {motionSeconds > 0 && (
             <MotionToolbar frame={frame} instance={instance} seconds={motionSeconds} disabled={!ready} />
@@ -717,6 +724,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           )}
           {page.kind === 'diagram' &&
             !editingLabels &&
+            !editing &&
             document &&
             mermaidLabels(editableSource(document) ?? '').length > 0 && (
               <Button
@@ -734,6 +742,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
             )}
           {(page.kind === 'doc' || page.kind === 'diagram') &&
             !editing &&
+            !editingLabels &&
             document &&
             editableSource(document) !== null && (
               <Button
@@ -1473,7 +1482,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
         </form>
       )}
       <div
-        hidden={!!editing || !!editingSlides || !!editingDesign}
+        hidden={stageHidden}
         className={`relative min-h-0 flex-1 overflow-auto ${width ? 'flex justify-center bg-fill px-3 py-4' : ''}`}
       >
         <div

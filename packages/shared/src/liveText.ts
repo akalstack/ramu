@@ -3,6 +3,7 @@
 // new with the host about once a second. Characters typed at once in the same line all stay, in an order every
 // editor agrees on. Shared so the host, the desktop and the phone use the same document shape.
 import * as Y from 'yjs'
+import { mergeText } from './textMerge'
 
 const FIELD = 'text'
 
@@ -106,6 +107,14 @@ export class LiveTextEditor {
     this.host = decode(reply.stateVector)
     return this.text
   }
+}
+
+/**
+ * The text an editor shows once its join answers: the shared copy, keeping what the person typed while the join was on
+ * its way. Typing that clashes with others' unsaved words in the same lines wins, since it is what the person sees.
+ */
+export function joinedText(opened: string, joined: string, typed: string): string {
+  return typed === opened ? joined : (mergeText(opened, joined, typed) ?? typed)
 }
 
 /**
