@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react'
 const MermaidBlock = lazy(() => import('./MermaidBlock').then((m) => ({ default: m.MermaidBlock })))
-import { useEffect, useState } from 'react'
-import type { Components } from 'react-markdown'
+import { useEffect, useState, type ComponentProps } from 'react'
+import type { Components, ExtraProps } from 'react-markdown'
 import { Check, Copy } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import {
@@ -102,28 +102,29 @@ export function ChatCodeBlock({ source, hint }: { source: string; hint?: string 
 }
 
 /** Fenced and indented code share the toolbar; inline code stays inline. */
-export const chatCodeComponents: Components = {
-  pre: ({ node, children }) => {
-    const code = node?.children.find((child) => child.type === 'element' && child.tagName === 'code')
-    if (!code || code.type !== 'element') return <pre>{children}</pre>
-    const source = code.children.map((child) => (child.type === 'text' ? child.value : '')).join('')
-    const classes = code.properties.className
-    const hint = (Array.isArray(classes) ? classes : [])
-      .map(String)
-      .find((name) => name.startsWith('language-'))
-      ?.slice(9)
-    return hint?.toLowerCase() === 'mermaid' ? (
-      <Suspense
-        fallback={
-          <pre>
-            <code>{source}</code>
-          </pre>
-        }
-      >
-        <MermaidBlock source={source} />
-      </Suspense>
-    ) : (
-      <ChatCodeBlock source={source} hint={hint} />
-    )
-  },
+/** A fenced code block: a Mermaid diagram, or the code frame with its language and Copy. */
+export function ChatCodePre({ node, children }: ComponentProps<'pre'> & ExtraProps) {
+  const code = node?.children.find((child) => child.type === 'element' && child.tagName === 'code')
+  if (!code || code.type !== 'element') return <pre>{children}</pre>
+  const source = code.children.map((child) => (child.type === 'text' ? child.value : '')).join('')
+  const classes = code.properties.className
+  const hint = (Array.isArray(classes) ? classes : [])
+    .map(String)
+    .find((name) => name.startsWith('language-'))
+    ?.slice(9)
+  return hint?.toLowerCase() === 'mermaid' ? (
+    <Suspense
+      fallback={
+        <pre>
+          <code>{source}</code>
+        </pre>
+      }
+    >
+      <MermaidBlock source={source} />
+    </Suspense>
+  ) : (
+    <ChatCodeBlock source={source} hint={hint} />
+  )
 }
+
+export const chatCodeComponents: Components = { pre: ChatCodePre }

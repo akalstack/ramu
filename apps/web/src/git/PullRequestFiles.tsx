@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import type { PullRequestFile, PullRequestThread, ReviewVerdict } from '@ramu/shared/types'
 import { patchRows } from '@ramu/shared/pullRequests'
 import { cn } from 'cn'
+import { PullRequestMarkdown } from './PullRequestMarkdown'
 import { t } from '../i18n'
 import { ipcQueryKeyOn } from '../dataQueries'
 import { FileIcon } from '../editor/FileIcon'
@@ -102,7 +103,7 @@ function InlineThread({ thread }: { thread: PullRequestThread }) {
             {comment.bot && <span className="text-caption text-muted-foreground">{t('bot')}</span>}
             {thread.resolved && <span className="text-caption text-muted-foreground">{t('Resolved')}</span>}
           </header>
-          <p className="text-soft">{comment.body}</p>
+          <PullRequestMarkdown>{comment.body}</PullRequestMarkdown>
         </Fragment>
       ))}
     </article>
@@ -219,7 +220,7 @@ function FileDiff({
                     <Trash2 size={13} />
                   </Button>
                 </header>
-                <p>{comment.body}</p>
+                <PullRequestMarkdown>{comment.body}</PullRequestMarkdown>
               </article>
             ))}
             {writing && range && (

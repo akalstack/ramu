@@ -2,10 +2,7 @@ import { useEffect, useState } from 'react'
 import { PullRequestTimeline } from './PullRequestTimeline'
 import { PullRequestFiles, usePullRequestFiles } from './PullRequestFiles'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { previewRehypePlugins } from '@ramu/shared/workspace/markdownRendering'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import { chatMarkdownComponents } from '../chat/ChatMarkdown'
+import { PullRequestMarkdown } from './PullRequestMarkdown'
 import { useQuery } from '@tanstack/react-query'
 import {
   Bot,
@@ -453,16 +450,8 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
             {!!description.data?.trim() && (
               <section className="flex flex-col gap-1">
                 <h3 className="m-0 text-control font-semibold">{t('Description')}</h3>
-                <div className="min-w-0 text-body text-soft [overflow-wrap:anywhere]">
-                  {/* Descriptions are often HTML (Dependabot's are): render it sanitized, as the Markdown preview does. */}
-                  <Markdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={previewRehypePlugins}
-                    components={chatMarkdownComponents}
-                  >
-                    {description.data}
-                  </Markdown>
-                </div>
+                {/* Descriptions are often HTML (Dependabot's are): rendered sanitized, as the service shows them. */}
+                <PullRequestMarkdown className="text-body">{description.data}</PullRequestMarkdown>
               </section>
             )}
 
@@ -509,20 +498,29 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
                 </p>
               )}
               {shownThreads.map((entry) => (
-                <article key={entry.id} className="flex flex-col gap-1.5 rounded-(--radius-s) border border-line p-2.5">
-                  <div className="text-caption text-muted-foreground">
+                <article key={entry.id} className="flex flex-col gap-2 rounded-(--radius-m) border border-line p-3">
+                  <div className="font-mono text-caption text-muted-foreground">
                     {entry.path ? `${entry.path}${entry.line ? `:${entry.line}` : ''}` : t('Conversation')}
                     {entry.outdated && ` · ${t('Outdated')}`}
                     {entry.resolved && ` · ${t('Resolved')}`}
                   </div>
                   {entry.comments.map((comment) => (
-                    <div key={comment.id} className="text-control [overflow-wrap:anywhere] whitespace-pre-wrap">
-                      <span className="font-medium">{comment.author ?? t('Someone')}</span>
-                      {comment.bot && <span className="ml-1 text-caption text-muted-foreground">{t('bot')}</span>}
-                      {!comment.trusted && (
-                        <span className="ml-1 text-caption text-warn">{t('From outside the project')}</span>
-                      )}
-                      <div className="text-soft">{comment.body}</div>
+                    <div
+                      key={comment.id}
+                      className="flex flex-col gap-1 border-t border-line pt-2 first-of-type:border-t-0 first-of-type:pt-0"
+                    >
+                      <div className="flex items-center gap-1.5 text-control">
+                        <span className="font-medium">{comment.author ?? t('Someone')}</span>
+                        {comment.bot && (
+                          <span className="rounded-full bg-fill px-1.5 text-caption text-muted-foreground">
+                            {t('bot')}
+                          </span>
+                        )}
+                        {!comment.trusted && (
+                          <span className="text-caption text-warn">{t('From outside the project')}</span>
+                        )}
+                      </div>
+                      <PullRequestMarkdown>{comment.body}</PullRequestMarkdown>
                     </div>
                   ))}
                 </article>

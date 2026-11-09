@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AppWindow, Pin, Plus } from 'lucide-react'
-import { NO_PROJECT } from '@ramu/shared/types'
-import { draftKey, draftStore, loadDraft, saveDraft } from '../composer/drafts'
+import { AppWindow, Pin } from 'lucide-react'
 import type { ArtifactInfo, ArtifactKind } from '@ramu/shared/artifacts'
 import { ARTIFACT_KINDS, declaredCapabilities } from '@ramu/shared/artifacts'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -68,7 +66,7 @@ function HostPagesFeed({ onChange }: { onChange(host: string, pages: HostPages |
  */
 export function PagesPage() {
   useLanguage()
-  const { activeHost, select } = useHostSelection()
+  const { activeHost } = useHostSelection()
   const hosts = useScopedHosts()
   const manyHosts = hosts.length > 1
   const [lists, setLists] = useState<Record<string, HostPages>>({})
@@ -81,24 +79,16 @@ export function PagesPage() {
       }),
     [],
   )
-  const ws = useWorkspace()
   const [query, setQuery] = useState('')
   const [kind, setKind] = useState<ArtifactKind | 'all'>('all')
   const [importing, setImporting] = useState(false)
   const viewOnly = useViewOnly()
   const connected = hosts.filter((entry) => entry.status === 'connected')
-  // New and Import act on the host the filter shows, or the one on screen under All hosts.
+  // Import acts on the host the filter shows, or the one on screen under All hosts.
   const target = (manyHosts ? undefined : hosts[0]?.id) ?? activeHost
   const targetReady = connected.some((entry) => entry.id === target)
   const hostName = (id: string) => hosts.find((entry) => entry.id === id)?.name ?? ''
   // A page starts as a request to an agent: New chat outside any project, with the request begun in the box.
-  const newPage = () => {
-    const key = draftKey.newChat(NO_PROJECT)
-    const store = draftStore(target)
-    if (!loadDraft(key, store).trim()) saveDraft(key, `${t('Make me a page to')} `, store)
-    if (target === activeHost) ws.newTask(NO_PROJECT)
-    else select(target, { kind: 'new', projectId: NO_PROJECT })
-  }
   const [open, setOpen] = useState<PageTarget | null>(() => takePendingPage())
   useEffect(() => {
     const choose = (event: Event) => {
@@ -157,10 +147,6 @@ export function PagesPage() {
           <div className="flex flex-none gap-2">
             <Button variant="outline" disabled={viewOnly || !targetReady} onClick={() => setImporting(true)}>
               {t('Import an artifact…')}
-            </Button>
-            <Button disabled={viewOnly || !targetReady} onClick={newPage}>
-              <Plus size={14} />
-              {t('New')}
             </Button>
           </div>
         </header>

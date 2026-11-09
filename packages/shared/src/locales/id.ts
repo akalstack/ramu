@@ -6776,4 +6776,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Projects of this identity use it; every other project keeps using {0}.": "Proyek dengan identitas ini memakainya; proyek lain tetap memakai {0}.",
   "Which identity uses it": "Identitas yang memakainya",
   "Open browser or computer": "Buka browser atau komputer",
+  "Suggested change": "Perubahan yang disarankan",
+  "Suggests removing these lines": "Menyarankan menghapus baris ini",
 }
