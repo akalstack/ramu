@@ -25,7 +25,9 @@ import { ContentSkeleton } from '@/components/content-skeleton'
 import { Button } from '@/components/desktop-button'
 import { Checkbox } from '@/components/desktop-checkbox'
 import type { MergeMethod, PullRequestAction, PullRequestSummary, ViewDescriptor } from '@ramu/shared/types'
-import { pullRequestStage } from '@ramu/shared/pullRequests'
+import { FORGE_NAMES, pullRequestRef, pullRequestStage } from '@ramu/shared/pullRequests'
+import { forgeBrand } from '@ramu/shared/brands'
+import { BrandIcon } from '@/components/brand-icon'
 import { cn } from 'cn'
 import { Dialog, Dropdown } from '../Menu'
 import { t, useLanguage } from '../i18n'
@@ -88,6 +90,8 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
   const pr: PullRequestSummary | undefined =
     inOpen ?? closedList.data?.pullRequests.find((entry) => entry.url === view.url)
   const linked = (list.data?.threads ?? closedList.data?.threads ?? {})[view.url] ?? []
+  // A list without a service is GitHub's.
+  const service = list.data?.service ?? closedList.data?.service ?? 'github'
   const drafts = useQuery({
     queryKey: ipcQueryKeyOn(host.id, 'forge.drafts', view.url),
     queryFn: () => call('forge.drafts', view.url),
@@ -220,7 +224,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
           <div className="flex items-start gap-2">
             <PullRequestIcon pr={pr} stage={stage} size={18} className="mt-1" />
             <h2 className="m-0 min-w-0 flex-1 text-[length:var(--font-title,18px)] font-semibold leading-snug [overflow-wrap:anywhere]">
-              {pr.title} <span className="font-normal text-muted-foreground">#{pr.number}</span>
+              {pr.title} <span className="font-normal text-muted-foreground">{pullRequestRef(service, pr.number)}</span>
             </h2>
             <Button
               variant="ghost"
@@ -252,7 +256,8 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
               rel="noreferrer"
               className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
             >
-              {t('Open on the hosting service')}
+              <BrandIcon brand={forgeBrand(service)} size={11} />
+              {t('Open on {0}', { '0': FORGE_NAMES[service] })}
               <ExternalLink size={11} />
             </a>
           </div>

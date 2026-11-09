@@ -7,6 +7,7 @@ import {
   matchesPullRequestRow,
   pullRequestGlyph,
   pullRequestRows,
+  pullRequestRef,
   pullRequestStage,
   sortPullRequestRows,
 } from '../src/pullRequests'
@@ -144,5 +145,35 @@ describe('sorting the Pull requests page', () => {
 
   it('or simply by the most recent change', () => {
     expect(sortPullRequestRows(rows, 'updated').map((entry) => entry.pr.updatedAt)).toEqual([9, 7, 5, 3, 1])
+  })
+})
+
+describe('hosting services on the Pull requests page', () => {
+  const base = {
+    projectId: 'p',
+    projectName: 'Shop',
+    repoId: 'r',
+    availability: 'ready' as const,
+    viewer: 'me',
+    local: {},
+  }
+  const rows = pullRequestRows([
+    { ...base, repoName: 'web', pullRequests: [pr({ url: 'u/1', number: 1 })] },
+    { ...base, repoId: 'g', repoName: 'api', service: 'gitlab', pullRequests: [pr({ url: 'u/2', number: 2 })] },
+  ])
+
+  it("carries each row's service, GitHub when the list names none", () => {
+    expect(rows.map((row) => row.service).sort()).toEqual(['github', 'gitlab'])
+  })
+
+  it('writes numbers the way each service does', () => {
+    expect(pullRequestRef('github', 4)).toBe('#4')
+    expect(pullRequestRef('bitbucket', 4)).toBe('#4')
+    expect(pullRequestRef('gitlab', 4)).toBe('!4')
+    expect(pullRequestRef('azure', 4)).toBe('!4')
+  })
+
+  it('finds rows by their service name', () => {
+    expect(rows.filter((row) => matchesPullRequestRow(row, 'gitlab')).map((row) => row.pr.number)).toEqual([2])
   })
 })

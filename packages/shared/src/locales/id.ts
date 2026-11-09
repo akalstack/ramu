@@ -6382,7 +6382,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Provider browser setup uses its existing browser tools and sessions, which Ramu cannot show or import.':
     'Pengaturan browser provider memakai alat dan sesi browser yang sudah ada, yang tidak bisa ditampilkan atau diimpor Ramu.',
   'Closest to merging': 'Paling dekat untuk di-merge',
-  'Opens on the hosting service': 'Terbuka di layanan hosting',
   'Recently updated': 'Baru diperbarui',
   Sort: 'Urutkan',
   '{0} lines added, {1} removed': '{0} baris ditambahkan, {1} dihapus',
@@ -6405,4 +6404,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'requested changes': 'meminta perubahan',
   'had a review dismissed': 'review-nya dibatalkan',
   Pages: 'Halaman',
+  'Open on {0}': 'Buka di {0}',
+  'Opens on {0}': 'Terbuka di {0}',
+  'All on {0}': 'Semua di {0}',
+  'All services': 'Semua layanan',
+  'Hosting service': 'Layanan hosting',
 }

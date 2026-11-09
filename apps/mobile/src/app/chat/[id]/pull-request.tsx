@@ -25,7 +25,7 @@ import {
   type PullRequestSummary,
   type PullRequestThread,
 } from '@ramu/shared/types'
-import { pullRequestStage } from '@ramu/shared/pullRequests'
+import { FORGE_NAMES, pullRequestRef, pullRequestStage } from '@ramu/shared/pullRequests'
 import { font, space, useTheme } from '../../../theme'
 import { useChat, useStore } from '../../../runtime/store'
 import { canWriteHost } from '../../../runtime/viewerAccess'
@@ -269,6 +269,8 @@ export default function PullRequestScreen() {
     )
 
   const linked = list?.threads?.[url] ?? []
+  // A list without a service is GitHub's.
+  const service = list?.service ?? 'github'
   const thread = linked.at(-1)
   const draftsReady =
     batch?.kind === 'review'
@@ -281,7 +283,7 @@ export default function PullRequestScreen() {
 
   return (
     <Screen bg="canvas">
-      <Header title={pr ? `#${pr.number}` : say('Pull request')} subtitle={pr?.title} />
+      <Header title={pr ? pullRequestRef(service, pr.number) : say('Pull request')} subtitle={pr?.title} />
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l, paddingBottom: space.xl }}
@@ -304,7 +306,10 @@ export default function PullRequestScreen() {
                   <PullRequestGlyph pr={pr} stage={stage} size={18} />
                 </View>
                 <T size={font.heading} weight="600" style={{ flex: 1 }}>
-                  {pr.title} <T size={font.heading} tone="muted" weight="400">{`#${pr.number}`}</T>
+                  {pr.title}{' '}
+                  <T size={font.heading} tone="muted" weight="400">
+                    {pullRequestRef(service, pr.number)}
+                  </T>
                 </T>
               </View>
               <View
@@ -343,7 +348,7 @@ export default function PullRequestScreen() {
               <Button
                 kind="ghost"
                 icon={ExternalLink}
-                title={say('Open on the hosting service')}
+                title={say('Open on {0}', { 0: FORGE_NAMES[service] })}
                 onPress={() => void Linking.openURL(pr.url).catch(() => {})}
                 style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }}
               />

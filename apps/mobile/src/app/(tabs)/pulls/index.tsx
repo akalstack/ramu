@@ -2,13 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Linking, RefreshControl, ScrollView, TextInput, View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ExternalLink, GitPullRequest, MessageSquare } from 'lucide-react-native'
-import type { RepositoryPullRequests } from '@ramu/shared/types'
+import type { ForgeService, RepositoryPullRequests } from '@ramu/shared/types'
+import { forgeBrand } from '@ramu/shared/brands'
+import { BrandIcon } from '../../../components/Logos'
 import {
+  FORGE_NAMES,
   PULL_REQUEST_FILTERS,
   PULL_REQUEST_FILTER_LABEL,
   PULL_REQUEST_STAGE_LABEL,
   inPullRequestFilter,
   matchesPullRequestRow,
+  pullRequestRef,
   pullRequestRows,
   sortPullRequestRows,
   type PullRequestFilter,
@@ -55,6 +59,8 @@ export default function PullRequestsScreen() {
   }, [params.computer, params.repo])
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<PullRequestSort>('updated')
+  // Narrows to one hosting service when the hosts' repositories span several.
+  const [service, setService] = useState<ForgeService | null>(null)
   const [lists, setLists] = useState<
     Record<string, { open?: RepositoryPullRequests[]; closed?: RepositoryPullRequests[] }>
   >({})
@@ -95,10 +101,14 @@ export default function PullRequestsScreen() {
       .filter(
         (row) =>
           (!repo || (row.computerId === repo.computer && row.repoId === repo.repoId)) &&
+          (!service || row.service === service) &&
           matchesPullRequestRow(row, search),
       )
       .sort((a, b) => b.pr.updatedAt - a.pr.updatedAt)
   const openRows = rowsOf('open')
+  const services = [
+    ...new Set(Object.values(lists).flatMap((entry) => (entry.open ?? []).map((item) => item.service ?? 'github'))),
+  ]
   const rows = sortPullRequestRows(
     (closed ? rowsOf('closed') : openRows).filter((row) => inPullRequestFilter(row, filter)),
     sort,
@@ -187,6 +197,20 @@ export default function PullRequestsScreen() {
               }}
             />
           ) : null}
+          {services.length > 1 ? (
+            <Chip
+              label={service ? FORGE_NAMES[service] : say('All services')}
+              selected={!!service}
+              accessibilityLabel={say('Hosting service')}
+              chevron
+              onPress={() =>
+                setService((current) => {
+                  const next = current ? services.indexOf(current) + 1 : 0
+                  return next < services.length ? services[next]! : null
+                })
+              }
+            />
+          ) : null}
           <Chip
             label={say(sort === 'readiness' ? 'Closest to merging' : 'Recently updated')}
             accessibilityLabel={say('Sort')}
@@ -231,6 +255,7 @@ export default function PullRequestsScreen() {
                   accessibilityLabel={[
                     say('Pull request #{0}: {1}', { 0: row.pr.number, 1: row.pr.title }),
                     repoLabel(row),
+                    FORGE_NAMES[row.service],
                     say(PULL_REQUEST_STAGE_LABEL[row.stage]),
                     thread ? say('In {0}', { 0: thread.title }) : null,
                   ]
@@ -252,11 +277,18 @@ export default function PullRequestsScreen() {
                         {ago(row.pr.updatedAt)}
                       </T>
                     </View>
-                    <T size={font.caption} tone="muted" numberOfLines={1}>
-                      {[multi ? row.hostName : null, `${repoLabel(row)} #${row.pr.number}`, row.pr.author]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </T>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <BrandIcon brand={forgeBrand(row.service)} size={11} />
+                      <T size={font.caption} tone="muted" numberOfLines={1} style={{ flex: 1 }}>
+                        {[
+                          multi ? row.hostName : null,
+                          `${repoLabel(row)} ${pullRequestRef(row.service, row.pr.number)}`,
+                          row.pr.author,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </T>
+                    </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, overflow: 'hidden' }}>
                       <ChecksLine checks={row.pr.checks} compact />
                       <StageText stage={row.stage} />

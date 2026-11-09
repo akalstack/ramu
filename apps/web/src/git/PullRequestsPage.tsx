@@ -18,12 +18,16 @@ import { ContentSkeleton } from '@/components/content-skeleton'
 import { OverlayScrollArea } from '@/components/overlay-scroll-area'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import type { PullRequestSummary, RepositoryPullRequests } from '@ramu/shared/types'
+import type { ForgeService, PullRequestSummary, RepositoryPullRequests } from '@ramu/shared/types'
+import { forgeBrand } from '@ramu/shared/brands'
+import { BrandIcon } from '@/components/brand-icon'
 import {
   PULL_REQUEST_FILTERS,
   PULL_REQUEST_FILTER_LABEL,
   inPullRequestFilter,
   matchesPullRequestRow,
+  FORGE_NAMES,
+  pullRequestRef,
   pullRequestRows,
   sortPullRequestRows,
   type PullRequestFilter,
@@ -43,6 +47,7 @@ import { PullRequestIcon, StageChip } from './PullRequestIcon'
 import { PullRequestView } from './PullRequestView'
 
 const ALL = ''
+const SERVICE = 'service:'
 const SORT_KEY = 'ramu.pull-requests-sort'
 
 /** The order last chosen on this device; storage may be unavailable, which leaves the default. */
@@ -136,9 +141,13 @@ export function PullRequestsPage() {
 
   const repositories: RepositoryPullRequests[] = useMemo(() => query.data ?? [], [query.data])
   const allRows = useMemo(() => pullRequestRows(repositories), [repositories])
-  const scoped = allRows.filter(
-    (row) => (repoId === ALL || row.repoId === repoId) && matchesPullRequestRow(row, search),
-  )
+  // The repository picker also narrows to one service: a value of `service:<id>`.
+  const inScope = (entry: { repoId: string; service?: ForgeService }) =>
+    repoId === ALL ||
+    (repoId.startsWith(SERVICE)
+      ? (entry.service ?? 'github') === repoId.slice(SERVICE.length)
+      : entry.repoId === repoId)
+  const scoped = allRows.filter((row) => inScope(row) && matchesPullRequestRow(row, search))
   const rows = sortPullRequestRows(
     scoped.filter((row) => inPullRequestFilter(row, filter)),
     sort,
@@ -148,15 +157,11 @@ export function PullRequestsPage() {
   const count = (entry: PullRequestFilter) =>
     entry === 'closed'
       ? 0
-      : openRows.filter(
-          (row) =>
-            (repoId === ALL || row.repoId === repoId) &&
-            matchesPullRequestRow(row, search) &&
-            inPullRequestFilter(row, entry),
-        ).length
+      : openRows.filter((row) => inScope(row) && matchesPullRequestRow(row, search) && inPullRequestFilter(row, entry))
+          .length
   const attention = repositories.filter(
     (repo) =>
-      (repoId === ALL || repo.repoId === repoId) &&
+      inScope(repo) &&
       (repo.error ||
         repo.availability === 'no-cli' ||
         repo.availability === 'signed-out' ||
@@ -184,7 +189,7 @@ export function PullRequestsPage() {
         stacked
         className="py-1.5"
         aria-selected={active}
-        title={entry.outside ? `${pr.title} (${t('Opens on the hosting service')})` : pr.title}
+        title={entry.outside ? `${pr.title} (${t('Opens on {0}', { '0': FORGE_NAMES[entry.service] })})` : pr.title}
         // Ramu has no checkout of a repository outside every project, so its pull request opens on the service.
         onClick={() => (entry.outside ? void openOnThisComputer('app.openExternal', pr.url) : setSelected(entry))}
       >
@@ -203,8 +208,11 @@ export function PullRequestsPage() {
           <span className="flex-none text-caption text-muted-foreground tabular-nums">{timeAgo(pr.updatedAt)}</span>
         </span>
         <span className="flex w-full min-w-0 items-center gap-1.5 pl-[21px] text-caption text-muted-foreground">
-          <span className="flex-none truncate">
-            {repoLabel(entry)} #{pr.number}
+          <span className="inline-flex min-w-0 flex-none items-center gap-1" title={FORGE_NAMES[entry.service]}>
+            <BrandIcon brand={forgeBrand(entry.service)} size={11} className="flex-none" />
+            <span className="truncate">
+              {repoLabel(entry)} {pullRequestRef(entry.service, pr.number)}
+            </span>
           </span>
           <ChecksMark checks={pr.checks} />
           <StageChip stage={entry.stage} />
@@ -228,9 +236,20 @@ export function PullRequestsPage() {
     )
   }
 
+  const services = [...new Set(repositories.map((repo) => repo.service ?? 'github'))]
   const repoOptions = [
     { value: ALL, label: t('All repositories') },
-    ...repositories.map((repo) => ({ value: repo.repoId, label: repoLabel(repo) })),
+    // With more than one service, each can be chosen whole, and each repository says which it is on.
+    ...(services.length > 1
+      ? services.map((service) => ({
+          value: `${SERVICE}${service}`,
+          label: t('All on {0}', { '0': FORGE_NAMES[service] }),
+        }))
+      : []),
+    ...repositories.map((repo) => ({
+      value: repo.repoId,
+      label: services.length > 1 ? `${repoLabel(repo)} · ${FORGE_NAMES[repo.service ?? 'github']}` : repoLabel(repo),
+    })),
   ]
 
   return (

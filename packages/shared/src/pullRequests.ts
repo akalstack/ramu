@@ -1,4 +1,5 @@
 import type {
+  ForgeService,
   PullRequestChecksState,
   PullRequestGroup,
   PullRequestStage,
@@ -133,6 +134,21 @@ export interface PullRequestRow {
   threads: { taskId: string; title: string }[]
   /** From a repository in no project: it opens on the hosting service, since Ramu has no checkout of it. */
   outside: boolean
+  /** The hosting service it lives on. */
+  service: ForgeService
+}
+
+/** Each hosting service's own name, as people know it. */
+export const FORGE_NAMES: Record<ForgeService, string> = {
+  github: 'GitHub',
+  gitlab: 'GitLab',
+  bitbucket: 'Bitbucket',
+  azure: 'Azure DevOps',
+}
+
+/** A pull request's number the way its service writes it: GitLab and Azure DevOps use `!12`, the others `#12`. */
+export function pullRequestRef(service: ForgeService, number: number): string {
+  return `${service === 'gitlab' || service === 'azure' ? '!' : '#'}${number}`
 }
 
 /** Every repository's pull requests as one list, newest change first. */
@@ -148,6 +164,8 @@ export function pullRequestRows(repositories: RepositoryPullRequests[]): PullReq
         repoName: repo.repoName,
         threads: repo.threads?.[pr.url] ?? [],
         outside: !!repo.outside,
+        // A list without a service is GitHub's, as the type documents.
+        service: repo.service ?? 'github',
       })),
     )
     .sort((a, b) => b.pr.updatedAt - a.pr.updatedAt)
@@ -180,7 +198,7 @@ export function matchesPullRequestRow(row: PullRequestRow, search: string): bool
   const words = search.trim().toLowerCase().replace(/^#/, '').split(/\s+/).filter(Boolean)
   if (!words.length) return true
   const haystack =
-    `${row.pr.number} ${row.pr.title} ${row.pr.author ?? ''} ${row.pr.headBranch} ${row.projectName} ${row.repoName}`.toLowerCase()
+    `${row.pr.number} ${row.pr.title} ${row.pr.author ?? ''} ${row.pr.headBranch} ${row.projectName} ${row.repoName} ${FORGE_NAMES[row.service]}`.toLowerCase()
   return words.every((word) => haystack.includes(word))
 }
 
