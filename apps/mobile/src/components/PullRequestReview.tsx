@@ -64,35 +64,57 @@ function CommentInput({
   )
 }
 
-/** Writes one line comment for the review; it waits as pending until Finish review sends them together. */
+/**
+ * Writes one line comment for the review; it waits as pending until Finish review sends them together. With `initial`
+ * it edits a pending comment, and `onRemove` takes it out of the review.
+ */
 export function LineCommentSheet({
   path,
   line,
+  initial,
   onAdd,
+  onRemove,
   onClose,
 }: {
   path: string
   line: number
+  initial?: string
   onAdd: (body: string) => void
+  onRemove?: () => void
   onClose: () => void
 }) {
   const say = useSay()
-  const [body, setBody] = useState('')
+  const [body, setBody] = useState(initial ?? '')
   return (
-    <Sheet open onClose={onClose} title={say('Comment on line {0}', { 0: line })}>
+    <Sheet
+      open
+      onClose={onClose}
+      title={initial === undefined ? say('Comment on line {0}', { 0: line }) : say('Edit comment')}
+    >
       <View style={{ paddingHorizontal: space.l, paddingBottom: space.l, gap: space.m }}>
         <T size={font.caption} tone="muted" mono numberOfLines={2}>
           {path}
         </T>
         <CommentInput value={body} onChange={setBody} placeholder={say('Leave a comment')} />
         <Button
-          title={say('Add to review')}
+          title={say(initial === undefined ? 'Add to review' : 'Save')}
           disabled={!body.trim()}
           onPress={() => {
             onAdd(body.trim())
             onClose()
           }}
         />
+        {onRemove ? (
+          <Button
+            kind="ghost"
+            icon={Trash2}
+            title={say('Remove comment')}
+            onPress={() => {
+              onRemove()
+              onClose()
+            }}
+          />
+        ) : null}
       </View>
     </Sheet>
   )

@@ -55,6 +55,7 @@ import {
   PullRequestReadinessCard,
   PullRequestWorkRow,
 } from '../../../components/PullRequestOverview'
+import { readReviewDraft, reviewDraftKey, writeReviewDraft } from '../../../runtime/pullRequestReviewDraft'
 import { FinishReviewSheet, LineCommentSheet, type PendingComment } from '../../../components/PullRequestReview'
 import { ReviewDrafts } from '../../../components/ReviewDrafts'
 import { PeopleSheet, PullRequestComments, ReactionRow } from '../../../components/PullRequestComments'
@@ -115,6 +116,12 @@ export default function PullRequestScreen() {
   const taskId = chat?.taskId ?? (params.computer ? `project:${params.project ?? ''}` : '')
   const projectId = chat?.projectId ? rawId(chat.projectId) : params.project || null
   const outside = outsideRepository(repoId)
+  // The person's own review: line comments waiting to go out together, kept as a draft so leaving the pull request
+  // or closing the app never loses them.
+  const draftKey = reviewDraftKey(computerId, url)
+  const pending = readReviewDraft(store.drafts[draftKey])
+  const setPending = (change: (current: PendingComment[]) => PendingComment[]) =>
+    store.setDraft(draftKey, writeReviewDraft(change(readReviewDraft(store.drafts[draftKey]))))
   const computer = store.computers.find((pc) => pc.id === computerId)
   const online = store.isOnline(computerId)
   // Offline, the screen reads from what this phone kept, and nothing is sent until the host is back.
@@ -160,9 +167,8 @@ export default function PullRequestScreen() {
   const [more, setMore] = useState(false)
   const [threadFilter, setThreadFilter] = useState<ReviewThreadFilter>('open')
   const [threadOrder, setThreadOrder] = useState<'newest' | 'oldest'>('newest')
-  // The person's own review: line comments waiting to go out together, the line being commented on, and the sheet.
-  const [pending, setPending] = useState<PendingComment[]>([])
-  const [commenting, setCommenting] = useState<{ path: string; line: number } | null>(null)
+  // The line being commented on (or the pending comment being edited), and the Finish review sheet.
+  const [commenting, setCommenting] = useState<{ path: string; line: number; id?: string; body?: string } | null>(null)
   const [finishing, setFinishing] = useState(false)
   const [reviewError, setReviewError] = useState<string | null>(null)
 
@@ -389,7 +395,7 @@ export default function PullRequestScreen() {
         body,
         comments: pending.map(({ path, line, body: text }) => ({ path, line, body: text })),
       })
-      setPending([])
+      setPending(() => [])
       setFinishing(false)
       await read(true)
       setRevision((value) => value + 1)
@@ -790,6 +796,7 @@ export default function PullRequestScreen() {
                   threads={threads ?? []}
                   pending={pending}
                   onComment={canReview ? (path, line) => setCommenting({ path, line }) : undefined}
+                  onEditPending={canReview ? (comment) => setCommenting(comment) : undefined}
                 />
               </View>
             ) : (
@@ -825,12 +832,20 @@ export default function PullRequestScreen() {
         <LineCommentSheet
           path={commenting.path}
           line={commenting.line}
+          initial={commenting.body}
           onClose={() => setCommenting(null)}
-          onAdd={(body) =>
-            setPending((current) => [
-              ...current,
-              { id: `${commenting.path}:${commenting.line}:${Date.now()}`, ...commenting, body },
-            ])
+          onAdd={(body) => {
+            const { id, path, line } = commenting
+            setPending((current) =>
+              id
+                ? current.map((comment) => (comment.id === id ? { ...comment, body } : comment))
+                : [...current, { id: `${path}:${line}:${Date.now()}`, path, line, body }],
+            )
+          }}
+          onRemove={
+            commenting.id
+              ? () => setPending((current) => current.filter((comment) => comment.id !== commenting.id))
+              : undefined
           }
         />
       ) : null}

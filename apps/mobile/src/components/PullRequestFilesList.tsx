@@ -18,11 +18,13 @@ function FilePatch({
   threads,
   pending,
   onComment,
+  onEditPending,
 }: {
   file: PullRequestFile
   threads: PullRequestThread[]
   pending: PendingComment[]
   onComment?: (line: number) => void
+  onEditPending?: (comment: PendingComment) => void
 }) {
   const { c } = useTheme()
   const say = useSay()
@@ -90,22 +92,30 @@ function FilePatch({
                 </View>
               ))}
               {waiting.map((comment) => (
-                <View
+                <Pressable
                   key={comment.id}
-                  style={{
+                  disabled={!onEditPending}
+                  accessibilityRole={onEditPending ? 'button' : undefined}
+                  accessibilityLabel={onEditPending ? say('Edit comment') : undefined}
+                  onPress={() => {
+                    tap()
+                    onEditPending?.(comment)
+                  }}
+                  style={({ pressed }) => ({
+                    opacity: pressed ? 0.7 : 1,
                     gap: 2,
                     padding: space.s,
                     marginVertical: 2,
                     backgroundColor: c.accentSoft,
                     borderRadius: radius.s,
                     maxWidth: 360,
-                  }}
+                  })}
                 >
                   <T size={font.caption} tone="accent" weight="600">
-                    {say('Pending')}
+                    {onEditPending ? `${say('Pending')} · ${say('Tap to edit')}` : say('Pending')}
                   </T>
                   <T size={font.caption}>{comment.body}</T>
-                </View>
+                </Pressable>
               ))}
             </Fragment>
           )
@@ -130,6 +140,7 @@ export function PullRequestFilesList({
   threads,
   pending = [],
   onComment,
+  onEditPending,
 }: {
   files: PullRequestFile[]
   more: boolean
@@ -138,6 +149,8 @@ export function PullRequestFilesList({
   pending?: PendingComment[]
   /** With it, a line on the new side opens a comment for the review. */
   onComment?: (path: string, line: number) => void
+  /** With it, a pending comment opens to be edited or removed. */
+  onEditPending?: (comment: PendingComment) => void
 }) {
   const { c } = useTheme()
   const say = useSay()
@@ -202,6 +215,7 @@ export function PullRequestFilesList({
                 threads={fileThreads}
                 pending={filePending}
                 onComment={onComment ? (line) => onComment(file.path, line) : undefined}
+                onEditPending={onEditPending}
               />
             ) : null}
           </View>
