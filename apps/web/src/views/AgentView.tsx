@@ -139,7 +139,12 @@ import { EditFromHereDialog } from './agent/components/EditFromHereDialog'
 import { MESSAGE_ACTION_EVENT, type MessageActionDetail } from './agent/components/MessageQuoteActions'
 import { PendingSettingsChange } from './agent/components/PendingSettingsChange'
 import { PendingSubmission } from './agent/components/PendingSubmission'
-import { pendingSubmissionVisible, type PendingSubmission as Submission } from './agent/lib/pendingSubmission'
+import {
+  pendingSubmissionVisible,
+  splitSteering,
+  STEER_GRACE_MS,
+  type PendingSubmission as Submission,
+} from './agent/lib/pendingSubmission'
 
 /** A chat with an agent: its transcript, the message box and the side panels for sub-agents and asides. */
 export const AgentView = memo(function AgentView({
@@ -195,7 +200,29 @@ export const AgentView = memo(function AgentView({
   const [editing, setEditing] = useState<MessageEdit | null>(null)
   const [configuring, setConfiguring] = useState(false)
   const [pendingSubmission, setPendingSubmission] = useState<Submission | null>(null)
-  const showingSubmission = pendingSubmissionVisible(pendingSubmission, sourceEvents, queued)
+  // When each steer was first seen, so one reaching the turn at once never flashes through the queue tray.
+  const [steerSeen, setSteerSeen] = useState<{ at: ReadonlyMap<string, number>; now: number }>(() => ({
+    at: new Map(),
+    now: Date.now(),
+  }))
+  useEffect(() => {
+    const now = Date.now()
+    const at = new Map(
+      queued
+        .filter((message) => message.mode === 'steer')
+        .map((message) => [message.id, steerSeen.at.get(message.id) ?? now] as const),
+    )
+    const changed = at.size !== steerSeen.at.size || [...at.keys()].some((key) => !steerSeen.at.has(key))
+    if (changed) setSteerSeen({ at, now })
+    const due = Math.min(
+      ...[...at.values()].map((seen) => seen + STEER_GRACE_MS).filter((time) => time > steerSeen.now),
+    )
+    if (!Number.isFinite(due)) return
+    const timer = setTimeout(() => setSteerSeen((current) => ({ ...current, now: Date.now() })), due - now)
+    return () => clearTimeout(timer)
+  }, [queued, steerSeen])
+  const { tray: trayQueued, steering } = splitSteering(queued, steerSeen.at, steerSeen.now)
+  const showingSubmission = pendingSubmissionVisible(pendingSubmission, sourceEvents, trayQueued)
   const [dropping, setDropping] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   const { scroller, stick, onScroll } = useTranscriptScroll({
@@ -925,10 +952,23 @@ export const AgentView = memo(function AgentView({
                               />
                             </MessageScrollerItem>
                           )}
-                        {showingSubmission && pendingSubmission && (
+                        {showingSubmission && pendingSubmission ? (
                           <MessageScrollerItem messageId="pending-submission">
                             <PendingSubmission submission={pendingSubmission} />
                           </MessageScrollerItem>
+                        ) : (
+                          steering.map((message) => (
+                            <MessageScrollerItem key={message.id} messageId={`steering-${message.id}`}>
+                              <PendingSubmission
+                                submission={{
+                                  text: visibleText(message.text),
+                                  attachments: message.attachments ?? [],
+                                  afterEvent: 0,
+                                  queuedIds: [],
+                                }}
+                              />
+                            </MessageScrollerItem>
+                          ))
                         )}
                         {activityLabel && (compacting || !statusGroup) && (
                           <ChatStatus label={translate(activityLabel)} compacting={compacting} />
@@ -966,7 +1006,7 @@ export const AgentView = memo(function AgentView({
                 !!computerActivity.session ||
                 providerWait ||
                 liveGoal ||
-                queued.length > 0 ||
+                trayQueued.length > 0 ||
                 pending.length > 0 ||
                 (!!session && trayAgents.length > 0) ||
                 dockQuestions.length > 0) && (
@@ -1015,10 +1055,10 @@ export const AgentView = memo(function AgentView({
                       />
                     )}
                   </TrayStack>
-                  {(queued.length > 0 || pending.length > 0) && (
+                  {(trayQueued.length > 0 || pending.length > 0) && (
                     <QueuedMessages
                       sessionId={view.sessionId}
-                      queued={queued}
+                      queued={trayQueued}
                       readOnly={viewOnly}
                       pending={pending}
                       paused={queuePaused}

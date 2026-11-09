@@ -26,3 +26,23 @@ export function pendingSubmissionVisible(
     queue.some((message) => !pending.queuedIds.includes(message.id) && matches(message.text, message.attachments))
   )
 }
+
+/** How long a steer stays in the transcript as a sent message before it is shown as waiting in the queue. */
+export const STEER_GRACE_MS = 1000
+
+/**
+ * Steering normally reaches the running turn within milliseconds; showing it in the queue for that moment makes the
+ * tray flash. A steer first seen within the grace period reads as sent; one still waiting after it, on active tools,
+ * moves to the queue where it can be edited or removed.
+ */
+export function splitSteering(
+  queue: QueuedMessage[],
+  seenAt: ReadonlyMap<string, number>,
+  now: number,
+  graceMs = STEER_GRACE_MS,
+): { tray: QueuedMessage[]; steering: QueuedMessage[] } {
+  const steering = queue.filter(
+    (message) => message.mode === 'steer' && now - (seenAt.get(message.id) ?? now) < graceMs,
+  )
+  return { tray: steering.length ? queue.filter((message) => !steering.includes(message)) : queue, steering }
+}
