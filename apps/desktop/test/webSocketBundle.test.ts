@@ -1,4 +1,4 @@
-import { createRequire } from 'node:module'
+import { builtinModules, createRequire } from 'node:module'
 import { expect, it } from 'vitest'
 import { build } from 'vite'
 import config from '../electron.vite.config'
@@ -13,7 +13,9 @@ it('bundles ws without throwing missing optional native peer stubs in developmen
       write: false,
       minify: false,
       rollupOptions: {
-        external: config.main!.build!.rollupOptions!.external,
+        // electron-vite leaves Node's built-ins to the runtime; without them here, a stray package named like one
+        // (such as `https` in node_modules) would be bundled in its place.
+        external: [...(config.main!.build!.rollupOptions!.external as string[]), ...builtinModules, /^node:/],
         input: require.resolve('ws').replace(/index\.js$/, 'wrapper.mjs'),
       },
     },
