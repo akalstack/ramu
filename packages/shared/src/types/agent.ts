@@ -248,12 +248,40 @@ export interface Attachment {
   mimeType: string
   path: string
 }
+/** How a thread an agent started ended up, as its report to the starting thread says. */
+export type ThreadReportOutcome = 'completed' | 'needs-input' | 'failed' | 'interrupted' | 'cancelled'
+
+/**
+ * Who sent a message the person did not write. The agent reads the message as usual; the transcript shows it as a note
+ * from that thread rather than as the person's own words. `taskId` is the other host's when `host` names one.
+ */
+export type MessageOrigin =
+  | {
+      kind: 'thread-report'
+      taskId: string
+      title: string
+      outcome: ThreadReportOutcome
+      host?: string
+      /** The thread's error and its latest reply, for the person to read without opening it. */
+      detail?: string
+    }
+  | {
+      kind: 'thread-message'
+      taskId?: string
+      title: string
+      host?: string
+      /** What the other thread's agent wrote, without the framing the agent here reads. */
+      detail?: string
+    }
+
 export interface QueuedMessage {
   id: string
   text: string
   mode?: 'queue' | 'steer'
   attachments?: Attachment[]
   reviewId?: string
+  /** Set when another thread sent it; such a message always goes out on its own. */
+  from?: MessageOrigin
   /** Background feedback must still belong to the checked-out branch when it is sent. */
   checkout?: { cwd: string; branch: string }
 }
@@ -379,7 +407,7 @@ type AgentEventBody =
   | { kind: 'ability'; call: import('../providers/abilities').AbilityCall }
   | ({ kind: 'provider-wait' } & ProviderWaitFields)
   | { kind: 'queue'; messages: QueuedMessage[]; paused?: boolean }
-  | { kind: 'user'; text: string; attachments?: Attachment[] }
+  | { kind: 'user'; text: string; attachments?: Attachment[]; from?: MessageOrigin }
   | { kind: 'file-restore'; userSeq: number; fileCount: number }
   /** Recorded on a teammate's own session: how it works beside the lead. Review is read-only whatever the thread allows. */
   | { kind: 'teammate'; mode: TeammateMode; name: string }

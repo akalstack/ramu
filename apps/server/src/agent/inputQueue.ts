@@ -1,5 +1,5 @@
 import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
-import type { Attachment, QueuedMessage } from '@ramu/shared/types'
+import type { AgentEvent, Attachment, MessageOrigin, QueuedMessage } from '@ramu/shared/types'
 import { attachmentPrompt, nativeBlocks } from '../attachments'
 
 /** Merges several pending messages into one request so the provider answers them together. */
@@ -20,6 +20,11 @@ export function combineQueued(messages: QueuedMessage[]): {
     attachments,
     ...(reviewId ? { reviewId } : {}),
   }
+}
+
+/** The transcript entry for a message going to the agent, naming the thread that sent it when the person did not. */
+export function userEvent(text: string, attachments: Attachment[], from?: MessageOrigin): AgentEvent {
+  return { kind: 'user', text, ...(attachments.length ? { attachments } : {}), ...(from ? { from } : {}) }
 }
 
 /** Push-based async iterable used as the SDK's streaming input. */

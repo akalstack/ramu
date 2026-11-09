@@ -1912,6 +1912,27 @@ describe('busy agent messages', () => {
     service.stopAll()
   })
 
+  it('sends another thread’s report on its own and records which thread sent it', async () => {
+    const { service, session, send, complete } = setup()
+    const from = { kind: 'thread-report', taskId: 't-2', title: 'Ship it', outcome: 'completed' } as const
+    await service.submit(
+      session.id,
+      'Report from the thread "Ship it": it finished.',
+      'queue',
+      [],
+      undefined,
+      false,
+      from,
+    )
+    await service.submit(session.id, 'plain follow-up', 'queue')
+    complete()
+    await until(() => send.mock.calls.length === 1)
+    expect(send).toHaveBeenNthCalledWith(1, 'Report from the thread "Ship it": it finished.', [])
+    expect(service.queued(session.id).map((m) => m.text)).toEqual(['plain follow-up'])
+    expect(service.events(session.id).findLast((event) => event.kind === 'user')).toMatchObject({ from })
+    service.stopAll()
+  })
+
   it('keeps a review follow-up out of the batch so it can be validated on its own', async () => {
     const { service, session, send, complete } = setup()
     service.reviewHooks = {

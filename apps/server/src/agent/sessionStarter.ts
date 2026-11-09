@@ -7,10 +7,12 @@ import {
   type AgentSessionInfo,
   type AgentSettings,
   type Attachment,
+  type MessageOrigin,
 } from '@ramu/shared/types'
 import { stepKey } from '@ramu/shared/providers/routing'
 import { goalInstructions, goalState } from './goals'
 import { WRITING_STATES } from './constants'
+import { userEvent } from './inputQueue'
 import { RECORDED_ACCOUNT_PROVIDERS } from './settings'
 import type { MessageDispatcher } from './messageDispatcher'
 import type { GoalManager } from './goalManager'
@@ -165,8 +167,9 @@ export class SessionStarter {
     recordUser = true,
     internalGoal?: { revision: number; goalId: string },
     providerRetry = false,
+    from?: MessageOrigin,
   ): Promise<void> {
-    if (recordUser && this.host.goalCommand(id, text, attachments, reviewId)) return
+    if (recordUser && !from && this.host.goalCommand(id, text, attachments, reviewId)) return
     if (this.host.providerWait(id) && recordUser) {
       this.host.updateQueue(
         id,
@@ -178,6 +181,7 @@ export class SessionStarter {
             mode: 'queue',
             ...(attachments.length ? { attachments } : {}),
             ...(reviewId ? { reviewId } : {}),
+            ...(from ? { from } : {}),
           },
         ],
         false,
@@ -251,7 +255,7 @@ export class SessionStarter {
     this.host.lowConfidenceRetried.delete(id)
     const codex = this.host.runners.get(id)
     if (codex) {
-      if (recordUser) this.host.record(id, { kind: 'user', text, ...(attachments.length ? { attachments } : {}) })
+      if (recordUser) this.host.record(id, userEvent(text, attachments, from))
       this.host.setState(id, 'running')
       try {
         await codex.send(actualText, attachments)
@@ -262,7 +266,7 @@ export class SessionStarter {
     }
     const live = this.host.live.get(id)
     if (live) {
-      if (recordUser) this.host.record(id, { kind: 'user', text, ...(attachments.length ? { attachments } : {}) })
+      if (recordUser) this.host.record(id, userEvent(text, attachments, from))
       live.input.push(actualText, attachments)
       this.host.setState(id, 'running')
       return
@@ -270,6 +274,6 @@ export class SessionStarter {
     await this.host.draining.get(id)
     // A new process for a thread: its provider or login may have been turned off since it last ran.
     await this.host.validateLaunch(s.settings)
-    this.host.launch(id, text, s.providerSessionId, recordUser, attachments)
+    this.host.launch(id, text, s.providerSessionId, recordUser, attachments, from)
   }
 }

@@ -1,6 +1,6 @@
 import { providerName, isAcpProvider } from '@ramu/shared/providers/providers'
 import { randomUUID } from 'node:crypto'
-import type { AgentSessionInfo, QueuedMessage, Attachment } from '@ramu/shared/types'
+import type { AgentSessionInfo, QueuedMessage, Attachment, MessageOrigin } from '@ramu/shared/types'
 import { combineQueued } from './inputQueue'
 import { WRITING_STATES } from './constants'
 import { currentBranch } from '../workspace/git'
@@ -127,7 +127,7 @@ export class MessageDispatcher {
       this.host.queued(id).filter((entry) => entry.id !== messageId),
     )
     try {
-      await this.host.send(id, message.text, message.attachments, message.reviewId)
+      await this.sendMessage(id, message)
     } catch (error) {
       this.updateQueue(id, [message, ...this.host.queued(id)])
       throw error
@@ -157,7 +157,7 @@ export class MessageDispatcher {
           throw new Error('The turn did not stop in time. Stop it, then send the message.')
         await new Promise((resolve) => setTimeout(resolve, 25))
       }
-      await this.host.send(id, message.text, message.attachments, message.reviewId)
+      await this.sendMessage(id, message)
     } catch (error) {
       paused = true
       this.updateQueue(id, [message, ...this.host.queued(id)], true)
@@ -224,8 +224,9 @@ export class MessageDispatcher {
     attachments: Attachment[] = [],
     reviewId?: string,
     fromUser = false,
+    from?: MessageOrigin,
   ): Promise<void> {
-    if (this.goalCommand(id, text, attachments, reviewId)) return
+    if (!from && this.goalCommand(id, text, attachments, reviewId)) return
     if (!text.trim() && !attachments.length) throw new Error('Enter a message or attach a file first.')
     if (this.host.transitioning.has(id)) throw new Error('Provider switch in progress. Try again in a moment.')
     const session = this.host.get(id)
@@ -242,6 +243,8 @@ export class MessageDispatcher {
               mode: 'queue',
               ...(attachments.length ? { attachments } : {}),
               ...(reviewId ? { reviewId } : {}),
+              ...(from ? { from } : {}),
+              ...(from ? { from } : {}),
             },
           ],
           false,
@@ -253,7 +256,7 @@ export class MessageDispatcher {
       this.updateQueue(id, this.host.queued(id), false)
       this.startingSends.add(id)
       try {
-        return await this.host.send(id, text, attachments, reviewId)
+        return await this.sendMessage(id, { text, attachments, reviewId, from })
       } finally {
         this.startingSends.delete(id)
         // Messages that arrived while this one was starting go out together once the turn is idle.
@@ -273,6 +276,7 @@ export class MessageDispatcher {
           mode,
           ...(attachments.length ? { attachments } : {}),
           ...(reviewId ? { reviewId } : {}),
+          ...(from ? { from } : {}),
         },
       ],
       false,
@@ -329,6 +333,7 @@ export class MessageDispatcher {
           kind: 'user',
           text: combined.text,
           ...(combined.attachments.length ? { attachments: combined.attachments } : {}),
+          ...(batch.length === 1 && batch[0]!.from ? { from: batch[0]!.from } : {}),
         })
       }
     } finally {
@@ -361,9 +366,10 @@ export class MessageDispatcher {
     const messages = this.host.queued(id),
       first = messages[0]
     if (!first || this.sendingMessages.has(first.id)) return
-    // Checkout-specific feedback and review follow-ups carry their own validation and stay separate.
-    const batch =
-      first.reviewId || first.checkout ? [first] : messages.filter((entry) => !entry.reviewId && !entry.checkout)
+    // Checkout-specific feedback and review follow-ups carry their own validation, and another thread's message keeps
+    // its sender, so each goes out on its own.
+    const alone = (entry: QueuedMessage) => !!(entry.reviewId || entry.checkout || entry.from)
+    const batch = alone(first) ? [first] : messages.filter((entry) => !alone(entry))
     if (this.workspaceBusy(this.host.get(id).covers, id)) {
       this.workspaceQueue.add(id)
       return
@@ -377,7 +383,7 @@ export class MessageDispatcher {
     const combined = combineQueued(batch)
     try {
       if (first.checkout) await this.validateCheckout(first)
-      await this.host.send(id, combined.text, combined.attachments, combined.reviewId)
+      await this.sendMessage(id, { ...combined, from: first.from })
     } catch (error) {
       this.updateQueue(
         id,
@@ -386,6 +392,13 @@ export class MessageDispatcher {
       )
       this.host.record(id, { kind: 'error', message: `Queued message was not sent: ${String(error)}` })
     }
+  }
+
+  private sendMessage(
+    id: string,
+    message: { text: string; attachments?: Attachment[]; reviewId?: string; from?: MessageOrigin },
+  ): Promise<void> {
+    return this.host.send(id, message.text, message.attachments, message.reviewId, true, undefined, false, message.from)
   }
 
   workspaceBusy(covers: string[], self?: string): boolean {

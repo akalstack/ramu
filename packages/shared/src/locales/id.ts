@@ -6457,4 +6457,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Its thread and checkout are on this host': 'Thread dan checkout-nya ada di host ini',
   '{0}. Its pull requests show when it is back.': '{0}. Pull request-nya tampil saat host kembali.',
   '{0}. Its artifacts show when it is back.': '{0}. Artefaknya tampil saat host kembali.',
+  '{0} is waiting for you': '{0} menunggu Anda',
+  '{0} was interrupted': '{0} terputus',
+  '{0} was stopped': '{0} dihentikan',
+  'Message from {0}': 'Pesan dari {0}',
 }

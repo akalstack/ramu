@@ -788,7 +788,8 @@ export const AgentView = memo(function AgentView({
         onMakePage={() => void act(() => invoke('agent.submit', view.sessionId, MAKE_PAGE_PROMPT, 'queue', [], []))}
         latestRequest={
           events.findLast(
-            (event): event is Extract<typeof event, { kind: 'user' }> => event.kind === 'user' && !event.agentId,
+            (event): event is Extract<typeof event, { kind: 'user' }> =>
+              event.kind === 'user' && !event.agentId && !event.from,
           )?.text
         }
       />

@@ -98,7 +98,7 @@ function proposalText(proposal: z.infer<typeof proposalSchema>): string {
 
 function substantiveTurn(events: AgentEvent[], resultIndex: number): boolean {
   const preceding = events.slice(0, resultIndex)
-  const userIndex = preceding.findLastIndex((event) => event.kind === 'user' && !event.agentId)
+  const userIndex = preceding.findLastIndex((event) => event.kind === 'user' && !event.agentId && !event.from)
   const previousResult = preceding.findLastIndex((event) => event.kind === 'result' && !event.agentId)
   const turn = preceding.slice(Math.max(userIndex, previousResult + 1))
   const tools = turn.filter((event) => event.kind === 'tool-use' && !event.agentId)

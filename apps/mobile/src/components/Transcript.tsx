@@ -722,6 +722,7 @@ function ErrorCard({ message, last, chat }: { message: string; last: boolean; ch
 function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Chat; meta?: ItemMeta }) {
   switch (item.kind) {
     case 'user':
+      if (item.from) return <ThreadMessageCard from={item.from} chat={chat} />
       return (
         <MessageActions text={item.text} from="user" seq={item.seq} files={item.attachments} markdown>
           <UserBubble text={item.text} attachments={item.attachments} chat={chat} />
@@ -850,6 +851,86 @@ function StartedThreadsCard({ threads, chat }: { threads: import('@ramu/shared/t
           </Pressable>
         )
       })}
+    </Card>
+  )
+}
+
+const REPORT_TITLES: Record<import('@ramu/shared/types').ThreadReportOutcome, string> = {
+  completed: '{0} finished',
+  'needs-input': '{0} is waiting for you',
+  failed: '{0} failed',
+  interrupted: '{0} was interrupted',
+  cancelled: '{0} was stopped',
+}
+
+/** A report or note another thread sent this one, as on the desktop: who sent it, its words folded, and a way there. */
+function ThreadMessageCard({ from, chat }: { from: import('@ramu/shared/types').MessageOrigin; chat: Chat }) {
+  const say = useSay()
+  const { c } = useTheme()
+  const store = useStore()
+  const router = useRouter()
+  const report = from.kind === 'thread-report'
+  const [open, setOpen] = useState(!report)
+  const title = report
+    ? say(REPORT_TITLES[from.outcome], { '0': from.title })
+    : say('Message from {0}', { '0': from.title })
+  const go =
+    from.taskId && !from.host
+      ? () => {
+          tap()
+          router.push({ pathname: '/chat/[id]', params: { id: store.resolveChat(chat.computerId, from.taskId!) } })
+        }
+      : undefined
+  return (
+    <Card
+      style={{
+        marginVertical: space.s,
+        padding: space.m,
+        gap: space.s,
+        ...(report && from.outcome === 'failed' ? { borderLeftWidth: 2, borderLeftColor: c.bad } : {}),
+      }}
+    >
+      <Pressable
+        onPress={go}
+        disabled={!go}
+        accessibilityRole={go ? 'button' : undefined}
+        accessibilityHint={go ? say('Open thread') : undefined}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}
+      >
+        <GitFork size={16} color={c.muted} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <T weight="600" numberOfLines={2}>
+            {title}
+          </T>
+          {from.host ? (
+            <T size={font.caption} tone="muted">
+              {say('on {0}', { '0': from.host })}
+            </T>
+          ) : null}
+        </View>
+        {go ? <ChevronRight size={16} color={c.muted} /> : null}
+      </Pressable>
+      {from.detail ? (
+        <View>
+          <Pressable
+            onPress={() => {
+              tap()
+              setOpen((value) => !value)
+            }}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: open }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 28 }}
+          >
+            <T size={font.caption} tone="muted">
+              {report ? say('Report') : say('Message')}
+            </T>
+            <Disclosure open={open} size={12} color={c.muted} />
+          </Pressable>
+          <Collapse open={open}>
+            <Markdown text={from.detail} />
+          </Collapse>
+        </View>
+      ) : null}
     </Card>
   )
 }

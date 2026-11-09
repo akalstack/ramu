@@ -72,7 +72,7 @@ A teammate that worked well can be kept: **Save as teammate** in its panel (on t
 
 ## Threads started by agents
 
-An agent can start separate threads you own: a follow-up, the matching change in another project, or several parts in parallel. They appear in the sidebar, report back when they finish or need you, and keep running if the starting thread stops.
+An agent can start separate threads you own: a follow-up, the matching change in another project, or several parts in parallel. They appear in the sidebar, report back when they finish or need you, and keep running if the starting thread stops. A report, or a message one thread's agent sends another, shows in the receiving thread as a card naming that thread, with what it said folded and **Open thread** beside it, never as a message from you; that thread's agent reads it in full.
 
 - In Full access, one thread in the same project starts at once. Anything wider shows one approval card.
 - Started threads can start one more level, and a thread can start 8 an hour.

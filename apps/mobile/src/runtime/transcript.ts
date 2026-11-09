@@ -172,6 +172,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
         attachments: e.attachments,
         seq: seqs?.[index],
         raw: e.text,
+        ...(e.from ? { from: e.from } : {}),
       })
     else if (e.kind === 'interactive') {
       const revision = revisions.get(e.reference.id)

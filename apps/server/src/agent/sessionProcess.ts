@@ -18,11 +18,12 @@ import type {
   HandoffCause,
   HandoffInfo,
   McpConnection,
+  MessageOrigin,
 } from '@ramu/shared/types'
 import { DEFAULT_INTELLIGENCE_PREFERENCES, DEFAULT_MEMORY_PREFERENCES } from '@ramu/shared/types'
 import { goalInstructions } from './goals'
 import type { QueryFn, PendingRequest } from './types'
-import { InputQueue } from './inputQueue'
+import { InputQueue, userEvent } from './inputQueue'
 import { errorMessage } from './util'
 import { helperRoleReadOnly } from '@ramu/shared/chat/helperRoles'
 import { claudeHooks, createCanUseTool, dangerousCommandHooks, readOnlyBashHooks } from './permissions'
@@ -355,7 +356,14 @@ export class SessionProcess {
     return { resume: native, built }
   }
 
-  launch(id: string, prompt: string, resume: string | null, recordUser = true, attachments: Attachment[] = []): void {
+  launch(
+    id: string,
+    prompt: string,
+    resume: string | null,
+    recordUser = true,
+    attachments: Attachment[] = [],
+    from?: MessageOrigin,
+  ): void {
     const s = this.host.get(id)
     const explicitGoal = !s.parentId && /^\/goal\s+(\S[\s\S]*)$/.exec(prompt.split('\n\n<ramu-context>')[0]!.trim())
     if (explicitGoal) this.host.setGoal(id, explicitGoal[1]!, true)
@@ -369,8 +377,7 @@ export class SessionProcess {
           'Your enabled rules cannot be delivered to this runtime. Turn them off in Settings → Agent setup → Rules to continue without them.',
         )
     } catch (e) {
-      if (recordUser)
-        this.host.record(id, { kind: 'user', text: prompt, ...(attachments.length ? { attachments } : {}) })
+      if (recordUser) this.host.record(id, userEvent(prompt, attachments, from))
       this.fail(id, e)
       return
     }
@@ -379,8 +386,7 @@ export class SessionProcess {
     // the checkpoint goes out once, in the handoff, and not again in the session guidance.
     const carried = this.carry(id, resume, !!connection, prompt, attachments)
     if (carried === 'too-large') {
-      if (recordUser)
-        this.host.record(id, { kind: 'user', text: prompt, ...(attachments.length ? { attachments } : {}) })
+      if (recordUser) this.host.record(id, userEvent(prompt, attachments, from))
       this.fail(
         id,
         new Error(
@@ -490,8 +496,7 @@ export class SessionProcess {
         }
         this.launchServers.set(id, this.serversNow(s, connection))
         this.host.runners.set(id, runner)
-        if (recordUser)
-          this.host.record(id, { kind: 'user', text: prompt, ...(attachments.length ? { attachments } : {}) })
+        if (recordUser) this.host.record(id, userEvent(prompt, attachments, from))
         this.host.setState(id, 'starting')
         void (async () => {
           if (connection && s.provider === 'codex' && !s.parentId) {
@@ -584,7 +589,7 @@ export class SessionProcess {
       },
     })
     this.host.live.set(id, { query, input, abort, pending })
-    if (recordUser) this.host.record(id, { kind: 'user', text: prompt, ...(attachments.length ? { attachments } : {}) })
+    if (recordUser) this.host.record(id, userEvent(prompt, attachments, from))
     input.push(actualPrompt, attachments)
     this.host.setState(id, resume ? 'running' : 'starting')
     this.host.live.get(id)!.done = this.host.pump(id, query)

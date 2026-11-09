@@ -60,6 +60,8 @@ export type TranscriptItem = (
       attachments?: import('@ramu/shared/types').Attachment[]
       /** The host's sequence number, which a revision names. */ seq?: number
       /** The text as sent, including any hidden <ramu-context>. */ raw?: string
+      /** Another thread sent it, so it shows as a note from that thread, not the person's bubble. */
+      from?: import('@ramu/shared/types').MessageOrigin
     }
   /** An image the agent returned (MCP or tool content). */
   | {

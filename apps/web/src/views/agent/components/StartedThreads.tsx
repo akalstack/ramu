@@ -1,9 +1,14 @@
-import { GitFork } from 'lucide-react'
-import type { StartedThread } from '@ramu/shared/types'
+import { ChevronRight, GitFork, MessageSquareShare } from 'lucide-react'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import type { MessageOrigin, StartedThread, ThreadReportOutcome } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { chatMarkdownComponents } from '../../../chat/ChatMarkdown'
 import { t, useLanguage } from '../../../i18n'
 import { useWorkspace } from '../../../workspace/workspace'
-import { GHOST_TEXT_BUTTON_CLASS } from '../styles'
+import { CARET_CLASS, GHOST_TEXT_BUTTON_CLASS, MSG_CLASS, TOOL_DISCLOSURE_PANEL_CLASS } from '../styles'
+import { MessageTime } from './MessageTime'
 
 /** The header chip on a thread an agent started: it opens the starting thread. */
 export function ThreadOriginChip({ taskId }: { taskId: string | undefined }) {
@@ -78,6 +83,77 @@ export function ThreadsStartedCard({ threads }: { threads: StartedThread[] }) {
             </li>
           ))}
         </ul>
+      </div>
+    </div>
+  )
+}
+
+const REPORT_TITLES: Record<ThreadReportOutcome, string> = {
+  completed: '{0} finished',
+  'needs-input': '{0} is waiting for you',
+  failed: '{0} failed',
+  interrupted: '{0} was interrupted',
+  cancelled: '{0} was stopped',
+}
+
+/**
+ * A message another thread sent this one: its report when it finished, failed or needs you, or a note its agent wrote.
+ * The agent here received the full message; the person reads who sent it and what it said, one click from that thread.
+ */
+export function ThreadMessageCard({ from, at }: { from: MessageOrigin; at?: number }) {
+  useLanguage()
+  const ws = useWorkspace()
+  const report = from.kind === 'thread-report'
+  const openable = !from.host && !!from.taskId && ws.tasks.some((task) => task.id === from.taskId)
+  const title = report
+    ? t(REPORT_TITLES[from.outcome], { '0': from.title })
+    : t('Message from {0}', { '0': from.title })
+  const Icon = report ? GitFork : MessageSquareShare
+  return (
+    <div
+      className={`m-[12px_0] flex items-start gap-3 rounded-(--radius-m) bg-fill p-[12px_15px] ${report && from.outcome === 'failed' ? 'shadow-[inset_2px_0_0_var(--bad)]' : ''}`}
+      role="note"
+      aria-label={title}
+    >
+      <Icon size={16} className="mt-0.5 flex-none text-muted-foreground" aria-hidden="true" />
+      <div className="min-w-0 flex-1 text-left">
+        <div className="flex min-w-0 items-center gap-2">
+          <strong className="min-w-0 flex-1 truncate font-medium">{title}</strong>
+          {from.host && (
+            <span className="flex-none text-caption text-muted-foreground">{t('on {0}', { '0': from.host })}</span>
+          )}
+          <span className="flex-none text-caption text-muted-foreground">
+            <MessageTime at={at} />
+          </span>
+          {openable && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className={GHOST_TEXT_BUTTON_CLASS}
+              onClick={() => ws.openTask(from.taskId!)}
+            >
+              {t('Open thread')}
+            </Button>
+          )}
+        </div>
+        {from.detail && (
+          <Collapsible defaultOpen={!report}>
+            <CollapsibleTrigger
+              render={<Button variant="ghost" size="sm" />}
+              className="group -ml-2 mt-0.5 h-6 gap-1 px-2 text-caption font-normal text-muted-foreground"
+            >
+              {report ? t('Report') : t('Message')}
+              <ChevronRight size={12} className={`${CARET_CLASS} group-data-[panel-open]:rotate-90`} />
+            </CollapsibleTrigger>
+            <CollapsibleContent className={TOOL_DISCLOSURE_PANEL_CLASS}>
+              <div className={`${MSG_CLASS} assistant mt-1 max-h-[360px] overflow-y-auto text-control`}>
+                <Markdown remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>
+                  {from.detail}
+                </Markdown>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
       </div>
     </div>
   )

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { hostname } from 'node:os'
 import { isTransportFailure } from '@ramu/client-runtime'
 import { clipText } from '@ramu/shared/text'
-import type { AgentSettings, StartedThread } from '@ramu/shared/types'
+import type { AgentSettings, StartedThread, ThreadReportOutcome } from '@ramu/shared/types'
 import type { Db } from '../db'
 import type { AgentService } from '../agent'
 import type { AgentHostService } from '../remote/agentHosts'
@@ -272,6 +272,16 @@ export class RemoteThreads {
     ]
       .filter(Boolean)
       .join('\n\n')
-    await this.agents.submit(source.id, text, 'queue').catch((reason) => console.error('Remote thread report:', reason))
+    const detail = [error ? `Error: ${error}` : '', latest].filter(Boolean).join('\n\n')
+    await this.agents
+      .submit(source.id, text, 'queue', [], undefined, false, {
+        kind: 'thread-report',
+        taskId: row.remote_task_id ?? remoteThreadId(row.id),
+        title: row.title,
+        outcome: state as ThreadReportOutcome,
+        host,
+        ...(detail ? { detail: clipText(detail, 4000) } : {}),
+      })
+      .catch((reason) => console.error('Remote thread report:', reason))
   }
 }

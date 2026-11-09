@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentEvent, AgentSessionInfo, AgentSettings } from '@ramu/shared/types'
+import type { AgentEvent, AgentSessionInfo, AgentSettings, MessageOrigin } from '@ramu/shared/types'
 import { DEFAULT_AGENT_SETTINGS, NO_PROJECT } from '@ramu/shared/types'
 import { openDb, type Db } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
@@ -30,7 +30,7 @@ let db: Db, ws: Workspace, service: AgentThreadService
 let sessions: Map<string, AgentSessionInfo>
 let events: Map<string, AgentEvent[]>
 let approvals: boolean[], permissionDetails: string[]
-let submitted: { id: string; text: string; mode: string }[]
+let submitted: { id: string; text: string; mode: string; from?: MessageOrigin }[]
 let recorded: { id: string; threads: unknown[] }[]
 let calls: string[]
 let goals: { id: string; objective: string; verify?: string }[]
@@ -105,9 +105,19 @@ beforeEach(async () => {
       return approvals.shift() ?? false
     }),
     threadsStarted: (id: string, threads: unknown[]) => recorded.push({ id, threads }),
-    submit: vi.fn(async (id: string, text: string, mode: string) => {
-      submitted.push({ id, text, mode })
-    }),
+    submit: vi.fn(
+      async (
+        id: string,
+        text: string,
+        mode: string,
+        _attachments?: unknown,
+        _reviewId?: string,
+        _fromUser?: boolean,
+        from?: MessageOrigin,
+      ) => {
+        submitted.push({ id, text, mode, from })
+      },
+    ),
     analyze: vi.fn(async () => ({ message: '{"projectIds":[],"reason":""}' })),
     validateSettings: vi.fn(async (settings: AgentSettings) => {
       if (settings.provider === 'cursor') throw new Error('Not installed here')
@@ -510,6 +520,14 @@ describe('related threads', () => {
     expect(submitted[0]!.text).toContain(out.started[0].threadId)
     expect(submitted[0]!.text).toContain('it finished')
     expect(submitted[0]!.text).toContain('Migration written and tested.')
+    // The transcript shows it as that thread's report, not as something the person wrote.
+    expect(submitted[0]!.from).toEqual({
+      kind: 'thread-report',
+      taskId: out.started[0].threadId,
+      title: 'Write the migration',
+      outcome: 'completed',
+      detail: 'Migration written and tested.',
+    })
   })
 
   it('does not wake a starting thread the person stopped', async () => {
@@ -644,6 +662,13 @@ describe('threads this host’s agents start on another host', () => {
     expect(submitted).toHaveLength(1)
     expect(submitted[0]!.text).toContain('on vps')
     expect(submitted[0]!.text).toContain('Backfilled 120 rows.')
+    expect(submitted[0]!.from).toMatchObject({
+      kind: 'thread-report',
+      title: 'Backfill',
+      outcome: 'completed',
+      host: 'vps',
+      detail: 'Backfilled 120 rows.',
+    })
     const status = await tools('caller').call('thread_status', { threadId: out.started[0].threadId })
     expect(status[0]).toMatchObject({ host: 'vps', state: 'completed' })
     remoteStatus = { state: 'running', threadId: 'far-1', title: 'Remote', project: 'jobs' }
