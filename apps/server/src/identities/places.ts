@@ -20,26 +20,31 @@ export class ProjectPlaces {
     private readonly chatsRoot: string,
   ) {}
 
-  /** Reads every repository's remotes again; callers never wait for it. */
+  /**
+   * Reads every repository's remotes again; callers never wait for it. The read starts after `refreshing` is set: each
+   * Git call asks for the folder's identity, which looks here, and must find this read rather than start another.
+   */
   refresh(): Promise<void> {
-    this.refreshing ??= (async () => {
-      const next = new Map<string, string[]>()
-      for (const project of this.workspace.listProjects())
-        for (const repo of this.workspace.listRepositories(project.id)) {
-          const output = await git(repo.root, ['config', '--get-regexp', '^remote\\..*\\.url$']).catch(() => '')
-          next.set(
-            repo.root,
-            output
-              .split('\n')
-              .map((line) => line.split(/\s+/)[1] ?? '')
-              .filter(Boolean),
-          )
-        }
-      this.remotes = next
-      this.refreshedAt = Date.now()
-    })().finally(() => {
-      this.refreshing = null
-    })
+    this.refreshing ??= Promise.resolve()
+      .then(async () => {
+        const next = new Map<string, string[]>()
+        for (const project of this.workspace.listProjects())
+          for (const repo of this.workspace.listRepositories(project.id)) {
+            const output = await git(repo.root, ['config', '--get-regexp', '^remote\\..*\\.url$']).catch(() => '')
+            next.set(
+              repo.root,
+              output
+                .split('\n')
+                .map((line) => line.split(/\s+/)[1] ?? '')
+                .filter(Boolean),
+            )
+          }
+        this.remotes = next
+        this.refreshedAt = Date.now()
+      })
+      .finally(() => {
+        this.refreshing = null
+      })
     return this.refreshing
   }
 
