@@ -678,7 +678,7 @@ for (const os of ['android', 'ios']) {
       '../../i18n': { useT: () => ({ settings: 'Settings' }) },
     })
     const initial = Menu()
-    assert.equal(find(Menu(), 'Header').props.align, 'center')
+    assert.equal(find(Menu(), 'SettingsHeader').props.align, 'center')
     const search = find(initial, 'NativeSearch')
     assert.ok(search, 'the OS owns search, instead of an elevated custom field')
     assert.equal(Boolean(find(initial, 'NativeSearchSlot')), os === 'ios')
@@ -774,7 +774,8 @@ test('native chat toolbar actions receive taps and keep their supplied symbols',
   )
   assert.equal(options.headerStyle.backgroundColor, 'window')
   assert.equal(options.scrollEdgeEffects.top, 'soft')
-  assert.ok(nodes(tree).some((node) => node.props?.style?.width >= 140 && node.props.style.width <= 220))
+  // On a 400pt phone the title gets what the back button and the two-button capsule leave: 400 − 32 − 56 − 100.
+  assert.ok(nodes(tree).some((node) => node.props?.style?.width === 212))
 })
 
 test('computer video does not evaluate WebRTC exports when its native module is absent', () => {
@@ -5135,9 +5136,9 @@ test('compact thread titles use the available width, wrap, and reveal the comple
     }),
   })
   const leading = nodes(tree).find((node) => node.type === 'Pressable' && node.props.accessibilityLabel === title)
-  // Back button (56) and both trailing actions (2 × 52) plus the window margins keep their room beside the title.
-  assert.ok(leading.props.style.width >= 140, 'a 400-point screen leaves at least 140 points for the title')
-  assert.ok(leading.props.style.width <= 400 - 96 - 56 - 2 * 52, 'the title never pushes a trailing action off the bar')
+  // Back button (56) and the two-action capsule (2 × 44 + 12) plus the window margins keep their room beside the title.
+  assert.ok(leading.props.style.width >= 200, 'a 400-point screen leaves at least 200 points for the title')
+  assert.ok(leading.props.style.width <= 400 - 32 - 56 - 100, 'the title never pushes a trailing action off the bar')
   assert.equal(nodes(tree).find((node) => node.props?.children === title).props.numberOfLines, 2)
   leading.props.onPress()
   assert.deepEqual(opened, [title])
@@ -6857,7 +6858,7 @@ for (const os of ['ios', 'android']) {
       },
       '../../runtime/useHostSettings': { useHostSettings: () => ({ state: { status: 'offline' } }) },
     })
-    const header = find(Section(), 'Header')
+    const header = find(Section(), 'SettingsHeader')
     assert.equal(header.props.align, 'center')
     const screen = load('components/Screen.tsx', os, {
       'expo-router': { Stack: { ...Stack, Title: 'NativeTitle', Header: 'NativeHeader' } },
@@ -8289,7 +8290,7 @@ test('the Skills & MCP page reads every project’s servers and skills without o
   await settle()
   const labels = nodes(render())
     .filter((node) => node.type === 'RowLabel')
-    .map((node) => [node.props.title, node.props.help])
+    .map((node) => [node.props.title, [node.props.description, node.props.help].filter(Boolean).join(' · ')])
   assert.deepEqual(labels, [
     // Declared servers for every project, with the projects that chose differently.
     ['atlassian', 'https://mcp.example/a · Only in codex · Different in 1 project'],
@@ -9043,7 +9044,9 @@ test('managed skills on the phone pin a skill, and restore an earlier revision o
   const option = (title) => options().find((node) => node.props.title === title)
   render()
   await settle()
-  assert.equal(find(render(), 'RowLabel').props.help, 'Ships it · Read 3 times')
+  // The description is cut to two lines on its own; the states stay whole beneath it.
+  assert.equal(find(render(), 'RowLabel').props.description, 'Ships it')
+  assert.equal(find(render(), 'RowLabel').props.help, 'Read 3 times')
   openSkill()
   // An active skill offers Pin, Disable and Archive, not Unpin or Restore.
   assert.deepEqual(

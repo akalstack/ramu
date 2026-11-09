@@ -34,11 +34,11 @@ import {
 import { useT, useSay } from '../../i18n'
 import { accountName } from '@ramu/shared/providers/providers'
 import { useAccountLogins } from '../../runtime/useAccountLogins'
-import { Header, Screen, useScrolledUnderBar } from '../../components/Screen'
+import { Screen, useScrolledUnderBar } from '../../components/Screen'
 import { SettingScroll } from '../../components/SettingHighlight'
 import { PlanUsageReading, PlanUsageSummary } from '../../components/PlanUsage'
 import { Card, ConnectionDot, Divider, Row, SectionLabel, Segmented, T } from '../../components/ui'
-import { ComputerScope } from '../../components/SettingsChrome'
+import { SettingsHeader } from '../../components/SettingsChrome'
 import { RulesSettings } from '../../components/RulesSettings'
 import { AgentSetupSettings, MemoryList } from '../../components/AgentSetupSettings'
 import { VoiceSettings } from '../../components/VoiceSettings'
@@ -410,7 +410,13 @@ export default function SettingsSectionPage() {
   const note = desktopOnly[id]
   return (
     <Screen bg="window">
-      <Header align="center" title={translate(language, section.label)} scrollEdge scrolled={edge.scrolled} />
+      <SettingsHeader
+        host={section.scope === 'host'}
+        align="center"
+        title={translate(language, section.label)}
+        scrollEdge
+        scrolled={edge.scrolled}
+      />
       <SettingScroll
         target={target ? String(target) : undefined}
         onScroll={edge.onScroll}
@@ -418,12 +424,6 @@ export default function SettingsSectionPage() {
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: space.xl * 2 }}
       >
-        {/* The host card stands apart from the page's first card, as the menu's groups do. */}
-        {section.scope === 'host' ? (
-          <View style={{ marginBottom: space.m }}>
-            <ComputerScope host={host} />
-          </View>
-        ) : null}
         {section.scope === 'host' && locked && computers.find((c) => c.id === selected)?.access !== 'viewer' ? (
           <View style={{ paddingHorizontal: space.l, paddingBottom: space.m }}>
             <PermissionNeeded computerId={selected} permission="settings" />

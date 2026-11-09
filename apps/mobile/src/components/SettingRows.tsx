@@ -56,7 +56,10 @@ export function ToggleRow({
         onPress={() => onChange(!value)}
       >
         <RowLabel title={title} help={help} />
-        <Toggle accessibilityLabel={title} disabled={disabled} value={value} onValueChange={onChange} />
+        {/* Its own column, so the switch centres on a multi-line label even where the native frame stretches. */}
+        <View style={{ alignSelf: 'stretch', justifyContent: 'center' }}>
+          <Toggle accessibilityLabel={title} disabled={disabled} value={value} onValueChange={onChange} />
+        </View>
       </Row>
     </SettingHighlight>
   )

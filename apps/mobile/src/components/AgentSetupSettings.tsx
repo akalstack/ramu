@@ -203,8 +203,8 @@ export function AgentSetupSettings({ hostId }: { hostId: string }) {
             <Row style={{ paddingVertical: space.m }}>
               <RowLabel
                 title={skill.name}
+                description={skill.description ?? ''}
                 help={[
-                  skill.description,
                   setupReachText(skill, t, providerName),
                   skill.sources.length ? t('From {places}', { places: setupFromText(skill.sources, t) }) : null,
                   exceptions(skill.exceptions),

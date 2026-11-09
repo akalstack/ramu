@@ -16,9 +16,9 @@ import {
 } from '../../runtime/settingsModel'
 import { useHostSettings } from '../../runtime/useHostSettings'
 import { useT } from '../../i18n'
-import { Header, Screen, useScrolledUnderBar, PageScrollView as ScrollView } from '../../components/Screen'
+import { Screen, useScrolledUnderBar, PageScrollView as ScrollView } from '../../components/Screen'
 import { Card, Divider, Row, SectionLabel, T } from '../../components/ui'
-import { ComputerScope, SectionIcon } from '../../components/SettingsChrome'
+import { SectionIcon, SettingsHeader } from '../../components/SettingsChrome'
 
 export default function SettingsMenu() {
   const edge = useScrolledUnderBar()
@@ -38,7 +38,7 @@ export default function SettingsMenu() {
     'view' in hit ? router.dismissTo({ pathname: '/', params: { filter: 'archived' } }) : open(hit.section, hit.title)
   return (
     <Screen bg="window">
-      <Header modal align="center" title={t.settings} scrollEdge scrolled={edge.scrolled} />
+      <SettingsHeader host modal align="center" title={t.settings} scrollEdge scrolled={edge.scrolled} />
       {Platform.OS !== 'web' ? (
         <Stack.SearchBar
           headerIconColor={c.text}
@@ -124,8 +124,6 @@ export default function SettingsMenu() {
           <>
             {SETTINGS_GROUPS.map((group) => (
               <View key={group.id}>
-                {/* The groups after This phone edit a host, so the picker for which one sits right above them. */}
-                {group.id === SETTINGS_GROUPS[1]?.id ? <ComputerScope host={host} /> : null}
                 <SectionLabel>{translate(language, group.label)}</SectionLabel>
                 <Card
                   style={{

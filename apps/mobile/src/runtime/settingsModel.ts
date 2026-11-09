@@ -23,8 +23,8 @@ import {
   type SharedSetting,
 } from '@ramu/shared/settingsCompatibility'
 
-// The phone's settings menu: this phone's own pages first, then the desktop's groups and sections
-// (`@ramu/shared/settingsMenu`) under their names, without the ones that only matter at the host's keyboard.
+// The phone's settings menu: the desktop's groups and sections (`@ramu/shared/settingsMenu`) under their names, without
+// the ones that only matter at the host's keyboard, then this phone's own pages.
 
 export type Language = 'en' | 'id'
 export type SettingsGroup = 'phone' | SettingsMenuGroup
@@ -34,10 +34,13 @@ export type SettingsSection = PhoneSettingsMenuId | 'notifications' | 'about'
 type Text = string
 const text = (key: string): Text => key
 
-/** The menu's groups in order; the host picker sits after This phone, above the groups that edit a host. */
+/**
+ * The menu's groups in order: the selected host's groups in the desktop's order, since the header names that host and
+ * they are what people come to change, then This phone.
+ */
 export const SETTINGS_GROUPS: { id: SettingsGroup; label: Text }[] = [
-  { id: 'phone', label: text('This phone') },
   ...SETTINGS_MENU_GROUPS.map((group) => ({ id: group, label: text(group) })),
+  { id: 'phone', label: text('This phone') },
 ]
 
 /** Pages about this phone rather than the selected host, in the This phone group with no host picker on them. */

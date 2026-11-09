@@ -60,8 +60,8 @@ export function PluginSettings({ hostId }: { hostId: string }) {
               <Row style={{ paddingVertical: space.m }}>
                 <RowLabel
                   title={plugin.name}
+                  description={plugin.contents.description ?? ''}
                   help={[
-                    plugin.contents.description,
                     !plugin.enabled ? t('Off') : null,
                     plugin.byRamu ? t('By Ramu') : null,
                     plugin.source.kind === 'development' ? t('Development') : null,

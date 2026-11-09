@@ -122,8 +122,8 @@ export function ManagedSkills({ hostId, locked }: { hostId: string; locked: bool
             >
               <RowLabel
                 title={skill.name}
+                description={skill.description ?? ''}
                 help={[
-                  skill.description,
                   skill.status === 'disabled' ? say('Off') : null,
                   skill.pinned ? say('Pinned') : null,
                   say('Read {0} times', { 0: skill.useCount }),

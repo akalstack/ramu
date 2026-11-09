@@ -294,8 +294,13 @@ export function Header({
         const props = child.props as { children?: ReactNode }
         return total + (child.type === Fragment || child.type === View ? count(props.children) : 1)
       }, 0)
-    // Reserve the window margins and every trailing button so the title never pushes one off the bar.
-    const available = Math.max(48, Math.min(220, width - 96 - (back || modal ? BAR + 12 : 0) - count(right) * 52))
+    // Reserve the window margins, the back button and the trailing buttons, which share one glass capsule, so the title
+    // takes the rest of the bar without pushing a button off it.
+    const trailing = count(right)
+    const available = Math.max(
+      48,
+      Math.min(520, width - 32 - (back || modal ? BAR + 12 : 0) - (trailing ? trailing * BAR + 12 : 0)),
+    )
     return (
       <>
         <Stack.Screen

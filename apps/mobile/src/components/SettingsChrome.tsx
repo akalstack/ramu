@@ -1,10 +1,9 @@
+import { useState, type ComponentProps } from 'react'
 import { Platform, View } from 'react-native'
-import { useRouter } from 'expo-router'
 import {
   Bell,
   Brain,
   CalendarClock,
-  ChevronRight,
   Cpu,
   Globe,
   GitBranch,
@@ -12,7 +11,6 @@ import {
   Info,
   Layers,
   MessageSquare,
-  Monitor,
   MonitorCog,
   MonitorSmartphone,
   Palette,
@@ -25,11 +23,10 @@ import {
   Target,
   type LucideIcon,
 } from 'lucide-react-native'
-import { font, radius, space, useTheme } from '../theme'
-import { useStore } from '../runtime/store'
+import { radius, useTheme } from '../theme'
+import { Header } from './Screen'
+import { HostChipButton, HostSheet } from './HostChip'
 import type { SettingsSection } from '../runtime/settingsModel'
-import type { useHostSettings } from '../runtime/useHostSettings'
-import { Card, ConnectionDot, Row, T } from './ui'
 
 // The desktop's icons for the same sections.
 const icons: Record<SettingsSection, LucideIcon> = {
@@ -75,32 +72,16 @@ export function SectionIcon(props: { section: SettingsSection } | { icon: Lucide
   )
 }
 
-/** Which computer's settings the page edits, as the desktop's "Changes apply to the selected computer" bar. */
-export function ComputerScope({ host }: { host: ReturnType<typeof useHostSettings> }) {
-  const { c } = useTheme()
-  const router = useRouter()
-  const { computers, selected } = useStore()
-  const pc = computers.find((computer) => computer.id === selected)
-  if (!pc) return null
+/**
+ * A settings screen's bar. With `host`, the host its pages edit stays named at the trailing edge, wherever the page is
+ * scrolled, and switches from there.
+ */
+export function SettingsHeader({ host, ...props }: Omit<ComponentProps<typeof Header>, 'right'> & { host?: boolean }) {
+  const [open, setOpen] = useState(false)
   return (
-    <Card style={{ marginHorizontal: space.l }}>
-      <Row accessibilityRole="button" onPress={() => router.push('/computers')} style={{ paddingVertical: space.m }}>
-        <Monitor size={17} color={c.soft} />
-        <View style={{ flex: 1, gap: 2 }}>
-          <T weight="500">{pc.name}</T>
-          <T size={font.caption} tone="muted">
-            {host.state.status === 'ready'
-              ? 'Host settings apply here'
-              : host.state.status === 'loading'
-                ? 'Loading settings…'
-                : host.state.status === 'offline'
-                  ? 'Offline: host settings are unavailable'
-                  : 'Could not load settings'}
-          </T>
-        </View>
-        <ConnectionDot status={pc.status} />
-        <ChevronRight size={16} color={c.muted} />
-      </Row>
-    </Card>
+    <>
+      <Header {...props} right={host ? <HostChipButton compact onOpen={() => setOpen(true)} /> : undefined} />
+      {host ? <HostSheet open={open} onClose={() => setOpen(false)} /> : null}
+    </>
   )
 }
