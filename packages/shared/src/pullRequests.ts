@@ -117,7 +117,7 @@ export const PULL_REQUEST_FILTERS: PullRequestFilter[] = ['needs-you', 'mine', '
 export const PULL_REQUEST_FILTER_LABEL: Record<PullRequestFilter, string> = {
   'needs-you': 'Needs you',
   mine: 'Yours',
-  review: 'Review requested',
+  review: 'To review',
   open: 'All open',
   closed: 'Closed',
 }

@@ -302,7 +302,10 @@ export function PullRequestsPage() {
             )}
           </div>
           <Tabs value={filter} onValueChange={(value) => setFilter(value as PullRequestFilter)}>
-            <TabsList variant="line" className="h-9! w-full justify-start gap-2.5 border-b border-(--line) p-0">
+            <TabsList
+              variant="line"
+              className="h-9! w-full justify-start gap-2.5 overflow-x-auto border-b border-(--line) p-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
               {PULL_REQUEST_FILTERS.map((entry) => (
                 <TabsTrigger key={entry} value={entry} className="flex-none gap-1.5 px-0.5 text-control">
                   {t(PULL_REQUEST_FILTER_LABEL[entry])}

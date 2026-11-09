@@ -6369,4 +6369,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Recently updated': 'Baru diperbarui',
   Sort: 'Urutkan',
   '{0} lines added, {1} removed': '{0} baris ditambahkan, {1} dihapus',
+  'To review': 'Untuk direview',
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { previewRehypePlugins } from '@ramu/shared/workspace/markdownRendering'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { chatMarkdownComponents } from '../chat/ChatMarkdown'
@@ -344,7 +345,12 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
           <section className="flex flex-col gap-1">
             <h3 className="m-0 text-control font-semibold">{t('Description')}</h3>
             <div className="min-w-0 text-body text-soft [overflow-wrap:anywhere]">
-              <Markdown remarkPlugins={[remarkGfm]} components={chatMarkdownComponents}>
+              {/* Descriptions are often HTML (Dependabot's are): render it sanitized, as the Markdown preview does. */}
+              <Markdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={previewRehypePlugins}
+                components={chatMarkdownComponents}
+              >
                 {description.data}
               </Markdown>
             </div>
