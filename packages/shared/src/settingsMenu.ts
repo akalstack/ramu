@@ -22,7 +22,6 @@ export const SETTINGS_MENU = [
   { id: 'chats', label: 'Threads', group: 'Agents', phone: true },
   { id: 'providers', label: 'Providers', group: 'Agents', phone: true },
   { id: 'models', label: 'Models', group: 'Agents', phone: true },
-  { id: 'media', label: 'Media', group: 'Agents', phone: true },
   { id: 'environment', label: 'Environment variables', group: 'Agents', phone: false },
   { id: 'agent-setup', label: 'Agent setup', group: 'Agents', phone: true },
   { id: 'access', label: 'Permissions', group: 'Agents', phone: true },

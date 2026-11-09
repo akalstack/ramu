@@ -2,14 +2,16 @@ import { ABILITY_LABELS, MEDIA_ABILITIES } from '@ramu/shared/providers/abilitie
 import { MEDIA_SERVICE_NAMES, MEDIA_SERVICES } from '@ramu/shared/types/deploy'
 import { Button } from '@/components/desktop-button'
 import { t, useLanguage } from '../i18n'
+import { SettingsGroupTitle } from '@/components/settings-row'
 import { SETTINGS_FORM_CLASS } from './constants'
 import { DeployAccounts } from './DeployAccounts'
 
-/** Settings › Media: API keys for the services that make video, speech, music and sound effects. */
+/** Settings › Providers › Media: API keys for the services that make video, speech, music and sound effects. */
 export function MediaSettings({ onOpenAbilities }: { onOpenAbilities: () => void }) {
   useLanguage()
   return (
-    <div className={SETTINGS_FORM_CLASS}>
+    <div className={`${SETTINGS_FORM_CLASS} mt-8`}>
+      <SettingsGroupTitle>{t('Media')}</SettingsGroupTitle>
       <p className="muted text-muted-foreground small text-caption">
         {t(
           'When no signed-in provider can make video, speech, music or sound effects, they run on a media service with your own API key, billed to that account. Auto tries these after your signed-in providers.',

@@ -7,7 +7,6 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/desktop-button'
 import {
   Archive,
-  Clapperboard,
   MessageSquare,
   Brain,
   CalendarClock,
@@ -51,7 +50,6 @@ const SECTION_ICONS: Record<SettingsMenuId, LucideIcon> = {
   chats: MessageSquare,
   providers: Cpu,
   models: Layers,
-  media: Clapperboard,
   environment: Variable,
   'agent-setup': Plug,
   access: ShieldCheck,
@@ -264,12 +262,12 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'models', title: 'Fallback order', words: 'provider model effort chain list order' },
   { section: 'models', title: 'Abilities', words: 'image generation web search long documents provider routing' },
   {
-    section: 'media',
+    section: 'providers',
     title: 'Google Gemini',
     words: 'media api key video omni flash speech voice narration music lyria',
   },
-  { section: 'media', title: 'ElevenLabs', words: 'media api key speech voice narration music sound effects' },
-  { section: 'media', title: 'OpenAI', words: 'media api key speech voice narration tts' },
+  { section: 'providers', title: 'ElevenLabs', words: 'media api key speech voice narration music sound effects' },
+  { section: 'providers', title: 'OpenAI', words: 'media api key speech voice narration tts' },
   { section: 'models', title: 'Ask before using another provider', words: 'ability approval image search provider' },
   { section: 'workflows', title: 'Where sub-agents run', words: 'subagent native provider cross delegate' },
   { section: 'workflows', title: 'Custom agents', words: 'custom agent reusable reviewer recipe' },
@@ -346,7 +344,8 @@ export function SettingsPage({
 }: {
   navigationLocked?: boolean
   section: SettingsSection
-  target?: string
+  /** The row to scroll to and highlight; a new object asks again for the same row. */
+  target?: { title: string }
   onSection: (section: SettingsSection) => void
   children: ReactNode
   busy: boolean
@@ -409,7 +408,7 @@ export function SettingsPage({
     window.requestAnimationFrame(attempt)
   }
   useEffect(() => {
-    if (target) reveal(t(target))
+    if (target) reveal(t(target.title))
   }, [target])
   const open = (entry: { section: SettingsSection; title: string }) => {
     setQuery('')

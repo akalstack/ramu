@@ -5938,8 +5938,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Connect with an API key': 'Hubungkan dengan kunci API',
   'Paste API keys in Ramu on the machine running this host. The key stays in that host’s credential store.':
     'Tempel kunci API di Ramu pada mesin yang menjalankan host ini. Kuncinya tetap di penyimpanan kredensial host itu.',
-  'Save API keys in Ramu on the host computer, under Settings → Media. The phone never stores a key.':
-    'Simpan kunci API di Ramu pada komputer host, di Pengaturan → Media. Ponsel tidak pernah menyimpan kunci.',
+  'Save API keys in Ramu on the host computer, under Settings → Providers. The phone never stores a key.':
+    'Simpan kunci API di Ramu pada komputer host, di Pengaturan → Provider. Ponsel tidak pernah menyimpan kunci.',
   'When no signed-in provider can make video, speech, music or sound effects, they run on a media service with your own API key, billed to that account. Auto tries these after your signed-in providers.':
     'Kalau tidak ada provider yang sudah login yang bisa membuat video, suara, musik, atau efek suara, semuanya dijalankan di layanan media dengan kunci API-mu sendiri dan ditagih ke akun itu. Auto mencobanya setelah provider yang sudah login.',
   'Not connected. Abilities can use it for {0}.': 'Belum terhubung. Kemampuan bisa memakainya untuk {0}.',

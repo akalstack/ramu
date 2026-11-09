@@ -49,9 +49,7 @@ async function failure(name: string, response: Response, what: string): Promise<
     // Not JSON: the status says enough.
   }
   if (response.status === 401 || response.status === 403)
-    return new Error(
-      `${name} refused the saved API key while ${what}. Replace it in Settings → Media.${detail}`,
-    )
+    return new Error(`${name} refused the saved API key while ${what}. Replace it in Settings → Providers.${detail}`)
   if (response.status === 429 || response.status === 402)
     return new Error(`${name} is at its limit or out of credit while ${what}.${detail}`)
   return new Error(`${name} could not finish ${what} (HTTP ${response.status}).${detail}`)

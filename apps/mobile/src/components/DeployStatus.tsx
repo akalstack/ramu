@@ -94,7 +94,7 @@ export function DeployStatus({ hostId, only }: { hostId: string; only?: 'media' 
       })}
       <T size={font.caption} tone="muted" style={{ paddingHorizontal: space.xl, paddingTop: space.m }}>
         {only === 'media'
-          ? t('Save API keys in Ramu on the host computer, under Settings → Media. The phone never stores a key.')
+          ? t('Save API keys in Ramu on the host computer, under Settings → Providers. The phone never stores a key.')
           : t(
               'Connect accounts in Ramu on the host computer, under Settings → Deploy. The phone never stores a token.',
             )}

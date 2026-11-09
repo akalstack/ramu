@@ -43,7 +43,7 @@ it('keeps the way to add a media key after the agent has finished its turn', () 
   expect(labels()).toEqual(['Add a media key', 'Not now'])
 })
 
-it('opens Settings › Media for speech, and Providers for an ability a provider makes', () => {
+it('opens the Media keys in Settings › Providers for speech, and Providers for an ability a provider makes', () => {
   const opened: unknown[] = []
   const listen = (event: Event) => opened.push((event as CustomEvent).detail)
   vi.stubGlobal('window', new EventTarget())
@@ -56,5 +56,5 @@ it('opens Settings › Media for speech, and Providers for an ability a provider
   state.buttons[0]!.onClick?.({} as never)
   state.buttons[2]!.onClick?.({} as never)
   vi.unstubAllGlobals()
-  expect(opened).toEqual([{ section: 'media' }, { section: 'providers' }])
+  expect(opened).toEqual([{ section: 'providers', target: 'Media' }, { section: 'providers' }])
 })

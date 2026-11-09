@@ -126,7 +126,7 @@ export function AbilityRow({ call, sessionId, live }: { call: AbilityCall; sessi
                 onClick={() =>
                   window.dispatchEvent(
                     new CustomEvent('ramu:settings', {
-                      detail: { section: isMediaAbility(call.ability) ? 'media' : 'providers' },
+                      detail: { section: 'providers', target: isMediaAbility(call.ability) ? 'Media' : undefined },
                     }),
                   )
                 }

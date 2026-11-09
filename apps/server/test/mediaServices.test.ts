@@ -77,7 +77,7 @@ describe('Google Gemini', () => {
     await expect(
       geminiMedia({ fetch: fetcher }).make(auth, { ability: 'speech', prompt: 'Hi' }, signal),
     ).rejects.toThrow('API key not valid')
-    await expect(geminiMedia({ fetch: refused.fetcher }).account(auth)).rejects.toThrow('Settings → Media')
+    await expect(geminiMedia({ fetch: refused.fetcher }).account(auth)).rejects.toThrow('Settings → Providers')
     await expect(
       geminiMedia({ fetch: fetcher }).make(auth, { ability: 'sound_effect', prompt: 'Whoosh' }, signal),
     ).rejects.toThrow('does not make')

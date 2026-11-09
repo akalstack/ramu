@@ -707,7 +707,7 @@ export class AbilityService {
       )
     throw new Refusal(
       'unavailable',
-      `No signed-in provider here has ${ABILITY_LABELS[base.ability].toLowerCase()}. Continue without it and tell the person; ${isMediaAbility(base.ability) ? 'they can save an API key for a media service that makes it in Settings → Media' : 'they can set one up in Settings → Providers'}. Do not make a placeholder without saying so.`,
+      `No signed-in provider here has ${ABILITY_LABELS[base.ability].toLowerCase()}. Continue without it and tell the person; ${isMediaAbility(base.ability) ? 'they can save an API key for a media service that makes it in Settings → Providers' : 'they can set one up in Settings → Providers'}. Do not make a placeholder without saying so.`,
     )
   }
 
@@ -921,7 +921,7 @@ export class AbilityService {
     if (!this.host.media || !this.connectedMedia().includes(service))
       throw new Refusal(
         'unavailable',
-        `${connector.name} is chosen for ${ABILITY_LABELS[base.ability].toLowerCase()}, but no API key for it is saved. Save one in Settings → Media, then try again.`,
+        `${connector.name} is chosen for ${ABILITY_LABELS[base.ability].toLowerCase()}, but no API key for it is saved. Save one in Settings → Providers, then try again.`,
       )
     const prompt = String(base.args.text ?? base.args.prompt ?? prepared.sent.prompt)
     if (this.preferences().askBeforeOtherProvider) {

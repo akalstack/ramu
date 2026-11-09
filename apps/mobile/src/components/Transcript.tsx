@@ -516,7 +516,7 @@ function AbilityCard({ call, chat }: { call: AbilityCall; chat: Chat }) {
               onPress={() =>
                 router.push({
                   pathname: '/settings/[section]',
-                  params: { section: isMediaAbility(call.ability) ? 'media' : 'providers' },
+                  params: { section: 'providers' },
                 })
               }
             />

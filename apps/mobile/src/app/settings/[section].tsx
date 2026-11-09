@@ -473,16 +473,16 @@ export default function SettingsSectionPage() {
         {id === 'providers' ? (
           <ProviderCompatibility key={`ProviderCompatibility:${selected}`} hostId={selected} locked={locked} />
         ) : null}
+        {id === 'providers' ? <DeployStatus key={`MediaStatus:${selected}`} hostId={selected} only="media" /> : null}
         {id === 'providers' ? <Usage computer={selected} /> : null}
         {id === 'chats' ? <BusyBehavior key={`BusyBehavior:${selected}`} computerId={selected} /> : null}
         {id === 'computer' ? <ComputerUseSettings key={`ComputerUseSettings:${selected}`} hostId={selected} /> : null}
         {id === 'computer' ? <TestDeviceSettings key={`TestDeviceSettings:${selected}`} hostId={selected} /> : null}
         {id === 'git' ? <HostingStatus key={`HostingStatus:${selected}`} hostId={selected} /> : null}
         {id === 'deploy' ? <DeployStatus key={`DeployStatus:${selected}`} hostId={selected} /> : null}
-        {id === 'media' ? <DeployStatus key={`MediaStatus:${selected}`} hostId={selected} only="media" /> : null}
         {id === 'agent-setup' ? <AgentSetupSettings key={`AgentSetupSettings:${selected}`} hostId={selected} /> : null}
         {id === 'agent-setup' ? <RulesSettings key={`RulesSettings:${selected}`} hostId={selected} /> : null}
-        {section.scope === 'host' && id !== 'computer' && id !== 'deploy' && id !== 'media' ? (
+        {section.scope === 'host' && id !== 'computer' && id !== 'deploy' ? (
           <HostGroups section={id} host={host} name={name} locked={locked} />
         ) : null}
         {id === 'models' ? <AbilitySummary key={`AbilitySummary:${selected}`} hostId={selected} /> : null}

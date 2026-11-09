@@ -1,4 +1,4 @@
-// A media key from Settings › Media to a finished ability call: the key is checked with the service and kept in the
+// A media key from Settings › Providers to a finished ability call: the key is checked with the service and kept in the
 // credential store, the host then lists the service as connected, an ability call runs on that key, and after
 // Disconnect the same call is refused with where to save one. Only the network is faked.
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
@@ -95,11 +95,11 @@ function setup() {
 
 const recorded = () => (events.at(-1) as Extract<AgentEvent, { kind: 'ability' }>).call
 
-it('a saved key makes speech on that service, and Disconnect sends the person back to Settings › Media', async () => {
+it('a saved key makes speech on that service, and Disconnect sends the person back to Settings › Providers', async () => {
   const { accounts, abilities, secrets, state } = setup()
 
   // A refused key is not kept, and the error says where to replace it.
-  await expect(accounts.save('elevenlabs', { token: 'wrong-key-000' }, 'token')).rejects.toThrow('Settings → Media')
+  await expect(accounts.save('elevenlabs', { token: 'wrong-key-000' }, 'token')).rejects.toThrow('Settings → Providers')
   expect(accounts.connected('elevenlabs')).toBe(false)
 
   const shown = await accounts.save('elevenlabs', { token: GOOD_KEY }, 'token')
@@ -120,6 +120,6 @@ it('a saved key makes speech on that service, and Disconnect sends the person ba
   expect(abilities.status().media).toEqual([])
   await abilities.call('thread', 'speak', { text: 'Again' })
   expect(recorded()).toMatchObject({ status: 'refused', refusal: 'unavailable' })
-  expect(recorded().summary).toContain('Settings → Media')
+  expect(recorded().summary).toContain('Settings → Providers')
   expect(requests.filter((request) => request.url.includes('/text-to-speech/'))).toHaveLength(1)
 })

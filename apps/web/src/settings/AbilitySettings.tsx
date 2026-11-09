@@ -52,7 +52,7 @@ export function AbilitySettings({
   value: AppPreferences
   onChange: (next: AppPreferences) => void
   busy: boolean
-  /** Opens Settings › Media, where the media services' keys are saved. */
+  /** Opens the Media keys in Settings › Providers, where the media services' keys are saved. */
   onOpenMedia: () => void
 }) {
   useLanguage()

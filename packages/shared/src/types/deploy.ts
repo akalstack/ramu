@@ -49,7 +49,7 @@ export const NAMED_SERVICE_NAMES: Record<NamedService, string> = {
 
 /**
  * Media services an ability can run on with the person's own API key, billed to that account: video, speech, music
- * and sound effects that no signed-in coding agent makes. Their keys are saved in Settings → Media.
+ * and sound effects that no signed-in coding agent makes. Their keys are saved under Media in Settings → Providers.
  */
 export const MEDIA_SERVICES = ['gemini', 'elevenlabs', 'openai'] as const
 export type MediaService = (typeof MEDIA_SERVICES)[number]

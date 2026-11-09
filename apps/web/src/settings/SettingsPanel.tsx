@@ -64,6 +64,13 @@ export function SettingsPanel({
   const app = useAppSettings()
   const [page, setPage] = useState<SettingsSection>(initialSection)
   useEffect(() => setPage(initialSection), [initialSection])
+  // The row to scroll to; a new object each time, so the same link pressed twice scrolls twice.
+  const [jump, setJump] = useState<{ title: string } | undefined>(undefined)
+  useEffect(() => setJump(initialTarget ? { title: initialTarget } : undefined), [initialTarget])
+  const openAt = (section: SettingsSection, title: string) => {
+    setPage(section)
+    setJump({ title })
+  }
   const scope = useSettingsScope(page, initialHost)
   const [appDraft, setAppDraft] = useState<AppPreferences>(() => structuredClone(scope.preferences))
   const store = useModelSets()
@@ -185,7 +192,7 @@ export function SettingsPanel({
           <ModelSetsOverride value={{ ...store, catalogs: scope.catalogs, preferences: draft }}>
             <SettingsPage
               section={page}
-              target={initialTarget}
+              target={jump}
               onSection={setPage}
               busy={busy || scope.saving}
               hasChanges={hasChanges}
@@ -202,6 +209,7 @@ export function SettingsPanel({
                 <>
                   <SettingsGroupTitle>{t('Providers')}</SettingsGroupTitle>
                   <ProviderSettings value={appDraft} onChange={setAppDraft} onOpenSection={setPage} />
+                  <MediaSettings onOpenAbilities={() => openAt('models', 'Abilities')} />
                   <div className={`${SETTINGS_FORM_CLASS} mt-8`}>
                     <SettingsGroupTitle>{t('Usage')}</SettingsGroupTitle>
                     <ToggleRow
@@ -292,10 +300,9 @@ export function SettingsPanel({
                   value={appDraft}
                   onChange={setAppDraft}
                   busy={busy}
-                  onOpenMedia={() => setPage('media')}
+                  onOpenMedia={() => openAt('providers', 'Media')}
                 />
               )}
-              {page === 'media' && <MediaSettings onOpenAbilities={() => setPage('models')} />}
               {page === 'models' && (
                 <ToggleRow
                   {...draftProps}
