@@ -1,7 +1,7 @@
 import { MEDIA_SERVICE_NAMES } from '@ramu/shared/types/deploy'
 import { useState } from 'react'
 import { BookOpen, ImageIcon, Search, Sparkles } from 'lucide-react'
-import { ABILITY_DONE, ABILITY_LABELS, type AbilityCall } from '@ramu/shared/providers/abilities'
+import { ABILITY_DONE, ABILITY_LABELS, isMediaAbility, type AbilityCall } from '@ramu/shared/providers/abilities'
 import { providerName } from '@ramu/shared/providers/providers'
 import { Button } from '@/components/desktop-button'
 import { formatLocale, t, useLanguage } from '../../../i18n'
@@ -123,10 +123,14 @@ export function AbilityRow({ call, sessionId, live }: { call: AbilityCall; sessi
                 size="sm"
                 className={GHOST_TEXT_BUTTON_CLASS}
                 onClick={() =>
-                  window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'providers' } }))
+                  window.dispatchEvent(
+                    new CustomEvent('ramu:settings', {
+                      detail: { section: isMediaAbility(call.ability) ? 'media' : 'providers' },
+                    }),
+                  )
                 }
               >
-                {t('Set up a provider')}
+                {isMediaAbility(call.ability) ? t('Add a media key') : t('Set up a provider')}
               </Button>
               <Button variant="ghost" size="sm" className={GHOST_TEXT_BUTTON_CLASS} onClick={() => setDismissed(true)}>
                 {t('Not now')}

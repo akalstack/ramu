@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { accountBrand } from '@ramu/shared/brands'
+import { ABILITY_LABELS, MEDIA_ABILITIES } from '@ramu/shared/providers/abilities'
 import type { AccountPlatform, HostingAccount, HostingAccountsSummary, HostingSignIn } from '@ramu/shared/types'
 import {
   CLI_SIGN_IN_PLATFORMS,
   DEPLOY_ACCOUNT_GROUPS,
   REMOTE_SIGN_IN_PLATFORMS,
+  isMediaService,
   SALESFORCE_CALLBACK,
   type CliSignInPlatform,
 } from '@ramu/shared/types/deploy'
@@ -52,8 +54,12 @@ function deployAccountHeadline(account: HostingAccount): string {
           ? t('Not connected. Store releases of phone apps need an account.')
           : account.kind === 'service'
             ? t('Not connected. Dashboards that read it need an account.')
-            : account.kind === 'media'
-              ? t('Not connected. Abilities can use it for video, speech, music or sound effects.')
+            : account.kind === 'media' && isMediaService(account.platform)
+              ? t('Not connected. Abilities can use it for {0}.', {
+                  0: MEDIA_ABILITIES[account.platform]
+                    .map((ability) => t(ABILITY_LABELS[ability]).toLowerCase())
+                    .join(', '),
+                })
               : t('Not connected. Databases for your projects need an account.')
   if (account.error) return account.error
   const via = account.via === 'cli' ? t('signed in through its CLI') : t('token saved on this host')
@@ -379,7 +385,9 @@ function DeployAccountRow({
                     size="sm"
                     onClick={() => void openOnThisComputer('app.openExternal', account.tokenPage)}
                   >
-                    {t('Open {0}’s token page', { 0: account.name })}
+                    {account.kind === 'media'
+                      ? t('Open {0}’s API key page', { 0: account.name })
+                      : t('Open {0}’s token page', { 0: account.name })}
                   </Button>
                 </li>
                 <li>{t('Name it Ramu.')}</li>
@@ -404,12 +412,15 @@ function DeployAccountRow({
                 />
               </label>
               <p className="m-0 text-muted-foreground">
-                {t(
-                  'The token goes straight to the host’s credential store, is checked with {0}, and is never shown again.',
-                  {
-                    0: account.name,
-                  },
-                )}
+                {account.kind === 'media'
+                  ? t(
+                      'The key goes straight to the host’s credential store, is checked with {0}, and is never shown again.',
+                      { 0: account.name },
+                    )
+                  : t(
+                      'The token goes straight to the host’s credential store, is checked with {0}, and is never shown again.',
+                      { 0: account.name },
+                    )}
               </p>
               {error && (
                 <p role="alert" className="m-0 text-destructive">

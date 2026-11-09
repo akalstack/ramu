@@ -113,6 +113,10 @@ export const MEDIA_ABILITIES: Record<MediaService, readonly Ability[]> = {
   openai: ['speech'],
 }
 
+/** Abilities only a media service makes here, so setting one up means saving a key in Settings › Media. */
+export const isMediaAbility = (ability: Ability): boolean =>
+  Object.values(MEDIA_ABILITIES).some((abilities) => abilities.includes(ability))
+
 export const isMediaChoice = (choice: AbilityChoice | undefined): choice is AbilityMediaChoice =>
   typeof choice === 'object' && 'media' in choice
 

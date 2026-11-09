@@ -27,7 +27,7 @@ import * as Clipboard from 'expo-clipboard'
 import { readableRuns, readableText, type ReadableStyle } from '../runtime/transcript'
 import type { Attachment } from '@ramu/shared/types'
 import { useRouter } from 'expo-router'
-import { ABILITY_DONE, ABILITY_LABELS, type AbilityCall } from '@ramu/shared/providers/abilities'
+import { ABILITY_DONE, ABILITY_LABELS, isMediaAbility, type AbilityCall } from '@ramu/shared/providers/abilities'
 import { providerName } from '@ramu/shared/providers/providers'
 import {
   Check,
@@ -512,8 +512,13 @@ function AbilityCard({ call, chat }: { call: AbilityCall; chat: Chat }) {
           {call.refusal === 'unavailable' ? (
             <Button
               kind="secondary"
-              title={say('Set up a provider')}
-              onPress={() => router.push({ pathname: '/settings/[section]', params: { section: 'providers' } })}
+              title={isMediaAbility(call.ability) ? say('Add a media key') : say('Set up a provider')}
+              onPress={() =>
+                router.push({
+                  pathname: '/settings/[section]',
+                  params: { section: isMediaAbility(call.ability) ? 'media' : 'providers' },
+                })
+              }
             />
           ) : null}
         </View>

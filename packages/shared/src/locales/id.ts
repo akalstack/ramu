@@ -5931,6 +5931,10 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Simpan kunci API Google Gemini, ElevenLabs, atau OpenAI untuk membuat video, suara, musik, atau efek suara.',
   'Manage keys': 'Kelola kunci',
   'Add a key': 'Tambah kunci',
+  'Add a media key': 'Tambah kunci media',
+  'Open {0}’s API key page': 'Buka halaman kunci API {0}',
+  'The key goes straight to the host’s credential store, is checked with {0}, and is never shown again.':
+    'Kunci langsung masuk ke penyimpanan kredensial host, diperiksa dengan {0}, dan tidak pernah ditampilkan lagi.',
   'Connect with an API key': 'Hubungkan dengan kunci API',
   'Paste API keys in Ramu on the machine running this host. The key stays in that host’s credential store.':
     'Tempel kunci API di Ramu pada mesin yang menjalankan host ini. Kuncinya tetap di penyimpanan kredensial host itu.',
@@ -5938,8 +5942,7 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Simpan kunci API di Ramu pada komputer host, di Pengaturan → Media. Ponsel tidak pernah menyimpan kunci.',
   'When no signed-in provider can make video, speech, music or sound effects, they run on a media service with your own API key, billed to that account. Auto tries these after your signed-in providers.':
     'Kalau tidak ada provider yang sudah login yang bisa membuat video, suara, musik, atau efek suara, semuanya dijalankan di layanan media dengan kunci API-mu sendiri dan ditagih ke akun itu. Auto mencobanya setelah provider yang sudah login.',
-  'Not connected. Abilities can use it for video, speech, music or sound effects.':
-    'Belum terhubung. Kemampuan bisa memakainya untuk video, suara, musik, atau efek suara.',
+  'Not connected. Abilities can use it for {0}.': 'Belum terhubung. Kemampuan bisa memakainya untuk {0}.',
   'Create an API key in Google AI Studio on a project with billing turned on; video and music need the paid tier':
     'Buat kunci API di Google AI Studio pada proyek dengan penagihan aktif; video dan musik butuh paket berbayar',
   'Create an API key with access to text to speech, music and sound effects':

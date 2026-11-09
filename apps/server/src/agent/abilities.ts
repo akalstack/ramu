@@ -12,6 +12,7 @@ import {
   abilityListing,
   abilityRoutes,
   isMcpChoice,
+  isMediaAbility,
   isMediaChoice,
   mediaFor,
   AUTO_MCP_ABILITIES,
@@ -706,7 +707,7 @@ export class AbilityService {
       )
     throw new Refusal(
       'unavailable',
-      `No signed-in provider here has ${ABILITY_LABELS[base.ability].toLowerCase()}. Continue without it and tell the person; they can set one up in Settings → Providers. Do not make a placeholder without saying so.`,
+      `No signed-in provider here has ${ABILITY_LABELS[base.ability].toLowerCase()}. Continue without it and tell the person; ${isMediaAbility(base.ability) ? 'they can save an API key for a media service that makes it in Settings → Media' : 'they can set one up in Settings → Providers'}. Do not make a placeholder without saying so.`,
     )
   }
 
