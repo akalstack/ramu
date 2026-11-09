@@ -6458,4 +6458,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0} was interrupted': '{0} terputus',
   '{0} was stopped': '{0} dihentikan',
   'Message from {0}': 'Pesan dari {0}',
+  '{0} could not be read': '{0} tidak dapat dibaca',
+  '{0} repositories could not be read': '{0} repositori tidak dapat dibaca',
+  'GitHub CLI is not installed': 'GitHub CLI belum terpasang',
+  'Choose a GitHub account': 'Pilih akun GitHub',
+  '{0} is not connected': '{0} belum terhubung',
+  'Hide this notice': 'Sembunyikan pemberitahuan ini',
+  '{0} repositories that need access are hidden': '{0} repositori yang perlu akses disembunyikan',
 }

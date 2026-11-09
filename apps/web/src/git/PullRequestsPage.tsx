@@ -40,14 +40,13 @@ import { cn } from 'cn'
 import { t, useLanguage } from '../i18n'
 import { Dropdown, timeAgo } from '../Menu'
 import { ipcQueryKeyOn } from '../dataQueries'
-import { HostProvider } from '../workspace/HostProvider'
 import { HostContent } from '../workspace/HostContent'
 import { useHostSelection } from '../workspace/HostSelection'
 import { statusText, useScopedHosts } from '../workspace/computers'
 import { projectCtx, type useWorkspace } from '../workspace/workspace'
 import { ownHostId } from '../hosts'
 import { DeviceIcon } from '@/components/device-icon'
-import { ForgeAccessPanel } from '../sidebar/scm/ForgeAccessPanel'
+import { RepositoryAccessNotices } from './RepositoryAccessNotices'
 import { queryInvokerFor } from './hostQuery'
 import { errorText } from '../lib/errors'
 import { invoke as openOnThisComputer } from '../ipc'
@@ -235,9 +234,15 @@ export function PullRequestsPage() {
     const thread = entry.threads.at(-1)
     const active = selected?.pr.url === pr.url
     const elsewhere = entry.sources.slice(1).map((source) => hostName(source.host))
+    // The stage already says when checks are failing or running; the mark adds it only when the stage is about something else.
+    const checksAside =
+      entry.stage !== 'checks-failing' &&
+      entry.stage !== 'checks-pending' &&
+      (pr.checks === 'failure' || pr.checks === 'pending')
     return (
       <RowButton
         key={pr.url}
+        data-pr-url={pr.url}
         stacked
         className="py-1.5"
         aria-selected={active}
@@ -259,33 +264,42 @@ export function PullRequestsPage() {
           )}
           <span className="flex-none text-caption text-muted-foreground tabular-nums">{timeAgo(pr.updatedAt)}</span>
         </span>
-        <span className="flex w-full min-w-0 items-center gap-1.5 pl-[21px] text-caption text-muted-foreground">
-          <span className="inline-flex min-w-0 flex-none items-center gap-1" title={FORGE_NAMES[entry.service]}>
+        <span className="flex w-full min-w-0 items-center gap-2 pl-[21px] text-caption text-muted-foreground">
+          {/* Everything but the host shares what is left of the line and gives way, least important first. */}
+          <span className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
             <BrandIcon brand={forgeBrand(entry.service)} size={11} className="flex-none" />
-            <span className="truncate">
+            <span
+              className="min-w-[56px] shrink truncate"
+              title={`${FORGE_NAMES[entry.service]} · ${repoLabel(entry)}`}
+            >
               {repoLabel(entry)} {pullRequestRef(entry.service, pr.number)}
             </span>
-          </span>
-          <ChecksMark checks={pr.checks} />
-          <StageChip stage={entry.stage} />
-          {!!pr.openThreads && (
-            <span className="inline-flex flex-none items-center gap-0.5" title={t('Open review threads')}>
-              <MessageSquare size={10} aria-hidden="true" />
-              {pr.openThreads}
-            </span>
-          )}
-          {pr.labels?.slice(0, 2).map((label) => (
-            <span key={label} className="flex-none rounded-full bg-fill px-1.5 text-[11px] leading-4">
-              {label}
-            </span>
-          ))}
-          <span className="min-w-0 truncate">
-            {pr.author ?? ''}
-            {thread ? ` · ${t('In {0}', { '0': thread.title })}` : ''}
+            {checksAside && <ChecksMark checks={pr.checks} />}
+            <StageChip stage={entry.stage} />
+            {!!pr.openThreads && (
+              <span className="inline-flex flex-none items-center gap-0.5" title={t('Open review threads')}>
+                <MessageSquare size={10} aria-hidden="true" />
+                {pr.openThreads}
+              </span>
+            )}
+            {pr.labels?.slice(0, 2).map((label) => (
+              <span
+                key={label}
+                title={label}
+                className="min-w-0 max-w-[96px] shrink-[2] truncate rounded-full bg-fill px-1.5 text-[11px] leading-4"
+              >
+                {label}
+              </span>
+            ))}
+            {(pr.author || thread) && (
+              <span className="min-w-0 shrink-[3] truncate">
+                {[pr.author, thread ? t('In {0}', { '0': thread.title }) : ''].filter(Boolean).join(' · ')}
+              </span>
+            )}
           </span>
           {manyHosts && (
             <span
-              className="ml-auto inline-flex min-w-0 flex-none items-center gap-1"
+              className="inline-flex max-w-[112px] flex-none items-center gap-1"
               title={
                 elsewhere.length
                   ? t('Opens on {0}. Also on {1}', { '0': hostName(entry.host), '1': elsewhere.join(', ') })
@@ -293,13 +307,27 @@ export function PullRequestsPage() {
               }
             >
               <DeviceIcon name={hostName(entry.host)} size={11} />
-              <span className="max-w-[120px] truncate">{hostName(entry.host)}</span>
-              {elsewhere.length > 0 && <span className="tabular-nums">+{elsewhere.length}</span>}
+              <span className="min-w-0 truncate">{hostName(entry.host)}</span>
+              {elsewhere.length > 0 && <span className="flex-none tabular-nums">+{elsewhere.length}</span>}
             </span>
           )}
         </span>
       </RowButton>
     )
+  }
+
+  const listRef = useRef<HTMLDivElement>(null)
+  /** Up and down move through the list, opening each pull request as a mail list does. */
+  const move = (event: React.KeyboardEvent) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    const openable = rows.filter((entry) => !entry.outside)
+    if (!openable.length) return
+    event.preventDefault()
+    const at = openable.findIndex((entry) => entry.pr.url === selected?.pr.url)
+    const step = event.key === 'ArrowDown' ? 1 : -1
+    const next = openable[at < 0 ? 0 : Math.min(openable.length - 1, Math.max(0, at + step))]!
+    setSelected(next)
+    listRef.current?.querySelector<HTMLElement>(`[data-pr-url="${CSS.escape(next.pr.url)}"]`)?.focus()
   }
 
   const services = [...new Set(repositories.map((repo) => repo.service ?? 'github'))]
@@ -325,7 +353,7 @@ export function PullRequestsPage() {
       <section
         aria-label={t('Pull requests')}
         className={cn(
-          'flex min-h-0 w-full flex-col @min-[900px]:w-[460px] @min-[900px]:flex-none @min-[900px]:border-r @min-[900px]:border-(--line)',
+          'flex min-h-0 w-full flex-col @min-[900px]:w-[480px] @min-[1280px]:w-[540px] @min-[900px]:flex-none @min-[900px]:border-r @min-[900px]:border-(--line)',
           selected && '@max-[899px]:hidden',
         )}
       >
@@ -407,7 +435,7 @@ export function PullRequestsPage() {
           </Tabs>
         </div>
         <OverlayScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col gap-px px-2 pt-1 pb-6">
+          <div ref={listRef} className="flex flex-col gap-px px-2 pt-2 pb-6" onKeyDown={move}>
             {unreachable.map(({ host, query }) => (
               <p
                 key={host.id}
@@ -435,26 +463,12 @@ export function PullRequestsPage() {
                 )}
               </p>
             ))}
-            {attention.map((repo) => (
-              <div key={`${repo.host}\n${repo.repoId}`} className="mx-2 my-1 flex flex-col gap-1">
-                <span className="text-caption text-muted-foreground">
-                  {manyHosts ? `${repoLabel(repo)} · ${hostName(repo.host)}` : repoLabel(repo)}
-                </span>
-                {repo.error ? (
-                  <p className="m-0 text-caption text-bad">{repo.error}</p>
-                ) : (
-                  // Signing in happens on the host whose checkout it is.
-                  <HostProvider hostId={repo.host}>
-                    <ForgeAccessPanel
-                      taskId={projectCtx(repo.projectId)}
-                      repoId={repo.repoId}
-                      unavailable={repo.availability}
-                      service={repo.service}
-                    />
-                  </HostProvider>
-                )}
-              </div>
-            ))}
+            <RepositoryAccessNotices
+              repos={attention}
+              hostName={hostName}
+              manyHosts={manyHosts}
+              activeHost={activeHost}
+            />
             {loading && !rows.length && <ContentSkeleton />}
             {rows.map(row)}
             {settled && !rows.length && (

@@ -111,7 +111,8 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
             className="pointer-events-none absolute inset-y-0 inset-x-1 rounded-(--radius-s) group-hover/host:bg-accent"
           />
           <SidebarDisclosureButton
-            className="relative flex-1 text-foreground hover:bg-transparent"
+            // Room for the actions that appear over the row's end, so the name truncates before them.
+            className="relative min-w-0 flex-1 text-foreground hover:bg-transparent group-hover/host:pr-[52px] group-focus-within/host:pr-[52px]"
             title={computer.name}
             aria-expanded={open}
             onClick={() => tree.setExpanded('host', !open)}
