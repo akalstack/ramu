@@ -41,7 +41,8 @@ Ramu does this differently:
 ### 1. Simlock as the engine
 
 - **Setup:** **Settings → Test devices** replaces **Install idb** with one **Set up test devices** button: it installs the pinned `simlock` into `~/.ramu/tools/simlock-<version>` with Ramu's Node, runs `simlock doctor`, and shows each finding in the existing missing-item rows with its fix. **Copy command** keeps the same install for a terminal. Ramu writes the daemon's settings it relies on (HTTP on loopback, `capabilities.input.enabled`, `capabilities.stream`) with `simlock config set`, and creates one agent token for its server with `simlock/admin`, kept in `credentials/`.
-- **Leases:** `TestDevices` talks to the daemon through `simlock/client` with principal `ramu:<thread id>`, so a thread holds one lease and a helper agent shares its parent's. `test_device_list` reads the catalog (models and OS versions that can be leased) instead of `simctl list`; `test_device_open` takes a platform and an optional model and OS. Ramu renews every third of the TTL and releases when the thread ends, stops or is archived. If the Ramu server dies, the lease ends one TTL later, so there is no ledger.
+- **Simlock's home** sits on a short path (`~/.ramu/simlock`): its daemon socket must fit macOS's 103-byte limit. The Android SDK's tools need Java; Android Studio's bundled runtime is used as `JAVA_HOME` when no other is installed.
+- **Leases:** `TestDevices` talks to the daemon through `simlock/client` with principal `ramu:<thread id>` (over HTTP the requester is always the token, and Simlock allows one lease per requester), so a thread holds one lease and a helper agent shares its parent's. `test_device_list` reads the catalog (models and OS versions that can be leased) instead of `simctl list`; `test_device_open` takes a platform and an optional model and OS. Ramu renews every third of the TTL and releases when the thread ends, stops or is archived. If the Ramu server dies, the lease ends one TTL later, so there is no ledger.
 - **Queue:** while a lease waits, the thread's device pill shows **Waiting for a device · 2nd in line** with **Stop waiting**; the tool returns once the device is ready. `TEST_DEVICE_LIMIT` and the "already running" error go away: capacity is Simlock's, from the machine's RAM.
 - **Commands:** install, launch, open URL and logs run through agent-device on the thread's session, with `client.exec` (`simctl` or `adb`, which refuses verbs that would break a lease) where agent-device has no command. Workspace path checks stay as they are.
 - **Captures and input:** everything an agent does on a device goes through agent-device under Simlock (part 2b): observing (elements and a screenshot), tapping by element or point, filling and typing, swiping, scrolling, Back and Home. The device stays a `ComputerBackend`, so agents keep `computer_observe` and the action tools they use on a Mac. The lease's input socket carries only the person's **Take control** from the viewer. idb and `idb.ts` are deleted.
@@ -49,7 +50,18 @@ Ramu does this differently:
 
 ### 2. Live screens
 
-- The desktop viewer, Float and the phone's full-screen viewer decode the lease stream (`/v1/leases/<id>/stream`) through the server, which adds the token so clients never hold it. The desktop decodes with WebCodecs; the phone uses the same canvas in its WebView. Take control sends touches over the input socket.
+Measured on an M-series Mac (macOS 27, Xcode 27.2, iOS 27 and Android 36) with Simlock 0.6.0 and agent-device 0.21.36, against a page animating the whole screen:
+
+| | iOS (serve-sim capture) | Android (scrcpy) | Polling today |
+| --- | --- | --- | --- |
+| Frames per second | 41 (median gap 20 ms, p95 36 ms) | 29 (median 25 ms, p95 107 ms; the emulator's own rendering) | about 2 |
+| Size, bitrate | 734×1600, 2.3 Mbps | 712×1600, 2.3 Mbps | a full PNG every 500 ms |
+| Change to frame | under 0.2 s | under 0.2 s | up to 0.5 s |
+
+idb's `video-stream` reached 30 fps (p95 66 ms) at full size, and Simlock's defaults (720 px, a 30 fps cap) only 24 fps, so setup writes `capabilities.stream.maxDimension` 1600, `fps` 60 and `bitrateKbps` 4000.
+
+
+- The desktop viewer, Float and the phone's full-screen viewer decode the lease stream (`/v1/leases/<id>/stream`) through the server, which adds an operator token (only a lease's holder or an operator may watch it) so clients never hold it. The desktop decodes with WebCodecs; the phone uses the same canvas in its WebView. Take control sends touches over the input socket.
 - Screenshots stay as the fallback where decoding is unavailable, and as the agent's observation.
 
 ### 2b. The element tree on iOS and Android
@@ -58,6 +70,7 @@ Today an agent on Android reads uiautomator's tree and taps "Sign up" by name, w
 
 - **Setup:** **Set up test devices** installs a pinned `agent-device` beside Simlock in `~/.ramu/tools` and points the daemon at it; `simlock doctor`'s agent-device finding is one more checklist row.
 - **Leases:** a thread's device is opened through the front with session `ramu-<thread id>` and lease id `ramu-<thread id>`, so each thread still gets its own device, and the stream, input socket and `client.exec` find it by that id. Ramu's server calls the front's RPC over loopback with its token; agents never see agent-device or a shell.
+- **Warm start:** agent-device's first snapshot on a fresh device starts its test runner (71 s on iOS, 13 s on Android); later ones take 0.44 s and 1.3 s, and a tap by element 0.86 s. Ramu starts the runner as soon as a device is opened, so the agent's first look does not wait. A fresh emulator's Chrome opens on its first-run screen, so Ramu skips it (Chrome's command-line file) before opening a page.
 - **Observe:** `computer_observe` returns the snapshot's elements (role, label, value, frame, a short ref) with the screenshot on both platforms; uiautomator's own parse goes.
 - **Act:** `computer_act` takes an element ref as well as coordinates; Ramu taps the element's centre, and fills a text field through agent-device's `fill` when the field is named.
 
