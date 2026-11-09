@@ -113,7 +113,6 @@ export class HostingAccounts {
       expo: saved('expo'),
       gemini: saved('gemini'),
       elevenlabs: saved('elevenlabs'),
-      openai: saved('openai'),
     }
   }
 

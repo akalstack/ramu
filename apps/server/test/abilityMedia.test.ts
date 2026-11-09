@@ -19,7 +19,7 @@ const made: { service: MediaService; request: MediaRequest; token: string }[] = 
 vi.mock('../src/media/mediaServices', () => ({
   mediaConnector: (service: MediaService) => ({
     id: service,
-    name: { gemini: 'Google Gemini', elevenlabs: 'ElevenLabs', openai: 'OpenAI' }[service],
+    name: { gemini: 'Google Gemini', elevenlabs: 'ElevenLabs' }[service],
     tokenPage: '',
     kind: 'media',
     account: async () => ({ id: service, name: service, defaultScope: null, broadScope: null, expiresAt: null }),
@@ -135,23 +135,23 @@ describe('abilities on a media service', () => {
   })
 
   it('refuses a chosen service with no saved key, and one that does not make the ability', async () => {
-    withAbilities({ choices: { music: { media: 'elevenlabs' }, video_generation: { media: 'openai' } } })
+    withAbilities({ choices: { music: { media: 'elevenlabs' }, video_generation: { media: 'elevenlabs' } } })
     await service().call('thread', 'make_music', { prompt: 'Calm piano' })
     expect(recorded()).toMatchObject({ status: 'refused', refusal: 'unavailable' })
     expect(recorded().summary).toContain('no API key for it is saved')
-    connected = ['openai']
+    connected = ['elevenlabs']
     await service().call('thread', 'make_video', { prompt: 'x' })
     expect(recorded().summary).toContain('does not make')
     expect(made).toEqual([])
   })
 
   it('asks first, naming the service and that it is billed to that account, when the person wants that', async () => {
-    connected = ['openai']
+    connected = ['elevenlabs']
     withAbilities({ askBeforeOtherProvider: true })
     permission.mockResolvedValueOnce(false)
     await service().call('thread', 'speak', { text: 'Hello' })
     expect(recorded()).toMatchObject({ status: 'refused', refusal: 'declined' })
-    expect(permission.mock.calls[0]![1]).toContain('OpenAI')
+    expect(permission.mock.calls[0]![1]).toContain('ElevenLabs')
     expect(permission.mock.calls[0]![2]).toContain('billed to that account')
     expect(made).toEqual([])
   })

@@ -1,4 +1,4 @@
-import { MEDIA_SERVICES } from '@ramu/shared/types/deploy'
+import { isMediaService, MEDIA_SERVICES } from '@ramu/shared/types/deploy'
 import { z } from 'zod'
 import { validBranchPrefix } from '@ramu/shared/workspaceDefaults'
 import { intelligenceSchema } from '../intelligence'
@@ -114,8 +114,14 @@ const abilityChoice = z.union([
   z.object({ media: z.enum(MEDIA_SERVICES) }),
 ])
 /** Auto, Off or one provider and model per ability; a project's `ramu.json` can set these over the host's. */
+// A choice of a media service Ramu no longer offers is dropped, so that ability falls back to Auto.
+const keptChoice = z.preprocess(
+  (value) =>
+    value && typeof value === 'object' && 'media' in value && !isMediaService(value.media) ? undefined : value,
+  abilityChoice.optional(),
+)
 export const abilityChoices = z.object(
-  Object.fromEntries(ABILITIES.map((ability) => [ability, abilityChoice.optional()])),
+  Object.fromEntries(ABILITIES.map((ability) => [ability, keptChoice])),
 ) as z.ZodType<AbilityPreferences['choices']>
 const mcpTool = z.object({ connectionId: z.string().min(1).max(200), tool: z.string().min(1).max(200) })
 const abilityPreferences = z.object({

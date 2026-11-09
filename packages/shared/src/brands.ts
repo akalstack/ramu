@@ -23,7 +23,6 @@ export const BRAND_IDS = [
   'grafana',
   'salesforce',
   'gemini',
-  'openai',
   'elevenlabs',
 ] as const
 

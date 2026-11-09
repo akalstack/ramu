@@ -40,7 +40,6 @@ const SCOPE_HINT: Record<AccountPlatform, string> = {
   gemini:
     'Create an API key in Google AI Studio on a project with billing turned on; video and music need the paid tier',
   elevenlabs: 'Create an API key with access to text to speech, music and sound effects',
-  openai: 'Create a project API key; speech is billed to that project',
 }
 
 /** The headline under a platform's name: who is connected and how, or what to do. */

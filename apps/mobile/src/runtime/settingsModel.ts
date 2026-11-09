@@ -801,7 +801,7 @@ const PHONE_ENTRIES: { section: SettingsSection; title: string; words: string }[
   {
     section: 'providers',
     title: 'Media',
-    words: 'api key video speech voice narration music sound effects gemini elevenlabs openai',
+    words: 'api key video speech voice narration music sound effects gemini elevenlabs',
   },
   {
     section: 'deploy',

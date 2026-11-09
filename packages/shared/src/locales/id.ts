@@ -5927,8 +5927,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Choose which service each ability uses': 'Pilih layanan yang dipakai tiap kemampuan',
   'Video, speech, music and sound effects can also run on your {0} API key.':
     'Video, suara, musik, dan efek suara juga bisa dijalankan dengan kunci API {0}-mu.',
-  'Save an API key for Google Gemini, ElevenLabs or OpenAI to make video, speech, music or sound effects.':
-    'Simpan kunci API Google Gemini, ElevenLabs, atau OpenAI untuk membuat video, suara, musik, atau efek suara.',
+  'Save an API key for Google Gemini or ElevenLabs to make video, speech, music or sound effects.':
+    'Simpan kunci API Google Gemini atau ElevenLabs untuk membuat video, suara, musik, atau efek suara.',
   'Manage keys': 'Kelola kunci',
   'Add a key': 'Tambah kunci',
   'Add a media key': 'Tambah kunci media',
@@ -5947,8 +5947,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Buat kunci API di Google AI Studio pada proyek dengan penagihan aktif; video dan musik butuh paket berbayar',
   'Create an API key with access to text to speech, music and sound effects':
     'Buat kunci API dengan akses ke teks ke suara, musik, dan efek suara',
-  'Create a project API key; speech is billed to that project':
-    'Buat kunci API proyek; suara ditagih ke proyek tersebut',
   'Roll back': 'Kembalikan',
   '{0} will show this version until the next deploy.': '{0} akan menampilkan versi ini sampai deploy berikutnya.',
   'No log yet.': 'Belum ada log.',

@@ -1,6 +1,6 @@
 // Media services an ability runs on with the person's own API key, saved in the host's credential store and billed to
-// that account: Google Gemini (video with Omni Flash, speech, music with Lyria), ElevenLabs (speech, music, sound
-// effects) and OpenAI (speech). Each request sends only the caller's prompt or text; the file comes back as bytes.
+// that account: Google Gemini (video with Omni Flash, speech, music with Lyria) and ElevenLabs (speech, music, sound
+// effects). Each request sends only the caller's prompt or text; the file comes back as bytes.
 import type { Ability } from '@ramu/shared/providers/abilities'
 import type { MediaService } from '@ramu/shared/types/deploy'
 import type { HostingAuth, HostingIdentity } from '../workspace/deploy/adapter'
@@ -258,44 +258,9 @@ export function elevenLabsMedia(options: { api?: string; fetch?: Fetch } = {}): 
   }
 }
 
-/** OpenAI's speech endpoint with a Bearer key; its Videos API shut down in September 2026. */
-export function openAiMedia(options: { api?: string; fetch?: Fetch } = {}): MediaConnector {
-  const api = options.api ?? 'https://api.openai.com/v1'
-  const fetcher = options.fetch ?? fetch
-  const headers = (auth: HostingAuth) => ({ Authorization: `Bearer ${auth.token}`, 'Content-Type': 'application/json' })
-  return {
-    id: 'openai',
-    name: 'OpenAI',
-    tokenPage: 'https://platform.openai.com/api-keys',
-    kind: 'media',
-    async account(auth) {
-      await send(fetcher, 'OpenAI', `${api}/models`, { headers: headers(auth) }, 'checking the key')
-      return { id: 'openai', name: 'OpenAI API key', defaultScope: null, broadScope: null, expiresAt: null }
-    },
-    async make(auth, request, signal) {
-      if (request.ability !== 'speech') throw new Error(`OpenAI does not make ${request.ability} here.`)
-      const model = 'gpt-4o-mini-tts'
-      const response = await send(
-        fetcher,
-        'OpenAI',
-        `${api}/audio/speech`,
-        {
-          method: 'POST',
-          headers: headers(auth),
-          body: JSON.stringify({ model, voice: 'alloy', input: request.prompt, response_format: 'mp3' }),
-        },
-        'recording the narration',
-        signal,
-      )
-      return { bytes: await bytesOf(response), extension: 'mp3', model }
-    },
-  }
-}
-
 const connectors: Record<MediaService, MediaConnector> = {
   gemini: geminiMedia(),
   elevenlabs: elevenLabsMedia(),
-  openai: openAiMedia(),
 }
 
 export const mediaConnector = (service: MediaService): MediaConnector => connectors[service]

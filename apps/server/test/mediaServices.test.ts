@@ -1,7 +1,7 @@
 // The media services an ability runs on with the person's own key, against a fake fetch: what each sends, where the key
 // goes, and how the file comes back.
 import { describe, expect, it } from 'vitest'
-import { elevenLabsMedia, geminiMedia, openAiMedia } from '../src/media/mediaServices'
+import { elevenLabsMedia, geminiMedia } from '../src/media/mediaServices'
 
 interface Sent {
   url: string
@@ -84,8 +84,8 @@ describe('Google Gemini', () => {
   })
 })
 
-describe('ElevenLabs and OpenAI', () => {
-  it('make sound effects, music and speech from the file their endpoints answer with', async () => {
+describe('ElevenLabs', () => {
+  it('makes sound effects and music from the file its endpoints answer with', async () => {
     const { fetcher, sent } = fakeFetch(() => new Response(Buffer.from('mp3')))
     const eleven = elevenLabsMedia({ api: 'https://eleven.test/v1', fetch: fetcher })
     const sound = await eleven.make(auth, { ability: 'sound_effect', prompt: 'A soft whoosh', seconds: 2 }, signal)
@@ -97,17 +97,5 @@ describe('ElevenLabs and OpenAI', () => {
     })
     await eleven.make(auth, { ability: 'music', prompt: 'Upbeat synth', seconds: 45 }, signal)
     expect(sent.at(-1)!.body).toMatchObject({ prompt: 'Upbeat synth', music_length_ms: 45_000 })
-
-    const openai = openAiMedia({ api: 'https://openai.test/v1', fetch: fetcher })
-    const speech = await openai.make(auth, { ability: 'speech', prompt: 'Hello' }, signal)
-    expect(speech.bytes.toString()).toBe('mp3')
-    expect(sent.at(-1)).toMatchObject({
-      url: 'https://openai.test/v1/audio/speech',
-      headers: { Authorization: 'Bearer key-1' },
-      body: { model: 'gpt-4o-mini-tts', input: 'Hello', response_format: 'mp3' },
-    })
-    await expect(openai.make(auth, { ability: 'video_generation', prompt: 'x' }, signal)).rejects.toThrow(
-      'does not make',
-    )
   })
 })

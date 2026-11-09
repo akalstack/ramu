@@ -21,7 +21,6 @@ Brand marks for forges, hosting platforms, databases and services, in each brand
 | `appstore.svg` | SVGL | https://developer.apple.com/app-store/marketing/guidelines/ |
 | `googleplay.svg` | SVGL | https://partnermarketinghub.withgoogle.com/brands/google-play/ |
 | `gemini.svg` | SVGL | https://about.google/brand-resource-center/ |
-| `openai.svg`, `openai-dark.svg` | SVGL | https://openai.com/brand/ |
 | `elevenlabs.svg`, `elevenlabs-dark.svg` | Simple Icons 13.21 (CC0 1.0), black and white | https://elevenlabs.io/brand |
 
 Amplitude has no mark here: it is in neither SVGL nor Simple Icons, so it shows the generic shape.

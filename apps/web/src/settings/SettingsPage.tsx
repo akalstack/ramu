@@ -267,7 +267,6 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
     words: 'media api key video omni flash speech voice narration music lyria',
   },
   { section: 'providers', title: 'ElevenLabs', words: 'media api key speech voice narration music sound effects' },
-  { section: 'providers', title: 'OpenAI', words: 'media api key speech voice narration tts' },
   { section: 'models', title: 'Ask before using another provider', words: 'ability approval image search provider' },
   { section: 'workflows', title: 'Where sub-agents run', words: 'subagent native provider cross delegate' },
   { section: 'workflows', title: 'Custom agents', words: 'custom agent reusable reviewer recipe' },

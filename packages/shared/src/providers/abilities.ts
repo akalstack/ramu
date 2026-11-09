@@ -110,7 +110,6 @@ export type AbilityChoice =
 export const MEDIA_ABILITIES: Record<MediaService, readonly Ability[]> = {
   gemini: ['video_generation', 'speech', 'music'],
   elevenlabs: ['speech', 'music', 'sound_effect'],
-  openai: ['speech'],
 }
 
 /** Abilities only a media service makes here, so setting one up means saving a key in Settings › Providers. */

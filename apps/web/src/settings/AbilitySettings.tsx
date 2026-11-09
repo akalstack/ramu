@@ -242,7 +242,7 @@ export function AbilitySettings({
                   '0': media.map((service) => MEDIA_SERVICE_NAMES[service]).join(', '),
                 })
               : t(
-                  'Save an API key for Google Gemini, ElevenLabs or OpenAI to make video, speech, music or sound effects.',
+                  'Save an API key for Google Gemini or ElevenLabs to make video, speech, music or sound effects.',
                 )}
           </span>
         </span>

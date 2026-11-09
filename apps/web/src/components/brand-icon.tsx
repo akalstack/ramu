@@ -25,8 +25,6 @@ import expoDark from '../assets/brands/expo-dark.svg'
 import appstore from '../assets/brands/appstore.svg'
 import googleplay from '../assets/brands/googleplay.svg'
 import gemini from '../assets/brands/gemini.svg'
-import openai from '../assets/brands/openai.svg'
-import openaiDark from '../assets/brands/openai-dark.svg'
 import elevenlabs from '../assets/brands/elevenlabs.svg'
 import elevenlabsDark from '../assets/brands/elevenlabs-dark.svg'
 
@@ -51,7 +49,6 @@ const MARKS: Record<BrandId, { light: string; dark?: string }> = {
   appstore: { light: appstore },
   googleplay: { light: googleplay },
   gemini: { light: gemini },
-  openai: { light: openai, dark: openaiDark },
   elevenlabs: { light: elevenlabs, dark: elevenlabsDark },
 }
 const FALLBACKS = { git: GitBranch, cloud: Cloud, database: Database, service: Boxes }
