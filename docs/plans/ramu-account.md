@@ -35,7 +35,7 @@ Neon is the first database (free plan; the first request after idle can be slowe
 
 ### 2. Encrypted settings backup
 
-**What is backed up:** the portable export from [Copy settings between hosts](identities-and-settings.md#2-copy-settings-between-hosts) (appearance, models and abilities, agent defaults, Git and commit style, notifications, rules, identities' match rules and Git author). No paths, tokens, account references that only make sense on one host, or workspace state.
+**What is backed up:** the portable export from [Copy settings between hosts](identities-and-settings.md#3-copy-settings-between-hosts) (appearance, models and abilities, agent defaults, Git and commit style, notifications, rules, identities' match rules and Git author). No paths, tokens, account references that only make sense on one host, or workspace state.
 
 **The backup key.** The first time backup is turned on, the host generates a random 256-bit backup key and keeps it in its credential store (`apps/server/src/credentials/store.ts`). Each backup is the export, compressed, then sealed with XChaCha20-Poly1305 under that key (`@noble/ciphers`, beside the `@noble/curves` and `@noble/hashes` already in `packages/shared`). The key never reaches the service.
 
