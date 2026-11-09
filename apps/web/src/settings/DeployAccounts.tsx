@@ -63,6 +63,10 @@ function deployAccountHeadline(account: HostingAccount): string {
     : who
 }
 
+/** Opens Settings → Deploy on the host that needs the account, at that platform's row. */
+export const openDeploySettings = (host: string, platform: string) =>
+  window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'deploy', target: platform, host } }))
+
 /** Deploy platforms grouped by what they do, or one kind (`only`) where another page shows it; the platform's own sign-in first, a guided token page otherwise. */
 export function DeployAccounts({ only }: { only?: HostingAccount['kind'] } = {}) {
   const invoke = useSettingsInvoke()

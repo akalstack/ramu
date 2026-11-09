@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { ArtifactInfo } from '@ramu/shared/artifacts'
+import { Button } from '@/components/desktop-button'
 import { RowButton } from '../components/row-button'
 import { Dialog } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { useHost } from '../workspace/HostProvider'
+import { openDeploySettings } from '../settings/DeployAccounts'
+import { openHostingSettings } from '../sidebar/scm/ForgeAccessPanel'
 
 type Target = 'github-pages' | 'netlify' | 'vercel' | 'cloudflare-pages'
 
@@ -18,7 +21,7 @@ const message = (error: unknown) =>
  */
 export function PublishDialog({ page, onClose }: { page: ArtifactInfo; onClose(): void }) {
   useLanguage()
-  const { invoke } = useHost()
+  const { id: hostId, invoke } = useHost()
   const [targets, setTargets] = useState<{ target: Target; name: string; connected: boolean }[]>([])
   const [target, setTarget] = useState<Target>((page.published?.target as Target | undefined) ?? 'github-pages')
   const [busy, setBusy] = useState(false)
@@ -67,15 +70,27 @@ export function PublishDialog({ page, onClose }: { page: ArtifactInfo; onClose()
           >
             <span className="flex-1 text-foreground">{entry.name}</span>
             <span className="text-caption text-muted-foreground">
-              {entry.connected
-                ? t('Connected')
-                : entry.target === 'github-pages'
-                  ? t('Connect GitHub in Settings → Git hosting')
-                  : t('Connect it in Settings → Deploy')}
+              {entry.connected ? t('Connected') : t('Not connected')}
             </span>
           </RowButton>
         ))}
       </div>
+      {chosen && !chosen.connected && (
+        <span>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="mt-2"
+            onClick={() => {
+              onClose()
+              if (chosen.target === 'github-pages') openHostingSettings()
+              else openDeploySettings(hostId, chosen.name)
+            }}
+          >
+            {t('Connect {0}', { 0: chosen.target === 'github-pages' ? 'GitHub' : chosen.name })}
+          </Button>
+        </span>
+      )}
     </Dialog>
   )
 }

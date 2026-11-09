@@ -75,9 +75,10 @@ const CURRENT_ENVIRONMENT_SECTIONS: readonly string[] = ['remote', 'archived']
 export const isSingleEnvironmentSection = (section: string) => SINGLE_ENVIRONMENT_SECTIONS.includes(section)
 export const isCurrentEnvironmentSection = (section: string) => CURRENT_ENVIRONMENT_SECTIONS.includes(section)
 
-export function useSettingsScope(section: string) {
+/** `host` opens on that host, such as the one whose project asked for an account; otherwise on all hosts. */
+export function useSettingsScope(section: string, host?: string) {
   const computers = useComputers()
-  const [requested, setTarget] = useState('all')
+  const [requested, setTarget] = useState(host ?? 'all')
   const current = computers?.current ?? ''
   const target = isCurrentEnvironmentSection(section)
     ? current

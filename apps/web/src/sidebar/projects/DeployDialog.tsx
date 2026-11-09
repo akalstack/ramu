@@ -21,6 +21,7 @@ import { errorText } from '../../lib/errors'
 import { useHost } from '../../workspace/HostProvider'
 import { projectCtx } from '../../workspace/workspace'
 import { openPublishRepository } from '../../git/PublishRepositoryHost'
+import { openDeploySettings } from '../../settings/DeployAccounts'
 import { CiSetupSection } from './CiSetup'
 import { DatabaseSection } from './Database'
 import { DomainsSection } from './Domains'
@@ -129,6 +130,11 @@ export function DeployDialog({
   const recommended = accounts.find((entry) => entry.platform === status?.recommended)
   // An Expo app ships through the stores, not a hosting platform, unless it is already linked to one.
   const storeOnly = !binding && status?.recommended === 'expo'
+  // Settings → Deploy holds the sign-in; the sheet reads the new account when it opens again.
+  const connect = (name: string) => {
+    onClose()
+    openDeploySettings(host.id, name)
+  }
   const confirm = () => {
     if (storeOnly) return onClose()
     if (!binding) {
@@ -181,10 +187,13 @@ export function DeployDialog({
                 '{0} is recommended for this project’s stack. It deploys through its own CLI: ask the project’s agent to deploy it, and Ramu runs the CLI with your {0} account and asks before each command that changes anything.',
                 { 0: cliAccount.name },
               )}{' '}
-              {cliAccount.connected
-                ? t('Connected as {0}', { 0: cliAccount.account ?? cliAccount.name })
-                : t('Connect it in Settings → Deploy')}
+              {cliAccount.connected && t('Connected as {0}', { 0: cliAccount.account ?? cliAccount.name })}
             </p>
+          )}
+          {cliAccount && !cliAccount.connected && (
+            <Button size="sm" variant="secondary" className="mb-3" onClick={() => connect(cliAccount.name)}>
+              {t('Connect {0}', { 0: cliAccount.name })}
+            </Button>
           )}
           <p>
             {cliAccount
@@ -212,13 +221,16 @@ export function DeployDialog({
                 <BrandIcon brand={accountBrand(entry.platform)} />
                 <span className="flex-1 text-foreground">{entry.name}</span>
                 <span className="text-caption text-muted-foreground">
-                  {entry.connected
-                    ? t('Connected as {0}', { 0: entry.account ?? entry.name })
-                    : t('Connect it in Settings → Deploy')}
+                  {entry.connected ? t('Connected as {0}', { 0: entry.account ?? entry.name }) : t('Not connected')}
                 </span>
               </RowButton>
             ))}
           </div>
+          {account && !account.connected && (
+            <Button size="sm" variant="secondary" className="mt-2" onClick={() => connect(account.name)}>
+              {t('Connect {0}', { 0: account.name })}
+            </Button>
+          )}
           {repos.length > 1 && (
             <div role="radiogroup" aria-label={t('Repository')} className="mt-3 flex flex-col gap-0.5">
               {repos.map((repo) => (
@@ -396,6 +408,7 @@ export function DeployDialog({
         projectId={project.id}
         repoId={repoId}
         onProvisioned={() => setProvisioned((count) => count + 1)}
+        onConnect={connect}
       />
       <EnvSyncSection key={provisioned} projectId={project.id} repoId={repoId} />
       <CiSetupSection projectId={project.id} repoId={repoId} />

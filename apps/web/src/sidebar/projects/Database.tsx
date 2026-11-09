@@ -28,10 +28,13 @@ export function DatabaseSection({
   projectId,
   repoId,
   onProvisioned,
+  onConnect,
 }: {
   projectId: string
   repoId: string | null
   onProvisioned: () => void
+  /** Opens the sign-in for a provider that has no account yet. */
+  onConnect: (name: string) => void
 }) {
   useLanguage()
   const host = useHost()
@@ -68,6 +71,7 @@ export function DatabaseSection({
               setStatus({ repoId, value: await host.invoke('deploy.provision', projectId, repoId, provider, plan) })
               onProvisioned()
             }}
+            onConnect={onConnect}
           />
         ))}
       {error && (
@@ -83,10 +87,12 @@ function KindSection({
   kind,
   shown,
   provision,
+  onConnect,
 }: {
   kind: ResourceKind
   shown: ProjectResources
   provision: (provider: ResourceProvider, plan: string) => Promise<void>
+  onConnect: (name: string) => void
 }) {
   const [provider, setProvider] = useState<ResourceProvider | null>(null)
   const [busy, setBusy] = useState(false)
@@ -162,15 +168,21 @@ function KindSection({
                 <BrandIcon brand={accountBrand(entry.provider)} />
                 <span className="flex-1 text-foreground">{entry.name}</span>
                 <span className="text-caption text-muted-foreground">
-                  {entry.connected && entry.plans[0] ? t(entry.plans[0].summary) : t('Connect it in Settings → Deploy')}
+                  {entry.connected && entry.plans[0] ? t(entry.plans[0].summary) : t('Not connected')}
                 </span>
               </RowButton>
             ))}
           </div>
           <span>
-            <Button size="sm" variant="secondary" disabled={busy || !chosen?.connected} onClick={() => void start()}>
-              {busy ? t('Working…') : t('Provision')}
-            </Button>
+            {chosen && !chosen.connected ? (
+              <Button size="sm" variant="secondary" onClick={() => onConnect(chosen.name)}>
+                {t('Connect {0}', { 0: chosen.name })}
+              </Button>
+            ) : (
+              <Button size="sm" variant="secondary" disabled={busy || !chosen} onClick={() => void start()}>
+                {busy ? t('Working…') : t('Provision')}
+              </Button>
+            )}
           </span>
         </>
       )}

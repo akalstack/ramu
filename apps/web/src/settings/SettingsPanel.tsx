@@ -48,11 +48,14 @@ export function SettingsPanel({
   onClose,
   initialSection = 'appearance',
   initialTarget,
+  initialHost,
   shortcuts = [],
 }: {
   onClose: () => void
   initialSection?: SettingsSection
   initialTarget?: string
+  /** The host Settings opens on; the window's own host and All hosts stay selectable. */
+  initialHost?: string
   shortcuts?: Shortcut[]
 }) {
   useLanguage()
@@ -60,7 +63,7 @@ export function SettingsPanel({
   const app = useAppSettings()
   const [page, setPage] = useState<SettingsSection>(initialSection)
   useEffect(() => setPage(initialSection), [initialSection])
-  const scope = useSettingsScope(page)
+  const scope = useSettingsScope(page, initialHost)
   const [appDraft, setAppDraft] = useState<AppPreferences>(() => structuredClone(scope.preferences))
   const store = useModelSets()
   const [draft, setDraft] = useState<ModelPreferences>(() => structuredClone(scope.models))

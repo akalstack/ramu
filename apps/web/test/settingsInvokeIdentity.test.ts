@@ -67,5 +67,5 @@ it('reads ability checks across all hosts from the primary host, but still asks 
   await route('abilities.mcpTools')
   expect(state.invoke).toHaveBeenCalledWith('computers.settings.invoke', 'a', 'abilities.checks', [])
   expect(state.invoke).toHaveBeenCalledWith('computers.settings.invoke', 'a', 'abilities.mcpTools', [])
-  await expect(route('abilities.check', 'claude')).rejects.toThrow('Choose one host')
+  await expect(route('abilities.check', 'claude-code')).rejects.toThrow('Choose one host')
 })

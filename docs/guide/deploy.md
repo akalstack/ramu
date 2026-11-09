@@ -4,7 +4,7 @@ Ramu deploys a project to a hosting platform on your own account. It hosts nothi
 
 ## Connect an account
 
-**Settings → Deploy** lists Vercel, Netlify, Railway, Fly.io, Cloudflare, Supabase, Neon and Expo with their marks. **Connect** offers two ways, in this order:
+**Settings → Deploy** lists Vercel, Netlify, Railway, Fly.io, Cloudflare, Supabase, Neon and Expo with their marks, for the host you choose at the top. Where the deploy sheet, **Provision** or **Publish to the web** needs a platform that is not connected, **Connect** with its name opens this page on the project's host, at that platform. **Connect** offers two ways, in this order:
 
 1. **Sign in with Vercel**, **Sign in with Netlify**, **Sign in with Railway** or **Sign in with Fly.io**, when the platform's CLI (`vercel`, `netlify`, `railway` or `fly`) is installed on the host. Ramu runs the CLI's own browser sign-in on the host and shows its link (and the code, for Vercel and Railway) in Settings; **Open the sign-in page**, sign in and authorize. Ramu then reads the token the CLI saved, checks it with the platform and shows the account name. The CLI runs against a private configuration folder that is deleted afterwards, so your own CLI login is not read, changed or signed out.
    - **Sign in with Neon** runs `neon profile create ramu --mint` (the `neon` or `neonctl` CLI on the host, or the published one through `npx`) in a private configuration folder. It opens Neon's sign-in in this computer's browser and shows the link; after you approve, the CLI mints an API key and drops the session, and Ramu keeps only that key. Neon keys do not expire, so revoke it on Neon when Ramu no longer needs it.

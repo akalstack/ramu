@@ -1053,6 +1053,17 @@ const actionsPath = async (cwd: string) => {
   return `/repos/${remote.owner}/${remote.repo}/actions/secrets`
 }
 
+/** GitHub answers 404, not 403, when the repository is missing or the account may not manage its secrets. */
+const actionsFailure = (error: unknown): never => {
+  const message = error instanceof Error ? error.message : String(error)
+  if ((error instanceof GithubApiError && error.status === 404) || /HTTP 404|\bNot Found\b/.test(message))
+    throw new ForgeError(
+      'GitHub cannot find this repository, or this account cannot manage its Actions secrets. Publish it to GitHub, or choose an account with admin access in Settings → Git.',
+      null,
+    )
+  throw error
+}
+
 /** The names of the repository's GitHub Actions secrets. GitHub never returns their values. */
 export async function actionsSecretNames(cwd: string): Promise<string[]> {
   const path = await actionsPath(cwd)
@@ -1062,7 +1073,7 @@ export async function actionsSecretNames(cwd: string): Promise<string[]> {
       cwd,
       'GET',
       `${path}?per_page=100&page=${page}`,
-    )
+    ).catch(actionsFailure)
     const batch = raw?.secrets ?? []
     names.push(...batch.map((secret) => secret.name))
     if (batch.length < 100) break
@@ -1073,7 +1084,7 @@ export async function actionsSecretNames(cwd: string): Promise<string[]> {
 /** Sets repository secrets, each sealed to the repository's public key before it leaves the host. */
 export async function setActionsSecrets(cwd: string, values: Record<string, string>): Promise<void> {
   const path = await actionsPath(cwd)
-  const key = await githubRest<{ key_id: string; key: string }>(cwd, 'GET', `${path}/public-key`)
+  const key = await githubRest<{ key_id: string; key: string }>(cwd, 'GET', `${path}/public-key`).catch(actionsFailure)
   for (const [name, value] of Object.entries(values))
     await githubRest(cwd, 'PUT', `${path}/${encodeURIComponent(name)}`, {
       encrypted_value: sealedBox(value, key.key),

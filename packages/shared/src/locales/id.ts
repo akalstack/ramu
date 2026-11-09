@@ -4357,6 +4357,7 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Tinjau server dan skema alat. Setiap pemanggilan tetap meminta persetujuan; petunjuk hanya baca dari server tidak memberikan izin.',
   'Approve access': 'Setujui akses',
   'Not connected': 'Belum terhubung',
+  'Connect {0}': 'Hubungkan {0}',
   'Connection failed': 'Koneksi gagal',
   'Sign-in required': 'Perlu login',
   'Insufficient permission': 'Izin tidak mencukupi',
@@ -5689,7 +5690,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Share link': 'Tautan berbagi',
   'Show in the home screen widget': 'Tampilkan di widget layar utama',
   'Remove from the home screen widget': 'Hapus dari widget layar utama',
-  'Connect GitHub in Settings → Git hosting': 'Hubungkan GitHub di Pengaturan → Git hosting',
   'Deploys this page as a static site on your own account. Ramu hosts nothing.':
     'Menerbitkan halaman ini sebagai situs statis di akunmu sendiri. Ramu tidak meng-host apa pun.',
   'Deploys v{version} to {url}.': 'Menerbitkan v{version} ke {url}.',
@@ -5901,7 +5901,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Ramu menautkan platform ke repositori, jadi setiap pull request mendapat pratinjau dan cabang default di-deploy ke produksi.',
   Platform: 'Platform',
   'Connected as {0}': 'Terhubung sebagai {0}',
-  'Connect it in Settings → Deploy': 'Hubungkan di Pengaturan → Deploy',
   'Not connected. Agents deploy here through its CLI with this account, asking before each change.':
     'Belum terhubung. Agen men-deploy ke sini lewat CLI-nya dengan akun ini, dan bertanya sebelum setiap perubahan.',
   'Or link Vercel or Netlify, which watch the repository: every pull request gets a preview and the default branch deploys to production.':
@@ -6429,6 +6428,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Waiting for a review.': 'Menunggu review.',
   'An agent is working on the feedback.': 'Agen sedang mengerjakan masukan.',
   'Click or drag to comment on lines': 'Klik atau seret untuk mengomentari baris',
+  'added {0} commits': 'menambahkan {0} commit',
+  'Show {0} earlier': 'Tampilkan {0} sebelumnya',
+  'Show only the latest': 'Tampilkan yang terbaru saja',
   'Goes into your review when you finish it.': 'Masuk ke review Anda saat Anda menyelesaikannya.',
   Wrap: 'Bungkus',
   'Wrap long lines': 'Bungkus baris panjang',

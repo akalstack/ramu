@@ -215,13 +215,15 @@ function Shell() {
   }, [sidebarWidth])
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('appearance')
   const [settingsTarget, setSettingsTarget] = useState<string | undefined>()
+  const [settingsHost, setSettingsHost] = useState<string | undefined>()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [searchingChats, setSearchingChats] = useState(false)
   useEffect(() => {
     const open = (event: Event) => {
-      const detail = (event as CustomEvent<{ section?: SettingsSection; target?: string }>).detail
+      const detail = (event as CustomEvent<{ section?: SettingsSection; target?: string; host?: string }>).detail
       setSettingsSection(detail?.section ?? 'appearance')
       setSettingsTarget(detail?.target)
+      setSettingsHost(detail?.host)
       setSettingsOpen(true)
     }
     const off = ramu.on('menu:action', ({ action }) => {
@@ -818,6 +820,7 @@ function Shell() {
           key={`settings:${shownHost}`}
           initialSection={settingsSection}
           initialTarget={settingsTarget}
+          initialHost={settingsHost}
           shortcuts={commands
             .filter((command) => command.keys)
             .map((command) => ({ title: command.title, category: command.category, keys: command.keys! }))}
