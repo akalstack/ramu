@@ -177,7 +177,7 @@ test('shows store builds with their upload, and says why Release cannot start ye
     error: null,
   }
   const view = storeView(release, t, time)
-  assert.equal(view.canRelease, true)
+  assert.deepEqual(view.targets, ['all', 'ios', 'android'])
   assert.equal(view.blocked, null)
   assert.deepEqual(view.builds[0], {
     id: 'b1',
@@ -189,7 +189,14 @@ test('shows store builds with their upload, and says why Release cannot start ye
     upload: { text: 'Upload to Play’s internal track: Failed · No service account', failed: true },
     page: 'https://expo.dev/b1',
   })
-  assert.equal(storeView({ ...release, connected: false }, t, time).canRelease, false)
+  assert.deepEqual(storeView({ ...release, connected: false }, t, time).targets, [])
+  // Each store is judged by its own checks: unfinished iOS setup leaves Android releasable.
+  const iosMissing = { ...release, checks: [...release.checks, { id: 'ios-app', state: 'missing', detail: null }] }
+  assert.deepEqual(storeView(iosMissing, t, time).targets, ['android'])
+  assert.equal(storeView(iosMissing, t, time).blocked, null)
+  const shared = { ...release, checks: [{ id: 'version', state: 'missing', detail: null }] }
+  assert.deepEqual(storeView(shared, t, time).targets, [])
+  assert.match(storeView(shared, t, time).blocked, /Deploy sheet/)
   assert.match(storeView({ ...release, app: { ...release.app, projectId: null } }, t, time).blocked, /Deploy sheet/)
   assert.equal(storeView({ ...release, app: null }, t, time), null)
 })

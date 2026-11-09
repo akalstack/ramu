@@ -19,6 +19,8 @@ import { font, space, useTheme } from '../theme'
 import { BrandIcon } from './Logos'
 import { Button, Divider, SectionLabel, Sheet, T, Toggle } from './ui'
 
+const STORE_TARGET_LABEL: Record<StoreTarget, string> = { all: 'iOS and Android', ios: 'iOS', android: 'Android' }
+
 const time = (at: number) => new Date(at).toLocaleString()
 const open = (url: string) => void Linking.openURL(/^https?:\/\//i.test(url) ? url : `https://${url}`).catch(() => {})
 
@@ -123,9 +125,10 @@ export function ProjectDeployments({
 
   const stores = storeView(loaded.release ?? null, t, time)
   const databases = resourceRows(loaded.resources ?? null, t)
-  // Release asks which stores, then says what happens; the second press is the approval, as on the desktop.
+  // Release asks which stores (only those ready to release), then says what happens; the second press is the
+  // approval, as on the desktop.
   const release = () => {
-    if (!writable() || busy) return
+    if (!writable() || busy || !stores?.targets.length) return
     const start = (target: StoreTarget) =>
       Alert.alert(
         t('Release now'),
@@ -151,12 +154,17 @@ export function ProjectDeployments({
           },
         ],
       )
-    Alert.alert(t('Release'), t('Which stores?'), [
-      { text: t('iOS and Android'), onPress: () => start('all') },
-      { text: t('iOS'), onPress: () => start('ios') },
-      { text: t('Android'), onPress: () => start('android') },
-      { text: t('Cancel'), style: 'cancel' },
-    ])
+    if (stores.targets.length === 1) return start(stores.targets[0]!)
+    // Android shows at most three buttons, so with all three stores Cancel is dropped there and a tap outside closes it.
+    Alert.alert(
+      t('Release'),
+      t('Which stores?'),
+      [
+        ...stores.targets.map((target) => ({ text: t(STORE_TARGET_LABEL[target]), onPress: () => start(target) })),
+        { text: t('Cancel'), style: 'cancel' as const },
+      ],
+      { cancelable: true },
+    )
   }
 
   // The build's log, as the desktop's Logs shows it: why a deploy failed, readable away from the computer.
@@ -237,7 +245,8 @@ export function ProjectDeployments({
         {!online ? <T tone="muted">{t('Reconnect to see this project’s deployments.')}</T> : null}
         {loaded.error ? <T tone="bad">{loaded.error}</T> : null}
         {online && !viewOnly && !status && !loaded.error ? <ActivityIndicator color={c.accent} /> : null}
-        {status && !status.binding ? (
+        {/* An Expo app with no hosting link ships through the stores, as the desktop's sheet treats it. */}
+        {status && !status.binding && !(status.recommended === 'expo' && stores) ? (
           <T tone="muted">{t('This project has no deploy target yet. Open Deploy… on the project on a computer.')}</T>
         ) : null}
         {status?.binding && view ? (
@@ -449,7 +458,7 @@ export function ProjectDeployments({
               <Button
                 title={t('Release')}
                 kind="secondary"
-                disabled={busy || !online || viewOnly || !stores.canRelease}
+                disabled={busy || !online || viewOnly || !stores.targets.length}
                 onPress={release}
               />
             }

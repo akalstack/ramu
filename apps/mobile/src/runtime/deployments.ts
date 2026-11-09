@@ -15,6 +15,7 @@ import type {
   ProjectDeployment,
   ProjectResources,
   StoreRelease,
+  StoreTarget,
   UptimeStatus,
   UsageReport,
 } from '@ramu/shared/types/deploy'
@@ -156,14 +157,20 @@ export interface StoreBuildRow {
   page: string
 }
 
-/** A project's Expo app on the phone: its latest store builds, and whether Release can start now. */
+/**
+ * A project's Expo app on the phone: its latest store builds, and the stores Release can target now. Each store is
+ * judged by its own checks, as on the desktop, so a finished Android setup releases while iOS still needs work.
+ */
 export function storeView(
   release: StoreRelease | null,
   t: Translate,
   time: (at: number) => string,
-): { builds: StoreBuildRow[]; canRelease: boolean; blocked: string | null } | null {
+): { builds: StoreBuildRow[]; targets: StoreTarget[]; blocked: string | null } | null {
   if (!release?.app) return null
-  const blocking = blockingChecks(release.checks, 'all')
+  const ready = release.connected && !!release.app.projectId
+  const targets = ready
+    ? (['all', 'ios', 'android'] as const).filter((target) => !blockingChecks(release.checks, target).length)
+    : []
   return {
     builds: release.builds.map((build) => ({
       id: build.id,
@@ -193,10 +200,10 @@ export function storeView(
         : null,
       page: build.page,
     })),
-    canRelease: release.connected && !!release.app.projectId && !blocking.length,
+    targets,
     blocked: !release.connected
       ? t('Connect Expo on the computer running the host to release.')
-      : !release.app.projectId || blocking.length
+      : !targets.length
         ? t('Finish what the stores need in the Deploy sheet on a computer first.')
         : null,
   }
