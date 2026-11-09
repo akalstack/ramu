@@ -113,12 +113,14 @@ export function CommitBranchDialog() {
       }
     >
       <p>
-        {t('You are on {0}. Continue on this branch or create a feature branch before you commit and push.', {
+        {t('You are on {0}. Continue on this branch or create a feature branch before committing and pushing.', {
           '0': request.branch!,
         })}
       </p>
       <p className="muted text-muted-foreground small text-caption">
-        {t('The feature branch is named from your changes. Staged and unstaged changes are kept, and you stay on it.')}
+        {t(
+          'The feature branch is named from your changes. Staged and unstaged changes are preserved, and it stays checked out.',
+        )}
       </p>
     </Dialog>
   )

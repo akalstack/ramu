@@ -77,7 +77,7 @@ export function NativeInstructions({ projects }: { projects: { id: string; name:
       <SettingsGroupTitle className="mt-8">{t('Instruction files providers read')}</SettingsGroupTitle>
       <p className={`${CAPTION} mb-3`}>
         {t(
-          'Each provider loads AGENTS.md, CLAUDE.md and rules folders itself. Ramu only lists them here and never changes or sends them.',
+          'AGENTS.md, CLAUDE.md and rules folders are loaded by each provider itself. Ramu only lists them here and never changes or sends them.',
         )}
       </p>
       <Field className="mb-3">
@@ -116,7 +116,7 @@ export function NativeInstructions({ projects }: { projects: { id: string; name:
                 </summary>
                 <pre className="m-0 mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words text-caption">
                   {file.text}
-                  {file.truncated ? `\n…${t('Shortened here. The provider reads the whole file.')}` : ''}
+                  {file.truncated ? `\n…${t('Shortened here; the provider reads the whole file.')}` : ''}
                 </pre>
                 {file.includes.length > 0 && (
                   <ul className="m-0 mt-1 list-none p-0">

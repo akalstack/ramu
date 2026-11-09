@@ -70,7 +70,7 @@ export function PairBackDialog() {
           <DialogTitle>{t('Connect to {0}?', { 0: invite.name })}</DialogTitle>
           <DialogDescription>
             {t(
-              '{0} invites this computer to connect back, so you can open its threads, files and terminals from here too. It joins Hosts you use, and you can forget it any time.',
+              '{0} invites this computer to connect back, so you can open its threads, files and terminals from here too. It joins Hosts you use; you can forget it any time.',
               { 0: invite.name },
             )}
           </DialogDescription>

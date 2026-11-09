@@ -130,7 +130,7 @@ export function ProjectDeployments({
       Alert.alert(
         t('Release now'),
         t(
-          'This builds the default branch on EAS and uploads it for testers. Nothing is submitted for review. The project’s latest thread hears how each build and upload went.',
+          'This builds the default branch on EAS and uploads it for testers. Nothing is submitted for review, and the project’s latest thread hears how each build and upload finished.',
         ),
         [
           { text: t('Cancel'), style: 'cancel' },

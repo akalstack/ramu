@@ -149,7 +149,7 @@ export function AppearanceSettings({
         {...toggleProps}
         setting="reduceMotion"
         title="Reduce motion"
-        description="Turn off interface animations. Your system’s reduced motion setting always applies."
+        description="Disable interface animations. System reduced motion is always respected."
       />
       <ToggleRow
         {...toggleProps}

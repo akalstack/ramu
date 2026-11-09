@@ -243,7 +243,9 @@ export default function ScheduleEdit() {
           <Field label={t.repeat}>
             <T tone="soft">{describeRule(rule, lang)}</T>
             <T size={font.caption} tone="muted">
-              {say('Set up the trigger, address and secret on a computer, where you can copy them into the sender.')}
+              {say(
+                'What starts it, its address and its secret are set up on a computer, where they can be copied into the sender.',
+              )}
             </T>
           </Field>
         ) : (

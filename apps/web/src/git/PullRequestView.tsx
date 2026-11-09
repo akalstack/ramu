@@ -381,7 +381,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
         {notice && <p className="m-0 text-caption text-warn">{notice}</p>}
         {pr.fork && !mine && open && (
           <p className="m-0 text-caption text-muted-foreground">
-            {t('This pull request comes from a fork. An agent can review it here, but only its author can push to it.')}
+            {t('This pull request comes from a fork: an agent can review it here, but pushing to it needs its author.')}
           </p>
         )}
 

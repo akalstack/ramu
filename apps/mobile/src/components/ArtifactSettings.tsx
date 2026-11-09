@@ -140,7 +140,7 @@ export function ArtifactSettings({
               (status.state === 'missing'
                 ? say('Install cloudflared or ngrok on this host to open pages to anyone.')
                 : status.state === 'failed'
-                  ? (status.error ?? say('The tunnel stopped. Ramu is retrying.'))
+                  ? (status.error ?? say('The tunnel stopped. Ramu tries again.'))
                   : say('Starting…'))}
           </T>
         ) : null}

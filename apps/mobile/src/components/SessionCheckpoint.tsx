@@ -65,7 +65,7 @@ export function SessionCheckpointSheet({
       {checkpoint ? (
         <View style={{ paddingHorizontal: space.l, paddingBottom: space.l, gap: space.m }}>
           <T size={font.caption} tone="muted">
-            {`${say('Saved {0}', { 0: saved })} · ${say('This thread only. Newer messages and current files take priority over this summary.')}`}
+            {`${say('Saved {0}', { 0: saved })} · ${say('This thread only. Newer messages and the current files win over this summary.')}`}
           </T>
           <Markdown text={checkpointMarkdown(checkpoint.summary)} />
           <T size={font.caption} tone="muted">

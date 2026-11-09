@@ -213,9 +213,9 @@ export function BackgroundTerminals({
       if (fresh.id !== command.id || fresh.taskId !== taskId)
         throw new Error('Background command details changed. Refresh before continuing.')
       if (!live(fresh) || !fresh.capabilities.stop)
-        throw new Error('This command has no live process to control. Saved output is read-only.')
+        throw new Error('This command has no controllable live process. Saved output is read-only.')
       if (force && (fresh.state !== 'stopping' || !fresh.capabilities.forceStop))
-        throw new Error('Try a normal stop before force stop.')
+        throw new Error('Request graceful stop before force stop.')
       if (!force && fresh.state === 'stopping') return
       await io.current.invoke(hostId, 'term.background.stop', taskId, command.id, force)
     } catch (error) {

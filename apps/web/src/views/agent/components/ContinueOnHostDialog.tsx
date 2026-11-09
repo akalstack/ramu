@@ -29,7 +29,7 @@ const problemText = (problem: ContinuationPackage['problem']) =>
   problem === 'no-remote'
     ? t('This project has no Git remote, so another host has nothing to start from. Add a remote and push first.')
     : problem === 'several-repositories'
-      ? t('A multi-repository workspace must already exist on that host. This one has no match there yet.')
+      ? t('A multi-repository workspace must already exist on that host, and this one cannot be matched yet.')
       : t('This thread has no conversation to continue yet.')
 
 const ids = () => ({ key: crypto.randomUUID(), cloneId: crypto.randomUUID() })
@@ -127,7 +127,7 @@ export function ContinueOnHostDialog({
         {pack && (
           <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-control">
             {pack.problem && <li className="text-bad">{problemText(pack.problem)}</li>}
-            {pack.running && <li className="text-bad">{t('Stop this thread first. A running agent cannot move.')}</li>}
+            {pack.running && <li className="text-bad">{t('Stop this thread first. A running agent never moves.')}</li>}
             {repo && (
               <li>
                 {repo.pushed

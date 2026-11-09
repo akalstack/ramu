@@ -90,7 +90,7 @@ export function CommitBox({
           rows={2}
           maxLength={100000}
           value={message}
-          placeholder={t('Message (leave empty for AI to write one)')}
+          placeholder={t('Message (empty drafts one with AI)')}
           aria-label={t('Commit message for {0}', { '0': repoName })}
           onChange={(e) => {
             onMessage(e.target.value)

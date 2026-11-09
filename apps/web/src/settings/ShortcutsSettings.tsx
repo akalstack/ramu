@@ -7,7 +7,9 @@ export type Shortcut = { title: string; category: string; keys: string }
 export function ShortcutsSettings({ shortcuts }: { shortcuts: Shortcut[] }) {
   return (
     <div className="settings-shortcuts">
-      <p className="muted text-muted-foreground">{t('App shortcuts. Editor shortcuts follow VS Code.')}</p>
+      <p className="muted text-muted-foreground">
+        {t('Current application shortcuts. Editor shortcuts also follow VS Code conventions.')}
+      </p>
       {[
         { title: t('Send / default queue or steer action'), category: t('Composer'), keys: 'Enter' },
         { title: t('Reverse queue / steer action'), category: t('Composer'), keys: 'mod+Enter' },

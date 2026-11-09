@@ -150,7 +150,7 @@ export function PagesPage() {
             <h1 className="m-[0_0_4px] text-heading font-semibold tracking-[-0.01em]">{t('Artifacts')}</h1>
             <p className="m-0 text-control text-muted-foreground">
               {t(
-                'Apps, docs and diagrams agents made for you to keep. Open them here or on your phone, and ask in any thread to change one.',
+                'Apps, docs and diagrams agents made for you to keep. Open them here or on your phone, and change one by asking in any thread.',
               )}
             </p>
           </div>

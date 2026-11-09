@@ -299,7 +299,7 @@ function CommitForm({
             maxLength={100000}
             className="min-h-[52px] resize-none"
             value={message}
-            placeholder={t('Message (leave empty for AI to write one)')}
+            placeholder={t('Message (empty drafts one with AI)')}
             aria-label={t('Commit message')}
             onChange={(event) => setMessage(event.target.value)}
             onKeyDown={(event) => {

@@ -79,9 +79,7 @@ export function MemorySettings({
           <SettingsRow setting="memory.staleAfterDays">
             <SettingsLabel
               title={t('Archive unused memories after')}
-              help={t(
-                'Applies to project notes that were never used. Notes you wrote and essential memories are kept.',
-              )}
+              help={t('Applies to project notes nobody has used. Notes you wrote and essential memories are kept.')}
             />
             <Dropdown
               label={t('Archive unused memories after')}
@@ -275,7 +273,7 @@ export function MemoryBrowser() {
         <SettingsEmpty>
           {status === 'archived'
             ? t('No archived memories.')
-            : t('No saved memories yet. Agents save them as they work, or you can use Add.')}
+            : t('No saved memories yet. Agents save them as they work, or use Add.')}
         </SettingsEmpty>
       )}
       {paged.shown.map((m) =>

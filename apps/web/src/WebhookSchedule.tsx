@@ -312,7 +312,7 @@ export function WebhookPanel({
       ) : (
         <p className="m-0 text-muted-foreground">
           {t(
-            'Nothing outside this computer can reach it yet. Turn on Allow other devices in Settings → Remote access, and the address appears here.',
+            'Nothing outside this computer can reach it yet. Turn on Allow other devices in Settings → Remote access; the address then appears here.',
           )}
           {address && (
             <>

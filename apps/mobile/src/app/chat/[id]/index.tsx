@@ -1023,7 +1023,7 @@ export default function ChatScreen() {
               Alert.alert(
                 tr('Continue in a new worktree?'),
                 tr(
-                  'Start a new thread on a new branch in its own worktree. It gets this conversation and a copy of the uncommitted changes, new files included. This checkout keeps its changes.',
+                  'Start a new thread on a new branch in its own worktree, with the current conversation and a copy of the uncommitted changes, new files included. This checkout keeps its changes.',
                 ),
                 [
                   { text: tr('Cancel'), style: 'cancel' },

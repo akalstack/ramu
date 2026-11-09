@@ -91,7 +91,7 @@ export function PermissionRules({ disabled }: { disabled: boolean }) {
       {viewOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
       <p className="m-0 text-caption text-muted-foreground">
         {t(
-          'Rules apply to the selected provider on this host. User rules cover all projects. Project rules cover one project.',
+          'Rules apply to the selected provider on this host. User rules cover all projects; project rules cover one project.',
         )}
       </p>
       {!rules.length ? (

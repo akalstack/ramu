@@ -207,7 +207,7 @@ export function TaskRow({
                 <Check size={14} /> {t('Select')}
               </>
             ),
-            title: t('Select several threads to act on at once. Cmd/Ctrl-click or Shift-click also works.'),
+            title: t('Pick several threads to act on together. Cmd/Ctrl-click or Shift-click also select.'),
             onSelect: () => threadSelection.toggle(task.id),
           },
           { key: 'select-sep', separator: true as const },

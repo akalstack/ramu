@@ -95,7 +95,7 @@ export function HostBrowserSettings({
       <SettingsGroupTitle>{t('Host browser')}</SettingsGroupTitle>
       <p className="text-caption text-muted-foreground">
         {t(
-          'The browser runs on this host, like terminals. Paired owner devices can open it without extra setup. Chromium downloads on first use, and website sign-ins stay on this host.',
+          'The browser runs on this host, like terminals. Paired owner devices can open it without extra access setup. Chromium is downloaded automatically on first use; website sign-ins stay on this host.',
         )}
       </p>
       {status?.reason && status.selected !== false && (
@@ -141,7 +141,7 @@ export function HostBrowserSettings({
           />
           <p className="text-caption text-muted-foreground">
             {t(
-              'Automatic uses this computer’s own browser while Ramu is open, so pages run natively instead of streaming. Otherwise it uses Host Chromium, which always runs the page on the host. Running threads keep the browser they started with.',
+              'Automatic uses this computer’s own browser while Ramu is open, so pages run natively instead of being streamed, and falls back to Host Chromium when it is not. Host Chromium always runs the page on the host. Threads already running keep the browser they started with.',
             )}
           </p>
         </div>
@@ -261,7 +261,7 @@ export function HostBrowserSettings({
             <DialogDescription>
               {review &&
                 t(
-                  'Closes {0} tabs and signs out of websites in this profile. Deleting the selected profile switches back to Default. This cannot be undone.',
+                  'This closes {0} tabs and signs out websites in this profile. Deleting a selected profile restores Default. This cannot be undone.',
                   { 0: review.tabs },
                 )}{' '}
               {review?.name}

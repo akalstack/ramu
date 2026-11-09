@@ -41,9 +41,7 @@ export function useCommitShortcut({
         if (!canWrite()) return
         const { publishable } = shortcut.current
         if (!publishable)
-          return reportError(
-            t('This repository has no branch with a remote to push to, or has an unresolved conflict.'),
-          )
+          return reportError(t('This repository has no branch with a remote to push to, or a conflict is unresolved.'))
         try {
           await shortcut.current.commit('push', undefined, true, pullRequest)
         } catch (reason) {

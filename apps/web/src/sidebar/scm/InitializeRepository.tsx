@@ -22,7 +22,7 @@ export function InitializeRepository({ taskId, binding }: { taskId: string; bind
   return (
     <div className="scm-init flex flex-col gap-2 p-[4px_8px_12px]">
       <p className="muted text-muted-foreground text-control leading-[1.5]">
-        {t("The folder “{0}” isn't a Git repository. Initialize one to track changes in Source Control.", {
+        {t("The folder “{0}” isn't a Git repository. You can initialize one to track changes with Source Control.", {
           '0': binding.repoName,
         })}
       </p>

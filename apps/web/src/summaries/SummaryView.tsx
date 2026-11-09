@@ -170,7 +170,7 @@ export function SummaryView({ id, call, host }: { id: string; call: SummaryCall;
             />
             <p className="muted text-muted-foreground small text-caption mt-1.5 px-1">
               {t(
-                '{0} when nothing needs changing. A review thread can edit memories and skills, and everything stays restorable.',
+                '{0} when nothing needs changing. A review thread can edit memories and skills; everything stays restorable.',
                 { 0: t(DISMISS_LABEL) },
               )}
             </p>

@@ -3,7 +3,7 @@ import type { ComputerAction, ComputerModifier } from './computerBridge'
 
 /** Who controls the computer, in the words every viewer shows. Copy keys are English source strings. */
 export function computerControllerLabel(session: ComputerSessionSummary): string {
-  if (session.interruption === 'local-input') return 'Paused while you use this computer’s mouse or keyboard'
+  if (session.interruption === 'local-input') return 'Paused: you are using this computer’s mouse or keyboard'
   if (session.paused) return 'Control paused'
   if (session.controller.kind === 'human')
     return session.controlledHere === false ? 'Another of your devices has control' : 'You are in control'

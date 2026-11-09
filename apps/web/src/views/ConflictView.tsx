@@ -87,7 +87,7 @@ export function ConflictView({ taskId, view, binding }: { taskId: string; view: 
     setError(null)
     try {
       if (Object.values(ws.dirty).some(Boolean))
-        throw new Error(t('Save or close unsaved files before changing files or branches.'))
+        throw new Error(t('Save or close unsaved editor buffers before changing files or branches.'))
       await work()
     } catch (e) {
       setError(errorText(e))

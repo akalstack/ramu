@@ -181,7 +181,7 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
           <SettingsLabel
             title={t('Agent browser')}
             help={t(
-              'Applies on the selected execution host. Keep Ramu desktop open there. Helpers and other access modes need browser-only approval. Changes apply the next time the provider starts.',
+              'Applies on the selected execution host. Keep Ramu desktop open there. Helpers and other access modes require browser-only approval. Changes apply on the next provider launch.',
             )}
           />
           <Dropdown
@@ -221,12 +221,12 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
               title={name}
               help={t(
                 (browser.providerOverrides[provider] ?? browser.agentBrowser) === 'provider'
-                  ? 'Uses this provider’s external setup. Ramu cannot inspect its browser sessions.'
+                  ? 'Uses this provider’s external setup; Ramu cannot inspect its browser sessions.'
                   : providerStatus.find((entry) => entry.provider === provider)?.browser?.integratedTools === false
                     ? 'This provider cannot use the integrated browser. Open Provider setup to update it.'
                     : !readiness?.available
                       ? 'Needs the integrated browser on this execution host. Runtime setup is shown above.'
-                      : 'Integrated tools use this host’s desktop. Provider-native tools may stay available. MCP support is checked when the runtime connects.',
+                      : 'Integrated tools use this host’s desktop. Provider-native tools may remain available; MCP support is checked when the runtime connects.',
               )}
             />
             <Dropdown
@@ -255,13 +255,13 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
         ))}
         <p className="m-[0_0_20px] text-caption text-muted-foreground">
           {t(
-            'Use this provider’s own browser tools and sessions. Ramu cannot show or import them here. They may stay available when the integrated browser is selected.',
+            'Use this provider’s existing browser tools and sessions. Ramu cannot show or import them here. Provider tools may remain available when the integrated browser is selected.',
           )}
         </p>
       </fieldset>
       {bulkHosts ? (
         <p className="m-[0_0_20px] text-caption text-muted-foreground">
-          {t('Choose one host to manage browser profiles. Named profiles belong to the computer that owns them.')}
+          {t('Choose one host to manage browser profiles. Named profiles belong to their owning computer.')}
         </p>
       ) : !hosted ? (
         <BrowserProfilesSettings
@@ -294,7 +294,7 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
         <SettingsLabel
           title={t('Open clicked links in')}
           help={t(
-            'Applies to this device only. Links always open in your own browser when no thread is open. Right-click stays the same.',
+            'Applies to this device only. Links always open in your own browser when no thread is open. Right-click is not changed.',
           )}
         />
         <Dropdown

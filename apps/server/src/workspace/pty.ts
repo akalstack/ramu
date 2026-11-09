@@ -364,7 +364,7 @@ export class TerminalService {
       this.onChange(e.taskId)
     }
     if (e.exited || bg.forced || (bg.stopRequested && !force)) return backgroundInfo(e)
-    if (force && !bg.stopRequested) throw new Error('Try a normal stop before force stop.')
+    if (force && !bg.stopRequested) throw new Error('Request graceful stop before force stop.')
     if (force && process.platform === 'win32') throw new Error('Force stop is unavailable on this host.')
     bg.stoppedBy = bg.stoppedBy === 'user' ? 'user' : by
     bg.stopRequested = true
@@ -507,7 +507,7 @@ export class TerminalService {
         )
       if (!review?.forgetUnknown)
         throw new Error(
-          'Commands with unknown status cannot be stopped. Deleting this thread forgets their saved records and keeps its files.',
+          'Unknown commands cannot be stopped. Review that deleting this thread will forget their saved records while keeping its files.',
         )
     }
   }

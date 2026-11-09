@@ -69,7 +69,7 @@ export function BranchNameEditor({
       {intent.strategy !== 'fixed' && (
         <>
           {!choice && (
-            <p>{t('This preview may change until a name is generated. Sending generates one automatically.')}</p>
+            <p>{t('Preview is provisional until a name is generated. Sending generates a name automatically.')}</p>
           )}
           <Button
             size="sm"

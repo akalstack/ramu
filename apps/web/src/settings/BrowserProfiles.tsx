@@ -74,7 +74,7 @@ export function BrowserProfilesSettings({
       </div>
       <p className="m-0 text-caption text-muted-foreground">
         {t(
-          'Website sign-ins stay on this computer. Profiles share sign-ins across their tabs, and Temporary stays separate for each run.',
+          'Website sign-ins stay on this computer. Profiles share sign-ins across their tabs; Temporary stays separate for each run.',
         )}
       </p>
       {catalog?.error && (

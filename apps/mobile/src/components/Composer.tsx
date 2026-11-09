@@ -64,11 +64,11 @@ import { modelTags } from '@ramu/shared/providers/modelTags'
 import { SheetGroup, SheetOption } from './SheetOptions'
 
 const ACCESS_MODES = [
-  { key: 'edits', label: 'Allow edits', help: 'File edits go through. Commands still ask first.', icon: Pencil },
+  { key: 'edits', label: 'Allow edits', help: 'File edits go through; commands still ask first.', icon: Pencil },
   {
     key: 'auto',
     label: 'Auto',
-    help: 'Approves routine actions where the provider supports it. Everything else still asks.',
+    help: 'Routine actions are approved for you where the provider supports it; the rest still ask.',
     icon: Sparkles,
   },
   {

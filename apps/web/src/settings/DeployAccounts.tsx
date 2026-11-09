@@ -228,7 +228,7 @@ function DeployAccountRow({
               <strong>{t('Sign in with {0}', { 0: account.name })}</strong>
               <p className="m-0 text-muted-foreground">
                 {t(
-                  'Runs {0}’s own sign-in on the host. Authorize Ramu on the page that opens. The token stays in this host’s credential store, and your own CLI login does not change.',
+                  'Runs {0}’s own sign-in on the host. Authorize Ramu in the page it opens; the token stays in this host’s credential store and your own CLI login is not changed.',
                   { 0: account.name },
                 )}
               </p>

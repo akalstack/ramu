@@ -245,7 +245,7 @@ export function ThemeEditor({
         references.map((reference) => reference.id),
       )
       if (mine !== generation.current) return
-      if (!results.length) throw new Error(t('No usable themes came back. Try again or change your description.'))
+      if (!results.length) throw new Error(t('No usable themes came back. Try again or change the wish.'))
       setCandidates(results.map((result) => result.theme))
       setGenerated(`${results[0]!.provider} · ${results[0]!.model}`)
     } catch (error) {
@@ -375,7 +375,7 @@ export function ThemeEditor({
         </div>
         {(generated || locked.light.length + locked.dark.length > 0) && (
           <p className="m-0 text-caption text-muted-foreground">
-            {generated && `${t('Drafted with')} ${generated}. ${t('This counts toward that provider’s usage.')} `}
+            {generated && `${t('Drafted with')} ${generated}. ${t('This may use that provider’s usage.')} `}
             {locked.light.length + locked.dark.length > 0 && `${t('Colors you set by hand stay as they are.')} `}
             {locked.light.length + locked.dark.length > 0 && (
               <LocalInlineAction tone="muted" onClick={() => setLocked(NO_LOCKED_ROLES)}>

@@ -230,7 +230,7 @@ export function windowLabel(reading: UsageReading, short = false): string {
 export function resetText(at: number | undefined, now = Date.now()): string | null {
   if (!at) return null
   const ms = at - now
-  if (ms <= 0) return t('Reset time passed, waiting for an update')
+  if (ms <= 0) return t('Reset time passed; awaiting update')
   const minutes = Math.round(ms / 60_000)
   if (minutes < 60) return t('resets in {minutes}m', { minutes })
   const hours = Math.floor(minutes / 60)
@@ -280,7 +280,7 @@ function Ring({ percent, className }: { percent: number; className: string }) {
 
 function usageStatusText(reading: UsageReading): string {
   return reading.source === 'notice'
-    ? t('Limit reported, usage unavailable')
+    ? t('Limit reported; usage unavailable')
     : usagePercent(reading) === null
       ? t('Not reported')
       : reading.status === 'limited'
@@ -462,7 +462,7 @@ function ProviderLogins({
                   <span
                     className="text-caption text-muted-foreground"
                     title={t(
-                      'Some hosts have no sign-in email. Matched because the limits and reset times are identical.',
+                      'No sign-in email on some hosts; matched because its limits and reset times are identical.',
                     )}
                   >
                     {t('Matched by its limits')}
@@ -482,7 +482,7 @@ function ProviderLogins({
                 </div>
               ) : (
                 <span className="self-center text-caption text-muted-foreground">
-                  {t('No usage yet. It appears after this login runs again.')}
+                  {t('No reading yet. It appears after this login next runs.')}
                 </span>
               )}
             </div>

@@ -72,14 +72,14 @@ export function resolveSkillTools(
 const INTERNAL = ['ramu', 'shared_mcp']
 
 const PROVIDER_MANAGED =
-  "Managed by the provider. Only it has this server's definition, so Ramu cannot share it with other logins. Manage it in the provider."
+  "Provider-managed: only this provider has this server's definition, so Ramu cannot share it with other logins. Manage it in the provider."
 const PROVIDER_MANAGED_DOWN =
-  "Managed by the provider and not connected. Only it has this server's definition, so Ramu cannot share or repair it. Manage it in the provider."
+  "Provider-managed and not connected: only this provider has this server's definition, so Ramu cannot share or repair it. Manage it in the provider."
 
 const DUPLICATE_BOTH =
   'This provider also loads the same server from its own configuration, so the model sees two copies. Choose one for this thread.'
 const DUPLICATE_NATIVE =
-  "Hidden for this thread. It uses the provider's own copy of this server. Ramu did not change the provider's configuration."
+  "Hidden for this thread: the provider's own copy of this server is used. Ramu did not change the provider's configuration."
 
 function hiddenOrBoth(
   connectionId: string,
@@ -96,7 +96,7 @@ function hiddenOrBoth(
 
 const connectionReasons: Record<SharedMcpAccountReadiness['status'], string> = {
   ready:
-    'Checked and approved for this login. Its approved tools reach the thread through the shared_mcp server, and each call asks first.',
+    'Checked and approved for this login. Its approved tools reach the thread on the shared_mcp server; each call asks first.',
   'approval-needed': 'Review access for this login in Settings → Agent setup → MCP servers.',
   'sign-in-required': 'Sign in to the service in Settings → Agent setup → MCP servers.',
   unsupported: 'This connection cannot be used from this provider.',
@@ -179,8 +179,8 @@ export function buildSetupSnapshot(input: SetupInputs): AgentSetupSnapshot {
   // Runtimes Ramu launches as runners restart on the same session with the next message; Claude keeps what it started with.
   const staleReason =
     input.provider === 'claude-code'
-      ? 'Its source file changed after this thread started. New threads use the current version, and this one keeps what it was given.'
-      : 'Its source file changed after this thread started. The change applies to your next message once nothing is running.'
+      ? 'The file it comes from changed after this thread started. A new thread uses the current version; this one keeps what it was given.'
+      : 'The file it comes from changed after this thread started. It applies with your next message, once no work is running.'
   for (const name of input.addedServers) {
     const reported = input.runtimeServers?.find((server) => server.name === name)
     if (stale.has(`server:${name}`)) {
@@ -233,8 +233,8 @@ export function buildSetupSnapshot(input: SetupInputs): AgentSetupSnapshot {
             name,
             state: 'configured' as const,
             reason: unmet
-              ? "Copied to this login's skill export for new threads. Some MCP tools it needs aren't ready here, so it may not work fully."
-              : "Copied into this login's skill export for new threads. Ramu cannot see whether the model reads a skill.",
+              ? "Copied into this login's skill export for new threads. Some MCP tools it asks for are not ready for this thread; the skill may not work fully."
+              : "Copied into this login's skill export for new threads. Whether the model reads a skill is not observable.",
           }),
       ...(requires.length ? { requires } : {}),
     })

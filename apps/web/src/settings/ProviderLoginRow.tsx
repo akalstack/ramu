@@ -235,7 +235,7 @@ export function ProviderLoginRow({
                 <AlertDialogTitle>{t('Remove {0}?', { '0': row.name })}</AlertDialogTitle>
                 <AlertDialogDescription>
                   {t(
-                    'It is removed from the list and no longer used. Threads on it need another account. Its sign-in stays on this computer. Choose Save changes to apply.',
+                    'It leaves the list and is no longer used. Threads still on it need another account. Its sign-in stays on this computer. Choose Save changes to apply.',
                   )}
                 </AlertDialogDescription>
               </AlertDialogHeader>

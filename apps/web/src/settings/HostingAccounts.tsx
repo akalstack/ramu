@@ -104,7 +104,7 @@ function ConnectionForm({
       )}
       <p className="m-0 text-caption text-muted-foreground">
         {t(
-          'Prefer a fine-grained token limited to the repositories you need. The host keeps it in its OS credential store, sends it only to {0} and never shows it again.',
+          'Prefer a fine-grained token limited to the repositories you need. The token is stored by the host in its OS credential store, is sent only to {0}, and is never shown again.',
           { '0': origin || t('this server') },
         )}
       </p>
@@ -736,7 +736,7 @@ function BitbucketRow({ canAdminister }: { canAdminister: boolean }) {
       brand="bitbucket"
       disconnected={t('Not connected. Pull requests, builds and issues need an Atlassian API token.')}
       instructions={t(
-        'Create an API token with Bitbucket scopes in your Atlassian account settings, then enter it with your account email. For a workspace or repository access token, leave the email empty.',
+        'Create an API token with Bitbucket scopes in your Atlassian account settings and enter it with your account email. For a workspace or repository access token, leave the email empty.',
       )}
       field={{ label: t('Atlassian account email'), type: 'email', required: false }}
       shown={(summary) => summary.email}

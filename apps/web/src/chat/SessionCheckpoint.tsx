@@ -81,7 +81,7 @@ export function SessionCheckpointButton({ sessionId }: { sessionId: string }) {
             <DialogDescription className="text-caption text-muted-foreground">
               <span title={saved}>{t('Saved {0}', { '0': savedAgo(checkpoint.updatedAt) })}</span>
               {' · '}
-              {t('This thread only. Newer messages and current files take priority over this summary.')}
+              {t('This thread only. Newer messages and the current files win over this summary.')}
             </DialogDescription>
           </DialogHeader>
           <div

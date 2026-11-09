@@ -360,7 +360,7 @@ function AttachmentPreview({
           ) : (
             <p className="muted text-muted-foreground" role={loadError ? 'alert' : undefined}>
               {loadError
-                ? t('Could not load this preview. Save the attachment to open it.')
+                ? t('Could not load this preview. You can save the attachment to inspect it.')
                 : t('No preview for this file type. Save it to open in another app.')}
             </p>
           )}

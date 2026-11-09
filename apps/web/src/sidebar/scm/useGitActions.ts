@@ -38,7 +38,7 @@ export function useGitActions({
   }
   const requireSaved = () => {
     if (Object.values(ws.dirty).some(Boolean))
-      throw new Error('Save or close unsaved files before changing files or branches.')
+      throw new Error('Save or close unsaved editor buffers before changing files or branches.')
   }
   const stagePaths = (paths: string[], stage: boolean) =>
     void run(() => invoke(stage ? 'git.stage' : 'git.unstage', taskId, binding.repoId, paths))

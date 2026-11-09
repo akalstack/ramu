@@ -522,7 +522,7 @@ export function McpSettings() {
     <div className="flex flex-col gap-3">
       <SettingsGroupTitle className="m-0">{t('Connected through Ramu')}</SettingsGroupTitle>
       <p className="m-0 text-caption text-muted-foreground">
-        {t('Add a remote server no provider has yet. Ramu connects it, and you review its tools first.')}
+        {t('Add a remote server no provider has yet. Ramu connects it and lets you review its tools first.')}
       </p>
       {(error || query.error || projects.error) && (
         <Alert variant="destructive">
@@ -798,7 +798,7 @@ export function McpSettings() {
           />
           <p>
             {t(
-              'Review the server and its tool schemas. Every tool call still asks for approval. Read-only hints from the server do not grant permission.',
+              'Review the server and tool schemas. Every invocation will still ask for approval; upstream read-only hints do not grant permission.',
             )}
           </p>
           <div className="max-h-72 overflow-auto">

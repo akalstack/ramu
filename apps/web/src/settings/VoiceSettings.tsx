@@ -61,9 +61,7 @@ export function VoiceSettings() {
       <SettingsRow>
         <SettingsLabel
           title={t('Show microphone button')}
-          help={t(
-            'Dictate into the message box. Speech is recognized on this computer, and audio is never uploaded or kept.',
-          )}
+          help={t('Dictate into the message box. Recognition runs on this computer; audio is never uploaded or kept.')}
         />
         <Switch
           aria-label={t('Show microphone button')}

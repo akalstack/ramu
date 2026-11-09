@@ -1003,7 +1003,7 @@ async function main() {
                 type: 'warning',
                 message: t(deleteProfile ? 'Delete browser profile {0}?' : 'Clear website data for {0}?', { 0: name }),
                 detail: t(
-                  'Closes {0} tabs and signs out of websites in this profile. Deleting the selected profile switches back to Default. This cannot be undone.',
+                  'This closes {0} tabs and signs out websites in this profile. Deleting a selected profile restores Default. This cannot be undone.',
                   { 0: tabs },
                 ),
                 buttons: [t('Cancel'), t(deleteProfile ? 'Delete profile' : 'Clear website data')],
@@ -1324,7 +1324,7 @@ async function main() {
       const choice = await dialog.showMessageBox(win, {
         type: 'question',
         message: t('Restart Ramu to finish updating?'),
-        detail: t('Running threads keep going. You can update the background service separately.'),
+        detail: t('Running threads continue. The background service can be updated separately.'),
         buttons: [t('Restart now'), t('Later')],
         defaultId: 1,
         cancelId: 1,

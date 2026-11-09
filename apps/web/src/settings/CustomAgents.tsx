@@ -142,7 +142,7 @@ export function CustomAgentSettings() {
       <SettingsGroupTitle>{t('Custom agents')}</SettingsGroupTitle>
       <p className="m-0 text-caption text-muted-foreground">
         {t(
-          'Reusable agents for sub-agent work. The thread’s agent reads each description and picks one when it fits, and the thread shows which one ran. A custom agent replaces a sub-agent type with the same name.',
+          'Reusable agents for sub-agents to use. The thread’s agent sees each description and uses one when a task fits; the thread shows which ran. A custom agent wins over a sub-agent type of the same name.',
         )}
       </p>
       <form

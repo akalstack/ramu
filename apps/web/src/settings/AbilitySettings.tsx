@@ -112,7 +112,7 @@ export function AbilitySettings({
       <SettingsGroupTitle>{t('Abilities')}</SettingsGroupTitle>
       <p className="muted text-muted-foreground small text-caption m-[0_0_12px] leading-[1.55]">
         {t(
-          "When a thread's provider cannot do something, like make an image, its agent asks Ramu to run that one step on another signed-in provider that can. Only what the agent passes is sent.",
+          "When a thread's provider cannot do something, such as making an image, its agent asks Ramu, which runs just that step on one of your signed-in providers that can. Only what the agent passes is sent.",
         )}
         {running ? ` ${t('Checking providers…')}` : ''}
       </p>
@@ -219,7 +219,7 @@ export function AbilitySettings({
           <SettingsTitle>{t('Ask before using another provider')}</SettingsTitle>
           <span className="muted text-muted-foreground block small text-caption">
             {t(
-              'Calls to a provider other than the thread’s wait for your approval, which shows the provider and what is sent.',
+              'Each call that would run on a provider other than the thread’s waits for your approval, which names the provider and what is sent.',
             )}
           </span>
         </span>
@@ -235,7 +235,7 @@ export function AbilitySettings({
       <SettingsGroupTitle>{t('Media accounts')}</SettingsGroupTitle>
       <p className="muted text-muted-foreground small text-caption m-[0_0_12px] leading-[1.55]">
         {t(
-          'When no signed-in provider can make video, speech, music or sound effects, they run on a media service with your own API key, billed to that account. Auto tries these after your signed-in providers.',
+          'Video, speech, music and sound effects that no signed-in provider makes run on a media service with your own API key, billed to that account. Auto uses one after your signed-in providers.',
         )}{' '}
         {MEDIA_SERVICES.map(
           (service) =>

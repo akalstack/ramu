@@ -41,7 +41,7 @@ export function ArchivedThreads() {
         <ListCount view={view} />
         <ListEmpty
           view={view}
-          none="No archived threads. Archive a thread from its menu in the sidebar to hide it."
+          none="No archived threads. Archive a thread from its menu in the sidebar to keep it out of the way."
           filtered="No archived threads match your search."
         />
         <div className="task-list flex flex-col gap-0.5">
@@ -102,7 +102,7 @@ export function ArchivedThreads() {
             }
           }}
         >
-          <p>{t('Removes every archived thread and its agent transcripts. This can’t be undone.')}</p>
+          <p>{t("This removes every archived thread and its agent transcripts. This can't be undone.")}</p>
           <p className="muted text-muted-foreground">{t('Worktrees and branches are kept.')}</p>
         </Dialog>
       )}

@@ -33,8 +33,8 @@ export function ConfirmStopDialog({
             <code className="break-all">{command}</code>
             <br />
             {force
-              ? t('It stops at once without cleaning up. Unsaved work in the command is lost.')
-              : t('The command stops. Anything unfinished is lost.')}
+              ? t('It ends immediately without a chance to clean up. Unsaved work in the command is lost.')
+              : t('The command stops running. Anything it has not finished is lost.')}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

@@ -54,7 +54,7 @@ export function PublicPageSection({ page }: { page: ArtifactInfo }) {
               (status.state === 'missing'
                 ? t('Install cloudflared or ngrok on this host to open pages to anyone.')
                 : status.state === 'failed'
-                  ? (status.error ?? t('The tunnel stopped. Ramu is retrying.'))
+                  ? (status.error ?? t('The tunnel stopped. Ramu tries again.'))
                   : t('Starting…'))}
           </span>
           {status.url && (

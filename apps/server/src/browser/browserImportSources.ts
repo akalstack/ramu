@@ -59,7 +59,7 @@ export function browserImportSources(
       : {
           reason:
             platform === 'win32' && (id === 'chrome' || id === 'edge')
-              ? 'Importing from Chromium browsers on Windows is not supported, because their credentials are protected. Sign in to a Ramu profile instead.'
+              ? 'Import from Windows Chromium browsers is unavailable because their protected credentials are not supported. Sign in to a Ramu profile instead.'
               : id === 'safari'
                 ? 'Safari keeps its cookies where only apps with Full Disk Access can read them. Sign in to a Ramu profile instead.'
                 : 'Session import from this browser is not available yet. Sign in to a Ramu profile instead.',

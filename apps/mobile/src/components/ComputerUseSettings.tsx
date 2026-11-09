@@ -113,7 +113,7 @@ export function ComputerUseSettings({ hostId }: { hostId: string }) {
       </Card>
       <Hint>
         {say(
-          'Each thread still needs your approval before the agent can see or control the screen. Install the helper and allow Screen Recording and Accessibility in Ramu on that Mac. Turning this off ends every thread’s access.',
+          'Each thread still needs your approval before the agent can see or control the screen. Installing the helper and allowing Screen Recording and Accessibility are done in Ramu on that Mac. Turning this off ends every thread’s access.',
         )}
       </Hint>
       {error ? (
@@ -202,7 +202,7 @@ export function TestDeviceSettings({ hostId }: { hostId: string }) {
         <ToggleRow
           title={say('Let agents use test devices')}
           help={say(
-            'Agents boot iOS Simulators and Android emulators on this host, install the app they built and check it like computer use. You install Xcode and the Android SDK yourself.',
+            'Agents boot iOS Simulators and Android emulators on this host, install the app they built and check it like computer use. Xcode and the Android SDK stay your install.',
           )}
           value={status.enabled}
           disabled={busy || readOnly}

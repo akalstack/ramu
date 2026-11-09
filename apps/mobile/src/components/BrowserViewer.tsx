@@ -979,7 +979,7 @@ export function BrowserViewer({
             autoCapitalize="none"
             autoCorrect={false}
             onChangeText={setUploadPath}
-            placeholder={t('Workspace file path (up to 8 MiB)')}
+            placeholder={t('Relative workspace file (maximum 8 MiB)')}
             placeholderTextColor={theme.placeholder}
             style={inputStyle}
           />
@@ -1016,7 +1016,7 @@ export function BrowserViewer({
         <View style={{ paddingHorizontal: space.l, gap: space.m }}>
           <T tone="muted" size={font.caption}>
             {t(
-              'Downloads stay on the execution host. Save to a new file path in the workspace. Existing files are never overwritten.',
+              'Downloads stay on the execution host. Save into a new relative workspace file; existing files are never overwritten.',
             )}
           </T>
           <Button

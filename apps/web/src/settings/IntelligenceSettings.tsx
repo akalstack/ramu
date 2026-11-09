@@ -88,7 +88,7 @@ function LearningLimitsSettings({ value, onChange }: Props) {
   return (
     <>
       <SettingsRow setting="intelligence.dailyReviews">
-        <SettingsLabel title={t('Reviews per day')} help={t('Caps background reviews to limit token use.')} />
+        <SettingsLabel title={t('Reviews per day')} help={t('Upper limit on background reviews, to cap token use.')} />
         <Dropdown
           label={t('Reviews per day')}
           value={String(value.dailyReviews)}

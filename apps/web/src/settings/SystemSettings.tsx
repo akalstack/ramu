@@ -31,7 +31,7 @@ export function SystemSettings({
         {...toggleProps}
         setting="localCrashReports"
         title="Keep local crash reports"
-        description="Off by default. Keeps sanitized service errors and Electron crash dumps on this device, never uploaded. Restart Ramu to apply. Native dumps may hold process memory and are left out of copied diagnostics."
+        description="Off by default. Keep sanitized service errors and local Electron crash dumps. Nothing is uploaded. Restart Ramu after changing this setting. Native dumps may contain process memory and are never included in copied diagnostics."
       />
       <div className="flex gap-2 mb-4">
         <Button
