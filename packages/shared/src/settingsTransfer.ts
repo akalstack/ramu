@@ -24,6 +24,7 @@ export const TRANSFER_GROUPS = [
       'defaultTerminalDock',
       'sidebarWidth',
       'recentChatMode',
+      'threadRowBranches',
       'showUsageLimits',
     ],
   },

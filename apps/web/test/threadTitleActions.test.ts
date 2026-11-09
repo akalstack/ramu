@@ -22,6 +22,7 @@ vi.mock('../src/workspace/workspace', () => ({
   useRowStore: () => ({
     tasks: [],
     workspaces: [],
+    bindings: {},
     ui: { openTaskIds: [], activeTaskId: null },
     unread: new Set(),
     refresh: async () => {},

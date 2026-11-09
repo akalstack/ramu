@@ -283,7 +283,10 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
     },
     'tasks.list': {
       args: z.tuple([]),
-      run: () => {
+      run: async () => {
+        // Branches are read first: everything after the snapshot is read without yielding, so it is one moment.
+        const listed = workspace.listTasks()
+        const branches = listed.length ? await workspace.threadBranches(listed) : new Map<string, string>()
         const snapshotAt = nextSnapshotAt()
         const tasks = workspace.listTasks()
         const helpers = tasks.length ? agents.helperSummaries() : new Map<string, never>()
@@ -313,6 +316,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
             helperSummary: helpers.get(task.id) ?? null,
             ...(advice.get(task.id) ? { unreadAdvice: advice.get(task.id) } : {}),
             pullRequest: pullRequestIndex?.forTask(task) ?? null,
+            branch: branches.get(task.id) ?? null,
             snapshotAt,
           }
           if (!goal || goal.status === 'completed') return { ...base, goalState: null }

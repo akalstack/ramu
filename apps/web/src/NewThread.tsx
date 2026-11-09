@@ -244,7 +244,7 @@ export function HomePage() {
       projects: ws.projects,
       lastProject: lastStartProject(storage),
     })
-  return <NewTask projectId={projectId} onProjectChange={(id) => ws.newTask(id)} />
+  return <NewThread projectId={projectId} onProjectChange={(id) => ws.newTask(id)} />
 }
 
 /**
@@ -252,7 +252,7 @@ export function HomePage() {
  * agent works on the whole workspace. Sending the first message creates the task.
  * `feed` adds the Home feed below; it is off when the box is docked beside an open file.
  */
-export function NewTask({
+export function NewThread({
   projectId,
   onProjectChange,
   feed = true,

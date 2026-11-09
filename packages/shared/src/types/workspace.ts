@@ -149,6 +149,11 @@ export interface Task {
   startedFrom?: ThreadOrigin | null
   /** The pull request for the thread's branch, from the host's last look; absent when there is none or it is unknown. */
   pullRequest?: import('./forge').TaskPullRequest | null
+  /**
+   * Where the thread's work lands: its worktree's branch, or the branch its project's checkout has out. Only the task
+   * list sets it; null when there is none (no project, a plain folder, detached), and older hosts omit it.
+   */
+  branch?: string | null
 }
 
 export interface ThreadOrigin {

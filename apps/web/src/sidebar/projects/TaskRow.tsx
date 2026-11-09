@@ -55,6 +55,7 @@ export function TaskRow({
   nested,
   merged,
   earlierRuns,
+  hideBranch,
 }: {
   task: Task
   projectName?: string
@@ -64,6 +65,8 @@ export function TaskRow({
   merged?: boolean
   /** Older quiet runs of the same schedule folded into this row. */
   earlierRuns?: number
+  /** Inside a project's own group the branch line is optional (`threadRowBranches`). */
+  hideBranch?: boolean
 }) {
   useLanguage()
   const ws = useRowStore()
@@ -78,6 +81,7 @@ export function TaskRow({
     (projectName || merged) && computers && computers.computers.length > 1
       ? computers.computers.find((c) => c.id === host.id)?.name
       : undefined
+  const place = [projectName, hostName].filter(Boolean).join(' · ')
   // Threads of the host on screen can be picked together for a bulk action, where the list offers one.
   const bulk = useBulkActionsContext()
   const picked = useThreadSelection()
@@ -102,6 +106,11 @@ export function TaskRow({
     )
   }, [host.id, activeHost])
   const workspace = task.workspaceId ? ws?.workspaces?.find((entry) => entry.id === task.workspaceId) : undefined
+  // The list names every thread's branch; an open thread's bindings cover a host whose list does not yet.
+  const binding = ws?.bindings[task.id]?.find((entry) => !entry.folderOnly)
+  const branch = task.branch ?? binding?.taskBranch ?? binding?.checkedOut ?? null
+  const shownBranch = hideBranch ? null : branch
+  const context = !!place || !!shownBranch
   const [deleting, setDeleting] = useState(false)
   const sharedWorktree =
     !!task.workspaceId && (ws?.tasks ?? []).some((t) => t.id !== task.id && t.workspaceId === task.workspaceId)
@@ -109,6 +118,54 @@ export function TaskRow({
   const active = onScreen && ws?.ui.activeTaskId === task.id && !ws.composing
   const archived = task.status === 'archived'
   const done = !!task.doneAt
+  // The thread's agents, as the phone shows them: a handoff or teammate stays visible beside the leading one. They end
+  // the row (after the time, or under it on the context line), so every row's agents share one right edge.
+  const agents = <AgentStack task={task} />
+  // Small marks (origin, review, pin, pull request or worktree) go on the context line before the agents when there is
+  // one, else before the time.
+  const markers = (
+    <>
+      {task.startedFrom && (
+        <GitFork
+          size={12}
+          className="flex-none text-muted-foreground"
+          aria-label={threadOriginLabel(task.startedFrom, t)}
+        />
+      )}
+      {task.kind === 'library-review' && (
+        <span className="task-kind flex-none rounded-full bg-fill px-1.5 text-caption text-muted-foreground">
+          {t('Review')}
+        </span>
+      )}
+      {task.pinnedAt && !archived && !hidePin && (
+        <Pin size={12} className="task-pin muted text-muted-foreground mode-icon flex-none" aria-label={t('Pinned')} />
+      )}
+      {task.pullRequest ? (
+        <span
+          className="mode-icon flex-none inline-flex"
+          title={`#${task.pullRequest.number} · ${stageLabel(task.pullRequest.stage)} · ${task.pullRequest.title}`}
+          role="img"
+          aria-label={t('Pull request #{0}: {1}', {
+            '0': String(task.pullRequest.number),
+            '1': stageLabel(task.pullRequest.stage),
+          })}
+        >
+          <PullRequestIcon pr={task.pullRequest} stage={task.pullRequest.stage} size={12} />
+        </span>
+      ) : (
+        task.mode === 'worktree' &&
+        !shownBranch && (
+          <span title={workspace?.name ?? t('Isolated worktrees')}>
+            <GitBranch
+              size={12}
+              className="muted text-muted-foreground mode-icon flex-none"
+              aria-label={t('Isolated worktrees')}
+            />
+          </span>
+        )
+      )}
+    </>
+  )
   const { initialSettings } = useModelSets()
   const [naming, setNaming] = useState(false)
   const { viewOnly, canWrite } = useHostWriteAccess()
@@ -364,7 +421,7 @@ export function TaskRow({
                   contextMenu.onContextMenu(e)
                 }
           }
-          className={`task-row [&:hover_.row-actions]:opacity-100 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:opacity-100 [&:focus-within_.row-actions]:flex [&:hover]:bg-accent [&:hover]:text-foreground [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&.archived]:[opacity:0.6] [&:hover_.task-time]:hidden [&:hover_.task-pin]:hidden [&:focus-within_.task-pin]:hidden [&:focus-within_.task-time]:hidden [&_.row-actions]:hidden [&_.row-actions]:mr-0 [&_.row-actions:has([aria-expanded='true'])]:flex [&_>_:not(.task-title)]:mt-0 [&_.task-actions]:hidden [&_.task-actions]:opacity-100 [&_.task-actions]:gap-1 [&_.task-actions_button]:size-5 [&:hover_.task-actions]:flex [&:focus-within_.task-actions]:flex [&:hover_.task-trailing]:hidden [&:focus-within_.task-trailing]:hidden [&:hover_.agent-stack]:hidden [&:focus-within_.agent-stack]:hidden [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 text-soft cursor-default [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] text-body leading-5 ${projectName || hostName ? 'min-h-11' : 'min-h-[30px]'} rounded-(--radius-s) p-[0_8px] ${active ? ' active' : ''}${selected ? ' selected bg-accent [box-shadow:inset_2px_0_0_var(--primary)]' : ''}${archived ? ' archived' : ''}${nested ? ' pl-[31px]' : ''}`}
+          className={`task-row [&:hover_.row-actions]:opacity-100 [&:hover_.row-actions]:flex [&:focus-within_.row-actions]:opacity-100 [&:focus-within_.row-actions]:flex [&:hover]:bg-accent [&:hover]:text-foreground [&.active]:text-foreground [&.active]:bg-accent [&.active]:[box-shadow:none] [&.archived]:[opacity:0.6] [&_.row-actions]:hidden [&_.row-actions]:mr-0 [&_.row-actions:has([aria-expanded='true'])]:flex [&_>_:not(.task-title)]:mt-0 [&_.task-actions]:hidden [&_.task-actions]:opacity-100 [&_.task-actions]:gap-1 [&_.task-actions_button]:size-5 [&:hover_.task-actions]:flex [&:focus-within_.task-actions]:flex [&:hover_.task-trailing]:hidden [&:focus-within_.task-trailing]:hidden [&:hover_.task-head_.task-pin]:hidden [&:focus-within_.task-head_.task-pin]:hidden [&:hover_.task-head_.agent-stack]:hidden [&:focus-within_.task-head_.agent-stack]:hidden [transition:background-color_140ms_ease,_color_140ms_ease] flex items-center gap-2 text-soft cursor-default [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] text-body leading-5 ${context ? 'min-h-11' : 'min-h-[30px]'} rounded-(--radius-s) p-[0_8px] ${active ? ' active' : ''}${selected ? ' selected bg-accent [box-shadow:inset_2px_0_0_var(--primary)]' : ''}${archived ? ' archived' : ''}${nested ? ' pl-[31px]' : ''}`}
           role="button"
           tabIndex={0}
           aria-disabled={unavailable || undefined}
@@ -393,30 +450,22 @@ export function TaskRow({
           }}
         >
           {done && <Check size={14} className="flex-none text-muted-foreground" aria-label={t('Done')} />}
-          {renaming ? (
-            <InlineEdit
-              readOnly={viewOnly}
-              value={task.title}
-              onDone={(v) => {
-                if (v !== null && !canWrite()) return
-                setRenaming(false)
-                if (v && v !== task.title) void run(() => host.invoke('tasks.rename', task.id, v))
-              }}
-            />
-          ) : (
-            <>
-              {projectName || hostName ? (
-                <span className="grow flex-1 min-w-0 flex flex-col py-1 text-left">
-                  <FadeText className="task-title overflow-hidden whitespace-nowrap" text={task.title} />
-                  <span className="task-project truncate text-caption text-muted-foreground">
-                    {[projectName, hostName].filter(Boolean).join(' · ')}
-                  </span>
-                </span>
-              ) : (
-                <FadeText
-                  className="grow flex-1 min-w-0 text-left task-title overflow-hidden whitespace-nowrap"
-                  text={task.title}
+          {/* Where the work lands goes on a second line only when there is something to say, so no row carries an
+              empty one; titles keep one left edge either way. */}
+          <span className={`flex min-w-0 flex-1 flex-col text-left${context ? ' py-1' : ''}`}>
+            <span className="task-head flex h-5 min-w-0 items-center gap-1.5">
+              {renaming ? (
+                <InlineEdit
+                  readOnly={viewOnly}
+                  value={task.title}
+                  onDone={(v) => {
+                    if (v !== null && !canWrite()) return
+                    setRenaming(false)
+                    if (v && v !== task.title) void run(() => host.invoke('tasks.rename', task.id, v))
+                  }}
                 />
+              ) : (
+                <FadeText className="task-title min-w-0 flex-1 overflow-hidden whitespace-nowrap" text={task.title} />
               )}
               {!!earlierRuns && (
                 <span
@@ -426,94 +475,76 @@ export function TaskRow({
                   +{earlierRuns}
                 </span>
               )}
-              {task.startedFrom && (
-                <GitFork
-                  size={12}
-                  className="flex-none text-muted-foreground"
-                  aria-label={threadOriginLabel(task.startedFrom, t)}
-                />
-              )}
-              {task.kind === 'library-review' && (
-                <span className="task-kind flex-none rounded-full bg-fill px-1.5 text-caption text-muted-foreground">
-                  {t('Review')}
-                </span>
-              )}
-            </>
-          )}
-          {task.pinnedAt && !archived && !hidePin && (
-            <Pin
-              size={12}
-              className="task-pin muted text-muted-foreground mode-icon flex-none"
-              aria-label={t('Pinned')}
-            />
-          )}
-          {(naming || task.titleGenerationState === 'pending') && (
-            <Sparkles
-              size={12}
-              className="muted text-muted-foreground mode-icon flex-none"
-              aria-label={t('Naming thread')}
-            />
-          )}
-          {task.pullRequest ? (
-            <span
-              className="mode-icon flex-none inline-flex"
-              title={`#${task.pullRequest.number} · ${stageLabel(task.pullRequest.stage)} · ${task.pullRequest.title}`}
-              role="img"
-              aria-label={t('Pull request #{0}: {1}', {
-                '0': String(task.pullRequest.number),
-                '1': stageLabel(task.pullRequest.stage),
-              })}
-            >
-              <PullRequestIcon pr={task.pullRequest} stage={task.pullRequest.stage} size={12} />
-            </span>
-          ) : (
-            task.mode === 'worktree' && (
-              <span title={ws?.workspaces.find((w) => w.id === task.workspaceId)?.name ?? t('Isolated worktrees')}>
-                <GitBranch
+              {(naming || task.titleGenerationState === 'pending') && (
+                <Sparkles
                   size={12}
                   className="muted text-muted-foreground mode-icon flex-none"
-                  aria-label={t('Isolated worktrees')}
+                  aria-label={t('Naming thread')}
                 />
+              )}
+              {!context && markers}
+              <span className={`${ROW_ACTIONS_CLASS} task-actions`} hidden={viewOnly}>
+                {!archived && (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className={ICON_BUTTON_CLASS}
+                    disabled={unavailable}
+                    aria-label={task.pinnedAt ? t('Unpin thread') : t('Pin thread')}
+                    title={task.pinnedAt ? t('Unpin') : t('Pin')}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      void run(() => host.invoke('tasks.pin', task.id, !task.pinnedAt))
+                    }}
+                  >
+                    {task.pinnedAt ? <PinOff size={14} /> : <Pin size={14} />}
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className={ICON_BUTTON_CLASS}
+                  disabled={unavailable}
+                  aria-label={archived ? t('Unarchive thread') : done ? t('Reopen thread') : t('Mark thread done')}
+                  title={archived ? t('Unarchive') : done ? t('Reopen') : t('Mark done')}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (archived) void run(() => host.invoke('tasks.archive', task.id, false))
+                    else if (done) void run(() => host.invoke('tasks.done', task.id, false))
+                    else void markDone()
+                  }}
+                >
+                  {archived ? <ArchiveRestore size={14} /> : done ? <RotateCcw size={14} /> : <Check size={14} />}
+                </Button>
               </span>
-            )
-          )}
-          {/* The thread's agents, as the phone shows them: a handoff or teammate stays visible beside the leading one. */}
-          <AgentStack task={task} />
-          <span className={`${ROW_ACTIONS_CLASS} task-actions`} hidden={viewOnly}>
-            {!archived && (
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className={ICON_BUTTON_CLASS}
-                disabled={unavailable}
-                aria-label={task.pinnedAt ? t('Unpin thread') : t('Pin thread')}
-                title={task.pinnedAt ? t('Unpin') : t('Pin')}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  void run(() => host.invoke('tasks.pin', task.id, !task.pinnedAt))
-                }}
-              >
-                {task.pinnedAt ? <PinOff size={14} /> : <Pin size={14} />}
-              </Button>
+              <TaskStateIcon task={task} unread={!!ws?.unread.has(task.id)} />
+              {!context && agents}
+            </span>
+            {context && (
+              <span className="task-context flex h-4 min-w-0 items-center gap-1 text-caption text-muted-foreground">
+                <span className="flex min-w-0 flex-1 items-center gap-1">
+                  {place && <span className="task-project max-w-[60%] flex-none truncate">{place}</span>}
+                  {place && shownBranch && <span aria-hidden>·</span>}
+                  {shownBranch && (
+                    <span
+                      className="task-branch flex min-w-0 items-center gap-0.5"
+                      title={task.mode === 'worktree' ? `${shownBranch} · ${t('Isolated worktree')}` : shownBranch}
+                    >
+                      <GitBranch
+                        size={11}
+                        className="flex-none"
+                        aria-label={task.mode === 'worktree' ? t('Isolated worktree') : undefined}
+                        aria-hidden={task.mode === 'worktree' ? undefined : true}
+                      />
+                      <span className="truncate">{shownBranch}</span>
+                    </span>
+                  )}
+                </span>
+                {markers}
+                {agents}
+              </span>
             )}
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className={ICON_BUTTON_CLASS}
-              disabled={unavailable}
-              aria-label={archived ? t('Unarchive thread') : done ? t('Reopen thread') : t('Mark thread done')}
-              title={archived ? t('Unarchive') : done ? t('Reopen') : t('Mark done')}
-              onClick={(e) => {
-                e.stopPropagation()
-                if (archived) void run(() => host.invoke('tasks.archive', task.id, false))
-                else if (done) void run(() => host.invoke('tasks.done', task.id, false))
-                else void markDone()
-              }}
-            >
-              {archived ? <ArchiveRestore size={14} /> : done ? <RotateCcw size={14} /> : <Check size={14} />}
-            </Button>
           </span>
-          <TaskStateIcon task={task} unread={!!ws?.unread.has(task.id)} />
         </HoverCardTrigger>
         <ThreadHoverCard
           task={task}

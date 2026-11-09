@@ -1,8 +1,8 @@
 // The sidebar's identity view, on each device: every project (the default), projects under a heading per identity,
-// or only one identity's until cleared, with the active filter shown above the list so no project seems lost. Search,
-// the Inbox and notifications keep showing every identity.
+// or only one identity's until cleared, with the active filter shown above the list so no project seems lost. The
+// recent threads list follows the same view by each thread's project. Search, the Inbox and notifications keep
+// showing every identity.
 import { Fragment, useState, type ReactNode } from 'react'
-import type { Project } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Menu } from '../Menu'
 import { Rows3, X } from 'lucide-react'
@@ -23,7 +23,7 @@ function read(hostId: string): View {
   }
 }
 
-/** The view and its picker for one host's projects; the picker is absent with fewer than two identities. */
+/** The view and its picker for one host's projects and threads; the picker is absent with fewer than two identities. */
 export function useIdentityView(hostId: string) {
   const snapshot = useIdentities(hostId)
   const [view, setView] = useState<View>(() => read(hostId))
@@ -112,13 +112,22 @@ export function useIdentityView(hostId: string) {
     />
   ) : null
 
-  /** The projects in view order, with headings when grouped and the filter line when narrowed. */
-  const arrange = (projects: Project[], render: (project: Project) => ReactNode): ReactNode => {
-    if (!identities || !snapshot || active === 'all') return projects.map(render)
-    const of = (project: Project) => snapshot.projects.find((entry) => entry.projectId === project.id)?.identityId
+  /**
+   * Projects or threads in view order, with headings when grouped and the filter line when narrowed. A project the
+   * snapshot does not list yet, and a thread in no project, act as the default identity, as the host treats them.
+   */
+  const arrange = <Item,>(
+    items: Item[],
+    projectIdOf: (item: Item) => string,
+    render: (item: Item) => ReactNode,
+  ): ReactNode => {
+    if (!identities || !snapshot || active === 'all') return items.map(render)
+    const fallback = (identities.find((identity) => identity.isDefault) ?? identities[0])?.id
+    const of = (item: Item) =>
+      snapshot.projects.find((entry) => entry.projectId === projectIdOf(item))?.identityId ?? fallback
     if (active === 'group')
       return identities.map((identity) => {
-        const caught = projects.filter((project) => of(project) === identity.id)
+        const caught = items.filter((item) => of(item) === identity.id)
         return caught.length ? (
           <Fragment key={identity.id}>
             <p className="m-0 flex items-center gap-1.5 px-2 pt-3 pb-1 text-caption font-medium text-muted-foreground first:pt-1">
@@ -130,13 +139,13 @@ export function useIdentityView(hostId: string) {
           </Fragment>
         ) : null
       })
-    if (!only) return projects.map(render)
-    const shown = projects.filter((project) => of(project) === only.id)
+    if (!only) return items.map(render)
+    const shown = items.filter((item) => of(item) === only.id)
     return (
       <>
         <p className="m-0 flex items-center gap-1.5 px-2 pt-1 pb-0.5 text-caption text-muted-foreground" role="status">
           <IdentityDot color={only.color} />
-          {t('Showing only {name}: {hidden} more hidden', { name: only.name, hidden: projects.length - shown.length })}
+          {t('Showing only {name}: {hidden} more hidden', { name: only.name, hidden: items.length - shown.length })}
           <Button size="xs" variant="ghost" onClick={() => choose('all')}>
             {t('Show all')}
           </Button>

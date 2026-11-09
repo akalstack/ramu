@@ -101,6 +101,27 @@ export async function currentBranch(cwd: string): Promise<string | null> {
   return out || null
 }
 
+/**
+ * The branch a checkout has out, read from its HEAD file so a thread list can name it on every refresh without
+ * starting Git once per repository. Null when detached, not a repository or stored in a format this cannot read.
+ */
+export async function checkedOutBranch(root: string): Promise<string | null> {
+  try {
+    let gitDir = resolve(root, '.git')
+    // A linked worktree or submodule keeps a file pointing at its real Git directory.
+    if ((await stat(gitDir)).isFile()) {
+      const pointer = /^gitdir:\s*(.+)$/m.exec(await readFile(gitDir, 'utf8'))?.[1]?.trim()
+      if (!pointer) return null
+      gitDir = resolve(root, pointer)
+    }
+    const branch = /^ref: refs\/heads\/(.+)$/m.exec(await readFile(resolve(gitDir, 'HEAD'), 'utf8'))?.[1]?.trim()
+    // Reftable repositories keep this placeholder in HEAD; their real branch is not in the file.
+    return branch && branch !== '.invalid' ? branch : null
+  } catch {
+    return null
+  }
+}
+
 export async function headOid(cwd: string): Promise<string | null> {
   return (await git(cwd, ['rev-parse', '--verify', '--quiet', 'HEAD']).catch(() => '')).trim() || null
 }

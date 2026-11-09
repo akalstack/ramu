@@ -22,7 +22,7 @@ export function SectionHead({
   return (
     <div className="section-head group/head flex min-h-8 items-center justify-between gap-2 px-2 pb-1 pt-3 first:pt-1 text-caption font-medium text-muted-foreground">
       <SidebarDisclosureButton
-        className="-ml-1 h-6 w-auto gap-1.5 px-1 py-0 text-[length:var(--font-caption)]"
+        className="-ml-1 h-6 w-auto min-w-0 shrink overflow-hidden gap-1.5 px-1 py-0 text-[length:var(--font-caption)]"
         aria-expanded={open}
         aria-controls={controls}
         onClick={onToggle}
@@ -36,7 +36,13 @@ export function SectionHead({
           className={`flex-none transition-transform ${open ? '' : '-rotate-90'}`}
         />
       </SidebarDisclosureButton>
-      {children && <span className="ml-auto flex flex-none items-center gap-0.5">{children}</span>}
+      {/* Icon buttons here take the size and right edge of the sidebar's other trailing icons (the title bar's
+          sidebar toggle, search), so they share one centre line down the sidebar. */}
+      {children && (
+        <span className="-mr-2 ml-auto flex flex-none items-center gap-0.5 [&>button.small-icon]:size-(--action-size)">
+          {children}
+        </span>
+      )}
     </div>
   )
 }

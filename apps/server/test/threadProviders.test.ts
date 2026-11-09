@@ -10,6 +10,7 @@ it('lists every agent that worked in a thread, from handoffs and teammates, with
     workspace: {
       getAppState: (_key: string, fallback: unknown) => fallback,
       listTasks: () => [{ id: 't' }, { id: 'quiet' }],
+      threadBranches: async () => new Map([['t', 'ramu/fix-login']]),
     },
     agents: {
       helperSummaries: () => new Map(),
@@ -33,6 +34,8 @@ it('lists every agent that worked in a thread, from handoffs and teammates, with
     const tasks = (await dispatcher.invoke('tasks.list', [])) as Task[]
     expect(tasks.find((task) => task.id === 't')?.providers).toEqual(['cursor', 'claude-code', 'codex'])
     expect(tasks.find((task) => task.id === 'quiet')?.providers).toEqual([])
+    // The branch rides along in the same list, so rows need no call of their own.
+    expect(tasks.map((task) => task.branch)).toEqual(['ramu/fix-login', null])
   } finally {
     dispatcher.close()
   }

@@ -113,6 +113,8 @@ export interface AppPreferences extends WorkspaceDefaults {
   appAutoUpdate: boolean
   /** Sidebar chat list: one flat list by recent activity, with project names, instead of groups per project. */
   recentChatMode: boolean
+  /** Thread rows inside a project's group add a second line naming their branch. */
+  threadRowBranches: boolean
   /** Render text with thin grayscale antialiasing instead of the macOS default. */
   fontSmoothing: boolean
   /** Disable interface animations in addition to the system motion preference. */
@@ -145,6 +147,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   fontSmoothing: true,
   reduceMotion: false,
   recentChatMode: false,
+  threadRowBranches: false,
   defaultMarkdownView: 'preview',
   editorFontSize: 13,
   terminalFontSize: 12,

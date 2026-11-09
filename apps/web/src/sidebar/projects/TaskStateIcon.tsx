@@ -44,9 +44,8 @@ export function StatusMark({ task, status }: { task: Task; status: ThreadStatus 
 }
 
 /**
- * The trailing status of a chat row: working, needs input, waiting, failed, unread, or its age. Mark and age share one
- * fixed slot, so the agent marks before it line up down the list whichever a row shows. On hover the row's two action
- * buttons are this slot's width, so the last lands on it and the first on the agent mark.
+ * The trailing status of a chat row: working, needs input, waiting, failed, unread, or its age, at its natural width so
+ * a short age leaves the title its room. On hover the row's actions take its place.
  */
 export function TaskStateIcon({ task, unread }: { task: Task; unread: boolean }) {
   useLanguage()

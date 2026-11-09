@@ -38,7 +38,7 @@ import { useHostWriteAccess } from '../composer/useHostWriteAccess'
 import { SectionHead } from './projects/SectionHead'
 import { Collapse } from './projects/Collapse'
 import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, pinnedFirst, STICKY_PROJECT_CLASS } from './projects/constants'
-import { mergedThreads, sidebarThreads, threadNeedsYou } from './projects/threadLists'
+import { mergedThreads, sidebarThreads, threadNeedsYou, threadProjectName } from './projects/threadLists'
 import { useSidebarExpansion } from './projects/sidebarExpansion'
 import { EMBEDDED_THREAD_LIMIT, ThreadPreviewList, useThreadPreview } from './projects/ThreadPreviewList'
 import { hostRows } from './hostRows'
@@ -231,7 +231,7 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
                 key={task.id}
                 task={task}
                 hidePin={hidePin}
-                projectName={name === 'Threads' ? undefined : projects.find((p) => p.id === task.projectId)?.name}
+                projectName={name === 'Threads' ? undefined : threadProjectName(projects, task.projectId)}
               />
             ))}
         </Collapse>
@@ -266,31 +266,34 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
             onToggle={() => tree.setExpanded('section:projects', !projectsOpen)}
             controls={projectsDomId}
           >
-            {!preferences.recentChatMode && identityView.picker}
+            {identityView.picker}
           </SectionHead>
         )}
         <Collapse open={projectsOpen} id={projectsDomId}>
           {preferences.recentChatMode
-            ? active
-                .filter((task) => !task.pinnedAt)
-                .sort(pinnedFirst)
-                .map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    projectName={projects.find((p) => p.id === task.projectId)?.name}
+            ? identityView.arrange(
+                active.filter((task) => !task.pinnedAt).sort(pinnedFirst),
+                (task) => task.projectId,
+                (task) => (
+                  <TaskRow key={task.id} task={task} projectName={threadProjectName(projects, task.projectId)} />
+                ),
+              )
+            : identityView.arrange(
+                projects,
+                (project) => project.id,
+                (project) => (
+                  <OtherHostProject
+                    key={project.id}
+                    host={computer.id}
+                    project={project}
+                    tasks={all}
+                    available={available}
+                    limit={
+                      embedded ? Math.min(preferences.recentChats, EMBEDDED_THREAD_LIMIT) : preferences.recentChats
+                    }
                   />
-                ))
-            : identityView.arrange(projects, (project) => (
-                <OtherHostProject
-                  key={project.id}
-                  host={computer.id}
-                  project={project}
-                  tasks={all}
-                  available={available}
-                  limit={embedded ? Math.min(preferences.recentChats, EMBEDDED_THREAD_LIMIT) : preferences.recentChats}
-                />
-              ))}
+                ),
+              )}
         </Collapse>
         {!preferences.recentChatMode &&
           section('Threads', 'section:chats', loose, {
@@ -472,7 +475,7 @@ type HostThreads = ReturnType<typeof useHostThreads>[number]
 function MergedRow({ task, source }: { task: Task; source: HostThreads }) {
   return (
     <HostScope host={source.host} store={source.store}>
-      <TaskRow task={task} projectName={source.projects.find((p) => p.id === task.projectId)?.name} merged />
+      <TaskRow task={task} projectName={threadProjectName(source.projects, task.projectId)} merged />
     </HostScope>
   )
 }

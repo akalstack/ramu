@@ -187,6 +187,24 @@ describe('current checkout (default)', () => {
     expect({ web: fingerprint(web), api: fingerprint(api) }).toEqual(before)
   })
 
+  it('names the branch each thread works on for the thread list', async () => {
+    const project = ws.createProject('Shop')
+    const rWeb = await ws.addRepository(project.id, web)
+    const rApi = await ws.addRepository(project.id, api)
+    const local = await ws.createTask({ projectId: project.id, title: 'Local', mode: 'current' })
+    const plan = await ws.planWorktrees(project.id, 'Fix checkout', [rWeb.id, rApi.id])
+    const isolated = await ws.createTask({ projectId: project.id, title: 'Fix checkout', mode: 'worktree' }, plan)
+    const loose = await ws.createTask({ projectId: NO_PROJECT, title: 'Loose', mode: 'current' })
+    const read = async () => ws.threadBranches(ws.listTasks())
+    // The first repository by name ("api", on develop) speaks for the shared checkout.
+    expect(Object.fromEntries(await read())).toEqual({ [local.id]: 'develop', [isolated.id]: 'ramu/fix-checkout' })
+    expect((await read()).has(loose.id)).toBe(false)
+    sh(api, 'switch', '-q', '-c', 'feature/reset')
+    expect((await read()).get(local.id)).toBe('feature/reset')
+    sh(api, 'switch', '-q', '--detach')
+    expect((await read()).has(local.id)).toBe(false)
+  })
+
   it('two tasks sharing a checkout share the same canonical cwd', async () => {
     const project = ws.createProject('Shop')
     const repo = await ws.addRepository(project.id, web)

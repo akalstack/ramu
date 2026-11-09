@@ -305,6 +305,16 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
   { section: 'workflows', title: 'Advisor model', words: 'advisor reviewer model effort provider' },
   { section: 'workflows', title: 'Always wait for advice', words: 'advisor block blocking async wait continue' },
   { section: 'providers', title: 'Show usage limits', words: 'usage gauge 5-hour weekly plan quota' },
+  {
+    section: 'chats',
+    title: 'Sidebar shows',
+    words: 'sidebar projects recent threads activity view list group switch mode',
+  },
+  {
+    section: 'chats',
+    title: 'Show branches in projects',
+    words: 'sidebar branch git worktree two line row thread project',
+  },
   { section: 'chats', title: 'Messages while working', words: 'queue steer steering enter busy' },
   { section: 'chats', title: 'Include open tabs as context', words: 'files mention' },
   { section: 'chats', title: 'Delete archived threads after', words: 'cleanup retention history delete days' },

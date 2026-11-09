@@ -330,6 +330,42 @@ export class Workspace {
     return ((projectId ? stmt.all(projectId) : stmt.all()) as unknown as Task[]).map(taskOf)
   }
 
+  /**
+   * Where each thread's work lands, for thread lists: a worktree thread's own branch, or the branch its project's
+   * checkout has out. Several repositories go by the first in name order, as bindings do. Threads without a branch
+   * (no project, a plain folder, a worktree still being set up) are absent.
+   */
+  async threadBranches(tasks: Task[]): Promise<Map<string, string>> {
+    const worktreeBranches = new Map<string, string>()
+    const rows = this.db
+      .prepare(
+        `SELECT b.task_id AS workspaceId, b.task_branch AS branch FROM bindings b
+         JOIN repositories r ON r.id = b.repo_id WHERE b.task_branch IS NOT NULL ORDER BY r.name`,
+      )
+      .all() as unknown as { workspaceId: string; branch: string }[]
+    for (const row of rows)
+      if (!worktreeBranches.has(row.workspaceId)) worktreeBranches.set(row.workspaceId, row.branch)
+    const projectIds = [
+      ...new Set(
+        tasks.filter((task) => task.mode === 'current' && task.projectId !== NO_PROJECT).map((task) => task.projectId),
+      ),
+    ]
+    const checkedOut = new Map(
+      await Promise.all(
+        projectIds.map(async (projectId) => {
+          const first = this.listRepositories(projectId)[0]
+          return [projectId, first ? await gitCli.checkedOutBranch(first.root) : null] as const
+        }),
+      ),
+    )
+    const branches = new Map<string, string>()
+    for (const task of tasks) {
+      const branch = task.workspaceId ? worktreeBranches.get(task.workspaceId) : checkedOut.get(task.projectId)
+      if (branch) branches.set(task.id, branch)
+    }
+    return branches
+  }
+
   getTask(id: string): Task {
     const t = this.db.prepare(`SELECT ${TASK_COLUMNS} FROM tasks t WHERE id = ?`).get(id) as unknown as Task | undefined
     if (!t) throw new Error(`Unknown thread ${id}`)

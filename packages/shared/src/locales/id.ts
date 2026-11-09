@@ -6799,4 +6799,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Name it": "Beri nama",
   "OAuth client ID": "ID klien OAuth",
   "Ramu signs in to the service the first time an agent uses it, if it asks.": "Ramu masuk ke layanan saat agen pertama kali memakainya, jika diminta.",
+  "Sidebar": "Sidebar",
+  "Sidebar shows": "Sidebar menampilkan",
+  "Projects groups threads under their project. Recent threads lists every thread by latest activity.": "Proyek mengelompokkan thread di bawah proyeknya. Thread terbaru menampilkan semua thread menurut aktivitas terakhir.",
+  "Show branches in projects": "Tampilkan branch di proyek",
+  "Threads under a project get a second line with the branch their work lands on. Recent threads always show it.": "Thread di bawah proyek mendapat baris kedua berisi branch tempat pekerjaannya masuk. Thread terbaru selalu menampilkannya.",
 }

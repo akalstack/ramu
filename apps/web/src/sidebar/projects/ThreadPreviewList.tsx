@@ -7,6 +7,7 @@ import { TaskRow } from './TaskRow'
 import { projectThreadPreview } from './threadLists'
 import { useWorkspaceOf } from '../../workspace/workspace'
 import { useSidebarExpansion } from './sidebarExpansion'
+import { useAppSettings } from '../../settings/AppSettings'
 
 /** How many threads each group previews when every host shares the sidebar. */
 export const EMBEDDED_THREAD_LIMIT = 5
@@ -39,6 +40,7 @@ export function ThreadPreviewList({
   ref?: Ref<HTMLDivElement>
 }) {
   useLanguage()
+  const { preferences } = useAppSettings()
   return (
     <div
       ref={ref}
@@ -50,7 +52,13 @@ export function ThreadPreviewList({
         </div>
       )}
       {preview.tasks.map((task) => (
-        <TaskRow key={task.id} task={task} nested earlierRuns={preview.earlierRuns[task.id]} />
+        <TaskRow
+          key={task.id}
+          task={task}
+          nested
+          hideBranch={!preferences.threadRowBranches}
+          earlierRuns={preview.earlierRuns[task.id]}
+        />
       ))}
       {preview.hasMore && (
         <Button

@@ -175,7 +175,7 @@ vi.mock('@tanstack/react-query', () => ({
         : [],
   }),
 }))
-import { NewTask } from '../src/NewTask'
+import { NewThread } from '../src/NewThread'
 
 beforeEach(() => {
   state.prompt = 'Fix login'
@@ -199,7 +199,7 @@ beforeEach(() => {
   state.draft.confirmed = true
   state.draft.problem = undefined
 })
-const render = (projectId = 'p') => renderToStaticMarkup(createElement(NewTask, { projectId, onProjectChange() {} }))
+const render = (projectId = 'p') => renderToStaticMarkup(createElement(NewThread, { projectId, onProjectChange() {} }))
 
 it('refuses creation until an unreadable draft workspace choice is reviewed', async () => {
   state.draft.confirmed = false

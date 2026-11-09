@@ -25,6 +25,7 @@ export type ToggleKey =
   | 'keepAwake'
   | 'fontSmoothing'
   | 'reduceMotion'
+  | 'threadRowBranches'
 
 export interface DraftProps {
   draft: AppPreferences

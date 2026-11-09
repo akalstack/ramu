@@ -29,8 +29,6 @@ import {
   SquarePen,
   Archive,
   Files,
-  History,
-  Folders,
   GitBranch,
   GitPullRequest,
   MessageCircle,
@@ -91,7 +89,7 @@ import { useGitChangeCount } from './git/useGitChangeCount'
 import { CommitPushButton } from './git/CommitPushButton'
 import { CreateEntryDialog } from './workspace/CreateEntryDialog'
 import { AddProjectDialog } from './workspace/AddProjectDialog'
-import { HomePage, NewTask } from './NewTask'
+import { HomePage, NewThread } from './NewThread'
 import { BootScreen, Wordmark } from './Brand'
 import { paneFadeIn } from './workspace/paneMotion'
 import { ComputerSwitcher, useComputers } from './workspace/computers'
@@ -177,7 +175,7 @@ function Shell() {
       'sidebar',
       () => !!document.querySelector('.shell.no-sidebar'),
     )
-  const { preferences, save } = useAppSettings()
+  const { preferences } = useAppSettings()
   // The sidebar width is shared by every host's window (device-wide); `preferences.sidebarWidth` only seeds it.
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth(preferences.sidebarWidth)
   const currentSidebarWidth = useRef(sidebarWidth)
@@ -760,24 +758,6 @@ function Shell() {
                       <Kbd className="hidden @min-[230px]:inline-flex">{formatKeys('mod+n')}</Kbd>
                     </Button>
                     <Button
-                      variant="secondary"
-                      className={`ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center sidebar-mode${preferences.recentChatMode ? ' active' : ''}`}
-                      aria-pressed={preferences.recentChatMode}
-                      aria-label={
-                        preferences.recentChatMode
-                          ? t('Group threads by project')
-                          : t('Show threads by recent activity')
-                      }
-                      title={
-                        preferences.recentChatMode
-                          ? t('Group threads by project')
-                          : t('Show threads by recent activity')
-                      }
-                      onClick={() => void save({ ...preferences, recentChatMode: !preferences.recentChatMode })}
-                    >
-                      {preferences.recentChatMode ? <Folders size={16} /> : <History size={16} />}
-                    </Button>
-                    <Button
                       variant="ghost"
                       size="icon-sm"
                       className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center sidebar-search"
@@ -823,7 +803,7 @@ function Shell() {
                 />
               )}
               {startProject && !panes.has(startContext!) && (
-                <NewTask projectId={startProject} onProjectChange={(id) => ws.newTask(id)} />
+                <NewThread projectId={startProject} onProjectChange={(id) => ws.newTask(id)} />
               )}
 
               {[...panes]

@@ -1,6 +1,7 @@
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
 import { collapseScheduleRuns } from '@ramu/shared/chat/scheduleRuns'
-import type { Task } from '@ramu/shared/types'
+import { NO_PROJECT, type Project, type Task } from '@ramu/shared/types'
+import { t } from '../../i18n'
 
 /** Done threads gather across projects, including pinned and projectless threads. */
 export function sidebarThreads(tasks: Task[]) {
@@ -10,6 +11,10 @@ export function sidebarThreads(tasks: Task[]) {
     done: visible.filter((task) => task.doneAt).sort((a, b) => b.doneAt! - a.doneAt!),
   }
 }
+
+/** The project a row names in a list across projects; a thread outside any project says so rather than naming none. */
+export const threadProjectName = (projects: Project[], projectId: string) =>
+  projectId === NO_PROJECT ? t('No project') : projects.find((project) => project.id === projectId)?.name
 
 /** The window's own host keeps its plain keys, so a person's saved tree survives; other hosts are namespaced. */
 export const sidebarTreeKey = (host: string, own: string, key: string) => (host === own ? key : `host:${host}:${key}`)

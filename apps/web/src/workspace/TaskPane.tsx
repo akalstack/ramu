@@ -51,7 +51,7 @@ import { DiffView } from '../views/DiffView'
 import { FileView } from '../views/FileView'
 import { BrowserView } from '../views/BrowserView'
 import { TerminalPanel } from './TerminalPanel'
-import { NewTask } from '../NewTask'
+import { NewThread } from '../NewThread'
 import { FILE_DRAG_TYPE } from '../composer/ComposerSuggestions'
 import { beginDrag, setActiveDrag, TAB_DRAG_TYPE, TERMINAL_DRAG_TYPE, useActiveDrag } from '../lib/dragState'
 import { useAppSettings } from '../settings/AppSettings'
@@ -289,7 +289,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
             style={{ display: 'flex' }}
           >
             {(showLauncherMain || (editorView && !chatView)) && isWorkspaceCtx(taskId) && (
-              <NewTask projectId={project?.id ?? ''} onProjectChange={(id) => ws.newTask(id)} feed={!editorView} />
+              <NewThread projectId={project?.id ?? ''} onProjectChange={(id) => ws.newTask(id)} feed={!editorView} />
             )}
             {sessionsError && !chatView && (
               <p role="alert" className="p-4 text-bad">

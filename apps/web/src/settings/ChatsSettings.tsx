@@ -98,6 +98,28 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
         title="Keep working while asking questions"
         description="Let the agent continue independent work while it waits for your answer. Applies when a thread starts or restarts."
       />
+      <SettingsGroupTitle>{t('Sidebar')}</SettingsGroupTitle>
+      <SettingsRow setting="recentChatMode">
+        <SettingsLabel
+          title={t('Sidebar shows')}
+          help={t('Projects groups threads under their project. Recent threads lists every thread by latest activity.')}
+        />
+        <Dropdown
+          label={t('Sidebar shows')}
+          value={draft.recentChatMode ? 'recent' : 'projects'}
+          options={[
+            { value: 'projects', label: t('Projects') },
+            { value: 'recent', label: t('Recent threads') },
+          ]}
+          onChange={(value) => onChange({ ...draft, recentChatMode: value === 'recent' })}
+        />
+      </SettingsRow>
+      <ToggleRow
+        {...toggleProps}
+        setting="threadRowBranches"
+        title="Show branches in projects"
+        description="Threads under a project get a second line with the branch their work lands on. Recent threads always show it."
+      />
       <SettingsGroupTitle>{t('Thread history')}</SettingsGroupTitle>
       <SettingsRow setting="recentChats">
         <SettingsLabel

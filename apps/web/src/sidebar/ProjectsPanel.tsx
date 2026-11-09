@@ -17,7 +17,7 @@ import { ProjectGroup } from './projects/ProjectGroup'
 import { SectionHead } from './projects/SectionHead'
 import { TaskRow } from './projects/TaskRow'
 import { BulkThreadActionsContext, ThreadSelectionBar, useBulkThreadActions } from './projects/ThreadSelectionBar'
-import { sidebarThreads } from './projects/threadLists'
+import { sidebarThreads, threadProjectName } from './projects/threadLists'
 import { useSidebarExpansion } from './projects/sidebarExpansion'
 import { EMBEDDED_THREAD_LIMIT, ThreadPreviewList, useThreadPreview } from './projects/ThreadPreviewList'
 
@@ -44,7 +44,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
     embedded ? Math.min(preferences.recentChats, EMBEDDED_THREAD_LIMIT) : Infinity,
     ws.ui.activeTaskId,
   )
-  // Recent mode: every chat in one list by activity, each led by its project's name.
+  // Recent mode: every chat in one list by activity, each naming its project, under the same identity view as projects.
   const recentMode = preferences.recentChatMode
   const latest = recentMode ? active.filter((t) => !t.pinnedAt).sort((a, b) => b.lastActiveAt - a.lastActiveAt) : []
   const bulk = useBulkThreadActions()
@@ -83,7 +83,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
                   key={task.id}
                   task={task}
                   hidePin
-                  projectName={ws.projects.find((project) => project.id === task.projectId)?.name}
+                  projectName={threadProjectName(ws.projects, task.projectId)}
                 />
               ))}
             </Collapse>
@@ -97,7 +97,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
             onToggle={() => tree.setExpanded('section:projects', !showProjects)}
             controls="projects-list"
           >
-            {!recentMode && identityView.picker}
+            {identityView.picker}
             <Button
               variant="ghost"
               size="icon-xs"
@@ -114,13 +114,13 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
         <Collapse open={showProjects} id="projects-list">
           {recentMode && (
             <div className="flex flex-col gap-0.5">
-              {latest.map((task) => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  projectName={ws.projects.find((project) => project.id === task.projectId)?.name}
-                />
-              ))}
+              {identityView.arrange(
+                latest,
+                (task) => task.projectId,
+                (task) => (
+                  <TaskRow key={task.id} task={task} projectName={threadProjectName(ws.projects, task.projectId)} />
+                ),
+              )}
             </div>
           )}
           {!recentMode && ws.projects.length === 0 && (
@@ -141,9 +141,13 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
           {!recentMode && (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={dropProject}>
               <SortableContext items={projectIds} strategy={verticalListSortingStrategy}>
-                {identityView.arrange(ws.projects, (p) => (
-                  <ProjectGroup key={p.id} project={p} previewLimit={embedded ? EMBEDDED_THREAD_LIMIT : undefined} />
-                ))}
+                {identityView.arrange(
+                  ws.projects,
+                  (p) => p.id,
+                  (p) => (
+                    <ProjectGroup key={p.id} project={p} previewLimit={embedded ? EMBEDDED_THREAD_LIMIT : undefined} />
+                  ),
+                )}
               </SortableContext>
             </DndContext>
           )}
@@ -184,11 +188,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
             />
             <Collapse open={showDone} id="done-chats" className="task-list flex flex-col gap-0.5">
               {done.map((task) => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  projectName={ws.projects.find((project) => project.id === task.projectId)?.name}
-                />
+                <TaskRow key={task.id} task={task} projectName={threadProjectName(ws.projects, task.projectId)} />
               ))}
             </Collapse>
           </>
