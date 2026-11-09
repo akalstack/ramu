@@ -343,8 +343,9 @@ export const AgentView = memo(function AgentView({
   const prepareLimitRetry = useCallback(() => prepareRetry.current(), [])
   const limitRetry = useLimitRetry(view.sessionId, providerWait, reportError, prepareLimitRetry)
   const runningTasks = helperSelection.selected.filter(helperActive)
-  // One list of what works beside the main agent: its teammates, then running sub-agents and background commands.
-  const trayAgents = [...teammates, ...runningTasks, ...commands].filter(
+  // One list of the agents working beside the main agent: its teammates, then running sub-agents. Commands the agent
+  // moved to the background are processes, so they are listed with the background terminals instead.
+  const trayAgents = [...teammates, ...runningTasks].filter(
     (task, index, all) => all.findIndex((other) => other.agentId === task.agentId) === index,
   )
   const act = async (fn: () => Promise<unknown>, propagate = false) => {
@@ -980,6 +981,7 @@ export const AgentView = memo(function AgentView({
               />
               {(hostOffline ||
                 backgroundTerminals.terminals.length > 0 ||
+                commands.length > 0 ||
                 threadServers.servers.length > 0 ||
                 browserActivity.tabs.length > 0 ||
                 !!computerActivity.session ||
@@ -1019,8 +1021,14 @@ export const AgentView = memo(function AgentView({
                       <ComputerActivity state={computerActivity} />
                     )}
                     {threadServers.servers.length > 0 && <ThreadServersSection state={threadServers} />}
-                    {backgroundTerminals.terminals.length > 0 && (
-                      <BackgroundTerminalsSection state={backgroundTerminals} />
+                    {(backgroundTerminals.terminals.length > 0 || commands.length > 0) && (
+                      <BackgroundTerminalsSection
+                        state={backgroundTerminals}
+                        commands={commands}
+                        readOnly={viewOnly}
+                        onOpenCommand={(task) => setOpenAgent(task.agentId)}
+                        onStopCommand={stopTask}
+                      />
                     )}
                     {liveGoal && (
                       <GoalBar
@@ -1226,6 +1234,7 @@ export const AgentView = memo(function AgentView({
           {openAgent && (
             <AgentTaskPanel
               tasks={tasks}
+              commands={commands}
               selectedIds={helperSelection.selected.map((task) => task.agentId)}
               openId={openAgent}
               events={events}

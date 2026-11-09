@@ -52,3 +52,21 @@ test('mobile quick commit does not auto-stage unresolved conflicts', async () =>
     false,
   )
 })
+
+test('mobile quick commit on the default branch commits where the person chose', async () => {
+  const { calls, invoke } = host([mixed[2]])
+  await commitAndPush(invoke, chat, 'repo', async () => ({ expectedBranch: 'main', autoBranch: true }))
+  assert.deepEqual(
+    calls.find(([method]) => method === 'git.commit'),
+    ['git.commit', 'task', 'repo', 'All edits', 'fingerprint', undefined, { expectedBranch: 'main', autoBranch: true }],
+  )
+})
+
+test('mobile quick commit cancelled at the branch question changes nothing', async () => {
+  const { calls, invoke } = host([mixed[2]])
+  assert.equal(await commitAndPush(invoke, chat, 'repo', async () => null), null)
+  assert.deepEqual(
+    calls.map(([method]) => method),
+    ['git.status'],
+  )
+})

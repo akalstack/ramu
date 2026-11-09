@@ -5,6 +5,8 @@ import { translate } from '@ramu/shared/i18n'
 import { TerminalOutputBuffer, unseenOutput, type TerminalChunk } from '@ramu/shared/workspace/terminalOutput'
 import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
+import { providerCommands } from '../runtime/threadActivity'
+import { HelperDetails } from './Helpers'
 import { font, space } from '../theme'
 import { Button, Card, Divider, Row, Sheet, T } from './ui'
 import TerminalView from './TerminalView'
@@ -35,6 +37,10 @@ export function BackgroundTerminals({
 }) {
   const store = useStore()
   const { height } = useWindowDimensions()
+  const commands = providerCommands(chat)
+  // A command the provider runs opens in the helper sheet, which shows its output and stops it through the agent.
+  const [commandId, setCommandId] = useState<string | null>(null)
+  const openCommand = commands.find((task) => task.agentId === commandId)
   const hostId = chat.computerId,
     taskId = chat.taskId,
     scope = `${hostId}:${taskId}`
@@ -190,7 +196,7 @@ export function BackgroundTerminals({
   useEffect(() => {
     if (!ready) return
     if (selected && !rows.some((row) => row.id === selected)) setSelection(null)
-    if (open && !rows.length) onClose()
+    if (open && !rows.length && !commands.length) onClose()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the host's list changes
   }, [ready, rows, selected, open])
   const awaited = rows.find((row) => row.agentWaiting)
@@ -266,14 +272,14 @@ export function BackgroundTerminals({
       : 'loading'
   return (
     <>
-      {!!rows.length && (
+      {!!(rows.length + commands.length) && (
         <ActivityPill
           icon={SquareTerminal}
           // While the agent waits on a command, the pill says which one, so an idle-looking turn has a reason on screen.
           label={
             awaited
               ? t('Waiting on {0}', { 0: clipCommand(awaited.command) })
-              : t('{0} background terminals', { 0: rows.length })
+              : t('{0} background terminals', { 0: rows.length + commands.length })
           }
           accessibilityLabel={t('Background terminals')}
           tone={awaited ? 'attention' : 'quiet'}
@@ -349,7 +355,7 @@ export function BackgroundTerminals({
             </>
           ) : (
             <>
-              {status === 'ready' && !rows.length && (
+              {status === 'ready' && !rows.length && !commands.length && (
                 <T tone="muted">{t('No tracked background commands in this thread.')}</T>
               )}
               {rows.length ? (
@@ -377,10 +383,38 @@ export function BackgroundTerminals({
                   ))}
                 </Card>
               ) : null}
+              {commands.length ? (
+                <Card>
+                  {commands.map((task, index) => (
+                    <View key={task.agentId}>
+                      {index ? <Divider inset={space.l} /> : null}
+                      <Row
+                        accessibilityRole="button"
+                        accessibilityLabel={`${task.name} · ${t('Running')} · ${t('Moved to the background')}`}
+                        onPress={() => {
+                          onClose()
+                          // iOS presents the next sheet only once this one has gone.
+                          setTimeout(() => setCommandId(task.agentId), 300)
+                        }}
+                      >
+                        <View style={{ flex: 1, gap: space.xs }}>
+                          <T mono numberOfLines={2}>
+                            {task.name}
+                          </T>
+                          <T size={font.caption} tone="muted">
+                            {t('Running')} · {t('Moved to the background')}
+                          </T>
+                        </View>
+                      </Row>
+                    </View>
+                  ))}
+                </Card>
+              ) : null}
             </>
           )}
         </View>
       </Sheet>
+      {openCommand ? <HelperDetails task={openCommand} chat={chat} onClose={() => setCommandId(null)} /> : null}
     </>
   )
 }

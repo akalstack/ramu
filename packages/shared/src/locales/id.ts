@@ -334,6 +334,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Or enter another address': 'Atau masukkan alamat lain',
   'Showing the last result; the host is not reachable.': 'Menampilkan hasil terakhir; host tidak dapat dijangkau.',
   'Update Ramu': 'Perbarui Ramu',
+  'Moved to the background': 'Dipindahkan ke latar belakang',
   '{0} runs an older Ramu. Update Ramu there to use this.': '{0} memakai Ramu versi lama. Perbarui Ramu di sana untuk memakai ini.',
   'Change executable path': 'Ubah path executable',
   'Compatibility details': 'Detail kompatibilitas',
@@ -3923,6 +3924,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Restarting…': 'Memulai ulang…',
   'Close background activity': 'Tutup aktivitas latar belakang',
   'Stop {0}': 'Hentikan {0}',
+  '{0} servers': '{0} server',
+  'What this thread’s agent, terminals and commands are listening on. Open one in the thread’s browser.':
+    'Yang didengarkan agen, terminal, dan perintah thread ini. Buka salah satunya di browser thread.',
+  'Nothing in this thread is listening now.': 'Tidak ada yang mendengarkan di thread ini sekarang.',
   'Stopping…': 'Menghentikan…',
   'Background tasks will appear here.': 'Tugas latar belakang akan muncul di sini.',
   'Activity will appear when this host reconnects.': 'Aktivitas akan muncul saat host ini tersambung kembali.',

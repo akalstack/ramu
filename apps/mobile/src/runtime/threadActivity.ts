@@ -22,6 +22,13 @@ export function normalizeHelperGroups(items: TranscriptItem[]): TranscriptItem[]
     ]
   })
 }
+/**
+ * Commands the provider itself moved to the background, shaped like a helper so the helper sheet can show their output
+ * and stop them. They are processes, not agents, so they are listed with the background terminals.
+ */
+export const providerCommands = (chat: Chat) =>
+  (chat.commands ?? []).map((task) => ({ ...task, id: task.agentId, type: task.taskType ?? '' }))
+
 export function mobileThreadActivity(chat: Chat, connected: boolean) {
   const lastUser = chat.items.findLastIndex((item) => item.kind === 'user')
   const groups = chat.items.flatMap((item, index) => (item.kind === 'agents' ? [{ item, index }] : []))
@@ -31,8 +38,6 @@ export function mobileThreadActivity(chat: Chat, connected: boolean) {
       .flatMap(({ item, index }) =>
         item.agents.filter((task) => (index >= lastUser && lastUser >= 0 && !item.earlier) || helperActive(task)),
       ),
-    // Background commands sit with the helpers, as on the desktop, so a running one can be found and stopped.
-    ...(chat.commands ?? []).map((task) => ({ ...task, id: task.agentId, type: task.taskType ?? '' })),
   ]
   const advisors = groups.filter(({ item }) => item.advisor).flatMap(({ item }) => item.agents)
   const requests = chat.items.filter(

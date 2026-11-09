@@ -4,6 +4,7 @@ import type {
   PullRequestGroup,
   PullRequestStage,
   PullRequestSummary,
+  PullRequestThread,
   RepositoryPullRequests,
 } from './types'
 
@@ -371,4 +372,18 @@ export function pullRequestNextStep(
       if (pr.mergeable === 'behind') return 'update-branch'
       return mine ? 'wait-review' : 'review'
   }
+}
+
+export type ReviewThreadFilter = 'open' | 'resolved' | 'all'
+
+/** The review threads a filter shows, in the order picked: by their latest comment, as GitHub's Overview sorts them. */
+export function shownReviewThreads(
+  threads: readonly PullRequestThread[],
+  filter: ReviewThreadFilter,
+  order: 'newest' | 'oldest',
+): PullRequestThread[] {
+  const last = (entry: PullRequestThread) => entry.comments.at(-1)?.createdAt ?? 0
+  return threads
+    .filter((entry) => (filter === 'all' ? true : filter === 'open' ? !entry.resolved : entry.resolved))
+    .sort((a, b) => (order === 'newest' ? last(b) - last(a) : last(a) - last(b)))
 }

@@ -12,7 +12,20 @@ import { BrowserViewer } from './BrowserViewer'
 import { ViewerHeader, ViewerScreen } from './ViewerChrome'
 
 /** Observes the host's metadata. Opening a website here never transfers its sign-in or local address to the phone. */
-export function BrowserActivity({ chat, open, onClose }: { chat: Chat; open: boolean; onClose(): void }) {
+export function BrowserActivity({
+  chat,
+  open,
+  onClose,
+  openUrl,
+  onOpened,
+}: {
+  chat: Chat
+  open: boolean
+  onClose(): void
+  /** A page to open in the host's browser for this thread when the viewer shows. */
+  openUrl?: string | null
+  onOpened?(): void
+}) {
   const store = useStore()
   const t = (key: string) => translate(store.language, key)
   const [hosted, setHosted] = useState(false)
@@ -72,7 +85,7 @@ export function BrowserActivity({ chat, open, onClose }: { chat: Chat; open: boo
   return (
     <ViewerScreen open={open} onClose={onClose}>
       {open && hosted ? (
-        <BrowserViewer chat={chat} hostManaged={hostManaged} onClose={onClose} />
+        <BrowserViewer chat={chat} hostManaged={hostManaged} onClose={onClose} openUrl={openUrl} onOpened={onOpened} />
       ) : (
         <View style={{ flex: 1 }}>
           <ViewerHeader title={t('Browser')} subtitle={host} closeLabel={t('Close browser')} onClose={onClose} />

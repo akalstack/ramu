@@ -137,14 +137,34 @@ export function CurrentPullRequest({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the store's invoke is stable for a host
   }, [computerId, taskId, repoId])
+  const openUrl = status?.pullRequest?.state === 'open' ? status.pullRequest.url : null
   useEffect(() => {
+    // Read again when the branch changes, since that changes which pull request it has.
     void read().catch(() => setStatus(null))
-    // Drafts arrive while the agent works; the host announces them with the thread lists.
-    return store.subscribe(computerId, (...[channel]) => {
-      if (channel === 'workspace:changed') void read().catch(() => {})
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-reads when the branch changes
   }, [read, branch])
+  useEffect(() => {
+    // Drafts and the watch change while the agent works, and an agent may open the pull request; the host announces
+    // them with the thread lists. An open pull request reads only its drafts and watch again: every workspace change
+    // re-reading it would spend the service's rate limit.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const off = store.subscribe(computerId, (...[channel]) => {
+      if (channel !== 'workspace:changed') return
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        if (!openUrl) return void read().catch(() => {})
+        void store.invoke(computerId, 'forge.drafts', openUrl).then(
+          (batch) => setDraftsReady(!!batch),
+          () => {},
+        )
+        void store.invoke(computerId, 'forge.watchStatus', taskId, repoId, openUrl).then(setWatch, () => {})
+      }, 400)
+    })
+    return () => {
+      clearTimeout(timer)
+      off()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the store's invoke is stable for a host
+  }, [read, computerId, taskId, repoId, openUrl])
 
   const pr = status?.pullRequest ?? null
   const note = status ? unavailableText(status.availability) : null

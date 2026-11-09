@@ -31,7 +31,6 @@ import type {
   PullRequestAction,
   PullRequestFeedbackKind,
   PullRequestSummary,
-  PullRequestThread,
   ViewDescriptor,
 } from '@ramu/shared/types'
 import {
@@ -40,6 +39,7 @@ import {
   pullRequestNextStep,
   pullRequestRef,
   pullRequestStage,
+  shownReviewThreads,
   type PullRequestNextStep,
 } from '@ramu/shared/pullRequests'
 import { PullRequestReadiness } from './PullRequestReadiness'
@@ -153,14 +153,17 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
     window.dispatchEvent(new Event('ramu:git-updated'))
   }
 
+  /** Whether the work went through, so a dialog that started it stays open on its error instead of losing its input. */
   const run = async (label: string, work: () => Promise<unknown>) => {
     setBusy(label)
     setError(null)
     try {
       await work()
       await refresh()
+      return true
     } catch (e) {
       setError(errorText(e))
+      return false
     } finally {
       setBusy(null)
     }
@@ -271,10 +274,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
         : openThread('work'))
     }
   }
-  const lastActivity = (entry: PullRequestThread) => entry.comments.at(-1)?.createdAt ?? 0
-  const shownThreads = (threads.data ?? [])
-    .filter((entry) => (threadFilter === 'all' ? true : threadFilter === 'open' ? !entry.resolved : entry.resolved))
-    .sort((a, b) => (threadOrder === 'newest' ? lastActivity(b) - lastActivity(a) : lastActivity(a) - lastActivity(b)))
+  const shownThreads = shownReviewThreads(threads.data ?? [], threadFilter, threadOrder)
   const thread = linked.at(-1)
 
   return (
@@ -418,7 +418,10 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
                 pr,
                 onDraft: () => void act({ kind: 'draft' }),
                 onRerun: () => void write('rerun-checks', { kind: 'rerun-checks' }),
-                onPeople: setPeople,
+                onPeople: (kind) => {
+                  setError(null)
+                  setPeople(kind)
+                },
               })}
             />
           )}
@@ -626,7 +629,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
               people === 'reviewers'
                 ? { kind: 'reviewers', add, remove }
                 : { kind: 'update', update: { [people]: { add, remove } } },
-            ).then(() => setPeople(null))
+            ).then((done) => done && setPeople(null))
           }
         />
       )}

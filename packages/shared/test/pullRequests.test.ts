@@ -10,6 +10,7 @@ import {
   outsideRepository,
   pullRequestGlyph,
   pullRequestRows,
+  shownReviewThreads,
   pullRequestRef,
   pullRequestStage,
   sortPullRequestRows,
@@ -289,5 +290,29 @@ describe('repositories in no project', () => {
     for (const bad of ['repo-1', 'outside:friend', 'outside:friend/site/extra', 'outside:../site', 'outside:friend/..'])
       expect(outsideRepository(bad)).toBeNull()
     expect(outsideRepository(`outside:${'a'.repeat(40)}/site`)).toBeNull()
+  })
+})
+
+describe('shownReviewThreads', () => {
+  const thread = (id: string, resolved: boolean, at: number) => ({
+    id,
+    path: null,
+    line: null,
+    outdated: false,
+    resolved,
+    resolvable: true,
+    comments: [{ id: `${id}c`, author: null, bot: false, trusted: true, body: '', createdAt: at }],
+  })
+  const threads = [thread('a', false, 1), thread('b', true, 3), thread('c', false, 2)]
+
+  it('shows unresolved, resolved or every thread, by its latest comment', () => {
+    expect(shownReviewThreads(threads, 'open', 'newest').map((entry) => entry.id)).toEqual(['c', 'a'])
+    expect(shownReviewThreads(threads, 'resolved', 'newest').map((entry) => entry.id)).toEqual(['b'])
+    expect(shownReviewThreads(threads, 'all', 'oldest').map((entry) => entry.id)).toEqual(['a', 'c', 'b'])
+  })
+
+  it('leaves the list it was given in its order', () => {
+    shownReviewThreads(threads, 'all', 'newest')
+    expect(threads.map((entry) => entry.id)).toEqual(['a', 'b', 'c'])
   })
 })

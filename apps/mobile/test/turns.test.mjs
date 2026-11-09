@@ -341,15 +341,17 @@ test('a thread that stopped on an error can continue from it, past its end marke
   assert.equal(endedOnError(later, later.find((row) => row.kind === 'error').id), false)
 })
 
-test("the phone lists the agent's running background commands with its active agents", async () => {
-  const { mobileThreadActivity } = await import('../src/runtime/threadActivity.ts')
+test("the agent's background commands are processes, so the phone lists them with background terminals, not agents", async () => {
+  const { mobileThreadActivity, providerCommands } = await import('../src/runtime/threadActivity.ts')
   const command = { agentId: 'bash-1', name: 'pnpm dev', status: 'running', taskType: 'local_bash', background: true }
-  const activity = mobileThreadActivity({ items: [], queue: [], status: 'idle', commands: [command] }, true)
+  const chat = { items: [], queue: [], status: 'idle', commands: [command] }
+  const activity = mobileThreadActivity(chat, true)
+  assert.deepEqual(activity.helpers, [])
+  assert.equal(activity.model.counts.active, 0)
   assert.deepEqual(
-    activity.helpers.map((task) => task.agentId),
-    ['bash-1'],
+    providerCommands(chat).map((task) => [task.id, task.type]),
+    [['bash-1', 'local_bash']],
   )
-  assert.equal(activity.model.counts.active, 1)
 })
 
 test('a message to a teammate heads its own turn, so the lead’s answer above it stays out of Worked for', () => {

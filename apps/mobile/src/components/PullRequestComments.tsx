@@ -1,16 +1,51 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Pressable, TextInput, View } from 'react-native'
-import { Trash2 } from 'lucide-react-native'
+import { Pencil, Trash2 } from 'lucide-react-native'
 import type { ForgeService, PullRequestConversationComment, PullRequestWrite } from '@ramu/shared/types'
 import { PULL_REQUEST_REACTIONS, supportsPullRequest } from '@ramu/shared/pullRequestSupport'
 import { REACTION_EMOJI } from '@ramu/shared/pullRequestWriteText'
 import { font, radius, space, useTheme } from '../theme'
 import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
-import { Markdown } from './Markdown'
+import { PullRequestMarkdown } from './PullRequestMarkdown'
 import { Button, Card, IconButton, Sheet, T } from './ui'
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
+
+/** The longest comment the host accepts, so a field never holds more than can be sent. */
+const COMMENT_MAX = 20_000
+
+/** A comment's text field, as the new comment and an edit share it. */
+function CommentField(props: {
+  value: string
+  onChangeText: (text: string) => void
+  label: string
+  placeholder?: string
+}) {
+  const { c } = useTheme()
+  return (
+    <TextInput
+      value={props.value}
+      onChangeText={props.onChangeText}
+      multiline
+      maxLength={COMMENT_MAX}
+      placeholder={props.placeholder}
+      placeholderTextColor={c.placeholder}
+      accessibilityLabel={props.label}
+      style={{
+        color: c.text,
+        backgroundColor: c.fill,
+        borderRadius: radius.s,
+        paddingHorizontal: space.m,
+        paddingVertical: space.s,
+        fontSize: font.control,
+        minHeight: 72,
+        maxHeight: 240,
+        textAlignVertical: 'top',
+      }}
+    />
+  )
+}
 
 /** The person's own action on a pull request, through the same call an agent's card posts with. */
 export function usePullRequestWrite(computerId: string, taskId: string, repoId: string, url: string) {
@@ -95,10 +130,10 @@ export function PullRequestComments({
 }) {
   const say = useSay()
   const store = useStore()
-  const { c } = useTheme()
   const [comments, setComments] = useState<PullRequestConversationComment[] | null>(null)
   const [readError, setReadError] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
+  const [editing, setEditing] = useState<{ id: string; body: string } | null>(null)
   const { write, busy, error } = usePullRequestWrite(computerId, taskId, repoId, url)
   const read = useCallback(
     () =>
@@ -131,9 +166,25 @@ export function PullRequestComments({
       {comments?.map((comment) => (
         <Card key={comment.id} style={{ padding: space.m, gap: space.s }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
-            <T size={font.control} weight="600" style={{ flex: 1 }}>
+            <T size={font.control} weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>
               {comment.author ?? say('Someone')}
             </T>
+            {comment.bot ? (
+              <T size={font.caption} tone="muted">
+                {say('bot')}
+              </T>
+            ) : null}
+            <View style={{ flex: 1 }} />
+            {canWrite && comment.own && supportsPullRequest(service, 'edit-comment') ? (
+              <IconButton
+                icon={Pencil}
+                label={say('Edit comment')}
+                tone="muted"
+                size={36}
+                disabled={busy}
+                onPress={() => setEditing({ id: comment.id, body: comment.body })}
+              />
+            ) : null}
             {canWrite && comment.own && supportsPullRequest(service, 'delete-comment') ? (
               <IconButton
                 icon={Trash2}
@@ -145,7 +196,36 @@ export function PullRequestComments({
               />
             ) : null}
           </View>
-          <Markdown text={comment.body} />
+          {editing?.id === comment.id ? (
+            <View style={{ gap: space.s }}>
+              <CommentField
+                value={editing.body}
+                onChangeText={(body) => setEditing({ id: comment.id, body })}
+                label={say('Edit comment')}
+              />
+              <View style={{ flexDirection: 'row', gap: space.s }}>
+                <Button
+                  kind="secondary"
+                  title={say('Cancel')}
+                  disabled={busy}
+                  style={{ flex: 1 }}
+                  onPress={() => setEditing(null)}
+                />
+                <Button
+                  title={say('Save')}
+                  disabled={busy || !editing.body.trim()}
+                  style={{ flex: 1 }}
+                  onPress={() =>
+                    void act({ kind: 'edit-comment', commentId: comment.id, body: editing.body }).then(
+                      (done) => done && setEditing(null),
+                    )
+                  }
+                />
+              </View>
+            </View>
+          ) : (
+            <PullRequestMarkdown text={comment.body} />
+          )}
           {canWrite ? (
             <ReactionRow
               service={service}
@@ -157,23 +237,11 @@ export function PullRequestComments({
       ))}
       {canWrite && open ? (
         <View style={{ gap: space.s }}>
-          <TextInput
+          <CommentField
             value={draft}
             onChangeText={setDraft}
-            multiline
+            label={say('Comment on this pull request')}
             placeholder={say('Comment on this pull request. Markdown works.')}
-            placeholderTextColor={c.placeholder}
-            accessibilityLabel={say('Comment on this pull request')}
-            style={{
-              color: c.text,
-              backgroundColor: c.fill,
-              borderRadius: radius.s,
-              paddingHorizontal: space.m,
-              paddingVertical: space.s,
-              fontSize: font.control,
-              minHeight: 72,
-              textAlignVertical: 'top',
-            }}
           />
           <Button
             title={say('Comment')}

@@ -1,6 +1,7 @@
 import { translate } from '@ramu/shared/i18n'
 import { BottomSearch } from '../../../components/BottomSearch'
 import { readSyncConfirmation } from '@ramu/shared/protectedBranch'
+import { chooseCommitBranch } from '../../../runtime/commitBranchPrompt'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Alert, Pressable, TextInput, View } from 'react-native'
 import { useKeyboardInset } from '../../../components/Keyboard'
@@ -111,6 +112,9 @@ interface FileState extends ChangedFile {
 }
 
 /** `ramu/` plus a short slug of the commit subject; a subject with nothing usable in it gets a random suffix. */
+/** Returned by work the person cancelled part-way, so no "done" toast follows. */
+const CANCELLED = Symbol('cancelled')
+
 function newBranchName(subject: string) {
   const slug = subject
     .toLowerCase()
@@ -477,9 +481,9 @@ export default function SourceControl() {
     running.current = true
     setBusy(true)
     try {
-      await fn()
+      const result = await fn()
       await read()
-      say(done)
+      if (result !== CANCELLED) say(done)
     } catch (error) {
       await read().catch(() => {})
       notify(error instanceof Error ? error.message : String(error), true)
@@ -629,11 +633,24 @@ export default function SourceControl() {
     setMessage(result.message)
     return result
   }
+  /** Commit & Push or Sync on the default branch asks first; null when the person cancels. */
+  const chooseBranch = () =>
+    chat && binding && (action === 'push' || action === 'sync')
+      ? chooseCommitBranch(
+          store.invoke,
+          { computerId: chat.computerId, taskId: chat.taskId, repoId: binding.repoId },
+          action,
+          store.appPreferences[chat.computerId]?.defaultCommitBranch,
+          tr,
+        )
+      : Promise.resolve(undefined)
   const commit = () =>
     void run(async () => {
       const blocked = commitBlock(action, gates, changeCount, !!head)
       if (blocked) throw new Error(tr(blocked))
       if (!chat || !binding) throw new Error('Select a repository first.')
+      const onBranch = await chooseBranch()
+      if (onBranch === null) return CANCELLED
       if (!staged.length && unstaged.length)
         await call(
           'git.stage',
@@ -656,7 +673,7 @@ export default function SourceControl() {
               expectedBranch: branch === '(detached)' ? null : branch,
               newBranch: newBranchName(subject),
             }
-          : undefined,
+          : onBranch,
       )
       setMessage('')
       setDraft(null)

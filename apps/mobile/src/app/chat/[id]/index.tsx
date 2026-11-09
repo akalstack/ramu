@@ -65,6 +65,7 @@ import { editFromHere } from '../../../runtime/editFromHere'
 import { looseInvoke } from '../../../runtime/settingsModel'
 import { formatChatDate, needsChatDate } from '@ramu/shared/chat/chatDates'
 import { commitAndPush, pushBranch } from '../../../runtime/gitQuick'
+import { chooseCommitBranch } from '../../../runtime/commitBranchPrompt'
 import { STANDALONE } from '../../../runtime/types'
 import { Header, HeaderButton, HeaderMenu, Screen, PageLegendList } from '../../../components/Screen'
 import type { LegendListRef } from '@legendapp/list/react-native'
@@ -74,6 +75,7 @@ import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { ThreadActivity } from '../../../components/ThreadActivity'
 import { WorkingLine } from '../../../components/WorkingLine'
 import { BackgroundTerminals } from '../../../components/BackgroundTerminals'
+import { ThreadServers } from '../../../components/ThreadServers'
 import { BrowserActivity } from '../../../components/BrowserActivity'
 import { BrowserNotice, useThreadBrowserTabs } from '../../../components/BrowserNotice'
 import { useThreadToolActivity } from '../../../runtime/useThreadToolActivity'
@@ -360,6 +362,9 @@ export default function ChatScreen() {
   const [sheet, setSheet] = useState(false)
   const [usageOpen, setUsageOpen] = useState(false)
   const [tool, setTool] = useState<'browser' | 'computer' | null>(null)
+  // A server from the Servers sheet, opened as a tab in the thread's browser once the viewer is up.
+  const [pageToOpen, setPageToOpen] = useState<string | null>(null)
+  const [serversFor, setServersFor] = useState<string | null>(null)
   const browserTabs = useThreadBrowserTabs(chat)
   const [backgroundFor, setBackgroundFor] = useState<string | null>(null)
   const [actions, setActions] = useState<'closed' | 'menu' | 'rename'>('closed')
@@ -897,11 +902,13 @@ export default function ChatScreen() {
     if (toastTimer.current) clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(undefined), 5000)
   }
-  const act = async (fn: () => Promise<string>) => {
+  /** Runs a header action and says how it went; null means the person cancelled part-way, so nothing is said. */
+  const act = async (fn: () => Promise<string | null>) => {
     if (busy) return
     setBusy(true)
     try {
-      say(await fn())
+      const done = await fn()
+      if (done !== null) say(done)
     } catch (error) {
       say(error instanceof Error ? error.message : String(error))
     } finally {
@@ -944,7 +951,19 @@ export default function ChatScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Commit & push',
-          onPress: () => void act(async () => `Pushed: ${await commitAndPush(store.invoke, chat, live.repoId)}`),
+          onPress: () =>
+            void act(async () => {
+              const message = await commitAndPush(store.invoke, chat, live.repoId, () =>
+                chooseCommitBranch(
+                  store.invoke,
+                  { computerId: chat.computerId, taskId: chat.taskId, repoId: live.repoId },
+                  'push',
+                  store.appPreferences[chat.computerId]?.defaultCommitBranch,
+                  tr,
+                ),
+              )
+              return message === null ? null : `Pushed: ${message}`
+            }),
         },
       ],
     )
@@ -1673,6 +1692,18 @@ export default function ChatScreen() {
                                 : []),
                             ]}
                           >
+                            <ThreadServers
+                              key={`servers:${chat.computerId}:${chat.taskId}`}
+                              chat={chat}
+                              open={serversFor === chat.id}
+                              onOpen={() => setServersFor(chat.id)}
+                              onClose={() => setServersFor((current) => (current === chat.id ? null : current))}
+                              onOpenPage={(url) => {
+                                setPageToOpen(url)
+                                // iOS presents the browser only once the sheet has gone.
+                                setTimeout(() => setTool('browser'), 300)
+                              }}
+                            />
                             <BackgroundTerminals
                               key={`${chat.computerId}:${chat.taskId}`}
                               chat={chat}
@@ -2002,7 +2033,12 @@ export default function ChatScreen() {
         key={`browser:${chat.computerId}:${chat.taskId}`}
         chat={chat}
         open={tool === 'browser'}
-        onClose={() => setTool(null)}
+        onClose={() => {
+          setTool(null)
+          setPageToOpen(null)
+        }}
+        openUrl={pageToOpen}
+        onOpened={() => setPageToOpen(null)}
       />
       <ComputerActivity
         key={`computer:${chat.computerId}:${chat.taskId}`}

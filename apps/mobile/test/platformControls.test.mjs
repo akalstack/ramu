@@ -4633,6 +4633,11 @@ for (const os of ['ios', 'android']) {
       '../runtime/store': { useStore: () => store },
       '@ramu/shared/workspace/terminalOutput': terminalOutput,
       './TerminalView': { default: 'TerminalView' },
+      '../runtime/threadActivity': {
+        providerCommands: (chat) =>
+          (chat.commands ?? []).map((task) => ({ ...task, id: task.agentId, type: task.taskType ?? '' })),
+      },
+      './Helpers': { HelperDetails: 'HelperDetails' },
     })
     const render = () =>
       hooks.render(() =>
@@ -4643,6 +4648,7 @@ for (const os of ['ios', 'android']) {
             computerId: host,
             title: 'Selected task',
             executionState: 'idle',
+            commands: options.commands,
           },
           open,
           onOpen: () => {
@@ -4798,6 +4804,31 @@ for (const os of ['ios', 'android']) {
       f.calls.some(([, method]) => method === 'term.background.stop'),
       false,
     )
+    f.hooks.dispose()
+  })
+  test(`${os} a command the provider moved to the background is a background terminal, and opens with its output`, async () => {
+    const command = {
+      agentId: 'bash-1',
+      toolUseId: 'tool-1',
+      name: 'pnpm test --watch',
+      taskType: 'local_bash',
+      background: true,
+      status: 'running',
+    }
+    const f = managedFixture({ open: false, record: { state: 'exited' }, commands: [command] })
+    f.render()
+    await settle()
+    const pill = find(f.render(), 'ActivityPill')
+    assert.equal(pill.props.label, '1 background terminals')
+    f.setOpen(true)
+    const row = nodes(f.render()).find(
+      (node) => node.type === 'Row' && String(node.props.accessibilityLabel).includes('Moved to the background'),
+    )
+    assert.ok(row, 'the command is listed with the background terminals')
+    row.props.onPress()
+    await new Promise((resolve) => setTimeout(resolve, 320))
+    const details = find(f.render(), 'HelperDetails')
+    assert.equal(details.props.task.agentId, 'bash-1', 'it opens in the sheet that shows its output and stops it')
     f.hooks.dispose()
   })
   test(`${os} rejects stale inspection responses and force confirmations after leaving a host`, async () => {
@@ -9201,3 +9232,123 @@ for (const selected of [true, false]) {
     hooks.dispose()
   })
 }
+
+test('a thread’s servers show as a pill, open in its browser on the host and stop from the phone', async () => {
+  const hooks = hookHarness()
+  const sharedServers = await import('../../../packages/shared/src/servers.ts')
+  const calls = []
+  const say = (text, params = {}) => text.replace(/\{(\w+)\}/g, (_, key) => String(params[key]))
+  let servers = [
+    {
+      taskId: 'task',
+      port: 3000,
+      pid: 41,
+      host: '127.0.0.1',
+      process: 'node',
+      web: true,
+      owner: { kind: 'terminal', id: 't1', name: 'npm run dev' },
+      orphaned: false,
+    },
+    {
+      taskId: 'task',
+      port: 5432,
+      pid: 42,
+      host: '127.0.0.1',
+      process: 'postgres',
+      web: false,
+      owner: { kind: 'agent', id: 'a1' },
+      orphaned: true,
+    },
+  ]
+  let access = 'owner'
+  const store = {
+    language: 'en',
+    computers: [{ id: 'a', name: 'Host A', access: 'owner' }],
+    isOnline: () => true,
+    invoke: async (...args) => {
+      calls.push(args)
+      if (args[1] === 'servers.list') return servers
+      if (args[1] === 'servers.stop') {
+        servers = servers.filter((server) => server.pid !== args[3])
+        return
+      }
+      throw new Error(`Unexpected ${args[1]}`)
+    },
+  }
+  const { ThreadServers } = load(
+    'components/ThreadServers.tsx',
+    'ios',
+    {
+      react: hooks.react,
+      '@ramu/shared/servers': sharedServers,
+      '../i18n': { useSay: () => say },
+      '../runtime/store': { useStore: () => ({ ...store, computers: [{ ...store.computers[0], access }] }) },
+    },
+    { setInterval: () => 1, clearInterval() {} },
+  )
+  let open = false
+  const opened = []
+  const render = () =>
+    hooks.render(() =>
+      ThreadServers({
+        chat: { id: 'a:task', taskId: 'task', computerId: 'a', title: 'Task' },
+        open,
+        onOpen: () => (open = true),
+        onClose: () => (open = false),
+        onOpenPage: (url) => opened.push(url),
+      }),
+    )
+  render()
+  await settle()
+  const pill = find(render(), 'ActivityPill')
+  assert.equal(pill.props.label, '2 servers')
+  pill.props.onPress()
+  const rows = nodes(render()).filter((node) => node.type === 'Row')
+  // A web server opens in the thread's browser on the host; a database is listed but not opened.
+  rows[0].props.onPress()
+  assert.deepEqual(opened, ['http://localhost:3000'])
+  assert.equal(rows[1].props.onPress, undefined)
+  assert.ok(nodes(render()).some((node) => String(node.props?.children).includes('Outlived what started it')))
+  open = true
+  const stop = nodes(render()).find(
+    (node) => node.type === 'Button' && node.props.accessibilityLabel === 'Stop localhost:5432',
+  )
+  stop.props.onPress()
+  await settle()
+  render()
+  await settle()
+  assert.deepEqual(
+    calls.find(([, method]) => method === 'servers.stop'),
+    ['a', 'servers.stop', 'task', 42, 5432],
+  )
+  assert.equal(find(render(), 'ActivityPill').props.label, 'localhost:3000')
+  hooks.dispose()
+  // A view-only device neither reads nor stops a host's servers.
+  const viewer = hookHarness()
+  access = 'viewer'
+  const before = calls.length
+  const { ThreadServers: ViewerServers } = load(
+    'components/ThreadServers.tsx',
+    'ios',
+    {
+      react: viewer.react,
+      '@ramu/shared/servers': sharedServers,
+      '../i18n': { useSay: () => say },
+      '../runtime/store': { useStore: () => ({ ...store, computers: [{ ...store.computers[0], access }] }) },
+    },
+    { setInterval: () => 1, clearInterval() {} },
+  )
+  const tree = viewer.render(() =>
+    ViewerServers({
+      chat: { id: 'a:task', taskId: 'task', computerId: 'a', title: 'Task' },
+      open: false,
+      onOpen() {},
+      onClose() {},
+      onOpenPage() {},
+    }),
+  )
+  await settle()
+  assert.equal(tree, null)
+  assert.equal(calls.length, before)
+  viewer.dispose()
+})

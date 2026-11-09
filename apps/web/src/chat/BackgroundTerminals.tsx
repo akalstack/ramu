@@ -1,6 +1,7 @@
 import { RowButton } from '@/components/row-button'
 import { useEffect, useRef, useState } from 'react'
 import type { BackgroundTerminalInfo } from '@ramu/shared/api'
+import type { AgentTask } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { SquareTerminal } from 'lucide-react'
 import { ComposerTraySection } from '../composer/ComposerTraySection'
@@ -79,8 +80,24 @@ export function useBackgroundTerminals(taskId: string | undefined) {
   return { terminals, stale, error, confirming, setConfirming, stop, open }
 }
 
-/** The thread's running commands as a tray section, shown while there are some, even once the agent is idle. */
-export function BackgroundTerminalsSection({ state }: { state: ReturnType<typeof useBackgroundTerminals> }) {
+/**
+ * The thread's running commands as a tray section, shown while there are some, even once the agent is idle: Ramu's
+ * background terminals, and the commands the provider itself moved to the background (`commands`), which the provider
+ * runs, so they open with their output and stop through the agent.
+ */
+export function BackgroundTerminalsSection({
+  state,
+  commands = [],
+  readOnly = false,
+  onOpenCommand,
+  onStopCommand,
+}: {
+  state: ReturnType<typeof useBackgroundTerminals>
+  commands?: AgentTask[]
+  readOnly?: boolean
+  onOpenCommand?: (task: AgentTask) => void
+  onStopCommand?: (task: AgentTask) => void
+}) {
   useLanguage()
   const { terminals, stale, error, confirming, setConfirming, stop, open } = state
   const stateLabel = (terminal: BackgroundTerminalInfo) => t(terminal.state === 'stopping' ? 'Stopping' : 'Running')
@@ -98,7 +115,7 @@ export function BackgroundTerminalsSection({ state }: { state: ReturnType<typeof
       <ComposerTraySection
         aria-label={t('Background terminals')}
         title={t('Background terminals')}
-        count={terminals.length}
+        count={terminals.length + commands.length}
         icon={<SquareTerminal />}
         actions={
           stale && <span className="text-muted-foreground text-caption">{t('Offline · last-known activity')}</span>
@@ -154,6 +171,35 @@ export function BackgroundTerminalsSection({ state }: { state: ReturnType<typeof
                   onClick={() => setConfirming({ terminal, force: true })}
                 >
                   {t('Force stop')}
+                </Button>
+              )}
+            </li>
+          ))}
+          {commands.map((task) => (
+            <li key={task.agentId} className="flex min-h-8 items-center gap-2 text-control">
+              <RowButton
+                size="sm"
+                stacked
+                className="w-auto flex-1 min-w-0 px-1.5 py-1"
+                title={t('Open output')}
+                onClick={() => onOpenCommand?.(task)}
+              >
+                <code className="w-full truncate text-foreground" title={task.name}>
+                  {task.name}
+                </code>
+                <span className="text-caption text-muted-foreground">
+                  {t('Running')} · {t('Moved to the background')}
+                </span>
+              </RowButton>
+              {onStopCommand && !readOnly && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="min-h-6 px-2 py-0 text-caption"
+                  aria-label={t('Stop {0}', { 0: task.name })}
+                  onClick={() => onStopCommand(task)}
+                >
+                  {t('Stop')}
                 </Button>
               )}
             </li>

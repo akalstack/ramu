@@ -38,6 +38,7 @@ import { UserBubble } from './UserMessage'
 /** One sub-agent's own conversation beside the chat, or the list of all of them. */
 export function AgentTaskPanel({
   tasks,
+  commands,
   selectedIds,
   openId,
   events,
@@ -55,6 +56,8 @@ export function AgentTaskPanel({
   onMessage,
 }: {
   tasks: AgentTask[]
+  /** Commands the agent moved to the background; one opens here with its output, but they are not listed as agents. */
+  commands?: AgentTask[]
   selectedIds?: string[]
   openId: string
   events: AgentEvent[]
@@ -76,7 +79,10 @@ export function AgentTaskPanel({
 }) {
   useLanguage()
   const { offline } = useHostConnection()
-  const task = openId === '*' ? undefined : tasks.find((entry) => entry.agentId === openId)
+  const task =
+    openId === '*'
+      ? undefined
+      : (tasks.find((entry) => entry.agentId === openId) ?? commands?.find((entry) => entry.agentId === openId))
   const [showHistory, setShowHistory] = useState(false)
   const listed = selectedIds
     ? tasks.filter((entry) => selectedIds.includes(entry.agentId))

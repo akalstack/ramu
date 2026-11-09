@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { PullRequestFilesList } from '../../../components/PullRequestFilesList'
 import { Disclosure } from '../../../components/Motion'
-import { Markdown } from '../../../components/Markdown'
+import { PullRequestMarkdown } from '../../../components/PullRequestMarkdown'
 import { ActivityIndicator, Alert, Linking, Pressable, RefreshControl, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
@@ -33,7 +33,9 @@ import {
   pullRequestNextStep,
   pullRequestRef,
   pullRequestStage,
+  shownReviewThreads,
   type PullRequestNextStep,
+  type ReviewThreadFilter,
 } from '@ramu/shared/pullRequests'
 import { font, radius, space, useTheme } from '../../../theme'
 import { useChat, useStore } from '../../../runtime/store'
@@ -42,7 +44,7 @@ import { openPullRequestThread } from '../../../runtime/pullRequestThread'
 import { ago, useSay } from '../../../i18n'
 import { Header, HeaderButton, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
-import { Button, Card, Divider, Segmented, Sheet, T, Toggle } from '../../../components/ui'
+import { Button, Card, Chip, Divider, Segmented, Sheet, T, Toggle } from '../../../components/ui'
 import { ChecksLine, PullRequestGlyph, StageText } from '../../../components/PullRequestParts'
 import { ReviewDrafts } from '../../../components/ReviewDrafts'
 import { PeopleSheet, PullRequestComments, ReactionRow } from '../../../components/PullRequestComments'
@@ -137,6 +139,8 @@ export default function PullRequestScreen() {
   const [revision, setRevision] = useState(0)
   const [notice, setNotice] = useState<string | null>(null)
   const [more, setMore] = useState(false)
+  const [threadFilter, setThreadFilter] = useState<ReviewThreadFilter>('open')
+  const [threadOrder, setThreadOrder] = useState<'newest' | 'oldest'>('newest')
 
   const read = useCallback(
     async (force: boolean) => {
@@ -192,17 +196,23 @@ export default function PullRequestScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the store's invoke is stable for a host
     [computerId, taskId, repoId, url],
   )
-  const readRef = useRef(read)
-  readRef.current = read
   useEffect(() => {
     void read(false)
     if (!computerId) return
-    // Drafts arrive while the agent works; the host announces them with the thread lists.
+    // Drafts arrive while the agent works; the host announces them with the thread lists. Only the drafts are read
+    // again: every workspace change re-reading the pull request would spend the service's rate limit.
     let timer: ReturnType<typeof setTimeout> | undefined
     const off = store.subscribe(computerId, (...[channel]) => {
       if (channel !== 'workspace:changed') return
       clearTimeout(timer)
-      timer = setTimeout(() => void readRef.current(false), 400)
+      timer = setTimeout(
+        () =>
+          void store.invoke(computerId, 'forge.drafts', url).then(
+            (drafts) => setBatch(drafts),
+            () => {},
+          ),
+        400,
+      )
     })
     return () => {
       clearTimeout(timer)
@@ -217,16 +227,19 @@ export default function PullRequestScreen() {
     setRefreshing(false)
   }
 
+  /** Whether the work went through, so a sheet that started it stays open on its error instead of losing its input. */
   const run = async (label: string, work: () => Promise<unknown>) => {
-    if (!canWrite) return
+    if (!canWrite) return false
     setBusy(label)
     setError(null)
     try {
       await work()
       await read(true)
       setRevision((value) => value + 1)
+      return true
     } catch (e) {
       setError(message(e))
+      return false
     } finally {
       setBusy(null)
     }
@@ -316,6 +329,7 @@ export default function PullRequestScreen() {
   const open = pr?.state === 'open'
   const mine = pr?.group === 'mine'
   const openThreads = (threads ?? []).filter((entry) => !entry.resolved)
+  const shownThreads = shownReviewThreads(threads ?? [], threadFilter, threadOrder)
   const step = pr && stage ? pullRequestNextStep(pr, stage, mine) : 'none'
   /** The Overview's one action, as on the desktop: fixes go to the thread on it, or a new one catches up first. */
   const takeStep = () => {
@@ -653,7 +667,7 @@ export default function PullRequestScreen() {
                     <T size={font.control} weight="600" tone="muted">
                       {say('Description')}
                     </T>
-                    <Markdown text={description} />
+                    <PullRequestMarkdown text={description} />
                   </View>
                 ) : null}
 
@@ -717,29 +731,52 @@ export default function PullRequestScreen() {
                 />
 
                 <View style={{ gap: space.s }}>
-                  <T size={font.control} weight="600" tone="muted">
-                    {say('Open review threads')}
-                    {openThreads.length ? (
-                      <T size={font.control} tone="placeholder">{` ${openThreads.length}`}</T>
-                    ) : null}
-                  </T>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+                    <T size={font.control} weight="600" tone="muted" style={{ flex: 1 }}>
+                      {say('Review threads')}
+                      {openThreads.length ? (
+                        <T
+                          size={font.control}
+                          tone="placeholder"
+                        >{` ${say('{0} unresolved', { 0: openThreads.length })}`}</T>
+                      ) : null}
+                    </T>
+                    {/* An order, as GitHub's Overview page gives its comments. */}
+                    <Chip
+                      small
+                      label={threadOrder === 'newest' ? say('Newest first') : say('Oldest first')}
+                      onPress={() => setThreadOrder((value) => (value === 'newest' ? 'oldest' : 'newest'))}
+                    />
+                  </View>
+                  <Segmented<ReviewThreadFilter>
+                    value={threadFilter}
+                    onChange={setThreadFilter}
+                    options={[
+                      { key: 'open', label: say('Unresolved') },
+                      { key: 'resolved', label: say('Resolved') },
+                      { key: 'all', label: say('All') },
+                    ]}
+                  />
                   {threadsError ? (
                     <T size={font.caption} tone="bad">
                       {threadsError}
                     </T>
                   ) : threads === null ? (
-                    <T tone="muted">{say('Loading…')}</T>
-                  ) : !openThreads.length ? (
-                    <T tone="muted">{say('No open review threads.')}</T>
+                    <ActivityIndicator color={c.muted} style={{ paddingVertical: space.m }} />
+                  ) : !shownThreads.length ? (
+                    <T tone="muted">
+                      {threadFilter === 'open' ? say('No open review threads.') : say('No review threads here.')}
+                    </T>
                   ) : (
-                    openThreads.map((entry) => (
+                    shownThreads.map((entry) => (
                       <Card key={entry.id} style={{ padding: space.m, gap: space.s }}>
                         <T size={font.caption} tone="muted" mono numberOfLines={2}>
                           {(entry.path ? `${entry.path}${entry.line ? `:${entry.line}` : ''}` : say('Conversation')) +
-                            (entry.outdated ? ` · ${say('Outdated')}` : '')}
+                            (entry.outdated ? ` · ${say('Outdated')}` : '') +
+                            (entry.resolved ? ` · ${say('Resolved')}` : '')}
                         </T>
                         {entry.comments.map((comment, index) => (
-                          <View key={comment.id} style={{ gap: 2 }}>
+                          <View key={comment.id} style={{ gap: space.xs }}>
                             {index ? <Divider /> : null}
                             <View
                               style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.s }}
@@ -758,9 +795,7 @@ export default function PullRequestScreen() {
                                 </T>
                               ) : null}
                             </View>
-                            <T size={font.control} tone="soft" copyable={comment.body}>
-                              {comment.body}
-                            </T>
+                            <PullRequestMarkdown text={comment.body} />
                             {canWrite ? (
                               <ReactionRow
                                 service={service}
@@ -775,10 +810,14 @@ export default function PullRequestScreen() {
                         {canWrite && open && entry.resolvable ? (
                           <Button
                             kind="secondary"
-                            title={say('Resolve thread')}
+                            title={entry.resolved ? say('Reopen thread') : say('Resolve thread')}
                             disabled={!!busy}
                             onPress={() =>
-                              void write('thread', { kind: 'thread-status', threadId: entry.id, status: 'resolved' })
+                              void write('thread', {
+                                kind: 'thread-status',
+                                threadId: entry.id,
+                                status: entry.resolved ? 'active' : 'resolved',
+                              })
                             }
                           />
                         ) : null}
@@ -821,6 +860,7 @@ export default function PullRequestScreen() {
                     title={say(kind === 'reviewers' ? 'Reviewers…' : kind === 'labels' ? 'Labels…' : 'Assignees…')}
                     onPress={() => {
                       setMore(false)
+                      setError(null)
                       // iOS presents the next sheet only once this one has gone.
                       setTimeout(() => setPeople(kind), 300)
                     }}
@@ -863,7 +903,7 @@ export default function PullRequestScreen() {
               people === 'reviewers'
                 ? { kind: 'reviewers', add, remove }
                 : { kind: 'update', update: { [people]: { add, remove } } },
-            ).then(() => setPeople(null))
+            ).then((done) => done && setPeople(null))
           }
         />
       ) : null}

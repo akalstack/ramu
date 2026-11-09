@@ -90,9 +90,14 @@ export function BrowserViewer({
   chat,
   onClose,
   hostManaged,
+  openUrl,
+  onOpened,
 }: {
   chat: Chat
   onClose(): void
+  /** A page to open as a new tab once the viewer is up, such as a server the thread started. */
+  openUrl?: string | null
+  onOpened?(): void
   /**
    * The host-managed browser, rather than the attached desktop's: only it handles file transfers and phone layout,
    * because a desktop page is also on the person's screen at the computer.
@@ -446,6 +451,14 @@ export function BrowserViewer({
       setNewTab(false)
       setDraft(null)
     })
+  const opening = useRef<string | null>(null)
+  useEffect(() => {
+    if (!openUrl || opening.current === openUrl || !allowed()) return
+    opening.current = openUrl
+    openHostTab(openUrl)
+    onOpened?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the URL asked for; `openHostTab` reads current state
+  }, [openUrl])
   const submitAddress = () => {
     // A submit retained from before an access change does nothing, here as for host actions.
     if (!allowed()) return

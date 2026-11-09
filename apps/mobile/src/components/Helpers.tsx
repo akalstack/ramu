@@ -389,7 +389,19 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
             }
           />
         ) : chat.sessionId && actions.canStop && !viewOnly ? (
-          <Button kind="danger" title={id ? 'Hentikan agen' : 'Stop agent'} onPress={stop} />
+          <Button
+            kind="danger"
+            title={
+              task.taskType === 'local_bash'
+                ? id
+                  ? 'Hentikan perintah'
+                  : 'Stop command'
+                : id
+                  ? 'Hentikan agen'
+                  : 'Stop agent'
+            }
+            onPress={stop}
+          />
         ) : null}
         <Button kind="ghost" title={id ? 'Kembali ke thread' : 'Back to thread'} onPress={onClose} />
       </View>
