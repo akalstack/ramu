@@ -59,7 +59,7 @@ import { sharedValue } from '@ramu/shared/sharedFields'
 import { useModelFlow } from '../runtime/useModelFlow'
 import { fill, useT, useSay } from '../i18n'
 import { translate } from '@ramu/shared/i18n'
-import { Chip, IconButton, Pill, Row, Segmented, Sheet, T, Toggle, tap, type Icon } from './ui'
+import { Chip, IconButton, Pill, Row, SHEET_SETTLE_MS, Segmented, Sheet, T, Toggle, tap, type Icon } from './ui'
 import { modelTags } from '@ramu/shared/providers/modelTags'
 import { SheetGroup, SheetOption } from './SheetOptions'
 
@@ -632,9 +632,6 @@ export function GoalQueueTray({
     </View>
   )
 }
-
-/** How long a closing sheet takes to leave the screen before a picker or another sheet can open. */
-const SHEET_SETTLE_MS = 400
 
 export function Composer({
   running,

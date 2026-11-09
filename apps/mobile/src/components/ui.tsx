@@ -501,6 +501,9 @@ function SheetBody({
  * The app's one bottom sheet. Android shows the official Material 3 modal bottom sheet (opaque, with its own handle, scrim
  * and swipe-to-dismiss). Elsewhere it is built on Modal so it runs in Expo Go; on iOS it floats inset from the edges on an opaque surface.
  */
+/** How long a closing sheet takes to leave the screen before a picker or another sheet can open. */
+export const SHEET_SETTLE_MS = 400
+
 export function Sheet(props: SheetProps) {
   if (Platform.OS === 'ios') return <LazyNativeSheet {...props} />
   if (props.presentation === 'screen') return <ScreenSheet {...props} />

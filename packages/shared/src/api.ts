@@ -399,6 +399,8 @@ interface ArtifactMethods {
     update: string | null,
     stateVector: string,
   ): import('./liveText').LiveTextReply
+  /** Cancel: drops what this device typed since the last save, unless someone else typed in it too. */
+  'artifacts.liveDiscard'(artifactId: string): void
   /** Says the link's editor is (or stopped) editing, and returns the others editing the same text now. */
   'artifacts.shareEditing'(token: string, editing: boolean, part?: string | null): string[]
   'artifacts.shares'(artifactId: string): import('./artifacts').ArtifactShare[]
@@ -1434,6 +1436,12 @@ export interface RamuMethods extends ArtifactMethods {
   'forge.allPullRequests'(includeClosed: boolean, force: boolean): import('./types').RepositoryPullRequests[]
   /** The pull request's description as Markdown, for its full view. */
   'forge.pullRequestDescription'(taskId: string, repoId: string, url: string): string
+  /** The files the pull request changes with their diffs; null where the service is not supported yet. */
+  'forge.pullRequestFiles'(
+    taskId: string,
+    repoId: string,
+    url: string,
+  ): { files: import('./types').PullRequestFile[]; more: boolean } | null
   'forge.mergeOptions'(taskId: string, repoId: string, url: string): import('./types').MergeOptions
   /** Merge, close, reopen, mark ready or update the branch. Never available to agents. */
   'forge.pullRequestAction'(

@@ -15,9 +15,13 @@ it.each([
   'reviews.get',
   'computer.session',
   'notifications.register',
-  // Share links: a viewer opens one and adds records only when the link allows it.
+  'artifacts.list',
+  'artifacts.document',
+  // Share links: a viewer opens one, and adds records or edits text only when the link allows it.
   'artifacts.openShare',
   'artifacts.shareCall',
+  'artifacts.shareLiveSync',
+  'artifacts.shareEditSource',
 ])('keeps viewer read/request-answer access for %s', (method) => expect(viewerMayInvoke(method)).toBe(true))
 
 it.each([
@@ -40,5 +44,7 @@ it.each([
   'newMethod.get',
   'artifacts.delete',
   'artifacts.call',
+  'artifacts.editSource',
+  'artifacts.liveSync',
   'pages.openShare',
 ])('never infers viewer access for %s', (method) => expect(viewerMayInvoke(method)).toBe(false))

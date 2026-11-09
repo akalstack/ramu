@@ -53,9 +53,22 @@ const viewerMethods = new Set([
   'interactive.get',
   'interactive.list',
   'interactive.media',
-  // Share links: a viewer device opens an artifact someone shared and adds records only when the link allows it.
+  // Kept artifacts are read like threads: the list, a version and its values, never changed.
+  'artifacts.list',
+  'artifacts.get',
+  'artifacts.exists',
+  'artifacts.document',
+  'artifacts.state',
+  'artifacts.versions',
+  // Share links: a viewer device opens an artifact someone shared, and adds records or edits its text only when the
+  // link allows it; the host checks the link on each call.
   'artifacts.openShare',
   'artifacts.shareCall',
+  'artifacts.shareEditing',
+  'artifacts.shareLiveJoin',
+  'artifacts.shareLiveSync',
+  'artifacts.shareEditSource',
+  'artifacts.shareEditSlides',
   'attachments.text',
   'attachments.preview',
   'reviews.list',

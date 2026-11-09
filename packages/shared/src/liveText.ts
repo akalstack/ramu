@@ -30,6 +30,8 @@ export function applyTextChange(text: Y.Text, from: string, to: string): void {
 export interface LiveTextReply {
   update: string
   stateVector: string
+  /** The version the host's copy was last saved as, so an editor's Save builds on it rather than the one it opened. */
+  version?: number
 }
 
 const encode = (bytes: Uint8Array) => {
@@ -49,6 +51,11 @@ export class LiveTextHost {
 
   get text(): string {
     return this.doc.getText(FIELD).toString()
+  }
+
+  /** Changes the text to `next` as one replaced span, which editors take in at their next sync. */
+  replace(next: string): void {
+    applyTextChange(this.doc.getText(FIELD), this.text, next)
   }
 
   /** The whole document, for an editor joining. */

@@ -81,6 +81,11 @@ const refreshLabel = (minutes: number) =>
     1440: t('Once a day'),
   })[minutes] ?? t('Every {count} minutes', { count: minutes })
 
+/** Moves an open edit's base forward to the version the live copy was saved as; never back. */
+function setBase<T extends { base: number }>(edit: (change: (current: T | null) => T | null) => void, version: number) {
+  edit((current) => (current && current.base < version ? { ...current, base: version } : current))
+}
+
 export function PageView({ artifactId, onBack }: { artifactId: string; onBack(): void }) {
   useLanguage()
   const { invoke } = useHost()
@@ -127,6 +132,21 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   )
   // A motion's narration lines while the person edits them, one per scene.
   const [narrating, setNarrating] = useState<{ base: number; lines: string[] } | null>(null)
+  /**
+   * One exchange with the host's live copy. The copy names the version it was last saved as (after a quiet minute, or
+   * a merge with an agent's version), and the edit's Save builds on that one so the person's own typing is not a
+   * conflict.
+   */
+  const liveSync = useCallback(
+    async (update: string | null, stateVector: string, onVersion: (version: number) => void) => {
+      const reply = await Promise.resolve(invoke('artifacts.liveSync', artifactId, update, stateVector))
+      if (reply.version !== undefined) onVersion(reply.version)
+      return reply
+    },
+    [invoke, artifactId],
+  )
+  /** Cancel: typing the host's live copy holds and no Save kept is not saved a minute later. */
+  const discardLive = () => void Promise.resolve(invoke('artifacts.liveDiscard', artifactId)).catch(() => {})
   // Live typing on a deck's words, while its slides keep their order; moving a slide pauses it until Save.
   const slidesNow = useRef(editingSlides)
   slidesNow.current = editingSlides
@@ -149,6 +169,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
         if (stopped) return
         editor = new LiveTextEditor(joined.state)
         withWords(editor.text)
+        setBase(setEditingSlides, joined.version)
       },
       () => {},
     )
@@ -163,7 +184,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
             ? deckText(current.slides)
             : null
         },
-        (update, stateVector) => Promise.resolve(invoke('artifacts.liveSync', artifactId, update, stateVector)),
+        (update, stateVector) => liveSync(update, stateVector, (version) => setBase(setEditingSlides, version)),
       )
         .then((merged) => {
           if (merged !== null && !stopped) withWords(merged)
@@ -177,7 +198,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
       stopped = true
       window.clearInterval(timer)
     }
-  }, [editingDeck, invoke, artifactId])
+  }, [editingDeck, invoke, artifactId, liveSync])
   // Named services this dashboard reads, and the ones the person allowed it to.
   const [services, setServices] = useState<{ needed: NamedService[]; allowed: NamedService[] } | null>(null)
   const dashboardVersion = page?.kind === 'dashboard' ? page.version : null
@@ -254,7 +275,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
       void syncLiveText(
         editor,
         () => editingNow.current?.text ?? null,
-        (update, stateVector) => Promise.resolve(invoke('artifacts.liveSync', artifactId, update, stateVector)),
+        (update, stateVector) => liveSync(update, stateVector, (version) => setBase(setEditing, version)),
       )
         .then((merged) => {
           if (merged !== null && !stopped) setEditing((current) => (current ? { ...current, text: merged } : current))
@@ -268,7 +289,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
       stopped = true
       window.clearInterval(timer)
     }
-  }, [editingText, invoke, artifactId])
+  }, [editingText, invoke, artifactId, liveSync])
   // Which design this host draws new visual artifacts with, for a design's menu.
   const [designSystem, setDesignSystem] = useState<string | null>(null)
   const projectId = page?.projectId ?? null
@@ -1035,7 +1056,15 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
                 {editing.rich ? t('Edit Markdown') : t('Edit as rich text')}
               </Button>
             )}
-            <Button type="button" variant="ghost" disabled={savingEdit} onClick={() => setEditing(null)}>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={savingEdit}
+              onClick={() => {
+                setEditing(null)
+                discardLive()
+              }}
+            >
               {t('Cancel')}
             </Button>
             <Button type="submit" variant="default" disabled={savingEdit}>
@@ -1304,7 +1333,15 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
             <span className="mr-auto text-caption text-muted-foreground">
               {t('Saving makes v{version}, marked Edited by you.', { version: editingSlides.base + 1 })}
             </span>
-            <Button type="button" variant="ghost" disabled={savingEdit} onClick={() => setEditingSlides(null)}>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={savingEdit}
+              onClick={() => {
+                setEditingSlides(null)
+                discardLive()
+              }}
+            >
               {t('Cancel')}
             </Button>
             <Button type="submit" variant="default" disabled={savingEdit}>

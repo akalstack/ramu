@@ -33,6 +33,7 @@ import {
   type SlideTextEdit,
 } from '@ramu/shared/artifactSource'
 import {
+  type ArtifactInfo,
   ARTIFACT_SOURCE_FILES,
   DESIGN_SYSTEM_KEY,
   appliedDesignSystem,
@@ -493,6 +494,13 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
     if (!liveEditing) throw new Error('Update this host for live editing.')
     return liveEditing
   }
+  /** A version Save made, handed to the live copy so it builds on it. */
+  const savedLive = async (artifactId: string, saving: Promise<ArtifactInfo>) => {
+    const artifact = await saving
+    const text = liveTextOf(artifactId, artifact.version)
+    if (text !== null) liveEditing?.saved(artifactId, artifact.version, text)
+    return artifact
+  }
   /** A motion's changed source saved as a new version, keeping the audio files it still names. */
   const saveMotion = async (artifactId: string, base: number, motion: object) => {
     const { pages } = need()
@@ -541,7 +549,8 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
     },
     'artifacts.editSource': {
       args: z.tuple([id, z.number().int().positive(), z.string().max(DOC_MAX_SOURCE)]),
-      run: (artifactId: string, base: number, text: string) => saveSourceEdit(artifactId, base, text, editedBy()),
+      run: (artifactId: string, base: number, text: string) =>
+        savedLive(artifactId, saveSourceEdit(artifactId, base, text, editedBy())),
     },
     'artifacts.designSystem': {
       args: z.tuple([id.nullable().optional()]),
@@ -708,7 +717,7 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
     'artifacts.editSlides': {
       args: z.tuple([id, z.number().int().positive(), z.array(slideTextEdit).max(SLIDES_MAX)]),
       run: (artifactId: string, base: number, edits: SlideTextEdit[]) =>
-        saveSlideEdit(artifactId, base, edits, editedBy()),
+        savedLive(artifactId, saveSlideEdit(artifactId, base, edits, editedBy())),
     },
     'artifacts.editDesign': {
       args: z.tuple([id, z.number().int().positive(), designTextEdit]),
@@ -999,14 +1008,14 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([z.string().max(80), z.number().int().positive(), z.string().max(DOC_MAX_SOURCE)]),
       run: (token: string, base: number, text: string) => {
         const share = editingShare(token)
-        return saveSourceEdit(share.artifactId, base, text, `Edited by ${share.editor}`)
+        return savedLive(share.artifactId, saveSourceEdit(share.artifactId, base, text, `Edited by ${share.editor}`))
       },
     },
     'artifacts.shareEditSlides': {
       args: z.tuple([z.string().max(80), z.number().int().positive(), z.array(slideTextEdit).max(SLIDES_MAX)]),
       run: (token: string, base: number, edits: SlideTextEdit[]) => {
         const share = editingShare(token)
-        return saveSlideEdit(share.artifactId, base, edits, `Edited by ${share.editor}`)
+        return savedLive(share.artifactId, saveSlideEdit(share.artifactId, base, edits, `Edited by ${share.editor}`))
       },
     },
     'artifacts.liveJoin': {
@@ -1018,6 +1027,13 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       run: (artifactId: string, update: string | null, stateVector: string) => {
         const device = ctx.host.callerName?.()?.slice(0, 60)
         return live().sync(artifactId, device ? `you on ${device}` : 'you', update, stateVector)
+      },
+    },
+    'artifacts.liveDiscard': {
+      args: z.tuple([id]),
+      run: (artifactId: string) => {
+        const device = ctx.host.callerName?.()?.slice(0, 60)
+        live().discard(artifactId, device ? `you on ${device}` : 'you')
       },
     },
     'artifacts.shareLiveJoin': {

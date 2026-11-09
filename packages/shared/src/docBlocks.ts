@@ -75,6 +75,8 @@ export function withDocBlocks(markdown: string, blocks: Pick<DocBlock, 'text' | 
   const lines = markdown.split('\n')
   found.forEach((block, index) => {
     const next = blocks[index]!
+    // An untouched block keeps its line exactly, with its spacing and hard line break.
+    if (next.text === block.text && (next.done === undefined || next.done === block.done)) return
     const text = next.text.replace(/\s*\n\s*/g, ' ').trim() || block.text
     const prefix =
       block.kind === 'task' && next.done !== undefined

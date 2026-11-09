@@ -3,6 +3,7 @@
 // typed for a minute, the text is saved as a version (merged onto any version an agent saved meanwhile) naming who
 // typed, so Restore and Compare keep working; a document nobody synced for five minutes is dropped after that save.
 import { LiveTextHost, type LiveTextReply } from '@ramu/shared/liveText'
+import { mergeText } from '@ramu/shared/textMerge'
 
 const IDLE_SAVE_MS = 60_000
 const DROP_MS = 5 * 60_000
@@ -49,6 +50,10 @@ export class LiveEditing {
         typed: new Set(),
       }
       this.sessions.set(artifactId, session)
+    } else if (session.host.text === session.saved) {
+      // Nothing typed is waiting: a version an agent or Save made since the copy began becomes its text.
+      const current = this.host.current(artifactId)
+      if (current && current.version !== session.base) this.adopt(session, current.version, current.text, session.saved)
     }
     session.touchedAt = this.now()
     return { state: session.host.state(), version: session.base }
@@ -63,7 +68,34 @@ export class LiveEditing {
       session.changedAt = this.now()
       session.typed.add(who)
     }
-    return session.host.exchange(update, stateVector)
+    return { ...session.host.exchange(update, stateVector), version: session.base }
+  }
+
+  /** A version Save made from an editor's text: the shared copy takes it, so the host does not save older text later. */
+  saved(artifactId: string, version: number, text: string): void {
+    const session = this.sessions.get(artifactId)
+    if (!session) return
+    session.typed.clear()
+    this.adopt(session, version, text, session.host.text)
+  }
+
+  /** Cancel: what was typed since the last save goes, unless someone other than `who` typed too. */
+  discard(artifactId: string, who: string): void {
+    const session = this.sessions.get(artifactId)
+    if (!session || [...session.typed].some((name) => name !== who)) return
+    session.typed.clear()
+    session.host.replace(session.saved)
+  }
+
+  /**
+   * Makes `version` the copy's base. `from` is the text that version was made from: typing that reached the copy
+   * since then is kept on top of the version's text, so a merge with an agent's version shows in every editor.
+   */
+  private adopt(session: Session, version: number, text: string, from: string) {
+    const now = session.host.text
+    session.host.replace(now === from ? text : (mergeText(from, now, text) ?? now))
+    session.base = version
+    session.saved = text
   }
 
   /** Saves each document nobody has typed in for a minute, and drops the ones nobody synced for five. */
@@ -74,13 +106,15 @@ export class LiveEditing {
         const names = [...session.typed]
         session.typed.clear()
         try {
-          session.base = await this.host.save(
+          const version = await this.host.save(
             artifactId,
             session.base,
             text,
             `Edited live by ${names.join(' and ') || 'you'}`,
           )
-          session.saved = text
+          // The saved version can differ from the copy when it was merged onto an agent's version.
+          const current = this.host.current(artifactId)
+          this.adopt(session, version, current?.version === version ? current.text : text, text)
         } catch {
           // A conflict with a version saved meanwhile keeps the text live; the editors' own Save shows the reason.
           names.forEach((name) => session.typed.add(name))

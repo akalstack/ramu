@@ -56,3 +56,11 @@ it('puts edited words and ticks back in their lines, keeping markers and everyth
   expect(next.split('\n').slice(9)).toEqual(DOC.split('\n').slice(9))
   expect(() => withDocBlocks(DOC, [])).toThrow('changed while you were editing')
 })
+
+it('leaves the lines of blocks nobody changed exactly as written', () => {
+  const doc = 'Line one  \nline two\n\n- Item\n  More about the item\n\n    indented code\n'
+  const blocks = docBlocks(doc)
+  expect(withDocBlocks(doc, blocks)).toBe(doc)
+  blocks[0] = { ...blocks[0]!, text: 'First line  ' }
+  expect(withDocBlocks(doc, blocks)).toBe(doc.replace('Line one  ', 'First line'))
+})

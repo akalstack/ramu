@@ -32,7 +32,7 @@ import { useStore } from '../../../runtime/store'
 import { useSay } from '../../../i18n'
 import { contentStorage } from '../../../storage'
 import { Header, HeaderButton, Screen } from '../../../components/Screen'
-import { Button, Card, IconButton, Row, Sheet, T } from '../../../components/ui'
+import { Button, Card, IconButton, Row, SHEET_SETTLE_MS, Sheet, T } from '../../../components/ui'
 import InteractiveFrame from '../../../components/InteractiveFrame'
 import { ArtifactSettings } from '../../../components/ArtifactSettings'
 import MotionVideo from '../../../components/MotionVideo'
@@ -67,6 +67,14 @@ const unreachable = (error: unknown) =>
  * One page, full screen: the same frame and bridge as the desktop, loaded from the host by id so it works without its
  * thread. Records added without a connection wait on the phone and sync when the host answers.
  */
+/**
+ * An open edit built on the version the host's live copy was last saved as (after a quiet minute, or a merge with an
+ * agent's version), so Save does not take the person's own typing for someone else's. Never moves back.
+ */
+function movedBase<T extends { base: number }>(current: T | null, version: number): T | null {
+  return current && current.base < version ? { ...current, base: version } : current
+}
+
 export default function PageScreen() {
   const params = useLocalSearchParams<{ computer: string; id: string; share?: string }>()
   const computerId = String(params.computer ?? '')
@@ -112,6 +120,15 @@ export default function PageScreen() {
   // The person's other devices editing this text too; saving merges edits that changed different lines.
   const [alsoEditing, setAlsoEditing] = useState<string[]>([])
   const editingText = !!editing
+  // A row that opens a sheet or the share sheet waits for the menu to leave the screen: on iOS a sheet presented while
+  // another is still closing never appears.
+  const menuTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(menuTimer.current), [])
+  const afterMenu = (run: () => void) => {
+    setMenu(false)
+    clearTimeout(menuTimer.current)
+    menuTimer.current = setTimeout(run, SHEET_SETTLE_MS)
+  }
   const editingNowRef = useRef(editing)
   editingNowRef.current = editing
   // Where this phone last typed (a heading, or a slide), sent with its presence so others see the part it is on. The
@@ -192,9 +209,13 @@ export default function PageScreen() {
         editor,
         () => (editingNow.current ? textOf(editingNow.current) : null),
         (update, stateVector) =>
-          token
+          (token
             ? store.invoke(computerId, 'artifacts.shareLiveSync', token, update, stateVector)
-            : store.invoke(computerId, 'artifacts.liveSync', artifactId, update, stateVector),
+            : store.invoke(computerId, 'artifacts.liveSync', artifactId, update, stateVector)
+          ).then((reply) => {
+            if (reply.version !== undefined && !stopped) setEditing((current) => movedBase(current, reply.version!))
+            return reply
+          }),
       )
         .then((merged) => {
           if (merged === null || stopped) return
@@ -245,6 +266,7 @@ export default function PageScreen() {
         if (stopped) return
         editor = new LiveTextEditor(joined.state)
         withWords(editor.text)
+        setEditingSlides((current) => movedBase(current, joined.version))
       },
       () => {},
     )
@@ -259,7 +281,12 @@ export default function PageScreen() {
             ? deckText(current.slides)
             : null
         },
-        (update, stateVector) => store.invoke(computerId, 'artifacts.liveSync', artifactId, update, stateVector),
+        (update, stateVector) =>
+          store.invoke(computerId, 'artifacts.liveSync', artifactId, update, stateVector).then((reply) => {
+            if (reply.version !== undefined && !stopped)
+              setEditingSlides((current) => movedBase(current, reply.version!))
+            return reply
+          }),
       )
         .then((merged) => {
           if (merged !== null && !stopped) withWords(merged)
@@ -843,10 +870,11 @@ export default function PageScreen() {
                 <Row
                   key={name}
                   disabled={!online || !!running}
-                  onPress={() => {
-                    setMenu(false)
-                    run(name)
-                  }}
+                  onPress={() =>
+                    afterMenu(() => {
+                      run(name)
+                    })
+                  }
                 >
                   <T>{declared.label}</T>
                 </Row>
@@ -856,20 +884,22 @@ export default function PageScreen() {
           <Card>
             {!shared && !viewer ? (
               <Row
-                onPress={() => {
-                  setMenu(false)
-                  post({ type: 'pick', value: true })
-                }}
+                onPress={() =>
+                  afterMenu(() => {
+                    post({ type: 'pick', value: true })
+                  })
+                }
               >
                 <T>{say('Edit')}</T>
               </Row>
             ) : null}
             {!shared && !viewer ? (
               <Row
-                onPress={() => {
-                  setMenu(false)
-                  setAbout('')
-                }}
+                onPress={() =>
+                  afterMenu(() => {
+                    setAbout('')
+                  })
+                }
               >
                 <T>{say('Ask about this')}</T>
               </Row>
@@ -887,14 +917,15 @@ export default function PageScreen() {
             ) : null}
             {(page?.capabilities.widget || page?.kind === 'dashboard') && !shared ? (
               <Row
-                onPress={() => {
-                  setMenu(false)
-                  const current = widgetPage(store.drafts[WIDGET_PAGE_KEY])
-                  store.setDraft(
-                    WIDGET_PAGE_KEY,
-                    current?.artifactId === artifactId ? '' : JSON.stringify({ computerId, artifactId }),
-                  )
-                }}
+                onPress={() =>
+                  afterMenu(() => {
+                    const current = widgetPage(store.drafts[WIDGET_PAGE_KEY])
+                    store.setDraft(
+                      WIDGET_PAGE_KEY,
+                      current?.artifactId === artifactId ? '' : JSON.stringify({ computerId, artifactId }),
+                    )
+                  })
+                }
               >
                 <T>
                   {widgetPage(store.drafts[WIDGET_PAGE_KEY])?.artifactId === artifactId
@@ -905,66 +936,71 @@ export default function PageScreen() {
             ) : null}
             {page && !shared && !viewer ? (
               <Row
-                onPress={() => {
-                  setMenu(false)
-                  setSettingsOpen(true)
-                }}
+                onPress={() =>
+                  afterMenu(() => {
+                    setSettingsOpen(true)
+                  })
+                }
               >
                 <T>{say('Page settings')}</T>
               </Row>
             ) : null}
             <Row
-              onPress={() => {
-                setMenu(false)
-                void Share.share({
-                  title: page?.title,
-                  message: `${page?.title ?? ''} ${artifactLink({ computerId, artifactId, ...(shared ? { share: shared.token } : {}) })}`,
-                  url: artifactLink({ computerId, artifactId, ...(shared ? { share: shared.token } : {}) }),
+              onPress={() =>
+                afterMenu(() => {
+                  void Share.share({
+                    title: page?.title,
+                    message: `${page?.title ?? ''} ${artifactLink({ computerId, artifactId, ...(shared ? { share: shared.token } : {}) })}`,
+                    url: artifactLink({ computerId, artifactId, ...(shared ? { share: shared.token } : {}) }),
+                  })
                 })
-              }}
+              }
             >
               <T>{say('Add to Home Screen or share')}</T>
             </Row>
             {document && editableSource(document) !== null && online && (shared ? !!shared.editor : !viewer) ? (
               <Row
-                onPress={() => {
-                  setMenu(false)
-                  const text = editableSource(document)
-                  if (text !== null)
-                    setEditing({
-                      base: document.reference.version,
-                      text,
-                      ...(page?.kind === 'doc' ? { blocks: docBlocks(text) } : {}),
-                    })
-                }}
+                onPress={() =>
+                  afterMenu(() => {
+                    const text = editableSource(document)
+                    if (text !== null)
+                      setEditing({
+                        base: document.reference.version,
+                        text,
+                        ...(page?.kind === 'doc' ? { blocks: docBlocks(text) } : {}),
+                      })
+                  })
+                }
               >
                 <T>{say('Edit text')}</T>
               </Row>
             ) : null}
             {page?.kind === 'slides' && document && online && !shared && !viewer ? (
               <Row
-                onPress={() => {
-                  setMenu(false)
-                  const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.slides)?.content
-                  if (stored)
-                    setEditingSlides({
-                      base: document.reference.version,
-                      slides: (JSON.parse(stored) as { slides: Slide[] }).slides.map((slide, from) => ({
-                        ...slide,
-                        from,
-                      })),
-                    })
-                }}
+                onPress={() =>
+                  afterMenu(() => {
+                    const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.slides)?.content
+                    if (stored)
+                      setEditingSlides({
+                        base: document.reference.version,
+                        slides: (JSON.parse(stored) as { slides: Slide[] }).slides.map((slide, from) => ({
+                          ...slide,
+                          from,
+                        })),
+                      })
+                  })
+                }
               >
                 <T>{say('Edit text')}</T>
               </Row>
             ) : null}
             {page?.kind === 'motion' && document && online && !shared ? (
               <Row
-                onPress={() => {
-                  setMenu(false)
-                  setPlaying(true)
-                }}
+                onPress={() =>
+                  afterMenu(() => {
+                    setPlaying(true)
+                  })
+                }
               >
                 <T>{say('Play as video')}</T>
               </Row>
@@ -976,28 +1012,30 @@ export default function PageScreen() {
             !viewer &&
             mermaidLabels(editableSource(document) ?? '').length > 0 ? (
               <Row
-                onPress={() => {
-                  setMenu(false)
-                  const source = editableSource(document) ?? ''
-                  setEditingLabels({ base: document.reference.version, source, labels: mermaidLabels(source) })
-                }}
+                onPress={() =>
+                  afterMenu(() => {
+                    const source = editableSource(document) ?? ''
+                    setEditingLabels({ base: document.reference.version, source, labels: mermaidLabels(source) })
+                  })
+                }
               >
                 <T>{say('Edit labels')}</T>
               </Row>
             ) : null}
             {page?.kind === 'design' && document && online && !shared && !viewer ? (
               <Row
-                onPress={() => {
-                  setMenu(false)
-                  const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.design)?.content
-                  if (stored)
-                    setEditingDesign({
-                      base: document.reference.version,
-                      frames: (JSON.parse(stored) as { frames: { name: string; html: string }[] }).frames.map(
-                        (frame) => ({ name: frame.name, texts: designTexts(frame.html) }),
-                      ),
-                    })
-                }}
+                onPress={() =>
+                  afterMenu(() => {
+                    const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.design)?.content
+                    if (stored)
+                      setEditingDesign({
+                        base: document.reference.version,
+                        frames: (JSON.parse(stored) as { frames: { name: string; html: string }[] }).frames.map(
+                          (frame) => ({ name: frame.name, texts: designTexts(frame.html) }),
+                        ),
+                      })
+                  })
+                }
               >
                 <T>{say('Edit text')}</T>
               </Row>
@@ -1005,10 +1043,11 @@ export default function PageScreen() {
             {(document ? kindExports(document, theme) : []).map(({ format, file }) => (
               <Row
                 key={format}
-                onPress={() => {
-                  setMenu(false)
-                  void shareFile(file).catch(() => setError(say('Could not share this content. Try again.')))
-                }}
+                onPress={() =>
+                  afterMenu(() => {
+                    void shareFile(file).catch(() => setError(say('Could not share this content. Try again.')))
+                  })
+                }
               >
                 <T>{say(SHARE_LABELS[format])}</T>
               </Row>
@@ -1017,13 +1056,14 @@ export default function PageScreen() {
               ? hostExportFormats(page.kind).map((format) => (
                   <Row
                     key={format}
-                    onPress={() => {
-                      setMenu(false)
-                      void store
-                        .invoke(computerId, 'artifacts.export', artifactId, document?.reference.version, format)
-                        .then(shareFile)
-                        .catch(() => setError(say('Could not share this content. Try again.')))
-                    }}
+                    onPress={() =>
+                      afterMenu(() => {
+                        void store
+                          .invoke(computerId, 'artifacts.export', artifactId, document?.reference.version, format)
+                          .then(shareFile)
+                          .catch(() => setError(say('Could not share this content. Try again.')))
+                      })
+                    }
                   >
                     <T>{say(hostShareLabel(format, page.kind))}</T>
                   </Row>

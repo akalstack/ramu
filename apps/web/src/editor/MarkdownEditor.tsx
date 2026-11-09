@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Editor, Node } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
-import { Markdown } from '@tiptap/markdown'
+import { Markdown, MarkdownManager } from '@tiptap/markdown'
 import { TableKit } from '@tiptap/extension-table'
 import { TaskItem, TaskList } from '@tiptap/extension-list'
 import Image from '@tiptap/extension-image'
@@ -64,6 +64,27 @@ const splitMetadata = (text: string) => {
   return { prefix, body: text.slice(prefix.length) }
 }
 
+/** What decides how rich text reads and writes Markdown; the editor adds its own image view. */
+const markdownExtensions = () => [
+  StarterKit.configure({ undoRedo: false, underline: false, link: { openOnClick: false } }),
+  TableKit,
+  TaskList,
+  TaskItem.configure({ nested: true, HTMLAttributes: { 'data-type': 'taskItem' } }),
+  RawHtml,
+]
+let writer: MarkdownManager | null = null
+
+/**
+ * The Markdown the rich editor writes for `text` before anything in it changes: its own spelling of lists, emphasis,
+ * tables and links. Comparing against it tells the person's edits apart from that respelling.
+ */
+export function richTextMarkdown(text: string): string {
+  writer ??= new MarkdownManager({ extensions: [...markdownExtensions(), Image] })
+  const { prefix, body } = splitMetadata(text)
+  const written = writer.serialize(writer.parse(body))
+  return prefix + written + (/\r?\n$/.test(text) && !written.endsWith('\n') ? '\n' : '')
+}
+
 /** Rich text is serialized into the shared source buffer; opening a file alone never rewrites it. */
 export function MarkdownEditor({
   model,
@@ -99,11 +120,8 @@ export function MarkdownEditor({
     const rich = new Editor({
       element: host.current!,
       extensions: [
-        StarterKit.configure({ undoRedo: false, underline: false, link: { openOnClick: false } }),
+        ...markdownExtensions(),
         Markdown,
-        TableKit,
-        TaskList,
-        TaskItem.configure({ nested: true, HTMLAttributes: { 'data-type': 'taskItem' } }),
         Image.extend({
           addNodeView() {
             return ({ node }) => {
@@ -141,7 +159,6 @@ export function MarkdownEditor({
             }
           },
         }),
-        RawHtml,
       ],
       content: metadata.body,
       contentType: 'markdown',
