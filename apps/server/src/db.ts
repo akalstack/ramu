@@ -50,6 +50,23 @@ CREATE INDEX IF NOT EXISTS artifact_records_by_artifact ON artifact_records(arti
 CREATE INDEX IF NOT EXISTS artifact_runs_by_artifact ON artifact_runs(artifact_id, created_at);
 `
 
+/**
+ * Columns added to tables after this schema version was stamped, each with a default, so existing rows read as that
+ * default and nothing is copied.
+ */
+const ADDED_COLUMNS: { table: string; column: string; definition: string }[] = [
+  { table: 'rules', column: 'paths', definition: "TEXT NOT NULL DEFAULT '[]'" },
+  { table: 'rule_revisions', column: 'paths', definition: "TEXT NOT NULL DEFAULT '[]'" },
+]
+
+function addColumns(db: DatabaseSync) {
+  for (const { table, column, definition } of ADDED_COLUMNS) {
+    const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+    if (!columns.some((entry) => entry.name === column))
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+  }
+}
+
 /** Tables and app state a profile may still hold from before artifacts; they are removed, not carried over. */
 const REMOVED = `
 DROP TABLE IF EXISTS artifact_templates;
@@ -354,6 +371,7 @@ export function openDb(path: string): Db {
   }
   db.exec(REMOVED)
   db.exec(ADDED_TABLES)
+  addColumns(db)
   db.exec('PRAGMA foreign_keys = ON;')
   return db
 }

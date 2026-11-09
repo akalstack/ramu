@@ -9,6 +9,7 @@ const rule = (patch: Partial<Rule>): Rule => ({
   projectId: null,
   providers: [],
   activation: 'always',
+  paths: [],
   enabled: true,
   revision: 1,
   createdAt: 100,
@@ -92,6 +93,16 @@ it('flags a shared server or skill whose source changed after the thread started
     ['db', 'needs-refresh'],
     ['review', 'needs-refresh'],
   ])
+})
+
+it('leaves a path rule to Claude Code’s own rules files and counts it as text for other runtimes', () => {
+  const pathRule = rule({ name: 'API', activation: 'paths', paths: ['src/api/**'] })
+  const claude = buildSetupSnapshot(base({ rules: [pathRule] }))
+  expect(claude.items.map((item) => item.state)).toEqual(['not-observable'])
+  expect(claude.rulesCharacters).toBe(0)
+  const codex = buildSetupSnapshot(base({ provider: 'codex', rules: [pathRule] }))
+  expect(codex.items.map((item) => item.state)).toEqual(['delivered'])
+  expect(codex.rulesCharacters).toBeGreaterThan('API'.length + pathRule.body.length)
 })
 
 it('says how each runtime receives rules and omits them all when they are over its size', () => {

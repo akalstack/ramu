@@ -1,6 +1,6 @@
 import { providerName } from '@ramu/shared/providers/providers'
 import { estimatedTokens, type RuleDuplicate, type RuleScopeCost } from '@ramu/shared/rules'
-import type { Rule } from '@ramu/shared/types'
+import type { Rule, RuleActivation } from '@ramu/shared/types'
 import { t } from '../i18n'
 
 /** Which providers a rule reaches, as short text. */
@@ -29,4 +29,18 @@ export function duplicateNote(duplicate: RuleDuplicate, rules: Pick<Rule, 'id' |
   return duplicate.kind === 'text'
     ? t('Same text as {0}. Both apply; turn one off or delete it.', { '0': names })
     : t('Same name as {0}. Both apply; rename one or turn it off.', { '0': names })
+}
+
+/** A rule's activation as short text for its card and the filter. */
+export function activationLabel(activation: RuleActivation): string {
+  return activation === 'manual' ? t('Manual') : activation === 'paths' ? t('When files match') : t('Always')
+}
+
+/** Where Claude Code's copy of a path rule is written, for the editor before and after saving. */
+export function claudeCopyNote(projectId: string | null): string {
+  return projectId
+    ? t(
+        "Claude Code's copy is written to .claude/rules in each of this project's repositories, where it can be committed and shared.",
+      )
+    : t("Claude Code's copy is written to the rules folder in your Claude config home.")
 }

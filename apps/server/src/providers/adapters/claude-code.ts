@@ -3,6 +3,9 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { defineAdapter, LONG_CONTEXT_TOKENS, npmLatest, runCli, selfUpdate } from '../adapter'
 
+/** Claude Code's own config home for the default account, where your user-level settings, skills and rules live. */
+export const claudeConfigHome = () => process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
+
 export const claudeCodeAdapter = defineAdapter({
   id: 'claude-code',
   browser: { integratedTools: true, providerBrowser: true, canSuppressNative: false },
@@ -11,10 +14,10 @@ export const claudeCodeAdapter = defineAdapter({
   executableNames: () => ['claude'],
   accountEnv: (root) => ({ CLAUDE_CONFIG_DIR: root }),
   accountClearedEnv: ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN'],
-  /** A Claude account keeps your user-level settings, skills and agents by linking them in; credentials and history stay its own. */
+  /** A Claude account keeps your user-level settings, skills, agents and rules by linking them in; credentials and history stay its own. */
   prepareAccount(root) {
-    const shared = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
-    for (const name of ['settings.json', 'CLAUDE.md', 'skills', 'agents', 'commands']) {
+    const shared = claudeConfigHome()
+    for (const name of ['settings.json', 'CLAUDE.md', 'skills', 'agents', 'commands', 'rules']) {
       const source = join(shared, name),
         target = join(root, name)
       if (existsSync(source) && !existsSync(target) && shared !== root)

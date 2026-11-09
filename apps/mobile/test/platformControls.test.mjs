@@ -431,6 +431,74 @@ test('a destination clarification keeps the composer draft instead of acknowledg
   hooks.dispose()
 })
 
+/** The shared pattern rules in brief: trimmed, blanks dropped, at least one pattern and none absolute. */
+const sharedRules = {
+  normalizeRulePaths: (patterns) => [...new Set(patterns.map((line) => line.trim()).filter(Boolean))],
+  rulePathsProblem: (paths) =>
+    !paths.length
+      ? { message: 'Add at least one file pattern, such as src/api/**.', values: {} }
+      : paths.some((pattern) => pattern.startsWith('/'))
+        ? { message: '{0} must be relative to the repository, not an absolute path.', values: { 0: paths[0] } }
+        : null,
+}
+
+for (const os of ['ios', 'android']) {
+  test(`${os} a rule set to apply when files match saves its patterns and explains a refused one`, async () => {
+    const hooks = hookHarness()
+    const calls = []
+    const store = {
+      language: 'en',
+      computers: [{ id: 'remote', access: 'owner' }],
+      projects: [],
+      isOnline: () => true,
+      mayUse: () => true,
+      invoke: async (...args) => calls.push(args),
+    }
+    const { RuleEditor } = load('components/RulesSettings.tsx', os, {
+      react: hooks.react,
+      '../runtime/store': { useStore: () => store },
+      '@ramu/shared/types': { RULE_BODY_LIMIT: 8000, RULE_NAME_LIMIT: 120 },
+      '@ramu/shared/providers/providers': { AGENT_PROVIDERS: ['codex'], providerName: (id) => id },
+      '@ramu/shared/rules': sharedRules,
+    })
+    const rule = {
+      id: 'r',
+      revision: 2,
+      name: 'API',
+      body: 'Validate inputs.',
+      projectId: null,
+      providers: [],
+      activation: 'paths',
+      paths: ['src/api/**'],
+      enabled: true,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const render = () => hooks.render(() => RuleEditor({ hostId: 'remote', rule, onClose() {}, onSaved() {} }))
+    const all = () => nodes(render())
+    const patterns = () =>
+      all().find((node) => node.type === 'TextInput' && node.props.accessibilityLabel === 'File patterns')
+    const save = () => all().find((node) => node.type === 'Button' && node.props.title === 'Save')
+    assert.equal(all().find((node) => node.type === 'Segmented').props.value, 'paths')
+    assert.equal(patterns().props.value, 'src/api/**')
+    patterns().props.onChangeText('/etc/**')
+    assert.equal(save().props.disabled, true)
+    assert.ok(
+      all().some((node) => node.props.children === '/etc/** must be relative to the repository, not an absolute path.'),
+    )
+    patterns().props.onChangeText(' src/api/** \n\n**/*.test.ts')
+    assert.equal(save().props.disabled, false)
+    save().props.onPress()
+    await settle()
+    assert.deepEqual(JSON.parse(JSON.stringify(calls[0][2])).paths, ['src/api/**', '**/*.test.ts'])
+    all()
+      .find((node) => node.type === 'Segmented')
+      .props.onChange('always')
+    assert.equal(patterns(), undefined)
+    hooks.dispose()
+  })
+}
+
 for (const os of ['ios', 'android']) {
   test(`${os} rule edits retain failed text, enforce explicit scopes and save one revision on the owning host`, async () => {
     const hooks = hookHarness()
@@ -457,6 +525,7 @@ for (const os of ['ios', 'android']) {
       '../runtime/store': { useStore: () => store },
       '@ramu/shared/types': { RULE_BODY_LIMIT: 8000, RULE_NAME_LIMIT: 120 },
       '@ramu/shared/providers/providers': { AGENT_PROVIDERS: ['codex'], providerName: (id) => id },
+      '@ramu/shared/rules': sharedRules,
     })
     const render = () =>
       hooks.render(() =>
@@ -497,6 +566,7 @@ for (const os of ['ios', 'android']) {
       projectId: 'p',
       providers: ['codex'],
       activation: 'always',
+      paths: [],
       enabled: true,
     })
     finish()

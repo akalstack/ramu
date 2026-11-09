@@ -122,6 +122,7 @@ import type {
   CommitDraft,
   ForgeStatus,
   Rule,
+  RuleFileStatus,
   RuleInput,
   RuleRevision,
   NativeInstructions,
@@ -1409,6 +1410,8 @@ export interface RamuMethods extends ArtifactMethods {
   /** API reads, writes and Git transport for this repository, separately; nothing is pushed. */
   'forge.checkAccess'(taskId: string, repoId: string): ForgeAccessReport
   'rules.list'(): Rule[]
+  /** Where Claude Code's copy of each path rule was last written, with any problem writing it. */
+  'rules.files'(): RuleFileStatus[]
   'rules.save'(input: RuleInput): Rule
   'rules.remove'(ruleId: string): void
   'rules.history'(ruleId: string): RuleRevision[]

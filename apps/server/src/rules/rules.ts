@@ -8,7 +8,15 @@ import {
   type RuleInput,
   type RuleRevision,
 } from '@ramu/shared/types'
-import { ruleCharacters, ruleDeliveryBlock, ruleScopeCosts } from '@ramu/shared/rules'
+import { translate } from '@ramu/shared/i18n'
+import {
+  normalizeRulePaths,
+  ruleCharacters,
+  ruleDeliveryBlock,
+  rulePathsLine,
+  rulePathsProblem,
+  ruleScopeCosts,
+} from '@ramu/shared/rules'
 import type { Db } from '../db'
 
 type Row = {
@@ -18,6 +26,7 @@ type Row = {
   project_id: string | null
   providers: string
   activation: Rule['activation']
+  paths: string
   enabled: number
   revision: number
   created_at: number
@@ -32,7 +41,8 @@ const fromRow = (row: Row): Rule => ({
   providers: (JSON.parse(row.providers) as string[]).filter((p): p is AgentProvider =>
     (AGENT_PROVIDERS as readonly string[]).includes(p),
   ),
-  activation: row.activation === 'manual' ? 'manual' : 'always',
+  activation: row.activation === 'manual' || row.activation === 'paths' ? row.activation : 'always',
+  paths: row.activation === 'paths' ? (JSON.parse(row.paths) as string[]) : [],
   enabled: row.enabled === 1,
   revision: row.revision,
   createdAt: row.created_at,
@@ -65,9 +75,15 @@ export class RuleStore {
     this.get(id)
     return (
       this.db
-        .prepare('SELECT revision, name, body, at FROM rule_revisions WHERE rule_id = ? ORDER BY revision DESC')
-        .all(id) as unknown as RuleRevision[]
-    ).map((entry) => ({ revision: entry.revision, name: entry.name, body: entry.body, at: entry.at }))
+        .prepare('SELECT revision, name, body, paths, at FROM rule_revisions WHERE rule_id = ? ORDER BY revision DESC')
+        .all(id) as { revision: number; name: string; body: string; paths: string; at: number }[]
+    ).map((entry) => ({
+      revision: entry.revision,
+      name: entry.name,
+      body: entry.body,
+      paths: JSON.parse(entry.paths) as string[],
+      at: entry.at,
+    }))
   }
 
   save(input: RuleInput, now = Date.now()): Rule {
@@ -76,6 +92,9 @@ export class RuleStore {
     if (!input.body.trim()) throw new Error('A rule needs some text')
     if (input.body.length > RULE_BODY_LIMIT)
       throw new Error(`A rule can be up to ${RULE_BODY_LIMIT} characters; split it into several rules`)
+    const paths = input.activation === 'paths' ? normalizeRulePaths(input.paths) : []
+    const pathsProblem = input.activation === 'paths' ? rulePathsProblem(paths) : null
+    if (pathsProblem) throw new Error(translate('en', pathsProblem.message, pathsProblem.values))
     const providers = [...new Set(input.providers)].filter((p) => (AGENT_PROVIDERS as readonly string[]).includes(p))
     const existing = input.id ? this.get(input.id) : null
     if (existing && input.baseRevision !== existing.revision)
@@ -87,6 +106,7 @@ export class RuleStore {
       projectId: input.projectId,
       providers,
       activation: input.activation,
+      paths,
       enabled: input.enabled,
       revision: (existing?.revision ?? 0) + 1,
       createdAt: existing?.createdAt ?? now,
@@ -97,10 +117,11 @@ export class RuleStore {
     try {
       this.db
         .prepare(
-          `INSERT INTO rules (id, name, body, project_id, providers, activation, enabled, revision, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO rules (id, name, body, project_id, providers, activation, paths, enabled, revision, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET name = excluded.name, body = excluded.body, project_id = excluded.project_id,
-             providers = excluded.providers, activation = excluded.activation, enabled = excluded.enabled,
+             providers = excluded.providers, activation = excluded.activation, paths = excluded.paths,
+             enabled = excluded.enabled,
              revision = excluded.revision, updated_at = excluded.updated_at`,
         )
         .run(
@@ -110,14 +131,15 @@ export class RuleStore {
           next.projectId,
           JSON.stringify(next.providers),
           next.activation,
+          JSON.stringify(next.paths),
           next.enabled ? 1 : 0,
           next.revision,
           next.createdAt,
           next.updatedAt,
         )
       this.db
-        .prepare('INSERT INTO rule_revisions (rule_id, revision, name, body, at) VALUES (?, ?, ?, ?, ?)')
-        .run(next.id, next.revision, next.name, next.body, now)
+        .prepare('INSERT INTO rule_revisions (rule_id, revision, name, body, paths, at) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(next.id, next.revision, next.name, next.body, JSON.stringify(next.paths), now)
       this.db.exec('COMMIT')
     } catch (error) {
       this.db.exec('ROLLBACK')
@@ -126,7 +148,10 @@ export class RuleStore {
     return next
   }
 
-  /** Restoring writes the old text as a new revision, so history only ever grows. */
+  /**
+   * Restoring writes the old text as a new revision, so history only ever grows. A path rule takes back the revision's
+   * patterns too, unless that revision predates its patterns.
+   */
   restore(id: string, revision: number, now = Date.now()): Rule {
     const current = this.get(id)
     const old = this.history(id).find((entry) => entry.revision === revision)
@@ -140,6 +165,7 @@ export class RuleStore {
         projectId: current.projectId,
         providers: current.providers,
         activation: current.activation,
+        paths: old.paths.length ? old.paths : current.paths,
         enabled: current.enabled,
       },
       now,
@@ -164,12 +190,15 @@ export class RuleStore {
     for (const rule of this.list()) if (rule.projectId === projectId) this.remove(rule.id)
   }
 
-  /** The always-on, enabled rules a session for this project and provider receives, in a stable order. */
+  /**
+   * The enabled rules a session for this project and provider receives as text, in a stable order: Always rules, and
+   * path rules for runtimes other than Claude Code, which loads those from the rules files Ramu writes.
+   */
   applicable(projectId: string | null, provider: AgentProvider): Rule[] {
     return this.list().filter(
       (rule) =>
         rule.enabled &&
-        rule.activation === 'always' &&
+        (rule.activation === 'always' || (rule.activation === 'paths' && provider !== 'claude-code')) &&
         (rule.projectId === null || rule.projectId === projectId) &&
         (rule.providers.length === 0 || rule.providers.includes(provider)),
     )
@@ -184,15 +213,19 @@ export class RuleStore {
       rules.reduce((sum, rule) => sum + ruleCharacters(rule), 0),
     )
     if (blocked) throw new Error(blocked)
-    return `${RULES_PREAMBLE}\n\n${rules.map((rule) => `### ${rule.name}\n${rule.body}`).join('\n\n')}`
+    const section = (rule: Rule) =>
+      rule.activation === 'paths'
+        ? `### ${rule.name}\n${rulePathsLine(rule.paths)}\n${rule.body}`
+        : `### ${rule.name}\n${rule.body}`
+    return `${RULES_PREAMBLE}\n\n${rules.map(section).join('\n\n')}`
   }
 
   /**
-   * Delivery cost for each scope the rule reaches: refuse a save that would push the enabled always-on text a thread can
+   * Delivery cost for each scope the rule reaches: refuse a save that would push the enabled delivered text a thread can
    * receive (host-wide plus its project's) past the budget. A host-wide rule is checked against every project.
    */
   private assertBudget(next: Rule) {
-    if (!next.enabled || next.activation !== 'always') return
+    if (!next.enabled || next.activation === 'manual') return
     const over = ruleScopeCosts([...this.list().filter((rule) => rule.id !== next.id), next])
       .filter((scope) => next.projectId === null || scope.projectId === next.projectId)
       .find((scope) => scope.characters > scope.limit)

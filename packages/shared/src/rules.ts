@@ -1,5 +1,6 @@
 import type { AgentProvider } from './types/agent'
-import { RULE_TOTAL_LIMIT, type Rule } from './types/rules'
+import type { TranslationValues } from './i18n'
+import { RULE_PATH_LIMIT, RULE_PATTERN_LIMIT, RULE_TOTAL_LIMIT, type Rule } from './types/rules'
 
 export interface RuleDelivery {
   /**
@@ -43,15 +44,49 @@ export function ruleDeliveryBlock(provider: AgentProvider, characters: number): 
     : null
 }
 
-type Scoped = Pick<Rule, 'id' | 'name' | 'body' | 'projectId' | 'providers' | 'activation' | 'enabled'>
+type Scoped = Pick<Rule, 'id' | 'name' | 'body' | 'projectId' | 'providers' | 'activation' | 'enabled' | 'paths'>
+
+/** The line a path rule carries in instruction text, so a runtime without path activation still knows its scope. */
+export const rulePathsLine = (paths: readonly string[]) =>
+  `Applies when you work on files matching: ${paths.map((pattern) => `\`${pattern}\``).join(', ')}.`
 
 /** Characters a rule adds to a thread's delivered rules; what the per-scope budget counts. */
-export const ruleCharacters = (rule: Pick<Rule, 'name' | 'body'>) => rule.name.length + rule.body.length
+export const ruleCharacters = (rule: Pick<Rule, 'name' | 'body' | 'activation' | 'paths'>) =>
+  rule.name.length + rule.body.length + (rule.activation === 'paths' ? rulePathsLine(rule.paths).length + 1 : 0)
+
+/** Whether Claude Code receives this rule as a path-scoped rules file Ramu writes, instead of instruction text. */
+export const ruleWritesClaudeFile = (rule: Pick<Rule, 'enabled' | 'activation' | 'providers'>) =>
+  rule.enabled && rule.activation === 'paths' && (!rule.providers.length || rule.providers.includes('claude-code'))
+
+/** File patterns as saved: trimmed, a leading `./` dropped, blanks and repeats removed, order kept. */
+export function normalizeRulePaths(patterns: readonly string[]): string[] {
+  return [...new Set(patterns.map((line) => line.trim().replace(/^(\.\/)+/, '')).filter(Boolean))]
+}
+
+/** Why these normalized file patterns cannot be saved, as copy with its values, or null when they are fine. */
+export function rulePathsProblem(paths: readonly string[]): { message: string; values: TranslationValues } | null {
+  if (!paths.length) return { message: 'Add at least one file pattern, such as src/api/**.', values: {} }
+  if (paths.length > RULE_PATH_LIMIT)
+    return { message: 'Use up to {0} file patterns.', values: { '0': RULE_PATH_LIMIT } }
+  for (const pattern of paths) {
+    const values = { '0': pattern }
+    if (pattern.length > RULE_PATTERN_LIMIT)
+      return { message: 'Keep each file pattern to {0} characters or fewer.', values: { '0': RULE_PATTERN_LIMIT } }
+    // eslint-disable-next-line no-control-regex -- control characters would break the rules file frontmatter.
+    if (/[\u0000-\u001f\u007f]/.test(pattern)) return { message: '{0} contains a control character.', values }
+    if (pattern.includes('\\')) return { message: 'Use / between folders in {0}.', values }
+    if (/^(\/|~|[A-Za-z]:)/.test(pattern))
+      return { message: '{0} must be relative to the repository, not an absolute path.', values }
+    if (pattern.split('/').includes('..')) return { message: '{0} cannot use .. to leave the repository.', values }
+  }
+  return null
+}
 
 /** A rough token estimate for display (about four characters per token); the budget itself is in characters. */
 export const estimatedTokens = (characters: number) => Math.ceil(characters / 4)
 
-const delivered = (rule: Scoped) => rule.enabled && rule.activation === 'always'
+/** Always rules, and path rules, which runtimes without native path activation receive at session start. */
+const delivered = (rule: Scoped) => rule.enabled && rule.activation !== 'manual'
 
 export interface RuleScopeCost {
   /** Null: chats with no project, which receive only host-wide rules. */

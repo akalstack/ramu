@@ -78,6 +78,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
   loadPreferences,
   threadTitles,
   rules,
+  ruleFiles,
   learning,
   agentThreads,
   pullRequestIndex,
@@ -262,7 +263,11 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
     'repos.list': { args: z.tuple([id]), run: (projectId: string) => workspace.listRepositories(projectId) },
     'repos.add': {
       args: z.tuple([id, z.string().max(4096)]),
-      run: (projectId: string, dir: string) => workspace.addRepository(projectId, dir),
+      run: async (projectId: string, dir: string) => {
+        const repo = await workspace.addRepository(projectId, dir)
+        ruleFiles?.sync()
+        return repo
+      },
     },
     'repos.pick': {
       args: z.tuple([z.enum(['project', 'repository']).optional()]),
@@ -581,13 +586,22 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
     'projects.remove': {
       args: z.tuple([id]),
       run: (p: string) => {
+        const roots = workspace.listRepositories(p).map((repo) => repo.root)
         workspace.removeProject(p)
         rules?.removeForProject(p)
+        ruleFiles?.sync(roots)
         learning?.removeProject(p)
         watchers.projectConfigs.retain(workspace.listProjects().map((project) => project.id))
       },
     },
-    'repos.remove': { args: z.tuple([id]), run: (r: string) => workspace.removeRepository(r) },
+    'repos.remove': {
+      args: z.tuple([id]),
+      run: (r: string) => {
+        const { root } = workspace.getRepository(r)
+        workspace.removeRepository(r)
+        ruleFiles?.sync([root])
+      },
+    },
     'tasks.setup': {
       args: z.tuple([id]),
       run: async (taskId: string) => {

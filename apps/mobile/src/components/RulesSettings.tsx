@@ -9,6 +9,9 @@ import { font, radius, space, useTheme } from '../theme'
 import { Button, Row, Segmented, Sheet, T } from './ui'
 import { ToggleRow } from './SettingRows'
 import { matchesWords, searchWords } from '@ramu/shared/listView'
+import { normalizeRulePaths, rulePathsProblem } from '@ramu/shared/rules'
+
+const ACTIVATION_LABELS = { always: 'Always', manual: 'Manual', paths: 'When files match' } as const
 
 /** Uses the host rule collection; editing text never grants agent permissions or starts work. */
 export function RulesSettings({ hostId }: { hostId: string }) {
@@ -96,7 +99,8 @@ export function RulesSettings({ hostId }: { hostId: string }) {
                     )?.name ?? rule.projectId)
                   : t('All projects'),
                 rule.providers.length ? rule.providers.map(providerName).join(', ') : t('All providers'),
-                t(rule.enabled ? (rule.activation === 'always' ? 'Always' : 'Manual') : 'Disabled'),
+                t(rule.enabled ? ACTIVATION_LABELS[rule.activation] : 'Disabled'),
+                ...(rule.activation === 'paths' ? [rule.paths.join(', ')] : []),
               ].join(' · ')}
             </T>
           </View>
@@ -133,6 +137,8 @@ export function RuleEditor({
   const store = useStore()
   const { c } = useTheme()
   const t = (key: string) => translate(store.language, key)
+  const [pathsText, setPathsText] = useState(rule?.paths.join('\n') ?? '')
+  const paths = normalizeRulePaths(pathsText.split('\n'))
   const [draft, setDraft] = useState<RuleInput>(() => ({
     ...(rule ? { id: rule.id, baseRevision: rule.revision } : {}),
     name: rule?.name ?? '',
@@ -140,8 +146,10 @@ export function RuleEditor({
     projectId: rule?.projectId ?? null,
     providers: rule?.providers ?? [],
     activation: rule?.activation ?? 'always',
+    paths: rule?.paths ?? [],
     enabled: rule?.enabled ?? true,
   }))
+  const pathsProblem = draft.activation === 'paths' ? rulePathsProblem(paths) : null
   const [scopeChosen, setScopeChosen] = useState(!!rule)
   const [providersChosen, setProvidersChosen] = useState(!!rule)
   const [history, setHistory] = useState<RuleRevision[] | null>(null)
@@ -165,7 +173,8 @@ export function RuleEditor({
     draft.name.length <= RULE_NAME_LIMIT &&
     draft.body.length <= RULE_BODY_LIMIT &&
     scopeChosen &&
-    providersChosen
+    providersChosen &&
+    !pathsProblem
   const act = async (work: () => Promise<unknown>, close = true) => {
     if (pending.current || !online || !owner || !live.current) return
     pending.current = true
@@ -290,8 +299,36 @@ export function RuleEditor({
           options={[
             { key: 'always', label: t('Always') },
             { key: 'manual', label: t('Manual') },
+            { key: 'paths', label: t('When files match') },
           ]}
         />
+        {draft.activation === 'paths' ? (
+          <>
+            <TextInput
+              value={pathsText}
+              onChangeText={setPathsText}
+              editable={!disabled}
+              multiline
+              autoCapitalize="none"
+              autoCorrect={false}
+              accessibilityLabel={t('File patterns')}
+              accessibilityHint={t('One pattern per line, such as src/api/**')}
+              placeholder={'src/api/**\n**/*.test.ts'}
+              placeholderTextColor={c.placeholder}
+              style={{ ...inputStyle, minHeight: 88, textAlignVertical: 'top' }}
+            />
+            <T tone="muted" size={font.caption}>
+              {t(
+                'One pattern per line, relative to each repository. Claude Code applies the rule itself when it works on matching files; other providers receive it at the start of a thread with its patterns.',
+              )}
+            </T>
+            {pathsProblem ? (
+              <T tone="bad" size={font.caption}>
+                {translate(store.language, pathsProblem.message, pathsProblem.values)}
+              </T>
+            ) : null}
+          </>
+        ) : null}
         <ToggleRow
           title={t('Enabled')}
           value={draft.enabled}
@@ -301,7 +338,11 @@ export function RuleEditor({
         <Button
           title={t('Save')}
           disabled={disabled || !valid}
-          onPress={() => void act(() => store.invoke(hostId, 'rules.save', draft))}
+          onPress={() =>
+            void act(() =>
+              store.invoke(hostId, 'rules.save', { ...draft, paths: draft.activation === 'paths' ? paths : [] }),
+            )
+          }
         />
         {rule ? (
           <>
@@ -334,6 +375,7 @@ export function RuleEditor({
                   disabled={disabled}
                   onPress={() => {
                     setDraft((value) => ({ ...value, name: preview.name, body: preview.body }))
+                    if (preview.paths.length) setPathsText(preview.paths.join('\n'))
                     setPreview(null)
                   }}
                 />

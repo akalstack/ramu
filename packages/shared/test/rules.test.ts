@@ -1,5 +1,13 @@
 import { expect, it } from 'vitest'
-import { estimatedTokens, ruleDuplicates, ruleScopeCosts } from '../src/rules'
+import {
+  estimatedTokens,
+  normalizeRulePaths,
+  ruleCharacters,
+  ruleDuplicates,
+  rulePathsLine,
+  rulePathsProblem,
+  ruleScopeCosts,
+} from '../src/rules'
 import type { Rule } from '../src/types/rules'
 
 const rule = (id: string, patch: Partial<Rule> = {}): Rule => ({
@@ -9,6 +17,7 @@ const rule = (id: string, patch: Partial<Rule> = {}): Rule => ({
   projectId: null,
   providers: [],
   activation: 'always',
+  paths: [],
   enabled: true,
   revision: 1,
   createdAt: 1,
@@ -52,4 +61,29 @@ it('warns about identical text or the same name only between enabled rules one t
     c: { kind: 'name', others: ['a'] },
     d: { kind: 'text', others: ['a'] },
   })
+})
+
+it('normalizes file patterns and refuses ones that are absolute, leave the repository or are too many', () => {
+  expect(normalizeRulePaths([' ./src/api/** ', '', '**/*.test.ts', 'src/api/**'])).toEqual([
+    'src/api/**',
+    '**/*.test.ts',
+  ])
+  expect(rulePathsProblem(['src/api/**', '**/*.test.ts'])).toBeNull()
+  const message = (paths: string[]) => rulePathsProblem(paths)?.message
+  expect(message([])).toMatch(/at least one/)
+  expect(message(['/etc/**'])).toMatch(/relative/)
+  expect(message(['~/notes/*.md'])).toMatch(/relative/)
+  expect(message(['C:/repo/**'])).toMatch(/relative/)
+  expect(message(['src/../../secrets/**'])).toMatch(/\.\./)
+  expect(message(['src\\api'])).toMatch(/Use \//)
+  expect(message(['src/\napi'])).toMatch(/control/)
+  expect(message(['x'.repeat(201)])).toMatch(/characters or fewer/)
+  expect(message(Array.from({ length: 21 }, (_, i) => `src/${i}/**`))).toMatch(/up to/)
+})
+
+it('counts a path rule, with the line naming its patterns, toward the budget like an always rule', () => {
+  const paths = ['src/api/**']
+  const costs = ruleScopeCosts([rule('p', { activation: 'paths', paths, body: 'x' })])
+  expect(costs[0]).toMatchObject({ rules: 1, characters: 1 + 1 + rulePathsLine(paths).length + 1 })
+  expect(ruleCharacters({ name: 'p', body: 'x', activation: 'paths', paths })).toBe(costs[0]!.characters)
 })

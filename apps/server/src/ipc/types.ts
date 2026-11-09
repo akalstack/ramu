@@ -26,6 +26,7 @@ import type { RecapService } from '../memory/recaps'
 import type { MemoryService } from '../memory/memory'
 import type { SummaryService } from '../memory/summaries'
 import type { RuleStore } from '../rules/rules'
+import type { RuleFiles } from '../rules/ruleFiles'
 import type { KeyedLock } from './keyedLock'
 import type { FileWatchers } from './watchers'
 
@@ -74,6 +75,8 @@ export interface Services {
   summaries?: SummaryService
   agentThreads?: import('../background/agentThreads').AgentThreadService
   rules?: RuleStore
+  /** Claude Code's copies of path rules; synced whenever rules or a project's repositories change. */
+  ruleFiles?: RuleFiles
   reviews: ReviewService
   notices?: NoticeInbox
 }

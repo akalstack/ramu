@@ -18,6 +18,7 @@ const state = vi.hoisted(() => ({
     projectId: null,
     enabled: true,
     activation: 'always',
+    paths: [],
   } as Rule,
 }))
 vi.mock('react', async () => ({

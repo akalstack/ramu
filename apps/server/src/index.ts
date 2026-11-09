@@ -18,6 +18,7 @@ import { processRoots } from './agent/processOwners'
 import { writeEvent } from './remote/eventStream'
 import { DEFAULT_AGENT_BROWSER_PREFERENCES } from '@ramu/shared/browser'
 import { providerAdapter } from './providers/adapters'
+import { claudeConfigHome } from './providers/adapters/claude-code'
 import { LocalDiagnostics } from './background/diagnostics'
 import {
   accountEnvironment,
@@ -170,6 +171,7 @@ import { ReviewService } from './review/reviews'
 import { RecapService } from './memory/recaps'
 import { MemoryService, registerMemoryTools } from './memory/memory'
 import { RuleStore } from './rules/rules'
+import { RuleFiles } from './rules/ruleFiles'
 import { SummaryService, registerLibraryTools, withoutTools } from './memory/summaries'
 import { discoverSkills } from './context'
 import { NO_PROJECT, type AgentSessionInfo, type ScheduleInput, type SetupOmission } from '@ramu/shared/types'
@@ -626,6 +628,18 @@ const projectOf = (session: AgentSessionInfo) => {
 }
 agents.memoryInstructions = (session) => memory.instructions(session, projectOf(session))
 const rules = new RuleStore(db)
+const ruleFiles = new RuleFiles({
+  rules: () => rules.list(),
+  repositories: () =>
+    workspace
+      .listProjects()
+      .flatMap((project) =>
+        workspace.listRepositories(project.id).map((repo) => ({ projectId: project.id, root: repo.root })),
+      ),
+  claudeHome: claudeConfigHome,
+})
+// Brings Claude's path-rule files in line with rules saved or repositories changed while Ramu was not running.
+ruleFiles.sync()
 // The person's rules, then what the project's ramu.json says about its stack, or how to start one from No project.
 agents.rulesInstructions = (session) => {
   const project = projectOf(session)
@@ -1115,6 +1129,7 @@ const dispatcher = createDispatcher(
     diagnostics,
     summaries,
     rules,
+    ruleFiles,
     notices: inbox,
     agentThreads,
   },

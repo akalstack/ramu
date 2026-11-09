@@ -1,5 +1,11 @@
 import { z } from 'zod'
-import { RULE_BODY_LIMIT, RULE_NAME_LIMIT, type RuleInput } from '@ramu/shared/types'
+import {
+  RULE_BODY_LIMIT,
+  RULE_NAME_LIMIT,
+  RULE_PATH_LIMIT,
+  RULE_PATTERN_LIMIT,
+  type RuleInput,
+} from '@ramu/shared/types'
 import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
 import { id } from '../schemas'
 import { need } from '../helpers'
@@ -13,13 +19,18 @@ const ruleInput = z.object({
   body: z.string().max(RULE_BODY_LIMIT * 2),
   projectId: id.nullable(),
   providers: z.array(z.enum(AGENT_PROVIDERS)).max(AGENT_PROVIDERS.length),
-  activation: z.enum(['always', 'manual']),
+  activation: z.enum(['always', 'manual', 'paths']),
+  // Loose bounds here; the store refuses anything past the real limits with a sentence the editor can show.
+  paths: z.array(z.string().max(RULE_PATTERN_LIMIT * 2)).max(RULE_PATH_LIMIT * 2),
   enabled: z.boolean(),
 })
 
 /** Shared user rules: text instructions with revisions. They never grant a permission. */
-export const registerRuleHandlers: RegisterHandlers = ({ rules, host, workspace }) => {
-  const changed = () => host.send('rules:changed', {})
+export const registerRuleHandlers: RegisterHandlers = ({ rules, ruleFiles, host, workspace }) => {
+  const changed = () => {
+    ruleFiles?.sync()
+    host.send('rules:changed', {})
+  }
   return {
     'rules.native': {
       args: z.tuple([id.nullable()]),
@@ -34,6 +45,7 @@ export const registerRuleHandlers: RegisterHandlers = ({ rules, host, workspace 
       },
     },
     'rules.list': { args: z.tuple([]), run: () => need(rules).list() },
+    'rules.files': { args: z.tuple([]), run: () => need(ruleFiles).status() },
     'rules.save': {
       args: z.tuple([ruleInput]),
       run: (input: RuleInput) => {

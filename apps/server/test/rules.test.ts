@@ -14,6 +14,7 @@ const input = (patch: Partial<RuleInput> = {}): RuleInput => ({
   projectId: null,
   providers: [],
   activation: 'always',
+  paths: [],
   enabled: true,
   ...patch,
 })
@@ -85,6 +86,29 @@ it("delivers only enabled always-on rules for the session project and provider, 
   expect(text).not.toContain('Manual')
   expect(rules.instructions(null, 'codex')).toContain('Everywhere')
   expect(new RuleStore(openDb(':memory:')).instructions(null, 'codex')).toBeUndefined()
+})
+
+it('sends path rules with their patterns to runtimes without path activation, but never to Claude Code as text', () => {
+  rules.save(input({ name: 'API', body: 'Validate every input.', activation: 'paths', paths: ['src/api/**'] }))
+  const codex = rules.instructions(null, 'codex')!
+  expect(codex).toContain('### API\nApplies when you work on files matching: `src/api/**`.\nValidate every input.')
+  expect(rules.instructions(null, 'opencode')).toContain('`src/api/**`')
+  expect(rules.instructions(null, 'claude-code')).toBeUndefined()
+})
+
+it('stores path patterns normalized, refuses invalid ones and keeps them through history and restore', () => {
+  const pathRule = (paths: string[]) => input({ name: 'API', activation: 'paths', paths })
+  expect(() => rules.save(pathRule([]))).toThrow(/at least one file pattern/)
+  expect(() => rules.save(pathRule(['/abs/**']))).toThrow(/relative to the repository/)
+  expect(() => rules.save(pathRule(['../other/**']))).toThrow(/cannot use \.\./)
+  const first = rules.save(pathRule([' ./src/api/** ', 'src/api/**']))
+  expect(first.paths).toEqual(['src/api/**'])
+  // Patterns belong to path activation only.
+  expect(rules.save(input({ name: 'Always', paths: ['src/**'] })).paths).toEqual([])
+  rules.save({ ...pathRule(['**/*.test.ts']), id: first.id, baseRevision: 1 })
+  expect(rules.history(first.id).map((entry) => entry.paths)).toEqual([['**/*.test.ts'], ['src/api/**']])
+  expect(rules.restore(first.id, 1).paths).toEqual(['src/api/**'])
+  expect(rules.get(first.id).paths).toEqual(['src/api/**'])
 })
 
 it('removing a project removes only its rules, and removing a rule drops its history', () => {

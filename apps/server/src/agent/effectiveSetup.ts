@@ -124,10 +124,13 @@ export function buildSetupSnapshot(input: SetupInputs): AgentSetupSnapshot {
     (rule.providers.length === 0 || rule.providers.includes(input.provider))
   let rulesCharacters = 0
   const reached = input.rules.filter(reaches)
+  // Claude Code reads path rules from the rules files Ramu writes; every other runtime receives them as text.
+  const nativePaths = (rule: Rule) => rule.activation === 'paths' && input.provider === 'claude-code'
+  const asText = (rule: Rule) => rule.activation !== 'manual' && !nativePaths(rule)
   const overSize =
     ruleDeliveryBlock(
       input.provider,
-      reached.filter((rule) => rule.activation === 'always').reduce((sum, rule) => sum + ruleCharacters(rule), 0),
+      reached.filter(asText).reduce((sum, rule) => sum + ruleCharacters(rule), 0),
     ) !== null
   for (const rule of reached) {
     if (rule.activation === 'manual') {
@@ -136,6 +139,16 @@ export function buildSetupSnapshot(input: SetupInputs): AgentSetupSnapshot {
         name: rule.name,
         state: 'omitted',
         reason: 'Manual rule: kept in Settings, not sent on its own.',
+      })
+      continue
+    }
+    if (nativePaths(rule)) {
+      items.push({
+        kind: 'rule',
+        name: rule.name,
+        state: 'not-observable',
+        reason:
+          "Written as a Claude Code rules file. Claude loads it when it works on files matching the rule's patterns.",
       })
       continue
     }

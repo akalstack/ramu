@@ -2,7 +2,15 @@ import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
-import { RULE_BODY_LIMIT, RULE_NAME_LIMIT, type AgentProvider, type Rule, type RuleRevision } from '@ramu/shared/types'
+import {
+  RULE_BODY_LIMIT,
+  RULE_NAME_LIMIT,
+  type AgentProvider,
+  type Rule,
+  type RuleActivation,
+  type RuleFileStatus,
+  type RuleRevision,
+} from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
 import { Switch } from '@/components/ui/switch'
@@ -14,23 +22,49 @@ import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { SettingsCard, SettingsCardList } from './cards'
 import { ListCount, ListEmpty, ListToolbar, useListView } from './ListView'
-import { ruleCharacters, ruleDuplicates, ruleScopeCosts } from '@ramu/shared/rules'
+import {
+  normalizeRulePaths,
+  ruleCharacters,
+  ruleDuplicates,
+  rulePathsProblem,
+  ruleScopeCosts,
+  ruleWritesClaudeFile,
+} from '@ramu/shared/rules'
 import { NativeInstructions } from './NativeInstructions'
-import { duplicateNote, ruleReach, ruleTokens, scopeCostLine } from './rulesView'
+import { activationLabel, claudeCopyNote, duplicateNote, ruleReach, ruleTokens, scopeCostLine } from './rulesView'
 import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './SettingsScope'
 
 const CAPTION = 'm-0 text-caption text-muted-foreground'
 const ALL = ''
+const ACTIVATIONS: readonly RuleActivation[] = ['always', 'manual', 'paths']
+
+/** Where Claude Code's copy of a saved path rule went, one line per file, with any problem writing it. */
+function RuleFileTargets({ status }: { status: RuleFileStatus | undefined }) {
+  if (!status?.targets.length) return null
+  return (
+    <ul className="m-0 flex list-none flex-col gap-0.5 p-0 text-caption" aria-label={t("Claude Code's copy")}>
+      {status.targets.map((target) => (
+        <li key={target.path} className={target.problem ? 'text-destructive' : 'text-muted-foreground'}>
+          <code className="break-all">{target.path}</code>
+          {target.problem ? ` · ${t('Not written: {0}', { '0': target.problem })}` : null}
+        </li>
+      ))}
+    </ul>
+  )
+}
 
 function RuleEditor({
   rule,
   rules,
   projects,
+  files,
   onClose,
   onSaved,
   readOnly = false,
   canWrite = () => true,
 }: {
+  /** Where this rule's Claude Code copy was last written. */
+  files?: RuleFileStatus
   readOnly?: boolean
   canWrite?: () => boolean
   rule: Rule | null
@@ -50,7 +84,11 @@ function RuleEditor({
   const [body, setBody] = useState(rule?.body ?? '')
   const [projectId, setProjectId] = useState(rule?.projectId ?? ALL)
   const [provider, setProvider] = useState<string>(rule?.providers.length === 1 ? rule.providers[0]! : ALL)
-  const [activation, setActivation] = useState<'always' | 'manual'>(rule?.activation ?? 'always')
+  const [activation, setActivation] = useState<RuleActivation>(rule?.activation ?? 'always')
+  const [pathsText, setPathsText] = useState(rule?.paths.join('\n') ?? '')
+  const paths = useMemo(() => normalizeRulePaths(pathsText.split('\n')), [pathsText])
+  const pathsProblem = activation === 'paths' ? rulePathsProblem(paths) : null
+  const providers = provider ? [provider as AgentProvider] : []
   const [enabled, setEnabled] = useState(rule?.enabled ?? true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -70,12 +108,14 @@ function RuleEditor({
       projectId: projectId || null,
       providers: provider ? [provider as AgentProvider] : [],
       activation,
+      paths,
       enabled,
     }
     if (!draft.name || !body.trim()) return undefined
     return ruleDuplicates([...rules.filter((other) => other.id !== draft.id), draft]).get(draft.id)
-  }, [rule?.id, rules, name, body, projectId, provider, activation, enabled])
-  const invalid = !name.trim() || name.length > RULE_NAME_LIMIT || !body.trim() || body.length > RULE_BODY_LIMIT
+  }, [rule?.id, rules, name, body, projectId, provider, activation, paths, enabled])
+  const invalid =
+    !name.trim() || name.length > RULE_NAME_LIMIT || !body.trim() || body.length > RULE_BODY_LIMIT || !!pathsProblem
   const save = async () => {
     if (access.current || !canWrite() || invalid || pending.current) return
     pending.current = true
@@ -87,8 +127,9 @@ function RuleEditor({
         name,
         body,
         projectId: projectId || null,
-        providers: provider ? [provider as AgentProvider] : [],
+        providers,
         activation,
+        paths: activation === 'paths' ? paths : [],
         enabled,
       })
       onSaved()
@@ -163,7 +204,8 @@ function RuleEditor({
               onChange={(event) => setBody(event.target.value)}
             />
             <p className={`${CAPTION} tabular-nums`}>
-              {`${body.length} / ${RULE_BODY_LIMIT}`} · {ruleTokens(ruleCharacters({ name: name.trim(), body }))}
+              {`${body.length} / ${RULE_BODY_LIMIT}`} ·{' '}
+              {ruleTokens(ruleCharacters({ name: name.trim(), body, activation, paths }))}
             </p>
           </Field>
           <div className="grid grid-cols-2 gap-3">
@@ -200,10 +242,39 @@ function RuleEditor({
               options={[
                 { value: 'always', label: t('Always, at the start of a thread') },
                 { value: 'manual', label: t('Manual: kept here, not sent on its own') },
+                { value: 'paths', label: t('When files match') },
               ]}
-              onChange={(value) => setActivation(value === 'manual' ? 'manual' : 'always')}
+              onChange={(value) => setActivation(ACTIVATIONS.find((entry) => entry === value) ?? 'always')}
             />
           </FieldLabel>
+          {activation === 'paths' && (
+            <Field>
+              <FieldLabel htmlFor={`${id}-paths`}>{t('File patterns')}</FieldLabel>
+              <Textarea
+                id={`${id}-paths`}
+                placeholder={'src/api/**\n**/*.test.ts'}
+                value={pathsText}
+                rows={3}
+                spellCheck={false}
+                aria-describedby={`${id}-paths-help`}
+                onChange={(event) => setPathsText(event.target.value)}
+              />
+              <p id={`${id}-paths-help`} className={CAPTION}>
+                {t(
+                  'One pattern per line, relative to each repository. Claude Code applies the rule itself when it works on matching files; other providers receive it at the start of a thread with its patterns.',
+                )}
+              </p>
+              {pathsProblem && (
+                <p role="alert" className="m-0 text-caption text-destructive">
+                  {t(pathsProblem.message, pathsProblem.values)}
+                </p>
+              )}
+              {ruleWritesClaudeFile({ enabled, activation, providers }) && (
+                <p className={CAPTION}>{claudeCopyNote(projectId || null)}</p>
+              )}
+              {rule?.projectId === (projectId || null) && <RuleFileTargets status={files} />}
+            </Field>
+          )}
           {duplicate && (
             <Alert>
               <AlertDescription>{duplicateNote(duplicate, rules)}</AlertDescription>
@@ -251,6 +322,7 @@ export function RulesSettings() {
   const allowed = () => access.current.hostKey === hostKey && !access.current.viewOnly
   const ready = !viewOnly && (!scope || (scope.ready && !scope.stale))
   const rules = useQuery({ queryKey: ['rules', hostKey], queryFn: () => invoke('rules.list'), enabled: ready })
+  const files = useQuery({ queryKey: ['rule-files', hostKey], queryFn: () => invoke('rules.files'), enabled: ready })
   const projects = useQuery({
     queryKey: ['rule-projects', hostKey],
     queryFn: () => invoke('projects.list'),
@@ -258,7 +330,13 @@ export function RulesSettings() {
   })
   const [editing, setEditing] = useState<Rule | 'new' | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const refetch = rules.refetch
+  const refetchRules = rules.refetch,
+    refetchFiles = files.refetch
+  // Saving a rule rewrites Claude Code's copies, so their status is read again with the list.
+  const refetch = useCallback(
+    () => Promise.all([refetchRules(), refetchFiles()]).then(([list]) => list),
+    [refetchRules, refetchFiles],
+  )
   useEffect(() => on('rules:changed', () => void refetch()), [on, refetch])
   useEffect(() => setEditing(null), [hostKey])
   const projectName = useCallback(
@@ -324,6 +402,7 @@ export function RulesSettings() {
                 { value: 'all', label: t('All rules') },
                 { value: 'always', label: t('Always') },
                 { value: 'manual', label: t('Manual') },
+                { value: 'paths', label: t('When files match') },
                 { value: 'off', label: t('Off') },
               ],
               onChange: setKind,
@@ -347,7 +426,8 @@ export function RulesSettings() {
               meta={[
                 projectName(rule.projectId),
                 ruleReach(rule),
-                rule.activation === 'manual' ? t('Manual') : t('Always'),
+                activationLabel(rule.activation),
+                rule.activation === 'paths' ? rule.paths.join(', ') : null,
                 rule.enabled ? null : t('Off'),
                 ruleTokens(ruleCharacters(rule)),
               ]
@@ -369,6 +449,7 @@ export function RulesSettings() {
                           projectId: rule.projectId,
                           providers: rule.providers,
                           activation: rule.activation,
+                          paths: rule.paths,
                           enabled,
                         }),
                       )
@@ -399,6 +480,14 @@ export function RulesSettings() {
                 </>
               }
             >
+              {files.data
+                ?.find((status) => status.ruleId === rule.id)
+                ?.targets.filter((target) => target.problem)
+                .map((target) => (
+                  <p key={target.path} role="alert" className="m-0 text-caption text-destructive">
+                    {t('Claude Code rules file not written to {0}: {1}', { '0': target.path, '1': target.problem })}
+                  </p>
+                ))}
               {duplicates.has(rule.id) && (
                 <p role="note" className="m-0 text-caption text-foreground">
                   {duplicateNote(duplicates.get(rule.id)!, list)}
@@ -430,6 +519,7 @@ export function RulesSettings() {
           rule={editing === 'new' ? null : editing}
           rules={list}
           projects={projects.data ?? []}
+          files={editing === 'new' ? undefined : files.data?.find((status) => status.ruleId === editing.id)}
           onClose={() => setEditing(null)}
           onSaved={() => void refetch()}
         />

@@ -5,7 +5,24 @@ vi.mock('../src/i18n', () => ({
     value.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match),
   useLanguage() {},
 }))
-import { duplicateNote, ruleReach, ruleTokens, scopeCostLine } from '../src/settings/rulesView'
+import {
+  activationLabel,
+  claudeCopyNote,
+  duplicateNote,
+  ruleReach,
+  ruleTokens,
+  scopeCostLine,
+} from '../src/settings/rulesView'
+
+it("labels each activation and says where Claude Code's copy of a path rule is written", () => {
+  expect((['always', 'manual', 'paths'] as const).map(activationLabel)).toEqual([
+    'Always',
+    'Manual',
+    'When files match',
+  ])
+  expect(claudeCopyNote('p')).toMatch(/\.claude\/rules in each of this project's repositories/)
+  expect(claudeCopyNote(null)).toMatch(/your Claude config home/)
+})
 
 it('names the providers a rule reaches, or every provider when none is chosen', () => {
   expect(ruleReach({ providers: [] })).toBe('Every provider')
