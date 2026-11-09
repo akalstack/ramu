@@ -5923,7 +5923,19 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Paired computers': 'Komputer tertaut',
   'No key saved': 'Belum ada kunci tersimpan',
   'On your {0} API key': 'Dengan kunci API {0}-mu',
-  'Media accounts': 'Akun media',
+  Media: 'Media',
+  'Choose which service each ability uses': 'Pilih layanan yang dipakai tiap kemampuan',
+  'Video, speech, music and sound effects can also run on your {0} API key.':
+    'Video, suara, musik, dan efek suara juga bisa dijalankan dengan kunci API {0}-mu.',
+  'Save an API key for Google Gemini, ElevenLabs or OpenAI to make video, speech, music or sound effects.':
+    'Simpan kunci API Google Gemini, ElevenLabs, atau OpenAI untuk membuat video, suara, musik, atau efek suara.',
+  'Manage keys': 'Kelola kunci',
+  'Add a key': 'Tambah kunci',
+  'Connect with an API key': 'Hubungkan dengan kunci API',
+  'Paste API keys in Ramu on the machine running this host. The key stays in that host’s credential store.':
+    'Tempel kunci API di Ramu pada mesin yang menjalankan host ini. Kuncinya tetap di penyimpanan kredensial host itu.',
+  'Save API keys in Ramu on the host computer, under Settings → Media. The phone never stores a key.':
+    'Simpan kunci API di Ramu pada komputer host, di Pengaturan → Media. Ponsel tidak pernah menyimpan kunci.',
   'When no signed-in provider can make video, speech, music or sound effects, they run on a media service with your own API key, billed to that account. Auto tries these after your signed-in providers.':
     'Kalau tidak ada provider yang sudah login yang bisa membuat video, suara, musik, atau efek suara, semuanya dijalankan di layanan media dengan kunci API-mu sendiri dan ditagih ke akun itu. Auto mencobanya setelah provider yang sudah login.',
   'Not connected. Abilities can use it for video, speech, music or sound effects.':
@@ -6436,8 +6448,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Platforms through their CLI': 'Platform lewat CLI-nya',
   'App stores': 'Toko aplikasi',
   'Dashboard data': 'Data dasbor',
-  'Could not read the deploy accounts on this host.': 'Tidak bisa membaca akun deploy di host ini.',
-  'Reconnect to check deploy accounts.': 'Sambungkan ulang untuk memeriksa akun deploy.',
+  'Could not read the accounts on this host.': 'Tidak bisa membaca akun di host ini.',
+  'Reconnect to check the accounts.': 'Sambungkan ulang untuk memeriksa akun.',
   'Connect accounts in Ramu on the host computer, under Settings → Deploy. The phone never stores a token.':
     'Hubungkan akun di Ramu pada komputer host, di Pengaturan → Deploy. Ponsel tidak pernah menyimpan token.',
   '{0} {1} does not work with this Ramu release.': '{0} {1} tidak bisa dipakai dengan rilis Ramu ini.',

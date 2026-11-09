@@ -42,6 +42,7 @@ const PHONE_MENU: readonly { id: SettingsSection; group: SettingsGroup; label?: 
   { id: 'chats', group: 'agents' },
   { id: 'access', group: 'agents' },
   { id: 'models', group: 'agents' },
+  { id: 'media', group: 'agents' },
   { id: 'providers', group: 'agents' },
   { id: 'workflows', group: 'agents' },
   { id: 'memory', group: 'agents' },
@@ -798,6 +799,11 @@ const PHONE_ENTRIES: { section: SettingsSection; title: string; words: string }[
   { section: 'archived', title: 'Archived threads', words: 'history restore unarchive delete' },
   { section: 'agent-setup', title: 'MCP servers', words: 'shared tools external service connection skills' },
   { section: 'memory', title: 'Memories', words: 'remember forget saved memory archive restore' },
+  {
+    section: 'media',
+    title: 'Media',
+    words: 'api key video speech voice narration music sound effects gemini elevenlabs openai',
+  },
   {
     section: 'deploy',
     title: 'Deploy accounts',

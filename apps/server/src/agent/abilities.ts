@@ -920,7 +920,7 @@ export class AbilityService {
     if (!this.host.media || !this.connectedMedia().includes(service))
       throw new Refusal(
         'unavailable',
-        `${connector.name} is chosen for ${ABILITY_LABELS[base.ability].toLowerCase()}, but no API key for it is saved. Save one in Settings → Models → Abilities, then try again.`,
+        `${connector.name} is chosen for ${ABILITY_LABELS[base.ability].toLowerCase()}, but no API key for it is saved. Save one in Settings → Media, then try again.`,
       )
     const prompt = String(base.args.text ?? base.args.prompt ?? prepared.sent.prompt)
     if (this.preferences().askBeforeOtherProvider) {

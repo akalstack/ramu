@@ -197,7 +197,7 @@ export class HostingAccounts {
     let value = await this.saved[platform].read()
     if (!value)
       throw new DeployError(
-        `Connect ${this.adapter(platform).name} in ${isMediaService(platform) ? 'Settings → Models → Abilities' : 'Settings → Deploy'} first.`,
+        `Connect ${this.adapter(platform).name} in ${isMediaService(platform) ? 'Settings → Media' : 'Settings → Deploy'} first.`,
         'signed-out',
       )
     if (value.refreshToken && value.expiresAt && value.expiresAt - RENEW_BEFORE_MS < Date.now())

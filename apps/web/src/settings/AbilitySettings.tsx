@@ -6,7 +6,6 @@ import {
   DEFAULT_ABILITY_PREFERENCES,
   AUTO_MCP_ABILITIES,
   MCP_ABILITIES,
-  MEDIA_ABILITIES,
   isMcpChoice,
   isMediaChoice,
   mediaFor,
@@ -21,7 +20,6 @@ import {
 import { providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
 import type { AppPreferences } from '@ramu/shared/types'
 import { MEDIA_SERVICE_NAMES, MEDIA_SERVICES, type MediaService } from '@ramu/shared/types/deploy'
-import { DeployAccounts } from './DeployAccounts'
 import { SettingsGroupTitle, SettingsRow, SettingsTitle } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
@@ -49,10 +47,13 @@ export function AbilitySettings({
   value,
   onChange,
   busy,
+  onOpenMedia,
 }: {
   value: AppPreferences
   onChange: (next: AppPreferences) => void
   busy: boolean
+  /** Opens Settings › Media, where the media services' keys are saved. */
+  onOpenMedia: () => void
 }) {
   useLanguage()
   const invoke = useSettingsInvoke()
@@ -232,17 +233,23 @@ export function AbilitySettings({
           }
         />
       </SettingsRow>
-      <SettingsGroupTitle>{t('Media accounts')}</SettingsGroupTitle>
-      <p className="muted text-muted-foreground small text-caption m-[0_0_12px] leading-[1.55]">
-        {t(
-          'When no signed-in provider can make video, speech, music or sound effects, they run on a media service with your own API key, billed to that account. Auto tries these after your signed-in providers.',
-        )}{' '}
-        {MEDIA_SERVICES.map(
-          (service) =>
-            `${MEDIA_SERVICE_NAMES[service]}: ${MEDIA_ABILITIES[service].map((ability) => t(ABILITY_LABELS[ability]).toLowerCase()).join(', ')}`,
-        ).join(' · ')}
-      </p>
-      <DeployAccounts only="media" />
+      <SettingsRow>
+        <span>
+          <SettingsTitle>{t('Media')}</SettingsTitle>
+          <span className="muted text-muted-foreground block small text-caption">
+            {media.length
+              ? t('Video, speech, music and sound effects can also run on your {0} API key.', {
+                  '0': media.map((service) => MEDIA_SERVICE_NAMES[service]).join(', '),
+                })
+              : t(
+                  'Save an API key for Google Gemini, ElevenLabs or OpenAI to make video, speech, music or sound effects.',
+                )}
+          </span>
+        </span>
+        <Button variant="secondary" size="sm" onClick={onOpenMedia}>
+          {media.length ? t('Manage keys') : t('Add a key')}
+        </Button>
+      </SettingsRow>
     </div>
   )
 }

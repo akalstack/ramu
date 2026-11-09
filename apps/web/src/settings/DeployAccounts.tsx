@@ -114,11 +114,15 @@ export function DeployAccounts({ only }: { only?: HostingAccount['kind'] } = {})
               </section>
             ) : null
           })}
-      {summary && !summary.canAdminister && only !== 'media' && (
+      {summary && !summary.canAdminister && (
         <p className="m-0 mb-3 px-4 text-caption text-muted-foreground">
-          {t(
-            'Paste tokens on the machine running this host. Vercel, Netlify and Railway can also be signed in from here: their sign-in runs on the host and keeps the token there.',
-          )}
+          {only === 'media'
+            ? t(
+                'Paste API keys in Ramu on the machine running this host. The key stays in that host’s credential store.',
+              )
+            : t(
+                'Paste tokens on the machine running this host. Vercel, Netlify and Railway can also be signed in from here: their sign-in runs on the host and keeps the token there.',
+              )}
         </p>
       )}
     </>
@@ -221,6 +225,11 @@ function DeployAccountRow({
           )}
         </span>
       </SettingsRow>
+      {error && !open && (
+        <p role="alert" className="m-0 mb-3 px-4 text-caption text-destructive">
+          {error}
+        </p>
+      )}
       {open && (
         <div className="mb-3 flex flex-col gap-3 rounded-(--radius-m) bg-fill p-4 text-caption">
           {cliPlatform && (
@@ -355,7 +364,13 @@ function DeployAccountRow({
                 })
               }}
             >
-              <strong>{account.cli ? t('Or use a token') : t('Connect with a token')}</strong>
+              <strong>
+                {account.cli
+                  ? t('Or use a token')
+                  : account.kind === 'media'
+                    ? t('Connect with an API key')
+                    : t('Connect with a token')}
+              </strong>
               <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-muted-foreground">
                 <li>
                   <Button
@@ -376,7 +391,7 @@ function DeployAccountRow({
                 </li>
               </ol>
               <label htmlFor={tokenId} className="flex flex-col gap-1">
-                {t('API token')}
+                {account.kind === 'media' ? t('API key') : t('API token')}
                 <Input
                   id={tokenId}
                   type="password"

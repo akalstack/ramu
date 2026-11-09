@@ -16,7 +16,7 @@ const lastKnown = new Map<string, HostingAccount[]>()
  * The deploy accounts on the selected host, grouped as the desktop's Deploy page groups them. Tokens are pasted on the
  * host's own computer; the phone never holds one, so this page only says what is connected and where to connect the rest.
  */
-export function DeployStatus({ hostId }: { hostId: string }) {
+export function DeployStatus({ hostId, only }: { hostId: string; only?: 'media' }) {
   const store = useStore()
   const { c } = useTheme()
   const t = (key: string, values?: Record<string, string>) => translate(store.language, key, values)
@@ -56,9 +56,7 @@ export function DeployStatus({ hostId }: { hostId: string }) {
             <ActivityIndicator color={c.accent} />
           ) : (
             <T tone="muted" accessibilityRole={failed ? 'alert' : undefined}>
-              {failed
-                ? t('Could not read the deploy accounts on this host.')
-                : t('Reconnect to check deploy accounts.')}
+              {failed ? t('Could not read the accounts on this host.') : t('Reconnect to check the accounts.')}
             </T>
           )}
         </View>
@@ -66,7 +64,7 @@ export function DeployStatus({ hostId }: { hostId: string }) {
     )
   return (
     <>
-      {DEPLOY_ACCOUNT_GROUPS.map((group) => {
+      {(only ? [{ kind: only, title: 'Media' }] : DEPLOY_ACCOUNT_GROUPS).map((group) => {
         const members = accounts.filter((account) => account.kind === group.kind)
         if (!members.length) return null
         return (
@@ -95,7 +93,11 @@ export function DeployStatus({ hostId }: { hostId: string }) {
         )
       })}
       <T size={font.caption} tone="muted" style={{ paddingHorizontal: space.xl, paddingTop: space.m }}>
-        {t('Connect accounts in Ramu on the host computer, under Settings → Deploy. The phone never stores a token.')}
+        {only === 'media'
+          ? t('Save API keys in Ramu on the host computer, under Settings → Media. The phone never stores a key.')
+          : t(
+              'Connect accounts in Ramu on the host computer, under Settings → Deploy. The phone never stores a token.',
+            )}
       </T>
     </>
   )

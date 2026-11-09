@@ -285,7 +285,16 @@ test('the phone menu has every desktop section a phone can use, arranged for a p
   // This phone first, then a host's agents before its workspace, and history and About last.
   const byGroup = (group) => SETTINGS_SECTIONS.filter((section) => section.group === group).map((section) => section.id)
   assert.deepEqual(byGroup('phone'), ['appearance', 'notifications', 'remote'])
-  assert.deepEqual(byGroup('agents'), ['chats', 'access', 'models', 'providers', 'workflows', 'memory', 'agent-setup'])
+  assert.deepEqual(byGroup('agents'), [
+    'chats',
+    'access',
+    'models',
+    'media',
+    'providers',
+    'workflows',
+    'memory',
+    'agent-setup',
+  ])
   assert.deepEqual(byGroup('workspace'), ['git', 'deploy', 'browser', 'computer', 'system'])
   assert.deepEqual(byGroup('more'), ['archived', 'about'])
   // Host pages keep the desktop's names, so a section reads the same on both.
@@ -293,6 +302,10 @@ test('the phone menu has every desktop section a phone can use, arranged for a p
     assert.equal(section.label, SETTINGS_MENU.find((entry) => entry.id === section.id).label)
   assert.equal(sectionById('remote').label, 'Paired computers')
   assert.ok(searchSettings('izin', null, (text) => (text === 'Permissions' ? 'Izin' : text)).length > 0)
+
+  // Media keys have their own page, found by the services' names.
+  assert.equal(sectionById('media').label, 'Media')
+  assert.ok(searchSettings('elevenlabs', null, (text) => text).some((hit) => hit.section === 'media'))
 })
 
 test('the advisor and the early switch show their details only while they apply', () => {
