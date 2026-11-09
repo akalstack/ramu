@@ -6811,4 +6811,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   "No browser found": "Tidak ada browser ditemukan",
   "Not found on this computer: {0}": "Tidak ada di komputer ini: {0}",
   "Sign in to the websites in a Ramu profile instead.": "Masuk ke situs di profil Ramu saja.",
+  "Line {0}": "Baris {0}",
+  "Lines {0}": "Baris {0}",
+  "Old line {0}": "Baris lama {0}",
+  "Old lines {0}": "Baris lama {0}",
+  "What should change, or what would you like to ask? Markdown works.": "Apa yang perlu diubah, atau apa yang ingin Anda tanyakan? Markdown bisa dipakai.",
 }

@@ -21,8 +21,13 @@ export function pendingComments(reviews: ChangeReview[], sessionId: string): Pen
     .filter((group) => group.ids.length > 0)
 }
 
-export const commentLabel = (side: 'old' | 'new', line: number, endLine: number, scope?: string) =>
-  scope === 'file' ? t('File') : `${side === 'old' ? 'L' : 'R'} ${line}${endLine !== line ? `–${endLine}` : ''}`
+/** Where a comment sits, as people read it: "Line 301", "Lines 12–18", or "Old line 7" for a removed line. */
+export const commentLabel = (side: 'old' | 'new', line: number, endLine: number, scope?: string) => {
+  if (scope === 'file') return t('File')
+  const lines = endLine !== line ? `${line}–${endLine}` : String(line)
+  if (side === 'old') return endLine !== line ? t('Old lines {0}', { 0: lines }) : t('Old line {0}', { 0: lines })
+  return endLine !== line ? t('Lines {0}', { 0: lines }) : t('Line {0}', { 0: lines })
+}
 
 /** "2 comments" above the message box; hover for the list, × to take them off this message (they stay on the diff). */
 export function CommentsChip({ groups, onRemove }: { groups: PendingComments[]; onRemove: () => void }) {

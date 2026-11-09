@@ -55,16 +55,19 @@ export function CommentForm({
     >
       <header>
         <span className={WHERE_CLASS}>{where}</span>
-        <span className="muted text-muted-foreground small text-caption">
+        <span className="min-w-0 truncate font-mono text-caption text-muted-foreground" title={path}>
+          {path.split('/').pop()}
+        </span>
+        <span className="ml-auto flex-none text-caption text-muted-foreground">
           {editing ? t('Editing comment') : t('New comment')}
         </span>
       </header>
       <Textarea
         ref={inputRef}
         aria-label={t('Comment on {0}', { '0': path })}
-        rows={2}
+        rows={3}
         maxLength={10000}
-        placeholder={t('What should change, or what would you like to ask?')}
+        placeholder={t('What should change, or what would you like to ask? Markdown works.')}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
