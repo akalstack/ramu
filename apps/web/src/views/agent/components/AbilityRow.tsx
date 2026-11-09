@@ -92,9 +92,10 @@ export function AbilityRow({ call, sessionId, live }: { call: AbilityCall; sessi
           ))}
         </ul>
       ) : null}
-      {live && !dismissed && (
+      {/* Running again needs the turn; setting up what was missing stays offered after the agent has moved on. */}
+      {!dismissed && ((live && done) || call.refusal === 'unavailable') && (
         <div className="flex flex-wrap gap-1">
-          {done && image && (
+          {live && done && image && (
             <Button
               variant="ghost"
               size="sm"
@@ -105,7 +106,7 @@ export function AbilityRow({ call, sessionId, live }: { call: AbilityCall; sessi
               {running === 'same' ? t('Making another…') : t('Make another')}
             </Button>
           )}
-          {done && call.provider !== 'ramu' && !call.mcp && !call.media && (
+          {live && done && call.provider !== 'ramu' && !call.mcp && !call.media && (
             <Button
               variant="ghost"
               size="sm"

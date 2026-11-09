@@ -918,6 +918,16 @@ export const fakeCodex: import('../agent/agentRunner').AgentRunnerFactory = (sco
     emit({ kind: 'text', text: `Fake Codex in ${scope.cwd} received: ${prompt}` })
     emit({ kind: 'result', isError: false, text: 'done', costUsd: null })
   }
+  // A failed fake turn ends as a failed turn, as a real provider's does; left unhandled it would end the whole host.
+  const turn = (prompt: string) =>
+    void send(prompt).catch((error: unknown) =>
+      emit({
+        kind: 'result',
+        isError: true,
+        text: error instanceof Error ? error.message : String(error),
+        costUsd: null,
+      }),
+    )
   const runner: import('../agent/agentRunner').AgentRunner = {
     setTools: (tools) => {
       connection = tools
@@ -941,10 +951,10 @@ export const fakeCodex: import('../agent/agentRunner').AgentRunnerFactory = (sco
         cwd: scope.cwd,
         providerSessionId: resume || 'fake-codex-thread',
       })
-      void send(prompt)
+      turn(prompt)
     },
     send: async (prompt) => {
-      void send(prompt)
+      turn(prompt)
     },
     steer: async (text) => {
       emit({ kind: 'text', text: `Steered: ${text}` })

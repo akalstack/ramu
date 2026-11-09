@@ -1,6 +1,7 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import type { Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
-import { fakeQuery } from '../src/providers/fakeAgent'
+import { DEFAULT_AGENT_SETTINGS, type AgentEvent } from '@ramu/shared/types'
+import { fakeCodex, fakeQuery } from '../src/providers/fakeAgent'
 
 /** Runs one turn through the fake agent and returns the text of its replies. */
 async function replies(content: SDKUserMessage['message']['content']): Promise<string> {
@@ -28,4 +29,18 @@ it('runs the [rich] scenario for a message that carries an attachment', async ()
 
 it('runs the same scenario for a plain text message', async () => {
   expect(await replies('[rich] compare the endpoints')).toContain('- [x] Single-use tokens')
+})
+
+it('ends a fake turn whose tool call fails as a failed turn, keeping the host running', async () => {
+  const events: AgentEvent[] = []
+  const runner = fakeCodex(
+    { cwd: '/work' } as Parameters<typeof fakeCodex>[0],
+    { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' },
+    (event) => void events.push(event),
+  )
+  // Nothing listens here, so the tool call cannot reach Ramu's tools.
+  runner.setTools?.({ url: 'http://127.0.0.1:9/mcp', token: 'test' })
+  await runner.start('<tool-call>{"name":"speak","arguments":{"text":"Hello"}}</tool-call>', null)
+  await vi.waitFor(() => expect(events.some((event) => event.kind === 'result')).toBe(true), { timeout: 10_000 })
+  expect(events.find((event) => event.kind === 'result')).toMatchObject({ kind: 'result', isError: true })
 })
