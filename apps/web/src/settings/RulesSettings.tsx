@@ -20,7 +20,8 @@ import { Field, FieldLabel } from '@/components/ui/field'
 import { Dialog, Dropdown, timeAgo } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
-import { SettingsCard, SettingsCardList } from './cards'
+import { SettingsCard, SettingsCardList, SettingsEmpty } from './cards'
+import { Plus } from 'lucide-react'
 import { ListCount, ListEmpty, ListToolbar, useListView } from './ListView'
 import {
   normalizeRulePaths,
@@ -364,9 +365,23 @@ export function RulesSettings() {
   return (
     <>
       {viewOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
-      <p className={`${CAPTION} mb-4`}>
-        {t('Instructions for how agents work, sent at the start of a thread. They never grant permissions.')}
-      </p>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <p className={CAPTION}>
+          {t('Instructions for how agents work, sent at the start of a thread. They never grant permissions.')}
+        </p>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="flex-none"
+          disabled={viewOnly}
+          onClick={() => {
+            if (allowed()) setEditing('new')
+          }}
+        >
+          <Plus size={14} />
+          {t('New rule')}
+        </Button>
+      </div>
       {(error || rules.error) && (
         <Alert variant="destructive" className="mb-3">
           <AlertDescription>{error ?? errorText(rules.error)}</AlertDescription>
@@ -388,26 +403,30 @@ export function RulesSettings() {
         </div>
       )}
       <div className="flex flex-col gap-3">
-        <ListToolbar
-          view={view}
-          label={t('Search rules')}
-          filters={[
-            {
-              key: 'kind',
-              label: t('Show'),
-              value: kind,
-              options: [
-                { value: 'all', label: t('All rules') },
-                { value: 'always', label: t('Always') },
-                { value: 'manual', label: t('Manual') },
-                { value: 'paths', label: t('When files match') },
-                { value: 'off', label: t('Off') },
-              ],
-              onChange: setKind,
-            },
-          ]}
-        />
+        {/* Filters over an empty list only add noise; they appear once there is a rule. */}
+        {view.total > 0 && (
+          <ListToolbar
+            view={view}
+            label={t('Search rules')}
+            filters={[
+              {
+                key: 'kind',
+                label: t('Show'),
+                value: kind,
+                options: [
+                  { value: 'all', label: t('All rules') },
+                  { value: 'always', label: t('Always') },
+                  { value: 'manual', label: t('Manual') },
+                  { value: 'paths', label: t('When files match') },
+                  { value: 'off', label: t('Off') },
+                ],
+                onChange: setKind,
+              },
+            ]}
+          />
+        )}
         <ListCount view={view} />
+        {rules.data?.length === 0 && <SettingsEmpty>{t('No rules yet.')}</SettingsEmpty>}
         {rules.data && view.total > 0 && (
           <ListEmpty
             view={view}
@@ -495,19 +514,6 @@ export function RulesSettings() {
           ))}
           {view.paged.more}
         </SettingsCardList>
-      </div>
-      {rules.data?.length === 0 && <p className={CAPTION}>{t('No rules yet.')}</p>}
-      <div className="mt-3">
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={viewOnly}
-          onClick={() => {
-            if (allowed()) setEditing('new')
-          }}
-        >
-          {t('New rule')}
-        </Button>
       </div>
       {editing && (
         <RuleEditor

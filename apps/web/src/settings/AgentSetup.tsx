@@ -4,7 +4,7 @@ import { InlineAction, InlineLink } from '@/components/inline-action'
 import { useStaging } from './stagedChanges'
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Globe, SquareTerminal } from 'lucide-react'
+import { Globe, SquareTerminal, WandSparkles } from 'lucide-react'
 import type { AgentProvider } from '@ramu/shared/types'
 import {
   setupFromText,
@@ -28,25 +28,13 @@ import { errorText } from '../lib/errors'
 import { ramu } from '../ipc'
 import { ProviderIcon } from '../models/ProviderIcon'
 import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './SettingsScope'
-import { usePaged } from './cards'
+import { SettingsEmpty, SettingsSectionHead, usePaged } from './cards'
 import { McpSettings } from './McpSettings'
 import { RulesSettings } from './RulesSettings'
 
 const CAPTION = 'm-0 text-caption text-muted-foreground'
 
 export type SetupView = 'mcp' | 'skills' | 'rules' | 'environment'
-
-/** An empty list says so inside a soft panel instead of leaving bare text between headings. */
-function EmptyNote({ children }: { children: ReactNode }) {
-  return (
-    <p
-      role="status"
-      className="m-0 mb-4 rounded-(--radius-m) bg-fill px-4 py-6 text-center text-caption text-muted-foreground"
-    >
-      {children}
-    </p>
-  )
-}
 
 /** Claude's own help page on connectors, which says where to manage them. Other providers have no such page Ramu can point to yet. */
 const CLAUDE_CONNECTORS_URL =
@@ -97,9 +85,12 @@ function ShareRow({
   onReset,
   extra,
   icon,
+  mono = false,
 }: {
   name: string
   detail: string
+  /** The detail is an address or command, set in monospace; prose descriptions are not. */
+  mono?: boolean
   /** What kind of thing it is, as a small tile before the name so a long list scans by shape. */
   icon?: ReactNode
   item: Shareable
@@ -127,7 +118,10 @@ function ShareRow({
         )}
         <span className="min-w-0 flex-1">
           <strong className="block min-w-0 truncate">{name}</strong>
-          <span className="block truncate font-mono text-caption text-muted-foreground" title={detail}>
+          <span
+            className={`block truncate text-caption text-muted-foreground ${mono ? 'font-mono' : ''}`}
+            title={detail}
+          >
             {detail}
           </span>
           <span className="block small text-caption text-muted-foreground">
@@ -243,9 +237,8 @@ function ImportDialog({
 /** A titled run of rows. `user` items come from the person's own provider files; `project` from the project's folders. */
 function Group({ title, help, children }: { title: string; help: string; children: ReactNode }) {
   return (
-    <section className="mb-4">
-      <h5 className="m-0 text-control font-medium">{title}</h5>
-      <p className={`${CAPTION} mb-2 mt-0.5`}>{help}</p>
+    <section>
+      <SettingsSectionHead title={title} help={help} />
       {children}
     </section>
   )
@@ -273,6 +266,7 @@ function Skills({
         <ShareRow
           key={skill.name}
           name={skill.name}
+          icon={<WandSparkles size={15} />}
           detail={
             skill.nameConflict ? `${skill.description} · ${t('Different content shares this name')}` : skill.description
           }
@@ -384,6 +378,7 @@ export function AgentSetup({
         key={server.key}
         name={server.name}
         icon={server.transport.type === 'http' ? <Globe size={15} /> : <SquareTerminal size={15} />}
+        mono
         detail={
           server.transport.type === 'http'
             ? server.transport.url
@@ -487,7 +482,7 @@ export function AgentSetup({
       )}
 
       <TabsContent value="mcp" className="flex flex-col">
-        <p className={`${CAPTION} mb-4`}>
+        <p className={CAPTION}>
           {projectId
             ? t(
                 'Tools agents can call. Sharing a server gives it to every provider and account in this project. New threads pick up changes.',
@@ -496,7 +491,11 @@ export function AgentSetup({
                 'Tools agents can call. Sharing a server gives it to every provider and account in every project. New threads pick up changes.',
               )}
         </p>
-        {data && mcpCount === 0 && <EmptyNote>{t('No MCP servers found yet.')}</EmptyNote>}
+        {data && mcpCount === 0 && (
+          <div className="mt-3">
+            <SettingsEmpty>{t('No MCP servers found yet.')}</SettingsEmpty>
+          </div>
+        )}
         {mcp('user').length > 0 && (
           <Group title={t('Your settings')} help={t('From your own provider files, so every project has them.')}>
             {servers('user')}
@@ -539,7 +538,7 @@ export function AgentSetup({
           </Group>
         )}
         {data && data.diagnostics.length > 0 && (
-          <details className={`${CAPTION} mb-4`}>
+          <details className={`${CAPTION} mt-4`}>
             <summary className="cursor-pointer select-none">
               {t('{count} files could not be read', { count: data.diagnostics.length })}
             </summary>
@@ -580,7 +579,7 @@ export function AgentSetup({
       </TabsContent>
 
       <TabsContent value="skills" className="flex flex-col">
-        <p className={`${CAPTION} mb-4`}>
+        <p className={CAPTION}>
           {projectId
             ? t(
                 'Instructions agents can load. Sharing a skill copies it to every provider and account in this project that lacks it. Original files stay unchanged.',
@@ -590,7 +589,7 @@ export function AgentSetup({
               )}
         </p>
         {(data?.skills.length ?? 0) > 10 && (
-          <div className="mb-4">
+          <div className="mt-3">
             <Input
               aria-label={t('Search skills')}
               placeholder={t('Search skills')}
@@ -599,9 +598,13 @@ export function AgentSetup({
             />
           </div>
         )}
-        {data?.skills.length === 0 && <EmptyNote>{t('No skills found yet.')}</EmptyNote>}
+        {data?.skills.length === 0 && (
+          <div className="mt-3">
+            <SettingsEmpty>{t('No skills found yet.')}</SettingsEmpty>
+          </div>
+        )}
         {!!data?.skills.length && skills.length === 0 && (
-          <p role="status" className={CAPTION}>
+          <p role="status" className={`${CAPTION} mt-3`}>
             {t('No skills match your search.')}
           </p>
         )}

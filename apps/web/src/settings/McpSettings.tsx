@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { AgentProvider, Project } from '@ramu/shared/types'
 import type { SharedMcpConnection, SharedMcpInspection, SharedMcpSelection } from '@ramu/shared/mcp'
 import { namesPrivateHost, serverNameFromUrl } from '@ramu/shared/mcp'
-import { Globe, Plus, RefreshCw, SquareTerminal } from 'lucide-react'
+import { Globe, KeyRound, Plus, RefreshCw, SquareTerminal } from 'lucide-react'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ExpandRow } from '@/components/expand-row'
 import { AGENT_PROVIDERS, providerName, providerAccountRows } from '@ramu/shared/providers/providers'
@@ -26,7 +26,7 @@ import { useWorkspace } from '../workspace/workspace'
 import { useModelSets } from '../models/ModelSets'
 import { useAppSettings } from './AppSettings'
 import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './SettingsScope'
-import { SettingsCard, SettingsCardList } from './cards'
+import { SettingsCard, SettingsCardList, SettingsSectionHead } from './cards'
 import { ListCount, ListEmpty, ListToolbar, useListView } from './ListView'
 import { availabilityLabels, connectionAvailability } from './mcpAvailability'
 
@@ -143,6 +143,11 @@ function CredentialFields({
   )
 }
 
+/** A group of choices in the editor, labelled like its text fields so the form reads as one column of equal parts. */
+const LEGEND = 'mb-2 text-sm leading-snug font-medium'
+/** The dialog's surface matches the toggle's own pressed fill, so the chosen option gets one it can be seen on. */
+const SEGMENT = 'text-muted-foreground aria-pressed:bg-fill-hover aria-pressed:text-foreground'
+
 function ConnectionEditor({
   initial,
   projects,
@@ -244,16 +249,16 @@ function ConnectionEditor({
               size="sm"
               variant="outline"
               spacing={2}
-              className="gap-1.5"
+              className="grid w-full grid-cols-2 gap-1.5"
               aria-label={t('Type')}
               value={[kind]}
               onValueChange={(values) => values[0] && setKind(values[0] as 'http' | 'stdio')}
             >
-              <ToggleGroupItem value="http" className="gap-1.5 px-2.5">
+              <ToggleGroupItem value="http" className={`h-8 justify-center gap-1.5 px-2.5 ${SEGMENT}`}>
                 <Globe size={13} aria-hidden />
                 {t('Remote server')}
               </ToggleGroupItem>
-              <ToggleGroupItem value="stdio" className="gap-1.5 px-2.5">
+              <ToggleGroupItem value="stdio" className={`h-8 justify-center gap-1.5 px-2.5 ${SEGMENT}`}>
                 <SquareTerminal size={13} aria-hidden />
                 {t('Local command')}
               </ToggleGroupItem>
@@ -330,8 +335,8 @@ function ConnectionEditor({
             />
           </Field>
           <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-            <legend className="mb-1.5 text-caption text-muted-foreground">{t('Agents that can use it')}</legend>
-            <div className="flex flex-wrap gap-x-4 gap-y-2">
+            <legend className={LEGEND}>{t('Agents that can use it')}</legend>
+            <div className="grid grid-cols-3 gap-x-4 gap-y-2">
               {AGENT_PROVIDERS.map((provider) => (
                 <label key={provider} className={chip}>
                   <Checkbox
@@ -342,13 +347,14 @@ function ConnectionEditor({
                       )
                     }
                   />
+                  <ProviderIcon provider={provider} size={13} />
                   {providerName(provider)}
                 </label>
               ))}
             </div>
           </fieldset>
           <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-            <legend className="mb-1.5 text-caption text-muted-foreground">{t('Projects')}</legend>
+            <legend className={LEGEND}>{t('Projects')}</legend>
             <ToggleGroup
               size="sm"
               variant="outline"
@@ -360,10 +366,10 @@ function ConnectionEditor({
                 values[0] && setScope((current) => ({ ...current, hostWide: values[0] === 'all' }))
               }
             >
-              <ToggleGroupItem value="all" className="px-2.5">
+              <ToggleGroupItem value="all" className={`px-2.5 ${SEGMENT}`}>
                 {t('All projects')}
               </ToggleGroupItem>
-              <ToggleGroupItem value="chosen" className="px-2.5" disabled={!projects.length}>
+              <ToggleGroupItem value="chosen" className={`px-2.5 ${SEGMENT}`} disabled={!projects.length}>
                 {t('Chosen projects')}
               </ToggleGroupItem>
             </ToggleGroup>
@@ -389,11 +395,11 @@ function ConnectionEditor({
             )}
           </fieldset>
           {kind === 'http' && (
-            <>
+            <div className="flex flex-col gap-4 border-t border-(--line) pt-3">
               <ExpandRow
                 expanded={advanced}
                 onToggle={() => setAdvanced((value) => !value)}
-                className="rounded-(--radius-s) px-1"
+                className="-ml-1.5 w-auto self-start rounded-(--radius-s) px-1.5"
               >
                 {t('Advanced')}
               </ExpandRow>
@@ -422,7 +428,7 @@ function ConnectionEditor({
                   )}
                 </>
               )}
-            </>
+            </div>
           )}
         </fieldset>
       </form>
@@ -435,7 +441,8 @@ function ConnectionEditor({
           onRemove={onRemoveCredential}
         />
       ) : (
-        <p className="m-0 text-caption text-muted-foreground">
+        <p className="m-0 mt-2 flex items-center gap-1.5 text-caption text-muted-foreground">
+          <KeyRound size={13} aria-hidden className="flex-none" />
           {t('Save the server first, then add its credentials here.')}
         </p>
       )}
@@ -562,30 +569,28 @@ export function McpSettings() {
     )
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h5 className="m-0 text-control font-medium">{t('Connected through Ramu')}</h5>
-          <p className="m-0 mt-0.5 text-caption text-muted-foreground">
-            {t('Add a remote server no provider has yet. Ramu connects it, and you review its tools first.')}
-          </p>
-        </div>
-        <div className="flex flex-none items-center gap-1">
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label={t('Refresh')}
-            title={t('Refresh')}
-            disabled={busy || query.isFetching || Boolean(scope && (!scope.ready || scope.stale))}
-            onClick={() => void query.refetch()}
-          >
-            <RefreshCw size={14} className={query.isFetching ? 'animate-spin' : undefined} />
-          </Button>
-          <Button size="sm" disabled={!canAdminister || busy} onClick={() => setEditing('new')}>
-            <Plus size={14} />
-            {t('Add server')}
-          </Button>
-        </div>
-      </div>
+      <SettingsSectionHead
+        title={t('Connected through Ramu')}
+        help={t('Add a remote server no provider has yet. Ramu connects it, and you review its tools first.')}
+        action={
+          <div className="flex flex-none items-center gap-1">
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label={t('Refresh')}
+              title={t('Refresh')}
+              disabled={busy || query.isFetching || Boolean(scope && (!scope.ready || scope.stale))}
+              onClick={() => void query.refetch()}
+            >
+              <RefreshCw size={14} className={query.isFetching ? 'animate-spin' : undefined} />
+            </Button>
+            <Button size="sm" disabled={!canAdminister || busy} onClick={() => setEditing('new')}>
+              <Plus size={14} />
+              {t('Add server')}
+            </Button>
+          </div>
+        }
+      />
       {(error || query.error || projects.error) && (
         <Alert variant="destructive">
           <AlertDescription>{error || errorText(query.error ?? projects.error)}</AlertDescription>
@@ -605,7 +610,7 @@ export function McpSettings() {
       <ListToolbar view={view} label={t('Search MCP servers')} />
       <ListCount view={view} />
       {data && view.empty !== 'ok' && (
-        <div className="rounded-(--radius-m) bg-fill">
+        <div className="rounded-(--radius-m) border border-dashed border-(--line)">
           <ListEmpty
             view={view}
             none="No servers connected through Ramu yet."

@@ -45,6 +45,8 @@ vi.mock('../src/settings/cards', () => ({
   SettingsCard: 'SettingsCard',
   SettingsCardList: 'SettingsCardList',
   SettingsEmpty: 'SettingsEmpty',
+  // The section's action (Create skill) renders where the test can find it.
+  SettingsSectionHead: ({ action }: { action?: unknown }) => action ?? null,
   usePaged: (shown: unknown[]) => ({ shown, more: null }),
 }))
 vi.mock('../src/workspace/workspace', () => ({ useWorkspace: () => ({ projects: [] }) }))

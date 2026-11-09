@@ -4,12 +4,10 @@ import { providerName } from '@ramu/shared/providers/providers'
 import { estimatedTokens } from '@ramu/shared/rules'
 import type { NativeInstructionFile, NativeInstructionInclude } from '@ramu/shared/types'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Field, FieldLabel } from '@/components/ui/field'
-import { SettingsGroupTitle } from '@/components/settings-row'
 import { Dropdown } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
-import { SettingsCard, SettingsCardList } from './cards'
+import { SettingsCard, SettingsCardList, SettingsEmpty, SettingsSectionHead } from './cards'
 import { SettingsScopeContext, useSettingsInvoke } from './SettingsScope'
 
 const CAPTION = 'm-0 text-caption text-muted-foreground'
@@ -74,26 +72,26 @@ export function NativeInstructions({ projects }: { projects: { id: string; name:
   })
   return (
     <>
-      <SettingsGroupTitle className="mt-8">{t('Instruction files providers read')}</SettingsGroupTitle>
-      <p className={`${CAPTION} mb-3`}>
-        {t(
-          'Each provider loads AGENTS.md, CLAUDE.md and rules folders itself. Ramu only lists them here and never changes or sends them.',
-        )}
-      </p>
-      <Field className="mb-3">
-        <FieldLabel className="flex-col items-stretch">
-          {t('Project')}
-          <Dropdown
-            label={t('Project')}
-            value={projectId}
-            options={[
-              { value: NONE, label: t('Your account only') },
-              ...projects.map((p) => ({ value: p.id, label: p.name })),
-            ]}
-            onChange={setProjectId}
-          />
-        </FieldLabel>
-      </Field>
+      <div className="mt-4">
+        <SettingsSectionHead
+          title={t('Instruction files providers read')}
+          help={t(
+            'Each provider loads AGENTS.md, CLAUDE.md and rules folders itself. Ramu only lists them here and never changes or sends them.',
+          )}
+          action={
+            <Dropdown
+              className="w-[190px]! flex-none"
+              label={t('Project')}
+              value={projectId}
+              options={[
+                { value: NONE, label: t('Your account only') },
+                ...projects.map((p) => ({ value: p.id, label: p.name })),
+              ]}
+              onChange={setProjectId}
+            />
+          }
+        />
+      </div>
       {files.error && (
         <Alert variant="destructive" className="mb-3">
           <AlertDescription>{errorText(files.error)}</AlertDescription>
@@ -132,7 +130,7 @@ export function NativeInstructions({ projects }: { projects: { id: string; name:
           </SettingsCard>
         ))}
       </SettingsCardList>
-      {files.data?.files.length === 0 && <p className={CAPTION}>{t('No instruction files found.')}</p>}
+      {files.data?.files.length === 0 && <SettingsEmpty>{t('No instruction files found.')}</SettingsEmpty>}
     </>
   )
 }

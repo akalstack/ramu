@@ -13,7 +13,7 @@ import { t } from '../i18n'
 import { notifyError } from '../chat/Notifications'
 import { errorText } from '../lib/errors'
 import { takeLibraryFocus } from '../summaries/libraryFocus'
-import { SettingsCard, SettingsCardList } from './cards'
+import { SettingsCard, SettingsCardList, SettingsEmpty, SettingsSectionHead } from './cards'
 import { ModelChoice } from './ModelChoice'
 import {
   type IntelligencePreferences,
@@ -439,34 +439,42 @@ export function ManagedSkills() {
     void invoke('projects.list').then(setProjects, () => {})
   }, [invoke])
   return (
-    <div className="settings-form flex flex-col gap-2 mt-6">
-      <SettingsGroupTitle className="mb-1">{t('Ramu’s skills')}</SettingsGroupTitle>
-      <p className="m-0 mb-1 text-caption text-muted-foreground">
-        {t('Learned from finished threads or written by you, for every provider. Each says where it applies.')}
-      </p>
-      {viewOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
-      <ListToolbar
-        view={view}
-        label={t('Search skills')}
-        filters={[
-          {
-            key: 'status',
-            label: t('Status'),
-            value: status,
-            options: SKILL_STATUS_FILTERS.map((value) => ({ value, label: t(SKILL_STATUS_LABELS[value]) })),
-            onChange: (next) => setStatus(next as SkillStatusFilter),
-          },
-        ]}
+    <div className="settings-form flex flex-col gap-2">
+      <SettingsSectionHead
+        title={t('Ramu’s skills')}
+        help={t('Learned from finished threads or written by you, for every provider. Each says where it applies.')}
       />
-      <ListCount view={view} />
-      {snapshot && (
-        <ListEmpty
+      {viewOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
+      {/* Filters over an empty list only add noise; they appear once Ramu has a skill. */}
+      {own.length > 0 && (
+        <ListToolbar
           view={view}
-          none="No skills yet. Ramu adds them here when it learns a repeatable procedure."
-          filtered="No skills match your search."
-          onReset={() => setStatus('active')}
+          label={t('Search skills')}
+          filters={[
+            {
+              key: 'status',
+              label: t('Status'),
+              value: status,
+              options: SKILL_STATUS_FILTERS.map((value) => ({ value, label: t(SKILL_STATUS_LABELS[value]) })),
+              onChange: (next) => setStatus(next as SkillStatusFilter),
+            },
+          ]}
         />
       )}
+      <ListCount view={view} />
+      {snapshot &&
+        (own.length === 0 ? (
+          <SettingsEmpty>
+            {t('No skills yet. Ramu adds them here when it learns a repeatable procedure.')}
+          </SettingsEmpty>
+        ) : (
+          <ListEmpty
+            view={view}
+            none="No skills yet. Ramu adds them here when it learns a repeatable procedure."
+            filtered="No skills match your search."
+            onReset={() => setStatus('active')}
+          />
+        ))}
       <SettingsCardList>
         {paged.shown.map((skill) => (
           <SettingsCard

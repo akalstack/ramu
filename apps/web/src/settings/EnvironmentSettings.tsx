@@ -1,7 +1,6 @@
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { useEffect, useRef, useState, type ClipboardEvent } from 'react'
 import { Check, ClipboardCopy, Eye, EyeOff, Globe, Plus, RefreshCw, X } from 'lucide-react'
-import { SettingsGroupTitle } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
 import { Textarea } from '@/components/ui/textarea'
@@ -171,7 +170,7 @@ export function EnvironmentSettings({
 
   return (
     <div className={SETTINGS_FORM_CLASS}>
-      <SettingsGroupTitle>{t('Environment variables')}</SettingsGroupTitle>
+      {/* The tab is already named Environment variables, so the page starts with what they do. */}
       {environment.readOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
       <p className="muted text-muted-foreground small text-caption">
         {t(

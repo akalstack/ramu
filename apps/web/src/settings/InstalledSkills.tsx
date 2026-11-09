@@ -1,3 +1,4 @@
+import { Plus } from 'lucide-react'
 import { SkillCopyUpdateReview } from './SkillCopyUpdateReview'
 import { useStaging } from './stagedChanges'
 import { useCallback, useContext, useEffect, useRef, useState } from 'react'
@@ -7,11 +8,10 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
-import { SettingsGroupTitle } from '@/components/settings-row'
 import { Dialog, Dropdown } from '../Menu'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { SettingsScopeContext, useSettingsInvoke } from './SettingsScope'
-import { SettingsCard, SettingsCardList, SettingsEmpty } from './cards'
+import { SettingsCard, SettingsCardList, SettingsEmpty, SettingsSectionHead } from './cards'
 import { ListCount, ListEmpty, ListToolbar, useListView } from './ListView'
 import { useWorkspace } from '../workspace/workspace'
 import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
@@ -140,23 +140,25 @@ export function InstalledSkills() {
     setPreview(value)
   }
   return (
-    <div className="flex flex-col gap-2 mt-6">
+    <div className="flex flex-col gap-2">
       {viewOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
       <fieldset disabled={viewOnly || !currentHost} className="contents">
-        <SettingsGroupTitle className="mb-1">{t('Your skills')}</SettingsGroupTitle>
-        <p className="m-0 text-caption text-muted-foreground">
-          {t('Write instructions an agent can use whenever they apply. Learning never changes them.')}
-        </p>
-        <div>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={busy}
-            onClick={() => setDraft({ name: '', description: '', content: '', projectId: '' })}
-          >
-            {t('Create skill')}
-          </Button>
-        </div>
+        <SettingsSectionHead
+          title={t('Your skills')}
+          help={t('Write instructions an agent can use whenever they apply. Learning never changes them.')}
+          action={
+            <Button
+              variant="secondary"
+              size="sm"
+              className="flex-none"
+              disabled={busy}
+              onClick={() => setDraft({ name: '', description: '', content: '', projectId: '' })}
+            >
+              <Plus size={14} />
+              {t('Create skill')}
+            </Button>
+          }
+        />
         {currentHost && !own.length && !draft && (
           <SettingsEmpty>
             {t('No skills of your own yet. Create one to give agents instructions they can reuse.')}
@@ -246,7 +248,7 @@ export function InstalledSkills() {
             </SettingsCard>
           ))}
         </SettingsCardList>
-        <SettingsGroupTitle className="mb-1 mt-4">{t('Installed skills')}</SettingsGroupTitle>
+        <SettingsSectionHead title={t('Installed skills')} />
         {!available && (
           <p role="status">
             {t('Install Node.js to install skills.')}{' '}
@@ -305,28 +307,31 @@ export function InstalledSkills() {
             {error}
           </p>
         )}
-        <ListToolbar
-          view={view}
-          label={t('Search installed skills')}
-          filters={
-            projects.length
-              ? [
-                  {
-                    key: 'scope',
-                    label: t('Scope'),
-                    value: skillScope,
-                    width: 'wide',
-                    options: [
-                      { value: 'all', label: t('Everything') },
-                      { value: 'global', label: t('All projects') },
-                      ...projects.map((p) => ({ value: p.id, label: p.name })),
-                    ],
-                    onChange: setSkillScope,
-                  },
-                ]
-              : []
-          }
-        />
+        {/* Filters over an empty list only add noise; they appear once something is installed. */}
+        {view.total > 0 && (
+          <ListToolbar
+            view={view}
+            label={t('Search installed skills')}
+            filters={
+              projects.length
+                ? [
+                    {
+                      key: 'scope',
+                      label: t('Scope'),
+                      value: skillScope,
+                      width: 'wide',
+                      options: [
+                        { value: 'all', label: t('Everything') },
+                        { value: 'global', label: t('All projects') },
+                        ...projects.map((p) => ({ value: p.id, label: p.name })),
+                      ],
+                      onChange: setSkillScope,
+                    },
+                  ]
+                : []
+            }
+          />
+        )}
         <ListCount view={view} />
         {hiddenOff > 0 && (
           <p className="m-0 text-caption text-muted-foreground">
@@ -335,12 +340,16 @@ export function InstalledSkills() {
               : t('{0} skills from turned-off plugins are hidden.', { 0: hiddenOff })}
           </p>
         )}
-        <ListEmpty
-          view={view}
-          none="No installed skills yet."
-          filtered="No installed skills match your search."
-          onReset={() => setSkillScope('all')}
-        />
+        {view.total === 0 ? (
+          <SettingsEmpty>{t('No installed skills yet.')}</SettingsEmpty>
+        ) : (
+          <ListEmpty
+            view={view}
+            none="No installed skills yet."
+            filtered="No installed skills match your search."
+            onReset={() => setSkillScope('all')}
+          />
+        )}
         <SettingsCardList>
           {paged.shown.map((skill) => (
             <SettingsCard
