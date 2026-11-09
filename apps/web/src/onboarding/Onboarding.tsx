@@ -168,6 +168,44 @@ export function Onboarding() {
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4 [scrollbar-width:thin]">
           {step === 0 && (
+            <section
+              className="mb-4 flex flex-wrap items-center gap-2 rounded-(--radius-m) bg-fill p-3"
+              aria-label={t('Restore your settings?')}
+            >
+              <div className="min-w-0 flex-1">
+                <strong className="text-control">{t('Restore your settings?')}</strong>
+                <p className="m-0 text-caption text-muted-foreground">
+                  {t(
+                    'Bring theme, models, rules and identities from a backup or another of your hosts. Nothing changes until you review it.',
+                  )}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                // Restoring brings the choices the steps below would make, so setup ends here.
+                onClick={() =>
+                  void finish().then(() =>
+                    window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'account' } })),
+                  )
+                }
+              >
+                {t('From a backup')}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  void finish().then(() =>
+                    window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'remote' } })),
+                  )
+                }
+              >
+                {t('From another host')}
+              </Button>
+            </section>
+          )}
+          {step === 0 && (
             <AgentsStep
               statuses={statuses}
               provider={provider}

@@ -421,6 +421,14 @@ export function McpSettings() {
   const hostKey = scope?.primaryId ?? ''
   const viewOnly = scope?.targets?.some((target) => target.viewOnly) ?? false
   const ws = useWorkspace()
+  // With two or more identities a server can hold an account per identity, each signed in on its own.
+  const [identityList, setIdentityList] = useState<{ id: string; name: string }[]>([])
+  useEffect(() => {
+    void Promise.resolve(invoke('identities.get')).then(
+      (snapshot) => setIdentityList(snapshot.settings.identities.length >= 2 ? snapshot.settings.identities : []),
+      () => {},
+    )
+  }, [invoke])
   const models = useModelSets()
   const preferences = useAppSettings().preferences
   const defaultProvider =
@@ -566,7 +574,14 @@ export function McpSettings() {
           view.paged.shown.map(({ connection, status, reason, checkedAt, toolCount }) => (
             <SettingsCard
               key={connection.id}
-              title={connection.name}
+              title={
+                connection.split
+                  ? t('{0} for {1}', {
+                      0: connection.name,
+                      1: identityList.find((identity) => identity.id === connection.split!.identityId)?.name ?? '',
+                    })
+                  : connection.name
+              }
               badges={<Badge variant="secondary">{t(statusLabels[status])}</Badge>}
               meta={`${connection.providers.map(providerName).join(', ')} · ${connection.scope.hostWide ? t('All projects') : connection.scope.projectIds.map((id) => projects.data?.find((project) => project.id === id)?.name ?? id).join(', ')}`}
             >
@@ -594,6 +609,25 @@ export function McpSettings() {
                 </p>
               )}
               <div className="flex flex-wrap gap-2">
+                {!connection.split && identityList.length > 0 && canAdminister && (
+                  <Dropdown
+                    label={t('Add an account for an identity')}
+                    value=""
+                    placeholder={t('Add an account for…')}
+                    options={identityList
+                      .filter(
+                        (identity) =>
+                          !data.connections.some(
+                            (entry) =>
+                              entry.connection.split?.base === connection.id &&
+                              entry.connection.split.identityId === identity.id,
+                          ),
+                      )
+                      .map((identity) => ({ value: identity.id, label: identity.name }))}
+                    onChange={(identityId) => void act(() => invoke('mcp.splitForIdentity', connection.id, identityId))}
+                    disabled={busy}
+                  />
+                )}
                 <Button
                   size="sm"
                   disabled={!canAdminister || busy || !connection.enabled}

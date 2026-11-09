@@ -255,6 +255,29 @@ export class SharedMcpService {
     }
   }
 
+  /**
+   * An account for one identity on an existing connection's server: the same definition with no credentials of its
+   * own yet, so it is signed in, or given its secrets, separately. Its tools are checked and approved on their own.
+   */
+  splitFor(baseId: string, identityId: string): SharedMcpConnection {
+    const base = this.connection(baseId)
+    if (base.split) throw new Error('Add the account to the connection it belongs to.')
+    const existing = this.policy
+      .snapshot()
+      .connections.find((entry) => entry.split?.base === baseId && entry.split.identityId === identityId)
+    if (existing) return existing
+    const { id: _id, hostId: _hostId, revision: _revision, ...definition } = base
+    return this.save({
+      ...definition,
+      serviceAccountId: `${base.serviceAccountId}@${identityId}`,
+      split: { base: baseId, identityId },
+      transport:
+        definition.transport.type === 'http'
+          ? { ...definition.transport, headerSecretRefs: {} }
+          : { ...definition.transport, envSecretRefs: {} },
+    })
+  }
+
   save(input: Omit<SharedMcpConnection, 'id' | 'hostId' | 'revision'>, connectionId?: string) {
     const previous = connectionId ? this.connection(connectionId) : undefined
     // Credentials belong to one service account. Changing the account never carries them to another identity, so the
@@ -700,6 +723,11 @@ export class SharedMcpService {
   }
 
   async remove(id: string) {
+    // A server's accounts for single identities go with it.
+    for (const split of this.policy.snapshot().connections.filter((entry) => entry.split?.base === id)) {
+      await this.disconnect(split.id)
+      this.policy.removeConnection(split.id)
+    }
     await this.disconnect(id)
     this.policy.removeConnection(id)
     this.changed()

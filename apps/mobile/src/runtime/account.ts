@@ -29,6 +29,8 @@ import {
 const SESSION = 'ramu-account-session'
 const KEY = 'ramu-account-backup-key'
 const SLOT = 'ramu-account-phone-slot'
+/** Set after the first backup of this phone: later changes then back up on their own. */
+const AUTO = 'ramu-account-phone-backup'
 
 /** What a phone backup carries: its look and its layout choices, nothing that grants access. */
 export interface PhonePreferences {
@@ -106,7 +108,13 @@ export async function startSignIn(): Promise<{
   }
 }
 
+/** Whether this phone backs its preferences up after a change: signed in, and backed up once by hand. */
+export async function autoBackup(): Promise<boolean> {
+  return !!(await SecureStore.getItemAsync(AUTO)) && !!(await SecureStore.getItemAsync(SESSION))
+}
+
 export async function signOut() {
+  await SecureStore.deleteItemAsync(AUTO)
   await call('POST', '/api/auth/sign-out', {}).catch(() => {})
   await SecureStore.deleteItemAsync(SESSION)
   await SecureStore.deleteItemAsync(KEY)
@@ -225,6 +233,7 @@ export async function backUpPhone(preferences: PhonePreferences, name: string, r
     await SecureStore.setItemAsync(KEY, toBase64(key))
   }
   const id = await slot(random)
+  await SecureStore.setItemAsync(AUTO, '1')
   const encode = (text: string) => new TextEncoder().encode(text)
   await call('PUT', `/api/backups/${id}`, {
     kind: 'phone',

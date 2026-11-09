@@ -404,12 +404,23 @@ const identities = new IdentityService({
 void places.refresh().catch(() => {})
 // A Shared MCP server or plugin put in one identity reaches only that identity's projects.
 setConnectionIdentityScope((connectionId, projectId) => {
+  const connections = getSharedMcp().policy.snapshot().connections
+  const connection = connections.find((entry) => entry.id === connectionId)
+  const identity = identities.settings().identities.length >= 2 ? identities.forProject(projectId)?.id : undefined
+  // One identity's own account on a server reaches only that identity's projects, in place of the base connection.
+  if (connection?.split) return connection.split.identityId === identity
+  if (
+    identity &&
+    connections.some((entry) => entry.split?.base === connectionId && entry.split.identityId === identity)
+  )
+    return false
   if (!identities.allowed(projectId, accountKey('mcp', connectionId))) return false
   // A plugin's servers follow the identity the plugin was put in.
-  const account = getSharedMcp()
-    .policy.snapshot()
-    .connections.find((entry) => entry.id === connectionId)?.serviceAccountId
-  return !account?.startsWith('plugin-') || identities.allowed(projectId, accountKey('plugin', account.slice(7)))
+  const account = connection?.serviceAccountId
+  return (
+    !account?.startsWith('plugin-') ||
+    identities.allowed(projectId, accountKey('plugin', account.slice(7).split('@')[0]!))
+  )
 })
 /** The project a task acts in, or null for No project, whose threads use the default identity. */
 const identityProject = (taskId: string) => {
@@ -619,6 +630,9 @@ const deploys = createDeploys(workspace, db, agents, {
   // The uptime watch follows an app published from this computer at its lasting address.
   localAddress: (projectId) => localApps.lastingUrl(projectId),
 })
+// A deploy, database, release or media call uses the project's identity's own account of a platform when it has one.
+deploys.accounts.identityOf = (projectId) =>
+  identities.settings().identities.length >= 2 && projectId ? (identities.forProject(projectId)?.id ?? null) : null
 // Thread rows show their pull request, so a change there refreshes the thread lists.
 const pullRequestIndex = new PullRequestIndex(workspace, agents, () => send('workspace:changed', {}))
 // Each open pull request of a linked repository with a branchable database gets a database branch of its own.
@@ -852,7 +866,8 @@ const abilities = new AbilityService(
     },
     media: {
       connected: () => MEDIA_SERVICES.filter((service) => deploys.accounts.connected(service)),
-      auth: async (service) => (await deploys.accounts.auth(service)).auth,
+      auth: async (service, taskId) =>
+        (await deploys.accounts.auth(service, taskId ? identityProject(taskId) : null)).auth,
     },
     readChecks: () => workspace.getAppState<unknown>('ability-checks', []),
     writeChecks: (checks) => workspace.setAppState('ability-checks', checks),
@@ -920,7 +935,7 @@ const liveDashboards = new LiveDashboards(
       // A plugin's data source is read only for a kept dashboard the person allowed to read it, with the credential
       // saved for that plugin.
       if (!artifactId || !serviceGrants.allowed(artifactId).includes(service.id)) return []
-      return dataSourceTable(await plugins.query(service.id, service, columns, DASHBOARD_ROWS_MAX), columns)
+      return dataSourceTable(await plugins.query(service.id, service, columns, DASHBOARD_ROWS_MAX, projectId), columns)
     }
     if (mcp && projectId) {
       // Only a tool the server marks read-only, on a server Shared MCP approved for this project, is called.
@@ -1074,7 +1089,10 @@ const plugins = new PluginService({
     save: (input, id) => getSharedMcp().save(input, id),
     remove: (id) => getSharedMcp().remove(id),
     setSecret: (id, kind, name, value) => getSharedMcp().setSecret(id, kind, name, value),
+    splitFor: (id, identity) => getSharedMcp().splitFor(id, identity),
   },
+  identityOf: (projectId) =>
+    identities.settings().identities.length >= 2 && projectId ? (identities.forProject(projectId)?.id ?? null) : null,
   agents: customAgents,
   rules: {
     save: (input) => {
@@ -1746,7 +1764,7 @@ const mcpHttp = createServer(async (req, res) => {
     const pluginProject = deployProject && deployProject !== NO_PROJECT ? deployProject : null
     registerPluginCliTools(
       server,
-      { clis: () => plugins.clis(pluginProject), secret: (id, slot) => plugins.secret(id, slot) },
+      { clis: () => plugins.clis(pluginProject), secret: (id, slot) => plugins.secret(id, slot, pluginProject) },
       source,
       () => agents.get(source.id),
       (detail, signal) => agents.requestPermission(source.id, 'Platform CLI', detail, signal),

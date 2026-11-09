@@ -78,7 +78,15 @@ interface PluginRecord {
   signingKey: string | null
   byRamu: boolean
   update: PluginUpdate | null
-  credentials: Record<string, { account: string | null; failed: string | null }>
+  credentials: Record<
+    string,
+    {
+      account: string | null
+      failed: string | null
+      /** Values kept for single identities, by identity id, beside the one for every identity. */
+      identities?: Record<string, string>
+    }
+  >
 }
 
 interface State {
@@ -107,7 +115,11 @@ export interface PluginHost {
     save(input: Omit<SharedMcpConnection, 'id' | 'hostId' | 'revision'>, id?: string): SharedMcpConnection
     remove(id: string): Promise<void> | void
     setSecret(id: string, kind: 'header' | 'env', name: string, value: string): Promise<void>
+    /** The connection's account for one identity, made on first use. */
+    splitFor?(id: string, identityId: string): SharedMcpConnection
   }
+  /** The identity a project acts as once there are two or more, for credentials split per identity. */
+  identityOf?(projectId: string | null): string | null
   agents: {
     list(): CustomAgent[]
     save(input: Omit<CustomAgent, 'id' | 'updatedAt'> & { id?: string }): CustomAgent
@@ -183,7 +195,7 @@ export class PluginService {
               ? 'saved'
               : 'missing',
           account: saved?.account ?? null,
-          identities: [],
+          identities: Object.keys(saved?.identities ?? {}),
         }
       }),
       update: plugin.update,
@@ -530,10 +542,10 @@ export class PluginService {
    * Puts the plugin's environment and headers on its MCP servers: plain values from `.mcp.json`, `${VAR}` filled from
    * the saved credentials, and every slot's value under its own variable. A server whose credential is missing waits.
    */
-  private async refillSecrets(record: PluginRecord) {
+  private async refillSecrets(record: PluginRecord, identity: string | null = null) {
     const values: Record<string, string> = {}
     for (const slot of record.extension.credentials) {
-      const secret = await this.secret(record.id, slot.id).catch(() => null)
+      const secret = await this.secretFor(record.id, slot.id, identity).catch(() => null)
       if (!secret) continue
       values[slot.env] = secret.token
       for (const field of slot.fields) if (secret.fields[field.id]) values[field.env] = secret.fields[field.id]!
@@ -543,7 +555,10 @@ export class PluginService {
         .replace(ROOT_VARIABLES, record.root)
         .replace(/\$\{([A-Z][A-Z0-9_]*)\}/g, (whole, name: string) => values[name] ?? whole)
     for (const [name, server] of Object.entries(record.mcpServers)) {
-      const connectionId = record.parts.mcp[name]
+      const base = record.parts.mcp[name]
+      if (!base) continue
+      // An identity's own values go to that identity's account on the server, which its projects use instead.
+      const connectionId = identity ? this.host.mcp.splitFor?.(base, identity).id : base
       if (!connectionId) continue
       const entries =
         'url' in server
@@ -559,11 +574,12 @@ export class PluginService {
 
   // ---- Credentials ----
 
-  private saved(pluginId: string, slotId: string) {
+  private saved(pluginId: string, slotId: string, identity: string | null = null) {
+    const suffix = identity ? `@${identity}` : ''
     return new SavedCredential<PluginSecret>(
       {
-        key: `plugin-credential:${pluginId}:${slotId}`,
-        connectionId: `plugin-${pluginId}-${slotId}`,
+        key: `plugin-credential:${pluginId}:${slotId}${suffix}`,
+        connectionId: `plugin-${pluginId}-${slotId}${suffix}`,
         shown: 'account',
       },
       (key, fallback) => this.host.getState(key, fallback),
@@ -592,11 +608,21 @@ export class PluginService {
     return !!plugin?.credentials[slotId]?.account
   }
 
-  /** The saved value for a slot, renewing a sign-in's token first when it is about to expire. */
-  async secret(pluginId: string, slotId: string): Promise<PluginSecret | null> {
+  /**
+   * The value a project uses: its identity's own when the slot was split for it, otherwise the one for every identity.
+   * An identity is never given another identity's value.
+   */
+  async secret(pluginId: string, slotId: string, projectId?: string | null): Promise<PluginSecret | null> {
+    const identity = projectId === undefined ? null : (this.host.identityOf?.(projectId) ?? null)
+    const own = identity && this.record(pluginId).credentials[slotId]?.identities?.[identity] ? identity : null
+    return this.secretFor(pluginId, slotId, own)
+  }
+
+  /** The saved value for a slot (one identity's, or the shared one), renewing a sign-in that is about to expire. */
+  private async secretFor(pluginId: string, slotId: string, identity: string | null): Promise<PluginSecret | null> {
     const record = this.record(pluginId)
     const slot = this.slot(record, slotId)
-    const saved = this.saved(pluginId, slotId)
+    const saved = this.saved(pluginId, slotId, identity)
     const value = await saved.read()
     if (!value) return null
     if (slot.kind === 'sign-in' && value.refreshToken && value.expiresAt && value.expiresAt - Date.now() < 5 * 60_000) {
@@ -608,7 +634,13 @@ export class PluginService {
   }
 
   /** Checks a pasted value with the slot's check request, then keeps it; a failed check keeps nothing. */
-  async setCredential(pluginId: string, slotId: string, input: { token: string; fields: Record<string, string> }) {
+  async setCredential(
+    pluginId: string,
+    slotId: string,
+    input: { token: string; fields: Record<string, string> },
+    /** Keep it for one identity, splitting the slot: that identity's projects use it, the others the shared one. */
+    identity: string | null = null,
+  ) {
     const record = this.record(pluginId)
     const slot = this.slot(record, slotId)
     if (slot.kind !== 'token') throw new Error('This credential is a sign-in. Use Sign in.')
@@ -618,9 +650,20 @@ export class PluginService {
       throw new Error(`That does not look like a ${slot.label}.`)
     const fields = this.checkFields(slot, input.fields)
     const account = await this.check(slot, { token, fields })
-    await this.saved(pluginId, slotId).save({ token, fields, account })
-    this.mark(pluginId, slotId, { account, failed: null })
-    await this.refillSecrets(this.record(pluginId))
+    await this.saved(pluginId, slotId, identity).save({ token, fields, account })
+    const current = this.record(pluginId).credentials[slotId]
+    this.mark(
+      pluginId,
+      slotId,
+      identity
+        ? {
+            account: current?.account ?? null,
+            failed: current?.failed ?? null,
+            identities: { ...(current?.identities ?? {}), [identity]: account },
+          }
+        : { account, failed: null, ...(current?.identities ? { identities: current.identities } : {}) },
+    )
+    await this.refillSecrets(this.record(pluginId), identity)
     return this.view(this.record(pluginId))
   }
 
@@ -659,7 +702,7 @@ export class PluginService {
     return typeof identity === 'string' && identity ? identity.slice(0, 200) : slot.label
   }
 
-  private mark(pluginId: string, slotId: string, value: { account: string | null; failed: string | null }) {
+  private mark(pluginId: string, slotId: string, value: PluginRecord['credentials'][string]) {
     const state = this.state()
     this.save({
       ...state,
@@ -669,11 +712,25 @@ export class PluginService {
     })
   }
 
-  async removeCredential(pluginId: string, slotId: string) {
+  async removeCredential(pluginId: string, slotId: string, identity: string | null = null) {
     const record = this.record(pluginId)
     this.slot(record, slotId)
+    if (identity) {
+      await this.saved(pluginId, slotId, identity).remove()
+      const current = record.credentials[slotId]
+      const { [identity]: _gone, ...others } = current?.identities ?? {}
+      this.mark(pluginId, slotId, {
+        account: current?.account ?? null,
+        failed: current?.failed ?? null,
+        identities: others,
+      })
+      return this.view(this.record(pluginId))
+    }
     await this.saved(pluginId, slotId).remove()
-    const { [slotId]: _gone, ...rest } = record.credentials
+    const { [slotId]: removed, ...rest } = record.credentials
+    // Values kept for single identities stay; only the shared one goes.
+    if (removed?.identities && Object.keys(removed.identities).length)
+      rest[slotId] = { account: null, failed: null, identities: removed.identities }
     const state = this.state()
     this.save({
       ...state,
@@ -948,9 +1005,10 @@ export class PluginService {
     await this.removeParts(record, null)
     this.mapAbilities([], Object.values(record.parts.mcp))
     for (const slot of record.extension.credentials)
-      await this.saved(id, slot.id)
-        .remove()
-        .catch(() => {})
+      for (const identity of [null, ...Object.keys(record.credentials[slot.id]?.identities ?? {})])
+        await this.saved(id, slot.id, identity)
+          .remove()
+          .catch(() => {})
     if (record.source.kind !== 'development')
       rmSync(join(this.host.dir, 'installed', id), { recursive: true, force: true })
     const state = this.state()
@@ -1059,12 +1117,19 @@ export class PluginService {
    * Runs a data source's query with its plugin's saved credential: the fields are checked against what the source
    * declares, the request goes only to the origin it names, and the rows are the columns the table asks for.
    */
-  async query(id: string, input: Record<string, unknown>, columns: readonly string[], limit: number) {
+  async query(
+    id: string,
+    input: Record<string, unknown>,
+    columns: readonly string[],
+    limit: number,
+    /** The dashboard's project, whose identity's value of the credential is used when it has one. */
+    projectId?: string | null,
+  ) {
     const found = this.dataSource(id)
     if (!found) throw new Error(`No installed plugin provides ${id}. Install its plugin in Settings → Plugins.`)
     const checked = checkQuery(found.source.query, input)
     if (!checked.ok) throw new Error(`${found.source.label}: ${checked.error}`)
-    const secret = await this.secret(found.plugin.id, found.slot.id)
+    const secret = await this.secret(found.plugin.id, found.slot.id, projectId ?? null)
     if (!secret)
       throw new Error(
         `${found.slot.label} for ${found.plugin.name} is not saved on this host. Add it in Settings → Plugins.`,

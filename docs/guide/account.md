@@ -21,6 +21,8 @@ The first time a destination is turned on, the host makes a random 256-bit backu
 
 ## Restoring
 
+A new host's first-run setup offers **Restore your settings?**: **From a backup** opens **Settings → Account**, and **From another host** opens **Copy settings from…** in **Settings → Remote access**.
+
 A new host needs the backup key first, in one of two ways:
 
 - **Approve on another device:** the new host asks; on a host or phone that has the key, **Settings → Account** lists the request under **New devices asking for your backup key**. **Answer** shows a six-digit number on both screens; when they match, **Approve** sends the key sealed to the new device. The account only relays sealed messages it cannot open, and a request lapses after ten minutes.
@@ -30,7 +32,7 @@ Then **Find backups** lists each host's backups by name and time; choosing one o
 
 ## On the phone
 
-The phone signs in the same way, answers a new host's request for the key, and backs up its own preferences in a slot of its own: appearance, text size, language, themes and layout choices, never paired hosts, device tokens or drafts. **Restore your phone's settings?** on a new phone restores the newest phone backup once the phone has the key.
+The phone signs in the same way, answers a new host's request for the key, and backs up its own preferences in a slot of its own (on **Back up**, then on its own a few seconds after any of them changes, at most once a minute): appearance, text size, language, themes and layout choices, never paired hosts, device tokens or drafts. **Restore your phone's settings?** on a new phone restores the newest phone backup once the phone has the key.
 
 ## Your hosts
 

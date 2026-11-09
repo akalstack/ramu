@@ -65,9 +65,34 @@ type SetState = ConstructorParameters<typeof SavedCredential>[2]
 
 export class HostingAccounts {
   private readonly saved: Record<AccountPlatform, SavedCredential<SavedHosting>>
+  private readonly identitySaved = new Map<string, SavedCredential<SavedHosting>>()
+  private readonly forIdentity: (platform: AccountPlatform, identity: string) => SavedCredential<SavedHosting>
+  private readonly identityIndex: () => Record<string, string[]>
+  private readonly setIdentityIndex: (value: Record<string, string[]>) => void
+  /**
+   * The identity a project acts as, so a deploy, database or release uses that identity's own account of the platform
+   * when it has one, and the account for every identity otherwise.
+   */
+  identityOf: (projectId: string | null | undefined) => string | null = () => null
+
+  /** Whether this project's identity has its own account of the platform. */
+  ownFor(platform: AccountPlatform, projectId: string | null): boolean {
+    return this.resolve(platform, projectId).identity !== null
+  }
+
+  /** The saved account a call for this project uses, and the identity it belongs to (null for the shared one). */
+  private resolve(
+    platform: AccountPlatform,
+    projectId?: string | null,
+  ): { saved: SavedCredential<SavedHosting>; identity: string | null } {
+    const identity = this.identityOf(projectId)
+    if (identity && this.identityIndex()[platform]?.includes(identity))
+      return { saved: this.forIdentity(platform, identity), identity }
+    return { saved: this.saved[platform], identity: null }
+  }
   private readonly errors = new Map<AccountPlatform, string>()
   // Refresh tokens rotate, so calls that all find a session about to expire share one renewal instead of racing.
-  private readonly renewing = new Map<AccountPlatform, Promise<SavedHosting>>()
+  private readonly renewing = new Map<string, Promise<SavedHosting>>()
   constructor(
     getState: State,
     setState: SetState,
@@ -83,6 +108,24 @@ export class HostingAccounts {
         setState,
         credentials,
       )
+    // A platform's further accounts, each kept for one identity, such as a client's Vercel team beside your own.
+    this.forIdentity = (platform, identity) => {
+      const key = `${platform}@${identity}`
+      let found = this.identitySaved.get(key)
+      if (!found) {
+        found = new SavedCredential<SavedHosting>(
+          { key: `hosting-${key}`, connectionId: `hosting-${key}`, shown: 'label' },
+          getState,
+          setState,
+          credentials,
+        )
+        this.identitySaved.set(key, found)
+      }
+      return found
+    }
+    this.identityIndex = () =>
+      (getState('hosting-identities', null) as unknown as Record<string, string[]> | null) ?? {}
+    this.setIdentityIndex = (value) => setState('hosting-identities', value as never)
     this.saved = {
       vercel: saved('vercel'),
       netlify: saved('netlify'),
@@ -95,12 +138,19 @@ export class HostingAccounts {
 
   /** Every platform's connection; `check` asks each connected platform who the token is. */
   async list(check: boolean, cli: (platform: AccountPlatform) => boolean): Promise<HostingAccount[]> {
-    return Promise.all(
+    const shared = await Promise.all(
       ACCOUNT_PLATFORMS.map(async (platform) => {
         if (check && this.saved[platform].savedField()) await this.check(platform)
         return this.describe(platform, cli(platform))
       }),
     )
+    const index = this.identityIndex()
+    const own = await Promise.all(
+      ACCOUNT_PLATFORMS.flatMap((platform) =>
+        (index[platform] ?? []).map((identity) => this.describe(platform, cli(platform), identity)),
+      ),
+    )
+    return [...shared, ...own]
   }
 
   /** The account name Settings shows for a saved sign-in, without reading the token. */
@@ -109,15 +159,17 @@ export class HostingAccounts {
   }
 
   /** Whether a token is saved, without reading it. */
-  connected(platform: AccountPlatform): boolean {
-    return !!this.saved[platform].savedField()
+  connected(platform: AccountPlatform, projectId?: string | null): boolean {
+    return !!this.resolve(platform, projectId).saved.savedField()
   }
 
-  private async describe(platform: AccountPlatform, cli: boolean): Promise<HostingAccount> {
+  private async describe(platform: AccountPlatform, cli: boolean, identity?: string): Promise<HostingAccount> {
     const adapter = this.adapter(platform)
-    const shown = this.saved[platform].savedField()
-    const value = shown ? await this.saved[platform].read().catch(() => null) : null
+    const store = identity ? this.forIdentity(platform, identity) : this.saved[platform]
+    const shown = store.savedField()
+    const value = shown ? await store.read().catch(() => null) : null
     return {
+      ...(identity ? { identityId: identity } : {}),
       platform,
       kind: adapter.kind,
       name: adapter.name,
@@ -146,9 +198,20 @@ export class HostingAccounts {
    * Checks a secret against the platform's account endpoint, then keeps it. A refused one never replaces a working
    * connection.
    */
-  async save(platform: AccountPlatform, secret: HostingSecret, via: 'cli' | 'token'): Promise<HostingAccount> {
+  async save(
+    platform: AccountPlatform,
+    secret: HostingSecret,
+    via: 'cli' | 'token',
+    /** Keep it as one identity's own account of the platform, beside the one for every identity. */
+    forIdentity?: string,
+  ): Promise<HostingAccount> {
     const identity = await this.adapter(platform).account({ token: secret.token })
-    await this.saved[platform].save({
+    if (forIdentity) {
+      const index = this.identityIndex()
+      if (!index[platform]?.includes(forIdentity))
+        this.setIdentityIndex({ ...index, [platform]: [...(index[platform] ?? []), forIdentity] })
+    }
+    await (forIdentity ? this.forIdentity(platform, forIdentity) : this.saved[platform]).save({
       token: secret.token,
       label: identity.name,
       accountId: identity.id,
@@ -159,42 +222,58 @@ export class HostingAccounts {
       ...((secret.expiresAt ?? identity.expiresAt) ? { expiresAt: secret.expiresAt ?? identity.expiresAt! } : {}),
     })
     this.errors.delete(platform)
-    return this.describe(platform, via === 'cli')
+    return this.describe(platform, via === 'cli', forIdentity)
   }
 
-  async disconnect(platform: AccountPlatform): Promise<void> {
+  async disconnect(platform: AccountPlatform, identity?: string): Promise<void> {
     this.errors.delete(platform)
-    await this.saved[platform].remove()
+    if (!identity) return this.saved[platform].remove()
+    await this.forIdentity(platform, identity).remove()
+    const index = this.identityIndex()
+    this.setIdentityIndex({ ...index, [platform]: (index[platform] ?? []).filter((entry) => entry !== identity) })
   }
 
   /** The token a call runs with, renewed first when it is a session about to expire. */
   async auth(
     platform: AccountPlatform,
-  ): Promise<{ auth: HostingAuth; accountId: string | null; defaultScope: string | null }> {
-    let value = await this.saved[platform].read()
+    /** The project the call acts for, so its identity's own account is used when it has one. */
+    projectId?: string | null,
+  ): Promise<{ auth: HostingAuth; accountId: string | null; defaultScope: string | null; identity?: string | null }> {
+    const { saved, identity } = this.resolve(platform, projectId)
+    let value = await saved.read()
     if (!value)
       throw new DeployError(
         `Connect ${this.adapter(platform).name} in ${isMediaService(platform) ? 'Settings → Providers' : 'Settings → Deploy'} first.`,
         'signed-out',
       )
     if (value.refreshToken && value.expiresAt && value.expiresAt - RENEW_BEFORE_MS < Date.now())
-      value = await this.renewOnce(platform, value)
+      value = await this.renewOnce(platform, value, saved)
     return {
       auth: { token: value.token },
       accountId: value.accountId ?? null,
       defaultScope: value.defaultScope ?? null,
+      identity,
     }
   }
 
-  private renewOnce(platform: AccountPlatform, value: SavedHosting): Promise<SavedHosting> {
-    const pending = this.renewing.get(platform)
+  private renewOnce(
+    platform: AccountPlatform,
+    value: SavedHosting,
+    saved: SavedCredential<SavedHosting>,
+  ): Promise<SavedHosting> {
+    const key = saved === this.saved[platform] ? platform : `${platform}@${value.accountId ?? ''}`
+    const pending = this.renewing.get(key)
     if (pending) return pending
-    const renewal = this.renew(platform, value).finally(() => this.renewing.delete(platform))
-    this.renewing.set(platform, renewal)
+    const renewal = this.renew(platform, value, saved).finally(() => this.renewing.delete(key))
+    this.renewing.set(key, renewal)
     return renewal
   }
 
-  private async renew(platform: AccountPlatform, value: SavedHosting): Promise<SavedHosting> {
+  private async renew(
+    platform: AccountPlatform,
+    value: SavedHosting,
+    saved: SavedCredential<SavedHosting>,
+  ): Promise<SavedHosting> {
     const name = this.adapter(platform).name
     const oauth = this.oauth[platform]
     if (!oauth)
@@ -229,7 +308,7 @@ export class HostingAccounts {
       refreshToken: renewed.refresh_token ?? value.refreshToken,
       expiresAt: Date.now() + (renewed.expires_in ?? 3600) * 1000,
     }
-    await this.saved[platform].save(next)
+    await saved.save(next)
     return next
   }
 }

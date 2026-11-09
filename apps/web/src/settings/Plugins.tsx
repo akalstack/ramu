@@ -196,11 +196,14 @@ function Credential({
   plugin,
   slot,
   viewOnly,
+  identities,
   onChanged,
 }: {
   plugin: InstalledPlugin
   slot: InstalledPlugin['credentials'][number]
   viewOnly: boolean
+  /** With two or more identities, a value can be kept for one of them, splitting the slot. */
+  identities: { id: string; name: string }[]
   onChanged: () => void
 }) {
   const invoke = useSettingsInvoke()
@@ -208,6 +211,7 @@ function Credential({
   const [token, setToken] = useState('')
   const [fields, setFields] = useState<Record<string, string>>({})
   const [sandbox, setSandbox] = useState(false)
+  const [forIdentity, setForIdentity] = useState('')
   const [editing, setEditing] = useState(slot.state !== 'saved')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -225,24 +229,50 @@ function Credential({
       setBusy(false)
     }
   }
+  const split =
+    slot.identities.length > 0 ? (
+      <ul className="m-0 flex flex-col gap-0.5 p-0">
+        {slot.identities.map((identity) => (
+          <li key={identity} className="flex list-none items-center gap-2 text-caption">
+            <span className="min-w-0 flex-1 truncate">
+              {t('{0} for {1}', {
+                0: declared.label,
+                1: identities.find((entry) => entry.id === identity)?.name ?? identity,
+              })}
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={viewOnly || busy}
+              onClick={() => void act(() => invoke('plugins.removeCredential', plugin.id, slot.id, identity))}
+            >
+              {t('Remove')}
+            </Button>
+          </li>
+        ))}
+      </ul>
+    ) : null
   if (!editing && slot.state === 'saved')
     return (
-      <div className="flex items-center gap-2 text-caption">
-        <span className="min-w-0 flex-1 truncate">
-          {declared.label}: {slot.account}
-        </span>
-        <Button size="sm" variant="ghost" disabled={viewOnly} onClick={() => setEditing(true)}>
-          {t('Replace')}
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={viewOnly || busy}
-          onClick={() => void act(() => invoke('plugins.removeCredential', plugin.id, slot.id))}
-        >
-          {t('Remove')}
-        </Button>
-      </div>
+      <>
+        {split}
+        <div className="flex items-center gap-2 text-caption">
+          <span className="min-w-0 flex-1 truncate">
+            {declared.label}: {slot.account}
+          </span>
+          <Button size="sm" variant="ghost" disabled={viewOnly} onClick={() => setEditing(true)}>
+            {t('Replace')}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={viewOnly || busy}
+            onClick={() => void act(() => invoke('plugins.removeCredential', plugin.id, slot.id))}
+          >
+            {t('Remove')}
+          </Button>
+        </div>
+      </>
     )
   return (
     <form
@@ -254,7 +284,10 @@ function Credential({
             const { url } = await invoke('plugins.signIn', plugin.id, slot.id, { clientId: token.trim(), sandbox })
             open(url)
           })
-        else void act(() => invoke('plugins.setCredential', plugin.id, slot.id, { token, fields }))
+        else
+          void act(() =>
+            invoke('plugins.setCredential', plugin.id, slot.id, { token, fields }, forIdentity || undefined),
+          ).then(() => setForIdentity(''))
       }}
     >
       <p className="m-0 text-caption text-muted-foreground">
@@ -302,6 +335,17 @@ function Credential({
             />
           ),
         )}
+      {declared.kind === 'token' && identities.length > 0 && (
+        <Dropdown
+          label={t('For')}
+          value={forIdentity}
+          options={[
+            { value: '', label: t('All identities') },
+            ...identities.map((identity) => ({ value: identity.id, label: identity.name })),
+          ]}
+          onChange={setForIdentity}
+        />
+      )}
       {declared.kind === 'sign-in' && (
         <label className="flex items-center gap-2 text-caption">
           <Checkbox checked={sandbox} onCheckedChange={(value) => setSandbox(value === true)} />
@@ -342,6 +386,13 @@ export function PluginSettings() {
   const [newIndex, setNewIndex] = useState('')
   const [review, setReview] = useState<PluginReview | null>(null)
   const [removing, setRemoving] = useState<InstalledPlugin | null>(null)
+  const [identityList, setIdentityList] = useState<{ id: string; name: string }[]>([])
+  useEffect(() => {
+    void invoke('identities.get').then(
+      (snapshot) => setIdentityList(snapshot.settings.identities.length >= 2 ? snapshot.settings.identities : []),
+      () => {},
+    )
+  }, [invoke])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const reload = useCallback(() => {
@@ -482,7 +533,14 @@ export function PluginSettings() {
                 </p>
               )}
               {plugin.credentials.map((slot) => (
-                <Credential key={slot.id} plugin={plugin} slot={slot} viewOnly={viewOnly} onChanged={reload} />
+                <Credential
+                  key={slot.id}
+                  plugin={plugin}
+                  slot={slot}
+                  viewOnly={viewOnly}
+                  identities={identityList}
+                  onChanged={reload}
+                />
               ))}
             </SettingsCard>
           )

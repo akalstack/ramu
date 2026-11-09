@@ -89,17 +89,25 @@ export const registerPluginHandlers: RegisterHandlers = (ctx) => {
           token: z.string().max(16_000),
           fields: z.record(z.string().max(40), z.string().max(2000)).default({}),
         }),
+        z.string().min(1).max(100).optional(),
       ]),
-      run: async (pluginId: string, slot: string, value: { token: string; fields: Record<string, string> }) => {
-        const plugin = await admin().setCredential(pluginId, slot, value)
+      run: async (
+        pluginId: string,
+        slot: string,
+        value: { token: string; fields: Record<string, string> },
+        identityId?: string,
+      ) => {
+        if (identityId && !ctx.identities?.settings().identities.some((identity) => identity.id === identityId))
+          throw new Error('That identity is not on this host.')
+        const plugin = await admin().setCredential(pluginId, slot, value, identityId ?? null)
         changed()
         return plugin
       },
     },
     'plugins.removeCredential': {
-      args: z.tuple([id, slotId]),
-      run: async (pluginId: string, slot: string) => {
-        const plugin = await admin().removeCredential(pluginId, slot)
+      args: z.tuple([id, slotId, z.string().min(1).max(100).optional()]),
+      run: async (pluginId: string, slot: string, identityId?: string) => {
+        const plugin = await admin().removeCredential(pluginId, slot, identityId ?? null)
         changed()
         return plugin
       },

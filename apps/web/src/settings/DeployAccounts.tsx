@@ -9,10 +9,12 @@ import {
   isMediaService,
   type CliSignInPlatform,
 } from '@ramu/shared/types/deploy'
+import type { IdentitySnapshot } from '@ramu/shared/identities'
 import { BrandIcon } from '@/components/brand-icon'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
+import { Dropdown } from '../Menu'
 import { t } from '../i18n'
 import { invoke as openOnThisComputer } from '../ipc'
 import { errorText } from '../lib/errors'
@@ -80,6 +82,10 @@ export function DeployAccounts({ only }: { only?: HostingAccount['kind'] } = {})
     setSummary(null)
     load(false)
   }, [load])
+  const [identities, setIdentities] = useState<IdentitySnapshot | null>(null)
+  useEffect(() => {
+    void Promise.resolve(invoke('identities.get')).then(setIdentities, () => {})
+  }, [invoke])
   if (failed)
     return (
       <p role="alert" className="m-0 mb-3 px-4 text-caption text-destructive">
@@ -87,7 +93,13 @@ export function DeployAccounts({ only }: { only?: HostingAccount['kind'] } = {})
       </p>
     )
   const row = (account: HostingAccount) => (
-    <DeployAccountRow key={account.platform} account={account} canAdminister={summary!.canAdminister} reload={load} />
+    <DeployAccountRow
+      key={`${account.platform}:${account.identityId ?? ''}`}
+      account={account}
+      identity={identities?.settings.identities.find((entry) => entry.id === account.identityId)?.name}
+      canAdminister={summary!.canAdminister}
+      reload={load}
+    />
   )
   return (
     <>
@@ -102,6 +114,13 @@ export function DeployAccounts({ only }: { only?: HostingAccount['kind'] } = {})
               </section>
             ) : null
           })}
+      {summary?.canAdminister && identities && identities.settings.identities.length >= 2 && (
+        <IdentityAccountForm
+          platforms={summary.accounts.filter((account) => !account.identityId && (!only || account.kind === only))}
+          identities={identities.settings.identities}
+          reload={load}
+        />
+      )}
       {summary && !summary.canAdminister && (
         <p className="m-0 mb-3 px-4 text-caption text-muted-foreground">
           {only === 'media'
@@ -117,12 +136,89 @@ export function DeployAccounts({ only }: { only?: HostingAccount['kind'] } = {})
   )
 }
 
+/**
+ * A further account of a platform for one identity, such as a client's Vercel team beside your own: projects of that
+ * identity deploy with it, every other project with the account for every identity.
+ */
+function IdentityAccountForm({
+  platforms,
+  identities,
+  reload,
+}: {
+  platforms: HostingAccount[]
+  identities: { id: string; name: string }[]
+  reload: (check: boolean) => void
+}) {
+  const invoke = useSettingsInvoke()
+  const [platform, setPlatform] = useState(platforms[0]?.platform ?? '')
+  const [identity, setIdentity] = useState(identities[0]?.id ?? '')
+  const [token, setToken] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  if (!platforms.length) return null
+  return (
+    <section className="mb-4 flex flex-col gap-1.5 px-1" aria-label={t('Add an account for an identity')}>
+      <SettingsGroupTitle>{t('Add an account for an identity')}</SettingsGroupTitle>
+      <p className="m-0 text-caption text-muted-foreground">
+        {t('Projects of that identity use it; every other project keeps using the account above.')}
+      </p>
+      <form
+        className="flex flex-wrap items-center gap-1.5"
+        onSubmit={(event) => {
+          event.preventDefault()
+          setBusy(true)
+          setError(null)
+          void Promise.resolve(
+            invoke('deploy.saveToken', platform as HostingAccount['platform'], token.trim(), identity),
+          )
+            .then(
+              () => {
+                setToken('')
+                reload(false)
+              },
+              (reason) => setError(errorText(reason)),
+            )
+            .finally(() => setBusy(false))
+        }}
+      >
+        <Dropdown
+          label={t('Platform')}
+          value={platform}
+          options={platforms.map((account) => ({ value: account.platform, label: account.name }))}
+          onChange={setPlatform}
+        />
+        <Dropdown
+          label={t('Identity')}
+          value={identity}
+          options={identities.map((entry) => ({ value: entry.id, label: entry.name }))}
+          onChange={setIdentity}
+        />
+        <Input
+          type="password"
+          aria-label={t('Token')}
+          placeholder={t('Token')}
+          value={token}
+          autoComplete="off"
+          onChange={(event) => setToken(event.target.value)}
+        />
+        <Button type="submit" size="sm" variant="secondary" disabled={busy || token.trim().length < 8}>
+          {t('Save')}
+        </Button>
+      </form>
+      {error && <p className="m-0 text-caption text-bad">{error}</p>}
+    </section>
+  )
+}
+
 function DeployAccountRow({
   account,
+  identity,
   canAdminister,
   reload,
 }: {
   account: HostingAccount
+  /** The identity this account belongs to, for one identity's own account. */
+  identity?: string
   canAdminister: boolean
   reload: (check: boolean) => void
 }) {
@@ -183,7 +279,11 @@ function DeployAccountRow({
   return (
     <>
       <SettingsRow>
-        <SettingsLabel title={account.name} icon={<BrandIcon brand={accountBrand(account.platform)} />} help={help} />
+        <SettingsLabel
+          title={identity ? t('{0} for {1}', { 0: account.name, 1: identity }) : account.name}
+          icon={<BrandIcon brand={accountBrand(account.platform)} />}
+          help={help}
+        />
         <span className="flex items-center gap-2">
           {account.connected && (
             <Button variant="secondary" size="sm" onClick={() => reload(true)}>
@@ -202,7 +302,7 @@ function DeployAccountRow({
               disabled={busy}
               onClick={() =>
                 void run(async () => {
-                  await invoke('deploy.disconnect', account.platform)
+                  await invoke('deploy.disconnect', account.platform, account.identityId)
                   reload(false)
                 })
               }

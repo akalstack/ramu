@@ -130,17 +130,23 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
     },
     'deploy.cancelSignIn': { args: z.tuple([signIn]), run: (signInId: string) => deploys().signIns.cancel(signInId) },
     'deploy.saveToken': {
-      args: z.tuple([account, z.string().trim().min(8).max(4000).regex(/^\S+$/, 'Paste the token alone')]),
-      run: (name: AccountPlatform, token: string) => {
+      args: z.tuple([
+        account,
+        z.string().trim().min(8).max(4000).regex(/^\S+$/, 'Paste the token alone'),
+        z.string().min(1).max(100).optional(),
+      ]),
+      run: (name: AccountPlatform, token: string, identityId?: string) => {
         administrate()
-        return deploys().accounts.save(name, { token }, 'token')
+        if (identityId && !ctx.identities?.settings().identities.some((identity) => identity.id === identityId))
+          throw new Error('That identity is not on this host.')
+        return deploys().accounts.save(name, { token }, 'token', identityId)
       },
     },
     'deploy.disconnect': {
-      args: z.tuple([account]),
-      run: async (name: AccountPlatform) => {
+      args: z.tuple([account, z.string().min(1).max(100).optional()]),
+      run: async (name: AccountPlatform, identityId?: string) => {
         administrate()
-        await deploys().accounts.disconnect(name)
+        await deploys().accounts.disconnect(name, identityId)
         return summary(false)
       },
     },

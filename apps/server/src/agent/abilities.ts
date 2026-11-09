@@ -49,7 +49,7 @@ import type { AbilityDeclaration } from '../providers/adapter'
 import { providerAdapter } from '../providers/adapters'
 import { loadProjectConfig } from '../workspace/projectConfig'
 import { classifyLimit } from '../providers/limitClassifier'
-import { providerAccountId } from '../providers/providerBinaries'
+import { providerAccountId, taskAccountId } from '../providers/providerBinaries'
 import { resolveInRoot } from '../workspace/files'
 import type { AbilityOutput, AbilityRequest, AbilityRun } from './abilityRuns'
 
@@ -77,7 +77,8 @@ export interface AbilityHost {
   /** Shared MCP tools approved on this host, which an ability can be mapped to. */
   mcpTools?(): AbilityMcpToolOption[]
   /** Media services with a saved API key, and the key a call runs with. */
-  media?: { connected(): MediaService[]; auth(service: MediaService): Promise<HostingAuth> }
+  /** Media keys; `taskId` picks the key of the thread's identity when it has its own. */
+  media?: { connected(): MediaService[]; auth(service: MediaService, taskId?: string): Promise<HostingAuth> }
   /** Checks' kept results. */
   readChecks(): unknown
   writeChecks(checks: unknown[]): void
@@ -216,6 +217,16 @@ interface Prepared {
  * it as one tool-limited step, and recording it in the thread. A call sends only the caller's prompt and the inputs it
  * named; the conversation, other files, memory and credentials never leave the thread.
  */
+/** The login an ability call uses on a provider: the thread's identity's own, never another identity's. */
+function loginFor(provider: AgentProvider, taskId: string): string {
+  try {
+    return taskAccountId(provider, taskId)
+  } catch {
+    // No login of this provider is for the thread's identity: the route then has no ready login there.
+    return `unavailable:${provider}`
+  }
+}
+
 export class AbilityService {
   readonly checks: AbilityChecks
   private lastRefresh = 0
@@ -587,7 +598,7 @@ export class AbilityService {
         { ...host, choices },
         this.passed(),
         this.order(),
-        providerAccountId,
+        (provider: AgentProvider) => loginFor(provider, session.taskId),
         exclude,
       )
       if (routes === null)
@@ -946,7 +957,7 @@ export class AbilityService {
     const timer = setTimeout(abort, TIMEOUT_MS[base.tool])
     try {
       const file = await connector.make(
-        await this.host.media.auth(service),
+        await this.host.media.auth(service, session.taskId),
         {
           ability: base.ability,
           prompt,

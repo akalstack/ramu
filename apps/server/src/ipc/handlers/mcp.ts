@@ -111,6 +111,15 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
         admin().removeSecret(connectionId, kind, name),
     },
     'mcp.disconnect': { args: z.tuple([id]), run: (id: string) => admin().disconnect(id) },
+    /** An account for one identity on this server: Linear once, a work sign-in for Work and a personal one for Personal. */
+    'mcp.splitForIdentity': {
+      args: z.tuple([id, id]),
+      run: (connectionId: string, identityId: string) => {
+        if (!ctx.identities?.settings().identities.some((identity) => identity.id === identityId))
+          throw new Error('That identity is not on this host.')
+        return admin().splitFor(connectionId, identityId)
+      },
+    },
     'mcp.remove': {
       args: z.tuple([id]),
       run: async (id: string) => {

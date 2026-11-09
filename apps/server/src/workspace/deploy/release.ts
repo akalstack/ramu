@@ -253,7 +253,7 @@ export class StoreReleases {
     }
     if (!account || !easProject) return status
     try {
-      const { auth } = await this.accounts.auth('expo')
+      const { auth } = await this.accounts.auth('expo', projectId)
       const [app, builds] = await Promise.all([
         this.client.app(auth, easProject),
         this.client.builds(auth, easProject, LISTED),
@@ -271,7 +271,7 @@ export class StoreReleases {
     const easProject = easProjectId((await this.facts(root)).appJson)
     if (!easProject) return null
     return usageReport('expo', 'Expo', async () =>
-      this.client.usage((await this.accounts.auth('expo')).auth, easProject),
+      this.client.usage((await this.accounts.auth('expo', projectId)).auth, easProject),
     )
   }
 
@@ -291,7 +291,7 @@ export class StoreReleases {
     const { branch, defaultBranch } = await commitBranchInfo(root)
     if (defaultBranch && branch !== defaultBranch)
       throw new Error(`A release builds ${defaultBranch}. Switch the project’s checkout to ${defaultBranch} first.`)
-    const { auth } = await this.accounts.auth('expo')
+    const { auth } = await this.accounts.auth('expo', projectId)
     const stdout = await this.run(
       [
         'build',
@@ -353,7 +353,7 @@ export class StoreReleases {
     const root = this.root(projectId)
     const easProject = root ? easProjectId((await this.facts(root)).appJson) : null
     if (!easProject) throw new Error('This project has no Expo app linked to an EAS project.')
-    const { auth } = await this.accounts.auth('expo')
+    const { auth } = await this.accounts.auth('expo', projectId)
     return this.client.logs(auth, easProject, buildId, of, LOG_LINES)
   }
 
@@ -383,7 +383,7 @@ export class StoreReleases {
     const needs = updatePreviewNeeds(await this.facts(root))
     if (needs.length)
       throw new Error(`Fix these first: ${needs.map((need) => UPDATE_PREVIEW_NEED_TEXT[need]).join('; ')}.`)
-    const { auth } = await this.accounts.auth('expo')
+    const { auth } = await this.accounts.auth('expo', projectId)
     await this.host.actionsSecrets(root).set('ci', { [EXPO_TOKEN_SECRET]: auth.token })
     const { url } = await proposeFile(root, 'ramu/eas-preview', async () => ({
       files: [{ path: EAS_PREVIEW_WORKFLOW_PATH, content: easPreviewWorkflow(packageManagerOf(await readdir(root))) }],

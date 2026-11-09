@@ -130,8 +130,8 @@ export class ResourceService {
   }
 
   /** The account a call runs as, refused when another account is connected than the one that made the resource. */
-  private async auth(provider: ResourceProvider, accountId?: string) {
-    const { auth, accountId: connected } = await this.accounts.auth(provider)
+  private async auth(provider: ResourceProvider, accountId: string | undefined, projectId: string) {
+    const { auth, accountId: connected } = await this.accounts.auth(provider, projectId)
     if (accountId && connected && connected !== accountId)
       throw new DeployError(
         `This database was made under another ${this.adapter(provider).name} account. Connect that account again.`,
@@ -170,7 +170,7 @@ export class ResourceService {
     const binding = this.branchable(projectId)
     const open = this.branchesOf(projectId)
     if (!binding || open.includes(gitBranch) || open.length >= BRANCHES_MAX) return null
-    const { auth } = await this.auth(binding.provider, binding.accountId)
+    const { auth } = await this.auth(binding.provider, binding.accountId, projectId)
     const values = await this.adapter(binding.provider).branch!(auth, binding.id, pullRequestBranch(gitBranch))
     this.host.setState(branchKey(projectId), [...this.branchesOf(projectId), gitBranch])
     return values
@@ -181,7 +181,7 @@ export class ResourceService {
     if (!this.branchesOf(projectId).includes(gitBranch)) return []
     const binding = this.bindings(projectId).find((entry) => entry.kind === 'database')
     if (binding) {
-      const { auth } = await this.auth(binding.provider, binding.accountId)
+      const { auth } = await this.auth(binding.provider, binding.accountId, projectId)
       await this.adapter(binding.provider).removeBranch?.(auth, binding.id, pullRequestBranch(gitBranch))
     }
     this.host.setState(
@@ -244,7 +244,7 @@ export class ResourceService {
     if (!adapter.plans.some((entry) => entry.id === plan)) throw new Error('Choose one of the offered plans.')
     if (this.bindings(projectId).some((binding) => binding.kind === adapter.kind))
       throw new Error(`This project already has ${KIND_NAMES[adapter.kind]}. Manage it on the provider’s page.`)
-    const { auth, accountId } = await this.auth(provider)
+    const { auth, accountId } = await this.auth(provider, undefined, projectId)
     const unfinished = this.host.getState<{ id: string; name: string } | null>(unfinishedKey(projectId, provider), null)
     let made = unfinished?.name === name ? await adapter.find(auth, name) : null
     if (made && made.id !== unfinished?.id) made = null
@@ -292,7 +292,7 @@ export class ResourceService {
           adapter.name,
           adapter.usage &&
             (async () => {
-              const { auth } = await this.auth(binding.provider, binding.accountId)
+              const { auth } = await this.auth(binding.provider, binding.accountId, projectId)
               return adapter.usage!(auth, binding.id)
             }),
         )

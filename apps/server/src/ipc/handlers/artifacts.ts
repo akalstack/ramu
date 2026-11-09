@@ -260,7 +260,7 @@ async function queryDataSource(ctx: HandlerContext, artifactId: string, spec: z.
     throw new Error(`This page is not allowed to read ${spec.id}. Allow it in Page settings.`)
   if (!ctx.plugins) throw new Error('Update this host for pages that read data sources.')
   const { columns, ...query } = spec
-  return ctx.plugins.query(spec.id, query, columns, DASHBOARD_ROWS_MAX)
+  return ctx.plugins.query(spec.id, query, columns, DASHBOARD_ROWS_MAX, page.projectId)
 }
 
 function readRamuData(ctx: HandlerContext, artifactId: string, source: RamuDataSource) {

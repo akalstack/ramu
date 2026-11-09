@@ -19,6 +19,7 @@ const definition = z.strictObject({
   enabled: z.boolean(),
   scope,
   providers: z.array(provider).min(1).max(5),
+  split: z.strictObject({ base: id, identityId: id }).optional(),
   transport: z.discriminatedUnion('type', [
     z.strictObject({
       type: z.literal('http'),

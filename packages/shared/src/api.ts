@@ -817,12 +817,14 @@ export interface RamuMethods extends ArtifactMethods {
   'plugins.checkUpdates'(): import('./plugins').InstalledPlugin[]
   'plugins.remove'(id: string): void
   'plugins.setEnabled'(id: string, enabled: boolean): import('./plugins').InstalledPlugin
+  /** With `identityId`, keeps the value for that identity only, splitting the slot. */
   'plugins.setCredential'(
     id: string,
     slot: string,
     value: { token: string; fields: Record<string, string> },
+    identityId?: string,
   ): import('./plugins').InstalledPlugin
-  'plugins.removeCredential'(id: string, slot: string): import('./plugins').InstalledPlugin
+  'plugins.removeCredential'(id: string, slot: string, identityId?: string): import('./plugins').InstalledPlugin
   /** Opens the service's sign-in; the host keeps the token once the browser comes back to its loopback callback. */
   'plugins.signIn'(id: string, slot: string, input: { clientId: string; sandbox: boolean }): { url: string }
   'plugins.addIndex'(url: string): import('./plugins').PluginIndexInfo[]
@@ -1205,6 +1207,8 @@ export interface RamuMethods extends ArtifactMethods {
   'mcp.removeCredential'(connectionId: string, name: string): Promise<void>
   /** Removes Ramu's credentials and asks the service to revoke its OAuth tokens: `revoked`, `unsupported`, `failed` or `none`. */
   'mcp.disconnect'(connectionId: string): Promise<'none' | 'revoked' | 'unsupported' | 'failed'>
+  /** Adds one identity's own account on a connection's server; it is signed in and approved on its own. */
+  'mcp.splitForIdentity'(connectionId: string, identityId: string): SharedMcpConnection
   'mcp.remove'(connectionId: string): Promise<void>
   'mcp.checkCredentialStore'(): Promise<'available' | 'unavailable' | 'not-checked'>
   /** Copy a declared server's non-secret definition into Shared MCP for one project. Connects nothing. */
@@ -1412,8 +1416,9 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.signInMatch'(id: string, number: string): HostingSignIn
   'deploy.cancelSignIn'(id: string): void
   /** Checks a token pasted on the guided token page and keeps it in the host's credential store. Host only. */
-  'deploy.saveToken'(platform: AccountPlatform, token: string): HostingAccount
-  'deploy.disconnect'(platform: AccountPlatform): HostingAccountsSummary
+  /** With `identityId`, keeps the token as that identity's own account of the platform. */
+  'deploy.saveToken'(platform: AccountPlatform, token: string, identityId?: string): HostingAccount
+  'deploy.disconnect'(platform: AccountPlatform, identityId?: string): HostingAccountsSummary
   /** Where a project deploys, its live address and its latest deployments. */
   'deploy.project'(projectId: string): ProjectDeployment
   /**

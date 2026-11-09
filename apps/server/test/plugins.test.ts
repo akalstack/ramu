@@ -125,7 +125,16 @@ function host(fetcher = vi.fn<typeof fetch>()) {
           1,
         ),
       setSecret: async (id, kind, name, value) => void secrets.push({ id, kind, name, value }),
+      splitFor: (id, identity) => {
+        const found = connections.find((entry) => entry.split?.base === id && entry.split.identityId === identity)
+        if (found) return found
+        const base = connections.find((entry) => entry.id === id)!
+        const split = { ...base, id: `${id}@${identity}`, split: { base: id, identityId: identity } }
+        connections.push(split)
+        return split
+      },
     },
+    identityOf: (projectId) => (projectId === 'work-api' ? 'work' : projectId ? 'personal' : null),
     agents: {
       list: () => agents,
       save: (input) => {
@@ -394,6 +403,30 @@ describe('credentials', () => {
     expect(issued).toBeGreaterThan(1)
     const body = String(fetcher.mock.calls.at(-1)![1]!.body)
     expect(body).toContain('grant_type=refresh_token')
+  })
+})
+
+describe('a credential split per identity', () => {
+  it('keeps a second value for one identity, used by its projects and its own account on the MCP server', async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => json([{ owner: { email: 'someone@example.com' } }]))
+    const h = host(fetcher)
+    services.push(h.service)
+    const review = await h.service.stage({ source: renderPlugin({}, RAMU) })
+    const plugin = await h.service.confirm(review.stageId, { scope: { kind: 'all' }, includeScripts: false })
+    await h.service.setCredential(plugin.id, 'token', { token: 'personal-token', fields: {} })
+    const split = await h.service.setCredential(plugin.id, 'token', { token: 'work-token', fields: {} }, 'work')
+    expect(split.credentials[0]!.identities).toEqual(['work'])
+    expect((await h.service.secret(plugin.id, 'token', 'work-api'))!.token).toBe('work-token')
+    expect((await h.service.secret(plugin.id, 'token', 'blog'))!.token).toBe('personal-token')
+    const workAccount = h.connections.find((entry) => entry.split?.identityId === 'work')!
+    expect(h.secrets).toContainEqual(
+      expect.objectContaining({ id: workAccount.id, name: 'RENDER_API_KEY', value: 'work-token' }),
+    )
+    expect(h.secrets.filter((entry) => entry.id === workAccount.id).map((entry) => entry.value)).not.toContain(
+      'personal-token',
+    )
+    await h.service.removeCredential(plugin.id, 'token', 'work')
+    expect((await h.service.secret(plugin.id, 'token', 'work-api'))!.token).toBe('personal-token')
   })
 })
 

@@ -22,6 +22,7 @@ import {
   type IdentityMismatch,
   type ProjectIdentity,
   type ProjectPlace,
+  forgeChoiceOf,
 } from '@ramu/shared/identities'
 
 const KEY = 'identities:v1'
@@ -205,7 +206,45 @@ export class IdentityService {
   /** The Git author environment for processes Ramu starts in a project; empty with no identities. */
   environment(projectId: string | null): Record<string, string> {
     const identity = this.forProject(projectId)
-    return identity ? gitAuthorEnvironment(identity) : {}
+    if (!identity) return {}
+    const token = this.settings().identities.length >= 2 && projectId ? this.forgeTokens.get(projectId) : undefined
+    return {
+      ...gitAuthorEnvironment(identity),
+      // The identity's own GitHub account for `gh` and for Git over https, so an agent's own push in a work project
+      // goes as the work account: a helper for github.com that answers with this token, after clearing the others.
+      ...(token
+        ? {
+            GH_TOKEN: token,
+            GIT_CONFIG_COUNT: '2',
+            GIT_CONFIG_KEY_0: 'credential.https://github.com.helper',
+            GIT_CONFIG_VALUE_0: '',
+            GIT_CONFIG_KEY_1: 'credential.https://github.com.helper',
+            GIT_CONFIG_VALUE_1:
+              '!f() { test "$1" = get && echo username=x-access-token && echo "password=$GH_TOKEN"; }; f',
+          }
+        : {}),
+    }
+  }
+
+  /** Projects whose identity owns a saved GitHub connection, with its token; kept fresh by the forge side. */
+  private forgeTokens = new Map<string, string>()
+  setForgeTokens(tokens: Map<string, string>) {
+    this.forgeTokens = tokens
+  }
+
+  /** The GitHub account choice a repository's project identity owns, for `ForgeAccountStore.identityChoice`. */
+  forgeChoice(origin: string, owner: string, repo: string): string | null {
+    if (this.settings().identities.length < 2) return null
+    const wanted = `${origin}/${owner}/${repo}`.toLowerCase()
+    const place = this.host.places().find((entry) =>
+      entry.remotes.some((remote) => {
+        const parsed = /^(?:[\w.-]+@)?([\w.-]+)[:/](.+?)(?:\.git)?\/?$/.exec(remote.replace(/^\w+:\/\//, ''))
+        return parsed ? `${parsed[1]}/${parsed[2]}`.toLowerCase() === wanted : false
+      }),
+    )
+    if (!place) return null
+    const own = this.ownAccount(place.id, 'forge:github:any')
+    return own ? forgeChoiceOf(own) : null
   }
 
   /**

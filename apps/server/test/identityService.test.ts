@@ -93,3 +93,23 @@ describe('identities on a host', () => {
     expect(bare.email('anything')).toBe('ada@host.example')
   })
 })
+
+describe('the identity’s GitHub account in a project’s processes', () => {
+  it('gives gh and Git over https the token of the account put in the identity, and nothing without one', () => {
+    const { identities } = service()
+    expect(identities.environment('api').GH_TOKEN).toBeUndefined()
+    identities.setForgeTokens(new Map([['api', 'ghp_work']]))
+    const env = identities.environment('api')
+    expect(env).toMatchObject({ GH_TOKEN: 'ghp_work', GIT_CONFIG_COUNT: '2', GIT_CONFIG_VALUE_0: '' })
+    expect(env.GIT_CONFIG_VALUE_1).toContain('$GH_TOKEN')
+    expect(identities.environment('blog').GH_TOKEN).toBeUndefined()
+  })
+
+  it('points a repository at the GitHub account its project identity owns', () => {
+    const { identities, work } = service()
+    expect(identities.forgeChoice('github.com', 'acme', 'api')).toBeNull()
+    identities.assign(accountKey('forge', 'github', 'conn-work'), [work.id])
+    expect(identities.forgeChoice('github.com', 'acme', 'api')).toBe('conn-work')
+    expect(identities.forgeChoice('github.com', 'ada', 'blog')).toBeNull()
+  })
+})

@@ -18,10 +18,19 @@ The identity is looked up when an action runs, never stored on a thread, schedul
 
 Every account is for all identities until it is put in one. Under **Accounts** in Settings, each connected account (provider logins, GitHub connections, hosting and media accounts, Shared MCP servers, plugins and browser profiles) has **Which identities is it for?**, with **All identities** first. An identity uses its own account of a kind when it has one, otherwise one that is for all identities, and never one put in another identity. A person with one Claude login and two identities uses it in both; putting a second Claude login in Personal changes Claude only.
 
+### One service, an account per identity
+
+Some services need a separate sign-in per identity under one setup:
+
+- **Shared MCP servers:** **Add an account for…** on a server's card in **Agent setup** adds that identity's own account on the same server, shown as "Linear for Personal". It is signed in, or given its secrets, on its own, and its tools are checked and approved on their own, since a work workspace can offer tools a personal one does not. A project of that identity uses it in place of the original; its agent still sees one `linear` server and never chooses the account. Removing the server removes its accounts too.
+- **Plugin credentials:** a plugin's card offers **For** beside a token: the first value is for every identity, and a value kept for one identity splits the slot. That identity's projects use their own value (in the plugin's CLI, data sources and MCP servers, which get an account for that identity); the others keep the shared one.
+- **Hosting accounts:** **Add an account for an identity** in **Settings → Deploy** keeps a further token of a platform for one identity, such as a client's Vercel team beside your own. Deploys, databases and store releases in that identity's projects use it, and every other project uses the account for every identity. Media keys work the same way for abilities run from a project of that identity.
+
 ### What follows the project's identity
 
 - **Commits:** agents, terminals and Ramu's own Git calls in the project run with `GIT_AUTHOR_*` and `GIT_COMMITTER_*` set to the identity's Git author. Ramu never edits your Git config; **Write to this repository's Git config** (`identities.writeGitConfig`) sets `user.name` and `user.email` in the project's repositories for commits made outside Ramu.
-- **Provider logins:** a new thread starts on the identity's own login, or one for every identity, and a thread at its limit moves only to another login its identity may use; it never moves to another identity's login. A provider with no login for the identity says so when the thread starts.
+- **Provider logins:** a new thread starts on the identity's own login, or one for every identity, and a thread at its limit moves only to another login its identity may use; it never moves to another identity's login. A provider with no login for the identity says so when the thread starts. Abilities a thread calls on another provider use that provider's login for the same identity.
+- **GitHub:** Ramu's own GitHub calls for a repository use the account put in its project's identity, unless you chose an account for that repository. Agents and terminals in the project get that account's token as `GH_TOKEN` and as Git's credential for `github.com`, so a push an agent runs itself goes as the identity too.
 - **Shared MCP servers and plugins** put in one identity reach only that identity's projects.
 - **Browser:** an agent browsing in a project opens the browser profile put in its identity.
 - **Knowledge,** below.

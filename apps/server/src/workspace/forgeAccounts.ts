@@ -330,6 +330,19 @@ export class ForgeAccountStore {
    * The identity a call would use, without reading any token: a saved connection id, `cli`, `cli:<login>`, or null
    * when several accounts need a choice. Watches record it so they can end when it changes.
    */
+  /**
+   * The account a repository's project identity owns, consulted after a pin made for the repository and before the
+   * origin's selection, so a work repository uses the work account without choosing it.
+   */
+  identityChoice: (origin: string, owner?: string, repo?: string) => string | null = () => null
+
+  /** A saved connection's token, for the environment of processes in a project of that connection's identity. */
+  async tokenFor(connectionId: string): Promise<string | null> {
+    const index = this.index()
+    const connection = index.connections.find((entry) => entry.id === connectionId && entry.enabled)
+    return connection ? this.credentials.read(this.scope(index, connection), connection.reference) : null
+  }
+
   choiceId(origin: string, owner?: string, repo?: string): string | null {
     const chosen = this.choose(this.index(), origin, owner, repo)
     if (chosen.kind === 'ambiguous') return null
@@ -348,11 +361,13 @@ export class ForgeAccountStore {
     | { kind: 'ambiguous'; candidates: { id: string; login: string | null }[] } {
     const usable = index.connections.filter((c) => c.origin === origin && c.enabled)
     const pin = owner && repo ? index.overrides[`${origin}/${owner}/${repo}`.toLowerCase()] : undefined
-    const wanted = [pin, index.selected[origin]].find((choice) => {
-      if (!choice) return false
-      if (choice === 'cli' || choice.startsWith('cli:')) return true
-      return usable.some((c) => c.id === choice)
-    })
+    const wanted = [pin, owner && repo ? this.identityChoice(origin, owner, repo) : null, index.selected[origin]].find(
+      (choice) => {
+        if (!choice) return false
+        if (choice === 'cli' || choice.startsWith('cli:')) return true
+        return usable.some((c) => c.id === choice)
+      },
+    )
     if (wanted?.startsWith('cli')) return { kind: 'cli', login: wanted === 'cli' ? null : wanted.slice(4) }
     const pick = wanted ? usable.find((c) => c.id === wanted) : usable.length === 1 ? usable[0] : undefined
     if (pick) return { kind: 'saved', connection: pick }

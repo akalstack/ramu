@@ -10,6 +10,11 @@ export interface SharedMcpConnection {
   enabled: boolean
   scope: { projectIds: string[]; hostWide: boolean }
   providers: AgentProvider[]
+  /**
+   * One identity's own account on another connection's server: the same server and tools, signed in separately. A
+   * project of that identity uses it in place of the base connection, so its agent still sees one server.
+   */
+  split?: { base: string; identityId: string }
   transport:
     | {
         type: 'http'

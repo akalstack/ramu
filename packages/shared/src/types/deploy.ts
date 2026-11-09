@@ -58,6 +58,8 @@ export type DeployFailureKind = 'signed-out' | 'missing-permission' | 'plan-limi
 /** One platform's connection on this host. The token never leaves the host. */
 export interface HostingAccount {
   platform: AccountPlatform
+  /** Set for one identity's own account of the platform; absent for the account every identity uses. */
+  identityId?: string
   /** Whether it deploys apps, provides a database, releases phone apps to the stores, or makes media. */
   kind: 'hosting' | ResourceKind | 'store' | 'media'
   /** The platform's name, such as "Vercel". */

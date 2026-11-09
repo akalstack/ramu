@@ -637,13 +637,15 @@ it('queries a plugin data source only when the page declared it and the person a
   )
   expect(pluginQuery).not.toHaveBeenCalled()
   pages.grant(page.id, { services: ['grafana'] })
-  // Allowed, the query reaches the plugin with the data source's own fields and the columns asked for.
+  // Allowed, the query reaches the plugin with the data source's own fields, the columns asked for and the project.
   await expect(query(grafana)).resolves.toEqual([{ Value: 3 }])
   expect(pluginQuery).toHaveBeenCalledWith(
     'grafana',
     { id: 'grafana', datasource: 'prom1', query: { expr: 'up' } },
     ['Value'],
     5000,
+    // The page's project, so a value of the credential kept for its identity is used.
+    'p',
   )
 })
 

@@ -1,4 +1,5 @@
 import { dirname, join } from 'node:path'
+import { forgeChoiceOf } from '@ramu/shared/identities'
 import { fileURLToPath } from 'node:url'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 import type { AgentProvider, AppPreferences, FileContext, UsageReading, ModelPreferences } from '@ramu/shared/types'
@@ -62,6 +63,25 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
       if (id) services.pullRequestWatches?.stopForConnection(id)
     },
   )
+  const identities = services.identities
+  if (identities) {
+    forgeAccounts.identityChoice = (origin, owner, repo) =>
+      owner && repo ? identities.forgeChoice(origin, owner, repo) : null
+    // Tokens of GitHub connections put in an identity, by project, for the environment of that project's processes.
+    const refreshTokens = async () => {
+      const tokens = new Map<string, string>()
+      for (const project of identities.projects()) {
+        const own = identities.ownAccount(project.projectId, 'forge:github:any')
+        const choice = own ? forgeChoiceOf(own) : null
+        if (!choice || choice.startsWith('cli')) continue
+        const token = await forgeAccounts.tokenFor(choice).catch(() => null)
+        if (token) tokens.set(project.projectId, token)
+      }
+      identities.setForgeTokens(tokens)
+    }
+    void refreshTokens()
+    setInterval(() => void refreshTokens(), 60_000).unref()
+  }
   configureForgeAccounts(forgeAccounts)
   const bitbucket = new BitbucketCredentials(
     (key, fallback) => workspace.getAppState(key, fallback),

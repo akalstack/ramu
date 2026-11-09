@@ -44,5 +44,7 @@ export async function guardForge(ctx: HandlerContext, context: string, cwd: stri
 export function guardHosting(ctx: HandlerContext, projectId: string, platform: string, action: string) {
   const identities = ctx.identities
   if (!identities || identities.settings().identities.length < 2) return
+  // The project's identity's own account of the platform is used when it has one, so it can never act as another.
+  if (ctx.deploys?.accounts.ownFor(platform as never, projectId)) return
   identities.guard(projectId === NO_PROJECT ? null : projectId, accountKey('hosting', platform), action)
 }
