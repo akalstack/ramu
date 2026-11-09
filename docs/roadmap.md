@@ -14,7 +14,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 ## Implementation
 
 - **Transport:** bounded replay and snapshot recovery for every resource, and defined connection outcomes (current, synchronizing, disconnected, authorization rejected, outcome unknown) that keep drafts and queued messages; mutations that cannot be retried report an unknown outcome and reconcile. Start from measurements on real networks ([Architecture](contributing/architecture.md#transport)).
-- **Background terminals:** native command handles for Claude, Codex, OpenCode and Cursor need verified owner-lifecycle contracts. The ACP client-terminal boundary is written but enabled for no provider until one is verified against a live runtime.
+- **Background terminals:** the owner of OpenCode's and Cursor's native background commands, checked on live turns as Claude's and Codex's were ([Architecture](contributing/architecture.md#providers)). The ACP client-terminal boundary stays off until a runtime uses it; Antigravity 1.4.3 does not.
 - **Agent setup:** per-adapter rule delivery (path-matched activation only where a runtime supports it).
 - **Mobile:** IME composition checks on a device. Add a phone entry for a desktop setting only when it clearly helps someone away from the laptop.
 - **Thread titles:** no provider checked so far names a thread itself: on live turns on 2026-11-09, Codex 0.167.0 sent no `thread/name/updated` and Antigravity 1.4.3 no ACP `session_info_update` title. Ramu writes titles itself until one does; recheck with new releases.
