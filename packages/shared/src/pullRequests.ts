@@ -229,3 +229,33 @@ export function sortPullRequestRows<T extends Pick<PullRequestRow, 'pr' | 'stage
   if (sort === 'updated') return sorted
   return sorted.sort((a, b) => READINESS.indexOf(a.stage) - READINESS.indexOf(b.stage))
 }
+
+/** One line of a pull request file's diff, with the line numbers on either side where it has them. */
+export interface PatchRow {
+  kind: 'hunk' | 'add' | 'del' | 'context' | 'note'
+  text: string
+  /** The line in the base version; absent on an added line. */
+  old?: number
+  /** The line in the pull request's version, which inline comments attach to; absent on a removed line. */
+  new?: number
+}
+
+/** A file's unified diff hunks as rows numbered from each hunk header, as the services' own diff views number them. */
+export function patchRows(patch: string): PatchRow[] {
+  const rows: PatchRow[] = []
+  let oldLine = 0
+  let newLine = 0
+  for (const line of patch.split('\n')) {
+    const header = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line)
+    if (header) {
+      oldLine = Number(header[1])
+      newLine = Number(header[2])
+      rows.push({ kind: 'hunk', text: line })
+    } else if (line.startsWith('+')) rows.push({ kind: 'add', text: line.slice(1), new: newLine++ })
+    else if (line.startsWith('-')) rows.push({ kind: 'del', text: line.slice(1), old: oldLine++ })
+    // "\ No newline at end of file" belongs to the line above and has no number of its own.
+    else if (line.startsWith('\\')) rows.push({ kind: 'note', text: line.slice(1).trim() })
+    else rows.push({ kind: 'context', text: line.slice(1), old: oldLine++, new: newLine++ })
+  }
+  return rows
+}

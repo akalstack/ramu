@@ -177,3 +177,23 @@ describe('hosting services on the Pull requests page', () => {
     expect(rows.filter((row) => matchesPullRequestRow(row, 'gitlab')).map((row) => row.pr.number)).toEqual([2])
   })
 })
+
+describe('reading a pull request file diff', () => {
+  it('numbers each line on the side it belongs to, from the hunk headers', async () => {
+    const { patchRows } = await import('../src/pullRequests')
+    const rows = patchRows(
+      '@@ -10,3 +10,4 @@ fn\n keep\n-old\n+new\n+added\n\\ No newline at end of file\n@@ -40 +41 @@\n tail',
+    )
+    expect(rows.map((row) => [row.kind, row.old ?? null, row.new ?? null])).toEqual([
+      ['hunk', null, null],
+      ['context', 10, 10],
+      ['del', 11, null],
+      ['add', null, 11],
+      ['add', null, 12],
+      ['note', null, null],
+      ['hunk', null, null],
+      ['context', 40, 41],
+    ])
+    expect(rows[2]!.text).toBe('old')
+  })
+})

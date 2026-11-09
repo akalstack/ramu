@@ -1438,6 +1438,17 @@ export interface RamuMethods extends ArtifactMethods {
   'forge.pullRequestDescription'(taskId: string, repoId: string, url: string): string
   /** The pull request's latest history, oldest first. */
   'forge.pullRequestTimeline'(taskId: string, repoId: string, url: string): import('./types').PullRequestTimelineEvent[]
+  /** Posts the person's own review with its inline comments (on the new side of each line). Never available to agents. */
+  'forge.submitReview'(
+    taskId: string,
+    repoId: string,
+    url: string,
+    review: {
+      verdict: import('./types').ReviewVerdict
+      body: string
+      comments: { path: string; line: number; body: string }[]
+    },
+  ): void
   /** The files the pull request changes with their diffs; null where the service is not supported yet. */
   'forge.pullRequestFiles'(
     taskId: string,

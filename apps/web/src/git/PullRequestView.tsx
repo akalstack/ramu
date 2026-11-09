@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { PullRequestTimeline } from './PullRequestTimeline'
-import { PullRequestFiles } from './PullRequestFiles'
+import { PullRequestFiles, usePullRequestFiles } from './PullRequestFiles'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { previewRehypePlugins } from '@ramu/shared/workspace/markdownRendering'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -12,6 +13,7 @@ import {
   CircleDot,
   CircleX,
   ExternalLink,
+  FileDiff,
   GitMerge,
   MessageSquare,
   MessagesSquare,
@@ -75,6 +77,8 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
   const [error, setError] = useState<string | null>(null)
   const [merging, setMerging] = useState(false)
   const [closing, setClosing] = useState(false)
+  const [tab, setTab] = useState<'conversation' | 'files'>('conversation')
+  const fileCount = usePullRequestFiles(taskId, view.repoId, view.url)
 
   const list = useQuery({
     queryKey: ipcQueryKeyOn(host.id, 'forge.pullRequests', taskId, view.repoId, false),
@@ -346,58 +350,91 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
           </p>
         )}
 
-        {batch && <ReviewDraftsCard key={batch.id} batch={batch} onDone={() => void refresh()} />}
+        {/* As on the services: the conversation and the changed files, one tab each. */}
+        <Tabs value={tab} onValueChange={(value) => setTab(value as 'conversation' | 'files')} className="gap-4">
+          <TabsList variant="line" className="h-9! w-full justify-start gap-4 border-b border-(--line) p-0">
+            <TabsTrigger value="conversation" className="flex-none gap-1.5 px-0.5 text-control">
+              <MessagesSquare size={14} />
+              {t('Conversation')}
+            </TabsTrigger>
+            <TabsTrigger value="files" className="flex-none gap-1.5 px-0.5 text-control">
+              <FileDiff size={14} />
+              {t('Files changed')}
+              {!!fileCount.data?.files.length && (
+                <span className="min-w-4 rounded-full bg-fill px-1.5 text-[11px] leading-4 text-muted-foreground tabular-nums">
+                  {fileCount.data.files.length}
+                  {fileCount.data.more ? '+' : ''}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="conversation" className="flex flex-col gap-5">
+            {batch && <ReviewDraftsCard key={batch.id} batch={batch} onDone={() => void refresh()} />}
 
-        {!!description.data?.trim() && (
-          <section className="flex flex-col gap-1">
-            <h3 className="m-0 text-control font-semibold">{t('Description')}</h3>
-            <div className="min-w-0 text-body text-soft [overflow-wrap:anywhere]">
-              {/* Descriptions are often HTML (Dependabot's are): render it sanitized, as the Markdown preview does. */}
-              <Markdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={previewRehypePlugins}
-                components={chatMarkdownComponents}
-              >
-                {description.data}
-              </Markdown>
-            </div>
-          </section>
-        )}
-
-        <PullRequestFiles taskId={taskId} repoId={view.repoId} url={view.url} />
-        <PullRequestTimeline taskId={taskId} repoId={view.repoId} url={view.url} />
-
-        <section className="flex flex-col gap-2">
-          <h3 className="m-0 text-control font-semibold">
-            {t('Open review threads')}
-            {openThreads.length ? (
-              <span className="ml-1.5 font-normal text-muted-foreground">{openThreads.length}</span>
-            ) : null}
-          </h3>
-          {threads.isPending && <ContentSkeleton />}
-          {threads.isError && <p className="m-0 text-caption text-bad">{errorText(threads.error)}</p>}
-          {threads.isSuccess && !openThreads.length && (
-            <p className="m-0 text-caption text-muted-foreground">{t('No open review threads.')}</p>
-          )}
-          {openThreads.map((entry) => (
-            <article key={entry.id} className="flex flex-col gap-1.5 rounded-(--radius-s) border border-line p-2.5">
-              <div className="text-caption text-muted-foreground">
-                {entry.path ? `${entry.path}${entry.line ? `:${entry.line}` : ''}` : t('Conversation')}
-                {entry.outdated && ` · ${t('Outdated')}`}
-              </div>
-              {entry.comments.map((comment) => (
-                <div key={comment.id} className="text-control [overflow-wrap:anywhere] whitespace-pre-wrap">
-                  <span className="font-medium">{comment.author ?? t('Someone')}</span>
-                  {comment.bot && <span className="ml-1 text-caption text-muted-foreground">{t('bot')}</span>}
-                  {!comment.trusted && (
-                    <span className="ml-1 text-caption text-warn">{t('From outside the project')}</span>
-                  )}
-                  <div className="text-soft">{comment.body}</div>
+            {!!description.data?.trim() && (
+              <section className="flex flex-col gap-1">
+                <h3 className="m-0 text-control font-semibold">{t('Description')}</h3>
+                <div className="min-w-0 text-body text-soft [overflow-wrap:anywhere]">
+                  {/* Descriptions are often HTML (Dependabot's are): render it sanitized, as the Markdown preview does. */}
+                  <Markdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={previewRehypePlugins}
+                    components={chatMarkdownComponents}
+                  >
+                    {description.data}
+                  </Markdown>
                 </div>
+              </section>
+            )}
+
+            <PullRequestTimeline taskId={taskId} repoId={view.repoId} url={view.url} />
+
+            <section className="flex flex-col gap-2">
+              <h3 className="m-0 text-control font-semibold">
+                {t('Open review threads')}
+                {openThreads.length ? (
+                  <span className="ml-1.5 font-normal text-muted-foreground">{openThreads.length}</span>
+                ) : null}
+              </h3>
+              {threads.isPending && <ContentSkeleton />}
+              {threads.isError && <p className="m-0 text-caption text-bad">{errorText(threads.error)}</p>}
+              {threads.isSuccess && !openThreads.length && (
+                <p className="m-0 text-caption text-muted-foreground">{t('No open review threads.')}</p>
+              )}
+              {openThreads.map((entry) => (
+                <article key={entry.id} className="flex flex-col gap-1.5 rounded-(--radius-s) border border-line p-2.5">
+                  <div className="text-caption text-muted-foreground">
+                    {entry.path ? `${entry.path}${entry.line ? `:${entry.line}` : ''}` : t('Conversation')}
+                    {entry.outdated && ` · ${t('Outdated')}`}
+                  </div>
+                  {entry.comments.map((comment) => (
+                    <div key={comment.id} className="text-control [overflow-wrap:anywhere] whitespace-pre-wrap">
+                      <span className="font-medium">{comment.author ?? t('Someone')}</span>
+                      {comment.bot && <span className="ml-1 text-caption text-muted-foreground">{t('bot')}</span>}
+                      {!comment.trusted && (
+                        <span className="ml-1 text-caption text-warn">{t('From outside the project')}</span>
+                      )}
+                      <div className="text-soft">{comment.body}</div>
+                    </div>
+                  ))}
+                </article>
               ))}
-            </article>
-          ))}
-        </section>
+            </section>
+          </TabsContent>
+          <TabsContent value="files">
+            {tab === 'files' && (
+              <PullRequestFiles
+                taskId={taskId}
+                repoId={view.repoId}
+                url={view.url}
+                threads={threads.data ?? []}
+                canReview={open}
+                own={mine}
+                onReviewed={() => void refresh()}
+              />
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
       {merging && (
         <MergeDialog

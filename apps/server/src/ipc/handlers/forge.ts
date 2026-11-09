@@ -415,6 +415,24 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
       run: (taskId: string, repoId: string, url: string) =>
         redacted(() => forge.pullRequestBody(gitCwdOf(taskId, repoId), url)),
     },
+    'forge.submitReview': {
+      args: z.tuple([id, id, prUrl, reviewInput]),
+      run: async (
+        taskId: string,
+        repoId: string,
+        url: string,
+        review: { verdict: ReviewVerdict; body: string; comments: { path: string; line: number; body: string }[] },
+      ) => {
+        // The person's own review, written in the pull request's full view; agents never reach this method.
+        await redacted(() =>
+          forge.submitReview(gitCwdOf(taskId, repoId), url, {
+            ...review,
+            comments: review.comments.map((comment, index) => ({ id: String(index), ...comment })),
+          }),
+        )
+        ctx.pullRequestIndex?.invalidate(repoId)
+      },
+    },
     'forge.pullRequestTimeline': {
       args: z.tuple([id, id, prUrl]),
       run: (taskId: string, repoId: string, url: string) =>

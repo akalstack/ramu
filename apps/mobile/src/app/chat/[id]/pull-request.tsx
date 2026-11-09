@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { PullRequestFilesList } from '../../../components/PullRequestFilesList'
 import { Disclosure } from '../../../components/Motion'
 import { Markdown } from '../../../components/Markdown'
 import { Alert, Linking, Pressable, RefreshControl, View } from 'react-native'
@@ -33,7 +34,7 @@ import { openPullRequestThread } from '../../../runtime/pullRequestThread'
 import { ago, useSay } from '../../../i18n'
 import { Header, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
-import { Button, Card, Divider, Sheet, T, Toggle } from '../../../components/ui'
+import { Button, Card, Divider, Segmented, Sheet, T, Toggle } from '../../../components/ui'
 import { ChecksLine, PullRequestGlyph, StageText } from '../../../components/PullRequestParts'
 import { ReviewDrafts } from '../../../components/ReviewDrafts'
 
@@ -96,7 +97,7 @@ export default function PullRequestScreen() {
   const [threadsError, setThreadsError] = useState<string | null>(null)
   const [description, setDescription] = useState<string | null>(null)
   const [files, setFiles] = useState<{ files: PullRequestFile[]; more: boolean } | null>(null)
-  const [filesOpen, setFilesOpen] = useState(false)
+  const [tab, setTab] = useState<'conversation' | 'files'>('conversation')
   const [timeline, setTimeline] = useState<PullRequestTimelineEvent[] | null>(null)
   const [timelineOpen, setTimelineOpen] = useState(false)
   const [loaded, setLoaded] = useState(false)
@@ -463,150 +464,141 @@ export default function PullRequestScreen() {
               ) : null}
             </View>
 
-            {batch ? (
-              <ReviewDrafts
-                key={`${batch.id}:${batch.kind === 'review' ? `${batch.body.length}:${batch.comments.length}` : batch.drafts.map((draft) => `${draft.threadId}${draft.reply.length}${draft.postedId ?? ''}`).join()}`}
-                computerId={computerId}
-                batch={batch}
-                readOnly={!canWrite}
-                onDone={() => void read(true)}
-              />
-            ) : null}
+            <Segmented
+              value={tab}
+              onChange={setTab}
+              options={[
+                { key: 'conversation', label: say('Conversation') },
+                { key: 'files', label: say('Files changed'), count: files?.files.length ?? 0 },
+              ]}
+            />
 
-            {description?.trim() ? (
-              <View style={{ gap: space.s }}>
-                <T size={font.control} weight="600" tone="muted">
-                  {say('Description')}
-                </T>
-                <Markdown text={description} />
-              </View>
-            ) : null}
+            {tab === 'conversation' ? (
+              <>
+                {batch ? (
+                  <ReviewDrafts
+                    key={`${batch.id}:${batch.kind === 'review' ? `${batch.body.length}:${batch.comments.length}` : batch.drafts.map((draft) => `${draft.threadId}${draft.reply.length}${draft.postedId ?? ''}`).join()}`}
+                    computerId={computerId}
+                    batch={batch}
+                    readOnly={!canWrite}
+                    onDone={() => void read(true)}
+                  />
+                ) : null}
 
-            {files?.files.length ? (
-              <View style={{ gap: space.xs }}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded: filesOpen }}
-                  onPress={() => setFilesOpen((value) => !value)}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: 32 }}
-                >
-                  <Disclosure open={filesOpen} size={14} color={c.muted} />
-                  <T size={font.control} weight="600" tone="muted">
-                    {say('Changed files')}{' '}
-                    <T size={font.control} tone="placeholder">
-                      {`${files.files.length}${files.more ? '+' : ''} · +${files.files.reduce((sum, file) => sum + file.additions, 0)} −${files.files.reduce((sum, file) => sum + file.deletions, 0)}`}
+                {description?.trim() ? (
+                  <View style={{ gap: space.s }}>
+                    <T size={font.control} weight="600" tone="muted">
+                      {say('Description')}
                     </T>
-                  </T>
-                </Pressable>
-                {filesOpen
-                  ? files.files.map((file) => (
-                      <View key={file.path} style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
-                        <T size={font.caption} mono numberOfLines={1} style={{ flex: 1 }}>
-                          {file.path}
+                    <Markdown text={description} />
+                  </View>
+                ) : null}
+
+                {timeline?.length ? (
+                  <View style={{ gap: space.xs }}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded: timelineOpen }}
+                      onPress={() => setTimelineOpen((value) => !value)}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: 32 }}
+                    >
+                      <Disclosure open={timelineOpen} size={14} color={c.muted} />
+                      <T size={font.control} weight="600" tone="muted">
+                        {say('Timeline')}{' '}
+                        <T size={font.control} tone="placeholder">
+                          {`${timeline.length} · ${ago(timeline.at(-1)!.at)}`}
                         </T>
-                        <T size={font.caption} tone="ok">{`+${file.additions}`}</T>
-                        <T size={font.caption} tone="bad">{`−${file.deletions}`}</T>
-                      </View>
-                    ))
-                  : null}
-              </View>
-            ) : null}
-
-            {timeline?.length ? (
-              <View style={{ gap: space.xs }}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded: timelineOpen }}
-                  onPress={() => setTimelineOpen((value) => !value)}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: 32 }}
-                >
-                  <Disclosure open={timelineOpen} size={14} color={c.muted} />
-                  <T size={font.control} weight="600" tone="muted">
-                    {say('Timeline')}{' '}
-                    <T size={font.control} tone="placeholder">
-                      {`${timeline.length} · ${ago(timeline.at(-1)!.at)}`}
-                    </T>
-                  </T>
-                </Pressable>
-                {timelineOpen
-                  ? timeline.map((event, index) => (
-                      <View key={`${event.kind}:${event.at}:${index}`} style={{ gap: 1 }}>
-                        <T size={font.caption}>
-                          {`${event.actor ?? say('Someone')} `}
-                          <T
-                            size={font.caption}
-                            tone={
-                              event.verdict === 'approved'
-                                ? 'ok'
-                                : event.verdict === 'changes-requested'
-                                  ? 'warn'
-                                  : 'muted'
-                            }
-                          >
-                            {event.kind === 'review' && event.verdict
-                              ? say(TIMELINE_VERDICT[event.verdict])
-                              : say(TIMELINE_SAID[event.kind], { 0: event.text ?? '' })}
-                          </T>
-                          <T size={font.caption} tone="placeholder">{` · ${ago(event.at)}`}</T>
-                        </T>
-                        {event.text && event.kind !== 'review-requested' ? (
-                          <T size={font.caption} tone="soft" numberOfLines={2}>
-                            {event.text}
-                          </T>
-                        ) : null}
-                      </View>
-                    ))
-                  : null}
-              </View>
-            ) : null}
-
-            <View style={{ gap: space.s }}>
-              <T size={font.control} weight="600" tone="muted">
-                {say('Open review threads')}
-                {openThreads.length ? <T size={font.control} tone="placeholder">{` ${openThreads.length}`}</T> : null}
-              </T>
-              {threadsError ? (
-                <T size={font.caption} tone="bad">
-                  {threadsError}
-                </T>
-              ) : threads === null ? (
-                <T tone="muted">{say('Loading…')}</T>
-              ) : !openThreads.length ? (
-                <T tone="muted">{say('No open review threads.')}</T>
-              ) : (
-                openThreads.map((entry) => (
-                  <Card key={entry.id} style={{ padding: space.m, gap: space.s }}>
-                    <T size={font.caption} tone="muted" mono numberOfLines={2}>
-                      {(entry.path ? `${entry.path}${entry.line ? `:${entry.line}` : ''}` : say('Conversation')) +
-                        (entry.outdated ? ` · ${say('Outdated')}` : '')}
-                    </T>
-                    {entry.comments.map((comment, index) => (
-                      <View key={comment.id} style={{ gap: 2 }}>
-                        {index ? <Divider /> : null}
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.s }}>
-                          <T size={font.control} weight="600">
-                            {comment.author ?? say('Someone')}
-                          </T>
-                          {comment.bot ? (
-                            <T size={font.caption} tone="muted">
-                              {say('bot')}
+                      </T>
+                    </Pressable>
+                    {timelineOpen
+                      ? timeline.map((event, index) => (
+                          <View key={`${event.kind}:${event.at}:${index}`} style={{ gap: 1 }}>
+                            <T size={font.caption}>
+                              {`${event.actor ?? say('Someone')} `}
+                              <T
+                                size={font.caption}
+                                tone={
+                                  event.verdict === 'approved'
+                                    ? 'ok'
+                                    : event.verdict === 'changes-requested'
+                                      ? 'warn'
+                                      : 'muted'
+                                }
+                              >
+                                {event.kind === 'review' && event.verdict
+                                  ? say(TIMELINE_VERDICT[event.verdict])
+                                  : say(TIMELINE_SAID[event.kind], { 0: event.text ?? '' })}
+                              </T>
+                              <T size={font.caption} tone="placeholder">{` · ${ago(event.at)}`}</T>
                             </T>
-                          ) : null}
-                          {!comment.trusted ? (
-                            <T size={font.caption} tone="warn">
-                              {say('From outside the project')}
-                            </T>
-                          ) : null}
-                        </View>
-                        <T size={font.control} tone="soft" copyable={comment.body}>
-                          {comment.body}
+                            {event.text && event.kind !== 'review-requested' ? (
+                              <T size={font.caption} tone="soft" numberOfLines={2}>
+                                {event.text}
+                              </T>
+                            ) : null}
+                          </View>
+                        ))
+                      : null}
+                  </View>
+                ) : null}
+
+                <View style={{ gap: space.s }}>
+                  <T size={font.control} weight="600" tone="muted">
+                    {say('Open review threads')}
+                    {openThreads.length ? (
+                      <T size={font.control} tone="placeholder">{` ${openThreads.length}`}</T>
+                    ) : null}
+                  </T>
+                  {threadsError ? (
+                    <T size={font.caption} tone="bad">
+                      {threadsError}
+                    </T>
+                  ) : threads === null ? (
+                    <T tone="muted">{say('Loading…')}</T>
+                  ) : !openThreads.length ? (
+                    <T tone="muted">{say('No open review threads.')}</T>
+                  ) : (
+                    openThreads.map((entry) => (
+                      <Card key={entry.id} style={{ padding: space.m, gap: space.s }}>
+                        <T size={font.caption} tone="muted" mono numberOfLines={2}>
+                          {(entry.path ? `${entry.path}${entry.line ? `:${entry.line}` : ''}` : say('Conversation')) +
+                            (entry.outdated ? ` · ${say('Outdated')}` : '')}
                         </T>
-                      </View>
-                    ))}
-                  </Card>
-                ))
-              )}
-            </View>
+                        {entry.comments.map((comment, index) => (
+                          <View key={comment.id} style={{ gap: 2 }}>
+                            {index ? <Divider /> : null}
+                            <View
+                              style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.s }}
+                            >
+                              <T size={font.control} weight="600">
+                                {comment.author ?? say('Someone')}
+                              </T>
+                              {comment.bot ? (
+                                <T size={font.caption} tone="muted">
+                                  {say('bot')}
+                                </T>
+                              ) : null}
+                              {!comment.trusted ? (
+                                <T size={font.caption} tone="warn">
+                                  {say('From outside the project')}
+                                </T>
+                              ) : null}
+                            </View>
+                            <T size={font.control} tone="soft" copyable={comment.body}>
+                              {comment.body}
+                            </T>
+                          </View>
+                        ))}
+                      </Card>
+                    ))
+                  )}
+                </View>
+              </>
+            ) : files?.files.length ? (
+              <PullRequestFilesList files={files.files} more={files.more} threads={threads ?? []} />
+            ) : (
+              <T tone="muted">{files ? say('No changed files to show.') : say('Loading files…')}</T>
+            )}
           </>
         ) : null}
       </ScrollView>
