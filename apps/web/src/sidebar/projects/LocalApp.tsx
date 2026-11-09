@@ -148,7 +148,11 @@ export function LocalAppSection({ projectId, repoId }: { projectId: string; repo
           </Button>
         ))
       )}
-      {error && <p className="m-0 text-caption text-bad">{error}</p>}
+      {error && (
+        <p role="alert" className="m-0 text-caption text-bad">
+          {error}
+        </p>
+      )}
       <div className="flex gap-2">
         {on ? (
           <Button

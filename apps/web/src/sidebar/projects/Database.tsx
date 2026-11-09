@@ -41,6 +41,8 @@ export function DatabaseSection({
   const [status, setStatus] = useState<{ repoId: string; value: ProjectResources } | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
+    // Another repository's failure is not this one's.
+    setError(null)
     if (!repoId) return
     let current = true
     host.invoke('deploy.resources', projectId, repoId).then(

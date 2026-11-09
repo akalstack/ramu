@@ -39,6 +39,8 @@ export function EnvSyncSection({ projectId, repoId }: { projectId: string; repoI
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   useEffect(() => {
+    // Another repository's failure is not this one's.
+    setError(null)
     if (!repoId) return
     let current = true
     host.invoke('deploy.environment', projectId, repoId).then(
