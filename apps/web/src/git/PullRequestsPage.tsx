@@ -47,6 +47,7 @@ import { projectCtx, type useWorkspace } from '../workspace/workspace'
 import { ownHostId } from '../hosts'
 import { DeviceIcon } from '@/components/device-icon'
 import { RepositoryAccessNotices } from './RepositoryAccessNotices'
+import { needsAccess } from '@ramu/shared/pullRequestAccess'
 import { queryInvokerFor } from './hostQuery'
 import { errorText } from '../lib/errors'
 import { PullRequestIcon, StageChip } from './PullRequestIcon'
@@ -197,14 +198,7 @@ export function PullRequestsPage() {
       ? 0
       : openRows.filter((row) => inScope(row) && matchesPullRequestRow(row, search) && inPullRequestFilter(row, entry))
           .length
-  const attention = repositories.filter(
-    (repo) =>
-      inScope(repo) &&
-      (repo.error ||
-        repo.availability === 'no-cli' ||
-        repo.availability === 'signed-out' ||
-        repo.availability === 'choose-account'),
-  )
+  const attention = repositories.filter((repo) => inScope(repo) && needsAccess(repo))
   const reachable = repositories.filter((repo) => repo.availability === 'ready' && !repo.error)
   const loading = lists.some(({ query }) => query.isLoading)
   const fetching = lists.some(({ query }) => query.isFetching)

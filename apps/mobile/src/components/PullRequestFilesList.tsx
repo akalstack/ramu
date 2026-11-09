@@ -8,11 +8,22 @@ import { useSay } from '../i18n'
 import { Disclosure } from './Motion'
 import { FileIcon } from './FileIcon'
 import { T, tap } from './ui'
+import type { PendingComment } from './PullRequestReview'
 
 /** Files that start open; a larger pull request starts folded so its list reads first. */
 const OPEN_AT_FIRST = 5
 
-function FilePatch({ file, threads }: { file: PullRequestFile; threads: PullRequestThread[] }) {
+function FilePatch({
+  file,
+  threads,
+  pending,
+  onComment,
+}: {
+  file: PullRequestFile
+  threads: PullRequestThread[]
+  pending: PendingComment[]
+  onComment?: (line: number) => void
+}) {
   const { c } = useTheme()
   const say = useSay()
   const rows = useMemo(() => (file.patch ? patchRows(file.patch) : []), [file.patch])
@@ -27,10 +38,23 @@ function FilePatch({ file, threads }: { file: PullRequestFile; threads: PullRequ
       <View style={{ paddingVertical: space.xs, minWidth: '100%' }}>
         {rows.map((row, index) => {
           const here = row.new === undefined ? [] : threads.filter((thread) => thread.line === row.new)
+          const waiting = row.new === undefined ? [] : pending.filter((comment) => comment.line === row.new)
+          // A line on the new side takes a comment, as the services comment on the new version.
+          const line = row.kind !== 'hunk' && row.kind !== 'del' ? row.new : undefined
           return (
             <Fragment key={index}>
-              <View
-                style={{
+              <Pressable
+                disabled={!onComment || line === undefined}
+                accessibilityRole={onComment && line !== undefined ? 'button' : undefined}
+                accessibilityLabel={
+                  onComment && line !== undefined ? say('Comment on line {0}', { 0: line }) : undefined
+                }
+                onPress={() => {
+                  if (line === undefined) return
+                  tap()
+                  onComment?.(line)
+                }}
+                style={({ pressed }) => ({
                   flexDirection: 'row',
                   backgroundColor:
                     row.kind === 'add'
@@ -40,7 +64,8 @@ function FilePatch({ file, threads }: { file: PullRequestFile; threads: PullRequ
                         : row.kind === 'hunk'
                           ? c.fill
                           : 'transparent',
-                }}
+                  opacity: pressed ? 0.6 : 1,
+                })}
               >
                 <T size={11} mono tone="placeholder" style={{ width: 34, textAlign: 'right', paddingRight: 6 }}>
                   {row.new ?? row.old ?? ''}
@@ -48,7 +73,7 @@ function FilePatch({ file, threads }: { file: PullRequestFile; threads: PullRequ
                 <T size={11} mono tone={row.kind === 'hunk' ? 'muted' : 'body'} style={{ paddingRight: space.m }}>
                   {`${row.kind === 'add' ? '+' : row.kind === 'del' ? '−' : ' '} ${row.text}`}
                 </T>
-              </View>
+              </Pressable>
               {here.map((thread) => (
                 <View
                   key={thread.id}
@@ -62,6 +87,24 @@ function FilePatch({ file, threads }: { file: PullRequestFile; threads: PullRequ
                       {` ${comment.body}`}
                     </T>
                   ))}
+                </View>
+              ))}
+              {waiting.map((comment) => (
+                <View
+                  key={comment.id}
+                  style={{
+                    gap: 2,
+                    padding: space.s,
+                    marginVertical: 2,
+                    backgroundColor: c.accentSoft,
+                    borderRadius: radius.s,
+                    maxWidth: 360,
+                  }}
+                >
+                  <T size={font.caption} tone="accent" weight="600">
+                    {say('Pending')}
+                  </T>
+                  <T size={font.caption}>{comment.body}</T>
                 </View>
               ))}
             </Fragment>
@@ -85,10 +128,16 @@ export function PullRequestFilesList({
   files,
   more,
   threads,
+  pending = [],
+  onComment,
 }: {
   files: PullRequestFile[]
   more: boolean
   threads: PullRequestThread[]
+  /** Line comments waiting to go out with the person's review. */
+  pending?: PendingComment[]
+  /** With it, a line on the new side opens a comment for the review. */
+  onComment?: (path: string, line: number) => void
 }) {
   const { c } = useTheme()
   const say = useSay()
@@ -104,6 +153,7 @@ export function PullRequestFilesList({
       {files.map((file) => {
         const expanded = open.has(file.path)
         const fileThreads = threads.filter((thread) => thread.path === file.path && !thread.outdated && thread.line)
+        const filePending = pending.filter((comment) => comment.path === file.path)
         return (
           <View
             key={file.path}
@@ -135,18 +185,25 @@ export function PullRequestFilesList({
               <T size={font.caption} mono numberOfLines={1} style={{ flex: 1 }}>
                 {file.path}
               </T>
-              {fileThreads.length ? (
+              {fileThreads.length + filePending.length ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
                   <MessageSquare size={11} color={c.muted} />
                   <T size={font.caption} tone="muted">
-                    {String(fileThreads.length)}
+                    {String(fileThreads.length + filePending.length)}
                   </T>
                 </View>
               ) : null}
               <T size={font.caption} tone="ok">{`+${file.additions}`}</T>
               <T size={font.caption} tone="bad">{`−${file.deletions}`}</T>
             </Pressable>
-            {expanded ? <FilePatch file={file} threads={fileThreads} /> : null}
+            {expanded ? (
+              <FilePatch
+                file={file}
+                threads={fileThreads}
+                pending={filePending}
+                onComment={onComment ? (line) => onComment(file.path, line) : undefined}
+              />
+            ) : null}
           </View>
         )
       })}

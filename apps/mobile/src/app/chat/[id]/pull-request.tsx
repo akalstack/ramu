@@ -7,11 +7,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Bot,
   CircleAlert,
-  Ellipsis,
   ExternalLink,
+  FolderGit2,
+  GitFork,
   GitMerge,
   MessageSquare,
   MessagesSquare,
+  RefreshCcw,
   RotateCcw,
   SquareArrowOutUpRight,
   X,
@@ -30,13 +32,14 @@ import {
 } from '@ramu/shared/types'
 import {
   FORGE_NAMES,
+  outsideRepository,
   pullRequestNextStep,
   pullRequestRef,
   pullRequestStage,
   shownReviewThreads,
-  type PullRequestNextStep,
   type ReviewThreadFilter,
 } from '@ramu/shared/pullRequests'
+import { READINESS_ACTION, readinessStep } from '@ramu/shared/pullRequestReadiness'
 import { font, radius, space, useTheme } from '../../../theme'
 import { useChat, useStore } from '../../../runtime/store'
 import { canWriteHost } from '../../../runtime/viewerAccess'
@@ -45,11 +48,18 @@ import { ago, useSay } from '../../../i18n'
 import { Header, HeaderButton, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { Button, Card, Chip, Divider, Segmented, Sheet, T, Toggle } from '../../../components/ui'
-import { ChecksLine, PullRequestGlyph, StageText } from '../../../components/PullRequestParts'
+import {
+  PullRequestActionBar,
+  PullRequestIdentity,
+  PullRequestNote,
+  PullRequestReadinessCard,
+  PullRequestWorkRow,
+} from '../../../components/PullRequestOverview'
+import { FinishReviewSheet, LineCommentSheet, type PendingComment } from '../../../components/PullRequestReview'
 import { ReviewDrafts } from '../../../components/ReviewDrafts'
 import { PeopleSheet, PullRequestComments, ReactionRow } from '../../../components/PullRequestComments'
 import { supportsPullRequest } from '@ramu/shared/pullRequestSupport'
-import type { ForgeService, PullRequestWrite } from '@ramu/shared/types'
+import type { ForgeService, PullRequestWrite, ReviewVerdict } from '@ramu/shared/types'
 import { pullRequestCopy } from '../../../runtime/pullRequestCopy'
 
 const METHOD_LABEL: Record<MergeMethod, string> = {
@@ -77,23 +87,6 @@ const TIMELINE_VERDICT: Record<NonNullable<PullRequestTimelineEvent['verdict']>,
   dismissed: 'had a review dismissed',
 }
 
-/** The Overview's action for each next step, the same English copy keys as the desktop; waiting steps only say why. */
-const NEXT_ACTION: Partial<Record<PullRequestNextStep, string>> = {
-  merge: 'Merge…',
-  'fix-checks': 'Fix failing checks',
-  'resolve-conflicts': 'Resolve conflicts',
-  'update-branch': 'Update branch',
-  'address-comments': 'Address review comments',
-  'mark-ready': 'Ready for review',
-  review: 'Review with agent',
-}
-const NEXT_WAITING: Partial<Record<PullRequestNextStep, string>> = {
-  'send-replies': 'Replies are drafted below, waiting for you to check and send them.',
-  'wait-checks': 'Waiting for checks to finish.',
-  'wait-review': 'Waiting for a review.',
-  'wait-agent': 'An agent is working on the feedback.',
-}
-
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
 const rawId = (id: string) => id.slice(id.indexOf(':') + 1)
 
@@ -117,10 +110,15 @@ export default function PullRequestScreen() {
   const chat = useChat(params.id)
   const store = useStore()
   const computerId = chat?.computerId ?? params.computer ?? ''
-  const taskId = chat?.taskId ?? (params.project ? `project:${params.project}` : '')
-  const projectId = chat?.projectId ? rawId(chat.projectId) : (params.project ?? null)
+  // A repository in no project (`outside:owner/repo`) is listed under no project; the host reads it through the
+  // service's account alone and ignores the context, which only has to be well formed.
+  const taskId = chat?.taskId ?? (params.computer ? `project:${params.project ?? ''}` : '')
+  const projectId = chat?.projectId ? rawId(chat.projectId) : params.project || null
+  const outside = outsideRepository(repoId)
   const computer = store.computers.find((pc) => pc.id === computerId)
-  const canWrite = canWriteHost(computer)
+  const online = store.isOnline(computerId)
+  // Offline, the screen reads from what this phone kept, and nothing is sent until the host is back.
+  const canWrite = canWriteHost(computer) && online
   // What this phone last read of this pull request, so the screen opens on it and then reads again.
   const [kept] = useState(() => {
     if (!computerId || !taskId) return null
@@ -162,6 +160,11 @@ export default function PullRequestScreen() {
   const [more, setMore] = useState(false)
   const [threadFilter, setThreadFilter] = useState<ReviewThreadFilter>('open')
   const [threadOrder, setThreadOrder] = useState<'newest' | 'oldest'>('newest')
+  // The person's own review: line comments waiting to go out together, the line being commented on, and the sheet.
+  const [pending, setPending] = useState<PendingComment[]>([])
+  const [commenting, setCommenting] = useState<{ path: string; line: number } | null>(null)
+  const [finishing, setFinishing] = useState(false)
+  const [reviewError, setReviewError] = useState<string | null>(null)
 
   const read = useCallback(
     async (force: boolean) => {
@@ -372,7 +375,38 @@ export default function PullRequestScreen() {
   const mine = pr?.group === 'mine'
   const openThreads = (threads ?? []).filter((entry) => !entry.resolved)
   const shownThreads = shownReviewThreads(threads ?? [], threadFilter, threadOrder)
-  const step = pr && stage ? pullRequestNextStep(pr, stage, mine) : 'none'
+  const step = pr && stage ? readinessStep(pullRequestNextStep(pr, stage, mine), !!outside) : 'none'
+  // Reviewing happens on the Files changed tab, on an open pull request whose service takes line comments.
+  const canReview = !!pr && open && canWrite && supportsPullRequest(service, 'line-comment')
+
+  const submitReview = async (verdict: ReviewVerdict, body: string) => {
+    if (!canWrite) return
+    setBusy('submit-review')
+    setReviewError(null)
+    try {
+      await store.invoke(computerId, 'forge.submitReview', taskId, repoId, url, {
+        verdict,
+        body,
+        comments: pending.map(({ path, line, body: text }) => ({ path, line, body: text })),
+      })
+      setPending([])
+      setFinishing(false)
+      await read(true)
+      setRevision((value) => value + 1)
+    } catch (e) {
+      // The sheet stays open on its error, keeping the summary and line comments.
+      setReviewError(message(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /** A repository in no project is cloned on the host and added as one; the folder screen picks where. */
+  const cloneAsProject = () => {
+    if (!outside) return
+    store.select(computerId)
+    router.push({ pathname: '/folders', params: { clone: outside } })
+  }
   /** The Overview's one action, as on the desktop: fixes go to the thread on it, or a new one catches up first. */
   const takeStep = () => {
     if (step === 'merge') setMerging(true)
@@ -417,179 +451,49 @@ export default function PullRequestScreen() {
         ) : null}
         {pr && stage ? (
           <>
-            <View style={{ gap: space.s }}>
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.s }}>
-                <View style={{ paddingTop: 4 }}>
-                  <PullRequestGlyph pr={pr} stage={stage} size={18} />
-                </View>
-                <T size={font.heading} weight="600" style={{ flex: 1 }}>
-                  {pr.title}
-                </T>
-              </View>
-              <View
-                style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: space.m, rowGap: 4 }}
-              >
-                <StageText stage={stage} />
-                {pr.author ? (
-                  <T size={font.caption} tone="muted">
-                    {pr.author}
-                  </T>
-                ) : null}
-                <ChecksLine checks={pr.checks} />
-                {pr.reviewDecision === 'approved' ? (
-                  <T size={font.caption} tone="ok">
-                    {say('Approved')}
-                  </T>
-                ) : pr.reviewDecision === 'changes-requested' ? (
-                  <T size={font.caption} tone="warn">
-                    {say('Changes requested')}
-                  </T>
-                ) : null}
-                {pr.fork ? (
-                  <T size={font.caption} tone="muted">
-                    {say('From a fork')}
-                  </T>
-                ) : null}
-              </View>
-              <T size={font.caption} tone="muted" mono numberOfLines={2}>
-                {`${pr.headBranch} → ${pr.baseBranch}`}
+            <PullRequestIdentity pr={pr} service={service} stage={stage} />
+            {!online ? (
+              <PullRequestNote>
+                {say('Offline · showing what this phone last read. Reconnect to the host to act on it.')}
+              </PullRequestNote>
+            ) : null}
+            {outside && open ? (
+              <PullRequestNote icon={FolderGit2}>
+                {say(
+                  '{0} is in no project on this host. Review, comment and merge here; clone it as a project to work on it in a thread or have an agent review it.',
+                  { 0: outside },
+                )}
+              </PullRequestNote>
+            ) : null}
+            {pr.fork && !mine && open && !outside ? (
+              <PullRequestNote icon={GitFork}>
+                {say(
+                  'This pull request comes from a fork. An agent can review it here, but only its author can push to it.',
+                )}
+              </PullRequestNote>
+            ) : null}
+            {notice ? (
+              <T size={font.control} tone="soft" accessibilityLiveRegion="polite">
+                {notice}
               </T>
-              {pr.requestedReviewers.length ? (
-                <T size={font.caption} tone="muted">
-                  {say('Review requested from {0}', { 0: pr.requestedReviewers.join(', ') })}
+            ) : null}
+            {error ? (
+              <View
+                accessibilityLiveRegion="polite"
+                style={{
+                  flexDirection: 'row',
+                  gap: space.s,
+                  padding: space.m,
+                  borderRadius: radius.m,
+                  backgroundColor: c.badWash,
+                }}
+              >
+                <CircleAlert size={16} color={c.bad} style={{ marginTop: 2 }} />
+                <T size={font.control} tone="bad" style={{ flex: 1 }}>
+                  {error}
                 </T>
-              ) : null}
-            </View>
-
-            <View style={{ gap: space.s }}>
-              {thread ? (
-                <Button
-                  icon={SquareArrowOutUpRight}
-                  title={say('Open thread')}
-                  onPress={() => openTask(thread.taskId)}
-                />
-              ) : open && canWrite ? (
-                <Button
-                  icon={MessagesSquare}
-                  title={busy === 'work' ? say('Starting…') : say('Open in thread')}
-                  disabled={!!busy || (pr.fork && !mine)}
-                  onPress={() => void openThread('work')}
-                />
-              ) : null}
-              {open && !mine && !thread && canWrite ? (
-                <Button
-                  kind="secondary"
-                  icon={Bot}
-                  title={busy === 'review' ? say('Starting…') : say('Review with agent')}
-                  disabled={!!busy}
-                  onPress={() => void openThread('review')}
-                />
-              ) : null}
-              {open && thread && mine && openThreads.length && canWrite ? (
-                <Button
-                  kind="secondary"
-                  icon={MessageSquare}
-                  title={busy === 'reviews' ? say('Starting…') : say('Address review comments')}
-                  disabled={!!busy}
-                  onPress={() => void sendThreadsToAgent(thread.taskId)}
-                />
-              ) : null}
-              {open && canWrite ? (
-                <>
-                  {pr.draft ? (
-                    <Button
-                      kind="secondary"
-                      title={busy === 'ready' ? say('Working…') : say('Ready for review')}
-                      disabled={!!busy}
-                      onPress={() => void act({ kind: 'ready' })}
-                    />
-                  ) : null}
-                  {pr.mergeable === 'behind' || pr.mergeable === 'conflicts' ? (
-                    <Button
-                      kind="secondary"
-                      icon={RotateCcw}
-                      title={
-                        busy === 'update-branch'
-                          ? say('Updating…')
-                          : pr.mergeable === 'conflicts'
-                            ? say('Resolve conflicts')
-                            : say('Update branch')
-                      }
-                      disabled={!!busy}
-                      onPress={() => void updateBranch()}
-                    />
-                  ) : null}
-                  {pr.checks === 'failure' && supportsPullRequest(service, 'rerun-checks') ? (
-                    <Button
-                      kind="secondary"
-                      title={busy === 'rerun' ? say('Working…') : say('Re-run failed checks')}
-                      disabled={!!busy}
-                      onPress={() => void write('rerun', { kind: 'rerun-checks' })}
-                    />
-                  ) : null}
-                  {/* Merge stays one tap away; the rarer changes and Close wait behind More actions. */}
-                  <View style={{ flexDirection: 'row', gap: space.s }}>
-                    <Button
-                      kind="secondary"
-                      icon={GitMerge}
-                      title={say('Merge…')}
-                      disabled={!!busy || pr.draft}
-                      onPress={() => setMerging(true)}
-                      style={{ flex: 1 }}
-                    />
-                    <Button
-                      kind="secondary"
-                      icon={Ellipsis}
-                      title={say('More actions')}
-                      disabled={!!busy}
-                      onPress={() => setMore(true)}
-                      style={{ flex: 1 }}
-                    />
-                  </View>
-                </>
-              ) : pr.state === 'closed' && canWrite ? (
-                <Button
-                  kind="secondary"
-                  title={busy === 'reopen' ? say('Working…') : say('Reopen')}
-                  disabled={!!busy}
-                  onPress={() => void act({ kind: 'reopen' })}
-                />
-              ) : null}
-              {open && pr.mergeable === 'conflicts' && canWrite ? (
-                <T size={font.caption} tone="muted">
-                  {say('Merges the base branch in the thread working on it, so you can resolve the conflicts there')}
-                </T>
-              ) : null}
-              {notice ? (
-                <T size={font.control} tone="soft" accessibilityLiveRegion="polite">
-                  {notice}
-                </T>
-              ) : null}
-              {error ? (
-                <View
-                  accessibilityLiveRegion="polite"
-                  style={{
-                    flexDirection: 'row',
-                    gap: space.s,
-                    padding: space.m,
-                    borderRadius: radius.m,
-                    backgroundColor: c.badWash,
-                  }}
-                >
-                  <CircleAlert size={16} color={c.bad} style={{ marginTop: 2 }} />
-                  <T size={font.control} tone="bad" style={{ flex: 1 }}>
-                    {error}
-                  </T>
-                </View>
-              ) : null}
-              {pr.fork && !mine && open ? (
-                <T size={font.caption} tone="muted">
-                  {say(
-                    'This pull request comes from a fork. An agent can review it here, but only its author can push to it.',
-                  )}
-                </T>
-              ) : null}
-            </View>
+              </View>
+            ) : null}
 
             <Segmented
               value={tab}
@@ -602,97 +506,102 @@ export default function PullRequestScreen() {
 
             {tab === 'overview' ? (
               <>
-                {pr && pr.state === 'open' ? (
-                  <Card style={{ padding: space.m, gap: space.s }}>
-                    {[
-                      {
-                        tone:
-                          pr.checks === 'success'
-                            ? 'ok'
-                            : pr.checks === 'failure'
-                              ? 'bad'
-                              : pr.checks === 'pending'
-                                ? 'warn'
-                                : 'muted',
-                        text:
-                          pr.checks === 'success'
-                            ? say('All checks passed')
-                            : pr.checks === 'failure'
-                              ? say('Checks failing')
-                              : pr.checks === 'pending'
-                                ? say('Checks running')
-                                : say('No checks'),
-                      },
-                      {
-                        tone:
-                          pr.reviewDecision === 'approved'
-                            ? 'ok'
-                            : pr.reviewDecision === 'changes-requested'
-                              ? 'warn'
-                              : 'muted',
-                        text:
-                          pr.reviewDecision === 'approved'
-                            ? say('Approved')
-                            : pr.reviewDecision === 'changes-requested'
-                              ? say('Changes requested')
-                              : say('Waiting on review'),
-                      },
-                      {
-                        tone:
-                          pr.mergeable === 'clean'
-                            ? 'ok'
-                            : pr.mergeable === 'conflicts'
-                              ? 'bad'
-                              : pr.mergeable === 'unknown'
-                                ? 'muted'
-                                : 'warn',
-                        text:
-                          pr.mergeable === 'conflicts'
-                            ? say('Has conflicts with its base branch')
-                            : pr.mergeable === 'behind'
-                              ? say('Behind its base branch')
-                              : pr.mergeable === 'blocked'
-                                ? say('Blocked by the branch rules')
-                                : pr.mergeable === 'clean'
-                                  ? say('No conflicts with its base branch')
-                                  : say('Mergeability not known yet'),
-                      },
-                      {
-                        tone: openThreads.length ? 'warn' : 'ok',
-                        text: openThreads.length
-                          ? say('{0} unresolved conversations', { 0: openThreads.length })
-                          : say('All conversations resolved'),
-                      },
-                    ].map((row) => (
-                      <View key={row.text} style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
-                        <View
-                          style={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: 4,
-                            backgroundColor:
-                              row.tone === 'ok'
-                                ? c.ok
-                                : row.tone === 'bad'
-                                  ? c.bad
-                                  : row.tone === 'warn'
-                                    ? c.warn
-                                    : c.lineStrong,
-                          }}
-                        />
-                        <T size={font.control} tone="soft" style={{ flex: 1 }}>
-                          {row.text}
-                        </T>
-                      </View>
-                    ))}
-                    {NEXT_ACTION[step] && canWrite ? (
-                      <Button title={say(NEXT_ACTION[step]!)} disabled={!!busy} onPress={takeStep} />
-                    ) : NEXT_WAITING[step] ? (
-                      <T size={font.caption} tone="muted">
-                        {say(NEXT_WAITING[step]!)}
-                      </T>
-                    ) : null}
-                  </Card>
+                <PullRequestReadinessCard
+                  pr={pr}
+                  openThreads={openThreads.length}
+                  step={step}
+                  onRow={(key) =>
+                    // Failing checks open on the service, where each check's log is.
+                    key === 'checks' && pr.checks && pr.checks !== 'success'
+                      ? () => void Linking.openURL(service === 'github' ? `${pr.url}/checks` : pr.url).catch(() => {})
+                      : key === 'merge' && pr.mergeable === 'conflicts'
+                        ? () => setTab('files')
+                        : undefined
+                  }
+                  rowAction={(key) =>
+                    key === 'checks' &&
+                    pr.checks === 'failure' &&
+                    canWrite &&
+                    supportsPullRequest(service, 'rerun-checks') ? (
+                      <Chip
+                        small
+                        fill
+                        icon={RefreshCcw}
+                        label={busy === 'rerun' ? say('Working…') : say('Re-run')}
+                        onPress={() => void write('rerun', { kind: 'rerun-checks' })}
+                      />
+                    ) : null
+                  }
+                />
+                {(() => {
+                  // Ways to work on it, each a row: its thread, a new one, an agent's review, a clone.
+                  const rows = [
+                    thread
+                      ? {
+                          key: 'thread',
+                          icon: SquareArrowOutUpRight,
+                          title: say('Open thread'),
+                          help: thread.title,
+                          onPress: () => openTask(thread.taskId),
+                        }
+                      : open && canWrite && !outside
+                        ? {
+                            key: 'work',
+                            icon: MessagesSquare,
+                            title: busy === 'work' ? say('Starting…') : say('Open in thread'),
+                            disabled: !!busy || (pr.fork && !mine),
+                            onPress: () => void openThread('work'),
+                          }
+                        : null,
+                    open && !mine && !thread && !outside && canWrite
+                      ? {
+                          key: 'review',
+                          icon: Bot,
+                          title: busy === 'review' ? say('Starting…') : say('Review with agent'),
+                          help: say('Checks it out in a worktree and drafts a review for you to edit and post.'),
+                          disabled: !!busy,
+                          onPress: () => void openThread('review'),
+                        }
+                      : null,
+                    open && thread && mine && openThreads.length && canWrite
+                      ? {
+                          key: 'reviews',
+                          icon: MessageSquare,
+                          title: busy === 'reviews' ? say('Starting…') : say('Address review comments'),
+                          disabled: !!busy,
+                          onPress: () => void sendThreadsToAgent(thread.taskId),
+                        }
+                      : null,
+                    outside && canWrite
+                      ? {
+                          key: 'clone',
+                          icon: FolderGit2,
+                          title: say('Clone {0} as a project', { 0: outside }),
+                          onPress: cloneAsProject,
+                        }
+                      : null,
+                  ].filter((row) => row !== null)
+                  return rows.length ? (
+                    <Card>
+                      {rows.map((row, index) => (
+                        <View key={row.key}>
+                          {index ? <Divider inset={space.l + 29} /> : null}
+                          <PullRequestWorkRow
+                            icon={row.icon}
+                            title={row.title}
+                            help={'help' in row ? row.help : undefined}
+                            disabled={'disabled' in row ? row.disabled : undefined}
+                            onPress={row.onPress}
+                          />
+                        </View>
+                      ))}
+                    </Card>
+                  ) : null
+                })()}
+                {open && pr.mergeable === 'conflicts' && canWrite && !outside ? (
+                  <T size={font.caption} tone="muted">
+                    {say('Merges the base branch in the thread working on it, so you can resolve the conflicts there')}
+                  </T>
                 ) : null}
                 {batch ? (
                   <ReviewDrafts
@@ -869,13 +778,74 @@ export default function PullRequestScreen() {
                 </View>
               </>
             ) : files?.files.length ? (
-              <PullRequestFilesList files={files.files} more={files.more} threads={threads ?? []} />
+              <View style={{ gap: space.s }}>
+                {canReview ? (
+                  <T size={font.caption} tone="muted">
+                    {say('Tap a line to comment on it. Comments wait until you finish your review.')}
+                  </T>
+                ) : null}
+                <PullRequestFilesList
+                  files={files.files}
+                  more={files.more}
+                  threads={threads ?? []}
+                  pending={pending}
+                  onComment={canReview ? (path, line) => setCommenting({ path, line }) : undefined}
+                />
+              </View>
             ) : (
               <T tone="muted">{files ? say('No changed files to show.') : say('Loading files…')}</T>
             )}
           </>
         ) : null}
       </ScrollView>
+      {pr ? (
+        <PullRequestActionBar
+          busy={!!busy}
+          primary={
+            tab === 'files' && canReview
+              ? {
+                  title: pending.length ? say('Finish review · {0}', { 0: pending.length }) : say('Finish review'),
+                  onPress: () => {
+                    setReviewError(null)
+                    setFinishing(true)
+                  },
+                }
+              : open && canWrite && READINESS_ACTION[step]
+                ? { title: say(READINESS_ACTION[step]!), onPress: takeStep }
+                : open && canWrite && !pr.draft
+                  ? { title: say('Merge…'), onPress: () => setMerging(true) }
+                  : pr.state === 'closed' && canWrite
+                    ? { title: say('Reopen'), onPress: () => void act({ kind: 'reopen' }) }
+                    : null
+          }
+          onMore={open && canWrite ? () => setMore(true) : undefined}
+        />
+      ) : null}
+      {commenting ? (
+        <LineCommentSheet
+          path={commenting.path}
+          line={commenting.line}
+          onClose={() => setCommenting(null)}
+          onAdd={(body) =>
+            setPending((current) => [
+              ...current,
+              { id: `${commenting.path}:${commenting.line}:${Date.now()}`, ...commenting, body },
+            ])
+          }
+        />
+      ) : null}
+      {finishing && pr ? (
+        <FinishReviewSheet
+          service={service}
+          own={mine}
+          pending={pending}
+          busy={busy === 'submit-review'}
+          error={reviewError}
+          onRemove={(id) => setPending((current) => current.filter((comment) => comment.id !== id))}
+          onSubmit={(verdict, body) => void submitReview(verdict, body)}
+          onClose={() => setFinishing(false)}
+        />
+      ) : null}
       {merging && pr ? (
         <MergeSheet
           computerId={computerId}
@@ -892,6 +862,50 @@ export default function PullRequestScreen() {
       ) : null}
       {pr ? (
         <Sheet open={more} onClose={() => setMore(false)} title={say('Pull request actions')}>
+          {(() => {
+            // What the bar's one button is not, so nothing the desktop offers is out of reach.
+            const later = (work: () => void) => () => {
+              setMore(false)
+              // iOS presents the next sheet only once this one has gone.
+              setTimeout(work, 300)
+            }
+            const options = [
+              step !== 'merge' && !pr.draft
+                ? { key: 'merge', icon: GitMerge, title: say('Merge…'), onPress: later(() => setMerging(true)) }
+                : null,
+              step !== 'mark-ready' && pr.draft
+                ? { key: 'ready', title: say('Ready for review'), onPress: later(() => void act({ kind: 'ready' })) }
+                : null,
+              step !== 'update-branch' &&
+              step !== 'resolve-conflicts' &&
+              (pr.mergeable === 'behind' || (pr.mergeable === 'conflicts' && !outside))
+                ? {
+                    key: 'update',
+                    icon: RotateCcw,
+                    title: pr.mergeable === 'conflicts' ? say('Resolve conflicts') : say('Update branch'),
+                    onPress: later(() => void updateBranch()),
+                  }
+                : null,
+              {
+                key: 'service',
+                icon: ExternalLink,
+                title: say('Open on {0}', { 0: FORGE_NAMES[service] }),
+                onPress: later(() => void Linking.openURL(pr.url).catch(() => {})),
+              },
+            ].filter((option) => option !== null)
+            return (
+              <SheetGroup>
+                {options.map((option) => (
+                  <SheetOption
+                    key={option.key}
+                    icon={'icon' in option ? option.icon : undefined}
+                    title={option.title}
+                    onPress={option.onPress}
+                  />
+                ))}
+              </SheetGroup>
+            )
+          })()}
           {(['reviewers', 'labels', 'assignees'] as const).some((kind) => supportsPullRequest(service, kind)) ? (
             <SheetGroup>
               {(['reviewers', 'labels', 'assignees'] as const)

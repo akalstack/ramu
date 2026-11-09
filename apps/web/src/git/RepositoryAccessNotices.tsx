@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ChevronDown, Eye, X } from 'lucide-react'
-import type { ForgeAvailability, ForgeService, RepositoryPullRequests } from '@ramu/shared/types'
+import { accessGroups, type AccessGroup, type AccessRepo } from '@ramu/shared/pullRequestAccess'
 import { forgeBrand } from '@ramu/shared/brands'
 import { FORGE_NAMES } from '@ramu/shared/pullRequests'
 import { BrandIcon } from '@/components/brand-icon'
@@ -12,16 +12,7 @@ import { HostProvider } from '../workspace/HostProvider'
 import { projectCtx } from '../workspace/workspace'
 import { ForgeAccessPanel, forgeUnavailableText, openHostingSettings } from '../sidebar/scm/ForgeAccessPanel'
 
-type Repo = RepositoryPullRequests & { host: string }
-type Problem = ForgeAvailability | 'error'
-
-interface AccessGroup {
-  key: string
-  host: string
-  service: ForgeService
-  problem: Problem
-  repos: Repo[]
-}
+type Repo = AccessRepo
 
 const HIDDEN_KEY = 'ramu.pull-requests-hidden-access'
 
@@ -33,20 +24,6 @@ function savedHidden(): string[] {
   } catch {
     return []
   }
-}
-
-/** One notice per host, service and problem: a sign-in is per host and service, not per repository. */
-function accessGroups(repos: Repo[]): AccessGroup[] {
-  const groups = new Map<string, AccessGroup>()
-  for (const repo of repos) {
-    const service = repo.service ?? 'github'
-    const problem: Problem = repo.error ? 'error' : repo.availability
-    const key = [repo.host, service, problem].join('\n')
-    const group = groups.get(key) ?? { key, host: repo.host, service, problem, repos: [] }
-    group.repos.push(repo)
-    groups.set(key, group)
-  }
-  return [...groups.values()]
 }
 
 const repoLabel = (repo: Pick<Repo, 'projectName' | 'repoName'>) =>

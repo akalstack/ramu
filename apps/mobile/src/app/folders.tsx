@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, ScrollView as HScroll, TextInput, View, type ScrollViewInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Check,
   ChevronLeft,
@@ -47,6 +47,8 @@ export default function HostFolders() {
   const keyboard = useKeyboardInset()
   const computerId = store.selected
   const host = store.computers.find((x) => x.id === computerId)
+  // Opened from a pull request in a repository no project holds: that repository (`owner/repo`) is the one to clone.
+  const { clone: wanted } = useLocalSearchParams<{ clone?: string }>()
   const [roots, setRoots] = useState<string[]>([])
   const [listing, setListing] = useState<HostFolderListing | null>(null)
   const [error, setError] = useState('')
@@ -104,6 +106,7 @@ export default function HostFolders() {
         <CloneRepository
           computerId={computerId}
           parent={listing.path}
+          initialQuery={wanted}
           onBack={() => setCloning(false)}
           onCloned={(path) => void addProject(path)}
         />
@@ -113,6 +116,11 @@ export default function HostFolders() {
   return (
     <Screen bg="canvas">
       <Header modal title={say('Add project')} subtitle={host?.name} />
+      {wanted ? (
+        <T size={font.caption} tone="muted" style={{ paddingHorizontal: space.l, paddingTop: space.s }}>
+          {say('Open the folder to clone {0} into, then choose Clone a repository here.', { 0: wanted })}
+        </T>
+      ) : null}
       {/* Where you are, one tap per step back up; Locations returns to the host's starting places. */}
       {listing ? (
         <HScroll
@@ -287,18 +295,20 @@ export default function HostFolders() {
 function CloneRepository({
   computerId,
   parent,
+  initialQuery,
   onBack,
   onCloned,
 }: {
   computerId: string
   parent: string
+  initialQuery?: string
   onBack: () => void
   onCloned: (path: string) => void
 }) {
   const say = useSay()
   const store = useStore()
   const { c } = useTheme()
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery ?? '')
   const [url, setUrl] = useState('')
   const [results, setResults] = useState<ForgeRepositorySummary[] | null>(null)
   const [searching, setSearching] = useState(false)

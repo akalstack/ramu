@@ -9352,3 +9352,109 @@ test('a thread’s servers show as a pill, open in its browser on the host and s
   assert.equal(calls.length, before)
   viewer.dispose()
 })
+
+test('every pull request row opens in full on the phone, a repository in no project included, and offline rows stay', async () => {
+  const pullRequests = await import('../../../packages/shared/src/pullRequests.ts')
+  const access = await import('../../../packages/shared/src/pullRequestAccess.ts')
+  const list = await import('../src/runtime/pullRequestList.ts')
+  const hooks = hookHarness()
+  const pushed = []
+  const pr = (number, extra = {}) => ({
+    number,
+    title: `Change ${number}`,
+    url: `https://github.com/Lionparcel/hydra/pull/${number}`,
+    state: 'open',
+    draft: false,
+    author: 'someone',
+    updatedAt: 1,
+    group: 'review',
+    checks: 'failure',
+    ...extra,
+  })
+  const repos = [
+    {
+      projectId: 'outside:Lionparcel/hydra',
+      projectName: 'Lionparcel',
+      repoId: 'outside:Lionparcel/hydra',
+      repoName: 'hydra',
+      availability: 'ready',
+      viewer: 'me',
+      pullRequests: [pr(15250)],
+      local: {},
+      outside: true,
+    },
+    {
+      projectId: 'p1',
+      projectName: 'ai-brain',
+      repoId: 'r1',
+      repoName: 'ai-brain-web',
+      availability: 'signed-out',
+      viewer: null,
+      pullRequests: [],
+      local: {},
+    },
+  ]
+  let status = 'online'
+  const { default: Pulls } = load('app/(tabs)/pulls/index.tsx', 'ios', {
+    react: hooks.react,
+    '@ramu/shared/pullRequests': pullRequests,
+    '@ramu/shared/pullRequestAccess': access,
+    '../../../runtime/pullRequestList': list,
+    '../../../runtime/pullRequestCopy': {
+      pullRequestCopy: { read: (_host, _method, closed) => (closed ? undefined : repos), keep() {} },
+    },
+    '../../../runtime/store': {
+      useStore: () => ({
+        language: 'en',
+        selected: 'a',
+        computers: [{ id: 'a', name: 'Host', status }],
+        drafts: {},
+        invoke: async () => repos,
+        resolveChat: () => 'chat',
+      }),
+    },
+    'expo-router': {
+      useRouter: () => ({ push: (route) => pushed.push(route) }),
+      useLocalSearchParams: () => ({}),
+      useFocusEffect() {},
+    },
+    'expo-clipboard': { setStringAsync: async () => {} },
+    '../../../components/ui': new Proxy(
+      { tap() {} },
+      { get: (target, key) => (key in target ? target[key] : String(key)) },
+    ),
+    '../../../components/Overlays': { useTabActions: () => null },
+  })
+  const render = () => hooks.render(() => Pulls())
+  const row = find(render(), 'PullRequestListRow')
+  assert.equal(row.props.row.outside, true)
+  row.props.onOpen()
+  assert.deepEqual(JSON.parse(JSON.stringify(pushed)), [
+    {
+      pathname: '/pull-request',
+      params: {
+        computer: 'a',
+        project: 'outside:Lionparcel/hydra',
+        repoId: 'outside:Lionparcel/hydra',
+        url: 'https://github.com/Lionparcel/hydra/pull/15250',
+      },
+    },
+  ])
+  // GitHub is one choice in the row's long-press menu, never what a tap does.
+  row.props.onMenu()
+  const options = nodes(render())
+    .filter((node) => node.type === 'SheetOption')
+    .map((node) => node.props.title)
+  assert.ok(options.includes('Open on {0}'), 'Open on GitHub is in the long-press menu')
+  // The sign-in notice is one per host and service, handed to the notices above the list.
+  const notices = find(render(), 'PullRequestListNotices')
+  assert.deepEqual([...notices.props.repos.map((entry) => entry.repoName)], ['ai-brain-web'])
+  assert.deepEqual([...notices.props.offline], [])
+  // Offline, the kept rows stay, the host is named as last known, and there is nothing to pull to refresh.
+  status = 'offline'
+  const offline = render()
+  assert.ok(find(offline, 'PullRequestListRow'))
+  assert.deepEqual([...find(offline, 'PullRequestListNotices').props.offline], ['a'])
+  assert.equal(find(offline, 'PageScrollView').props.refreshControl, undefined)
+  hooks.dispose()
+})
