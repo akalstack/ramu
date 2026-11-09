@@ -164,6 +164,35 @@ async function main() {
   const daemonPath = join(import.meta.dirname, 'daemon.js')
   // This computer's server always runs. Paired computers connect alongside it in the same shell.
   const runtime = await ensureRuntime(userData, daemonPath)
+  /** Stops the service and starts it again from the daemon on disk, keeping login startup as it was. */
+  const restartRuntime = async () => {
+    const startup = loginEnabled(userData)
+    // Unload the old supervisor so it cannot race the replacement back into existence.
+    if (startup) {
+      loginService(userData, daemonPath, false)
+      unloadLoginService(userData)
+    }
+    await runtimeInvoke(runtime, 'background.restart').catch(() => {})
+    for (let attempt = 0; attempt < 300; attempt++) {
+      try {
+        await runtimeInvoke(runtime, 'background.status')
+      } catch {
+        break
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    await ensureRuntime(userData, daemonPath)
+    if (startup) loginService(userData, daemonPath, true)
+  }
+  // Under `pnpm dev` the service outlives the app, and electron-vite rebuilds the daemon only when the app starts, so a
+  // restart or a new `pnpm dev` would otherwise keep serving the previous build's code.
+  if (process.env.ELECTRON_RENDERER_URL) {
+    const status = await runtimeInvoke(runtime, 'background.status')
+    if (status.build !== runtimeBuild(daemonPath)) {
+      console.info('[ramu] background service is from an older build; restarting it')
+      await restartRuntime()
+    }
+  }
   const diagnosticPreferences = await runtimeInvoke(runtime, 'settings.app.get')
   if (diagnosticPreferences.localCrashReports) {
     crashReporter.start({ productName: 'Ramu', uploadToServer: false, extra: {}, globalExtra: {} })
@@ -1289,23 +1318,7 @@ async function main() {
         cancelId: 1,
       })
       if (choice.response !== 0) return
-      const startup = loginEnabled(userData)
-      // Unload the old supervisor so it cannot race the replacement back into existence.
-      if (startup) {
-        loginService(userData, daemonPath, false)
-        unloadLoginService(userData)
-      }
-      await runtimeInvoke(runtime, 'background.restart').catch(() => {})
-      for (let attempt = 0; attempt < 300; attempt++) {
-        try {
-          await runtimeInvoke(runtime, 'background.status')
-        } catch {
-          break
-        }
-        await new Promise((resolve) => setTimeout(resolve, 100))
-      }
-      await ensureRuntime(userData, daemonPath)
-      if (startup) loginService(userData, daemonPath, true)
+      await restartRuntime()
       relaunch()
       return
     }
