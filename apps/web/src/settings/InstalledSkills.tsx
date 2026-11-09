@@ -73,7 +73,11 @@ export function InstalledSkills() {
     projectId: string
   } | null>(null)
   const [skillScope, setSkillScope] = useState('all')
-  const view = useListView(currentHost ? skills : [], {
+  // A plugin's skills follow its switch in Plugins: a turned-off plugin's skills are not listed as if they were in use.
+  const fromPlugin = (skill: ManagedSkill) => skill.installation?.source.startsWith('plugin:') === true
+  const hiddenOff = skills.filter((skill) => fromPlugin(skill) && skill.status !== 'active').length
+  const listed = skills.filter((skill) => !fromPlugin(skill) || skill.status === 'active')
+  const view = useListView(currentHost ? listed : [], {
     text: (skill) => `${skill.name} ${skill.description}`,
     match: (skill) =>
       skillScope === 'all' || (skillScope === 'global' ? !skill.projectId : skill.projectId === skillScope),
@@ -324,6 +328,13 @@ export function InstalledSkills() {
           }
         />
         <ListCount view={view} />
+        {hiddenOff > 0 && (
+          <p className="m-0 text-caption text-muted-foreground">
+            {hiddenOff === 1
+              ? t('1 skill from a turned-off plugin is hidden.')
+              : t('{0} skills from turned-off plugins are hidden.', { 0: hiddenOff })}
+          </p>
+        )}
         <ListEmpty
           view={view}
           none="No installed skills yet."
@@ -356,52 +367,65 @@ export function InstalledSkills() {
                 </>
               }
               actions={
-                <>
+                fromPlugin(skill) ? (
                   <Button
                     variant="ghost"
                     size="sm"
-                    disabled={busy || !available}
-                    onClick={() => void act(async () => stage(await invoke('skills.updateSource', skill.id)))}
-                  >
-                    {t('Update')}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={busy}
-                    title={t('Make your own editable copy. The installed skill keeps updating from its source.')}
+                    title={t('Comes with a plugin: it updates, turns off and is removed with it.')}
                     onClick={() =>
-                      void act(async () => {
-                        const copy = await invoke('skills.fork', skill.id)
-                        setDraft({
-                          id: copy.id,
-                          revision: copy.revision,
-                          name: copy.name,
-                          description: copy.description,
-                          content: copy.content,
-                          projectId: copy.projectId ?? '',
+                      window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'plugins' } }))
+                    }
+                  >
+                    {t('Manage in Plugins')}
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy || !available}
+                      onClick={() => void act(async () => stage(await invoke('skills.updateSource', skill.id)))}
+                    >
+                      {t('Update')}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy}
+                      title={t('Make your own editable copy. The installed skill keeps updating from its source.')}
+                      onClick={() =>
+                        void act(async () => {
+                          const copy = await invoke('skills.fork', skill.id)
+                          setDraft({
+                            id: copy.id,
+                            revision: copy.revision,
+                            name: copy.name,
+                            description: copy.description,
+                            content: copy.content,
+                            projectId: copy.projectId ?? '',
+                          })
                         })
-                      })
-                    }
-                  >
-                    {t('Edit a copy')}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() =>
-                      void act(() =>
-                        invoke('learning.control', skill.id, skill.status === 'active' ? 'disable' : 'restore'),
-                      )
-                    }
-                  >
-                    {skill.status === 'active' ? t('Disable') : t('Enable')}
-                  </Button>
-                  <Button variant="ghost" size="sm" disabled={busy} onClick={() => setRemoving(skill)}>
-                    {t('Remove')}
-                  </Button>
-                </>
+                      }
+                    >
+                      {t('Edit a copy')}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() =>
+                        void act(() =>
+                          invoke('learning.control', skill.id, skill.status === 'active' ? 'disable' : 'restore'),
+                        )
+                      }
+                    >
+                      {skill.status === 'active' ? t('Disable') : t('Enable')}
+                    </Button>
+                    <Button variant="ghost" size="sm" disabled={busy} onClick={() => setRemoving(skill)}>
+                      {t('Remove')}
+                    </Button>
+                  </>
+                )
               }
             >
               <p className="m-0 truncate text-caption text-muted-foreground">

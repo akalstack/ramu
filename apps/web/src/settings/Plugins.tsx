@@ -581,7 +581,17 @@ export function PluginSettings() {
                     title={plugin.enabled ? t('On') : t('Off')}
                     checked={plugin.enabled}
                     disabled={viewOnly || busy}
-                    onCheckedChange={(enabled) => void act(() => invoke('plugins.setEnabled', plugin.id, enabled))}
+                    onCheckedChange={(enabled) =>
+                      void act(async () => {
+                        // The answer is the plugin as saved, so the switch shows it at once; the reload brings
+                        // the rest of the page (credentials, updates) in line.
+                        const saved = await invoke('plugins.setEnabled', plugin.id, enabled)
+                        setPlugins(
+                          (current) => current?.map((entry) => (entry.id === saved.id ? saved : entry)) ?? null,
+                        )
+                        reload()
+                      })
+                    }
                   />
                   <Button
                     size="icon-sm"

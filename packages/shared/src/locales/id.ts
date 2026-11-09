@@ -6778,4 +6778,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Open browser or computer": "Buka browser atau komputer",
   "Suggested change": "Perubahan yang disarankan",
   "Suggests removing these lines": "Menyarankan menghapus baris ini",
+  "1 skill from a turned-off plugin is hidden.": "1 skill dari plugin yang dimatikan disembunyikan.",
+  "Comes with a plugin: it updates, turns off and is removed with it.": "Datang bersama plugin: ikut diperbarui, dimatikan, dan dihapus bersamanya.",
+  "Manage in Plugins": "Kelola di Plugin",
+  "{0} skills from turned-off plugins are hidden.": "{0} skill dari plugin yang dimatikan disembunyikan.",
 }
