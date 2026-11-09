@@ -1,4 +1,5 @@
 import { createCloudflareRecords } from '../../workspace/deploy/cloudflareDns'
+import { guardHosting } from '../identityGuard'
 import { z } from 'zod'
 import type { StoreTarget } from '@ramu/shared/types/deploy'
 import {
@@ -159,6 +160,8 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
       run: (projectId: string) =>
         exclusive(projectId, async () => {
           try {
+            const binding = deploys().service.binding(projectId)
+            if (binding) guardHosting(ctx, projectId, binding.platform, 'Deploying to production')
             const deployment = await deploys().service.deploy(project(projectId), null, true)
             deploys().deployWatch.follow(projectId, deployment, null)
             return deployment
@@ -323,6 +326,7 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, storeTarget]),
       run: (projectId: string, target: StoreTarget) =>
         exclusive(projectId, async () => {
+          guardHosting(ctx, projectId, 'expo', 'Releasing to the stores')
           const builds = await deploys().releases.start(project(projectId), target)
           for (const build of builds) deploys().deployWatch.followRelease(projectId, build.id, null)
           return builds

@@ -1,4 +1,4 @@
-import { providerAccountId } from '../providers/providerBinaries'
+import { taskAccountId } from '../providers/providerBinaries'
 import { supportsProviderAccounts } from '@ramu/shared/providers/providers'
 import { randomUUID } from 'node:crypto'
 import {
@@ -82,14 +82,14 @@ export class SessionStarter {
     attachments: Attachment[] = [],
   ): Promise<AgentSessionInfo> {
     if (this.host.shutdown()) throw new Error('Application is shutting down')
-    if (
-      supportsProviderAccounts(settings.provider) &&
-      settings.accountId === undefined &&
-      (RECORDED_ACCOUNT_PROVIDERS.has(settings.provider) || providerAccountId(settings.provider) !== 'default')
-    )
-      settings = { ...settings, accountId: providerAccountId(settings.provider) }
+    if (supportsProviderAccounts(settings.provider) && settings.accountId === undefined) {
+      // The login comes from the project's identity, looked up now: its own, or one for every identity.
+      const accountId = taskAccountId(settings.provider, taskId)
+      if (RECORDED_ACCOUNT_PROVIDERS.has(settings.provider) || accountId !== 'default')
+        settings = { ...settings, accountId }
+    }
     // Keep the requested model unless its usage requires falling back.
-    const route = await this.host.route(settings)
+    const route = await this.host.route(settings, taskId)
     const requested = settings
     if (route) settings = this.host.withStep(settings, route.step)
     // Every new thread passes the same check, whoever starts it: the composer, a schedule, an agent or another host.

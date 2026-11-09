@@ -1,4 +1,5 @@
 import { HelperDetails } from '../../../components/Helpers'
+import { projectIdentity, useHostIdentities } from '../../../runtime/identities'
 import { deliveryVisible, visibleText } from '../../../runtime/transcript'
 import { finishedAnswerRow, transcriptScrollState } from '../../../runtime/chatViewport'
 import { goBackOrHome } from '../../../runtime/navigation'
@@ -144,6 +145,7 @@ export default function ChatScreen() {
   const tr = useSay()
   const { id } = useLocalSearchParams<{ id: string }>()
   const chat = useChat(id)
+  const hostIdentities = useHostIdentities(chat?.computerId)
   const { seeFailure } = useAutomation()
   const [continueHost, setContinueHost] = useState<string | null>(null)
   const [mcpOpen, setMcpOpen] = useState(false)
@@ -727,6 +729,7 @@ export default function ChatScreen() {
     )
   const live = git?.chatId === chat.id ? git : undefined
   const branch = live?.branch ?? chat.branch
+  const identity = projectIdentity(hostIdentities, chat?.projectId)
   const project =
     chat.projectId === STANDALONE ? 'Standalone' : store.projects.find((p) => p.id === chat.projectId)?.name
   const running = chat.status === 'running'
@@ -1160,6 +1163,11 @@ export default function ChatScreen() {
               <T size={12} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
                 {project}
               </T>
+              {identity ? (
+                <T size={12} tone="muted" numberOfLines={1}>
+                  · {identity.name}
+                </T>
+              ) : null}
               {branch ? (
                 <>
                   <GitBranch size={11} color={c.muted} />

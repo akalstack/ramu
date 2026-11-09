@@ -1,4 +1,5 @@
 import { SidebarDisclosureButton } from '@/components/sidebar-disclosure-button'
+import { useIdentityView } from './identityView'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useHeld, useSteadySpin } from '../lib/steadyActivity'
 import {
@@ -184,6 +185,7 @@ function HostGroup({ computer, current, grouped }: { computer: Computer; current
 /** A host that is not on screen: its rows act on that host's store and open there through the selection. */
 function OtherHostProjects({ computer, embedded }: { computer: Computer; embedded: boolean }) {
   const tree = useSidebarExpansion(computer.id)
+  const identityView = useIdentityView(computer.id)
   const { select } = useHostSelection()
   const { preferences } = useAppSettings()
   const rows = useHostGroupRows(computer.id)
@@ -263,7 +265,9 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
             open={projectsOpen}
             onToggle={() => tree.setExpanded('section:projects', !projectsOpen)}
             controls={projectsDomId}
-          />
+          >
+            {!preferences.recentChatMode && identityView.picker}
+          </SectionHead>
         )}
         <Collapse open={projectsOpen} id={projectsDomId}>
           {preferences.recentChatMode
@@ -277,7 +281,7 @@ function OtherHostProjects({ computer, embedded }: { computer: Computer; embedde
                     projectName={projects.find((p) => p.id === task.projectId)?.name}
                   />
                 ))
-            : projects.map((project) => (
+            : identityView.arrange(projects, (project) => (
                 <OtherHostProject
                   key={project.id}
                   host={computer.id}

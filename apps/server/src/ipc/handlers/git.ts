@@ -1,4 +1,5 @@
 import { followPush as followThreadPush } from '../../workspace/followPush'
+import { guardForge } from '../identityGuard'
 import { rm } from 'node:fs/promises'
 import type { SyncApproval } from '@ramu/shared/protectedBranch'
 import { z } from 'zod'
@@ -316,6 +317,7 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, id, branchName.optional(), z.string().min(1).max(255).optional()]),
       run: (t: string, r: string, expectedBranch?: string, remote?: string) =>
         gitExclusive(ctx, t, r, async (cwd) => {
+          await guardForge(ctx, t, cwd, 'Pushing')
           const before = await git.status(cwd)
           await git.push(cwd, expectedBranch, remote)
           if (before.ahead > 0 || !before.upstream) followPush(t, cwd, r)

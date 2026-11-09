@@ -20,6 +20,8 @@ export interface RuleFilesHost {
   rules(): Rule[]
   repositories(): { projectId: string; root: string }[]
   claudeHome(): string
+  /** The identity a project acts as, for rules limited to one. */
+  identityOf?(projectId: string): string | null
 }
 
 const MANAGED_NAME = /^ramu-[a-z0-9-]+\.md$/
@@ -127,8 +129,16 @@ export class RuleFiles {
         base: root,
         segments: ['.claude', 'rules'],
         kind: 'repository' as const,
+        // A rule limited to an identity is written into each of its projects' repositories, never the provider's home
+        // folder, which every identity shares.
         rules: rules.filter((rule) =>
-          repositories.some((repo) => repo.root === root && repo.projectId === rule.projectId),
+          repositories.some(
+            (repo) =>
+              repo.root === root &&
+              (repo.projectId === rule.projectId ||
+                (rule.projectId?.startsWith('identity:') &&
+                  this.host.identityOf?.(repo.projectId) === rule.projectId.slice(9))),
+          ),
         ),
       })),
       {

@@ -8,6 +8,7 @@ import type {
   SharedMcpProviderAccount,
   SharedMcpSelection,
 } from '@ramu/shared/mcp'
+import { connectionApplies } from './policy'
 import { HostCredentialStore } from '../credentials/store'
 import { SharedMcpPolicy, type ExternalMcpSession } from './policy'
 import { ExternalMcpGateway, type ExternalMcpGatewayHost } from './gateway'
@@ -138,10 +139,7 @@ export class SharedMcpService {
   /** The connections one session could reach (its provider, project and login) with their readiness. */
   sessionConnections(provider: SharedMcpProviderAccount['provider'], accountId: string, projectId: string | null) {
     return this.applicable(this.policy.snapshot(), provider)
-      .filter(
-        (connection) =>
-          connection.scope.hostWide || (projectId !== null && connection.scope.projectIds.includes(projectId)),
-      )
+      .filter((connection) => connectionApplies(connection, projectId))
       .map((connection) => ({
         connectionId: connection.id,
         name: connection.name,
@@ -227,8 +225,7 @@ export class SharedMcpService {
     if (!state.accounts.some((entry) => entry.provider === provider && entry.accountId === accountId))
       throw new Error('Unknown provider account')
     for (const connection of this.applicable(state, provider)) {
-      const scoped =
-        connection.scope.hostWide || (projectId !== null && connection.scope.projectIds.includes(projectId))
+      const scoped = connectionApplies(connection, projectId)
       try {
         await this.check(connection.id, {
           provider,

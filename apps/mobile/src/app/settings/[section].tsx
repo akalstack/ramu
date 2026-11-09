@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { PluginSettings } from '../../components/PluginSettings'
+import { IdentitySettings } from '../../components/IdentitySettings'
 import { AbilitySummary } from '../../components/AbilitySummary'
 import { HostAddressSheet } from '../../components/HostAddressSheet'
 import { hostOfUrl, networkName } from '@ramu/shared/networkLabel'
@@ -484,6 +485,9 @@ export default function SettingsSectionPage() {
         {id === 'agent-setup' ? <AgentSetupSettings key={`AgentSetupSettings:${selected}`} hostId={selected} /> : null}
         {id === 'agent-setup' ? <RulesSettings key={`RulesSettings:${selected}`} hostId={selected} /> : null}
         {id === 'plugins' ? <PluginSettings key={`PluginSettings:${selected}`} hostId={selected} /> : null}
+        {id === 'identities' ? (
+          <IdentitySettings key={`IdentitySettings:${selected}`} hostId={selected} locked={locked} />
+        ) : null}
         {section.scope === 'host' && id !== 'computer' && id !== 'deploy' ? (
           <HostGroups section={id} host={host} name={name} locked={locked} />
         ) : null}

@@ -108,6 +108,18 @@ const canonical = (value: unknown): string => {
 export const sharedMcpCatalogRevision = (catalog: unknown): string =>
   createHash('sha256').update(canonical(catalog)).digest('hex')
 
+let identityAllows: (connectionId: string, projectId: string | null) => boolean = () => true
+
+/** A server put in one identity reaches only that identity's projects; one for every identity reaches all. */
+export function setConnectionIdentityScope(allow: typeof identityAllows) {
+  identityAllows = allow
+}
+
+/** Whether a connection reaches a project: its own scope, and the identity it was put in. */
+export const connectionApplies = (connection: Pick<SharedMcpConnection, 'id' | 'scope'>, projectId: string | null) =>
+  (connection.scope.hostWide || (projectId !== null && connection.scope.projectIds.includes(projectId))) &&
+  identityAllows(connection.id, projectId)
+
 const applies = (value: SharedMcpConnection['scope'], projectId: string | null) =>
   value.hostWide || (projectId !== null && value.projectIds.includes(projectId))
 const subset = (narrow: SharedMcpConnection['scope'], wide: SharedMcpConnection['scope']) =>
@@ -274,7 +286,7 @@ export class SharedMcpPolicy {
     if (!connection.enabled) return denied('disabled', 'Connection is disabled')
     if (
       session.hostId !== this.hostId ||
-      !applies(connection.scope, session.projectId) ||
+      !connectionApplies(connection, session.projectId) ||
       (session.connectionIds !== undefined && !session.connectionIds.includes(connectionId))
     )
       return denied('disabled', 'Connection is outside this session scope')

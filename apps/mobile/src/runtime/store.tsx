@@ -25,7 +25,8 @@ import {
 } from './composerDrafts'
 import { createWorkspaceTask, workspaceCreation } from './workspaces'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { AppState, NativeModules } from 'react-native'
+import { Alert, AppState, NativeModules } from 'react-native'
+import { translate } from '@ramu/shared/i18n'
 import { fetch as nativeFetch } from 'expo/fetch'
 import { shareRows } from './shareRows'
 import * as Device from 'expo-device'
@@ -611,7 +612,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       )
     } else if (channel === 'settings:models' || channel === 'settings:changed') loadDefaults(id)
     else if (channel === 'device:permissions') loadPermissions(id)
-    else if (channel === 'notices:changed') setInbox((i) => ({ ...i, [id]: payload }))
+    else if (channel === 'identities:mismatch') {
+      // The guardrail's card on the phone: the action would act as another identity than its project's.
+      const say = (text: string, values?: Record<string, string>) => translate(ref.current.language, text, values)
+      Alert.alert(
+        say('This would act as {name}', { name: payload.actual.name }),
+        say(
+          '{action} would use an account of {actual} ({actualEmail}), but this project is {expected} ({expectedEmail}).',
+          {
+            action: say(payload.action),
+            actual: payload.actual.name,
+            actualEmail: payload.actual.email,
+            expected: payload.expected.name,
+            expectedEmail: payload.expected.email,
+          },
+        ) +
+          '\n\n' +
+          say('To use {name}, put its account in it under Settings → Identities.', { name: payload.expected.name }),
+        [
+          { text: say('Cancel'), style: 'cancel' },
+          {
+            text: say('Continue as {name}', { name: payload.actual.name }),
+            onPress: () =>
+              void invoke(id, 'identities.continueAs', payload.projectId).then(
+                () =>
+                  Alert.alert(
+                    say('Try the action again within ten minutes and it runs once as {name}.', {
+                      name: payload.actual.name,
+                    }),
+                  ),
+                () => {},
+              ),
+          },
+        ],
+      )
+    } else if (channel === 'notices:changed') setInbox((i) => ({ ...i, [id]: payload }))
     else if (channel === 'activity:changed') setActivity((a) => ({ ...a, [id]: payload }))
     else if (channel === 'usage:changed') change((s) => ({ ...s, usage: { ...s.usage, [id]: payload } }))
     else if (channel === 'notify:inapp') {

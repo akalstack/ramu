@@ -28,6 +28,8 @@ export interface FileNote {
 /** Which file a note lives in. */
 export function pathFor(m: Pick<Memory, 'status' | 'projectId' | 'kind'>): string {
   if (m.status === 'archived') return ARCHIVE_FILE
+  if (m.projectId?.startsWith('identity:'))
+    return `identities/${m.projectId.slice(9).replace(/[^\w.-]/g, '_')}/${MEMORY_FILE}`
   if (m.projectId) return `projects/${m.projectId.replace(/[^\w.-]/g, '_')}/${MEMORY_FILE}`
   return m.kind === 'user' ? USER_FILE : MEMORY_FILE
 }

@@ -115,6 +115,8 @@ export interface PluginHost {
   }
   rules: { save(input: RuleInput): Rule; remove(id: string): void }
   projects(): { id: string }[]
+  /** Whether a plugin may reach a project under that project's identity; every plugin is for every identity by default. */
+  identityAllows?(pluginId: string, projectId: string | null): boolean
   /** App preferences, for pointing Auto at a plugin's ability tools. */
   preferences?: { load(): AppPreferences; save(preferences: AppPreferences): void }
   changed(): void
@@ -1025,7 +1027,8 @@ export class PluginService {
     return this.state().plugins.filter(
       (plugin) =>
         plugin.enabled &&
-        (plugin.scope.kind === 'all' || (plugin.scope.kind === 'project' && plugin.scope.projectId === projectId)),
+        (plugin.scope.kind === 'all' || (plugin.scope.kind === 'project' && plugin.scope.projectId === projectId)) &&
+        (this.host.identityAllows?.(plugin.id, projectId) ?? true),
     )
   }
 

@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { execFile } from 'node:child_process'
+import { environmentFor } from '../userEnvironment'
 import type {
   DiffContents,
   GitCommitFile,
@@ -64,7 +65,14 @@ function gitOnce(cwd: string, args: string[], opts: { input?: string; env?: Reco
         maxBuffer: MAX_BUFFER,
         encoding: 'utf8',
         // Never let Git block on an interactive prompt or open an editor.
-        env: { ...process.env, ...opts.env, GIT_TERMINAL_PROMPT: '0', GIT_EDITOR: 'true', LC_ALL: 'C' },
+        env: {
+          ...process.env,
+          ...environmentFor(cwd),
+          ...opts.env,
+          GIT_TERMINAL_PROMPT: '0',
+          GIT_EDITOR: 'true',
+          LC_ALL: 'C',
+        },
       },
       (err, stdout, stderr) => {
         if (err) {

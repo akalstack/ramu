@@ -368,7 +368,7 @@ export class OpenCodeSession implements AgentRunner {
 
   private async startServer(): Promise<Client> {
     const env = {
-      ...providerEnvironment('opencode', undefined, this.settings.accountId ?? 'default'),
+      ...providerEnvironment('opencode', undefined, this.settings.accountId ?? 'default', this.scope.cwd),
       ...openCodeServerEnv(
         this.connection,
         undefined,

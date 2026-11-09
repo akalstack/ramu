@@ -24,6 +24,53 @@ export const managedAntigravity = () => managedAntigravityAt(providerRuntimeHome
 export function providerAccountId(provider: AgentProvider) {
   return configuration[provider]?.accountId || 'default'
 }
+
+let allowAccount: (provider: AgentProvider, accountId: string, taskId: string) => boolean = () => true
+
+/** Which logins a thread may use: those of its project's identity and those for every identity. */
+export function setAccountRestriction(allow: typeof allowAccount) {
+  allowAccount = allow
+}
+
+/** The provider configuration with the logins a thread's identity may not use turned off. */
+export function identityConfiguration(config: ProviderConfiguration, taskId: string): ProviderConfiguration {
+  return Object.fromEntries(
+    Object.entries(config).map(([provider, entry]) => {
+      if (!entry) return [provider, entry]
+      const id = provider as AgentProvider
+      const accounts = entry.accounts?.map((account) =>
+        allowAccount(id, account.id, taskId) ? account : { ...account, enabled: false },
+      )
+      const defaultAllowed = allowAccount(id, 'default', taskId)
+      const primary = entry.accountId || 'default'
+      const firstAllowed = [
+        ...(defaultAllowed && entry.defaultAccountEnabled !== false ? ['default'] : []),
+        ...(accounts ?? []).filter((account) => account.enabled !== false).map((account) => account.id),
+      ][0]
+      return [
+        provider,
+        {
+          ...entry,
+          ...(accounts ? { accounts } : {}),
+          ...(defaultAllowed ? {} : { defaultAccountEnabled: false }),
+          ...(allowAccount(id, primary, taskId) || !firstAllowed
+            ? {}
+            : { accountId: firstAllowed === 'default' ? undefined : firstAllowed }),
+        },
+      ]
+    }),
+  ) as ProviderConfiguration
+}
+
+/** The login a new thread in this task starts on: the chosen one, unless its identity may not use it. */
+export function taskAccountId(provider: AgentProvider, taskId: string): string {
+  const restricted = identityConfiguration(configuration, taskId)[provider]
+  const chosen = restricted?.accountId || 'default'
+  if (allowAccount(provider, chosen, taskId)) return chosen
+  throw new Error(
+    `No ${provider} login is for this project's identity. Connect one in Settings → Providers and put it in this identity.`,
+  )
+}
 export function providerAccountClearedEnv(provider: AgentProvider): string[] {
   return providerAdapter(provider).accountClearedEnv
 }
@@ -103,8 +150,10 @@ export function providerEnvironment(
   provider: AgentProvider,
   overrides = configuration,
   accountId = overrides[provider]?.accountId || 'default',
+  /** The folder the process works in, so it commits as that project's identity. */
+  cwd?: string,
 ): NodeJS.ProcessEnv {
-  const env = userEnvironment()
+  const env = userEnvironment({}, cwd)
   let accountEnv: Record<string, string> = {}
   if (accountId !== 'default') {
     if (!overrides[provider]?.accounts?.some((account) => account.id === accountId))

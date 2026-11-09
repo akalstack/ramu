@@ -26,6 +26,8 @@ export interface ContinuationPackage {
   queued: number
   repo: ContinuationRepo | null
   problem: 'no-agent' | 'no-remote' | 'several-repositories' | null
+  /** The Git author email the thread commits as here; hosts are compared by it, since identity names are per host. */
+  gitEmail?: string | null
 }
 
 export interface ContinuationMatch {
@@ -175,6 +177,8 @@ export interface TargetPlan {
   match: ContinuationMatch | null
   settings: AgentSettings
   parent: string
+  /** The Git author email the thread would commit as on the target, by its own identities. */
+  gitEmail?: string | null
 }
 
 /** Reads the package once, then asks every target what it would do. A target that cannot answer says why. */

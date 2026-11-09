@@ -1,4 +1,5 @@
 import { Button } from '@/components/desktop-button'
+import { useIdentityView } from './identityView'
 import { CheckCheck, FolderClosed, FolderPlus, MessageCircle, Pin, Plus } from 'lucide-react'
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -26,6 +27,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
   const addProject = useAddProject()
   const { active, done } = sidebarThreads(ws.tasks)
   const host = useHost()
+  const identityView = useIdentityView(host.id)
   const tree = useSidebarExpansion(host.id)
   const showDone = tree.isExpanded('section:done')
   // Pinned chats from every project gather in one section above the projects.
@@ -95,6 +97,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
             onToggle={() => tree.setExpanded('section:projects', !showProjects)}
             controls="projects-list"
           >
+            {!recentMode && identityView.picker}
             <Button
               variant="ghost"
               size="icon-xs"
@@ -138,7 +141,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
           {!recentMode && (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={dropProject}>
               <SortableContext items={projectIds} strategy={verticalListSortingStrategy}>
-                {ws.projects.map((p) => (
+                {identityView.arrange(ws.projects, (p) => (
                   <ProjectGroup key={p.id} project={p} previewLimit={embedded ? EMBEDDED_THREAD_LIMIT : undefined} />
                 ))}
               </SortableContext>

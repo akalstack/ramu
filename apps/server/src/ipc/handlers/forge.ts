@@ -1,4 +1,5 @@
 import { CREATED_REPOSITORIES } from '../../workspace/ci/setup'
+import { guardForge } from '../identityGuard'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -362,6 +363,7 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
               throw new Error(`Switch to ${input.base} to open a pull request from its commits.`)
             await git.branchFromHere(cwd, input.branch)
           }
+          await guardForge(ctx, taskId, cwd, 'Opening this pull request')
           // The branch must be on the remote first; push publishes it when it has no upstream yet.
           await git.push(cwd)
           const status = await forge.createPullRequest(cwd, {
@@ -464,6 +466,7 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, id, prUrl, pullRequestAction]),
       run: async (taskId: string, repoId: string, url: string, action: PullRequestAction) => {
         const cwd = gitCwdOf(taskId, repoId)
+        if (action.kind === 'merge') await guardForge(ctx, taskId, cwd, 'Merging this pull request')
         // The base is read before merging, while the pull request is still listed as open.
         const base =
           action.kind === 'merge' && (ctx.deploys || ctx.pullRequestWatches) && ctx.pullRequestIndex

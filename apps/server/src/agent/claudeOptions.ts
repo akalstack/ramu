@@ -50,7 +50,12 @@ export function claudeLaunchOptions({
   preferences,
   hooks,
 }: ClaudeLaunch): Options {
-  const env = providerEnvironment('claude-code', preferences?.().providerBinaries, s.settings.accountId ?? 'default')
+  const env = providerEnvironment(
+    'claude-code',
+    preferences?.().providerBinaries,
+    s.settings.accountId ?? 'default',
+    s.cwd,
+  )
   const plugins = connection?.skillsDir
     ? (providerAdapter('claude-code').skillsLaunch?.(connection.skillsDir).plugins ?? [])
     : []

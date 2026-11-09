@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { crossHostWarning } from '@ramu/shared/identities'
 import { PROJECT_NAME, STACKS, STACK_IDS, commandLine, stackCheck, type StackId } from '@ramu/shared/stacks'
 import { createProjectFolder, runCommand } from '../workspace/projectCreate'
 import { RequestReplay } from '../agent/requestReplay'
@@ -480,15 +481,42 @@ export class AgentThreadService {
       throw new Error('bringChanges works only on this host: uncommitted changes never leave it.')
     if (threads.some((entry) => !entry.project?.trim()))
       throw new Error(`Name the project on ${host.name} for every thread (project_list with host lists them).`)
+    // Hosts are compared by Git author email: a thread that commits as you@acme.com here should not quietly commit
+    // as another address there. The person sees it on the approval card, which the agent cannot answer.
+    const here = this.gitEmail({ projectId: callerTask.projectId })
+    const theirs = here
+      ? (((await this.remote!.hosts.invoke(host.id, 'hostThreads.projects', []).catch(() => [])) as {
+          id: string
+          name: string
+          aliases?: string[]
+          gitEmail?: string | null
+        }[]) ?? [])
+      : []
+    const warnings = [
+      ...new Set(
+        threads.flatMap((entry) => {
+          const wanted = entry.project!.trim().toLowerCase()
+          const target = theirs.find(
+            (project) =>
+              project.id === entry.project ||
+              project.name.toLowerCase() === wanted ||
+              project.aliases?.some((alias) => alias.toLowerCase() === wanted),
+          )
+          const warning = here && target?.gitEmail ? crossHostWarning(here, target.gitEmail, host.name) : null
+          return warning ? [warning] : []
+        }),
+      ),
+    ]
     const allowed = await this.agents.requestPermission(
       sessionId,
       threads.length === 1 ? `starting a thread on ${host.name}` : `starting ${threads.length} threads on ${host.name}`,
-      threads
-        .map(
+      [
+        ...warnings,
+        ...threads.map(
           (entry) =>
             `${entry.title?.trim() || titleOf(entry.prompt)} · ${entry.project} on ${host.name}\n${clipText(entry.prompt, 600)}`,
-        )
-        .join('\n\n'),
+        ),
+      ].join('\n\n'),
       signal,
     )
     if (!allowed)
@@ -626,6 +654,7 @@ export class AgentThreadService {
       name: project.name,
       ...(project.aliases?.length ? { aliases: project.aliases } : {}),
       ...(project.description ? { description: project.description } : {}),
+      ...((email) => (email ? { gitEmail: email } : {}))(this.gitEmail({ projectId: project.id })),
     }))
   }
 
@@ -732,7 +761,11 @@ export class AgentThreadService {
       .all()
       .filter((entry) => entry.taskId === taskId && !entry.parentId)
       .at(-1)
-    const base = { title: task.title, queued: session ? this.agents.queued(session.id).length : 0 }
+    const base = {
+      title: task.title,
+      queued: session ? this.agents.queued(session.id).length : 0,
+      gitEmail: this.gitEmail({ projectId: task.projectId }),
+    }
     if (!session)
       return { ...base, running: false, prompt: '', settings: {} as AgentSettings, repo: null, problem: 'no-agent' }
     let transcript: string
@@ -771,12 +804,23 @@ export class AgentThreadService {
 
   /** What this host would do with a continued thread: the project it matches, the model it would run, where to clone. */
   async prepareContinuation(repo: Pick<ContinuationRepo, 'remoteUrl' | 'repoName'>, requested: AgentSettings) {
+    const match = matchProject(repo, await this.projectRemotes())
+    const parent = this.workspace.newProjectParent()
     return {
-      match: matchProject(repo, await this.projectRemotes()),
+      match,
       settings: await this.settingsForHost(requested, 'edits', 'edits'),
-      parent: this.workspace.newProjectParent(),
+      parent,
+      // A clone here would be picked by this host's own rules from where it lands and its remote.
+      gitEmail: this.gitEmail(
+        match?.by === 'remote'
+          ? { projectId: match.projectId }
+          : { folder: join(parent, repo.repoName), remote: repo.remoteUrl },
+      ),
     }
   }
+
+  /** The Git author email a thread commits as on this host, for a project or for where a clone would land. */
+  gitEmail: (place: { projectId?: string; folder?: string; remote?: string }) => string | null = () => null
 
   /** Each project with a single repository, with every remote it has: a fork may call the shared one upstream. */
   private projectRemotes() {

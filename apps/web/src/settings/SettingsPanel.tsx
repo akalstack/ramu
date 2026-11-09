@@ -45,6 +45,8 @@ import { SystemSettings } from './SystemSettings'
 import { ToggleRow } from './ToggleRow'
 import { AgentSetup } from './AgentSetup'
 import { PluginSettings } from './Plugins'
+import { IdentitySettings } from './Identities'
+import { SettingsTransfer } from './SettingsTransfer'
 
 export function SettingsPanel({
   onClose,
@@ -222,9 +224,15 @@ export function SettingsPanel({
                   </div>
                 </>
               )}
-              {page === 'remote' && <RemoteAccessSettings />}
+              {page === 'remote' && (
+                <>
+                  <RemoteAccessSettings />
+                  <SettingsTransfer />
+                </>
+              )}
               {page === 'agent-setup' && <AgentSetup />}
               {page === 'plugins' && <PluginSettings />}
+              {page === 'identities' && <IdentitySettings />}
               {page === 'system' && <SystemSettings {...draftProps} />}
               {page === 'appearance' && (
                 <AppearanceSettings {...draftProps} sizesReset={sizesReset} onResetSizes={() => setReset('sizes')} />

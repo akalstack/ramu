@@ -1,4 +1,5 @@
 import { SheetGroup, SheetOption } from './SheetOptions'
+import { projectIdentity, useHostIdentities } from '../runtime/identities'
 import { threadStatus, titleSourceNote } from '@ramu/shared/chat/threadStatus'
 import { threadOriginLabel } from '@ramu/shared/workspace/threadOrigin'
 import { runsBy } from '../runtime/groupRuns'
@@ -23,6 +24,7 @@ import {
   SquareTerminal,
   Sparkles,
   Trash2,
+  UsersRound,
 } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import type { MobileProject } from '../runtime/types'
@@ -468,6 +470,8 @@ export function ProjectActionsSheet({
     }
   }, [open, project.name])
   const raw = project.id.slice(project.id.indexOf(':') + 1)
+  const identities = useHostIdentities(project.computerId)
+  const identity = projectIdentity(identities, project.id)
   const run = async (fn: () => Promise<unknown>) => {
     if (!writable()) return
     onClose()
@@ -552,6 +556,22 @@ export function ProjectActionsSheet({
         if (writable()) setDeployments(true)
       },
     },
+    // The chip's picker: pin the project to another identity; its next thread uses that identity's accounts.
+    ...(identity && identities
+      ? identities.settings.identities
+          .filter((entry) => entry.id !== identity.identityId)
+          .map((entry) => ({
+            key: `identity:${entry.id}`,
+            group: 'edit' as const,
+            icon: UsersRound,
+            label: translate(store.language, 'Use {name} for this project', { name: entry.name }),
+            onPress: () => {
+              if (!writable()) return
+              onClose()
+              void store.invoke(project.computerId, 'identities.pin', raw, entry.id).catch(() => {})
+            },
+          }))
+      : []),
     {
       key: 'rename',
       group: 'edit',

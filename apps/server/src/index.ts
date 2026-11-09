@@ -172,6 +172,13 @@ import { MemoryService, registerMemoryTools } from './memory/memory'
 import { RuleStore } from './rules/rules'
 import { RuleFiles } from './rules/ruleFiles'
 import { PluginService } from './plugins/service'
+import { IdentityService } from './identities/service'
+import { ProjectPlaces } from './identities/places'
+import { setFolderEnvironment } from './userEnvironment'
+import { execFileSync } from 'node:child_process'
+import { setAccountRestriction } from './providers/providerBinaries'
+import { accountKey } from '@ramu/shared/identities'
+import { setConnectionIdentityScope } from './mcp/policy'
 import { RAMU_INDEX_KEY } from '@ramu/shared/plugins'
 import { SummaryService, registerLibraryTools, withoutTools } from './memory/summaries'
 import { discoverSkills } from './context'
@@ -362,6 +369,63 @@ const db = openDb(join(userData, 'ramu.db'))
 const root = process.env.RAMU_WORKTREES ?? join(homedir(), '.ramu', 'worktrees')
 mkdirSync(root, { recursive: true })
 const workspace = new Workspace(db, root)
+const places = new ProjectPlaces(workspace, join(root, '..', 'chats'))
+const identities = new IdentityService({
+  getState: (key, fallback) => workspace.getAppState(key, fallback),
+  setState: (key, value) => workspace.setAppState(key, value),
+  places: () => places.places(),
+  changed: () => send('identities:changed', null),
+  mismatched: (mismatch) => send('identities:mismatch', mismatch),
+  gitEmail: (() => {
+    let cached: string | null | undefined
+    return () => {
+      if (cached !== undefined) return cached
+      try {
+        cached =
+          execFileSync('git', ['config', '--global', 'user.email'], { encoding: 'utf8', timeout: 3000 }).trim() || null
+      } catch {
+        cached = null
+      }
+      return cached ?? null
+    }
+  })(),
+})
+void places.refresh().catch(() => {})
+// A Shared MCP server or plugin put in one identity reaches only that identity's projects.
+setConnectionIdentityScope((connectionId, projectId) => {
+  if (!identities.allowed(projectId, accountKey('mcp', connectionId))) return false
+  // A plugin's servers follow the identity the plugin was put in.
+  const account = getSharedMcp()
+    .policy.snapshot()
+    .connections.find((entry) => entry.id === connectionId)?.serviceAccountId
+  return !account?.startsWith('plugin-') || identities.allowed(projectId, accountKey('plugin', account.slice(7)))
+})
+/** The project a task acts in, or null for No project, whose threads use the default identity. */
+const identityProject = (taskId: string) => {
+  try {
+    const projectId = workspace.getTask(taskId).projectId
+    return projectId === NO_PROJECT ? null : projectId
+  } catch {
+    return null
+  }
+}
+// A thread uses its identity's own logins of a provider, else those for every identity; never another identity's.
+setAccountRestriction((provider, accountId, taskId) => {
+  const config =
+    workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).providerBinaries?.[provider] ?? undefined
+  const keys = [
+    ...(config?.defaultAccountEnabled === false ? [] : ['default']),
+    ...(config?.accounts ?? []).map((account) => account.id),
+  ].map((id) => accountKey('provider', provider, id))
+  return identities
+    .choose(identityProject(taskId), keys, (key) => key)
+    .includes(accountKey('provider', provider, accountId))
+})
+// Agents, terminals and Ramu's own Git calls in a project commit as its identity.
+setFolderEnvironment((cwd) => {
+  const projectId = places.projectOf(cwd)
+  return projectId ? identities.environment(projectId) : {}
+})
 configureMcpSharing(() => workspace.getAppState<McpSharing>(MCP_SHARING_KEY, {}))
 workspace.settingsStore = new SettingsStore(userData)
 const fake = process.env.RAMU_FAKE_AGENT === '1' ? await import('./providers/fakeAgent') : null
@@ -577,6 +641,9 @@ agents.reviewHooks = {
 }
 const recaps = new RecapService(db, workspace, agents, changed, () => void mobilePush.deliverDigest().catch(() => {}))
 const memory = new MemoryService(db, workspace, agents, () => send('memory:changed', {}), join(userData, 'memory'))
+// Once a second identity exists, notes also have an identity level between a project and everywhere.
+memory.identityOf = (projectId) =>
+  identities.settings().identities.length >= 2 ? (identities.forProject(projectId)?.id ?? null) : null
 memory.start()
 const learning = new LearningService(
   db,
@@ -593,6 +660,15 @@ const learning = new LearningService(
       agents.preferences?.()?.fallback.switchAt ?? DEFAULT_FALLBACK_PREFERENCES.switchAt,
     ),
 )
+learning.identityOf = memory.identityOf
+learning.sameIdentity = (projectId) => {
+  if (identities.settings().identities.length < 2) return null
+  const identity = identities.forProject(projectId)?.id
+  return identities
+    .projects()
+    .filter((entry) => entry.identityId === identity)
+    .map((entry) => entry.projectId)
+}
 const externalSkills = new ExternalSkills(learning, workspace)
 // Skills a person shares from their own provider folders reach every provider and account through the same export.
 learning.sharedSkills = ({ projectId, provider, accountId, cwd }) => {
@@ -638,7 +714,10 @@ const ruleFiles = new RuleFiles({
         workspace.listRepositories(project.id).map((repo) => ({ projectId: project.id, root: repo.root })),
       ),
   claudeHome: claudeConfigHome,
+  identityOf: (projectId) => identities.forProject(projectId)?.id ?? null,
 })
+rules.identityOf = (projectId) =>
+  identities.settings().identities.length >= 2 ? (identities.forProject(projectId)?.id ?? null) : null
 // Brings Claude's path-rule files in line with rules saved or repositories changed while Ramu was not running.
 ruleFiles.sync()
 // The person's rules, then what the project's ramu.json says about its stack, or how to start one from No project.
@@ -1009,6 +1088,7 @@ const plugins = new PluginService({
     send('plugins:changed', null)
   },
   indexKey: RAMU_INDEX_KEY,
+  identityAllows: (pluginId, projectId) => identities.allowed(projectId, accountKey('plugin', pluginId)),
 })
 plugins.start()
 const externalTools = new ExternalSessionTools(getSharedMcp, (sessionId, title, detail, signal) =>
@@ -1075,6 +1155,14 @@ const agentThreads = new AgentThreadService(
   changed,
   new RemoteThreads(db, agents, agentHosts, changed),
 )
+agentThreads.gitEmail = (place) =>
+  place.projectId !== undefined
+    ? identities.email(place.projectId === NO_PROJECT ? null : place.projectId)
+    : identities.email({
+        id: 'new',
+        folders: place.folder ? [place.folder] : [],
+        remotes: place.remote ? [place.remote] : [],
+      })
 /** Asks this host's own desktop app to do something only it can: a native dialog, or installing an update. */
 function askDesktop(method: string, path?: string): Promise<unknown> {
   if (!hostClients.size) return Promise.reject(new Error('Open Ramu on this host to use this desktop action'))
@@ -1134,6 +1222,7 @@ const dispatcher = createDispatcher(
     workspace,
     getSharedMcp,
     plugins,
+    identities,
     browser: browserBroker,
     hostBrowser,
     computer,
@@ -1984,6 +2073,9 @@ agents.toolConnection = (session) => {
     workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).agentBrowser ??
       DEFAULT_AGENT_BROWSER_PREFERENCES,
   )
+  // An agent browsing in a work project opens the browser profile put in Work, with its sign-ins.
+  const identityProfile = identities.ownAccount(identityProject(session.taskId), accountKey('browser', 'default'))
+  if (identityProfile) browserPreferences.defaultProfileId = identityProfile.slice('browser:'.length)
   sessions.set(token, {
     session,
     browser: browserPreferences,

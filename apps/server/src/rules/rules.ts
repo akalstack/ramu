@@ -194,12 +194,18 @@ export class RuleStore {
    * The enabled rules a session for this project and provider receives as text, in a stable order: Always rules, and
    * path rules for runtimes other than Claude Code, which loads those from the rules files Ramu writes.
    */
+  /** A project's identity, so a rule limited to an identity (`identity:<id>`) reaches only its projects. */
+  identityOf: (projectId: string | null) => string | null = () => null
+
   applicable(projectId: string | null, provider: AgentProvider): Rule[] {
+    const identity = this.identityOf(projectId)
     return this.list().filter(
       (rule) =>
         rule.enabled &&
         (rule.activation === 'always' || (rule.activation === 'paths' && provider !== 'claude-code')) &&
-        (rule.projectId === null || rule.projectId === projectId) &&
+        (rule.projectId === null ||
+          rule.projectId === projectId ||
+          (identity !== null && rule.projectId === `identity:${identity}`)) &&
         (rule.providers.length === 0 || rule.providers.includes(provider)),
     )
   }

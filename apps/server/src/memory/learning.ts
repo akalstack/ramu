@@ -226,8 +226,19 @@ export class LearningService {
     const id = this.workspace.getTask(this.agents.get(sessionId).taskId).projectId
     return id === NO_PROJECT ? null : id
   }
+  /** The project's identity once a second one exists: skills learned in its projects stay at that level. */
+  identityOf: (projectId: string | null) => string | null = () => null
+  /** The projects sharing a project's identity, for past-conversation search across projects. */
+  sameIdentity: (projectId: string) => string[] | null = () => null
+
   private scoped(projectId: string | null) {
-    return this.skills().filter((skill) => skill.projectId === null || skill.projectId === projectId)
+    const identity = this.identityOf(projectId)
+    return this.skills().filter(
+      (skill) =>
+        skill.projectId === null ||
+        skill.projectId === projectId ||
+        (identity !== null && skill.projectId === `identity:${identity}`),
+    )
   }
   private usable(skill: ManagedSkill) {
     return skill.status === 'active'
@@ -433,7 +444,11 @@ export class LearningService {
       sessionTitle: session.title,
       id: randomUUID(),
       sessionId,
-      projectId: this.project(sessionId),
+      // A skill learned from a work thread is built from that company's code and habits, so it starts at Work's level.
+      projectId: ((project) => {
+        const identity = this.identityOf(project)
+        return identity ? `identity:${identity}` : project
+      })(this.project(sessionId)),
       seq: resultIndex + 1,
       status: 'queued',
       createdAt: Date.now(),
@@ -924,6 +939,7 @@ ${JSON.stringify({ previousCheckpoint: this.checkpoint(job.sessionId), trace: bo
   /** `recall` is the cross-thread recall setting the chat launched with; search still refuses once it is turned off. */
   register(server: McpServer, sessionId: string, recall = this.preferences().crossThreadRecall) {
     const history = new SessionSearch(this.db, () => this.preferences().crossThreadRecall)
+    history.sameIdentity = this.sameIdentity
     if (recall) history.register(server, sessionId)
     server.registerTool(
       'session_recall',

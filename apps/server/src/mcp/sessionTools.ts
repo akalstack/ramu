@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { connectionApplies } from './policy'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
@@ -73,8 +74,7 @@ export function hasExternalConnections(service: SharedMcpService, source: Extern
         connection.enabled &&
         connection.providers.includes(source.provider) &&
         (source.connectionIds === undefined || source.connectionIds.includes(connection.id)) &&
-        (connection.scope.hostWide ||
-          (source.projectId !== null && connection.scope.projectIds.includes(source.projectId))),
+        connectionApplies(connection, source.projectId),
     )
 }
 

@@ -28,6 +28,17 @@ export class SessionSearch {
       .get(sessionId, Number(topLevelOnly)) as Source | undefined
   }
 
+  /**
+   * The projects that share a project's identity, for scope all; null when there are no identities. A work thread's
+   * search never returns a personal one.
+   */
+  sameIdentity: (projectId: string) => string[] | null = () => null
+
+  private within(projectId: string): [string | null, string | null] {
+    const peers = this.sameIdentity(projectId)
+    return peers ? ['limited', JSON.stringify(peers)] : [null, null]
+  }
+
   search(sourceId: string, query: string, scope: 'project' | 'all', limit: number, offset: number) {
     this.checkEnabled()
     const source = this.source(sourceId)
@@ -43,10 +54,10 @@ export class SessionSearch {
       FROM session_search_fts f JOIN agent_sessions s ON s.id=f.session_id JOIN tasks t ON t.id=s.task_id
       JOIN agent_events e ON e.session_id=f.session_id AND e.seq=f.seq
       WHERE session_search_fts MATCH ? AND s.parent_session_id IS NULL AND s.id<>?
-      AND (?='all' OR t.project_id=?)
+      AND ((?='all' AND (? IS NULL OR t.project_id IN (SELECT value FROM json_each(?)))) OR t.project_id=?)
       ORDER BY rank, e.rowid DESC LIMIT ? OFFSET ?`,
       )
-      .all(match, sourceId, scope, source.projectId, limit + 1, offset) as {
+      .all(match, sourceId, scope, ...this.within(source.projectId), source.projectId, limit + 1, offset) as {
       sessionId: string
       seq: number
       taskId: string
@@ -72,7 +83,12 @@ export class SessionSearch {
     this.checkEnabled()
     const source = this.source(sourceId),
       target = this.source(targetId, true)
-    if (!source || !target || (scope !== 'all' && target.projectId !== source.projectId))
+    const peers = source ? this.sameIdentity(source.projectId) : null
+    if (
+      !source ||
+      !target ||
+      (target.projectId !== source.projectId && (scope !== 'all' || (peers && !peers.includes(target.projectId))))
+    )
       throw new Error(
         'Thread is unavailable in this search scope. Use scope all only when cross-project recall is intended.',
       )

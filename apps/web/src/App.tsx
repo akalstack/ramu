@@ -65,6 +65,7 @@ import { openPublishRepository, PublishRepositoryHost } from './git/PublishRepos
 import { PairingRequestDialog } from './settings/PairingRequestDialog'
 import { PermissionRequestDialog } from './settings/PermissionRequestDialog'
 import { PairBackDialog } from './settings/PairBackDialog'
+import { IdentityMismatchDialog } from './settings/IdentityMismatchDialog'
 import { Notifications, notifyError } from './chat/Notifications'
 import { SummaryHost } from './summaries/SummaryHost'
 import { TitleTooltips } from './TitleTooltips'
@@ -841,6 +842,7 @@ function Shell() {
       <PairingRequestDialog />
       <PermissionRequestDialog />
       <PairBackDialog />
+      <IdentityMismatchDialog />
       <TitleTooltips />
       <Fragment key={`dialogs:${shownHost}`}>
         <ProviderSetupTerminal />

@@ -722,6 +722,52 @@ export interface RamuMethods extends ArtifactMethods {
   /** Which providers' exports carry a managed skill. Applies to new threads. */
   'skills.setProviders'(id: string, providers: import('./types').AgentProvider[]): void
   'skills.remove'(id: string): void
+  /** This host's portable settings in the chosen groups; never paths, credentials or workspace state. */
+  'settingsTransfer.export'(
+    groups: import('./settingsTransfer').TransferGroup[],
+  ): import('./settingsTransfer').SettingsExport
+  /** Every value an import would change here, and the accounts its identities name that are not connected here. */
+  'settingsTransfer.preview'(
+    file: import('./settingsTransfer').SettingsExport,
+    groups: import('./settingsTransfer').TransferGroup[],
+  ): { changes: import('./settingsTransfer').TransferChange[]; connectHere: string[] }
+  /** Applies a reviewed import; `expected` is how many changes the review showed, so a changed setting stops it. */
+  'settingsTransfer.apply'(
+    file: import('./settingsTransfer').SettingsExport,
+    groups: import('./settingsTransfer').TransferGroup[],
+    expected: number,
+  ): { changed: number; connectHere: string[] }
+  'identities.get'(): import('./identities').IdentitySnapshot
+  'identities.add'(input: {
+    name: string
+    gitAuthor: import('./identities').Identity['gitAuthor']
+    rules?: import('./identities').IdentityRule[]
+    color?: import('./identities').IdentityColor
+    id?: string
+  }): import('./identities').IdentitySnapshot
+  'identities.update'(
+    id: string,
+    patch: Partial<Pick<import('./identities').Identity, 'name' | 'color' | 'gitAuthor' | 'rules'>> & {
+      isDefault?: true
+    },
+  ): import('./identities').IdentitySnapshot
+  /** Removes an identity; its projects move to `moveTo`. */
+  'identities.remove'(id: string, moveTo: string | null): import('./identities').IdentitySnapshot
+  /** Pins a project to an identity, or back to its rules with null. */
+  'identities.pin'(projectId: string, identityId: string | null): import('./identities').IdentitySnapshot
+  /** Which identities a connected account is for; empty makes it shared. */
+  'identities.assign'(accountKey: string, identityIds: string[]): import('./identities').IdentitySnapshot
+  'identities.suggestion'(projectId: string): import('./identities').IdentityRule | null
+  'identities.answerSuggestion'(
+    projectId: string,
+    identityId: string | null,
+    rule: import('./identities').IdentityRule | null,
+  ): import('./identities').IdentitySnapshot
+  'identities.writeGitConfig'(projectId: string): { repositories: number; email: string }
+  /** The last action the guardrail stopped in a project, for its card. */
+  'identities.mismatch'(projectId: string | null): import('./identities').IdentityMismatch | null
+  'identities.continueAs'(projectId: string | null): import('./identities').IdentityMismatch
+  'identities.useIdentity'(taskId: string, repoId: string): { identity: string }
   'plugins.list'(): import('./plugins').InstalledPlugin[]
   'plugins.indexes'(): import('./plugins').PluginIndexInfo[]
   /** Listed plugins across every index, matching the words in `query`. */
@@ -1804,6 +1850,9 @@ export type PushEvents = {
   'summaries:changed': { created: string | null }
   'rules:changed': Record<string, never>
   'plugins:changed': null
+  'identities:changed': null
+  /** The guardrail stopped an action that would act as another identity than the project's. */
+  'identities:mismatch': import('./identities').IdentityMismatch
   'plugins:signInFailed': { pluginId: string; slot: string; message: string }
   /** `rejected`: the server no longer accepts this device's token, so reconnecting is pointless until it is paired again. */
   'background:connection': {

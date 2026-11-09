@@ -14,6 +14,8 @@ import { registerCiHandlers } from './handlers/ci'
 import { registerGitHandlers } from './handlers/git'
 import { registerMemoryHandlers } from './handlers/memory'
 import { registerPluginHandlers } from './handlers/plugins'
+import { registerIdentityHandlers } from './handlers/identities'
+import { registerSettingsTransferHandlers } from './handlers/settingsTransfer'
 import { registerProviderHandlers } from './handlers/providers'
 import { registerSharedMcpHandlers } from './handlers/mcp'
 import { registerProjectSetupHandlers } from './handlers/projectSetup'
@@ -99,6 +101,8 @@ export const registerHandlers = (ctx: HandlerContext): MethodTable => {
     registerTerminalHandlers(ctx),
     registerMemoryHandlers(ctx),
     registerPluginHandlers(ctx),
+    registerIdentityHandlers(ctx),
+    registerSettingsTransferHandlers(ctx),
     registerSummaryHandlers(ctx),
     registerRuleHandlers(ctx),
     registerSettingsHandlers(ctx),

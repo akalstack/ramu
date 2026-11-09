@@ -46,7 +46,7 @@ export class CodexRpc {
   onExit: (error: Error) => void = () => {}
   readonly exited: Promise<void>
 
-  constructor(connection?: McpConnection, extraConfig: string[] = [], accountId?: string) {
+  constructor(connection?: McpConnection, extraConfig: string[] = [], accountId?: string, cwd?: string) {
     this.process = trackProcess(
       spawn(
         providerBinary('codex'),
@@ -69,7 +69,7 @@ export class CodexRpc {
         {
           stdio: 'pipe',
           env: {
-            ...providerEnvironment('codex', undefined, accountId),
+            ...providerEnvironment('codex', undefined, accountId, cwd),
             ...(connection ? { RAMU_MCP_TOKEN: connection.token } : {}),
           },
         },
@@ -304,6 +304,7 @@ class CodexSession implements CodexRunner {
           : []),
       ],
       this.settings.accountId ?? 'default',
+      this.scope.cwd,
     )
     this.rpc.onMessage = (m) => this.handle(m)
     this.rpc.onExit = (e) => {

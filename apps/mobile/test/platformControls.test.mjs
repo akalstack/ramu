@@ -1943,6 +1943,7 @@ for (const os of ['ios', 'android']) {
     }
     const { ChatActionsSheet } = load('components/ChatActions.tsx', os, {
       react: hooks.react,
+      '../runtime/identities': { useHostIdentities: () => null, projectIdentity: () => null },
       '../runtime/store': { useStore: () => store },
       '../i18n': { useT: () => labels },
       './SheetOptions': { SheetGroup: 'SheetGroup', SheetOption: 'SheetOption' },
@@ -3961,6 +3962,7 @@ for (const os of ['ios', 'android']) {
     const store = { isOnline: () => true, chats: [] }
     const { ProjectActionsSheet } = load('components/ChatActions.tsx', os, {
       react: hooks.react,
+      '../runtime/identities': { useHostIdentities: () => null, projectIdentity: () => null },
       '../runtime/store': { useStore: () => store },
       '../i18n': { useT: () => actionSettingsCopy },
       './ProjectCommandSettings': { ProjectCommandSettings: 'ProjectCommandSettings' },
@@ -4474,6 +4476,7 @@ for (const os of ['ios', 'android']) {
     const alerts = [],
       calls = []
     const { confirmChatDeletion } = load('components/ChatActions.tsx', os, {
+      '../runtime/identities': { useHostIdentities: () => null, projectIdentity: () => null },
       'react-native': { Alert: { alert: (...args) => alerts.push(args) } },
       '@ramu/shared/i18n': { translate: (_language, text) => text },
       '@ramu/shared/chat/taskRemoval': taskRemoval,
@@ -5662,6 +5665,7 @@ for (const os of ['ios', 'android']) {
     }
     const { ChatActionsSheet } = load('components/ChatActions.tsx', os, {
       react: hooks.react,
+      '../runtime/identities': { useHostIdentities: () => null, projectIdentity: () => null },
       '../runtime/store': { useStore: () => store },
       '../i18n': { useT: () => ({ renameWithAI: 'Rename with AI' }) },
       './SheetOptions': { SheetGroup: 'SheetGroup', SheetOption: 'SheetOption' },
@@ -5906,6 +5910,7 @@ for (const os of ['ios', 'android']) {
       'components/ChatActions.tsx',
       os,
       {
+        '../runtime/identities': { useHostIdentities: () => null, projectIdentity: () => null },
         react: hooks.react,
         '../runtime/store': { useStore: () => store },
         '../i18n': { useT: () => actionSettingsCopy },
@@ -7467,6 +7472,7 @@ test('Threads uses native toolbar buttons and its usage action opens the shared 
     ],
   })
   const { default: Threads } = load('app/(tabs)/(threads)/index.tsx', 'ios', {
+    '../../../runtime/identities': { useHostIdentities: () => null, projectIdentity: () => null },
     react,
     '../../../runtime/store': {
       useStore: () => ({

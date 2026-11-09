@@ -42,6 +42,8 @@ export function ContinueOnHostSheet({
   const [pack, setPack] = useState<ContinuationPackage | null>(null)
   const [plans, setPlans] = useState<Record<string, TargetPlan | { error: string }>>({})
   const [named, setNamed] = useState<Record<string, boolean>>({})
+  // A host that would commit as another email is chosen only after Continue anyway.
+  const [acknowledged, setAcknowledged] = useState<Record<string, boolean>>({})
   const [outcomes, setOutcomes] = useState<Record<string, string | null>>({})
   const [keys] = useState(() => new Map<string, { key: string; cloneId: string }>())
   const [error, setError] = useState('')
@@ -75,9 +77,20 @@ export function ContinueOnHostSheet({
   const name = (id: string) => available.find((pc) => pc.id === id)?.name ?? ''
   const repo = pack?.repo
   const pending = targets.filter((id) => outcomes[id] !== null)
+  /** Hosts are compared by Git author email: the warning names both before anything crosses. */
+  const warning = (id: string) => {
+    const plan = plans[id]
+    return plan &&
+      !('error' in plan) &&
+      pack?.gitEmail &&
+      plan.gitEmail &&
+      pack.gitEmail.toLowerCase() !== plan.gitEmail.toLowerCase()
+      ? say('This thread is {0}. On {1} it would run as {2}.', { 0: pack.gitEmail, 1: name(id), 2: plan.gitEmail })
+      : null
+  }
   const ready = pending.every((id) => {
     const plan = plans[id]
-    return plan && !('error' in plan) && (plan.match?.by !== 'name' || named[id])
+    return plan && !('error' in plan) && (plan.match?.by !== 'name' || named[id]) && (!warning(id) || acknowledged[id])
   })
   const start = async () => {
     if (!pack || !here) return
@@ -188,6 +201,14 @@ export function ContinueOnHostSheet({
                         say('Runs {0} with Allow edits', { 0: plan.settings.model || plan.settings.provider }),
                         'muted',
                       )}
+                      {warning(id) ? line(warning(id)!, 'warn') : null}
+                      {warning(id) && !acknowledged[id] ? (
+                        <Button
+                          kind="secondary"
+                          title={say('Continue anyway')}
+                          onPress={() => setAcknowledged({ ...acknowledged, [id]: true })}
+                        />
+                      ) : null}
                       {outcome ? line(outcome, 'bad') : null}
                     </>
                   )}

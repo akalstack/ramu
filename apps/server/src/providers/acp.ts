@@ -114,7 +114,7 @@ export class AcpRpc {
       spawn(command, args, {
         cwd,
         stdio: 'pipe',
-        env: providerEnvironment(provider, undefined, accountId),
+        env: providerEnvironment(provider, undefined, accountId, cwd),
       }),
     )
     this.child.stderr.resume()

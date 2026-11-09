@@ -23,6 +23,7 @@ import {
   Plus,
   SquarePen,
   X,
+  UsersRound,
 } from 'lucide-react'
 import { useState } from 'react'
 import { HoverCard, HoverCardTrigger } from '@/components/ui/hover-card'
@@ -47,6 +48,8 @@ import { useSidebarExpansion } from './sidebarExpansion'
 import { ThreadPreviewList, useThreadPreview } from './ThreadPreviewList'
 import { useSlideMount } from './useSlideMount'
 import { useHost } from '../../workspace/HostProvider'
+import { refreshIdentities, useIdentities, useProjectIdentity } from '../../workspace/identities'
+import { IdentityChip } from '../../settings/IdentityChip'
 import { draftKey, draftStore, saveDraft } from '../../composer/drafts'
 
 export function ProjectGroup({ project, previewLimit }: { project: Project; previewLimit?: number }) {
@@ -54,6 +57,8 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
   const ws = useWorkspace()
   const host = useHost()
   const { viewOnly, canWrite } = useHostWriteAccess()
+  const identity = useProjectIdentity(host.id, project.id)
+  const identities = useIdentities(host.id)
   // Artifacts made for this project, found from its menu as well as from Artifacts.
   const projectPages = [...usePageIndex().pages.values()].filter((page) => page.projectId === project.id)
   const repos = ws.repos[project.id] ?? []
@@ -161,6 +166,46 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
               label: `${page.icon} ${page.title}`,
               onSelect: () => openPage(page.id, host.id),
             })),
+          } as MenuEntry,
+        ]
+      : []),
+    ...(identity && identities
+      ? [
+          {
+            key: 'identity',
+            label: (
+              <>
+                <UsersRound size={14} /> {t(' Identity')}
+              </>
+            ),
+            submenu: [
+              ...identities.settings.identities.map((entry) => ({
+                key: entry.id,
+                label: entry.id === identity.identityId ? `✓ ${entry.name}` : entry.name,
+                onSelect: () => {
+                  if (canWrite())
+                    void act(async () => {
+                      await host.invoke('identities.pin', project.id, entry.id)
+                      await refreshIdentities(host.id)
+                    })
+                },
+              })),
+              ...(identity.reason === 'pinned'
+                ? [
+                    {
+                      key: 'rules',
+                      label: t('Follow its rules'),
+                      onSelect: () => {
+                        if (canWrite())
+                          void act(async () => {
+                            await host.invoke('identities.pin', project.id, null)
+                            await refreshIdentities(host.id)
+                          })
+                      },
+                    },
+                  ]
+                : []),
+            ],
           } as MenuEntry,
         ]
       : []),
@@ -358,6 +403,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
                 text={project.name}
               />
             )}
+            {identity && !renaming && <IdentityChip identity={identity} />}
             <span className={ROW_ACTIONS_CLASS}>
               <Button
                 variant="ghost"

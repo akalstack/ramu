@@ -47,6 +47,7 @@ const PHONE_MENU: readonly { id: SettingsSection; group: SettingsGroup; label?: 
   { id: 'memory', group: 'agents' },
   { id: 'agent-setup', group: 'agents' },
   { id: 'plugins', group: 'agents' },
+  { id: 'identities', group: 'agents' },
   { id: 'git', group: 'workspace' },
   { id: 'deploy', group: 'workspace' },
   { id: 'browser', group: 'workspace' },

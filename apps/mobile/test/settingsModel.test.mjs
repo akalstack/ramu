@@ -294,6 +294,7 @@ test('the phone menu has every desktop section a phone can use, arranged for a p
     'memory',
     'agent-setup',
     'plugins',
+    'identities',
   ])
   assert.deepEqual(byGroup('workspace'), ['git', 'deploy', 'browser', 'computer', 'system'])
   assert.deepEqual(byGroup('more'), ['archived', 'about'])

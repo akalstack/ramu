@@ -1,4 +1,5 @@
 import { translate } from '@ramu/shared/i18n'
+import { projectIdentity, useHostIdentities } from '../../../runtime/identities'
 import { recentThreads } from '../../../runtime/recentThreads'
 import { groupKey, groupThreads, splitDone, type ThreadGroup } from '../../../runtime/threadGroups'
 import { collapseScheduleRuns } from '@ramu/shared/chat/scheduleRuns'
@@ -62,6 +63,8 @@ const DONE_KEY = 'section:done'
 
 /** Where this phone remembers how the thread list is drawn: by project (default) or by recent activity. */
 const THREAD_LIST_KEY = 'pref-device:threadList'
+/** How this phone arranges projects by identity: all (default), grouped, or `only:<id>`. */
+const IDENTITY_VIEW_KEY = 'pref-device:identityView'
 
 export default function Threads() {
   const { c } = useTheme()
@@ -143,6 +146,11 @@ export default function Threads() {
   const filtering = filter !== 'all'
   // The desktop's sidebar switch, kept on this phone: threads grouped by project, or one list by recent activity.
   const recentMode = store.drafts?.[THREAD_LIST_KEY] === 'recent'
+  // Grouping and narrowing by identity, once the shown host has two or more; search still finds every thread.
+  const identities = useHostIdentities(merged ? undefined : selected)
+  const identityList = identities && identities.settings.identities.length >= 2 ? identities.settings.identities : null
+  const identityView = identityList ? (store.drafts?.[IDENTITY_VIEW_KEY] ?? 'all') : 'all'
+  const identityOf = (projectId: string | null | undefined) => projectIdentity(identities, projectId)?.identityId
   // A thread marked done leaves its project (and Pinned) for one Done section at the bottom; archived ones list as they are.
   const { open, done } = useMemo(
     () => (filter === 'archived' ? { open: mine, done: [] } : splitDone(mine)),
@@ -239,9 +247,19 @@ export default function Threads() {
         folded.set(key, (folded.get(key) ?? 0) + 1)
       }
     // Folded runs count toward a section's "Show more", so a section holding only folded runs can still open them.
-    const groups = groupThreads(listed, projectList, { limit: PER_PROJECT, expanded, collapsed }).map((g) =>
-      expanded.has(g.key) || collapsed.has(g.key) ? g : { ...g, hidden: g.hidden + (folded.get(g.key) ?? 0) },
-    )
+    const order = identityList?.map((identity) => identity.id) ?? []
+    const groups = groupThreads(listed, projectList, { limit: PER_PROJECT, expanded, collapsed })
+      .map((g) =>
+        expanded.has(g.key) || collapsed.has(g.key) ? g : { ...g, hidden: g.hidden + (folded.get(g.key) ?? 0) },
+      )
+      .filter(
+        (g) => !identityView.startsWith('only:') || !g.project || identityOf(g.project.id) === identityView.slice(5),
+      )
+      .sort((a, b) =>
+        identityView === 'group' && a.project && b.project
+          ? order.indexOf(identityOf(a.project.id) ?? '') - order.indexOf(identityOf(b.project.id) ?? '')
+          : 0,
+      )
     if (groups.length) out.push({ key: 'label:projects', kind: 'label', text: t.projects })
     groups.forEach((g, index) => {
       const closed = collapsed.has(g.key)
@@ -298,6 +316,8 @@ export default function Threads() {
     recentMode,
     merged,
     projects,
+    identities,
+    identityView,
     computers,
     collapsed,
     expanded,
@@ -407,8 +427,10 @@ export default function Threads() {
           const name =
             p?.name ?? (g.projectId === STANDALONE ? t.standalone : translate(store.language, 'Unknown project'))
           const host = merged ? computers.find((x) => x.id === g.computerId)?.name : undefined
+          const identity = p ? projectIdentity(identities, p.id) : null
           const detail = [
             host,
+            identity?.name,
             p?.kind === 'workspace' ? translate(store.language, '{count} repos', { count: p.repos.length }) : undefined,
           ]
             .filter(Boolean)
@@ -633,6 +655,28 @@ export default function Threads() {
               contentContainerStyle={{ paddingHorizontal: space.l, paddingTop: space.m, gap: space.s }}
             >
               <HostChip all={merged} onAll={multi ? setAllHosts : undefined} />
+              {identityList && !recentMode ? (
+                <>
+                  <Chip
+                    label={say('By identity')}
+                    selected={identityView === 'group'}
+                    onPress={() => store.setDraft(IDENTITY_VIEW_KEY, identityView === 'group' ? 'all' : 'group')}
+                  />
+                  {identityList.map((identity) => (
+                    <Chip
+                      key={identity.id}
+                      label={translate(store.language, 'Only {name}', { name: identity.name })}
+                      selected={identityView === `only:${identity.id}`}
+                      onPress={() =>
+                        store.setDraft(
+                          IDENTITY_VIEW_KEY,
+                          identityView === `only:${identity.id}` ? 'all' : `only:${identity.id}`,
+                        )
+                      }
+                    />
+                  ))}
+                </>
+              ) : null}
               <Chip
                 label={recentMode ? say('Recent') : t.projects}
                 icon={recentMode ? History : Folders}

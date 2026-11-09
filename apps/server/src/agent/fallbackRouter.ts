@@ -1,4 +1,4 @@
-import { providerAccountId } from '../providers/providerBinaries'
+import { identityConfiguration, providerAccountId } from '../providers/providerBinaries'
 import { launchCompatibility } from '../providers/launchCompatibility'
 import {
   AGENT_PROVIDERS,
@@ -277,7 +277,7 @@ export class FallbackRouter {
   /** Where the next message would run, using the routing a send applies. Reads only: it changes nothing and fetches nothing. */
   async nextRoute(id: string): Promise<NextMessageRoute> {
     const s = this.host.get(id)
-    const routing = this.routing(s.settings)
+    const routing = this.routing(s.settings, s.taskId)
     if (!routing) return { state: 'unknown' }
     const catalogs = await this.host.catalog()
     const policy = this.policyOf(catalogs, routing.prefs)
@@ -318,7 +318,10 @@ export class FallbackRouter {
   }
 
   /** Preferences and usage, once the app has provided them; tests run without. */
-  routing(settings?: AgentSettings): {
+  routing(
+    settings?: AgentSettings,
+    taskId?: string,
+  ): {
     prefs: AppPreferences
     usage: UsageReading[]
     all: UsageReading[]
@@ -327,7 +330,11 @@ export class FallbackRouter {
     const source = this.host.preferencesSource()
     const usage = this.host.usage()
     if (!source || !usage) return null
-    const prefs = source()
+    // Only the logins the thread's identity may use: its own and those for every identity.
+    const loaded = source()
+    const prefs = taskId
+      ? { ...loaded, providerBinaries: identityConfiguration(loaded.providerBinaries, taskId) }
+      : loaded
     const all = usage.all?.() ?? usage.list()
     return {
       prefs,
@@ -409,8 +416,8 @@ export class FallbackRouter {
   }
 
   /** Route foreground and background work only when its model reaches the usage threshold. */
-  async route(settings: AgentSettings): Promise<RouteDecision | null> {
-    let routing = this.routing(settings)
+  async route(settings: AgentSettings, taskId?: string): Promise<RouteDecision | null> {
+    let routing = this.routing(settings, taskId)
     if (!routing || !settings.autoFallback) return null
     const catalogs = await this.host.catalog()
     const model =
@@ -418,7 +425,7 @@ export class FallbackRouter {
       settings.model
     if (isOver(peakFor(routing.usage, settings.provider, model), routing.prefs.fallback.switchAt)) {
       await this.freshAccountUsage(settings.provider)
-      routing = this.routing(settings) ?? routing
+      routing = this.routing(settings, taskId) ?? routing
     }
     return planRoute(settings, this.orderOf(catalogs, routing.prefs), {
       usage: routing.usage,
@@ -445,7 +452,7 @@ export class FallbackRouter {
   /** Before sending, fall back only at the usage threshold, respecting explicit composer holds. */
   async switchBeforeSend(id: string): Promise<boolean> {
     const s = this.host.get(id)
-    let routing = this.routing(s.settings)
+    let routing = this.routing(s.settings, s.taskId)
     if (!routing) return false
     const catalogs = await this.host.catalog()
     const policy = this.policyOf(catalogs, routing.prefs)
@@ -461,7 +468,7 @@ export class FallbackRouter {
       tried.add(accountKey(s.provider, s.settings.accountId))
       this.attemptedAccounts.set(id, tried)
       await this.freshAccountUsage(s.provider)
-      routing = this.routing(s.settings) ?? routing
+      routing = this.routing(s.settings, s.taskId) ?? routing
     }
     const decision = planRoute(s.settings, policy.order, {
       usage: routing.usage,
@@ -549,7 +556,7 @@ export class FallbackRouter {
     let seen = proof(routing.all)
     if (seen === 'unknown' && refresh) {
       await this.freshAccountUsage(target.provider)
-      seen = proof(this.routing(s.settings)?.all ?? routing.all)
+      seen = proof(this.routing(s.settings, s.taskId)?.all ?? routing.all)
     }
     if (seen !== 'room') return null
     const where =
@@ -616,7 +623,7 @@ export class FallbackRouter {
       const catalogs = await this.host.catalog()
       if (this.host.shutdown() || revision !== (this.host.revisions.get(id) ?? 0)) return
       resolveAttempted(catalogs)
-      let routing = this.routing(s.settings)
+      let routing = this.routing(s.settings, s.taskId)
       const configured = !!routing?.prefs.fallback.order
       const policy = this.policyOf(catalogs, routing?.prefs)
       const tried = this.attemptedAccounts.get(id) ?? new Set<string>()
@@ -625,7 +632,7 @@ export class FallbackRouter {
       // The limit just hit belongs to this login, so try the provider's other logins before leaving it.
       if (routing) {
         await this.freshAccountUsage(s.provider)
-        routing = this.routing(s.settings) ?? routing
+        routing = this.routing(s.settings, s.taskId) ?? routing
       }
       // Prefer a login that already has the thread's Shared MCP access: usage decides which logins have room, and
       // connection readiness only orders them. When every candidate lacks something the first still gets the notice.
@@ -789,7 +796,7 @@ export class FallbackRouter {
     let reason: string | undefined
     // Chosen per task: Ramu runs it so the provider can pick the model and effort (see selectSubagentSettings).
     let redirect = !!resolved || prefs?.subagents.model === 'auto'
-    const routing = this.routing(settings)
+    const routing = this.routing(settings, parent.taskId)
     if (routing) {
       const policy = this.policyOf(catalogs, routing.prefs)
       const decision = planRoute(settings, policy.order, {

@@ -80,6 +80,8 @@ const SETTINGS_DOMAINS = new Set([
   'providers',
   'rules',
   'plugins',
+  'identities',
+  'settingsTransfer',
   'codex',
   'updates',
   'background',
