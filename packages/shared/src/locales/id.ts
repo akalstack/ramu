@@ -6404,4 +6404,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   approved: 'menyetujui',
   'requested changes': 'meminta perubahan',
   'had a review dismissed': 'review-nya dibatalkan',
+  Pages: 'Halaman',
 }

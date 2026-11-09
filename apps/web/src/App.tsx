@@ -24,6 +24,7 @@ import {
   CalendarClock,
   Inbox,
   Settings,
+  MessagesSquare,
   SquarePen,
   Archive,
   Files,
@@ -581,29 +582,38 @@ function Shell() {
     </nav>
   )
   // With the sidebar hidden, chats that want attention show on its toggle instead.
-  /** One of the app's pages as an icon in the sidebar's top row; choosing the open one goes back to the threads. */
-  const pageButton = (
-    page: 'inbox' | 'pulls' | 'schedules' | 'artifacts',
+  /** One page on the sidebar's rail; choosing the page that is open goes back to the threads, except Inbox. */
+  const railButton = (
+    page: 'projects' | 'inbox' | 'pulls' | 'schedules' | 'artifacts',
     Icon: typeof Inbox,
     label: string,
     waiting: number,
     keys?: string,
-  ) => (
-    <Button
-      key={page}
-      variant="ghost"
-      size="icon-sm"
-      className={`relative overflow-visible size-(--action-size) flex-none justify-center p-0 border-transparent hover:bg-hover hover:text-foreground ${ui.sidebar === page ? 'bg-accent text-foreground' : 'bg-transparent text-muted-foreground'}`}
-      aria-pressed={ui.sidebar === page}
-      aria-label={label}
-      aria-description={waiting ? t('{0} waiting', { 0: waiting }) : undefined}
-      title={keys ? `${label} (${keys})` : label}
-      onClick={() => ws.setSidebar(ui.sidebar === page && page !== 'inbox' ? 'projects' : page)}
-    >
-      <Icon size={16} />
-      {badge(waiting, true)}
-    </Button>
-  )
+  ) => {
+    const active = page === 'projects' ? !isGlobalPage(ui.sidebar) : ui.sidebar === page
+    return (
+      <Button
+        key={page}
+        variant="ghost"
+        size="icon-sm"
+        className={`relative overflow-visible size-9 flex-none justify-center border-transparent bg-transparent p-0 hover:bg-hover hover:text-foreground ${active ? 'text-foreground' : 'text-muted-foreground'}`}
+        aria-pressed={active}
+        aria-label={label}
+        aria-description={waiting ? t('{0} waiting', { 0: waiting }) : undefined}
+        title={keys ? `${label} (${keys})` : label}
+        onClick={() => ws.setSidebar(page === 'projects' || (active && page !== 'inbox') ? 'projects' : page)}
+      >
+        {active && (
+          <span
+            className="absolute top-1/2 -left-1 h-5 w-[3px] -translate-y-1/2 rounded-full bg-(--primary)"
+            aria-hidden="true"
+          />
+        )}
+        <Icon size={18} />
+        {badge(waiting, true)}
+      </Button>
+    )
+  }
 
   const sidebarToggle = (
     <Button
@@ -627,7 +637,7 @@ function Shell() {
       onPointerDownCapture={(event) => {
         if ((event.target as HTMLElement).closest('[role="separator"]')) cancelPanelMotion()
       }}
-      className={`shell [&.no-sidebar_.sidebar]:opacity-0 [&.no-sidebar_.sidebar]:invisible [&_.sidebar_>_*]:min-w-[calc(var(--sidebar-w,_268px)_-_14px)] [&.no-sidebar_.main]:ml-[var(--island-gap)] relative h-full bg-window [--titlebar-h:44px] [--nav-width:var(--sidebar-w,_268px)] ${sidebarHidden ? ' no-sidebar' : ''}`}
+      className={`shell [&.no-sidebar_.sidebar]:opacity-0 [&.no-sidebar_.sidebar]:invisible [&_.sidebar_>_*]:min-w-[calc(var(--sidebar-w,_312px)_-_14px)] [&.no-sidebar_.main]:ml-[var(--island-gap)] relative h-full bg-window [--titlebar-h:44px] [--nav-width:var(--sidebar-w,_312px)] ${sidebarHidden ? ' no-sidebar' : ''}`}
       style={{ '--sidebar-w': `${expandedWidth}px`, '--nav-width': `${navWidth}px` } as React.CSSProperties}
     >
       <div className="app-titlebar [&_>_.task-header]:flex-1 [&_>_.task-header]:min-w-0 [&_>_.task-header]:h-[44px] [&_>_.task-header]:p-[0_10px_0_12px] [&_>_.task-header]:bg-transparent [&_>_.task-header]:[border:0] absolute inset-[0_0_auto] z-20 h-[var(--titlebar-h)] flex items-center [-webkit-app-region:drag] pr-[var(--island-gap)]">
@@ -685,72 +695,84 @@ function Shell() {
             aria-hidden={sidebarHidden}
             inert={sidebarHidden}
           >
-            <nav className="sidebar-nav flex flex-col gap-px p-[2px_8px_6px] flex-none" aria-label={t('Activity')}>
-              {/* The app's own pages as one row of icons beside the host switcher, as VS Code's activity bar does, so
-                  threads keep the sidebar's height. */}
-              <div className="flex min-h-8 items-center gap-1">
-                <div className="min-w-0 flex-1">
-                  <ComputerSwitcher />
-                </div>
-                {pageButton('inbox', Inbox, t('Inbox'), inboxCount, formatKeys('mod+shift+i'))}
-                {pageButton('pulls', GitPullRequest, t('Pull requests'), pullsWaiting)}
-                {pageButton('schedules', CalendarClock, t('Schedules'), 0)}
-                {pageButton('artifacts', AppWindow, t('Artifacts'), 0)}
-              </div>
-              <div className="sidebar-actions @container flex items-center gap-1">
-                <Button
-                  variant="secondary"
-                  className="bg-fill hover:bg-fill-hover nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] flex-1 min-w-0 bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start"
-                  onClick={() => (computers?.scope ? select(computers.scope, { kind: 'new' }) : ws.newTask())}
-                >
-                  <SquarePen data-icon="inline-start" />{' '}
-                  <span className="grow flex-1 min-w-0 truncate text-left">{t('New thread')}</span>{' '}
-                  <Kbd className="hidden @min-[230px]:inline-flex">{formatKeys('mod+n')}</Kbd>
-                </Button>
-                <Button
-                  variant="secondary"
-                  className={`ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center sidebar-mode${preferences.recentChatMode ? ' active' : ''}`}
-                  aria-pressed={preferences.recentChatMode}
-                  aria-label={
-                    preferences.recentChatMode ? t('Group threads by project') : t('Show threads by recent activity')
-                  }
-                  title={
-                    preferences.recentChatMode ? t('Group threads by project') : t('Show threads by recent activity')
-                  }
-                  onClick={() => void save({ ...preferences, recentChatMode: !preferences.recentChatMode })}
-                >
-                  {preferences.recentChatMode ? <Folders size={16} /> : <History size={16} />}
-                </Button>
+            {/* One child, so the sidebar's width rule (kept through its collapse animation) applies to rail and
+                content together. */}
+            <div className="flex min-h-0 flex-1 flex-row">
+              {/* The app's pages as a vertical rail along the sidebar's edge, as VS Code's activity bar: the threads keep
+                the sidebar's full height and width, and the active page is marked by a bar on its edge. */}
+              <nav className="flex w-11 flex-none flex-col items-center gap-1 pt-0.5 pb-2" aria-label={t('Pages')}>
+                {railButton('projects', MessagesSquare, t('Threads'), 0)}
+                {railButton('inbox', Inbox, t('Inbox'), inboxCount, formatKeys('mod+shift+i'))}
+                {railButton('pulls', GitPullRequest, t('Pull requests'), pullsWaiting)}
+                {railButton('schedules', CalendarClock, t('Schedules'), 0)}
+                {railButton('artifacts', AppWindow, t('Artifacts'), 0)}
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center sidebar-search"
-                  aria-label={t('Search threads')}
-                  title={`${t('Search threads')} (${formatKeys('mod+k')})`}
-                  onClick={() => setSearchingChats(true)}
+                  className="mt-auto size-9 flex-none justify-center border-transparent bg-transparent p-0 text-muted-foreground hover:bg-hover hover:text-foreground"
+                  aria-label={t('Settings')}
+                  title={`${t('Settings')} (${formatKeys('mod+,')})`}
+                  onClick={() => {
+                    setSettingsSection('appearance')
+                    setSettingsOpen(true)
+                  }}
                 >
-                  <Search size={16} />
+                  <Settings size={18} />
                 </Button>
+              </nav>
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                <nav
+                  className="sidebar-nav flex flex-col gap-px p-[2px_8px_6px_2px] flex-none"
+                  aria-label={t('Activity')}
+                >
+                  <ComputerSwitcher />
+                  <div className="sidebar-actions @container flex items-center gap-1">
+                    <Button
+                      variant="secondary"
+                      className="bg-fill hover:bg-fill-hover nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] flex-1 min-w-0 bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start"
+                      onClick={() => (computers?.scope ? select(computers.scope, { kind: 'new' }) : ws.newTask())}
+                    >
+                      <SquarePen data-icon="inline-start" />{' '}
+                      <span className="grow flex-1 min-w-0 truncate text-left">{t('New thread')}</span>{' '}
+                      <Kbd className="hidden @min-[230px]:inline-flex">{formatKeys('mod+n')}</Kbd>
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className={`ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center sidebar-mode${preferences.recentChatMode ? ' active' : ''}`}
+                      aria-pressed={preferences.recentChatMode}
+                      aria-label={
+                        preferences.recentChatMode
+                          ? t('Group threads by project')
+                          : t('Show threads by recent activity')
+                      }
+                      title={
+                        preferences.recentChatMode
+                          ? t('Group threads by project')
+                          : t('Show threads by recent activity')
+                      }
+                      onClick={() => void save({ ...preferences, recentChatMode: !preferences.recentChatMode })}
+                    >
+                      {preferences.recentChatMode ? <Folders size={16} /> : <History size={16} />}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center sidebar-search"
+                      aria-label={t('Search threads')}
+                      title={`${t('Search threads')} (${formatKeys('mod+k')})`}
+                      onClick={() => setSearchingChats(true)}
+                    >
+                      <Search size={16} />
+                    </Button>
+                  </div>
+                </nav>
+                <div className="sidebar-body [&:has(.scm-panel)]:flex [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:flex [&:has(.explorer-panel)]:overflow-hidden flex-1 overflow-auto min-h-0">
+                  <HostProjects />
+                </div>
+                <div className="sidebar-footer flex flex-col gap-1.5 p-[6px_8px_8px_2px] flex-none">
+                  {!sidebarHidden && <UsageFooter />}
+                </div>
               </div>
-            </nav>
-            <div className="sidebar-body [&:has(.scm-panel)]:flex [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:flex [&:has(.explorer-panel)]:overflow-hidden flex-1 overflow-auto min-h-0">
-              <HostProjects />
-            </div>
-            <div className="sidebar-footer flex flex-col gap-1.5 p-[6px_8px_8px] flex-none">
-              {!sidebarHidden && <UsageFooter />}
-              <Button
-                variant="secondary"
-                className="bg-fill hover:bg-fill-hover nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start"
-                aria-label={t('Settings')}
-                title={`${t('Settings')} (${formatKeys('mod+,')})`}
-                onClick={() => {
-                  setSettingsSection('appearance')
-                  setSettingsOpen(true)
-                }}
-              >
-                <Settings className="size-[calc(var(--font-control)+2px)]" />{' '}
-                <span className="grow flex-1 min-w-0 text-left">{t('Settings')}</span> <Kbd>{formatKeys('mod+,')}</Kbd>
-              </Button>
             </div>
           </aside>
         </ResizablePanel>

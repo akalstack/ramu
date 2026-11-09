@@ -259,7 +259,7 @@ label input {
 }
 @media (max-width: 1100px) {
   .shell.with-workspace-tools:not(.no-sidebar) {
-    --nav-width: min(var(--sidebar-w, 268px), 180px);
+    --nav-width: min(var(--sidebar-w, 312px), 224px);
   }
 }
 /* The sidebar sits on the window material with no edge of its own; only the work area is raised. */

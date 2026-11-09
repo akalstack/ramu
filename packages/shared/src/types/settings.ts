@@ -131,7 +131,7 @@ export interface AppPreferences extends WorkspaceDefaults {
   memory: MemoryPreferences
 }
 
-export const DEFAULT_SIDEBAR_WIDTH = 268
+export const DEFAULT_SIDEBAR_WIDTH = 312
 export const SIDEBAR_WIDTH_RANGE = [200, 520] as const
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   ...DEFAULT_WORKSPACE_PREFERENCES,
