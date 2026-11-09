@@ -1032,13 +1032,14 @@ function TurnSummary({ label, children }: { label: string; children: ReactNode }
           borderBottomColor: c.line,
         }}
       >
-        <T size={font.control} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
+        <T size={font.control} tone="muted" style={{ flex: 1, fontVariant: ['tabular-nums'] }}>
           {label}
         </T>
         <Disclosure open={open} color={c.muted} />
       </Pressable>
       <Collapse open={open}>
-        <View style={{ gap: space.m }}>{children}</View>
+        {/* Folded steps read as one list, as tool rows inside a group do. */}
+        <View style={{ gap: space.xs }}>{children}</View>
       </Collapse>
     </View>
   )
@@ -1222,7 +1223,7 @@ function ToolGroup({ item, thinking }: { item: Extract<TranscriptItem, { kind: '
         ) : (
           <Icon size={14} color={tint} />
         )}
-        <View style={{ flexShrink: 1, minWidth: 0 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
           {/* The headline follows the current tool; each change fades instead of jumping. */}
           <Arrive animate={false} identity={headline}>
             <ActivityText active={running > 0 || thinking}>{headline}</ActivityText>
@@ -1270,7 +1271,7 @@ function PlanCard({ item }: { item: Extract<TranscriptItem, { kind: 'plan' }> })
         }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
       >
-        <T weight="600" size={font.control} style={{ flexShrink: 1 }}>
+        <T weight="600" size={font.control} style={{ flex: 1 }}>
           {translate(language, 'Plan')} · {completed}/{item.entries.length}
         </T>
         <Disclosure open={open} color={c.muted} />
@@ -1347,14 +1348,16 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
           toggled()
           setOpen((o) => !o)
         }}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
+        // Compact like the rows around it; the full-width row and the slop keep it easy to hit.
+        hitSlop={{ top: 4, bottom: 4 }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingVertical: 4 }}
       >
         {item.ramu ? (
           <RamuGlyph size={14} color={failed ? c.bad : c.muted} />
         ) : (
           <I size={14} color={failed ? c.bad : c.muted} strokeWidth={1.8} />
         )}
-        <View style={{ flexShrink: 1, minWidth: 0 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
           <ActivityText active={running}>{title}</ActivityText>
         </View>
         {item.file?.added || item.file?.removed ? (
@@ -2013,7 +2016,7 @@ function GoalNote({ item }: { item: Extract<TranscriptItem, { kind: 'note' }> })
         <T size={font.control} tone="soft">
           {title}
         </T>
-        <T size={font.control} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+        <T size={font.control} tone="muted" numberOfLines={1} style={{ flex: 1 }}>
           {item.objective ?? ''}
         </T>
         <Disclosure open={open} color={c.muted} />
@@ -2050,7 +2053,7 @@ function GoalDone({ item }: { item: Extract<TranscriptItem, { kind: 'goal' }> })
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
       >
         <Flag size={14} color={c.ok} strokeWidth={1.8} />
-        <T size={font.control} tone="muted" style={{ flexShrink: 1 }}>
+        <T size={font.control} tone="muted" style={{ flex: 1 }}>
           {fill(strings.goalReached, item.turns, item.objective)}
         </T>
         <Disclosure open={open} color={c.muted} />
@@ -2339,11 +2342,11 @@ function ThinkingRow({ text, live }: { text: string; live: boolean }) {
           toggled()
           setOpen((value) => !value)
         }}
-        // The whole row width takes the tap; the chevron stays beside the label.
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 32 }}
+        hitSlop={{ top: 4, bottom: 4 }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingVertical: 4 }}
       >
-        <Brain size={14} color={c.muted} style={{ marginRight: space.s - 4 }} />
-        <T size={font.control} tone="muted">
+        <Brain size={14} color={c.muted} />
+        <T size={font.control} tone="muted" style={{ flex: 1 }}>
           {say('Thought')}
         </T>
         <Disclosure open={open} color={c.muted} />

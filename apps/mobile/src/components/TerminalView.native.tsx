@@ -95,7 +95,8 @@ export default function TerminalView({
             const value = JSON.parse(event.nativeEvent.data)
             if (value.kind === 'gesture' && enabled && appActive) {
               const state = readGesture(value)
-              if (state && !gestureActive.current) tap()
+              // A tick when the control appears, and one per arrow it sends, as the iOS keyboard trackpad does.
+              if (state && (!gestureActive.current || (typeof value.steps === 'number' && value.steps > 0))) tap()
               gestureActive.current = !!state
               setGesture(state)
             }
