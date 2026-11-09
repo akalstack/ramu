@@ -1,9 +1,9 @@
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { addTokens } from '../src/providers/turnTokens'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  addTokens,
   codexContext,
   codexLast,
   createCodexRunner,

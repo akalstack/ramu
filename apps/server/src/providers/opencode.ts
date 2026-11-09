@@ -1,4 +1,5 @@
 import { trackProcess } from '../agent/processOwners'
+import { addTokens } from './turnTokens'
 import { permissionKey } from '../agent/permissionApprovals'
 // OpenCode 2 chats through its HTTP API (`@opencode/client`). Each chat runs its own `opencode serve`, so the
 // account's config directories and the per-chat config (Ramu's tool server, skills, sub-agent switch) stay separate.
@@ -285,6 +286,7 @@ export class OpenCodeSession implements AgentRunner {
   private thinking = new Map<string, string>()
   private tools = 0
   private cost = 0
+  private tokens: { input: number; output: number } | null = null
   private permissions = new Set<string>()
   private forms = new Map<string, Wire>()
   /** `tool.called` carries the input but not the tool's name. */
@@ -447,6 +449,7 @@ export class OpenCodeSession implements AgentRunner {
     this.thinking.clear()
     this.tools = 0
     this.cost = 0
+    this.tokens = null
     this.toolNames.clear()
     let done!: (outcome: Outcome) => void
     const outcome = new Promise<Outcome>((resolve) => (done = resolve))
@@ -547,6 +550,7 @@ export class OpenCodeSession implements AgentRunner {
         isError: !!error || !!match,
         text: error ?? (match ? reply : outcome.interrupted ? 'cancelled' : 'end_turn'),
         costUsd: this.cost || null,
+        ...(this.tokens ? { tokens: this.tokens } : {}),
       },
       limitSignal(match),
     )
@@ -618,6 +622,7 @@ export class OpenCodeSession implements AgentRunner {
       }
       case 'session.step.ended':
         this.cost += Number(d.cost) || 0
+        this.tokens = addTokens(this.tokens, openCodeStepTokens(d.tokens))
         return
       case 'session.execution.succeeded':
         return this.turn?.done({})
@@ -680,4 +685,18 @@ export class OpenCodeSession implements AgentRunner {
       }
     }
   }
+}
+
+/**
+ * One OpenCode step's tokens from `session.step.ended`, as Ramu records Claude and Codex turns: cached reads count as
+ * input and reasoning as output. A step without usable counts adds nothing.
+ */
+export function openCodeStepTokens(tokens: unknown): { input: number; output: number } | null {
+  if (!tokens || typeof tokens !== 'object') return null
+  const t = tokens as { input?: unknown; output?: unknown; reasoning?: unknown; cache?: { read?: unknown } }
+  const count = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null)
+  const input = count(t.input),
+    output = count(t.output)
+  if (input === null || output === null) return null
+  return { input: input + (count(t.cache?.read) ?? 0), output: output + (count(t.reasoning) ?? 0) }
 }

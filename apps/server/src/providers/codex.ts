@@ -1,4 +1,5 @@
 import { trackProcess } from '../agent/processOwners'
+import { addTokens } from './turnTokens'
 import { modelLegacyMetadata } from './modelLifecycle'
 import { modelContextWindow } from './modelContext'
 import { permissionKey } from '../agent/permissionApprovals'
@@ -1125,15 +1126,6 @@ export function codexLast(usage: Wire | null | undefined): { input: number; outp
   const input = usage?.last?.inputTokens,
     output = usage?.last?.outputTokens
   return typeof input === 'number' && typeof output === 'number' && input >= 0 && output >= 0 ? { input, output } : null
-}
-
-/** A running turn total with one more call added; an unreported call leaves it as it was. */
-export function addTokens(
-  total: { input: number; output: number } | null,
-  call: { input: number; output: number } | null,
-): { input: number; output: number } | null {
-  if (!call) return total
-  return { input: (total?.input ?? 0) + call.input, output: (total?.output ?? 0) + call.output }
 }
 
 /** Codex's rate-limit windows as usage readings: the 5-hour window and the weekly one, told apart by their length. */
