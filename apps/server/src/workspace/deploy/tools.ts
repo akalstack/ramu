@@ -277,7 +277,7 @@ export function registerReleaseTools(
   )
 }
 
-const CLI_GUIDE = `Runs the CLI of Railway (railway), Fly.io (fly), Cloudflare (wrangler) or Supabase (supabase) in this thread's checkout, signed in with the account the person connected in Settings → Git → Hosting accounts. Use it instead of running those CLIs yourself: the token is passed to the CLI in its environment and never shown, and a CLI you run yourself is signed out. Pass the arguments after the CLI's name, such as ["status"] or ["deploy", "--detach"]; never pass a token or a login command. Commands that only read (whoami, status, list, logs, help) run straight away; every other command asks the person with a card naming it, and a refusal is final for this request. Run non-interactive forms (--yes, --json, --detach, --no-tail) since there is no terminal to answer prompts. Write the platform's own config files (railway.json, fly.toml, wrangler.toml, supabase/config.toml) yourself and commit them like any change.`
+const CLI_GUIDE = `Runs the CLI of Railway (railway), Fly.io (fly), Cloudflare (wrangler) or Supabase (supabase) in this thread's checkout, signed in with the account the person connected in Settings → Deploy. Use it instead of running those CLIs yourself: the token is passed to the CLI in its environment and never shown, and a CLI you run yourself is signed out. Pass the arguments after the CLI's name, such as ["status"] or ["deploy", "--detach"]; never pass a token or a login command. Commands that only read (whoami, status, list, logs, help) run straight away; every other command asks the person with a card naming it, and a refusal is final for this request. Run non-interactive forms (--yes, --json, --detach, --no-tail) since there is no terminal to answer prompts. Write the platform's own config files (railway.json, fly.toml, wrangler.toml, supabase/config.toml) yourself and commit them like any change.`
 
 /** The platforms driven through their own CLI, signed in with the token kept on this host. */
 export function registerPlatformCliTools(
@@ -302,7 +302,7 @@ export function registerPlatformCliTools(
       const spec = CLI_PLATFORM_SPECS[platform]
       if (!accounts.connected(platform))
         throw new Error(
-          `${spec.name} is not connected on this host. Ask the person to connect it in Settings → Git → Hosting accounts.`,
+          `${spec.name} is not connected on this host. Ask the person to connect it in Settings → Deploy.`,
         )
       if (args.some((arg) => /^(login|logout)$/.test(arg) || /token/i.test(arg.split('=')[0] ?? '')))
         throw new Error('Sign-in is the person’s step in Settings, and the token is passed for you. Leave it out.')

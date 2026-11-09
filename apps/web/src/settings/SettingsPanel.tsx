@@ -35,6 +35,7 @@ import { BrowserSettings } from './BrowserSettings'
 import { VoiceSettings } from './VoiceSettings'
 import { ComputerUseSettings } from './ComputerSettings'
 import { GitSettings } from './GitSettings'
+import { DeployAccounts } from './DeployAccounts'
 import { ModelSetsEditor } from './ModelSetsEditor'
 import { ResetDialog, type ResetTarget } from './ResetDialog'
 import { inResetSection, resetSection } from './resetDefaults'
@@ -257,6 +258,11 @@ export function SettingsPanel({
                 </>
               )}
               {page === 'git' && <GitSettings {...draftProps} />}
+              {page === 'deploy' && (
+                <div className={SETTINGS_FORM_CLASS}>
+                  <DeployAccounts />
+                </div>
+              )}
               {page === 'shortcuts' && <ShortcutsSettings shortcuts={shortcuts} />}
               {page === 'models' && (
                 <ModelSetsEditor

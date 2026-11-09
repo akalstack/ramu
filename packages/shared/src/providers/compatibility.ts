@@ -123,19 +123,6 @@ function newestSupported(rules: CompatibilityRule[]): string | undefined {
   return newest
 }
 
-/** The one line a provider card shows, as a translation key and its values. */
-export function compatibilitySummary(result: CompatibilityResult): { key: string; values?: Record<string, string> } {
-  if (result.status === 'supported') return { key: 'Compatible with this Ramu release.' }
-  if (result.status === 'limited') return { key: 'Limited: some features are unavailable with this version.' }
-  if (result.status === 'incompatible') return { key: 'Incompatible with this Ramu release.' }
-  return result.reason === 'newer-than-tested' && result.testedVersion
-    ? {
-        key: 'Newer than the last version tested with this Ramu ({0}). It can still be used.',
-        values: { '0': result.testedVersion },
-      }
-    : { key: 'Unverified: no compatibility rule covers this version. It can still be used.' }
-}
-
 /** Problems that make a policy unsafe to ship: bad ranges, overlapping rules, and recommendations it would itself reject. */
 export function validatePolicy(policy: CompatibilityPolicy): string[] {
   const problems: string[] = []

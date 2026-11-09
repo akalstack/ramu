@@ -27,7 +27,7 @@ export function salesforceAuth(auth: HostingAuth): { origin: string; token: stri
   }
   const loopback = url?.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(url.hostname)
   if (!url || !token || (url.protocol !== 'https:' && !loopback))
-    throw new Error('Sign in to Salesforce again in Settings → Git → Hosting accounts.')
+    throw new Error('Sign in to Salesforce again in Settings → Deploy.')
   return { origin: url.origin, token }
 }
 

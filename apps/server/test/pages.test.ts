@@ -586,7 +586,7 @@ it('queries a named service only when the page declared it and the person allowe
   const v = interactive.publish('s', (await interactive.preview('s', { ...input, html: html(declared) })).id, 'sv')
   const page = pages.keep('s', v.id, { projectId: 'p' })
   const auth = vi.fn(async () => {
-    throw new Error('Connect Grafana in Settings → Git → Hosting accounts first.')
+    throw new Error('Connect Grafana in Settings → Deploy first.')
   })
   const methods = registerArtifactHandlers({
     pages,

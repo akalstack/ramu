@@ -306,9 +306,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'File yang disetujui tetap disimpan dalam salinan ini. Pembaruan sumber tidak pernah menggantinya secara otomatis.',
   Wide: 'Lebar',
   Narrow: 'Sempit',
-  'Compatible with this Ramu release.': 'Kompatibel dengan rilis Ramu ini.',
-  'Newer than the last version tested with this Ramu ({0}). It can still be used.':
-    'Lebih baru dari versi terakhir yang diuji dengan Ramu ini ({0}). Tetap bisa digunakan.',
   VPN: 'VPN',
   'Local network': 'Jaringan lokal',
   'Virtual network': 'Jaringan virtual',
@@ -319,21 +316,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Both devices must be on the network you pick. Ramu checks it is the same host before switching.':
     'Kedua perangkat harus ada di jaringan yang dipilih. Ramu memastikan host-nya sama sebelum beralih.',
   'Or enter another address': 'Atau masukkan alamat lain',
-  'Unverified: no compatibility rule covers this version. It can still be used.':
-    'Belum terverifikasi: tidak ada aturan kompatibilitas untuk versi ini. Versi ini tetap bisa dipakai.',
-  'Limited: some features are unavailable with this version.': 'Terbatas: beberapa fitur tidak tersedia di versi ini.',
-  'Incompatible with this Ramu release.': 'Tidak kompatibel dengan rilis Ramu ini.',
-  'Recommended version: {0}': 'Versi yang disarankan: {0}',
   'Showing the last result; the host is not reachable.': 'Menampilkan hasil terakhir; host tidak dapat dijangkau.',
-  'Ramu cannot pick a compatible release for you. Install a compatible version manually, then check again.':
-    'Ramu tidak dapat memilihkan rilis yang kompatibel. Pasang versi yang kompatibel secara manual, lalu periksa lagi.',
   'Update Ramu': 'Perbarui Ramu',
   'Change executable path': 'Ubah path executable',
   'Compatibility details': 'Detail kompatibilitas',
-  'Observed version': 'Versi terdeteksi',
-  'Policy revision': 'Revisi kebijakan',
   Evidence: 'Bukti',
-  Runtime: 'Runtime',
   'Starting in': 'Dimulai di',
   'More than one project could fit. Choose where to start.': 'Lebih dari satu proyek yang cocok. Pilih tempat memulai.',
   'No project matched. Choose where to start.': 'Tidak ada proyek yang cocok. Pilih tempat memulai.',
@@ -3627,7 +3614,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Enter a Gemini API key.': 'Masukkan API key Gemini.',
   'Enter an API key, or a Google Cloud project and location.':
     'Masukkan API key, atau project dan lokasi Google Cloud.',
-  Compatibility: 'Kompatibilitas',
   'This runtime updates itself outside Ramu.': 'Runtime ini diperbarui sendiri di luar Ramu.',
   'Runtime and helper paths.': 'Path runtime dan helper.',
   'Use a specific executable.': 'Gunakan executable tertentu.',
@@ -4628,10 +4614,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Use inherited setting ({0})': 'Pakai pengaturan turunan ({0})',
   'All devices and all mobile devices are saved on this computer and apply to the devices that use it. Devices with their own setting keep it.':
     'Semua perangkat dan semua perangkat seluler disimpan di komputer ini dan berlaku untuk perangkat yang memakainya. Perangkat dengan pengaturannya sendiri tetap memakainya.',
-  'Runtime compatibility': 'Kompatibilitas runtime',
   'Update this host to see provider compatibility.': 'Perbarui host ini untuk melihat kompatibilitas penyedia.',
   'Reconnect to check provider compatibility.': 'Sambungkan kembali untuk memeriksa kompatibilitas penyedia.',
-  'Compatibility is not reported by this host.': 'Host ini tidak melaporkan kompatibilitas.',
   'Update Ramu on the host to change this bundled runtime.': 'Perbarui Ramu di host untuk mengubah runtime bawaan ini.',
   'Change the executable path in Ramu on the host.': 'Ubah path executable di Ramu pada host.',
   'No providers are installed on this computer.': 'Tidak ada penyedia yang terpasang di komputer ini.',
@@ -5918,7 +5902,7 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Ramu menautkan platform ke repositori, jadi setiap pull request mendapat pratinjau dan cabang default di-deploy ke produksi.',
   Platform: 'Platform',
   'Connected as {0}': 'Terhubung sebagai {0}',
-  'Connect it in Settings → Git → Hosting accounts': 'Hubungkan di Pengaturan → Git → Akun hosting',
+  'Connect it in Settings → Deploy': 'Hubungkan di Pengaturan → Deploy',
   'Not connected. Agents deploy here through its CLI with this account, asking before each change.':
     'Belum terhubung. Agen men-deploy ke sini lewat CLI-nya dengan akun ini, dan bertanya sebelum setiap perubahan.',
   'Or link Vercel or Netlify, which watch the repository: every pull request gets a preview and the default branch deploys to production.':
@@ -5961,9 +5945,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'No log yet.': 'Belum ada log.',
   'No deployments yet.': 'Belum ada deployment.',
   'Deploy…': 'Deploy…',
-  '{0}: not connected. Connect it in Ramu on the host computer.':
-    '{0}: belum terhubung. Hubungkan di Ramu pada komputer host.',
-  '{0}: connected as {1}': '{0}: terhubung sebagai {1}',
   'Checked deployments': 'Memeriksa deployment',
   'Checking deployments': 'Memeriksa deployment',
   'Read the build log': 'Membaca log build',
@@ -6098,8 +6079,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Open on Expo': 'Buka di Expo',
   'Release builds {0} on EAS with your Expo account {1}, then uploads iOS to TestFlight and Android to Play’s internal testing track. Submitting for review is your step on each store.':
     'Rilis mem-build {0} di EAS dengan akun Expo Anda {1}, lalu mengunggah iOS ke TestFlight dan Android ke jalur pengujian internal Play. Mengirim untuk ditinjau adalah langkah Anda di tiap toko.',
-  'Connect Expo in Settings → Git → Hosting accounts to build and upload the app.':
-    'Hubungkan Expo di Pengaturan → Git → Akun hosting untuk mem-build dan mengunggah aplikasi.',
+  'Connect Expo in Settings → Deploy to build and upload the app.':
+    'Hubungkan Expo di Pengaturan → Deploy untuk mem-build dan mengunggah aplikasi.',
   'What the stores need': 'Yang dibutuhkan toko aplikasi',
   'Add eas.json in a pull request': 'Tambahkan eas.json lewat pull request',
   'The pull request adding eas.json is open. Merge it, then release.':
@@ -6278,8 +6259,8 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Buat service account dengan peran Viewer dan token untuknya, lalu tempel alamat Grafana Anda dan token yang digabung dengan | (https://acme.grafana.net|glsa_…). Dashboard membacanya hanya jika Anda mengizinkan',
   'Not connected. Dashboards that read it need an account.':
     'Belum terhubung. Dashboard yang membacanya memerlukan akun.',
-  'This dashboard reads {0} with the account in Settings → Git → Hosting accounts. Its tables stay empty until you allow it.':
-    'Dashboard ini membaca {0} dengan akun di Pengaturan → Git → Akun hosting. Tabelnya tetap kosong sampai Anda mengizinkannya.',
+  'This dashboard reads {0} with the account in Settings → Deploy. Its tables stay empty until you allow it.':
+    'Dashboard ini membaca {0} dengan akun di Pengaturan → Deploy. Tabelnya tetap kosong sampai Anda mengizinkannya.',
   'Stop reading {0}': 'Berhenti membaca {0}',
   'Copy the project’s API key and secret key from its settings and paste them joined by a colon (key:secret), with eu| before them for an EU project. Dashboards read it only where you allow it':
     'Salin API key dan secret key proyek dari pengaturannya lalu tempel dengan titik dua di antaranya (key:secret), dengan eu| di depannya untuk proyek EU. Dashboard membacanya hanya jika Anda mengizinkan',
@@ -6455,4 +6436,20 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Lines {0}–{1}': 'Baris {0}–{1}',
   Wrap: 'Bungkus',
   'Wrap long lines': 'Bungkus baris panjang',
+  Deploy: 'Deploy',
+  'Deploy accounts': 'Akun deploy',
+  Hosting: 'Hosting',
+  'Platforms through their CLI': 'Platform lewat CLI-nya',
+  'App stores': 'Toko aplikasi',
+  'Dashboard data': 'Data dasbor',
+  'Could not read the deploy accounts on this host.': 'Tidak dapat membaca akun deploy di host ini.',
+  'Reconnect to check deploy accounts.': 'Sambungkan ulang untuk memeriksa akun deploy.',
+  'Connect accounts in Ramu on the host computer, under Settings → Deploy. The phone never stores a token.':
+    'Hubungkan akun di Ramu pada komputer host, di Pengaturan → Deploy. Ponsel tidak pernah menyimpan token.',
+  '{0} {1} does not work with this Ramu release.': '{0} {1} tidak dapat digunakan dengan rilis Ramu ini.',
+  'This {0} version does not work with this Ramu release.': 'Versi {0} ini tidak dapat digunakan dengan rilis Ramu ini.',
+  'Use {0}.': 'Gunakan {0}.',
+  'Install a compatible version yourself, then check again.': 'Pasang versi yang kompatibel sendiri, lalu periksa lagi.',
+  'Cannot be used with this Ramu release': 'Tidak dapat digunakan dengan rilis Ramu ini',
+  'Installed providers': 'Penyedia terpasang',
 }

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { compatibilitySummary, evaluateCompatibility, validatePolicy } from '@ramu/shared/providers/compatibility'
+import { evaluateCompatibility, validatePolicy } from '@ramu/shared/providers/compatibility'
 import { COMPATIBILITY_POLICY, COMPATIBILITY_RUNTIME } from '../src/providers/compatibilityPolicy'
 
 it('the bundled policy is valid and only audited runtimes are evaluated', () => {
@@ -23,7 +23,6 @@ it('marks the exact Codex release that was probed as supported and every other r
 it('says a release newer than anything tested is newer, not merely unknown', () => {
   const result = evaluateCompatibility(COMPATIBILITY_POLICY, 'codex', COMPATIBILITY_RUNTIME.codex!, '99.0.0')
   expect(result).toMatchObject({ status: 'unverified', reason: 'newer-than-tested', testedVersion: '0.167.0' })
-  expect(compatibilitySummary(result).values).toEqual({ '0': '0.167.0' })
   expect(evaluateCompatibility(COMPATIBILITY_POLICY, 'codex', COMPATIBILITY_RUNTIME.codex!, '0.100.0').reason).toBe(
     'no-rule',
   )

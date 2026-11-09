@@ -162,9 +162,7 @@ function KindSection({
                 <BrandIcon brand={accountBrand(entry.provider)} />
                 <span className="flex-1 text-foreground">{entry.name}</span>
                 <span className="text-caption text-muted-foreground">
-                  {entry.connected && entry.plans[0]
-                    ? t(entry.plans[0].summary)
-                    : t('Connect it in Settings → Git → Hosting accounts')}
+                  {entry.connected && entry.plans[0] ? t(entry.plans[0].summary) : t('Connect it in Settings → Deploy')}
                 </span>
               </RowButton>
             ))}

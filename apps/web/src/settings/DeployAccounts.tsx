@@ -3,6 +3,7 @@ import { accountBrand } from '@ramu/shared/brands'
 import type { AccountPlatform, HostingAccount, HostingAccountsSummary, HostingSignIn } from '@ramu/shared/types'
 import {
   CLI_SIGN_IN_PLATFORMS,
+  DEPLOY_ACCOUNT_GROUPS,
   REMOTE_SIGN_IN_PLATFORMS,
   SALESFORCE_CALLBACK,
   type CliSignInPlatform,
@@ -11,7 +12,7 @@ import { BrandIcon } from '@/components/brand-icon'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
 import { Checkbox } from '@/components/desktop-checkbox'
-import { SettingsLabel, SettingsRow } from '@/components/settings-row'
+import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { t } from '../i18n'
 import { invoke as openOnThisComputer } from '../ipc'
 import { errorText } from '../lib/errors'
@@ -62,7 +63,7 @@ function deployAccountHeadline(account: HostingAccount): string {
     : who
 }
 
-/** Hosting platforms and database providers: the platform's own sign-in first, a guided token page otherwise. */
+/** Deploy platforms grouped by what they do, or one kind (`only`) where another page shows it; the platform's own sign-in first, a guided token page otherwise. */
 export function DeployAccounts({ only }: { only?: HostingAccount['kind'] } = {}) {
   const invoke = useSettingsInvoke()
   const [summary, setSummary] = useState<HostingAccountsSummary | null>(null)
@@ -93,19 +94,22 @@ export function DeployAccounts({ only }: { only?: HostingAccount['kind'] } = {})
         {failed}
       </p>
     )
+  const row = (account: HostingAccount) => (
+    <DeployAccountRow key={account.platform} account={account} canAdminister={summary!.canAdminister} reload={load} />
+  )
   return (
     <>
-      {summary?.accounts
-        // Media keys are saved beside the abilities they serve, not with the hosting accounts.
-        .filter((account) => (only ? account.kind === only : account.kind !== 'media'))
-        .map((account) => (
-          <DeployAccountRow
-            key={account.platform}
-            account={account}
-            canAdminister={summary.canAdminister}
-            reload={load}
-          />
-        ))}
+      {only
+        ? summary?.accounts.filter((account) => account.kind === only).map(row)
+        : DEPLOY_ACCOUNT_GROUPS.map((group) => {
+            const accounts = summary?.accounts.filter((account) => account.kind === group.kind) ?? []
+            return accounts.length ? (
+              <section key={group.kind} className="mb-4">
+                <SettingsGroupTitle>{t(group.title)}</SettingsGroupTitle>
+                {accounts.map(row)}
+              </section>
+            ) : null
+          })}
       {summary && !summary.canAdminister && only !== 'media' && (
         <p className="m-0 mb-3 px-4 text-caption text-muted-foreground">
           {t(

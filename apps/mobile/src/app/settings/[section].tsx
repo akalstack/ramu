@@ -39,6 +39,7 @@ import { AgentSetupSettings, MemoryList } from '../../components/AgentSetupSetti
 import { VoiceSettings } from '../../components/VoiceSettings'
 import { ProviderCompatibility } from '../../components/ProviderCompatibility'
 import { HostingStatus } from '../../components/HostingStatus'
+import { DeployStatus } from '../../components/DeployStatus'
 import { ComputerUseSettings, TestDeviceSettings } from '../../components/ComputerUseSettings'
 import { ThemeLibrary } from '../../components/ThemeLibrary'
 import { Hint, HostGroups, RowLabel, ToggleRow } from '../../components/SettingRows'
@@ -477,9 +478,10 @@ export default function SettingsSectionPage() {
         {id === 'computer' ? <ComputerUseSettings key={`ComputerUseSettings:${selected}`} hostId={selected} /> : null}
         {id === 'computer' ? <TestDeviceSettings key={`TestDeviceSettings:${selected}`} hostId={selected} /> : null}
         {id === 'git' ? <HostingStatus key={`HostingStatus:${selected}`} hostId={selected} /> : null}
+        {id === 'deploy' ? <DeployStatus key={`DeployStatus:${selected}`} hostId={selected} /> : null}
         {id === 'agent-setup' ? <AgentSetupSettings key={`AgentSetupSettings:${selected}`} hostId={selected} /> : null}
         {id === 'agent-setup' ? <RulesSettings key={`RulesSettings:${selected}`} hostId={selected} /> : null}
-        {section.scope === 'host' && id !== 'computer' ? (
+        {section.scope === 'host' && id !== 'computer' && id !== 'deploy' ? (
           <HostGroups section={id} host={host} name={name} locked={locked} />
         ) : null}
         {id === 'models' ? <AbilitySummary key={`AbilitySummary:${selected}`} hostId={selected} /> : null}

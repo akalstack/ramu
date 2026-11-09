@@ -71,7 +71,7 @@ export function PublishDialog({ page, onClose }: { page: ArtifactInfo; onClose()
                 ? t('Connected')
                 : entry.target === 'github-pages'
                   ? t('Connect GitHub in Settings → Git hosting')
-                  : t('Connect it in Settings → Git → Hosting accounts')}
+                  : t('Connect it in Settings → Deploy')}
             </span>
           </RowButton>
         ))}

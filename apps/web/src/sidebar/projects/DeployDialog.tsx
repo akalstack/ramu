@@ -183,7 +183,7 @@ export function DeployDialog({
               )}{' '}
               {cliAccount.connected
                 ? t('Connected as {0}', { 0: cliAccount.account ?? cliAccount.name })
-                : t('Connect it in Settings → Git → Hosting accounts')}
+                : t('Connect it in Settings → Deploy')}
             </p>
           )}
           <p>
@@ -214,7 +214,7 @@ export function DeployDialog({
                 <span className="text-caption text-muted-foreground">
                   {entry.connected
                     ? t('Connected as {0}', { 0: entry.account ?? entry.name })
-                    : t('Connect it in Settings → Git → Hosting accounts')}
+                    : t('Connect it in Settings → Deploy')}
                 </span>
               </RowButton>
             ))}

@@ -19,8 +19,9 @@ const status = (patch: Partial<ProviderStatus>, compat: Partial<NonNullable<Prov
   }) as ProviderStatus
 const open = { customBinary: false, canUpdate: true }
 
-it('stays quiet for supported and unverified runtimes and old hosts', () => {
+it('stays quiet for every runtime that still works and for old hosts', () => {
   expect(compatibilityPlan(status({}, { status: 'supported' }), open).actions).toEqual([])
+  expect(compatibilityPlan(status({ updateAvailable: true }, { status: 'limited' }), open).actions).toEqual([])
   expect(compatibilityPlan(status({}, { status: 'unverified' }), open).actions).toEqual([])
   expect(compatibilityPlan({ ...status({}), compatibility: undefined }, open).actions).toEqual([])
   expect(compatibilityPlan(undefined, open).actions).toEqual([])

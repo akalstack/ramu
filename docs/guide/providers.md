@@ -14,7 +14,7 @@ Ramu runs the agent tools you already use, with your own accounts.
 
 A new profile opens a short setup that finds installed tools and offers their sign-ins. **Settings → Providers** handles sign-in, accounts, updates and executable paths (`RAMU_CLAUDE_BIN`, `RAMU_CODEX_BIN`, `RAMU_OPENCODE_BIN`, `RAMU_CURSOR_BIN`, `RAMU_ANTIGRAVITY_BIN`). Ramu stores no provider passwords.
 
-Each provider card shows whether its installed version is **Supported**, **Limited**, **Incompatible** or **Unverified**, with **Update** when a tested release exists.
+A provider card says nothing about its version while Ramu can use it, including a version no one has tested yet. When the installed version cannot be used with this Ramu release, the card says so in red with the fix: **Update to** a tested release, **Update Ramu** for a bundled runtime, **Change executable path**, or **Check again**.
 
 ## Models
 

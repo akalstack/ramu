@@ -197,7 +197,7 @@ export class HostingAccounts {
     let value = await this.saved[platform].read()
     if (!value)
       throw new DeployError(
-        `Connect ${this.adapter(platform).name} in ${isMediaService(platform) ? 'Settings → Models → Abilities' : 'Settings → Git → Hosting accounts'} first.`,
+        `Connect ${this.adapter(platform).name} in ${isMediaService(platform) ? 'Settings → Models → Abilities' : 'Settings → Deploy'} first.`,
         'signed-out',
       )
     if (value.refreshToken && value.expiresAt && value.expiresAt - RENEW_BEFORE_MS < Date.now())
@@ -213,10 +213,7 @@ export class HostingAccounts {
     const name = this.adapter(platform).name
     const oauth = value.oauthClient ?? this.oauth[platform]
     if (!oauth)
-      throw new DeployError(
-        `The ${name} sign-in ended. Connect ${name} again in Settings → Git → Hosting accounts.`,
-        'signed-out',
-      )
+      throw new DeployError(`The ${name} sign-in ended. Connect ${name} again in Settings → Deploy.`, 'signed-out')
     let response: Response
     try {
       response = await this.fetcher(oauth.url, {
@@ -234,7 +231,7 @@ export class HostingAccounts {
     }
     if (!response.ok)
       throw new DeployError(
-        `The ${name} sign-in ended. Connect ${name} again in Settings → Git → Hosting accounts.`,
+        `The ${name} sign-in ended. Connect ${name} again in Settings → Deploy.`,
         'signed-out',
         response.status,
       )

@@ -77,7 +77,7 @@ export function ReleaseSection({ projectId }: { projectId: string }) {
               'Release builds {0} on EAS with your Expo account {1}, then uploads iOS to TestFlight and Android to Play’s internal testing track. Submitting for review is your step on each store.',
               { 0: status.app.name, 1: status.account ?? '' },
             )
-          : t('Connect Expo in Settings → Git → Hosting accounts to build and upload the app.')}
+          : t('Connect Expo in Settings → Deploy to build and upload the app.')}
       </p>
       <ul className="m-0 flex list-none flex-col gap-1 p-0 text-caption" aria-label={t('What the stores need')}>
         {status.checks.map((check) => (

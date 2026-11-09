@@ -64,7 +64,7 @@ export class TokenExpiryNotices {
           title: expired
             ? `${account.name} token has expired`
             : `${account.name} token expires ${when(account.expiresAt, now)}`,
-          body: `The ${account.name} token Ramu deploys ${project.name} with ${expired ? 'stopped' : 'stops'} working on ${date}. Make a new one and choose Replace in Settings → Git → Hosting accounts, so deploys keep working.`,
+          body: `The ${account.name} token Ramu deploys ${project.name} with ${expired ? 'stopped' : 'stops'} working on ${date}. Make a new one and choose Replace in Settings → Deploy, so deploys keep working.`,
           at: now,
         })
       }

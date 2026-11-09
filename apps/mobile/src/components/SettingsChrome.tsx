@@ -9,6 +9,7 @@ import {
   Cpu,
   Globe,
   GitBranch,
+  Rocket,
   Info,
   Layers,
   MessageSquare,
@@ -31,6 +32,7 @@ import { Card, ConnectionDot, Row, T } from './ui'
 const icons: Record<SettingsSection, LucideIcon> = {
   appearance: Palette,
   git: GitBranch,
+  deploy: Rocket,
   browser: Globe,
   computer: MonitorCog,
   archived: Archive,

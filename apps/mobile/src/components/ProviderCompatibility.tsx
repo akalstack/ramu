@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, View } from 'react-native'
 import { translate } from '@ramu/shared/i18n'
-import { compatibilitySummary } from '@ramu/shared/providers/compatibility'
-import { compatibilityPlan } from '@ramu/shared/providers/compatibilityPlan'
+import { compatibilityPlan, incompatibleText } from '@ramu/shared/providers/compatibilityPlan'
 import { providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
 import { useStore } from '../runtime/store'
 import { providerEnabledEdits, providerSwitches } from '../runtime/settingsModel'
@@ -70,7 +69,8 @@ export function ProviderSwitches({
 }
 
 /**
- * Provider versions and runtime compatibility as the selected host reports them. Every probe and update runs on that host;
+ * Installed providers as the selected host reports them, with their logins; a version Ramu cannot use says so with the
+ * fix, and every other version stays quiet. Every probe and update runs on that host;
  * the phone never inspects itself. Path changes and Ramu updates stay on the host, so they appear as guidance.
  */
 export function ProviderCompatibility({ hostId, locked }: { hostId: string; locked: boolean }) {
@@ -138,7 +138,7 @@ export function ProviderCompatibility({ hostId, locked }: { hostId: string; lock
   return (
     <>
       <ProviderSwitches settings={settings} statuses={statuses} writable={writable} />
-      <SectionLabel>{t('Runtime compatibility')}</SectionLabel>
+      <SectionLabel>{t('Installed providers')}</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         {!statuses ? (
           <View style={{ padding: space.m }}>
@@ -152,27 +152,21 @@ export function ProviderCompatibility({ hostId, locked }: { hostId: string; lock
           </View>
         ) : shown.length ? (
           shown.map((status, index) => {
-            const result = status.compatibility
             // A custom executable path is set on the host; its own status already withholds updates for it.
             const plan = compatibilityPlan(status, { customBinary: false, canUpdate: online && !status.updateError })
-            const bad = result?.status === 'incompatible'
-            const tone = bad
-              ? c.bad
-              : result?.status === 'limited'
-                ? c.warn
-                : result?.status === 'supported'
-                  ? c.ok
-                  : c.muted
-            // What to do about it, in one line, instead of a stack of notes.
-            const guidance = [
-              plan.manualInstall
-                ? t(
-                    'Ramu cannot pick a compatible release for you. Install a compatible version manually, then check again.',
-                  )
-                : '',
-              plan.actions.includes('update-ramu') ? t('Update Ramu on the host to change this bundled runtime.') : '',
-              plan.actions.includes('change-path') ? t('Change the executable path in Ramu on the host.') : '',
-            ].filter(Boolean)
+            const problem = incompatibleText(status, plan, t)
+            // What to do about it, in one paragraph, instead of a stack of notes.
+            const guidance = problem
+              ? [
+                  problem,
+                  plan.actions.includes('update-ramu')
+                    ? t('Update Ramu on the host to change this bundled runtime.')
+                    : '',
+                  plan.actions.includes('change-path') ? t('Change the executable path in Ramu on the host.') : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')
+              : null
             return (
               <View key={status.provider}>
                 {index ? <Divider inset={space.l} /> : null}
@@ -192,21 +186,14 @@ export function ProviderCompatibility({ hostId, locked }: { hostId: string; lock
                     </View>
                     <View style={{ flex: 1, gap: 2 }}>
                       <T weight="600">{providerName(status.provider)}</T>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: tone }} />
-                        <T
-                          size={font.caption}
-                          tone={bad ? 'bad' : 'muted'}
-                          numberOfLines={2}
-                          style={{ flex: 1 }}
-                          accessibilityRole={bad ? 'alert' : undefined}
-                          accessibilityLiveRegion="polite"
-                        >
-                          {result
-                            ? t(compatibilitySummary(result).key, compatibilitySummary(result).values)
-                            : t('Compatibility is not reported by this host.')}
-                        </T>
-                      </View>
+                      {problem ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: c.bad }} />
+                          <T size={font.caption} tone="bad" style={{ flex: 1 }}>
+                            {t('Cannot be used with this Ramu release')}
+                          </T>
+                        </View>
+                      ) : null}
                     </View>
                     {status.version ? (
                       <T size={font.caption} tone="muted" mono>
@@ -214,17 +201,6 @@ export function ProviderCompatibility({ hostId, locked }: { hostId: string; lock
                       </T>
                     ) : null}
                   </View>
-                  {result?.affects?.length || result?.recommend || (stale && result) ? (
-                    <T size={font.caption} tone="muted">
-                      {[
-                        result?.affects?.length ? `${result.affects.join(', ')}.` : '',
-                        result?.recommend ? t('Recommended version: {0}', { '0': result.recommend }) : '',
-                        stale && result ? t('Showing the last result; the host is not reachable.') : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                    </T>
-                  ) : null}
                   {/* Each login with how it signs in now (plan or API key), and a switch to stop using it. */}
                   <View
                     style={{
@@ -236,15 +212,9 @@ export function ProviderCompatibility({ hostId, locked }: { hostId: string; lock
                   >
                     <ProviderLogins status={status} settings={settings} disabled={!online} />
                   </View>
-                  {guidance.length ? (
-                    <T size={font.caption} tone="muted">
-                      {guidance.join(' ')}
-                    </T>
-                  ) : null}
-                  {result && (result.status === 'incompatible' || result.status === 'limited') ? (
-                    <T size={font.caption} tone="muted">
-                      {`${t('Observed version')}: ${result.observedVersion ?? t('Unknown')} · ${t('Policy revision')}: ${result.policyRevision}`}
-                      {result.evidence ? ` · ${t('Evidence')}: ${result.evidence}` : ''}
+                  {guidance ? (
+                    <T size={font.caption} tone="bad" accessibilityRole="alert" accessibilityLiveRegion="polite">
+                      {guidance}
                     </T>
                   ) : null}
                   {plan.actions.length ? (

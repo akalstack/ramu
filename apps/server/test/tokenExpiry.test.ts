@@ -36,7 +36,7 @@ it('tells each project deploying with a token a week before it expires, once per
     kind: 'usage',
     title: 'Vercel token expires in 3 days',
   })
-  expect(raise.mock.calls[0]![0].body).toContain('Settings → Git → Hosting accounts')
+  expect(raise.mock.calls[0]![0].body).toContain('Settings → Deploy')
   await notices.tick(NOW + 7 * 60 * 60_000)
   expect(raise).toHaveBeenCalledTimes(1)
   // A replaced token has a new date, told again when it nears.

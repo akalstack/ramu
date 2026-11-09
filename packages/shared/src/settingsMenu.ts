@@ -14,6 +14,7 @@ export const SETTINGS_MENU = [
   { id: 'appearance', label: 'Appearance', group: 'Workspace', phone: true },
   { id: 'editor', label: 'Editor & Terminal', group: 'Workspace', phone: false },
   { id: 'git', label: 'Git', group: 'Workspace', phone: true },
+  { id: 'deploy', label: 'Deploy', group: 'Workspace', phone: true },
   { id: 'browser', label: 'Browser', group: 'Workspace', phone: true },
   { id: 'computer', label: 'Computer use', group: 'Workspace', phone: true },
   { id: 'shortcuts', label: 'Keyboard shortcuts', group: 'Workspace', phone: false },

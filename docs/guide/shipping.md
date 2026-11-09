@@ -22,7 +22,7 @@ Deploys and CI work from a GitHub repository. **Publish to GitHub** in Source Co
 
 ## 4. Deploy
 
-Connect an account once in **Settings → Git → Hosting accounts**, with the platform's own sign-in where its CLI is installed, or a token through a guided page ([Connect an account](deploy.md#connect-an-account)). Then **Deploy…** in the project's menu opens the deploy sheet, which recommends the platform the stack names when Ramu can deploy to it.
+Connect an account once in **Settings → Deploy**, with the platform's own sign-in where its CLI is installed, or a token through a guided page ([Connect an account](deploy.md#connect-an-account)). Then **Deploy…** in the project's menu opens the deploy sheet, which recommends the platform the stack names when Ramu can deploy to it.
 
 | Target | What Ramu sets up | Details |
 | --- | --- | --- |

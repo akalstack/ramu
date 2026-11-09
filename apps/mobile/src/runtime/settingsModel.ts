@@ -47,6 +47,7 @@ const PHONE_MENU: readonly { id: SettingsSection; group: SettingsGroup; label?: 
   { id: 'memory', group: 'agents' },
   { id: 'agent-setup', group: 'agents' },
   { id: 'git', group: 'workspace' },
+  { id: 'deploy', group: 'workspace' },
   { id: 'browser', group: 'workspace' },
   { id: 'computer', group: 'workspace' },
   { id: 'system', group: 'workspace' },
@@ -797,6 +798,11 @@ const PHONE_ENTRIES: { section: SettingsSection; title: string; words: string }[
   { section: 'archived', title: 'Archived threads', words: 'history restore unarchive delete' },
   { section: 'agent-setup', title: 'MCP servers', words: 'shared tools external service connection skills' },
   { section: 'memory', title: 'Memories', words: 'remember forget saved memory archive restore' },
+  {
+    section: 'deploy',
+    title: 'Deploy accounts',
+    words: 'deploy ship hosting vercel netlify railway cloudflare fly neon supabase expo database app store',
+  },
 ]
 
 const offered = (row: SettingRow, known: ReadonlySet<string>) => known.has(row.path)

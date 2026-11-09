@@ -20,7 +20,6 @@ import { runProviderCommand } from '../models/ProviderSetupTerminal'
 import { invoke as openOnThisComputer } from '../ipc'
 import { githubTokenLink } from '@ramu/shared/githubTokenLink'
 import { accountDetail, connectionHeadline, savedDetail } from './hostingStatus'
-import { DeployAccounts } from './DeployAccounts'
 
 /** Providers shown for orientation only: no setup, no network calls, no background work until they are built. */
 
@@ -408,7 +407,6 @@ export function HostingAccounts() {
       <GitlabRow canAdminister={canAdminister} />
       <BitbucketRow canAdminister={canAdminister} />
       <AzureRow canAdminister={canAdminister} />
-      <DeployAccounts />
     </>
   )
 }

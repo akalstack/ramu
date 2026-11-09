@@ -4,7 +4,7 @@ Ramu deploys a project to a hosting platform on your own account. It hosts nothi
 
 ## Connect an account
 
-**Settings → Git → Hosting accounts** lists Vercel, Netlify, Railway, Fly.io, Cloudflare, Supabase, Neon and Expo with their marks. **Connect** offers two ways, in this order:
+**Settings → Deploy** lists Vercel, Netlify, Railway, Fly.io, Cloudflare, Supabase, Neon and Expo with their marks. **Connect** offers two ways, in this order:
 
 1. **Sign in with Vercel**, **Sign in with Netlify**, **Sign in with Railway** or **Sign in with Fly.io**, when the platform's CLI (`vercel`, `netlify`, `railway` or `fly`) is installed on the host. Ramu runs the CLI's own browser sign-in on the host and shows its link (and the code, for Vercel and Railway) in Settings; **Open the sign-in page**, sign in and authorize. Ramu then reads the token the CLI saved, checks it with the platform and shows the account name. The CLI runs against a private configuration folder that is deleted afterwards, so your own CLI login is not read, changed or signed out.
    - **Sign in with Neon** runs `neon profile create ramu --mint` (the `neon` or `neonctl` CLI on the host, or the published one through `npx`) in a private configuration folder. It opens Neon's sign-in in this computer's browser and shows the link; after you approve, the CLI mints an API key and drops the session, and Ramu keeps only that key. Neon keys do not expire, so revoke it on Neon when Ramu no longer needs it.
@@ -48,7 +48,7 @@ The same accounts publish artifacts with **Publish to the web** ([Artifacts](art
 
 These platforms have no adapter in Ramu. Agents already know their CLIs, so an agent writes the setup (`railway.json`, `fly.toml`, `wrangler.toml`, `supabase/config.toml`) and runs the CLI through `platform_cli`, while Ramu keeps what an agent cannot do for itself:
 
-- **Your account, never the agent's:** connect the platform in **Settings → Git → Hosting accounts** (Railway and Fly.io can also sign in through their CLI). `platform_cli` runs the CLI in the thread's checkout with the token in its environment (`RAILWAY_API_TOKEN`, `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN` with the account id, `SUPABASE_ACCESS_TOKEN`), never in its arguments, and replaces the token with `[token]` in anything the CLI prints. The CLI gets a home folder of Ramu's own, so your own CLI login is not read or changed.
+- **Your account, never the agent's:** connect the platform in **Settings → Deploy** (Railway and Fly.io can also sign in through their CLI). `platform_cli` runs the CLI in the thread's checkout with the token in its environment (`RAILWAY_API_TOKEN`, `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN` with the account id, `SUPABASE_ACCESS_TOKEN`), never in its arguments, and replaces the token with `[token]` in anything the CLI prints. The CLI gets a home folder of Ramu's own, so your own CLI login is not read or changed.
 - **Asking before a change:** commands that only read (such as `status`, `logs --no-tail`, `list`, `whoami` and `--help`) run straight away; every other command shows a card naming it, and a refusal is final for that request. `railway variables` asks too, since it prints values.
 - **The CLI:** the installed `railway`, `fly` (or `flyctl`), `wrangler` or `supabase` on the host, or for Railway, Cloudflare and Supabase their published CLI through `npx` when none is installed. Fly.io needs `flyctl` installed.
 

@@ -31,7 +31,7 @@ export const STORE_SERVICES = ['expo'] as const
 export type StoreService = (typeof STORE_SERVICES)[number]
 
 /**
- * Every account connected in Settings → Git → Hosting accounts: the hosting platforms, the resource providers, then the
+ * Every account connected in Settings → Deploy: the hosting platforms, the resource providers, then the
  * store services.
  */
 /** Services a Dashboard artifact reads from, each its own grant on the dashboard. */
@@ -114,6 +114,15 @@ export interface HostingAccountsSummary {
 /** What a resource adapter provides. */
 export const RESOURCE_KINDS = ['database'] as const
 export type ResourceKind = (typeof RESOURCE_KINDS)[number]
+
+/** How the Deploy settings page groups accounts, in order; titles are English copy keys. */
+export const DEPLOY_ACCOUNT_GROUPS: readonly { kind: Exclude<HostingAccount['kind'], 'media'>; title: string }[] = [
+  { kind: 'hosting', title: 'Hosting' },
+  { kind: 'cli', title: 'Platforms through their CLI' },
+  { kind: 'database', title: 'Databases' },
+  { kind: 'store', title: 'App stores' },
+  { kind: 'service', title: 'Dashboard data' },
+]
 
 /** A size or tier a provider offers when creating a resource. */
 export interface ResourcePlan {

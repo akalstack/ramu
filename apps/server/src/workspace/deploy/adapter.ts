@@ -216,7 +216,7 @@ function failure(name: string, status: number, body: string, what: string): Depl
 function refusal(name: string, kind: DeployFailureKind | null, status: number | null, what: string): DeployError {
   if (kind === 'signed-out')
     return new DeployError(
-      `${name} refused the saved sign-in while ${what}. Connect ${name} again in Settings → Git → Hosting accounts.`,
+      `${name} refused the saved sign-in while ${what}. Connect ${name} again in Settings → Deploy.`,
       kind,
       status,
     )

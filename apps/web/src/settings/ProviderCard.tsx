@@ -123,15 +123,18 @@ export function ProviderCard({
     onCount = order.filter(on).length,
     canUpdate = !((provider === 'codex' || provider === 'antigravity') && preferences?.binary?.trim()),
     plan = compatibilityPlan(status, { customBinary: !!preferences?.binary?.trim(), canUpdate })
+  const incompatible = status?.compatibility?.status === 'incompatible'
   const statusText = !enabled
     ? t('Off. Hidden from model pickers and never started.')
     : !status
       ? t('Detecting…')
       : !status.installed
         ? t(provider === 'antigravity' ? 'Runtime not found' : 'CLI not found')
-        : status.updateAvailable
-          ? t('Update available')
-          : t('Installed')
+        : incompatible
+          ? t('Cannot be used with this Ramu release')
+          : status.updateAvailable
+            ? t('Update available')
+            : t('Installed')
   return (
     <section
       role="region"
@@ -150,7 +153,7 @@ export function ProviderCard({
               <SettingTitleHosts path={`providerBinaries.${provider}.enabled`} />
             </span>
             <span
-              className={`block text-caption ${enabled && status?.updateAvailable ? 'provider-update-label text-brand' : 'text-muted-foreground'}`}
+              className={`block text-caption ${enabled && incompatible ? 'text-bad' : enabled && status?.updateAvailable ? 'provider-update-label text-brand' : 'text-muted-foreground'}`}
             >
               {statusText}
             </span>
@@ -309,7 +312,7 @@ export function ProviderCard({
           </SettingsRow>
         ))}
       {enabled && models}
-      {enabled && status?.compatibility && status.installed && (
+      {enabled && incompatible && status.installed && (
         <SettingsRow className="settings-stack">
           <ProviderCompatibility
             status={status}
