@@ -84,8 +84,9 @@ interface Contract {
   site: HostingSite
   capabilities: HostingCapability[]
   routes(list: unknown[], created: unknown): Route[]
-  first: unknown
-  created: unknown
+  /** The deployments, stamped from the time the test starts so a just-started one counts as new. */
+  first(now: number): unknown
+  created(now: number): unknown
   createdId: string
   /** The first deployment's id, which a rollback puts back. */
   firstId: string
@@ -95,7 +96,6 @@ interface Contract {
   usage: { figures: UsageFigure[]; billingPage: RegExp }
 }
 
-const now = Date.now()
 const contracts: Contract[] = [
   {
     name: 'Vercel',
@@ -103,22 +103,24 @@ const contracts: Contract[] = [
     make: (url) => vercelAdapter({ api: url }),
     site: { siteId: 'prj_1', siteName: 'shop' },
     capabilities: ['linkRepository', 'deployPreview', 'deployProduction', 'rollback', 'promote', 'domains', 'usage'],
-    first: {
+    first: (now) => ({
       uid: 'dpl_1',
+      projectId: 'prj_1',
       url: 'shop-abc.vercel.app',
       readyState: 'READY',
       target: 'production',
       created: now - 60_000,
       meta: { githubCommitRef: 'main', githubCommitSha: 'aaa', githubCommitMessage: 'First\n\nbody' },
-    },
-    created: {
+    }),
+    created: (now) => ({
       uid: 'dpl_2',
+      projectId: 'prj_1',
       url: 'shop-def.vercel.app',
       readyState: 'BUILDING',
       target: 'production',
       created: now,
       meta: { githubCommitRef: 'main' },
-    },
+    }),
     createdId: 'dpl_2',
     firstId: 'dpl_1',
     productionUrl: 'https://shop.example.com',
@@ -153,6 +155,9 @@ const contracts: Contract[] = [
       { method: 'GET', path: /^\/v5\/user\/tokens\/current$/, body: { token: { scopes: [{ type: 'user' }] } } },
       { method: 'GET', path: /^\/v6\/deployments\?projectId=prj_1/, body: { deployments: list } },
       { method: 'GET', path: /^\/v13\/deployments\/dpl_1$/, body: list[0] },
+      // Another project's deployment in the same team.
+      { method: 'GET', path: /^\/v13\/deployments\/dpl_9$/, body: { uid: 'dpl_9', projectId: 'prj_other' } },
+      { method: 'GET', path: /^\/v3\/deployments\/dpl_9\/events/, body: [{ payload: { text: 'SECRET=1' } }] },
       {
         method: 'GET',
         path: /^\/v3\/deployments\/dpl_1\/events/,
@@ -191,7 +196,7 @@ const contracts: Contract[] = [
     make: (url) => netlifyAdapter({ api: url, github: `${url}/gh` }),
     site: { siteId: 'site_1', siteName: 'shop' },
     capabilities: ['linkRepository', 'deployProduction', 'rollback', 'promote', 'domains', 'usage'],
-    first: {
+    first: (now) => ({
       id: 'd1',
       state: 'ready',
       context: 'production',
@@ -201,15 +206,15 @@ const contracts: Contract[] = [
       created_at: new Date(now - 60_000).toISOString(),
       deploy_ssl_url: 'https://d1--shop.netlify.app',
       build_id: 'b1',
-    },
-    created: {
+    }),
+    created: (now) => ({
       id: 'd2',
       state: 'building',
       context: 'production',
       branch: 'main',
       created_at: new Date(now).toISOString(),
       deploy_ssl_url: 'https://d2--shop.netlify.app',
-    },
+    }),
     createdId: 'd2',
     firstId: 'd1',
     productionUrl: 'https://shop.netlify.app',
@@ -249,7 +254,12 @@ const contracts: Contract[] = [
       {
         method: 'GET',
         path: /^\/sites\/site_1$/,
-        body: { ssl_url: 'https://shop.netlify.app', account_id: 'acc_1', account_slug: 'ana-team' },
+        body: {
+          ssl_url: 'https://shop.netlify.app',
+          account_id: 'acc_1',
+          account_slug: 'ana-team',
+          published_deploy: { id: 'd1', locked: false },
+        },
       },
       { method: 'GET', path: /^\/gh\/repos\/ana\/shop$/, body: { id: 7, full_name: 'ana/shop' } },
       { method: 'POST', path: /^\/deploy_keys$/, body: { id: 'k1', public_key: 'ssh-ed25519 AAAA' } },
@@ -274,7 +284,6 @@ const contracts: Contract[] = [
         effect: () => list.unshift(created),
       },
       { method: 'POST', path: /^\/sites\/site_1\/deploys\/d1\/restore$/, body: {} },
-      { method: 'GET', path: /^\/sites\/site_1$/, body: { id: 'site_1', published_deploy: { id: 'd1' } } },
       { method: 'POST', path: /^\/deploys\/d1\/lock$/, body: {} },
       { method: 'POST', path: /^\/sites\/site_1\/deploys\/d2\/restore$/, body: {} },
       { method: 'POST', path: /^\/deploys\/d2\/lock$/, body: {} },
@@ -290,8 +299,9 @@ const repository = { owner: 'ana', name: 'shop', githubToken: async () => 'gh_12
 
 describe.each(contracts)('$name hosting adapter', (contract) => {
   const setup = async () => {
-    const list: unknown[] = [contract.first]
-    const server = await fake(contract.routes(list, contract.created))
+    const now = Date.now()
+    const list: unknown[] = [contract.first(now)]
+    const server = await fake(contract.routes(list, contract.created(now)))
     return { server, list, adapter: contract.make(server.url) }
   }
 
@@ -370,6 +380,45 @@ describe.each(contracts)('$name hosting adapter', (contract) => {
     expect(server.requests.at(-1)).toMatch(/deployments\?projectId|deploys\?per_page|query Deployments$/)
   })
 
+  it('runs one project’s deploys one at a time, whoever starts them', async () => {
+    const { adapter } = await setup()
+    let running = 0
+    let most = 0
+    const slow = {
+      ...adapter,
+      capabilities: {
+        ...adapter.capabilities,
+        deployProduction: async () => {
+          most = Math.max(most, ++running)
+          await new Promise((resolve) => setTimeout(resolve, 20))
+          running--
+          return { id: 'x' } as Deployment
+        },
+      },
+    }
+    const binding: DeployBinding = {
+      platform: contract.platform,
+      ...contract.site,
+      repository: 'ana/shop',
+      productionBranch: 'main',
+      accountId: 'u1',
+      scope: null,
+    }
+    const service = new DeployService(
+      {
+        getState: <T>() => binding as T,
+        setState: () => {},
+        stackTarget: () => null,
+        githubRepository: async () => repository,
+      },
+      { auth: async () => ({ auth, accountId: 'u1', defaultScope: null }) } as never,
+      () => slow,
+    )
+    // The sheet's click and an agent's deploy_production arrive together.
+    await Promise.all([service.deploy('project', null, true), service.deploy('project', null, true)])
+    expect(most).toBe(1)
+  })
+
   it('refuses to act under another account than the one that linked the project', async () => {
     const { adapter, server } = await setup()
     const service = new DeployService(
@@ -393,6 +442,17 @@ describe.each(contracts)('$name hosting adapter', (contract) => {
     await expect(service.deploy('project', null, true)).rejects.toMatchObject({ kind: 'missing-permission' })
     expect(server.requests.filter(writes)).toHaveLength(0)
   })
+
+  it.runIf(contract.platform === 'vercel')(
+    'treats another project’s deployment as missing, so its build log is never read',
+    async () => {
+      const { adapter, server } = await setup()
+      const site = { ...contract.site, repository: 'ana/shop' }
+      await expect(adapter.deploymentLogs(auth, site, 'dpl_9', 50)).rejects.toMatchObject({ kind: 'not-found' })
+      await expect(adapter.deploymentStatus(auth, site, 'dpl_9')).rejects.toMatchObject({ kind: 'not-found' })
+      expect(server.requests.join('\n')).not.toContain('dpl_9/events')
+    },
+  )
 
   it.each([
     [401, '{}', 'signed-out'],
@@ -643,4 +703,63 @@ describe('pull request previews', () => {
     expect((await service.preview('project', 'fix'))?.id).toBe('new')
     expect(await service.preview('project', 'nothing')).toBeNull()
   })
+})
+
+describe('Netlify holding production for migrations', () => {
+  const site = { siteId: 'site_1', siteName: 'shop' }
+  it('refuses to hold a site with no live deploy, since its first build would go live unmigrated', async () => {
+    const server = await fake([{ method: 'GET', path: /^\/sites\/site_1$/, body: { id: 'site_1' } }])
+    const adapter = netlifyAdapter({ api: server.url })
+    await expect(adapter.capabilities.hold!(auth, site, true)).rejects.toThrow('Deploy once')
+    await adapter.capabilities.hold!(auth, site, false)
+    expect(server.requests.filter(writes)).toHaveLength(0)
+  })
+
+  it('keeps a held site held after a rollback', async () => {
+    const server = await fake([
+      { method: 'GET', path: /^\/sites\/site_1$/, body: { published_deploy: { id: 'd2', locked: true } } },
+      { method: 'POST', path: /^\/sites\/site_1\/deploys\/d1\/restore$/, body: {} },
+      { method: 'POST', path: /^\/deploys\/d1\/lock$/, body: {} },
+    ])
+    await netlifyAdapter({ api: server.url }).capabilities.rollback!(auth, site, 'd1')
+    expect(server.requests.filter(writes).at(-1)).toMatch(/\/deploys\/d1\/lock/)
+  })
+})
+
+it('lets builds go live again when a held project is linked to the same site again', async () => {
+  const state = new Map<string, unknown>([
+    [
+      'deploy-binding:project',
+      {
+        platform: 'vercel',
+        siteId: 'prj_1',
+        siteName: 'shop',
+        repository: 'ana/shop',
+        productionBranch: 'main',
+        accountId: 'u1',
+        scope: null,
+      },
+    ],
+    ['migration-gate:project', true],
+  ])
+  const hold = vi.fn(async () => {})
+  const service = new DeployService(
+    {
+      getState: <T>(key: string, fallback?: T) => (state.has(key) ? state.get(key) : fallback) as T,
+      setState: (key, value) => void state.set(key, value),
+      stackTarget: () => null,
+      githubRepository: async () => repository,
+    },
+    { auth: async () => ({ auth, accountId: 'u1', defaultScope: null }) } as never,
+    () =>
+      ({
+        name: 'Vercel',
+        capabilities: { linkRepository: async () => ({ siteId: 'prj_1', siteName: 'shop' }), hold },
+        listDeployments: async () => [],
+        productionUrl: async () => null,
+      }) as never,
+  )
+  await service.link('project', 'vercel', 'r1', 'shop')
+  expect(hold).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ siteId: 'prj_1' }), false)
+  expect(service.gated('project')).toBe(false)
 })

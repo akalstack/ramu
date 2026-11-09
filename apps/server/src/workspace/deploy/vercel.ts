@@ -35,6 +35,7 @@ interface VercelDeployment {
   target?: string | null
   created?: number
   createdAt?: number
+  projectId?: string
   meta?: { githubCommitRef?: string; githubCommitSha?: string; githubCommitMessage?: string }
 }
 
@@ -92,6 +93,18 @@ export function vercelAdapter(options: { api?: string; fetch?: typeof fetch } = 
   const call = <T>(path: string, auth: HostingAuth, what: string, init: RequestInit = {}, query = {}) =>
     platformCall<T>('Vercel', fetcher, url(path, auth, query), { ...init, token: auth.token }, what)
   const project = (site: HostingSite) => encodeURIComponent(site.siteId)
+  // A deployment id reaches any project the token's team holds, so one from another project is treated as missing:
+  // an agent's arguments never read another project's build log.
+  const owned = async (auth: HostingAuth, site: HostingSite, deploymentId: string) => {
+    const raw = await call<VercelDeployment>(
+      `/v13/deployments/${encodeURIComponent(deploymentId)}`,
+      auth,
+      'reading the deployment',
+    )
+    if (raw.projectId !== site.siteId)
+      throw new DeployError('That deployment is not one of this project’s.', 'not-found', 404)
+    return raw
+  }
   const deploy = async (
     auth: HostingAuth,
     site: HostingSite & { repository: string },
@@ -191,16 +204,11 @@ export function vercelAdapter(options: { api?: string; fetch?: typeof fetch } = 
       )
       return (deployments ?? []).map(deployment).sort((a, b) => b.createdAt - a.createdAt)
     },
-    async deploymentStatus(auth, _site, deploymentId) {
-      return deployment(
-        await call<VercelDeployment>(
-          `/v13/deployments/${encodeURIComponent(deploymentId)}`,
-          auth,
-          'reading the deployment',
-        ),
-      )
+    async deploymentStatus(auth, site, deploymentId) {
+      return deployment(await owned(auth, site, deploymentId))
     },
-    async deploymentLogs(auth, _site, deploymentId, lines) {
+    async deploymentLogs(auth, site, deploymentId, lines) {
+      await owned(auth, site, deploymentId)
       const events = await call<{ type?: string; text?: string; payload?: { text?: string } }[]>(
         `/v3/deployments/${encodeURIComponent(deploymentId)}/events`,
         auth,
@@ -263,13 +271,13 @@ export function vercelAdapter(options: { api?: string; fetch?: typeof fetch } = 
       environment: {
         environments: ['preview', 'production'],
         async list(auth, site) {
-          const { envs } = await call<{ envs?: { key: string; target?: string[] | string }[] }>(
-            `/v10/projects/${project(site)}/env`,
-            auth,
-            'reading the environment variables',
-          )
+          const { envs } = await call<{
+            envs?: { key: string; target?: string[] | string; gitBranch?: string | null }[]
+          }>(`/v10/projects/${project(site)}/env`, auth, 'reading the environment variables')
+          // A variable for one pull request's branch does not reach other previews, so it does not count as set.
           const named = (target: string) =>
             (envs ?? [])
+              .filter((env) => !env.gitBranch)
               .filter((env) => (Array.isArray(env.target) ? env.target : [env.target]).includes(target))
               .map((env) => env.key)
           return { preview: named('preview'), production: named('production') }

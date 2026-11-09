@@ -307,9 +307,9 @@ export class StoreReleases {
       ],
       { cwd: root, token: auth.token },
     )
-    let started: { id?: unknown }[]
+    let started: { id?: unknown; platform?: unknown }[]
     try {
-      started = JSON.parse(stdout) as { id?: unknown }[]
+      started = JSON.parse(stdout) as { id?: unknown; platform?: unknown }[]
     } catch (error) {
       throw new DeployError(
         'EAS did not report the builds it started. Check the builds on expo.dev before releasing again.',
@@ -318,10 +318,29 @@ export class StoreReleases {
         { cause: error },
       )
     }
-    const ids = (Array.isArray(started) ? started : []).flatMap((entry) =>
-      typeof entry?.id === 'string' ? [entry.id] : [],
+    const builds = (Array.isArray(started) ? started : []).flatMap((entry) =>
+      typeof entry?.id === 'string' ? [{ id: entry.id, platform: entry.platform }] : [],
     )
-    return Promise.all(ids.map((id) => this.client.build(auth, id)))
+    // The builds have started (and cost credits) whether or not reading them back works, so each one is returned and
+    // followed; one that cannot be read yet is reported as queued rather than failing the release into a retry.
+    return Promise.all(
+      builds.map(({ id, platform }) =>
+        this.client.build(auth, id).catch((): StoreBuild => ({
+          id,
+          platform: platform === 'IOS' || platform === 'ios' ? 'ios' : 'android',
+          state: 'queued',
+          profile: RELEASE_PROFILE,
+          version: null,
+          buildNumber: null,
+          commit: null,
+          message: null,
+          error: null,
+          createdAt: Date.now(),
+          page: 'https://expo.dev',
+          submission: null,
+        })),
+      ),
+    )
   }
 
   async build(buildId: string): Promise<StoreBuild> {
@@ -332,7 +351,7 @@ export class StoreReleases {
   /** The end of a build's or its submission's log, for a build of the project's own app. */
   async logs(projectId: string, buildId: string, of: 'build' | 'submission'): Promise<string> {
     const root = this.root(projectId)
-    const easProject = root ? easProjectId(await readJson(root, 'app.json')) : null
+    const easProject = root ? easProjectId((await this.facts(root)).appJson) : null
     if (!easProject) throw new Error('This project has no Expo app linked to an EAS project.')
     const { auth } = await this.accounts.auth('expo')
     return this.client.logs(auth, easProject, buildId, of, LOG_LINES)

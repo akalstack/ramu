@@ -36,6 +36,8 @@ describe('hosting adapters’ environment variables', () => {
       envs: [
         { key: 'DATABASE_URL', target: ['production', 'preview'], value: 'hidden' },
         { key: 'STRIPE_KEY', target: 'production' },
+        // One pull request's own database: other previews still lack a shared one.
+        { key: 'SESSION_SECRET', target: ['preview'], gitBranch: 'feature/login' },
       ],
     }))
     const env = vercelAdapter({ api: 'https://vercel.test', fetch: fetcher }).capabilities.environment!

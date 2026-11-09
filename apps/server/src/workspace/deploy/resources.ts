@@ -16,6 +16,7 @@ import {
 import type { EnvEnvironment } from '@ramu/shared/envSync'
 import { HostCredentialStore } from '../../credentials/store'
 import { SavedCredential } from '../forge/savedCredential'
+import { redactSecrets } from '../../memory/secrets'
 import { currentBranch, git } from '../git'
 import { DeployError, ReplyLostError, tail } from './adapter'
 import type { HostingAccounts } from './accounts'
@@ -91,6 +92,8 @@ export const runMigration: MigrationRunner = (argv, cwd, variables) =>
 const KIND_NAMES: Record<ResourceKind, string> = { database: 'a database' }
 
 const key = (projectId: string) => `resources:${projectId}`
+/** A resource created whose setup did not finish (its preview branch failed), so a retry finishes it instead of making another. */
+const unfinishedKey = (projectId: string, provider: ResourceProvider) => `resource-unfinished:${projectId}:${provider}`
 const branchKey = (projectId: string) => `resource-branches:${projectId}`
 /** Open pull requests with a database branch of their own; past this, they share the preview branch. */
 const BRANCHES_MAX = 4
@@ -242,17 +245,21 @@ export class ResourceService {
     if (this.bindings(projectId).some((binding) => binding.kind === adapter.kind))
       throw new Error(`This project already has ${KIND_NAMES[adapter.kind]}. Manage it on the provider’s page.`)
     const { auth, accountId } = await this.auth(provider)
-    let made
-    try {
-      made = await adapter.provision(auth, { name }, plan)
-    } catch (error) {
-      if (!(error instanceof ReplyLostError)) throw error
-      made = await adapter.find(auth, name)
-      if (!made)
-        throw new Error(`${adapter.name} did not answer, and nothing named ${name} is listed. Try again.`, {
-          cause: error,
-        })
-    }
+    const unfinished = this.host.getState<{ id: string; name: string } | null>(unfinishedKey(projectId, provider), null)
+    let made = unfinished?.name === name ? await adapter.find(auth, name) : null
+    if (made && made.id !== unfinished?.id) made = null
+    if (!made)
+      try {
+        made = await adapter.provision(auth, { name }, plan)
+      } catch (error) {
+        if (!(error instanceof ReplyLostError)) throw error
+        made = await adapter.find(auth, name)
+        if (!made)
+          throw new Error(`${adapter.name} did not answer, and nothing named ${name} is listed. Try again.`, {
+            cause: error,
+          })
+      }
+    this.host.setState(unfinishedKey(projectId, provider), { id: made.id, name: made.name })
     const preview = adapter.branch ? await adapter.branch(auth, made.id, PREVIEW_BRANCH) : made.variables
     await this.secrets(projectId, adapter.kind).save({
       token: made.id,
@@ -271,6 +278,7 @@ export class ResourceService {
         previewBranch: !!adapter.branch,
       } satisfies ResourceBinding,
     ])
+    this.host.setState(unfinishedKey(projectId, provider), null)
     return preview
   }
 
@@ -329,7 +337,8 @@ export class ResourceService {
       throw new Error(`The checkout of ${branch} is not at ${commit.slice(0, 7)}, the commit this build is from.`)
     const result = await this.migrate(argv, root, secrets.production)
     if (!result.ok) {
-      const output = tail(result.output, OUTPUT_LINES)
+      // It ran with production's database address, which an error may print; the output reaches the sheet and threads.
+      const output = redactSecrets(tail(result.output, OUTPUT_LINES))
       throw new MigrationError(
         `The migration (${commandLine(argv)}) failed, so nothing was deployed.\n${output}`,
         output,

@@ -3,6 +3,7 @@
 // awake and online, so a sleep between checks, or a check the host could not make, is reported as unknown.
 import { randomUUID } from 'node:crypto'
 import type { UptimeCheck, UptimeFailure, UptimeStatus } from '@ramu/shared/types/deploy'
+import { redactSecrets } from '../../memory/secrets'
 import type { DeployService } from './service'
 import type { ProjectWake } from './wake'
 
@@ -272,7 +273,7 @@ export class UptimeWatches {
     const status = await this.service.project(projectId)
     const last = status.deployments.find((entry) => entry.production)
     const log = last ? await this.service.logs(projectId, last.id).catch(() => '') : ''
-    const lines = log.split('\n').slice(-LOG_LINES).join('\n').trim()
+    const lines = redactSecrets(log.split('\n').slice(-LOG_LINES).join('\n').trim())
     const deployment = last
       ? `The last production deployment is ${last.id} (${last.state}), made ${when(last.createdAt)}${last.ref ? ` from ${last.ref}` : ''}${last.message ? `: “${last.message}”` : ''}.`
       : 'No production deployment is listed.'

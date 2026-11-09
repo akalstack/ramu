@@ -280,6 +280,14 @@ describe('Release', () => {
     })
   })
 
+  it('returns every started build even when reading one back fails, so none is started twice', async () => {
+    const { service, client } = releases(expoApp())
+    client.build.mockRejectedValueOnce(new Error('EAS did not answer'))
+    expect(await service.start('p1', 'ios')).toEqual([
+      expect.objectContaining({ id: BUILD, platform: 'ios', state: 'queued' }),
+    ])
+  })
+
   it('says to check expo.dev when EAS does not report the builds it started', async () => {
     const { service } = releases(expoApp(), 'Uploading…')
     await expect(service.start('p1', 'all')).rejects.toThrow('Check the builds on expo.dev')
@@ -470,5 +478,29 @@ describe('an app.config app', () => {
     expect(config).toHaveBeenCalledWith(root)
     expect(after.checks.find((check) => check.id === 'dynamic-config')).toBeUndefined()
     expect(after.checks.find((check) => check.id === 'ios-bundle')).toMatchObject({ detail: 'com.barber.dynamic' })
+  })
+
+  it('reads build logs through the EAS project its code computes', async () => {
+    const root = expoApp({ extra: {} })
+    writeFileSync(join(root, 'app.config.js'), 'module.exports = ({ config }) => config')
+    const logs = vi.fn(async () => 'Build failed')
+    const service = new StoreReleases(
+      { roots: () => [root], actionsSecrets: () => secrets },
+      {
+        auth: async () => ({ auth: { token: 'expo_token_1' }, accountId: 'r1', defaultScope: null }),
+        accountName: () => 'ramu-bot',
+      },
+      {
+        build: vi.fn(),
+        builds: vi.fn(async () => []),
+        app: vi.fn(async () => ({ name: 'Barber', page: '' })),
+        logs,
+      } as never,
+      vi.fn(),
+      async () => JSON.stringify({ name: 'Barber', extra: { eas: { projectId: APP } } }),
+    )
+    await service.resolveConfig('p1')
+    expect(await service.logs('p1', BUILD, 'build')).toBe('Build failed')
+    expect(logs).toHaveBeenCalledWith(expect.anything(), APP, BUILD, 'build', expect.any(Number))
   })
 })

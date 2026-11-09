@@ -444,7 +444,9 @@ it('renews an expiring Vercel CLI session with its refresh token, keeping the ro
     () => ({ ...adapter(() => true), kind: 'hosting' }),
   )
   await accounts.save('vercel', { token: 'vca_1', refreshToken: 'r1', expiresAt: Date.now() + 1000 }, 'cli')
-  expect((await accounts.auth('vercel')).auth.token).toBe('vca_2')
+  // Calls that arrive together, as when the deploy sheet opens, share one renewal: a rotated refresh token works once.
+  const together = await Promise.all([accounts.auth('vercel'), accounts.auth('vercel'), accounts.auth('vercel')])
+  expect(together.map((entry) => entry.auth.token)).toEqual(['vca_2', 'vca_2', 'vca_2'])
   expect(bodies[0]).toContain('grant_type=refresh_token')
   expect(bodies[0]).toContain('refresh_token=r1')
   // Fresh now: no second renewal.

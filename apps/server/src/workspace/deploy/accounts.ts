@@ -82,6 +82,8 @@ type SetState = ConstructorParameters<typeof SavedCredential>[2]
 export class HostingAccounts {
   private readonly saved: Record<AccountPlatform, SavedCredential<SavedHosting>>
   private readonly errors = new Map<AccountPlatform, string>()
+  // Refresh tokens rotate, so calls that all find a session about to expire share one renewal instead of racing.
+  private readonly renewing = new Map<AccountPlatform, Promise<SavedHosting>>()
   constructor(
     getState: State,
     setState: SetState,
@@ -201,12 +203,20 @@ export class HostingAccounts {
         'signed-out',
       )
     if (value.refreshToken && value.expiresAt && value.expiresAt - RENEW_BEFORE_MS < Date.now())
-      value = await this.renew(platform, value)
+      value = await this.renewOnce(platform, value)
     return {
       auth: { token: value.token },
       accountId: value.accountId ?? null,
       defaultScope: value.defaultScope ?? null,
     }
+  }
+
+  private renewOnce(platform: AccountPlatform, value: SavedHosting): Promise<SavedHosting> {
+    const pending = this.renewing.get(platform)
+    if (pending) return pending
+    const renewal = this.renew(platform, value).finally(() => this.renewing.delete(platform))
+    this.renewing.set(platform, renewal)
+    return renewal
   }
 
   private async renew(platform: AccountPlatform, value: SavedHosting): Promise<SavedHosting> {

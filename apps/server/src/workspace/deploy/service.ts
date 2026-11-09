@@ -26,6 +26,7 @@ import type { HostingAccounts } from './accounts'
 import { liveProbes, type DomainProbes } from './domains'
 import type { EnvTarget } from './envSync'
 import { usageReport } from './usage'
+import { KeyedLock } from '../../ipc/keyedLock'
 
 const LISTED = 10
 /** Previews of busy repositories crowd the list; a pull request's branch is looked for a little further back. */
@@ -47,6 +48,9 @@ export interface DeployHost {
 const key = (projectId: string) => `deploy-binding:${projectId}`
 
 export class DeployService {
+  // Deploys and rollbacks of one project run one at a time whoever starts them (the sheet, an agent's tool or a pull
+  // request's redeploy), so two never race or run the migrations twice.
+  private readonly changes = new KeyedLock()
   constructor(
     private readonly host: DeployHost,
     private readonly accounts: HostingAccounts,
@@ -125,8 +129,9 @@ export class DeployService {
     const repository = await this.host.githubRepository(projectId, repoId)
     const { auth, accountId, defaultScope } = await this.accounts.auth(platform)
     const scoped = { ...auth, scope: defaultScope }
+    const previous = this.gated(projectId) ? this.binding(projectId) : null
     const site = await link(scoped, name, repository)
-    this.bind(projectId, {
+    const binding: DeployBinding = {
       platform,
       siteId: site.siteId,
       siteName: site.siteName,
@@ -134,7 +139,12 @@ export class DeployService {
       productionBranch: repository.productionBranch,
       accountId: accountId ?? (await adapter.account(auth)).id,
       scope: defaultScope,
-    })
+    }
+    // A new binding starts without the wait for migrations, so a platform still holding builds for the old one lets
+    // them go live again; otherwise production builds would wait for a promotion that never comes.
+    if (previous?.platform === platform && previous.siteId === site.siteId)
+      await adapter.capabilities.hold?.(scoped, binding, false)
+    this.bind(projectId, binding)
     return this.project(projectId)
   }
 
@@ -142,7 +152,11 @@ export class DeployService {
    * Deploys `ref` (production when asked). A reply that never arrives may still have started a deployment, so the
    * list is read again and a deployment of the same ref started since is reported instead of deploying twice.
    */
-  async deploy(projectId: string, ref: string | null, production: boolean): Promise<Deployment> {
+  deploy(projectId: string, ref: string | null, production: boolean): Promise<Deployment> {
+    return this.changes.run(projectId, () => this.deployNow(projectId, ref, production))
+  }
+
+  private async deployNow(projectId: string, ref: string | null, production: boolean): Promise<Deployment> {
     const { binding, auth } = await this.bound(projectId)
     const adapter = this.adapter(binding.platform)
     const run = production ? adapter.capabilities.deployProduction : adapter.capabilities.deployPreview
@@ -254,7 +268,11 @@ export class DeployService {
   }
 
   /** Rolls production back to an earlier production deployment of this project. */
-  async rollback(projectId: string, deploymentId: string): Promise<void> {
+  rollback(projectId: string, deploymentId: string): Promise<void> {
+    return this.changes.run(projectId, () => this.rollbackNow(projectId, deploymentId))
+  }
+
+  private async rollbackNow(projectId: string, deploymentId: string): Promise<void> {
     const { binding, auth } = await this.bound(projectId)
     const adapter = this.adapter(binding.platform)
     if (!adapter.capabilities.rollback) throw new Error(`${adapter.name} cannot roll back from Ramu.`)

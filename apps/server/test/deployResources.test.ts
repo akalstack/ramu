@@ -186,6 +186,20 @@ describe('Neon resource adapter', () => {
     await expect(resources.provision('p1', 'neon', 'default', 'shop')).rejects.toThrow('already has a database')
   })
 
+  it('finishes the database it created when its preview branch failed, instead of creating a second one', async () => {
+    const routes = neonRoutes([])
+    const branchPost = routes.find((route) => route.method === 'POST' && String(route.path).includes('branches'))!
+    branchPost.method = 'BLOCKED'
+    const server = await fake(routes)
+    const { resources } = service(server.url)
+    await expect(resources.provision('p1', 'neon', 'default', 'shop')).rejects.toThrow()
+    branchPost.method = 'POST'
+    const development = await resources.provision('p1', 'neon', 'default', 'shop')
+    expect(development.DATABASE_URL).toContain('preview-pooler')
+    expect(server.requests.filter((line) => line === 'POST /projects')).toHaveLength(1)
+    expect((await resources.status('p1', [])).resources).toHaveLength(1)
+  })
+
   it('gives production its own values and the preview branch to previews, this host and CI', async () => {
     const server = await fake(neonRoutes([]))
     const { resources } = service(server.url)
@@ -216,7 +230,11 @@ describe('migrations before a production deploy', () => {
 
   it('runs the migrate command with production’s values, and a failure stops the deploy with its output', async () => {
     const server = await fake(neonRoutes([]))
-    const runner = vi.fn<MigrationRunner>(async () => ({ ok: false, output: 'step 1\nrelation "users" exists' }))
+    const runner = vi.fn<MigrationRunner>(async () => ({
+      ok: false,
+      output:
+        'step 1\nconnecting to postgresql://neondb_owner:s3cret-pass@main.neon.tech/neondb\nrelation "users" exists',
+    }))
     const { resources } = service(server.url, ['npx', 'prisma', 'migrate', 'deploy'], runner)
     const { work } = repository()
     // No database yet: nothing to migrate.
@@ -226,6 +244,9 @@ describe('migrations before a production deploy', () => {
     const failure = await resources.migrateProduction('p1', work, 'main').catch((error: unknown) => error)
     expect(failure).toBeInstanceOf(MigrationError)
     expect((failure as MigrationError).output).toContain('relation "users" exists')
+    // The output goes to the sheet and the project's thread, so a printed database address is redacted.
+    expect((failure as MigrationError).output).not.toContain('s3cret-pass')
+    expect((failure as Error).message).not.toContain('s3cret-pass')
     expect(runner).toHaveBeenCalledWith(
       ['npx', 'prisma', 'migrate', 'deploy'],
       work,

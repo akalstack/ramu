@@ -397,18 +397,32 @@ export function netlifyAdapter(options: { api?: string; github?: string; fetch?:
         },
       },
       async rollback(auth, target, deploymentId) {
+        const live = await call<{ published_deploy?: { locked?: boolean } }>(
+          site(target.siteId),
+          auth,
+          'reading the site',
+        )
         await call(
           `${site(target.siteId)}/deploys/${encodeURIComponent(deploymentId)}/restore`,
           auth,
           'restoring the deployment',
           { method: 'POST' },
         )
+        // Publishing by hand moves the lock off, so a site held for migrations stays held after a rollback.
+        if (live.published_deploy?.locked)
+          await call(`/deploys/${encodeURIComponent(deploymentId)}/lock`, auth, 'keeping auto publishing locked', {
+            method: 'POST',
+          })
       },
       // Locked publishing: the live deploy stays live until another is published by hand.
       async hold(auth, target, on) {
         const live = await call<{ published_deploy?: { id?: string } }>(site(target.siteId), auth, 'reading the site')
         const id = live.published_deploy?.id
-        if (!id) return
+        if (!id) {
+          if (!on) return
+          // Netlify locks a published deploy; with none yet, the first build would go live before its migrations.
+          throw new Error('Netlify can hold builds once the site has a live deploy. Deploy once, then turn this on.')
+        }
         await call(`/deploys/${encodeURIComponent(id)}/${on ? 'lock' : 'unlock'}`, auth, 'changing auto publishing', {
           method: 'POST',
         })
