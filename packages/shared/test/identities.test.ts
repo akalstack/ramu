@@ -10,6 +10,7 @@ import {
   normalizeIdentities,
   parseRule,
   remoteOwner,
+  suggestedAccountIdentity,
   suggestedRule,
   type Identity,
   type IdentitySettings,
@@ -152,5 +153,26 @@ describe('helpers', () => {
     expect(crossHostWarning('you@acme.com', 'you@gmail.com', 'home-server')).toBe(
       'This thread is you@acme.com. On home-server it would run as you@gmail.com.',
     )
+  })
+
+  it('suggests the identity still missing an account of a kind, and every identity before any is split', () => {
+    const two = [identity('personal', [], true), identity('work', [])]
+    expect(suggestedAccountIdentity({ identities: two, accounts: {} }, 'provider:claude-code')).toBe('')
+    expect(
+      suggestedAccountIdentity(
+        { identities: two, accounts: { 'provider:claude-code:a': ['work'] } },
+        'provider:claude-code',
+      ),
+    ).toBe('personal')
+    // Another kind's split says nothing about this one.
+    expect(
+      suggestedAccountIdentity({ identities: two, accounts: { 'provider:codex:a': ['work'] } }, 'provider:claude-code'),
+    ).toBe('')
+    expect(
+      suggestedAccountIdentity(
+        { identities: two, accounts: { 'browser:a': ['work'], 'browser:b': ['personal'] } },
+        'browser',
+      ),
+    ).toBe('')
   })
 })

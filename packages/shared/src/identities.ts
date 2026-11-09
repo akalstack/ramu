@@ -318,6 +318,22 @@ export function identitiesOffered(snapshot: Pick<IdentitySnapshot, 'settings' | 
   return [...kinds.values()].some((count) => count >= 2)
 }
 
+/**
+ * The identity a new account of a kind is most likely for: once one identity has its own account of the kind, the first
+ * identity that has none yet; otherwise '' (every identity), since nothing says the account belongs to one.
+ */
+export function suggestedAccountIdentity(
+  settings: Pick<IdentitySettings, 'identities' | 'accounts'>,
+  kind: string,
+): string {
+  const owned = new Set(
+    Object.entries(settings.accounts)
+      .filter(([key]) => accountKindOf(key) === kind)
+      .flatMap(([, ids]) => ids),
+  )
+  return owned.size ? (settings.identities.find((identity) => !owned.has(identity.id))?.id ?? '') : ''
+}
+
 /** The account key of a GitHub account choice: a saved connection, or a `gh` sign-in by login. */
 export function forgeAccountKey(choice: string | null): string | null {
   if (!choice || choice === 'cli') return null

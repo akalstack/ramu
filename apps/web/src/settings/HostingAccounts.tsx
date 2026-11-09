@@ -27,6 +27,8 @@ import {
   serverHost,
 } from '@ramu/shared/forgeTokenLinks'
 import { accountDetail, connectionHeadline, savedDetail } from './hostingStatus'
+import { accountKey, forgeAccountKey } from '@ramu/shared/identities'
+import { AccountIdentityPicker, IdentityDropdown, useAccountIdentities } from './AccountIdentity'
 
 type Form = { replace: ForgeSavedConnection | null }
 
@@ -59,6 +61,7 @@ function TokenForm({
   service,
   notes,
   alternative,
+  choice,
   submitLabel = t('Connect'),
   onSave,
   onCancel,
@@ -77,6 +80,8 @@ function TokenForm({
   notes?: string
   /** Another way to connect, such as a CLI sign-in. */
   alternative?: ReactNode
+  /** A small choice beside the submit action, such as which identity a further account is for. */
+  choice?: ReactNode
   submitLabel?: string
   onSave: (field: string, token: string) => Promise<void>
   onCancel: () => void
@@ -191,7 +196,8 @@ function TokenForm({
             })}
             {notes ? ` ${notes}` : ''}
           </p>
-          <span className="flex items-center gap-2">
+          <span className="flex flex-wrap items-center gap-2">
+            {choice}
             <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={onCancel}>
               {t('Cancel')}
             </Button>
@@ -218,6 +224,10 @@ export function HostingAccounts() {
   const [pending, setPending] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [removing, setRemoving] = useState<ForgeSavedConnection | null>(null)
+  const accountIdentities = useAccountIdentities()
+  // Null follows the suggestion, which is known only once the identities have loaded.
+  const [chosenIdentity, setChosenIdentity] = useState<string | null>(null)
+  const forIdentity = chosenIdentity ?? accountIdentities.suggestedFor(accountKey('forge', 'github'))
   const request = useRef(0)
   const opener = useRef<HTMLButtonElement>(null)
   const check = useCallback(() => {
@@ -276,16 +286,20 @@ export function HostingAccounts() {
   }
   // A failed check keeps the previous connection and throws, so the form stays open to correct the token.
   const save = async (origin: string, token: string) => {
-    await invoke('forge.saveConnection', {
+    const connection = await invoke('forge.saveConnection', {
       origin: serverHost(origin),
       token,
       ...(form?.replace ? { replaceId: form.replace.id } : {}),
     })
+    if (!form?.replace && further && forIdentity)
+      await accountIdentities.assign(forgeAccountKey(connection.id)!, forIdentity)
     closeForm()
     check()
   }
   const origins = [...new Set(saved.map((connection) => connection.origin))]
   const hasCli = (summary?.accounts.length ?? 0) > 0
+  // Only a further GitHub account asks which identity it is for; the first one is for every identity.
+  const further = saved.length > 0 || hasCli
 
   return (
     <>
@@ -307,9 +321,12 @@ export function HostingAccounts() {
               variant="secondary"
               size="sm"
               disabled={storeLocked || pending || !summary}
-              onClick={() => setForm({ replace: null })}
+              onClick={() => {
+                setChosenIdentity(null)
+                setForm({ replace: null })
+              }}
             >
-              {t('Connect')}
+              {further ? t('Add account') : t('Connect')}
             </Button>
           )}
           {summary && (summary.accounts.length > 0 || saved.length > 0) && (
@@ -366,6 +383,17 @@ export function HostingAccounts() {
             'It covers pull requests, issues and checks; Git push and fetch keep using your own Git credentials.',
           )}
           submitLabel={form.replace ? t('Save') : t('Connect')}
+          choice={
+            !form.replace && further && accountIdentities.identities ? (
+              <IdentityDropdown
+                identities={accountIdentities.identities}
+                caption={t('For')}
+                label={t('Which identity uses it')}
+                value={forIdentity}
+                onChange={setChosenIdentity}
+              />
+            ) : undefined
+          }
           onSave={save}
           onCancel={closeForm}
         />
@@ -376,9 +404,15 @@ export function HostingAccounts() {
             <ul className="m-0 flex list-none flex-col gap-3 p-0" aria-label={t('Saved tokens')}>
               {saved.map((connection) => (
                 <li key={connection.id} className="flex flex-col gap-1">
-                  <span>
-                    <strong>{connection.login ?? t('Unknown account')}</strong>{' '}
-                    <span className="text-muted-foreground">{connection.origin}</span>
+                  <span className="flex flex-wrap items-center gap-x-2">
+                    <span className="min-w-0 flex-1">
+                      <strong>{connection.login ?? t('Unknown account')}</strong>{' '}
+                      <span className="text-muted-foreground">{connection.origin}</span>
+                    </span>
+                    <AccountIdentityPicker
+                      accountKey={forgeAccountKey(connection.id)!}
+                      name={connection.login ?? connection.origin}
+                    />
                   </span>
                   <span className="text-muted-foreground">{savedDetail(connection)}</span>
                   {canAdminister && (
@@ -434,7 +468,12 @@ export function HostingAccounts() {
             <ul className="m-0 flex list-none flex-col gap-1 p-0" aria-label={t('GitHub CLI sign-ins')}>
               {summary.accounts.map((account) => (
                 <li key={`${account.host}:${account.login}`}>
-                  <strong>{account.login}</strong> <span className="text-muted-foreground">{account.host}</span>
+                  <span className="flex flex-wrap items-center gap-x-2">
+                    <span className="min-w-0 flex-1">
+                      <strong>{account.login}</strong> <span className="text-muted-foreground">{account.host}</span>
+                    </span>
+                    <AccountIdentityPicker accountKey={forgeAccountKey(`cli:${account.login}`)!} name={account.login} />
+                  </span>
                   <div className="text-muted-foreground">{accountDetail(account)}</div>
                   {canAdminister &&
                     account.state === 'ok' &&

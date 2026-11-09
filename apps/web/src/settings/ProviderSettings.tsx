@@ -12,12 +12,21 @@ import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
 import { AGENT_PROVIDERS, providerAccountRows, providerEnabled, providerName } from '@ramu/shared/providers/providers'
 import type { AgentProvider, AppPreferences } from '@ramu/shared/types'
+import type { ProviderStatus } from '@ramu/shared/providers/providers'
 import { runProviderCommand } from '../models/ProviderSetupTerminal'
 import { useAccountUsage } from './Usage'
+import { accountKey } from '@ramu/shared/identities'
+import { useAccountIdentities } from './AccountIdentity'
 import { ProviderCard } from './ProviderCard'
 import { ProviderModels } from './ProviderModels'
 import { useModelSets } from '../models/ModelSets'
-import { providerStatusQuery } from './providerStatusQuery'
+import {
+  NO_STATUSES,
+  applyStatuses,
+  changedProviders,
+  providerStatusQuery,
+  type KnownStatuses,
+} from './providerStatusQuery'
 import { AntigravitySignIn } from './AntigravitySignIn'
 import { ApiKeySignIn } from './ApiKeySignIn'
 import { supportsApiKey } from '@ramu/shared/providers/apiKeys'
@@ -46,8 +55,7 @@ export function ProviderSettings({
   const [apiKey, setApiKey] = useState<{ provider: AgentProvider; accountId: string; name: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const sequence = useRef(0),
-    config = value.providerBinaries
+  const config = value.providerBinaries
   const host = scope?.primaryId || ownHostId()
   const viewOnly = !!scope?.targets.find((target) => target.id === host)?.viewOnly
   const access = useRef({ host, viewOnly })
@@ -55,9 +63,35 @@ export function ProviderSettings({
   const allowed = () => access.current.host === host && !access.current.viewOnly
   const status = (...args: Parameters<import('@ramu/shared/api').RamuMethods['providers.status']>) =>
     invoke('providers.status', ...args)
-  const statusQuery = useQuery({ ...providerStatusQuery(host, config, status), enabled: false })
-  const statuses = statusQuery.data ?? []
-  const busy = !viewOnly && (statusQuery.isFetching || (!statusQuery.data && !statusQuery.isError))
+  // What is known about each provider stays on screen while it is checked again; "Detecting…" shows only before the
+  // first answer. Seeded from this host's latest cached answer, so reopening Settings shows it at once.
+  const lastCached = (forHost: string): KnownStatuses => {
+    const [latest] = queryClient
+      .getQueryCache()
+      .findAll({ queryKey: ['provider-settings', forHost] })
+      .filter((query) => Array.isArray(query.state.data))
+      .sort((a, b) => b.state.dataUpdatedAt - a.state.dataUpdatedAt)
+    return latest ? applyStatuses(NO_STATUSES, latest.state.data as ProviderStatus[], 0) : NO_STATUSES
+  }
+  const [known, setKnown] = useState(() => ({ host, value: lastCached(host) }))
+  const shown = known.host === host ? known.value : lastCached(host)
+  const statuses = shown.statuses
+  const stamp = useRef(0)
+  const [fullChecks, setFullChecks] = useState(0)
+  const [checking, setChecking] = useState<ReadonlySet<AgentProvider>>(new Set())
+  const [stale, setStale] = useState(false)
+  const busy = !viewOnly && (fullChecks > 0 || (!statuses.length && !stale))
+  const take = (forHost: string, answer: ProviderStatus[], mine: number) =>
+    setKnown((current) => ({
+      host: forHost,
+      value: applyStatuses(current.host === forHost ? current.value : lastCached(forHost), answer, mine),
+    }))
+  // The merged result is this draft's answer too, so focusing the window or reopening Settings reuses it.
+  useEffect(() => {
+    if (known.value.statuses.length)
+      queryClient.setQueryData(providerStatusQuery(known.host, config, status).queryKey, known.value.statuses)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- written when the known statuses change; the draft it is filed under is read as of then
+  }, [known])
   const ready = !viewOnly && (!scope || (scope.ready && !scope.stale))
   const mcp = useQuery({ queryKey: ['mcp-accounts', host], queryFn: () => invoke('mcp.status'), enabled: ready })
   const canShare = mcp.data?.canAdminister === true
@@ -66,6 +100,7 @@ export function ProviderSettings({
   const sharing = (provider: AgentProvider, id: string) =>
     mcp.data?.accounts.find((entry) => entry.provider === provider && entry.accountId === id)?.shareApprovals
   const { valueOf, stage } = useStaging()
+  const accountIdentities = useAccountIdentities()
   const setSharing = async (provider: AgentProvider, ids: string[], shareApprovals: boolean) => {
     setError(null)
     try {
@@ -93,32 +128,74 @@ export function ProviderSettings({
       setRechecking(null)
     }
   }
-  const loginPending = useRef(false)
+  // The provider whose sign-in runs in a terminal or browser, checked alone when the window comes back.
+  const loginPending = useRef<AgentProvider | null>(null)
   const accountUsage = useAccountUsage()
-  // Cache entries are host/configuration scoped, so reopening never shows another host’s logins.
-  const refresh = async (latest = false, quiet = false) => {
+  /**
+   * Asks the host again: every provider, or only those named in `only` (the one an action touched). Cache entries are
+   * host and draft scoped, so reopening never shows another host's logins; answers apply per provider by request
+   * order, so a slower, older check never overwrites a newer one.
+   */
+  const refresh = async (latest = false, quiet = false, only?: AgentProvider[]) => {
     if (!allowed()) return
-    const request = ++sequence.current
+    const mine = ++stamp.current
+    const forHost = host
+    const current = () => access.current.host === forHost
     setError(null)
+    const failed = (reason: unknown) => {
+      if (!current()) return
+      setError(errorText(reason))
+      setStale(true)
+    }
+    if (only?.length && !latest) {
+      setChecking((names) => new Set([...names, ...only]))
+      try {
+        const answers = await Promise.all(only.map((provider) => invoke('providers.statusOf', provider, config)))
+        if (current()) {
+          take(forHost, answers, mine)
+          setStale(false)
+        }
+      } catch (reason) {
+        failed(reason)
+      } finally {
+        setChecking((names) => new Set([...names].filter((name) => !only.includes(name))))
+      }
+      return
+    }
+    setFullChecks((count) => count + 1)
     try {
       // Reopening and focus reuse fresh data; explicit actions always ask the host again.
-      const fresh = !quiet || loginPending.current
-      loginPending.current = false
-      await queryClient.fetchQuery(providerStatusQuery(host, config, status, latest, fresh))
+      const answer = await queryClient.fetchQuery(providerStatusQuery(host, config, status, latest, !quiet))
+      if (current()) {
+        take(forHost, answer, mine)
+        setStale(false)
+      }
     } catch (reason) {
-      if (request === sequence.current) setError(errorText(reason))
+      failed(reason)
+    } finally {
+      setFullChecks((count) => count - 1)
     }
   }
+  // The draft last checked, so an edit re-checks only the providers it changed.
+  const checked = useRef<{ host: string; config: typeof config } | null>(null)
   useEffect(() => {
     if (viewOnly) return
-    const timer = setTimeout(() => void refresh(false, true), 350)
-    return () => {
-      clearTimeout(timer)
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- a counter that invalidates in-flight work; it is not a DOM ref
-      sequence.current++
-    }
+    const timer = setTimeout(() => {
+      const before = checked.current
+      checked.current = { host, config }
+      const only = before && before.host === host && statuses.length ? changedProviders(before.config, config) : null
+      if (only && !only.length) return
+      void refresh(false, true, only ?? undefined)
+    }, 350)
+    return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [config, invoke, viewOnly] by design; the values it reads beyond these are current as of that run
   }, [config, invoke, viewOnly])
+  /** After a sign-in elsewhere: only the provider being signed in when one is, otherwise every provider. */
+  const recheckLogin = (quiet: boolean) => {
+    const provider = loginPending.current
+    loginPending.current = null
+    void refresh(false, quiet && !provider, provider ? [provider] : undefined)
+  }
   const change = (provider: AgentProvider, patch: Partial<NonNullable<(typeof config)[AgentProvider]>>) =>
     allowed() &&
     onChange({ ...value, providerBinaries: { ...config, [provider]: { binary: '', ...config[provider], ...patch } } })
@@ -133,12 +210,12 @@ export function ProviderSettings({
   // A login signed in from another device or a terminal shows its new account here without a manual refresh.
   useEffect(() => {
     if (viewOnly) return
-    return on('logins:changed', () => void refresh(false, false))
+    return on('logins:changed', () => recheckLogin(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [config, invoke, viewOnly] by design; the values it reads beyond these are current as of that run
   }, [config, invoke, viewOnly, on])
   useEffect(() => {
     if (viewOnly) return
-    const onFocus = () => void refresh(false, true)
+    const onFocus = () => recheckLogin(true)
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [config, invoke, viewOnly] by design; the values it reads beyond these are current as of that run
@@ -166,6 +243,8 @@ export function ProviderSettings({
       id === 'default' ? enabled : undefined,
     )
   const remove = (provider: AgentProvider, id: string) => {
+    // A removed login leaves its identity too, so nothing refers to it after Save changes.
+    accountIdentities.setOwner(accountKey('provider', provider, id), '')
     if (canShare)
       void invoke('mcp.removeAccount', provider, id).then(
         () => refetchMcp(),
@@ -196,7 +275,7 @@ export function ProviderSettings({
       const command = await invoke('providers.loginCommand', provider, target)
       if (!allowed()) return
       if (command) {
-        loginPending.current = true
+        loginPending.current = provider
         runProviderCommand(`${providerName(provider)} · ${t('Login')}`, command)
         return
       }
@@ -209,7 +288,7 @@ export function ProviderSettings({
       setSigningIn(provider)
       try {
         await invoke('providers.signIn', provider, accountId)
-        void refresh()
+        void refresh(false, false, [provider])
       } finally {
         setSigningIn(null)
       }
@@ -222,16 +301,18 @@ export function ProviderSettings({
     setError(null)
     try {
       await invoke('providers.update', provider)
-      await refresh()
+      await refresh(false, false, [provider])
     } catch (reason) {
       setError(errorText(reason))
     } finally {
       setUpdating(null)
     }
   }
-  const add = (provider: AgentProvider) => {
+  const add = (provider: AgentProvider, identityId: string) => {
     const id = crypto.randomUUID()
     arrange(provider, [...providerAccountRows(config, provider), id], [...(config[provider]?.accounts ?? []), { id }])
+    // Its identity is saved with the login itself, on Save changes.
+    if (identityId) accountIdentities.setOwner(accountKey('provider', provider, id), identityId)
     // A backup account starts out sharing approved MCP connections; it stays editable in its row.
     if (canShare) void setSharing(provider, [id], true)
   }
@@ -295,7 +376,7 @@ export function ProviderSettings({
               onReorder={(order) => arrange(provider, order)}
               onRename={(id, label) => rename(provider, id, label)}
               onRemove={(id) => remove(provider, id)}
-              onAddAccount={() => add(provider)}
+              onAddAccount={(identityId) => add(provider, identityId)}
               mcpSharing={
                 canShare ? (id) => valueOf(`mcp-sharing:${provider}:${id}`, sharing(provider, id)) : undefined
               }
@@ -309,8 +390,9 @@ export function ProviderSettings({
               mcpRechecking={(id) => rechecking === `${provider}:${id}`}
               onMcpRecheck={canShare ? (id) => void recheck(provider, id) : undefined}
               onUpdate={() => void update(provider)}
-              stale={statusQuery.isError && !!statusQuery.data}
-              onCheckAgain={() => void refresh()}
+              stale={stale && !!status}
+              checking={checking.has(provider)}
+              onCheckAgain={() => void refresh(false, false, [provider])}
               onUpdateRamu={onOpenSection ? () => onOpenSection('system') : undefined}
               onBrowse={(key) => void browse(provider, key)}
               models={
@@ -337,7 +419,7 @@ export function ProviderSettings({
           onClose={() => setApiKey(null)}
           onSubmit={async (variable, key) => {
             await invoke('providers.setApiKey', apiKey.provider, apiKey.accountId, variable, key)
-            void refresh()
+            void refresh(false, false, [apiKey.provider])
           }}
         />
       )}
@@ -349,7 +431,7 @@ export function ProviderSettings({
             setSigningIn('antigravity')
             try {
               await invoke('providers.signIn', 'antigravity', antigravity.accountId, input)
-              void refresh()
+              void refresh(false, false, ['antigravity'])
             } finally {
               setSigningIn(null)
             }

@@ -26,6 +26,8 @@ import { errorText } from '../lib/errors'
 import { takePendingPluginSource } from './pluginLinks'
 import { SettingsCard, SettingsCardList, SettingsEmpty, SettingsSectionHead } from './cards'
 import { useSettingsEvents, useSettingsInvoke } from './SettingsScope'
+import { accountKey } from '@ramu/shared/identities'
+import { AccountIdentityPicker, IdentityDropdown, IdentityName, useAccountIdentities } from './AccountIdentity'
 
 const open = (url: string) => void onThisComputer('app.openExternal', url)
 
@@ -199,17 +201,16 @@ function Credential({
   plugin,
   slot,
   viewOnly,
-  identities,
   onChanged,
 }: {
   plugin: InstalledPlugin
   slot: InstalledPlugin['credentials'][number]
   viewOnly: boolean
-  /** With two or more identities, a value can be kept for one of them, splitting the slot. */
-  identities: { id: string; name: string }[]
   onChanged: () => void
 }) {
   const invoke = useSettingsInvoke()
+  // With two or more identities, a value can be kept for one of them, splitting the slot.
+  const { identities, identity } = useAccountIdentities()
   const declared = plugin.contents.credentials.find((entry) => entry.id === slot.id)
   const [token, setToken] = useState('')
   const [fields, setFields] = useState<Record<string, string>>({})
@@ -232,22 +233,25 @@ function Credential({
       setBusy(false)
     }
   }
+  // Identities that could still keep their own value beside the one for every identity.
+  const free = (identities ?? []).filter((entry) => !slot.identities.includes(entry.id))
   const split =
     slot.identities.length > 0 ? (
       <ul className="m-0 flex flex-col gap-0.5 p-0">
-        {slot.identities.map((identity) => (
-          <li key={identity} className="flex list-none items-center gap-2 text-caption">
-            <span className="min-w-0 flex-1 truncate">
-              {t('{0} for {1}', {
-                0: declared.label,
-                1: identities.find((entry) => entry.id === identity)?.name ?? identity,
-              })}
+        {slot.identities.map((id) => (
+          <li key={id} className="flex list-none items-center gap-2 text-caption">
+            <span className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="truncate">{declared.label}</span>
+              {(() => {
+                const own = identity(id)
+                return own ? <IdentityName identity={own} /> : null
+              })()}
             </span>
             <Button
               size="sm"
               variant="ghost"
               disabled={viewOnly || busy}
-              onClick={() => void act(() => invoke('plugins.removeCredential', plugin.id, slot.id, identity))}
+              onClick={() => void act(() => invoke('plugins.removeCredential', plugin.id, slot.id, id))}
             >
               {t('Remove')}
             </Button>
@@ -263,7 +267,28 @@ function Credential({
           <span className="min-w-0 flex-1 truncate">
             {declared.label}: {slot.account}
           </span>
-          <Button size="sm" variant="ghost" disabled={viewOnly} onClick={() => setEditing(true)}>
+          {declared.kind === 'token' && free.length > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={viewOnly}
+              onClick={() => {
+                setForIdentity(free[0]!.id)
+                setEditing(true)
+              }}
+            >
+              {t('Add account')}
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={viewOnly}
+            onClick={() => {
+              setForIdentity('')
+              setEditing(true)
+            }}
+          >
             {t('Replace')}
           </Button>
           <Button
@@ -338,14 +363,12 @@ function Credential({
             />
           ),
         )}
-      {declared.kind === 'token' && identities.length > 0 && (
-        <Dropdown
-          label={t('For')}
+      {declared.kind === 'token' && identities && (
+        <IdentityDropdown
+          identities={identities}
+          caption={t('For')}
+          label={t('Which identity uses it')}
           value={forIdentity}
-          options={[
-            { value: '', label: t('All identities') },
-            ...identities.map((identity) => ({ value: identity.id, label: identity.name })),
-          ]}
           onChange={setForIdentity}
         />
       )}
@@ -391,13 +414,6 @@ export function PluginSettings() {
   const [newIndex, setNewIndex] = useState('')
   const [review, setReview] = useState<PluginReview | null>(null)
   const [removing, setRemoving] = useState<InstalledPlugin | null>(null)
-  const [identityList, setIdentityList] = useState<{ id: string; name: string }[]>([])
-  useEffect(() => {
-    void invoke('identities.get').then(
-      (snapshot) => setIdentityList(snapshot.settings.identities.length >= 2 ? snapshot.settings.identities : []),
-      () => {},
-    )
-  }, [invoke])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Installed plugins and every listing load when the page opens; typing filters the listings here, without a request.
@@ -513,6 +529,11 @@ export function PluginSettings() {
                 .join(' · ')}
               actions={
                 <>
+                  <AccountIdentityPicker
+                    accountKey={accountKey('plugin', plugin.id)}
+                    name={plugin.name}
+                    disabled={viewOnly || busy}
+                  />
                   {plugin.update && (
                     <Button
                       size="sm"
@@ -556,14 +577,7 @@ export function PluginSettings() {
                 </p>
               )}
               {plugin.credentials.map((slot) => (
-                <Credential
-                  key={slot.id}
-                  plugin={plugin}
-                  slot={slot}
-                  viewOnly={viewOnly}
-                  identities={identityList}
-                  onChanged={reload}
-                />
+                <Credential key={slot.id} plugin={plugin} slot={slot} viewOnly={viewOnly} onChanged={reload} />
               ))}
             </SettingsCard>
           )

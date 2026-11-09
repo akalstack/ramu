@@ -1178,6 +1178,11 @@ export interface RamuMethods extends ArtifactMethods {
     checkLatest?: boolean,
     refresh?: boolean,
   ): Promise<ProviderStatus[]>
+  /** One provider's status and its logins' sign-in, read alone so the others keep their last result. */
+  'providers.statusOf'(
+    provider: import('./types').AgentProvider,
+    configuration?: ProviderConfiguration,
+  ): Promise<ProviderStatus>
   /** Sign-in email per provider and login ID, for the logins whose CLI reports one. */
   'providers.accountEmails'(): Promise<Record<string, Record<string, string>>>
   /** Each login's sign-in email and whether it uses an API key, by provider and account, for naming logins. */

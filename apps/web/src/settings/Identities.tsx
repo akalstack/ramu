@@ -329,9 +329,9 @@ function IdentityCard({
 }
 
 /**
- * Settings › Identities: work, personal and client identities, each with its Git author, the rules that pick it from a
- * project's folder or remote, and which connected accounts belong to it. Every account is for all identities until it
- * is put in one.
+ * Settings › Identities: work, personal and client identities, each with its Git author and the rules that pick it from
+ * a project's folder or remote, and which identity each project uses. Accounts are put in an identity where each one is
+ * connected (see AccountIdentity).
  */
 export function IdentitySettings() {
   useLanguage()
@@ -429,37 +429,11 @@ export function IdentitySettings() {
 
       {identities.length >= 2 && (
         <>
-          <SettingsSectionHead
-            title={t('Accounts')}
-            help={t(
-              'Every account is for all identities until you put it in one. An identity uses its own account of a kind first, and never another identity’s.',
+          <p className="m-0 mt-1 text-caption text-muted-foreground">
+            {t(
+              'Each account picks its identity where you connect it: Providers, Git, Deploy, Media, MCP, plugins and browser profiles. Every account is for all identities until you put it in one.',
             )}
-          />
-          <SettingsCardList>
-            {snapshot.accounts.map((account) => {
-              const owners = snapshot.settings.accounts[account.key] ?? []
-              return (
-                <SettingsCard
-                  key={account.key}
-                  title={account.label}
-                  actions={
-                    <Dropdown
-                      label={t('Which identities is it for?')}
-                      value={owners.length === 1 ? owners[0]! : ''}
-                      options={[
-                        { value: '', label: t('All identities') },
-                        ...identities.map((identity) => ({ value: identity.id, label: identity.name })),
-                      ]}
-                      onChange={(value) =>
-                        void act(() => invoke('identities.assign', account.key, value ? [value] : []))
-                      }
-                      disabled={viewOnly || busy}
-                    />
-                  }
-                />
-              )
-            })}
-          </SettingsCardList>
+          </p>
           <SettingsSectionHead
             title={t('Projects')}
             help={t('Pin a project to another identity; it follows its rules otherwise.')}

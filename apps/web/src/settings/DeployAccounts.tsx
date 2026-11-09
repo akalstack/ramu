@@ -9,16 +9,17 @@ import {
   isMediaService,
   type CliSignInPlatform,
 } from '@ramu/shared/types/deploy'
-import type { IdentitySnapshot } from '@ramu/shared/identities'
+import { accountKey } from '@ramu/shared/identities'
+import { ExternalLink } from 'lucide-react'
 import { BrandIcon } from '@/components/brand-icon'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
-import { Dropdown } from '../Menu'
 import { t } from '../i18n'
 import { invoke as openOnThisComputer } from '../ipc'
 import { errorText } from '../lib/errors'
 import { useSettingsInvoke } from './SettingsScope'
+import { AccountIdentityPicker, IdentityDropdown, IdentityName, useAccountIdentities } from './AccountIdentity'
 
 /** What to pick on each platform's token page: the smallest scope it offers. */
 const SCOPE_HINT: Record<AccountPlatform, string> = {
@@ -82,21 +83,27 @@ export function DeployAccounts({ only }: { only?: HostingAccount['kind'] } = {})
     setSummary(null)
     load(false)
   }, [load])
-  const [identities, setIdentities] = useState<IdentitySnapshot | null>(null)
-  useEffect(() => {
-    void Promise.resolve(invoke('identities.get')).then(setIdentities, () => {})
-  }, [invoke])
   if (failed)
     return (
       <p role="alert" className="m-0 mb-3 px-4 text-caption text-destructive">
         {failed}
       </p>
     )
+  // Each platform's accounts kept for one identity follow the account for every identity, so they read as one group.
+  const ordered = (accounts: HostingAccount[]) =>
+    accounts
+      .filter((account) => !account.identityId)
+      .flatMap((shared) => [
+        shared,
+        ...accounts.filter((account) => account.identityId && account.platform === shared.platform),
+      ])
   const row = (account: HostingAccount) => (
     <DeployAccountRow
       key={`${account.platform}:${account.identityId ?? ''}`}
       account={account}
-      identity={identities?.settings.identities.find((entry) => entry.id === account.identityId)?.name}
+      ownIdentities={summary!.accounts.flatMap((other) =>
+        other.platform === account.platform && other.identityId ? [other.identityId] : [],
+      )}
       canAdminister={summary!.canAdminister}
       reload={load}
     />
@@ -104,9 +111,9 @@ export function DeployAccounts({ only }: { only?: HostingAccount['kind'] } = {})
   return (
     <>
       {only
-        ? summary?.accounts.filter((account) => account.kind === only).map(row)
+        ? ordered(summary?.accounts.filter((account) => account.kind === only) ?? []).map(row)
         : DEPLOY_ACCOUNT_GROUPS.map((group) => {
-            const accounts = summary?.accounts.filter((account) => account.kind === group.kind) ?? []
+            const accounts = ordered(summary?.accounts.filter((account) => account.kind === group.kind) ?? [])
             return accounts.length ? (
               <section key={group.kind} className="mb-4">
                 <SettingsGroupTitle>{t(group.title)}</SettingsGroupTitle>
@@ -114,13 +121,6 @@ export function DeployAccounts({ only }: { only?: HostingAccount['kind'] } = {})
               </section>
             ) : null
           })}
-      {summary?.canAdminister && identities && identities.settings.identities.length >= 2 && (
-        <IdentityAccountForm
-          platforms={summary.accounts.filter((account) => !account.identityId && (!only || account.kind === only))}
-          identities={identities.settings.identities}
-          reload={load}
-        />
-      )}
       {summary && !summary.canAdminister && (
         <p className="m-0 mb-3 px-4 text-caption text-muted-foreground">
           {only === 'media'
@@ -136,94 +136,29 @@ export function DeployAccounts({ only }: { only?: HostingAccount['kind'] } = {})
   )
 }
 
-/**
- * A further account of a platform for one identity, such as a client's Vercel team beside your own: projects of that
- * identity deploy with it, every other project with the account for every identity.
- */
-function IdentityAccountForm({
-  platforms,
-  identities,
-  reload,
-}: {
-  platforms: HostingAccount[]
-  identities: { id: string; name: string }[]
-  reload: (check: boolean) => void
-}) {
-  const invoke = useSettingsInvoke()
-  const [platform, setPlatform] = useState(platforms[0]?.platform ?? '')
-  const [identity, setIdentity] = useState(identities[0]?.id ?? '')
-  const [token, setToken] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  if (!platforms.length) return null
-  return (
-    <section className="mb-4 flex flex-col gap-1.5 px-1" aria-label={t('Add an account for an identity')}>
-      <SettingsGroupTitle>{t('Add an account for an identity')}</SettingsGroupTitle>
-      <p className="m-0 text-caption text-muted-foreground">
-        {t('Projects of that identity use it; every other project keeps using the account above.')}
-      </p>
-      <form
-        className="flex flex-wrap items-center gap-1.5"
-        onSubmit={(event) => {
-          event.preventDefault()
-          setBusy(true)
-          setError(null)
-          void Promise.resolve(
-            invoke('deploy.saveToken', platform as HostingAccount['platform'], token.trim(), identity),
-          )
-            .then(
-              () => {
-                setToken('')
-                reload(false)
-              },
-              (reason) => setError(errorText(reason)),
-            )
-            .finally(() => setBusy(false))
-        }}
-      >
-        <Dropdown
-          label={t('Platform')}
-          value={platform}
-          options={platforms.map((account) => ({ value: account.platform, label: account.name }))}
-          onChange={setPlatform}
-        />
-        <Dropdown
-          label={t('Identity')}
-          value={identity}
-          options={identities.map((entry) => ({ value: entry.id, label: entry.name }))}
-          onChange={setIdentity}
-        />
-        <Input
-          type="password"
-          aria-label={t('Token')}
-          placeholder={t('Token')}
-          value={token}
-          autoComplete="off"
-          onChange={(event) => setToken(event.target.value)}
-        />
-        <Button type="submit" size="sm" variant="secondary" disabled={busy || token.trim().length < 8}>
-          {t('Save')}
-        </Button>
-      </form>
-      {error && <p className="m-0 text-caption text-bad">{error}</p>}
-    </section>
-  )
-}
+/** What the open panel does: connect the account (again), or add one more of the platform for one identity. */
+type Panel = 'connect' | 'add'
 
 function DeployAccountRow({
   account,
-  identity,
+  ownIdentities,
   canAdminister,
   reload,
 }: {
   account: HostingAccount
-  /** The identity this account belongs to, for one identity's own account. */
-  identity?: string
+  /** The identities that already have their own account of this platform. */
+  ownIdentities: string[]
   canAdminister: boolean
   reload: (check: boolean) => void
 }) {
   const invoke = useSettingsInvoke()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState<Panel | null>(null)
+  const { identities, identity, ownerOf } = useAccountIdentities()
+  const key = accountKey(account.kind === 'media' ? 'media' : 'hosting', account.platform)
+  const own = identity(account.identityId)
+  // Identities that could still get their own account of this platform, beside the one for every identity.
+  const free = account.identityId ? [] : (identities ?? []).filter((entry) => !ownIdentities.includes(entry.id))
+  const [forIdentity, setForIdentity] = useState('')
   const [signIn, setSignIn] = useState<HostingSignIn | null>(null)
   const [token, setToken] = useState('')
   const [number, setNumber] = useState('')
@@ -246,7 +181,7 @@ function DeployAccountRow({
         (next) => {
           setSignIn(next)
           if (next.state === 'connected') {
-            setOpen(false)
+            setOpen(null)
             reload(false)
           }
         },
@@ -268,7 +203,7 @@ function DeployAccountRow({
   }
   const close = () => {
     if (signInId && waiting) void invoke('deploy.cancelSignIn', signInId)
-    setOpen(false)
+    setOpen(null)
     setSignIn(null)
     setToken('')
     setError(null)
@@ -276,23 +211,41 @@ function DeployAccountRow({
   const help = account.broadScope
     ? `${deployAccountHeadline(account)} · ${account.broadScope}`
     : deployAccountHeadline(account)
+  const openPanel = (panel: Panel) => {
+    // A further account is for an identity that has none yet, preferring one the shared account is not put in.
+    setForIdentity(panel === 'add' ? ((free.find((entry) => entry.id !== ownerOf(key)) ?? free[0])?.id ?? '') : '')
+    setOpen(panel)
+  }
+  // The CLI sign-in keeps the platform's one shared account, so a further account for an identity uses a token.
+  const cliSignIn = !!cliPlatform && open === 'connect' && !account.identityId
+  const title =
+    open === 'add'
+      ? t('Add a {0} account', { 0: account.name })
+      : cliSignIn
+        ? t('Or use a token')
+        : account.kind === 'media'
+          ? t('Connect with an API key')
+          : t('Connect with a token')
   return (
     <>
       <SettingsRow>
-        <SettingsLabel
-          title={identity ? t('{0} for {1}', { 0: account.name, 1: identity }) : account.name}
-          icon={<BrandIcon brand={accountBrand(account.platform)} />}
-          help={help}
-        />
+        <SettingsLabel title={account.name} icon={<BrandIcon brand={accountBrand(account.platform)} />} help={help} />
         <span className="flex items-center gap-2">
+          {own && <IdentityName identity={own} />}
+          {account.connected && !account.identityId && <AccountIdentityPicker accountKey={key} name={account.name} />}
           {account.connected && (
             <Button variant="secondary" size="sm" onClick={() => reload(true)}>
               {t('Check connection')}
             </Button>
           )}
-          {(canAdminister || remoteSignIn) && !open && (
-            <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
+          {(canAdminister || (remoteSignIn && !account.identityId)) && !open && (
+            <Button variant="secondary" size="sm" onClick={() => openPanel('connect')}>
               {account.connected ? t('Reconnect') : t('Connect')}
+            </Button>
+          )}
+          {canAdminister && account.connected && free.length > 0 && !open && (
+            <Button variant="ghost" size="sm" onClick={() => openPanel('add')}>
+              {t('Add account')}
             </Button>
           )}
           {canAdminister && account.connected && !open && (
@@ -318,8 +271,9 @@ function DeployAccountRow({
         </p>
       )}
       {open && (
-        <div className="mb-3 flex flex-col gap-3 rounded-(--radius-m) bg-fill p-4 text-caption">
-          {cliPlatform && (
+        <SettingsRow className="settings-stack gap-3!">
+          {/* The CLI sign-in keeps the platform's one shared account, so a further account for an identity uses a token. */}
+          {cliSignIn && (
             <section className="flex flex-col gap-2" aria-label={t('Sign in with {0}', { 0: account.name })}>
               <strong>{t('Sign in with {0}', { 0: account.name })}</strong>
               <p className="m-0 text-muted-foreground">
@@ -387,89 +341,119 @@ function DeployAccountRow({
           )}
           {canAdminister && (
             <form
-              className="flex flex-col gap-2"
+              className="flex flex-col gap-3"
+              aria-label={title}
               onSubmit={(event) => {
                 event.preventDefault()
+                if (busy || token.trim().length < 8) return
                 void run(async () => {
-                  await invoke('deploy.saveToken', account.platform, token.trim())
+                  const identityId = account.identityId ?? (open === 'add' ? forIdentity : undefined)
+                  if (identityId) await invoke('deploy.saveToken', account.platform, token.trim(), identityId)
+                  else await invoke('deploy.saveToken', account.platform, token.trim())
                   setToken('')
-                  setOpen(false)
+                  setOpen(null)
                   reload(false)
                 })
               }}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && !busy) {
+                  event.stopPropagation()
+                  close()
+                }
+              }}
             >
-              <strong>
-                {account.cli
-                  ? t('Or use a token')
-                  : account.kind === 'media'
-                    ? t('Connect with an API key')
-                    : t('Connect with a token')}
-              </strong>
-              <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-muted-foreground">
-                <li>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => void openOnThisComputer('app.openExternal', account.tokenPage)}
-                  >
-                    {account.kind === 'media'
-                      ? t('Open {0}’s API key page', { 0: account.name })
-                      : t('Open {0}’s token page', { 0: account.name })}
-                  </Button>
-                </li>
-                <li>{t('Name it Ramu.')}</li>
-                <li>{t(SCOPE_HINT[account.platform])}</li>
-                <li>
-                  {account.kind === 'hosting'
-                    ? t('Set an expiry, then copy the token and paste it here.')
-                    : t('Copy the key and paste it here.')}
-                </li>
-              </ol>
-              <label htmlFor={tokenId} className="flex flex-col gap-1">
-                {account.kind === 'media' ? t('API key') : t('API token')}
+              <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                <div className="flex min-w-0 flex-1 basis-64 flex-col gap-0.5">
+                  <strong className="text-body">{title}</strong>
+                  <p className="m-0 text-caption text-muted-foreground">
+                    {`${t(SCOPE_HINT[account.platform])}. ${t('Name it Ramu.')} ${
+                      account.kind === 'hosting'
+                        ? t('Set an expiry, then copy the token and paste it here.')
+                        : t('Copy the key and paste it here.')
+                    }`}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void openOnThisComputer('app.openExternal', account.tokenPage)}
+                >
+                  {account.kind === 'media'
+                    ? t('Open {0}’s API key page', { 0: account.name })
+                    : t('Open {0}’s token page', { 0: account.name })}
+                  <ExternalLink data-icon="inline-end" />
+                </Button>
+              </div>
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <label htmlFor={tokenId} className="text-caption">
+                  {account.kind === 'media' ? t('API key') : t('API token')}
+                </label>
                 <Input
                   id={tokenId}
+                  className="w-full! flex-auto!"
                   type="password"
                   autoComplete="off"
                   autoCapitalize="none"
                   spellCheck={false}
+                  autoFocus={!cliSignIn}
+                  placeholder={account.kind === 'media' ? t('Paste the key') : t('Paste the token')}
                   disabled={busy}
                   value={token}
                   onChange={(event) => setToken(event.target.value)}
                 />
-              </label>
-              <p className="m-0 text-muted-foreground">
-                {account.kind === 'media'
-                  ? t(
-                      'The key goes straight to the host’s credential store, is checked with {0}, and is never shown again.',
-                      { 0: account.name },
-                    )
-                  : t(
-                      'The token goes straight to the host’s credential store, is checked with {0}, and is never shown again.',
-                      { 0: account.name },
-                    )}
-              </p>
+              </div>
               {error && (
-                <p role="alert" className="m-0 text-destructive">
+                <p role="alert" className="m-0 text-caption text-destructive">
                   {error}
                 </p>
               )}
-              <span className="flex gap-2">
-                <Button type="submit" size="sm" disabled={busy || token.trim().length < 8}>
-                  {busy ? t('Checking…') : t('Save')}
-                </Button>
-                <Button type="button" variant="ghost" size="sm" onClick={close}>
-                  {t('Cancel')}
-                </Button>
-              </span>
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <p className="m-0 min-w-0 flex-1 basis-64 text-caption text-muted-foreground">
+                  {account.kind === 'media'
+                    ? t(
+                        'The key goes straight to the host’s credential store, is checked with {0}, and is never shown again.',
+                        { 0: account.name },
+                      )
+                    : t(
+                        'The token goes straight to the host’s credential store, is checked with {0}, and is never shown again.',
+                        { 0: account.name },
+                      )}
+                </p>
+                <span className="flex flex-wrap items-center gap-2">
+                  {open === 'add' && identities && (
+                    <IdentityDropdown
+                      identities={free}
+                      everyIdentity={false}
+                      caption={t('For')}
+                      label={t('Projects of this identity use it; every other project keeps using {0}.', {
+                        0: account.account ?? account.name,
+                      })}
+                      value={forIdentity}
+                      onChange={setForIdentity}
+                    />
+                  )}
+                  <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={close}>
+                    {t('Cancel')}
+                  </Button>
+                  <Button type="submit" size="sm" disabled={busy || token.trim().length < 8}>
+                    {busy
+                      ? t('Checking…')
+                      : open === 'add'
+                        ? t('Add account')
+                        : account.connected
+                          ? t('Save')
+                          : t('Connect')}
+                  </Button>
+                </span>
+              </div>
             </form>
           )}
           {/* Without the token form (a paired device), the panel still shows what failed and can be closed. */}
           {!canAdminister && (
             <>
               {error && (
-                <p role="alert" className="m-0 text-destructive">
+                <p role="alert" className="m-0 text-caption text-destructive">
                   {error}
                 </p>
               )}
@@ -480,7 +464,7 @@ function DeployAccountRow({
               </span>
             </>
           )}
-        </div>
+        </SettingsRow>
       )}
     </>
   )

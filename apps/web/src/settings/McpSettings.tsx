@@ -12,6 +12,8 @@ import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { SettingsGroupTitle } from '@/components/settings-row'
 import { Dialog, Dropdown } from '../Menu'
+import { accountKey } from '@ramu/shared/identities'
+import { AccountIdentityPicker, IdentityDropdown, IdentityName, useAccountIdentities } from './AccountIdentity'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { revocationNotice } from './mcpRevocation'
@@ -422,13 +424,8 @@ export function McpSettings() {
   const viewOnly = scope?.targets?.some((target) => target.viewOnly) ?? false
   const ws = useWorkspace()
   // With two or more identities a server can hold an account per identity, each signed in on its own.
-  const [identityList, setIdentityList] = useState<{ id: string; name: string }[]>([])
-  useEffect(() => {
-    void Promise.resolve(invoke('identities.get')).then(
-      (snapshot) => setIdentityList(snapshot.settings.identities.length >= 2 ? snapshot.settings.identities : []),
-      () => {},
-    )
-  }, [invoke])
+  const { identities, identity } = useAccountIdentities()
+  const [adding, setAdding] = useState<{ connection: SharedMcpConnection; identityId: string } | null>(null)
   const models = useModelSets()
   const preferences = useAppSettings().preferences
   const defaultProvider =
@@ -467,6 +464,7 @@ export function McpSettings() {
     setEditing(null)
     setReview(null)
     setRemoving(null)
+    setAdding(null)
     setSigningIn(null)
     setError('')
     setBusy(false)
@@ -526,6 +524,14 @@ export function McpSettings() {
     )
   }
   const hostName = scope?.available.find((host) => host.id === scope.primaryId)?.name ?? t('This host')
+  /** Identities without their own account on this server yet. */
+  const freeFor = (connection: SharedMcpConnection) =>
+    (identities ?? []).filter(
+      (entry) =>
+        !data?.connections.some(
+          (other) => other.connection.split?.base === connection.id && other.connection.split.identityId === entry.id,
+        ),
+    )
   return (
     <div className="flex flex-col gap-3">
       <SettingsGroupTitle className="m-0">{t('Connected through Ramu')}</SettingsGroupTitle>
@@ -574,15 +580,16 @@ export function McpSettings() {
           view.paged.shown.map(({ connection, status, reason, checkedAt, toolCount }) => (
             <SettingsCard
               key={connection.id}
-              title={
-                connection.split
-                  ? t('{0} for {1}', {
-                      0: connection.name,
-                      1: identityList.find((identity) => identity.id === connection.split!.identityId)?.name ?? '',
-                    })
-                  : connection.name
+              title={connection.name}
+              badges={
+                <>
+                  <Badge variant="secondary">{t(statusLabels[status])}</Badge>
+                  {(() => {
+                    const own = identity(connection.split?.identityId)
+                    return own ? <IdentityName identity={own} /> : null
+                  })()}
+                </>
               }
-              badges={<Badge variant="secondary">{t(statusLabels[status])}</Badge>}
               meta={`${connection.providers.map(providerName).join(', ')} · ${connection.scope.hostWide ? t('All projects') : connection.scope.projectIds.map((id) => projects.data?.find((project) => project.id === id)?.name ?? id).join(', ')}`}
             >
               {reason && <p className="m-0 text-caption text-muted-foreground">{t(reason)}</p>}
@@ -609,24 +616,8 @@ export function McpSettings() {
                 </p>
               )}
               <div className="flex flex-wrap gap-2">
-                {!connection.split && identityList.length > 0 && canAdminister && (
-                  <Dropdown
-                    label={t('Add an account for an identity')}
-                    value=""
-                    placeholder={t('Add an account for…')}
-                    options={identityList
-                      .filter(
-                        (identity) =>
-                          !data.connections.some(
-                            (entry) =>
-                              entry.connection.split?.base === connection.id &&
-                              entry.connection.split.identityId === identity.id,
-                          ),
-                      )
-                      .map((identity) => ({ value: identity.id, label: identity.name }))}
-                    onChange={(identityId) => void act(() => invoke('mcp.splitForIdentity', connection.id, identityId))}
-                    disabled={busy}
-                  />
+                {!connection.split && (
+                  <AccountIdentityPicker accountKey={accountKey('mcp', connection.id)} name={connection.name} />
                 )}
                 <Button
                   size="sm"
@@ -690,6 +681,16 @@ export function McpSettings() {
                       }
                     />
                   </>
+                )}
+                {!connection.split && canAdminister && freeFor(connection).length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy}
+                    onClick={() => setAdding({ connection, identityId: freeFor(connection)[0]!.id })}
+                  >
+                    {t('Add account')}
+                  </Button>
                 )}
                 <Button
                   size="sm"
@@ -884,6 +885,38 @@ export function McpSettings() {
           <p>
             {t(
               'Removing this server revokes its shared access and deletes credentials stored by Ramu. External CLI sign-ins are unchanged.',
+            )}
+          </p>
+        </Dialog>
+      )}
+      {adding && identities && (
+        <Dialog
+          title={t('Add a {0} account', { 0: adding.connection.name })}
+          confirmLabel={t('Add account')}
+          busy={busy}
+          error={error}
+          onCancel={() => {
+            if (!busy) setAdding(null)
+          }}
+          onConfirm={() =>
+            void act(
+              () => invoke('mcp.splitForIdentity', adding.connection.id, adding.identityId),
+              () => setAdding(null),
+            )
+          }
+        >
+          <IdentityDropdown
+            identities={freeFor(adding.connection)}
+            everyIdentity={false}
+            caption={t('For')}
+            label={t('Which identity uses it')}
+            value={adding.identityId}
+            onChange={(identityId) => setAdding({ ...adding, identityId })}
+          />
+          <p className="m-0 text-caption text-muted-foreground">
+            {t(
+              'It signs in on its own and its tools are approved on their own. Projects of that identity use it in place of {0}; agents still see one server.',
+              { 0: adding.connection.name },
             )}
           </p>
         </Dialog>

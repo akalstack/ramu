@@ -302,3 +302,18 @@ it('routes managed runtime cancellation to the installer and lets the update be 
   await expect(service.update('antigravity')).resolves.toEqual(status)
   expect(install).toHaveBeenCalledTimes(2)
 })
+it('reads one provider and its logins without probing the others', async () => {
+  const probes = AGENT_PROVIDERS.map((provider) => {
+    const adapter = providerAdapter(provider)
+    vi.spyOn(adapter, 'signInState').mockResolvedValue({ signedIn: true })
+    return [provider, vi.spyOn(adapter, 'probeVersion').mockResolvedValue('1.2.3')] as const
+  })
+  create()
+  const status = await service.statusOf('codex', {
+    ...preferences.providerBinaries,
+    codex: { binary: bin, accounts: [{ id: 'work' }] },
+  })
+  expect(status).toMatchObject({ provider: 'codex', installed: true, version: '1.2.3' })
+  expect(Object.keys(status.signIn ?? {}).sort()).toEqual(['default', 'work'])
+  for (const [provider, probe] of probes) expect(probe).toHaveBeenCalledTimes(provider === 'codex' ? 1 : 0)
+})

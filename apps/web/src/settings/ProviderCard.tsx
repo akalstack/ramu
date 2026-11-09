@@ -63,6 +63,7 @@ export function ProviderCard({
   onBrowse,
   models,
   stale = false,
+  checking = false,
   onCheckAgain,
   onUpdateRamu,
 }: {
@@ -85,7 +86,8 @@ export function ProviderCard({
   onReorder: (ids: string[]) => void
   onRename: (id: string, name: string) => void
   onRemove: (id: string) => void
-  onAddAccount: () => void
+  /** `identityId` is '' for a login every identity may use. */
+  onAddAccount: (identityId: string) => void
   /** Whether an account shares approved Shared MCP connections; undefined hides the control (not the host's administrator). */
   mcpSharing?: (id: string) => boolean | undefined
   /** Turns sharing on or off for every login of the provider at once. */
@@ -100,6 +102,8 @@ export function ProviderCard({
   models?: ReactNode
   /** The host could not be reached; the status is its last known result. */
   stale?: boolean
+  /** This provider is being checked again; its last result stays shown meanwhile. */
+  checking?: boolean
   onCheckAgain: () => void
   onUpdateRamu?: () => void
 }) {
@@ -149,6 +153,14 @@ export function ProviderCard({
               <strong className="text-control">{providerName(provider)}</strong>
               {enabled && status?.version && (
                 <span className="text-caption text-muted-foreground">{status.version}</span>
+              )}
+              {enabled && checking && status && (
+                <RefreshCw
+                  size={11}
+                  role="status"
+                  aria-label={t('Checking…')}
+                  className="self-center text-muted-foreground [animation:spin_0.9s_linear_infinite]"
+                />
               )}
               <SettingTitleHosts path={`providerBinaries.${provider}.enabled`} />
             </span>
@@ -205,6 +217,7 @@ export function ProviderCard({
                         }}
                         position={index + 1}
                         state={status.signIn?.[id]}
+                        checking={checking}
                         accountUsage={accountUsage}
                         signingIn={signingIn}
                         sortable={order.length > 1}
@@ -231,14 +244,14 @@ export function ProviderCard({
             </SortableContext>
           </DndContext>
           {accounts && (
-            <div className="flex flex-wrap items-center gap-3">
-              <ProviderAddAccount preferences={preferences} onAdd={onAddAccount} />
-              <span className="min-w-0 flex-1 text-caption text-muted-foreground">
+            <div className="flex flex-col items-start gap-2">
+              <p className="m-0 text-caption text-muted-foreground">
                 {t(
                   'New threads use the top login. At a limit, a thread moves only to a login with an API key, never to another subscription.',
                 )}
                 <SettingTitleHosts path={`providerBinaries.${provider}.accountOrder`} />
-              </span>
+              </p>
+              <ProviderAddAccount provider={provider} preferences={preferences} onAdd={onAddAccount} />
             </div>
           )}
         </SettingsRow>

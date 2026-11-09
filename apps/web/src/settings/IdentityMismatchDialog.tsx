@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { IdentityMismatch } from '@ramu/shared/identities'
+import { accountSection } from './AccountIdentity'
 import { Button } from '@/components/desktop-button'
 import { Dialog } from '../Menu'
 import { t, useLanguage } from '../i18n'
@@ -45,7 +46,10 @@ export function IdentityMismatchDialog() {
       onCancel={close}
       onConfirm={() => {
         close()
-        window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'identities' } }))
+        // Opens where that kind of account is connected, so the right one can be put in this identity there.
+        window.dispatchEvent(
+          new CustomEvent('ramu:settings', { detail: { section: accountSection(mismatch.accountKey) } }),
+        )
       }}
       extraActions={
         <Button

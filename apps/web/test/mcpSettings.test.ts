@@ -20,6 +20,21 @@ vi.mock('../src/models/ModelSets', () => ({ useModelSets: () => ({ preferences: 
 vi.mock('../src/settings/AppSettings', () => ({ useAppSettings: () => ({ preferences: { providerBinaries: {} } }) }))
 vi.mock('../src/ipc', () => ({ ramu: { invoke: vi.fn() } }))
 vi.mock('../src/Menu', () => ({ Dialog: () => null, Dropdown: () => null }))
+// Identities are their own concern, read from the host's identity store; these settings render without them.
+vi.mock('../src/settings/AccountIdentity', () => ({
+  useAccountIdentities: () => ({
+    identities: null,
+    viewOnly: false,
+    identity: () => null,
+    ownerOf: () => '',
+    setOwner: () => {},
+    assign: async () => {},
+    suggestedFor: () => '',
+  }),
+  AccountIdentityPicker: () => null,
+  IdentityDropdown: () => null,
+  IdentityName: () => null,
+}))
 
 const snapshot: SharedMcpManagement = {
   hostId: 'host',

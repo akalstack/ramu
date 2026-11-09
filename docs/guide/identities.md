@@ -4,7 +4,7 @@
 
 An **identity** names the accounts that belong together, such as Work and Personal: a Git author (name and email), and which of this host's connected accounts it uses. Ramu picks a project's identity from its folder or remote, so nothing is switched by hand. With one account of each kind nothing new appears and nothing changes.
 
-**Settings → Identities** lists each identity with its name, color, Git author and rules, the connected accounts it can hold, and which identity each project uses. **Add identity** starts one; one identity is the default for projects no rule matches.
+**Settings → Identities** lists each identity with its name, color, Git author and rules, and which identity each project uses. Accounts are put in an identity where each one is connected (below). **Add identity** starts one; one identity is the default for projects no rule matches.
 
 ### Which identity a project uses
 
@@ -16,15 +16,17 @@ The identity is looked up when an action runs, never stored on a thread, schedul
 
 ### Accounts: shared unless split
 
-Every account is for all identities until it is put in one. Under **Accounts** in Settings, each connected account (provider logins, GitHub connections, hosting and media accounts, Shared MCP servers, plugins and browser profiles) has **Which identities is it for?**, with **All identities** first. An identity uses its own account of a kind when it has one, otherwise one that is for all identities, and never one put in another identity. A person with one Claude login and two identities uses it in both; putting a second Claude login in Personal changes Claude only.
+Every account is for all identities until it is put in one. With two or more identities, each account shows a small identity chip where it is connected: provider logins in **Settings → Providers**, GitHub tokens and `gh` sign-ins under **Details** in **Settings → Git**, hosting accounts in **Settings → Deploy**, media keys in **Providers → Media**, Shared MCP servers in **Agent setup**, plugins in **Settings → Plugins** and host browser profiles in **Settings → Browser**. The chip shows the identity's color and name, or **All**; choosing another identity takes effect on **Save changes**. Adding a further account of a kind (**Add account** for a provider, a GitHub token beside an existing one, a browser profile) offers **For** with the identity that has no account of that kind yet chosen. The first account of a kind is for all identities.
+
+An identity uses its own account of a kind when it has one, otherwise one that is for all identities, and never one put in another identity. A person with one Claude login and two identities uses it in both; putting a second Claude login in Personal changes Claude only.
 
 ### One service, an account per identity
 
 Some services need a separate sign-in per identity under one setup:
 
-- **Shared MCP servers:** **Add an account for…** on a server's card in **Agent setup** adds that identity's own account on the same server, shown as "Linear for Personal". It is signed in, or given its secrets, on its own, and its tools are checked and approved on their own, since a work workspace can offer tools a personal one does not. A project of that identity uses it in place of the original; its agent still sees one `linear` server and never chooses the account. Removing the server removes its accounts too.
-- **Plugin credentials:** a plugin's card offers **For** beside a token: the first value is for every identity, and a value kept for one identity splits the slot. That identity's projects use their own value (in the plugin's CLI, data sources and MCP servers, which get an account for that identity); the others keep the shared one.
-- **Hosting accounts:** **Add an account for an identity** in **Settings → Deploy** keeps a further token of a platform for one identity, such as a client's Vercel team beside your own. Deploys, databases and store releases in that identity's projects use it, and every other project uses the account for every identity. Media keys work the same way for abilities run from a project of that identity.
+- **Shared MCP servers:** **Add account** on a server's card in **Agent setup** adds an identity's own account on the same server, shown with that identity's chip. It is signed in, or given its secrets, on its own, and its tools are checked and approved on their own, since a work workspace can offer tools a personal one does not. A project of that identity uses it in place of the original; its agent still sees one `linear` server and never chooses the account. Removing the server removes its accounts too.
+- **Plugin credentials:** **Add account** beside a saved token, or **For** in the token form, keeps a value for one identity and splits the slot. That identity's projects use their own value (in the plugin's CLI, data sources and MCP servers, which get an account for that identity); the others keep the shared one.
+- **Hosting and media accounts:** **Add account** on a connected platform's row in **Settings → Deploy** or **Providers → Media** keeps a further token for one identity, such as a client's Vercel team beside your own. Deploys, databases, store releases and media abilities in that identity's projects use it, and every other project uses the account for every identity.
 
 ### What follows the project's identity
 
@@ -37,7 +39,7 @@ Some services need a separate sign-in per identity under one setup:
 
 ### The guardrail
 
-Before Ramu pushes, opens a pull request, merges, deploys to production or releases to the stores, it compares the account it is about to use (the repository's GitHub account, the thread's provider login, the hosting account) with the project's identity. If the account belongs to another identity, the action stops and a card opens on the desktop and the phone naming both: **Continue as ‹other›** lets the action run once within ten minutes, and **Use ‹project's identity›** opens Settings → Identities to put the right account in place.
+Before Ramu pushes, opens a pull request, merges, deploys to production or releases to the stores, it compares the account it is about to use (the repository's GitHub account, the thread's provider login, the hosting account) with the project's identity. If the account belongs to another identity, the action stops and a card opens on the desktop and the phone naming both: **Continue as ‹other›** lets the action run once within ten minutes, and **Use ‹project's identity›** opens the Settings page where that kind of account is connected, to put the right account in place.
 
 ### Knowledge: three levels
 

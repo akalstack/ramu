@@ -20,6 +20,8 @@ import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/set
 import { Dropdown } from '../Menu'
 import { BrowserImportPanel } from './BrowserImportPanel'
 import { useStagedValue } from './stagedChanges'
+import { accountKey } from '@ramu/shared/identities'
+import { AccountIdentityPicker, IdentityDropdown, useAccountIdentities } from './AccountIdentity'
 
 /** Runtime preferences and profile administration stay on the owning host. */
 export function HostBrowserSettings({
@@ -44,6 +46,10 @@ export function HostBrowserSettings({
   const [renaming, setRenaming] = useState('')
   const [rename, setRename] = useState('')
   const [review, setReview] = useState<ReturnType<RamuMethods['hostBrowser.profileReview']> | null>(null)
+  const accountIdentities = useAccountIdentities()
+  // Null follows the suggestion: the identity with no profile of its own yet, once one identity has one.
+  const [chosenIdentity, setChosenIdentity] = useState<string | null>(null)
+  const forIdentity = chosenIdentity ?? accountIdentities.suggestedFor('browser')
   const local = hostId === ownHostId()
   const refresh = useCallback(async () => {
     if (readOnly || access.current.readOnly || access.current.hostId !== hostId) return
@@ -168,8 +174,11 @@ export function HostBrowserSettings({
             onSubmit={(event) => {
               event.preventDefault()
               void act(async () => {
-                await invokeOn(hostId, 'hostBrowser.profileCreate', name)
+                const profile = await invokeOn(hostId, 'hostBrowser.profileCreate', name)
+                if (accountIdentities.identities && forIdentity)
+                  await accountIdentities.assign(accountKey('browser', profile.id), forIdentity)
                 setName('')
+                setChosenIdentity(null)
               })
             }}
           >
@@ -181,6 +190,15 @@ export function HostBrowserSettings({
               maxLength={80}
               onChange={(event) => setName(event.target.value)}
             />
+            {accountIdentities.identities && (
+              <IdentityDropdown
+                identities={accountIdentities.identities}
+                caption={t('For')}
+                label={t('Which identity uses it')}
+                value={forIdentity}
+                onChange={setChosenIdentity}
+              />
+            )}
             <Button size="sm" disabled={busy || !name.trim()}>
               {t('Add profile')}
             </Button>
@@ -190,6 +208,10 @@ export function HostBrowserSettings({
             .map((profile) => (
               <div key={profile.id} className="flex items-center gap-2 text-caption">
                 <span className="flex-1">{profile.builtin ? t(profile.name) : profile.name}</span>
+                <AccountIdentityPicker
+                  accountKey={accountKey('browser', profile.id)}
+                  name={profile.builtin ? t(profile.name) : profile.name}
+                />
                 {!profile.builtin &&
                   (renaming === profile.id ? (
                     <form

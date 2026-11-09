@@ -46,6 +46,21 @@ vi.mock('../src/deviceStorage', () => ({ deviceStorage: { getItem: () => null, s
 vi.mock('../src/ipc', () => ({ invokeOn: state.invoke, ramu: { invoke: state.invoke }, bridge: {} }))
 vi.mock('../src/i18n', () => ({ t: (text: string) => text, useLanguage() {} }))
 vi.mock('../src/Menu', () => ({ Dropdown: 'Dropdown' }))
+// Identities are their own concern, read from the host's identity store; these settings render without them.
+vi.mock('../src/settings/AccountIdentity', () => ({
+  useAccountIdentities: () => ({
+    identities: null,
+    viewOnly: false,
+    identity: () => null,
+    ownerOf: () => '',
+    setOwner: () => {},
+    assign: async () => {},
+    suggestedFor: () => '',
+  }),
+  AccountIdentityPicker: () => null,
+  IdentityDropdown: () => null,
+  IdentityName: () => null,
+}))
 vi.mock('@/components/settings-row', () => ({
   SettingsGroupTitle: 'h4',
   SettingsRow: 'div',
@@ -65,7 +80,7 @@ vi.mock('@/components/ui/dialog', () => ({
 vi.mock('../src/views/searchEngine', () => ({ SearchEnginePicker: 'SearchEnginePicker' }))
 vi.mock('../src/settings/BrowserProfiles', () => ({ BrowserProfilesSettings: 'BrowserProfilesSettings' }))
 vi.mock('@tanstack/react-query', () => ({
-  useQueryClient: () => ({ fetchQuery: vi.fn() }),
+  useQueryClient: () => ({ fetchQuery: vi.fn(), getQueryCache: () => ({ findAll: () => [] }), setQueryData: vi.fn() }),
   useQuery: ({ queryKey }: { queryKey: string[] }) => ({
     data: queryKey[0] === 'provider-settings' ? [] : { accounts: [], canAdminister: false },
     isFetching: false,

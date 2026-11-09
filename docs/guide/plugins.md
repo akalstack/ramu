@@ -14,7 +14,7 @@ Nothing is saved until you have seen the review. It lists:
 - The credentials it asks for, its CLI and the commands that run without asking, the abilities it maps and the dashboard data it provides.
 - Its source pinned to a commit, its license, and **Signed by ‹author›** or **Unsigned**.
 - Parts Claude Code or Codex use that Ramu does not (hooks, slash commands, language servers, output styles, monitors and app connectors), as **Not used in Ramu**. They are never run.
-- **Applies to:** all projects (the default) or one project, so a client's plugin reaches only that client's project. To limit a plugin to an [identity](identities.md), put it in one under **Settings → Identities → Accounts**.
+- **Applies to:** all projects (the default) or one project, so a client's plugin reaches only that client's project. To limit a plugin to an [identity](identities.md), put it in one with the identity chip on its card.
 
 After **Install**, each credential asks for its value on the plugin's card. A token is checked with the service before it is kept, and the card shows whose it is; a sign-in opens the service's page in your browser and comes back to Ramu on this computer. **Later** leaves the plugin installed, and its card says what is missing. Credentials are pasted and signed in only on the computer running the host.
 

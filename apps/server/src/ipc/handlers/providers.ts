@@ -70,6 +70,11 @@ export const registerProviderHandlers: RegisterHandlers = ({
       run: (config?: ProviderConfiguration, latest?: boolean, refresh?: boolean) =>
         providers.status(config, latest, true, refresh),
     },
+    'providers.statusOf': {
+      args: z.tuple([agentSettings.shape.provider, providerBinaries.optional()]),
+      run: (provider: ProviderStatus['provider'], config?: ProviderConfiguration) =>
+        providers.statusOf(provider, config),
+    },
     'providers.accountEmails': { args: z.tuple([]), run: () => providers.accountEmails() },
     'providers.accountLogins': { args: z.tuple([]), run: () => providers.accountLogins() },
     'providers.signIn': {

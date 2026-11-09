@@ -404,14 +404,23 @@ export class ProviderService {
     }
     return result
   }
+  /**
+   * One provider's status with its logins, for Settings after a change to that provider alone (a login added, renamed
+   * or signed in), so every other provider keeps its result instead of being probed again.
+   */
+  async statusOf(provider: AgentProvider, overrides?: ProviderConfiguration): Promise<ProviderStatus> {
+    const [status] = await this.readStatus(overrides, false, true, [provider])
+    return status!
+  }
   private async readStatus(
     overrides?: ProviderConfiguration,
     checkLatest = false,
     force = true,
+    only: readonly AgentProvider[] = AGENT_PROVIDERS,
   ): Promise<ProviderStatus[]> {
     const config = overrides ?? this.preferences().providerBinaries ?? {}
     const statuses = await Promise.all(
-      AGENT_PROVIDERS.map(async (provider): Promise<ProviderStatus> => {
+      only.map(async (provider): Promise<ProviderStatus> => {
         const binary = providerBinary(provider, config),
           installed = !!findExecutable(binary)
         let version: string | null = null,
