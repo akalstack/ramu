@@ -57,11 +57,13 @@ Inbox, notifications and usage stay host-wide with the chip on each item; usage 
 
 **Projects stay one list.** Projects belong to the host, and the identity is a property of each project: matched by a rule or pinned from its menu, stored on the host. The sidebar shows every project with its chip; nothing is hidden behind a switch, and moving a project to another identity changes only that field.
 
+**Grouping and filtering.** With two or more identities, the sidebar's view menu, on the desktop and the phone, offers **Group by identity**, which puts projects under a heading per identity in the identity's color, and **Show only**, which narrows the list to one identity until cleared, with the active filter shown above the list so no project seems lost. Both are off by default and remembered per device. Search, the Inbox and notifications keep showing every identity.
+
+**On the phone.** The chip on a project and in a thread's header opens the identity picker, so a project can be pinned to another identity from the phone; mismatch cards offer **Use Work** and **Continue as Personal** there too. **Settings → Identities** on the phone lists identities with their rules and the projects each catches, and edits the name, color, rules, Git author and which connected accounts belong to each. Connecting a new account follows that account's existing rules (some sign in from a paired owner device; others only on the host's own computer). Changing identities needs the device's **settings changes** permission, like any other host setting.
+
 **One identity is no change.** With a single identity nothing new appears. **Settings → Identities** shows up once a second account of any kind above exists, with **Add identity** prefilled from it.
 
 **More than two works the same way.** Work and Personal are the case to design for; further identities are more entries in the same list, with no extra screens. Each has a name and a color for its chip. **Add identity** starts from the accounts not yet in one, and **Remove** asks which identity its projects move to. One identity is the default for projects no rule matches. When two rules match, the more specific one wins (a remote owner over a folder, a deeper folder over a shallower one), and the identity's rules list shows which projects each rule catches.
-
-**Each host has its own.** Identities are host settings that reference that host's accounts, and a project's identity is resolved and applied on the host that holds it, memory scope included. A person who keeps work on one machine and personal projects on another needs no identities at all.
 
 #### Knowledge: three levels
 
@@ -88,6 +90,8 @@ It applies to:
 **The receiving host decides.** A thread that arrives on another host, through **Continue on ‹host›**, an agent starting a thread there, or Home's **Auto** routing, runs under that host's identity for its project, with that host's accounts. Credentials never travel. When **Continue on ‹host›** clones the repository there, that host's rules pick the new project's identity, and the sheet shows it before cloning.
 
 **Compared by Git author email.** Identity names belong to each host, so hosts are compared by the Git author email, which means the same everywhere and is set even on a host with only its default identity. The Continue sheet, the approval for an agent's start on another host and Home's routing show the target's chip, and when the emails differ they say so before anything crosses: "This thread is you@acme.com. On home-server it would run as you@gmail.com." with **Continue anyway** and **Cancel**. Agents get this as a refusal only the person can approve. **Bring back result** returns only a reply and needs no check.
+
+**The same identities on several hosts.** Each identity gets a stable id when it is created, and **Copy settings from…** carries it, so copying again updates an identity instead of adding a second "Work". **Settings → Identities** follows **Apply settings to**: with several hosts selected, editing an identity's name, color, rules or Git author changes it on every selected host that has it, and an identity a host lacks is offered as **Add on ‹host›**. Account choices are matched per host by sign-in email; an account not connected on a host shows **Connect on this host** rather than changing anything. Values that differ between hosts show **Mixed**, as other settings do. Folder rules apply only on hosts whose paths match; remote rules mean the same on every host.
 
 **Memory does not cross.** A copied conversation is evidence for that thread only. Notes its agent saves go to the receiving host's memory under that host's identity.
 
@@ -136,10 +140,7 @@ Encrypted backups to a Ramu account or to your own GitHub are planned in [Ramu a
 - Removing an identity moves its projects to the identity chosen in **Remove**, and they act with its accounts from the next thread.
 - On a second Mac paired with the first, **Copy settings from…** brings over appearance, models and identities with one review, and lists the logins still to connect there; no credential appears on the second host.
 - An exported file contains no paths, tokens or account secrets, and importing it on a fresh host gives the same review.
-- Server tests for identity matching, environment applied to started processes, the guardrail on each action and on schedule runs, shared and split accounts, fallback limited to the identity's and shared logins, the three knowledge levels for memory, learned skills, past-conversation search and rules, the cross-host email check, Shared MCP account selection per identity and the portable export; web tests for the chip, the mismatch card, the Continue warning and the copy review; strings translated to Indonesian.
-
-## Later options
-
-- Identities on the phone beyond the read-only chip, once people ask to change them away from the desktop.
-- Filtering or grouping the sidebar by identity, once people with many projects ask for it.
-- Keeping the same identities in step on several hosts (a stable id across hosts, editing them with **Apply settings to**), once people who mix accounts on several machines ask for it.
+- From the phone, a project's chip pins it to Personal, and its next thread uses the personal login; a mismatch card on the phone pushes as Work with **Use Work**; a phone without the settings changes permission sees identities read-only.
+- **Group by identity** shows Work and Personal headings on the desktop and the phone; **Show only Work** hides personal projects with the filter shown above the list, and search still finds a personal thread.
+- After copying identities to a second host, copying again changes no identity count; adding a folder rule to Work with both hosts selected adds it on both, and a host without the work GitHub login shows **Connect on this host** for it.
+- Server tests for identity matching, environment applied to started processes, the guardrail on each action and on schedule runs, shared and split accounts, fallback limited to the identity's and shared logins, the three knowledge levels for memory, learned skills, past-conversation search and rules, the cross-host email check, Shared MCP account selection per identity and the portable export; web and mobile tests for the chip and picker, the mismatch card, grouping and filtering, identities edited across hosts, the Continue warning and the copy review; strings translated to Indonesian.

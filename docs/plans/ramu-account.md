@@ -9,7 +9,7 @@ A Ramu account is also where cloud Ramu hosts will attach later, so it is design
 ## Principles
 
 - **Optional.** Everything that works without an account keeps working. Ramu never asks for sign-in at first launch or as a gate; it offers it where it helps (**Back up settings**, and **Restore your settings?** in a new host's setup).
-- **An account is not access.** Signing in never pairs a device or grants anything on a host. Host pairing, device tokens, roles and permissions stay the only way in ([Security](../../SECURITY.md#remote-access)).
+- **An account is not access.** Signing in never pairs a device or grants anything on a host. An account can carry a pairing request to a host, but the host approves it with the same six-digit check as a nearby request. Host pairing, device tokens, roles and permissions stay the only way in ([Security](../../SECURITY.md#remote-access)).
 - **The service cannot read backups.** Settings are encrypted on the host before upload. The service stores ciphertext, its size and its time.
 - **Credentials never leave the host,** encrypted or not. A backup carries the portable settings export only.
 - **Free to run.** The service must fit free hosting and database plans whose terms allow a company's product (Vercel's Hobby plan does not), which bounds sizes, versions and request rates below.
@@ -51,13 +51,29 @@ Neon is the first database (free plan; the first request after idle can be slowe
 
 **Restore.** A new host's setup offers **Restore your settings?** when a signed-in account or a connected GitHub account has backups. It lists them by host name and time, gets the key (approval or recovery code), decrypts, and opens the same review list as **Import settings**, so nothing changes without the person seeing it. **Restore an earlier version** in Settings does the same for older versions.
 
-**Phone.** The phone can sign in, approve a new host's key request, and show backup status. Its own device preferences are not backed up in this delivery.
+**Phone.** The phone can sign in, approve a new host's key request, and show backup status. Its own preferences are backed up too ([Phone preferences](#4-phone-preferences)).
 
 **Turning it off.** **Stop backing up** keeps local settings and offers **Delete backups** for each destination. **Sign out** on a host removes its session and its copy of the backup key; other devices keep theirs.
 
-### 3. Docs and trust
+### 3. Your hosts
 
-[Security](../../SECURITY.md) gets an account section: what the service stores, that it cannot read backups, that an account grants no host access, and what a compromised service could and could not do (withhold or delete backups, see sign-in metadata and backup sizes and times; not read settings or pair a device). The privacy notice on akalstack.com lists the same, and getramu.dev links to it. [Configuration](../guide/configuration.md) documents backup and restore.
+**The need.** Adding a host today means being near it (a nearby request) or copying a pairing code or link from its screen. Setting up a new phone, or adding the home server from the office, means getting to that host first.
+
+**Listing a host.** A signed-in host offers **List in my account** in **Settings → Remote access** (off until chosen). The account then holds the host's name, its public key and when it was last seen; never its addresses, which travel only inside an approved pairing. **Remove from my account** takes it off, and signing out removes it.
+
+**Asking without a code.** **Add a host** on a signed-in device (the desktop or the phone) lists **Your hosts** from the account above hosts nearby. Choosing one sends a pairing request through the service: the device's one-time X25519 key and the commitment pairing requests already use (`packages/shared/src/pairRequest.ts`). The host receives it the way it receives a nearby request (in Ramu, as a notification, or with `ramu pair --approve`), both screens show the same six-digit number, and the host chooses the access. The approval travels back sealed to the device's key, carrying the device token and the host's addresses, so the service relays only envelopes it cannot open; a request expires after ten minutes. The device then connects directly and checks the host's identity on each address, as after any pairing.
+
+**Bounds.** Only devices signed in to the same account can send a request to a listed host; at most five requests wait per host and one is sent per device per minute. A listed host checks the service for requests while it runs, at most every 30 seconds, and immediately while its **Pair a device** sheet is open. A denied or expired request changes nothing.
+
+### 4. Phone preferences
+
+The phone's own preferences (appearance, text size, language, notification and haptics choices, viewer gestures, layout choices such as collapsed sections) are backed up in a slot of their own, sealed under the same backup key as host settings. The phone gets that key when it signs in and is approved by a device that holds it, or from the recovery code. Device tokens, paired hosts' credentials, drafts and anything in `expo-secure-store` are never included.
+
+On a new phone, signing in offers **Restore your phone's settings?** with the same review list, then **Pair again with your hosts**, which lists [Your hosts](#3-your-hosts) to request in turn. Each still needs its host's approval.
+
+### 5. Docs and trust
+
+[Security](../../SECURITY.md) gets an account section: what the service stores, that it cannot read backups, that an account grants no host access, and what a compromised service could and could not do (withhold or delete backups, see sign-in metadata, backup sizes and times and the names of listed hosts, delay or drop pairing requests; not read settings, learn a host's addresses or pair a device). The privacy notice on akalstack.com lists the same, and getramu.dev links to it. [Configuration](../guide/configuration.md) documents backup and restore.
 
 ## Existing services to extend
 
@@ -66,6 +82,8 @@ Neon is the first database (free plan; the first request after idle can be slowe
 - Six-digit confirmation and X25519 from pairing requests: `packages/shared/src/pairRequest.ts`, `apps/server/src/remote/pairingRequests.ts`.
 - GitHub sign-ins for the GitHub destination: `apps/server/src/workspace/forgeAccounts.ts`.
 - Phone secret storage: `expo-secure-store` beside the existing device token.
+- Pairing requests, their approval and the access chosen: `apps/server/src/remote/pairingRequests.ts`; the device side: `apps/mobile/src/runtime/nearby.ts`, and **Add a host** on the desktop.
+- Phone preferences: `apps/mobile/src/storage/index.ts`.
 
 ## Acceptance
 
@@ -75,11 +93,12 @@ Neon is the first database (free plan; the first request after idle can be slowe
 - A database dump read directly shows no setting value, host name or settings key name in any backup row.
 - The service's tests pass against a plain Postgres container, and a dump restored into a second Postgres serves an existing account's backups after only `DATABASE_URL` changes.
 - A wrong recovery code, a tampered backup and an expired approval each fail with a plain message and change nothing.
+- From outside the home network, a signed-in phone adds a listed home server from **Your hosts**: the request appears on the host with the same number as on the phone, **Allow** pairs it, and the phone connects over the host's tunnel address. No code was copied. A database dump shows the host's name and public key but no address.
+- A device signed in to another account cannot send a request to that host; a sixth waiting request is refused.
+- A new phone signs in, restores its preferences after review, and pairs again with two listed hosts with one approval each; no device token came from the backup.
 - **Delete account** leaves no rows for the person.
-- Server tests for sealing and opening, versions and limits, the approval envelope and restore review; web and mobile tests for sign-in, approval and restore; strings translated to Indonesian.
+- Server tests for sealing and opening, versions and limits, the approval envelope, restore review, listed hosts and relayed pairing requests with their bounds; web and mobile tests for sign-in, approval, restore, **Your hosts** and phone preference restore; strings translated to Indonesian.
 
 ## Later options
 
 - **Cloud Ramu hosts** attached to the account, listed in the host switcher and paired like any other host, with the web app at `ramu.akalstack.com`; sign-in stays at `account.akalstack.com`.
-- **Your hosts** from the account, so a signed-in device can find a host and send a pairing request without a code (the host still approves).
-- Backing up the phone's own device preferences.
