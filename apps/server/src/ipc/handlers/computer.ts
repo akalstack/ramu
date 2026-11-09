@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { AppPreferences } from '@ramu/shared/types'
 import { MAX_COMPUTER_TEXT, type ComputerAction } from '@ramu/shared/computerBridge'
 import { MAIN_DISPLAY } from '../../computer/macos'
 import { ComputerRouter } from '../../computer/router'
@@ -50,9 +51,19 @@ export const registerComputerHandlers: RegisterHandlers = ({
   host,
   workspace,
   agents,
+  loadPreferences,
+  savePreferences,
+  settingsChanges,
 }) => {
   let installingApps = false
   let settingUp = false
+  /** The Test devices page saves at once, as the person's own change to those settings. */
+  const saveTestDevicePreferences = (change: Partial<AppPreferences['testDevices']>) => {
+    const preferences = loadPreferences()
+    savePreferences({ ...preferences, testDevices: { ...preferences.testDevices, ...change } })
+    settingsChanges?.personChanged(Object.keys(change).map((key) => `testDevices.${key}`))
+    host.send('settings:changed', loadPreferences())
+  }
   const ready = () => {
     if (!computer) throw new Error('Update this host for computer use.')
     return computer
@@ -124,20 +135,24 @@ export const registerComputerHandlers: RegisterHandlers = ({
       args: z.tuple([z.string().min(1).max(200)]),
       run: (taskId: string) => testDevices?.releaseThread(taskId),
     },
-    'testDevices.setDefault': {
-      args: z.tuple([z.enum(['ios', 'android']), z.string().min(1).max(120).nullable()]),
-      run: (platform: 'ios' | 'android', model: string | null) => {
-        const current = workspace.getAppState<Partial<Record<'ios' | 'android', string>>>('test-devices:defaults', {})
-        const { [platform]: _previous, ...rest } = current
-        workspace.setAppState('test-devices:defaults', model ? { ...rest, [platform]: model } : rest)
-      },
+    'testDevices.place': {
+      args: z.tuple([z.string().min(1).max(200)]),
+      run: async (taskId: string) => testDevices?.placeOf(taskId) ?? { state: 'none' as const },
     },
-    'testDevices.setKeepWarm': {
-      args: z.tuple([z.boolean()]),
-      run: async (keep: boolean) => {
-        workspace.setAppState('test-devices:keep-warm', keep)
-        await testDevices?.setKeepWarm()
-      },
+    'testDevices.setPreferences': {
+      args: z.tuple([
+        z
+          .object({
+            iosModel: z.string().trim().min(1).max(120).nullable(),
+            androidModel: z.string().trim().min(1).max(120).nullable(),
+            keepWarm: z.boolean(),
+            maxRunning: z.number().int().min(1).max(16).nullable(),
+            slim: z.boolean(),
+          })
+          .partial()
+          .strict(),
+      ]),
+      run: (change: Partial<AppPreferences['testDevices']>) => saveTestDevicePreferences(change),
     },
     // Runs npm on the host and starts a daemon there; viewers cannot call it, and a full-access device such as a paired
     // phone can, as it can open a terminal there.

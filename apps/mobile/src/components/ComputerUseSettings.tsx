@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, View } from 'react-native'
+import { ActivityIndicator, Alert, Linking, View } from 'react-native'
 import type { RamuMethods } from '@ramu/shared/api'
 import {
   queuePlace,
+  testDeviceFix,
   testDeviceSummary,
   type PlatformReadiness,
   type TestDeviceStatus,
@@ -142,11 +143,19 @@ function Readiness({ title, value }: { title: string; value: PlatformReadiness }
           {say(value.unsupported)}
         </T>
       ) : null}
-      {value.missing.map((entry) => (
-        <T key={entry.item} size={12} tone="muted" style={{ lineHeight: 18 }}>
-          {entry.item}: {entry.fix}
-        </T>
-      ))}
+      {value.missing.map((entry) => {
+        const fix = testDeviceFix(entry.item)
+        return (
+          <View key={entry.item} style={{ gap: 4 }}>
+            <T size={12} tone="muted" style={{ lineHeight: 18 }}>
+              {say(entry.name)}: {entry.fix}
+            </T>
+            {fix?.kind === 'link' ? (
+              <Button kind="ghost" title={say(fix.label)} onPress={() => void Linking.openURL(fix.url)} />
+            ) : null}
+          </View>
+        )
+      })}
     </View>
   )
 }
@@ -201,6 +210,7 @@ export function TestDeviceSettings({ hostId }: { hostId: string }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [choosing, setChoosing] = useState<TestPlatform | null>(null)
+  const [choosingCount, setChoosingCount] = useState(false)
   const live = useRef(true)
   useEffect(() => {
     live.current = true
@@ -354,10 +364,31 @@ export function TestDeviceSettings({ hostId }: { hostId: string }) {
                   onPress={() => {
                     const platform = choosing
                     setChoosing(null)
-                    void act(() => store.invoke(hostId, 'testDevices.setDefault', platform, model.name))
+                    void act(() =>
+                      store.invoke(hostId, 'testDevices.setPreferences', {
+                        [platform === 'ios' ? 'iosModel' : 'androidModel']: model.name,
+                      }),
+                    )
                   }}
                 />
               ))}
+          </SheetGroup>
+        </Sheet>
+      ) : null}
+      {choosingCount ? (
+        <Sheet open onClose={() => setChoosingCount(false)} title={say('Devices at once')}>
+          <SheetGroup>
+            {[null, 1, 2, 3, 4, 5, 6].map((count) => (
+              <SheetOption
+                key={String(count)}
+                title={count === null ? say('Automatic') : String(count)}
+                selected={status.maxRunning === count}
+                onPress={() => {
+                  setChoosingCount(false)
+                  void act(() => store.invoke(hostId, 'testDevices.setPreferences', { maxRunning: count }))
+                }}
+              />
+            ))}
           </SheetGroup>
         </Sheet>
       ) : null}
@@ -372,8 +403,32 @@ export function TestDeviceSettings({ hostId }: { hostId: string }) {
               )}
               value={status.keepWarm}
               disabled={busy || readOnly}
-              onChange={(keep) => void act(() => store.invoke(hostId, 'testDevices.setKeepWarm', keep))}
+              onChange={(keep) =>
+                void act(() => store.invoke(hostId, 'testDevices.setPreferences', { keepWarm: keep }))
+              }
             />
+            <Divider inset={space.l} />
+            <SheetOption
+              title={say('Devices at once')}
+              trailing={
+                <T size={12} tone="muted">
+                  {status.maxRunning === null ? say('Automatic') : String(status.maxRunning)}
+                </T>
+              }
+              onPress={() => setChoosingCount(true)}
+            />
+            {!status.ios.unsupported ? (
+              <>
+                <Divider inset={space.l} />
+                <ToggleRow
+                  title={say('Slim iOS Simulators')}
+                  help={say('Quicker to start and lighter on memory, without some system apps such as Safari.')}
+                  value={status.slim}
+                  disabled={busy || readOnly}
+                  onChange={(slim) => void act(() => store.invoke(hostId, 'testDevices.setPreferences', { slim }))}
+                />
+              </>
+            ) : null}
           </Card>
         </>
       ) : null}

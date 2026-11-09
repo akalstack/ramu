@@ -38,7 +38,7 @@ Ramu does this differently:
 
 ## Delivery
 
-Simlock is the engine on every host, as [Test devices](../guide/browser-and-computer.md#test-devices) describes: setup, a lease per thread through Simlock's agent-device front (with a token of its own per thread and an operator token held in memory), the queue, the element tree and taps by element, rotation, defaults, crash notes, and the Test devices page on the desktop and the phone. What remains:
+Simlock is the engine on every host, as [Test devices](../guide/browser-and-computer.md#test-devices) describes: setup, a lease per thread through Simlock's agent-device front (with a token of its own per thread and an operator token held in memory), the queue with its card in the thread, the element tree and taps by element, rotation, live video, Take control, defaults and Advanced as settings, crash notes, Resources, and the Test devices page on the desktop and the phone. What remains:
 
 ### 1. Live screens on the phone through a tunnel
 
@@ -46,21 +46,9 @@ Live video and **Take control** ship: Simlock's H.264 stream feeds Ramu's WebRTC
 
 - **A fallback when WebRTC cannot connect**, such as a phone reaching the host through a tunnel that blocks UDP: the phone plays Simlock's stream through Ramu's own connection, decoded with WebCodecs in a WebView, as Simlock's console does, instead of dropping to screenshots.
 
-### 2. The thread while it waits
-
-- The thread's device pill shows **Waiting for a device · number 2 in line** (`TestDevices.placeOf`) with **Stop waiting**, as the Test devices page already does.
-
-### 3. The rest of the Test devices page
-
-- **Defaults** become portable settings with entries in `packages/shared/src/settingsCatalog.ts`, so "make the default iPhone a 16 Pro" works through `settings_change`; today they are host state.
-- **Setup checklist** items get their own fix button where Ramu can act (**Open Xcode**, **Install iOS 27 · 8 GB** through `simlock component install`), not only the fix in words.
-- **Advanced** adds how many devices may run (automatic from this host's memory, or a number) and slim simulators, beside **Keep a spare device ready**.
-- **Resources** shows each Simlock device's memory and CPU under the thread holding it, as emulators Ramu started did before.
-
 ## Services to extend
 
-- `apps/server/src/testDevice/testDevices.ts` (`video`, `placeOf`), the phone's computer viewer (`apps/mobile/src/components/useComputerVideo.ts`), and the thread's device pill.
-- `packages/shared/src/settingsCatalog.ts` for the defaults; `apps/server/src/background/resources.ts` for Simlock's devices.
+- `apps/server/src/testDevice/testDevices.ts` (`video`) and the phone's computer viewer (`apps/mobile/src/components/useComputerVideo.ts`) for the fallback stream.
 
 ## Acceptance
 

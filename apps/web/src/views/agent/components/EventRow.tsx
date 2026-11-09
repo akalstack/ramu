@@ -4,6 +4,7 @@ import { ContinuedCard } from './ContinuedCard'
 import { AbilityRow } from './AbilityRow'
 import { ThemeCard } from '../../../theme/ThemeCard'
 import { PullRequestWritesCard } from '../../../git/PullRequestWritesCard'
+import { TestDeviceWaitCard } from '../../../chat/TestDeviceWaitCard'
 import { SettingsChangeCard } from '../../../settings/SettingsChangeCard'
 import { InteractiveContent } from '../../../interactive/InteractiveContent'
 import { t as translate, useLanguage } from '../../../i18n'
@@ -129,6 +130,8 @@ export function EventRow({
       return <ThreadsStartedCard threads={e.threads} />
     case 'pull-request-writes':
       return <PullRequestWritesCard cardId={e.cardId} />
+    case 'test-device-wait':
+      return taskId ? <TestDeviceWaitCard taskId={taskId} platform={e.platform} /> : null
     case 'settings-change':
       return <SettingsChangeCard cardId={e.cardId} />
     case 'settings':

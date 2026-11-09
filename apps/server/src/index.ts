@@ -562,8 +562,21 @@ const terminals = new TerminalService(
 setAcpTerminalService(terminals)
 const customAgents = new CustomAgentStore(workspace)
 const testDevices = new TestDevices(() => workspace.getAppState<boolean>('test-devices:enabled', false) === true, {
-  defaults: () => workspace.getAppState<Partial<Record<TestPlatform, string>>>('test-devices:defaults', {}),
-  keepWarm: () => workspace.getAppState<boolean>('test-devices:keep-warm', false) === true,
+  defaults: () => {
+    const chosen = workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).testDevices
+    return {
+      ...(chosen?.iosModel ? { ios: chosen.iosModel } : {}),
+      ...(chosen?.androidModel ? { android: chosen.androidModel } : {}),
+    }
+  },
+  choices: () => {
+    const chosen = workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).testDevices
+    return { keepWarm: chosen?.keepWarm === true, maxRunning: chosen?.maxRunning ?? null, slim: chosen?.slim === true }
+  },
+  waiting: (taskId, platform) => {
+    const session = agents.list(taskId).findLast((entry) => !entry.parentId && entry.state !== 'stopped')
+    if (session) agents.testDeviceWaiting(session.id, platform)
+  },
   // A restarted or lost device reaches the thread's lead through its durable queue, so the agent relaunches the app.
   notify: (taskId, text) =>
     void (async () => {
@@ -586,6 +599,9 @@ const threadRoots = (): ProcessRoot[] => {
   const sessions = new Map(agents.all().map((session) => [session.id, session]))
   return [
     ...terminals.processes().map(({ pid, taskId, id, kind, name }) => ({ pid, taskId, item: { kind, id, name } })),
+    ...testDevices
+      .processes()
+      .map(({ pid, taskId, id, name }) => ({ pid, taskId, item: { kind: 'device' as const, id, name } })),
     ...[...processRoots()].flatMap(([pid, sessionId]) => {
       const session = sessions.get(sessionId)
       return session
