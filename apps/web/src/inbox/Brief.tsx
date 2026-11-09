@@ -301,7 +301,7 @@ export function Brief() {
             <EmptyMedia variant="icon">
               <CircleCheck />
             </EmptyMedia>
-            <EmptyTitle>{t('Nothing needs you')}</EmptyTitle>
+            <EmptyTitle>{t('You are all caught up')}</EmptyTitle>
             <EmptyDescription>
               {finished
                 ? t('{0} finished since your last visit.', { 0: finished })

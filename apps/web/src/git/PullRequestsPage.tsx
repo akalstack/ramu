@@ -483,7 +483,7 @@ export function PullRequestsPage() {
                       : search
                         ? t('No pull requests match')
                         : filter === 'needs-you'
-                          ? t('Nothing waiting on you')
+                          ? t('No pull requests waiting on you')
                           : t('No pull requests here')}
                   </EmptyTitle>
                   <EmptyDescription>

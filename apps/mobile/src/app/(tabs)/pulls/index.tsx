@@ -343,7 +343,7 @@ export default function PullRequestsScreen() {
                 : search
                   ? say('No pull requests match')
                   : filter === 'needs-you'
-                    ? say('Nothing waiting on you')
+                    ? say('No pull requests waiting on you')
                     : say('No pull requests here')
             }
             detail={

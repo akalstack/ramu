@@ -3283,7 +3283,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   Learned: 'Dipelajari',
   Completed: 'Selesai',
   Earlier: 'Sebelumnya',
-  'Nothing needs you': 'Tidak ada yang perlu kamu tangani',
   'Questions, approvals and recaps that need a decision show up here.':
     'Pertanyaan, persetujuan, dan ringkasan yang butuh keputusan muncul di sini.',
   'No agents running': 'Tidak ada agen yang berjalan',
@@ -6295,7 +6294,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Search title, author, branch or repository': 'Cari judul, penulis, branch, atau repository',
   'No repositories with a hosting service': 'Belum ada repository dengan layanan hosting',
   'No pull requests match': 'Tidak ada pull request yang cocok',
-  'Nothing waiting on you': 'Tidak ada yang menunggumu',
+  'No pull requests waiting on you': 'Tidak ada pull request yang menunggu tindakanmu',
   'No pull requests here': 'Tidak ada pull request di sini',
   'Publish a project to GitHub, GitLab, Bitbucket or Azure DevOps to see its pull requests here.':
     'Publikasikan project ke GitHub, GitLab, Bitbucket, atau Azure DevOps untuk melihat pull request-nya di sini.',

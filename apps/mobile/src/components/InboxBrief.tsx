@@ -188,7 +188,7 @@ export function InboxBrief({ inbox, where }: { inbox: InboxModel; where: (chat: 
     return (
       <Nothing
         icon={CircleCheck}
-        title={say('Nothing needs you')}
+        title={say('You are all caught up')}
         detail={
           finished
             ? say('{0} finished since your last visit.', { 0: finished })
