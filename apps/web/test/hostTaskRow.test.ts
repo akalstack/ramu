@@ -179,7 +179,7 @@ it('names the branch an open thread’s bindings report when the host list has n
   expect(renderToStaticMarkup(TaskRow({ task }))).toContain('>main<')
 })
 
-it('puts a done row’s agents and marks at the end of its context line, leaving the title line to the title and time', () => {
+it('keeps every icon in one group at the right edge: under the time on two-line rows, after it on one-line rows', () => {
   const finished = {
     ...task,
     doneAt: 5,
@@ -192,10 +192,12 @@ it('puts a done row’s agents and marks at the end of its context line, leaving
   expect(renderToStaticMarkup(context)).toContain('agent-icon')
   expect(renderToStaticMarkup(head)).not.toContain('agent-icon')
   expect(elements(context).some((node) => node.type === GitFork)).toBe(true)
-  // A one-line row ends with its agents, after the time, so they share the right edge with two-line rows' agents.
-  const plain = TaskRow({ task })
+  // A one-line row ends with one icon group (marks, then agents) after the time, on the same right edge as the
+  // context line of a two-line row.
+  const plain = TaskRow({ task: { ...task, startedFrom: finished.startedFrom } })
   const line = renderToStaticMarkup(
     elements(plain).find((node) => String(node.props.className).startsWith('task-head'))!,
   )
-  expect(line).toMatch(/time<\/span><span>agent-icon<\/span><\/span>$/)
+  expect(line).toMatch(/time<\/span><span class="task-trailing[^"]*">.*<span>agent-icon<\/span><\/span><\/span>$/)
+  expect(line.indexOf('time</span>')).toBeLessThan(line.indexOf('task-trailing'))
 })

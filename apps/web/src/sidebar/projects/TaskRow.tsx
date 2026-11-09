@@ -121,8 +121,8 @@ export function TaskRow({
   // The thread's agents, as the phone shows them: a handoff or teammate stays visible beside the leading one. They end
   // the row (after the time, or under it on the context line), so every row's agents share one right edge.
   const agents = <AgentStack task={task} />
-  // Small marks (origin, review, pin, pull request or worktree) go on the context line before the agents when there is
-  // one, else before the time.
+  // Small marks (origin, review, pin, pull request or worktree) sit just before the agents in one icon group at the row's
+  // right edge: after the time on a one-line row, under it on the context line of a two-line row.
   const markers = (
     <>
       {task.startedFrom && (
@@ -482,7 +482,6 @@ export function TaskRow({
                   aria-label={t('Naming thread')}
                 />
               )}
-              {!context && markers}
               <span className={`${ROW_ACTIONS_CLASS} task-actions`} hidden={viewOnly}>
                 {!archived && (
                   <Button
@@ -518,7 +517,13 @@ export function TaskRow({
                 </Button>
               </span>
               <TaskStateIcon task={task} unread={!!ws?.unread.has(task.id)} />
-              {!context && agents}
+              {/* Every icon sits in one group at the row's right edge, as on the context line of a two-line row. */}
+              {!context && (
+                <span className="task-trailing flex flex-none items-center gap-1">
+                  {markers}
+                  {agents}
+                </span>
+              )}
             </span>
             {context && (
               <span className="task-context flex h-4 min-w-0 items-center gap-1 text-caption text-muted-foreground">
