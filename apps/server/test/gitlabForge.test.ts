@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { HostCredentialStore } from '../src/credentials/store'
 import { GitlabCredentials, configureGitlabCredentials } from '../src/workspace/forge/gitlabCredentials'
+import { FILES_PAGE, PATCH_LIMIT } from '../src/workspace/forge/adapter'
 import {
   gitlabApi,
   gitlabMergeOptions,
@@ -18,6 +19,7 @@ import {
   parseMergeRequest,
   parseProjects,
   pullRequestAction,
+  pullRequestFiles,
   readyTitle,
   requirePipeline,
   setGitlabVariables,
@@ -445,6 +447,60 @@ it('lists CI variable names and writes values protected, masked when GitLab can 
       },
     ])
   } finally {
+    vi.unstubAllEnvs()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+it('lists a merge request’s files with counts from their hunks, renames, cut patches and a further page', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-gitlab-files-'))
+  execFileSync('git', ['init', '-q', '-b', 'search'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'git@gitlab.com:a/b.git'], { cwd: dir })
+  vi.stubEnv('GLAB_CONFIG_DIR', '/nonexistent')
+  vi.stubEnv('GITLAB_HOST', 'gitlab.com')
+  vi.stubEnv('GITLAB_TOKEN', 'glpat-test')
+  const entry = { new_file: false, deleted_file: false, renamed_file: false }
+  const huge = `@@ -0,0 +1,2 @@\n+${'x'.repeat(PATCH_LIMIT)}\n+y\n`
+  let diffs: unknown[] = [
+    { ...entry, old_path: 'src/a.ts', new_path: 'src/a.ts', diff: '@@ -1,2 +1,2 @@\n-old\n+new\n same\n' },
+    { ...entry, old_path: 'lib/old.ts', new_path: 'lib/new.ts', renamed_file: true, diff: '' },
+    { ...entry, old_path: 'gen.json', new_path: 'gen.json', new_file: true, diff: huge },
+    { ...entry, old_path: 'gone.png', new_path: 'gone.png', deleted_file: true, diff: '' },
+  ]
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      url === `https://gitlab.com/api/v4/projects/a%2Fb/merge_requests/4/diffs?per_page=${FILES_PAGE}`
+        ? new Response(JSON.stringify(diffs))
+        : new Response('', { status: 404 }),
+    ),
+  )
+  const url = 'https://gitlab.com/a/b/-/merge_requests/4'
+  try {
+    const { files, more } = await pullRequestFiles(dir, url)
+    expect(more).toBe(false)
+    expect(files[0]).toEqual({
+      path: 'src/a.ts',
+      status: 'modified',
+      additions: 1,
+      deletions: 1,
+      patch: '@@ -1,2 +1,2 @@\n-old\n+new\n same\n',
+    })
+    expect(files[1]).toEqual({
+      path: 'lib/new.ts',
+      previousPath: 'lib/old.ts',
+      status: 'renamed',
+      additions: 0,
+      deletions: 0,
+      patch: null,
+    })
+    expect(files[2]).toMatchObject({ path: 'gen.json', status: 'added', additions: 2, deletions: 0, truncated: true })
+    expect(files[2]!.patch).toHaveLength(PATCH_LIMIT)
+    expect(files[3]).toMatchObject({ path: 'gone.png', status: 'removed', patch: null })
+    diffs = Array.from({ length: FILES_PAGE }, (_, i) => ({ ...entry, old_path: `f${i}`, new_path: `f${i}`, diff: '' }))
+    expect((await pullRequestFiles(dir, url)).more).toBe(true)
+  } finally {
+    vi.unstubAllGlobals()
     vi.unstubAllEnvs()
     rmSync(dir, { recursive: true, force: true })
   }

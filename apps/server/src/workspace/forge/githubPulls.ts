@@ -15,6 +15,7 @@ import type {
   ReviewVerdict,
 } from '@ramu/shared/types'
 import { ForgeError, forgeRemoteOf, githubAvailability, githubGraphql, githubRest } from './github'
+import { FILES_PAGE, boundedPatch } from './adapter'
 
 const PR_FRAGMENT = `fragment pr on PullRequest {
   id number title url state isDraft baseRefName headRefName headRefOid updatedAt isCrossRepository
@@ -562,11 +563,6 @@ export async function submitReview(
   })
 }
 
-/** Files per page GitHub returns at most; a pull request with more says so instead of paging on. */
-const FILES_PAGE = 100
-/** A patch longer than this is cut, so one generated file cannot swamp the view or the connection. */
-const PATCH_LIMIT = 40_000
-
 const FILE_STATUS: PullRequestFile['status'][] = [
   'added',
   'modified',
@@ -590,19 +586,15 @@ export async function pullRequestFiles(cwd: string, url: string): Promise<{ file
       patch?: string
     }[]
   >(cwd, 'GET', `/repos/${owner}/${repo}/pulls/${pullNumber(url)}/files?per_page=${FILES_PAGE}`)
-  const files = (raw ?? []).map((file): PullRequestFile => {
-    const patch = typeof file.patch === 'string' ? file.patch : null
-    return {
-      path: file.filename,
-      ...(file.previous_filename ? { previousPath: file.previous_filename } : {}),
-      status: FILE_STATUS.includes(file.status as PullRequestFile['status'])
-        ? (file.status as PullRequestFile['status'])
-        : 'changed',
-      additions: file.additions,
-      deletions: file.deletions,
-      patch: patch && patch.length > PATCH_LIMIT ? patch.slice(0, PATCH_LIMIT) : patch,
-      ...(patch && patch.length > PATCH_LIMIT ? { truncated: true } : {}),
-    }
-  })
+  const files = (raw ?? []).map((file): PullRequestFile => ({
+    path: file.filename,
+    ...(file.previous_filename ? { previousPath: file.previous_filename } : {}),
+    status: FILE_STATUS.includes(file.status as PullRequestFile['status'])
+      ? (file.status as PullRequestFile['status'])
+      : 'changed',
+    additions: file.additions,
+    deletions: file.deletions,
+    ...boundedPatch(typeof file.patch === 'string' ? file.patch : null),
+  }))
   return { files, more: files.length >= FILES_PAGE }
 }

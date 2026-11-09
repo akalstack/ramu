@@ -15,6 +15,7 @@ import type {
   MergeOptions,
   PublishRepositoryInput,
   PullRequestAction,
+  PullRequestFile,
   PullRequestList,
   PullRequestSummary,
   PullRequestThread,
@@ -27,7 +28,7 @@ import type {
 import { parseGitlabRemote } from '@ramu/shared/forgeHosts'
 import { redactSecrets } from '@ramu/shared/forgeRemote'
 import { currentBranch, git, publishRemote } from '../git'
-import { registerForgeAdapter } from './adapter'
+import { FILES_PAGE, boundedPatch, registerForgeAdapter } from './adapter'
 import { enrichOpen } from './enrich'
 import { checksRollup } from '@ramu/shared/pullRequests'
 import { ForgeError, pullRequestDraft } from './github'
@@ -70,21 +71,30 @@ function authorization(credential: BitbucketCredential) {
 export async function bitbucketApi<T>(
   target: Target,
   path: string,
-  init: { method?: string; body?: unknown } = {},
+  init: { method?: string; body?: unknown; text?: boolean } = {},
+  redirects = 0,
 ): Promise<T> {
   const response = await (target.fetch ?? fetch)(`${API}${path}`, {
     method: init.method ?? 'GET',
     headers: {
       Authorization: authorization(target),
-      Accept: 'application/json',
+      Accept: init.text ? 'text/plain' : 'application/json',
       ...(init.body ? { 'Content-Type': 'application/json' } : {}),
     },
     ...(init.body ? { body: JSON.stringify(init.body) } : {}),
-    redirect: 'error',
+    redirect: 'manual',
     signal: AbortSignal.timeout(20_000),
   }).catch(() => {
     throw new ForgeError('Could not reach Bitbucket. Check the network and try again.', null)
   })
+  // A pull request's diff answers with a redirect to the commit-range diff. Only one redirect that stays on the API
+  // is followed, so the credential never leaves api.bitbucket.org.
+  if (response.status >= 300 && response.status < 400) {
+    const location = response.headers.get('location')
+    if (!location?.startsWith(`${API}/`) || redirects > 0)
+      throw new ForgeError('Bitbucket redirected Ramu away from its API, so the request stopped.', null)
+    return bitbucketApi<T>(target, location.slice(API.length), init, redirects + 1)
+  }
   if (response.status === 401)
     throw new ForgeError(
       'Bitbucket did not accept this credential. Connect again in Settings → Git with a current API token.',
@@ -97,7 +107,7 @@ export async function bitbucketApi<T>(
   if (!response.ok) throw new ForgeError(`Bitbucket answered ${response.status}. Try again in a moment.`, null)
   const text = await response.text()
   if (text.length > 8 * 1024 * 1024) throw new ForgeError('Bitbucket sent more than Ramu reads at once.', null)
-  return (text ? JSON.parse(text) : null) as T
+  return (init.text ? text : text ? JSON.parse(text) : null) as T
 }
 
 interface Access {
@@ -117,7 +127,7 @@ async function access(cwd: string): Promise<Access> {
 }
 
 const q = (value: string) => encodeURIComponent(value)
-const repoApi = <T>(a: Access, path = '', init?: { method?: string; body?: unknown }) =>
+const repoApi = <T>(a: Access, path = '', init?: { method?: string; body?: unknown; text?: boolean }) =>
   bitbucketApi<T>(a.credential, `/repositories/${q(a.repo.workspace)}/${q(a.repo.slug)}${path}`, init)
 
 interface RawPullRequest {
@@ -693,6 +703,69 @@ export async function pullRequestBody(cwd: string, url: string): Promise<string>
   return (await readPullRequest(await access(cwd), url)).description ?? ''
 }
 
+interface RawDiffstat {
+  status: string
+  lines_added?: number
+  lines_removed?: number
+  old?: { path: string } | null
+  new?: { path: string } | null
+}
+
+const DIFFSTAT_STATUS: Record<string, PullRequestFile['status']> = {
+  added: 'added',
+  removed: 'removed',
+  modified: 'modified',
+  renamed: 'renamed',
+}
+
+/**
+ * Each file's hunks from a unified diff of the whole pull request, keyed by the file's new path (its old path when
+ * removed). Header lines are left off, so a patch starts at its first `@@`; a file with no hunks (binary, or a rename
+ * alone) is absent.
+ */
+function splitDiff(diff: string): Map<string, string> {
+  const patches = new Map<string, string>()
+  for (const section of diff.split(/^(?=diff --git )/m)) {
+    const lines = section.replace(/\n$/, '').split('\n')
+    const hunk = lines.findIndex((line) => line.startsWith('@@'))
+    if (hunk < 0) continue
+    const header = lines.slice(0, hunk)
+    const path =
+      header.find((line) => line.startsWith('+++ b/'))?.slice(6) ??
+      header.find((line) => line.startsWith('--- a/'))?.slice(6)
+    if (path) patches.set(path, lines.slice(hunk).join('\n'))
+  }
+  return patches
+}
+
+/** The first page of files `url` changes from its diffstat, with each one's hunks cut at Ramu's limit. */
+export async function pullRequestFiles(cwd: string, url: string): Promise<{ files: PullRequestFile[]; more: boolean }> {
+  const a = await access(cwd)
+  const id = idOf(url)
+  const [stat, diff] = await Promise.all([
+    repoApi<{ values: RawDiffstat[]; next?: string }>(a, `/pullrequests/${id}/diffstat?pagelen=${FILES_PAGE}`),
+    // A diff past what Ramu reads still lists its files, only without patches.
+    repoApi<string>(a, `/pullrequests/${id}/diff`, { text: true }).catch(() => ''),
+  ])
+  const patches = splitDiff(diff)
+  const files = stat.values.flatMap((file): PullRequestFile[] => {
+    const path = file.new?.path ?? file.old?.path
+    if (!path) return []
+    const status = DIFFSTAT_STATUS[file.status] ?? 'changed'
+    return [
+      {
+        path,
+        ...(status === 'renamed' && file.old?.path ? { previousPath: file.old.path } : {}),
+        status,
+        additions: file.lines_added ?? 0,
+        deletions: file.lines_removed ?? 0,
+        ...boundedPatch(patches.get(path) ?? null),
+      },
+    ]
+  })
+  return { files, more: !!stat.next }
+}
+
 interface RawComment {
   id: number
   content?: { raw?: string }
@@ -861,6 +934,7 @@ registerForgeAdapter({
   mergeOptions,
   pullRequestAction,
   pullRequestBody,
+  pullRequestFiles,
   reviewThreads,
   replyToThread,
   resolveThread,

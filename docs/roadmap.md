@@ -23,7 +23,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 - **Helpers on another host:** `ramu_agent` with a `host` would mirror a helper's events into the parent live, which needs an event channel between hosts; a thread started there with its report covers the need until then.
 - **Site screenshots:** a real capture from a release build beside each of the five steps in **From an idea to a live app** (`apps/site`). Claim "anyone can ship an app" only after the non-coder task under [Acceptance](#acceptance) has passed with real people.
 - **Presenting from the phone:** **Present** a deck on a display the phone is connected to (AirPlay or a cable), with the speaker notes on the phone, as the desktop does with two displays ([Artifacts](guide/artifacts.md)).
-- **Pull requests page:** changed files and the timeline for GitLab, Bitbucket and Azure DevOps (GitHub's full view lists both).
+- **Pull requests page:** the timeline for GitLab, Bitbucket and Azure DevOps, and diffs for Azure DevOps's changed files, which are listed without them (GitHub's full view has both).
 - **Code quality:** push events are checked for channel and shape where they enter the phone and the desktop, and RPC results take each method's declared type; checking RPC results against runtime schemas is still to do. About 140 `react-hooks/exhaustive-deps` disables name the trigger they are keyed on and are mostly deliberate; convert one only when touching it, after checking it neither loops nor refetches.
 
 ## Acceptance

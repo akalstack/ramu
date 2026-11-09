@@ -75,6 +75,16 @@ export interface ForgeAdapter {
   searchRepositories(search: string, cwd?: string, origin?: string): Promise<ForgeRepositorySummary[]>
 }
 
+/** Files per page the services return at most; a pull request with more says so instead of paging on. */
+export const FILES_PAGE = 100
+/** A patch longer than this is cut, so one generated file cannot swamp the view or the connection. */
+export const PATCH_LIMIT = 40_000
+
+/** A file's patch cut at Ramu's limit, marked when it was cut. */
+export function boundedPatch(patch: string | null): Pick<PullRequestFile, 'patch' | 'truncated'> {
+  return patch && patch.length > PATCH_LIMIT ? { patch: patch.slice(0, PATCH_LIMIT), truncated: true } : { patch }
+}
+
 const adapters = new Map<ForgeProviderId, ForgeAdapter>()
 
 /** Registers an adapter once, at module load. A second registration for the same id is a bug. */

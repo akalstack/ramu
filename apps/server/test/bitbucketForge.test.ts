@@ -10,8 +10,10 @@ import {
   parseStatuses,
   pipelineNumber,
   pullRequestAction,
+  pullRequestFiles,
   checksFeedback,
 } from '../src/workspace/forge/bitbucket'
+import { FILES_PAGE, PATCH_LIMIT } from '../src/workspace/forge/adapter'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -315,6 +317,112 @@ it('carries the end of each failed Pipelines step log, fetched from storage with
     expect(prompt).not.toContain('line 0\n')
     expect(prompt).not.toContain('\u001b')
     expect(storage).toEqual([undefined])
+  } finally {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+it('lists a pull request’s files from its diffstat with each file’s hunks from the diff, following its redirect', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-bitbucket-files-'))
+  execFileSync('git', ['init', '-q', '-b', 's'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'git@bitbucket.org:acme/app.git'], { cwd: dir })
+  vi.stubEnv('BITBUCKET_ACCESS_TOKEN', 'workspace-token')
+  const base = 'https://api.bitbucket.org/2.0/repositories/acme/app'
+  const huge = `+${'x'.repeat(PATCH_LIMIT)}`
+  const diff = [
+    'diff --git a/src/a.ts b/src/a.ts',
+    'index 1..2 100644',
+    '--- a/src/a.ts',
+    '+++ b/src/a.ts',
+    '@@ -1 +1 @@',
+    '-old',
+    '+new',
+    'diff --git a/lib/old.ts b/lib/new.ts',
+    'similarity index 90%',
+    'rename from lib/old.ts',
+    'rename to lib/new.ts',
+    '--- a/lib/old.ts',
+    '+++ b/lib/new.ts',
+    '@@ -2 +2 @@',
+    '+more',
+    'diff --git a/gone.ts b/gone.ts',
+    'deleted file mode 100644',
+    '--- a/gone.ts',
+    '+++ /dev/null',
+    '@@ -1 +0,0 @@',
+    '-bye',
+    'diff --git a/gen.json b/gen.json',
+    'new file mode 100644',
+    '--- /dev/null',
+    '+++ b/gen.json',
+    '@@ -0,0 +1 @@',
+    huge,
+    'diff --git a/logo.png b/logo.png',
+    'Binary files a/logo.png and b/logo.png differ',
+    '',
+  ].join('\n')
+  let next: string | undefined
+  const seen: { url: string; auth: string | null }[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      seen.push({ url, auth: new Headers(init?.headers).get('authorization') })
+      if (url === `${base}/pullrequests/3/diffstat?pagelen=${FILES_PAGE}`)
+        return new Response(
+          JSON.stringify({
+            values: [
+              {
+                status: 'modified',
+                lines_added: 1,
+                lines_removed: 1,
+                old: { path: 'src/a.ts' },
+                new: { path: 'src/a.ts' },
+              },
+              {
+                status: 'renamed',
+                lines_added: 1,
+                lines_removed: 0,
+                old: { path: 'lib/old.ts' },
+                new: { path: 'lib/new.ts' },
+              },
+              { status: 'removed', lines_added: 0, lines_removed: 1, old: { path: 'gone.ts' }, new: null },
+              { status: 'added', lines_added: 1, lines_removed: 0, old: null, new: { path: 'gen.json' } },
+              { status: 'merge conflict', old: { path: 'logo.png' }, new: { path: 'logo.png' } },
+            ],
+            ...(next ? { next } : {}),
+          }),
+        )
+      if (url === `${base}/pullrequests/3/diff`)
+        return new Response('', { status: 302, headers: { location: `${base}/diff/acme/app:abc%0Ddef` } })
+      if (url === `${base}/diff/acme/app:abc%0Ddef`) return new Response(diff)
+      return new Response('', { status: 404 })
+    }),
+  )
+  const url = 'https://bitbucket.org/acme/app/pull-requests/3'
+  try {
+    const { files, more } = await pullRequestFiles(dir, url)
+    expect(more).toBe(false)
+    expect(files.slice(0, 3)).toEqual([
+      { path: 'src/a.ts', status: 'modified', additions: 1, deletions: 1, patch: '@@ -1 +1 @@\n-old\n+new' },
+      {
+        path: 'lib/new.ts',
+        previousPath: 'lib/old.ts',
+        status: 'renamed',
+        additions: 1,
+        deletions: 0,
+        patch: '@@ -2 +2 @@\n+more',
+      },
+      { path: 'gone.ts', status: 'removed', additions: 0, deletions: 1, patch: '@@ -1 +0,0 @@\n-bye' },
+    ])
+    expect(files[3]).toMatchObject({ path: 'gen.json', status: 'added', truncated: true })
+    expect(files[3]!.patch).toHaveLength(PATCH_LIMIT)
+    expect(files[4]).toEqual({ path: 'logo.png', status: 'changed', additions: 0, deletions: 0, patch: null })
+    // The redirect stays on the API, so the credential goes with it.
+    expect(seen.find((entry) => entry.url.includes('/diff/acme'))?.auth).toBe('Bearer workspace-token')
+    next = `${base}/pullrequests/3/diffstat?page=2`
+    expect((await pullRequestFiles(dir, url)).more).toBe(true)
   } finally {
     vi.unstubAllGlobals()
     vi.unstubAllEnvs()

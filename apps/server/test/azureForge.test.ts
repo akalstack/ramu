@@ -14,8 +14,10 @@ import {
   parseRepositories,
   parseThreads,
   pullRequestAction,
+  pullRequestFiles,
   reviewDecision,
 } from '../src/workspace/forge/azure'
+import { FILES_PAGE } from '../src/workspace/forge/adapter'
 import { AzureCredentials, azureCredential } from '../src/workspace/forge/azureCredentials'
 import { BitbucketCredentials } from '../src/workspace/forge/bitbucketCredentials'
 import { HostCredentialStore } from '../src/credentials/store'
@@ -343,4 +345,58 @@ it('keeps hosting secrets in the credential store and only the shown field in st
   await bitbucket.save({ email: 'a@b.co', token: 'tok' })
   expect(state.get('bitbucket-credential')).toMatchObject({ email: 'a@b.co' })
   expect(bitbucket.saved()).toEqual({ email: 'a@b.co' })
+})
+
+it('lists the latest iteration’s files with renames and without diffs, and says when more follow', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-azure-files-'))
+  dirs.push(dir)
+  execFileSync('git', ['init', '-q', '-b', 'fix/login'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'https://dev.azure.com/acme/Web%20App/_git/site'], { cwd: dir })
+  vi.stubEnv('AZURE_DEVOPS_EXT_PAT', 'pat')
+  const base = 'https://dev.azure.com/acme/Web%20App/_apis/git/repositories/site/pullrequests/7/iterations'
+  let nextTop: number | undefined
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === `${base}?api-version=7.1`) return new Response(JSON.stringify({ value: [{ id: 1 }, { id: 3 }] }))
+      if (url === `${base}/3/changes?$top=${FILES_PAGE}&api-version=7.1`)
+        return new Response(
+          JSON.stringify({
+            changeEntries: [
+              { item: { path: '/src', gitObjectType: 'tree' }, changeType: 'edit' },
+              { item: { path: '/src/a.ts', gitObjectType: 'blob' }, changeType: 'edit' },
+              {
+                item: { path: '/src/new.ts', gitObjectType: 'blob' },
+                changeType: 'edit, rename',
+                originalPath: '/src/old.ts',
+              },
+              { item: { path: '/README.md', gitObjectType: 'blob' }, changeType: 'add' },
+              { item: { path: '/gone.ts', gitObjectType: 'blob' }, changeType: 'delete' },
+              { item: { path: '/odd.ts', gitObjectType: 'blob' }, changeType: 'undelete' },
+            ],
+            ...(nextTop ? { nextSkip: FILES_PAGE, nextTop } : {}),
+          }),
+        )
+      return new Response('', { status: 404 })
+    }),
+  )
+  const url = 'https://dev.azure.com/acme/Web%20App/_git/site/pullrequest/7'
+  const none = { additions: 0, deletions: 0, patch: null }
+  try {
+    expect(await pullRequestFiles(dir, url)).toEqual({
+      files: [
+        { path: 'src/a.ts', status: 'modified', ...none },
+        { path: 'src/new.ts', previousPath: 'src/old.ts', status: 'renamed', ...none },
+        { path: 'README.md', status: 'added', ...none },
+        { path: 'gone.ts', status: 'removed', ...none },
+        { path: 'odd.ts', status: 'changed', ...none },
+      ],
+      more: false,
+    })
+    nextTop = 100
+    expect((await pullRequestFiles(dir, url)).more).toBe(true)
+  } finally {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  }
 })

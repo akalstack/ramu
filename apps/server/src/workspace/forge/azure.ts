@@ -16,6 +16,7 @@ import type {
   MergeOptions,
   PublishRepositoryInput,
   PullRequestAction,
+  PullRequestFile,
   PullRequestList,
   PullRequestMergeability,
   PullRequestSummary,
@@ -28,7 +29,7 @@ import type {
 } from '@ramu/shared/types'
 import { redactSecrets } from '@ramu/shared/forgeRemote'
 import { currentBranch, git, publishRemote } from '../git'
-import { registerForgeAdapter } from './adapter'
+import { FILES_PAGE, registerForgeAdapter } from './adapter'
 import { enrichOpen } from './enrich'
 import { checksRollup } from '@ramu/shared/pullRequests'
 import { ForgeError, pullRequestDraft } from './github'
@@ -837,6 +838,60 @@ export async function pullRequestBody(cwd: string, url: string): Promise<string>
   return (await readPullRequest(await access(cwd), url)).description ?? ''
 }
 
+interface RawChange {
+  item?: { path?: string; gitObjectType?: string }
+  /** Flags joined by commas, such as `edit, rename`. */
+  changeType?: string
+  originalPath?: string
+  sourceServerItem?: string
+}
+
+/** The change's status, by its strongest flag: a renamed and edited file reads as renamed. */
+function changeStatus(changeType: string): PullRequestFile['status'] {
+  const flags = changeType.split(',').map((flag) => flag.trim().toLowerCase())
+  if (flags.includes('add')) return 'added'
+  if (flags.includes('delete')) return 'removed'
+  if (flags.includes('rename')) return 'renamed'
+  if (flags.includes('edit')) return 'modified'
+  return 'changed'
+}
+
+const repoPath = (path: string) => path.replace(/^\//, '')
+
+/**
+ * The first page of files the latest iteration of `url` changes. Azure DevOps reports which files changed and how,
+ * but not their diffs or line counts (its file diff API needs a request per file), so every patch is null and every
+ * count is zero.
+ */
+export async function pullRequestFiles(cwd: string, url: string): Promise<{ files: PullRequestFile[]; more: boolean }> {
+  const a = await access(cwd)
+  const path = `/pullrequests/${idOf(url)}/iterations`
+  const iterations = await repoApi<{ value: { id: number }[] }>(a, path)
+  const latest = Math.max(0, ...iterations.value.map((iteration) => iteration.id))
+  if (!latest) return { files: [], more: false }
+  const page = await repoApi<{ changeEntries?: RawChange[]; nextTop?: number }>(
+    a,
+    `${path}/${latest}/changes?$top=${FILES_PAGE}`,
+  )
+  const files = (page.changeEntries ?? []).flatMap((change): PullRequestFile[] => {
+    // Folders appear as changes of their own; the view lists files.
+    if (!change.item?.path || change.item.gitObjectType === 'tree') return []
+    const status = changeStatus(change.changeType ?? '')
+    const previous = change.originalPath ?? change.sourceServerItem
+    return [
+      {
+        path: repoPath(change.item.path),
+        ...(status === 'renamed' && previous ? { previousPath: repoPath(previous) } : {}),
+        status,
+        additions: 0,
+        deletions: 0,
+        patch: null,
+      },
+    ]
+  })
+  return { files, more: (page.nextTop ?? 0) > 0 }
+}
+
 interface RawThread {
   id: number
   status?: 'active' | 'pending' | 'fixed' | 'wontFix' | 'closed' | 'byDesign' | 'unknown'
@@ -976,6 +1031,7 @@ registerForgeAdapter({
   mergeOptions,
   pullRequestAction,
   pullRequestBody,
+  pullRequestFiles,
   reviewThreads,
   replyToThread,
   resolveThread,

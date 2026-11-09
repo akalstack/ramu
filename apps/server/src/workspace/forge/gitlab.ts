@@ -18,6 +18,7 @@ import type {
   MergeOptions,
   PublishRepositoryInput,
   PullRequestAction,
+  PullRequestFile,
   PullRequestList,
   PullRequestSummary,
   PullRequestThread,
@@ -30,7 +31,7 @@ import type {
 import { glabHosts, parseGitlabRemote, type GitlabProject } from '@ramu/shared/forgeHosts'
 import { redactSecrets } from '@ramu/shared/forgeRemote'
 import { currentBranch, git, publishRemote } from '../git'
-import { registerForgeAdapter } from './adapter'
+import { FILES_PAGE, boundedPatch, registerForgeAdapter } from './adapter'
 import { enrichOpen } from './enrich'
 import { checksRollup } from '@ramu/shared/pullRequests'
 import { findExecutable } from '../../providers/providerBinaries'
@@ -834,6 +835,46 @@ export async function pullRequestBody(cwd: string, url: string): Promise<string>
   return (await readMergeRequest(await access(cwd), url)).description ?? ''
 }
 
+interface RawDiff {
+  old_path: string
+  new_path: string
+  new_file: boolean
+  deleted_file: boolean
+  renamed_file: boolean
+  diff?: string
+}
+
+/** Lines a GitLab diff adds and removes; its diffs carry only hunks, so every `+` or `-` line is content. */
+function diffCounts(diff: string): { additions: number; deletions: number } {
+  let additions = 0
+  let deletions = 0
+  for (const line of diff.split('\n')) {
+    if (line.startsWith('+')) additions++
+    else if (line.startsWith('-')) deletions++
+  }
+  return { additions, deletions }
+}
+
+/** The first page of files `url` changes, counted before each patch is cut at Ramu's limit. */
+export async function pullRequestFiles(cwd: string, url: string): Promise<{ files: PullRequestFile[]; more: boolean }> {
+  const raw = await projectApi<RawDiff[]>(
+    await access(cwd),
+    `/merge_requests/${iidOf(url)}/diffs?per_page=${FILES_PAGE}`,
+  )
+  const files = (raw ?? []).map((file): PullRequestFile => {
+    // A binary file or one too large for GitLab to diff comes back with an empty diff.
+    const diff = file.diff || null
+    return {
+      path: file.deleted_file ? file.old_path : file.new_path,
+      ...(file.renamed_file ? { previousPath: file.old_path } : {}),
+      status: file.new_file ? 'added' : file.deleted_file ? 'removed' : file.renamed_file ? 'renamed' : 'modified',
+      ...(diff ? diffCounts(diff) : { additions: 0, deletions: 0 }),
+      ...boundedPatch(diff),
+    }
+  })
+  return { files, more: files.length >= FILES_PAGE }
+}
+
 interface RawDiscussionNote {
   id: number
   body: string
@@ -1007,6 +1048,7 @@ registerForgeAdapter({
   mergeOptions,
   pullRequestAction,
   pullRequestBody,
+  pullRequestFiles,
   reviewThreads,
   replyToThread,
   resolveThread,
