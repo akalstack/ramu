@@ -6,7 +6,7 @@ People who use Ramu for paid work and for their own projects keep two sets of ac
 
 The same people set Ramu up on more than one machine. A second host starts from defaults, and they redo theme, models, abilities, commit style and notification choices from memory.
 
-Account sign-in (Google or GitHub with a Ramu backend) solves neither: it needs a hosted service, which Ramu does not run, and credentials and workspace state must never leave the host anyway. Profiles switched by hand would copy every setting and add one more thing to remember. This plan does both jobs without a Ramu account and without a switcher.
+Profiles switched by hand would copy every setting and add one more thing to remember, and an account cannot carry credentials or workspace state, which never leave the host. This plan does both jobs without a switcher and without requiring an account; an optional Ramu account adds encrypted backups ([Ramu account](ramu-account.md)).
 
 ## Delivery
 
@@ -42,9 +42,9 @@ Settings already edits several hosts at once (`SettingsScope` with `commonSettin
 
 **Export settings** and **Import settings** beside it write and read the same portable groups as a JSON file, for a new machine with no paired host. Import shows the same review list.
 
-### 3. Back up settings to your own GitHub
+### 3. Backups
 
-Optional, off until chosen: **Back up to GitHub** in **Settings → Remote access** saves the export file to a private gist (or a `ramu-settings` repository) in an account the host is already signed in to with `gh` or a saved token. Each change to a portable setting updates it after a short delay, so history shows what changed and when. **Restore from GitHub** on another host lists the backups that account holds and opens the import review. Ramu stores nothing itself.
+Encrypted backups to a Ramu account or to your own GitHub are planned in [Ramu account and encrypted settings backup](ramu-account.md); they carry the same portable export.
 
 ## Existing services to extend
 
@@ -63,10 +63,8 @@ Optional, off until chosen: **Back up to GitHub** in **Settings → Remote acces
 - A third identity for a client, matched by `github.com/globex/*`, takes a Globex project out of Work without touching Work's folder rule; removing it moves that project to the identity chosen in **Remove**.
 - On a second Mac paired with the first, **Copy settings from…** brings over appearance, models and identities with one review, and lists the logins still to connect there; no credential appears on the second host.
 - An exported file contains no paths, tokens or account secrets, and importing it on a fresh host gives the same review.
-- A GitHub backup restores on a third host signed in to the same account.
 - Server tests for identity matching, environment applied to started processes, the guardrail on each action, memory scoping and the portable export; web tests for the chip, the mismatch card and the copy review; strings translated to Indonesian.
 
 ## Later options
 
-- **Sign-in with a Ramu account** (Google or GitHub with a Ramu service) for sync without a paired host or a GitHub account: only if a hosted service becomes fundable. It still would not carry credentials.
 - Identities on the phone beyond the read-only chip, once people ask to change them away from the desktop.
