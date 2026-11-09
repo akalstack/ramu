@@ -21,15 +21,16 @@ test('short taps and ordinary swipes never activate cursor control', () => {
   gesture.move(120, 100, 20)
   assert.equal(gesture.tick(2000).active, false)
 })
-test('hold shows a neutral control and only a full gauge emits a step', () => {
+test('hold shows a neutral control; a direction sends its first key at once, then repeats on a full gauge', () => {
   const gesture = new TerminalGesture()
   gesture.begin(100, 100, 0)
   assert.equal(gesture.tick(HOLD_MS).active, true)
   for (let t = HOLD_MS; t < 2000; t += 16) assert.equal(gesture.tick(t).steps, 0)
   gesture.move(113, 100, 2000)
+  assert.equal(gesture.tick(2016).steps, 1)
   let steps = 0,
     partial = false
-  for (let t = 2016; t <= 2720; t += 16) {
+  for (let t = 2032; t <= 2480; t += 16) {
     const state = gesture.tick(t)
     steps += state.steps
     partial ||= state.progress > 0 && state.progress < 1
@@ -48,7 +49,7 @@ test('farther dragging repeats faster, diagonal drift is stable, returning to ce
     for (let t = HOLD_MS + 16; t <= HOLD_MS + 1000; t += 16) total += gesture.tick(t).steps
     return total
   }
-  assert.ok(rate(112) > rate(25) * 4)
+  assert.ok(rate(112) > rate(25) * 3)
   const gesture = new TerminalGesture()
   gesture.begin(100, 100, 0)
   gesture.tick(HOLD_MS)

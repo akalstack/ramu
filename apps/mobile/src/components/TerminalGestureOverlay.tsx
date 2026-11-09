@@ -15,7 +15,7 @@ import { Glass } from './Glass'
 import { useTheme } from '../theme'
 import { gestureOverlayPosition, type Direction, type TerminalGestureState } from '../runtime/terminalGesture'
 
-export type GestureDisplay = Pick<TerminalGestureState, 'active' | 'direction' | 'progress' | 'speed' | 'x' | 'y'>
+export type GestureDisplay = Pick<TerminalGestureState, 'active' | 'direction' | 'speed' | 'x' | 'y'>
 const SIZE = 112
 const BLUE = '#0a84ff'
 const positions = {
@@ -33,12 +33,10 @@ export function readGesture(value: Record<string, unknown>): GestureDisplay | nu
     value.direction === null || ['up', 'down', 'left', 'right'].includes(String(value.direction))
       ? (value.direction as Direction | null)
       : null
-  if (![value.progress, value.speed, value.x, value.y].every((v) => typeof v === 'number' && Number.isFinite(v)))
-    return null
+  if (![value.speed, value.x, value.y].every((v) => typeof v === 'number' && Number.isFinite(v))) return null
   return {
     active: true,
     direction,
-    progress: Math.max(0, Math.min(1, value.progress as number)),
     speed: Math.max(0, Math.min(1, value.speed as number)),
     x: value.x as number,
     y: value.y as number,
@@ -150,29 +148,6 @@ export function TerminalGestureOverlay({
             </View>
           )
         })}
-        {/* A separate, quiet tick track retains full-gauge key timing. The arrows'
-          blue fill communicates drag strength without repeatedly snapping empty. */}
-        <View
-          style={{
-            position: 'absolute',
-            left: 36,
-            bottom: 5,
-            width: 40,
-            height: 2,
-            borderRadius: 1,
-            overflow: 'hidden',
-            backgroundColor: c.lineStrong,
-          }}
-        >
-          <View
-            style={{
-              height: 2,
-              width: 40 * state.progress,
-              backgroundColor: BLUE,
-              opacity: state.direction ? 0.85 : 0,
-            }}
-          />
-        </View>
       </Glass>
     </View>
   )

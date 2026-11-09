@@ -8,11 +8,13 @@ export interface TerminalGestureState {
   x: number
   y: number
 }
-export const HOLD_MS = 650
+export const HOLD_MS = 300
 const DEAD_ZONE = 12
 const MAX_DRAG = 112
+const SLOWEST_REPEAT_MS = 450
+const FASTEST_REPEAT_MS = 70
 
-/** Hold-and-drag cursor control. Distance sets repetition rate; a full gauge sends one key. */
+/** Hold-and-drag cursor control. A direction sends one key at once; distance then sets the repeat rate. */
 export class TerminalGesture {
   private started: number | null = null
   private active = false
@@ -64,7 +66,8 @@ export class TerminalGesture {
       direction = useX ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down'
     }
     if (direction !== this.direction) {
-      this.progress = 0
+      // Picking a direction sends its first key on the next frame; the gauge then paces the repeats.
+      this.progress = direction ? 1 : 0
       this.lastTick = now
     }
     this.direction = direction
@@ -79,7 +82,7 @@ export class TerminalGesture {
     if (this.active && this.direction) {
       // Never catch up in a burst after a dropped frame or background pause.
       const elapsed = Math.max(0, Math.min(64, now - this.lastTick))
-      const interval = 650 * Math.pow(70 / 650, this.speed)
+      const interval = SLOWEST_REPEAT_MS * Math.pow(FASTEST_REPEAT_MS / SLOWEST_REPEAT_MS, this.speed)
       this.progress += elapsed / interval
       if (this.progress >= 1) {
         steps = 1
