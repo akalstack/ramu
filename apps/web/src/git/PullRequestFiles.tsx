@@ -14,6 +14,9 @@ import { errorText } from '../workspace/TaskPane'
 import { CommentForm } from '../changes/CommentForm'
 import { ICON_BUTTON_CLASS, NOTE_CLASS, WHERE_CLASS } from '../changes/styles'
 import { commentLabel } from './ReviewChip'
+import { isLargeDiff, LargeDiffBanner } from '../changes/LargeDiffBanner'
+import { ReviewFileTree } from '../changes/ReviewFileTree'
+import { useNearViewport } from '../lib/useNearViewport'
 import { queryInvokerFor } from './hostQuery'
 
 /** Files that start open; a larger pull request starts folded so its list can be read first. */
@@ -345,6 +348,28 @@ function FileDiff({
   )
 }
 
+/** A file's diff, built once it nears the screen and kept after, so a long list opens fast and keeps its drafts. */
+function NearFileDiff({ lines, children }: { lines: number; children: React.ReactNode }) {
+  const root = useRef<HTMLDivElement>(null)
+  const near = useNearViewport(root)
+  const [seen, setSeen] = useState(false)
+  useEffect(() => {
+    if (near) setSeen(true)
+  }, [near])
+  return (
+    <div ref={root}>
+      {seen ? (
+        children
+      ) : (
+        <div
+          className="rounded-b-(--radius-m) border-x border-b border-line"
+          style={{ height: Math.min(Math.max(lines, 1), 400) * 20 }}
+        />
+      )}
+    </div>
+  )
+}
+
 /**
  * Files changed, as the services' own review views show them: each file's diff with line numbers, the review comments
  * already on its lines, and a comment on any line or block of lines of the new version, gathered into one review that
@@ -379,21 +404,49 @@ export function PullRequestFiles({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [wrap, setWrap] = useState(savedWrap)
+  // A large pull request is read one file at a time, as the Changes tab reads a large run.
+  const [showAll, setShowAll] = useState(false)
+  const [activePath, setActivePath] = useState<string | null>(null)
+  // Files opened one at a time stay mounted, hidden, so a comment being written survives moving to another file.
+  const [visited, setVisited] = useState<Set<string>>(() => new Set())
+  const banner = useRef<HTMLDivElement>(null)
   const data = files.data
   if (files.isPending) return <p className="m-0 text-caption text-muted-foreground">{t('Loading files…')}</p>
   if (files.isError) return <p className="m-0 text-caption text-bad">{errorText(files.error)}</p>
   if (!data?.files.length)
     return <p className="m-0 text-caption text-muted-foreground">{t('No changed files to show.')}</p>
-  const isClosed = (path: string, index: number) => (closed ? closed.has(path) : index >= OPEN_AT_FIRST)
+  const added = data.files.reduce((sum, file) => sum + file.additions, 0)
+  const removed = data.files.reduce((sum, file) => sum + file.deletions, 0)
+  const large = isLargeDiff(data.files.length, added + removed)
+  const oneAtATime = large && !showAll
+  const activeIndex = Math.max(
+    0,
+    data.files.findIndex((file) => file.path === activePath),
+  )
+  const activeFile = data.files[activeIndex]!
+  const startsClosed = (index: number) => !oneAtATime && index >= OPEN_AT_FIRST
+  const isClosed = (path: string, index: number) => (closed ? closed.has(path) : startsClosed(index))
   const toggle = (path: string, index: number) =>
     setClosed((current) => {
-      const next = new Set(current ?? data.files.slice(OPEN_AT_FIRST).map((file) => file.path))
+      const next = new Set(current ?? data.files.filter((_, at) => startsClosed(at)).map((file) => file.path))
       if (isClosed(path, index)) next.delete(path)
       else next.add(path)
       return next
     })
-  const added = data.files.reduce((sum, file) => sum + file.additions, 0)
-  const removed = data.files.reduce((sum, file) => sum + file.deletions, 0)
+  const pick = (path: string) => {
+    if (oneAtATime) {
+      setActivePath(path)
+      setVisited((current) => new Set(current).add(path))
+      banner.current?.scrollIntoView({ block: 'start' })
+    } else
+      document
+        .getElementById(`pull-request-file-${encodeURIComponent(path)}`)
+        ?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }
+  const counts = new Map<string, number>()
+  for (const thread of threads)
+    if (thread.path && !thread.outdated && thread.line) counts.set(thread.path, (counts.get(thread.path) ?? 0) + 1)
+  for (const comment of pending) counts.set(comment.path, (counts.get(comment.path) ?? 0) + 1)
   const submit = async () => {
     setBusy(true)
     setError(null)
@@ -516,66 +569,115 @@ export function PullRequestFiles({
           </div>
         </div>
       )}
-      {data.files.map((file, index) => {
-        const open = !isClosed(file.path, index)
-        const status = STATUS_LABEL[file.status]
-        const fileThreads = threads.filter((thread) => thread.path === file.path && !thread.outdated && thread.line)
-        const filePending = pending.filter((comment) => comment.path === file.path)
-        return (
-          // No overflow clipping here: it would stop the file's header from staying pinned while its diff scrolls.
-          <section key={file.path}>
-            {/* Pinned under the tabs and the toolbar (36px + 48px), on the page's own colour so the diff never shows
-                through the header's tint. */}
-            <div className="sticky top-[84px] z-10 bg-canvas">
-              <Button
-                variant="ghost"
-                className={cn(
-                  'h-auto w-full justify-start gap-2 border border-line bg-card px-3 py-2 text-left font-normal hover:bg-hover',
-                  open ? 'rounded-t-(--radius-m) rounded-b-none' : 'rounded-(--radius-m)',
-                )}
-                aria-expanded={open}
-                onClick={() => toggle(file.path, index)}
-              >
-                <ChevronRight size={13} className={cn('flex-none transition-transform', open && 'rotate-90')} />
-                <FileIcon path={file.path} size={14} className="flex-none" />
-                <FilePath file={file} />
-                {fileThreads.length + filePending.length > 0 && (
-                  <span className="inline-flex flex-none items-center gap-0.5 text-caption text-muted-foreground">
-                    <MessageSquare size={11} />
-                    {fileThreads.length + filePending.length}
-                  </span>
-                )}
-                {status && <span className="flex-none text-caption text-muted-foreground">{t(status)}</span>}
-                <span className="flex-none text-caption tabular-nums">
-                  <span className="text-ok">+{file.additions}</span> <span className="text-bad">−{file.deletions}</span>
-                </span>
-              </Button>
-            </div>
-            {open && (
-              <FileDiff
-                file={file}
-                threads={fileThreads}
-                pending={filePending}
-                canComment={canReview}
-                wrap={wrap}
-                onAdd={(line, startLine, text) =>
-                  setPending((current) => [
-                    ...current,
-                    {
-                      id: `${file.path}:${line}:${Date.now()}`,
-                      path: file.path,
-                      line,
-                      ...(startLine ? { startLine } : {}),
-                      body: text,
-                    },
-                  ])
-                }
-                onRemove={(id) => setPending((current) => current.filter((comment) => comment.id !== id))}
+      {/* The file list sits beside the diffs once a pull request is large and the pane is wide enough for both. */}
+      <div className="@container">
+        <div
+          className={cn('grid gap-3', large && '@[760px]:grid-cols-[minmax(170px,220px)_minmax(0,1fr)]')}
+          style={{ '--review-toolbar-height': '72px' } as React.CSSProperties}
+        >
+          {large && (
+            <div className="hidden @[760px]:block">
+              <ReviewFileTree
+                files={data.files.map((file) => ({
+                  id: file.path,
+                  path: file.path,
+                  addedLines: file.additions,
+                  removedLines: file.deletions,
+                }))}
+                counts={counts}
+                viewedFiles={new Set()}
+                activeId={oneAtATime ? activeFile.path : undefined}
+                onPick={pick}
               />
+            </div>
+          )}
+          <div className="flex min-w-0 flex-col gap-3">
+            {large && (
+              <div ref={banner} className="scroll-mt-[84px]">
+                <LargeDiffBanner
+                  oneAtATime={oneAtATime}
+                  activeIndex={activeIndex}
+                  count={data.files.length}
+                  onStep={(delta) => pick(data.files[activeIndex + delta]!.path)}
+                  onToggleAll={() => setShowAll((value) => !value)}
+                />
+              </div>
             )}
-          </section>
-        )
-      })}
+            {data.files.map((file, index) => {
+              const shown = !oneAtATime || file.path === activeFile.path
+              if (oneAtATime && !shown && !visited.has(file.path)) return null
+              const open = !isClosed(file.path, index)
+              const status = STATUS_LABEL[file.status]
+              const fileThreads = threads.filter(
+                (thread) => thread.path === file.path && !thread.outdated && thread.line,
+              )
+              const filePending = pending.filter((comment) => comment.path === file.path)
+              return (
+                // No overflow clipping here: it would stop the file's header from staying pinned while its diff scrolls.
+                <section
+                  key={file.path}
+                  id={`pull-request-file-${encodeURIComponent(file.path)}`}
+                  hidden={!shown}
+                  className="scroll-mt-[84px]"
+                >
+                  {/* Pinned under the tabs and the toolbar (36px + 48px), on the page's own colour so the diff never shows
+                through the header's tint. */}
+                  <div className="sticky top-[84px] z-10 bg-canvas">
+                    <Button
+                      variant="ghost"
+                      className={cn(
+                        'h-auto w-full justify-start gap-2 border border-line bg-card px-3 py-2 text-left font-normal hover:bg-hover',
+                        open ? 'rounded-t-(--radius-m) rounded-b-none' : 'rounded-(--radius-m)',
+                      )}
+                      aria-expanded={open}
+                      onClick={() => toggle(file.path, index)}
+                    >
+                      <ChevronRight size={13} className={cn('flex-none transition-transform', open && 'rotate-90')} />
+                      <FileIcon path={file.path} size={14} className="flex-none" />
+                      <FilePath file={file} />
+                      {fileThreads.length + filePending.length > 0 && (
+                        <span className="inline-flex flex-none items-center gap-0.5 text-caption text-muted-foreground">
+                          <MessageSquare size={11} />
+                          {fileThreads.length + filePending.length}
+                        </span>
+                      )}
+                      {status && <span className="flex-none text-caption text-muted-foreground">{t(status)}</span>}
+                      <span className="flex-none text-caption tabular-nums">
+                        <span className="text-ok">+{file.additions}</span>{' '}
+                        <span className="text-bad">−{file.deletions}</span>
+                      </span>
+                    </Button>
+                  </div>
+                  {open && (
+                    <NearFileDiff lines={file.additions + file.deletions}>
+                      <FileDiff
+                        file={file}
+                        threads={fileThreads}
+                        pending={filePending}
+                        canComment={canReview}
+                        wrap={wrap}
+                        onAdd={(line, startLine, text) =>
+                          setPending((current) => [
+                            ...current,
+                            {
+                              id: `${file.path}:${line}:${Date.now()}`,
+                              path: file.path,
+                              line,
+                              ...(startLine ? { startLine } : {}),
+                              body: text,
+                            },
+                          ])
+                        }
+                        onRemove={(id) => setPending((current) => current.filter((comment) => comment.id !== id))}
+                      />
+                    </NearFileDiff>
+                  )}
+                </section>
+              )
+            })}
+          </div>
+        </div>
+      </div>
       {data.more && (
         <p className="m-0 text-caption text-muted-foreground">
           {t('Showing the first {0} files. Open it on the hosting service for the rest.', { '0': data.files.length })}

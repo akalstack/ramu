@@ -1,6 +1,6 @@
 import { Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { useDeferredValue, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { ChangeFile, ChangeReview } from '@ramu/shared/types'
+import type { ChangeFile } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { t, useLanguage } from '../i18n'
 import { SearchInput } from '../SearchInput'
@@ -8,22 +8,29 @@ import { VirtualList } from '../lib/VirtualList'
 import { useAppSettings } from '../settings/AppSettings'
 import { DISCUSSION_COUNT_CLASS } from './styles'
 
+/** What the list needs of a file, shared by a run's changes and a pull request's files. */
+export type ReviewTreeFile = Pick<ChangeFile, 'id' | 'path'> &
+  Partial<Pick<ChangeFile, 'binary' | 'addedLines' | 'removedLines'>>
+
 /** File list beside the diffs: click to jump to a file, or to open it when the diff is shown one file at a time. */
 export function ReviewFileTree({
-  review,
+  files,
+  counts,
   activeId,
   onPick,
   viewedFiles,
 }: {
+  files: ReviewTreeFile[]
+  /** Comments waiting to be sent, by file id. */
+  counts: Map<string, number>
   viewedFiles: Set<string>
-  review: ChangeReview
   activeId?: string
   onPick: (fileId: string) => void
 }) {
   useLanguage()
   const [filter, setFilter] = useState(''),
     [closed, setClosed] = useState<Set<string>>(new Set())
-  type Node = { name: string; path: string; dirs: Map<string, Node>; files: ChangeFile[] }
+  type Node = { name: string; path: string; dirs: Map<string, Node>; files: ReviewTreeFile[] }
   const { preferences } = useAppSettings()
   const needle = useDeferredValue(filter).trim().toLowerCase()
   const treeRoot = useRef<HTMLElement>(null)
@@ -39,7 +46,7 @@ export function ReviewFileTree({
   }, [])
   const tree = useMemo(() => {
     const root: Node = { name: '', path: '', dirs: new Map(), files: [] }
-    for (const file of review.files) {
+    for (const file of files) {
       if (needle && !file.path.toLowerCase().includes(needle)) continue
       const parts = file.path.split('/')
       let node = root
@@ -51,18 +58,13 @@ export function ReviewFileTree({
       node.files.push(file)
     }
     return root
-  }, [review.files, needle])
-  const counts = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const comment of review.comments)
-      if (comment.state === 'draft') map.set(comment.fileId, (map.get(comment.fileId) ?? 0) + 1)
-    return map
-  }, [review.comments])
-  type Row = { key: string; depth: number; dir: Node; open: boolean } | { key: string; depth: number; file: ChangeFile }
+  }, [files, needle])
+  type Row =
+    { key: string; depth: number; dir: Node; open: boolean } | { key: string; depth: number; file: ReviewTreeFile }
   const rows = useMemo(() => {
     const result: Row[] = []
     if (flat)
-      return review.files
+      return files
         .filter((file) => !needle || file.path.toLowerCase().includes(needle))
         .sort((a, b) => a.path.localeCompare(b.path))
         .map((file) => ({ key: `file:${file.id}`, depth: 0, file }))
@@ -77,7 +79,7 @@ export function ReviewFileTree({
     }
     visit(tree, 0)
     return result
-  }, [tree, closed, needle, flat, review.files])
+  }, [tree, closed, needle, flat, files])
   const render = (row: Row) =>
     'dir' in row ? (
       <Button

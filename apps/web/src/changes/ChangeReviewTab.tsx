@@ -11,7 +11,7 @@ import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { enterReviewFile } from '../git/ReviewDiff'
 import { useReviews, openReview } from '../git/reviews'
 import { DeferredReviewFile } from './DeferredReviewFile'
-import { LargeDiffBanner } from './LargeDiffBanner'
+import { isLargeDiff, LargeDiffBanner } from './LargeDiffBanner'
 import { ReviewBranchContext } from './ReviewBranchContext'
 import { ReviewFileCard } from './ReviewFileCard'
 import { ReviewFileTree } from './ReviewFileTree'
@@ -142,7 +142,13 @@ export function ChangeReviewTab({
       }
     return map
   }, [review?.comments])
-  const large = files.length > 25 || changedLines > 2500
+  const draftCounts = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const comment of review?.comments ?? [])
+      if (comment.state === 'draft') map.set(comment.fileId, (map.get(comment.fileId) ?? 0) + 1)
+    return map
+  }, [review?.comments])
+  const large = isLargeDiff(files.length, changedLines)
   const oneAtATime = large && !showAll
   const activeIndex = Math.max(
     0,
@@ -273,7 +279,8 @@ export function ChangeReviewTab({
           >
             {showTree && (
               <ReviewFileTree
-                review={review}
+                files={review.files}
+                counts={draftCounts}
                 viewedFiles={viewedFiles}
                 activeId={oneAtATime ? files[activeIndex]?.id : undefined}
                 onPick={(fileId) => {
