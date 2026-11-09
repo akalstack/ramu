@@ -581,6 +581,30 @@ function Shell() {
     </nav>
   )
   // With the sidebar hidden, chats that want attention show on its toggle instead.
+  /** One of the app's pages as an icon in the sidebar's top row; choosing the open one goes back to the threads. */
+  const pageButton = (
+    page: 'inbox' | 'pulls' | 'schedules' | 'artifacts',
+    Icon: typeof Inbox,
+    label: string,
+    waiting: number,
+    keys?: string,
+  ) => (
+    <Button
+      key={page}
+      variant="ghost"
+      size="icon-sm"
+      className={`relative overflow-visible size-(--action-size) flex-none justify-center p-0 border-transparent hover:bg-hover hover:text-foreground ${ui.sidebar === page ? 'bg-accent text-foreground' : 'bg-transparent text-muted-foreground'}`}
+      aria-pressed={ui.sidebar === page}
+      aria-label={label}
+      aria-description={waiting ? t('{0} waiting', { 0: waiting }) : undefined}
+      title={keys ? `${label} (${keys})` : label}
+      onClick={() => ws.setSidebar(ui.sidebar === page && page !== 'inbox' ? 'projects' : page)}
+    >
+      <Icon size={16} />
+      {badge(waiting, true)}
+    </Button>
+  )
+
   const sidebarToggle = (
     <Button
       variant="ghost"
@@ -662,7 +686,17 @@ function Shell() {
             inert={sidebarHidden}
           >
             <nav className="sidebar-nav flex flex-col gap-px p-[2px_8px_6px] flex-none" aria-label={t('Activity')}>
-              <ComputerSwitcher />
+              {/* The app's own pages as one row of icons beside the host switcher, as VS Code's activity bar does, so
+                  threads keep the sidebar's height. */}
+              <div className="flex min-h-8 items-center gap-1">
+                <div className="min-w-0 flex-1">
+                  <ComputerSwitcher />
+                </div>
+                {pageButton('inbox', Inbox, t('Inbox'), inboxCount, formatKeys('mod+shift+i'))}
+                {pageButton('pulls', GitPullRequest, t('Pull requests'), pullsWaiting)}
+                {pageButton('schedules', CalendarClock, t('Schedules'), 0)}
+                {pageButton('artifacts', AppWindow, t('Artifacts'), 0)}
+              </div>
               <div className="sidebar-actions @container flex items-center gap-1">
                 <Button
                   variant="secondary"
@@ -698,43 +732,6 @@ function Shell() {
                   <Search size={16} />
                 </Button>
               </div>
-              <Button
-                variant="secondary"
-                className={`nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start${ui.sidebar === 'inbox' ? ' active' : ''}`}
-                aria-pressed={ui.sidebar === 'inbox'}
-                aria-description={inboxCount ? t('{0} waiting', { 0: inboxCount }) : undefined}
-                title={`${t('Inbox')} (${formatKeys('mod+shift+i')})`}
-                onClick={() => ws.setSidebar('inbox')}
-              >
-                <Inbox size={15} /> <span className="grow flex-1 min-w-0 text-left">{t('Inbox')}</span>
-                {badge(inboxCount)}
-              </Button>
-              <Button
-                variant="secondary"
-                className={`nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start${ui.sidebar === 'pulls' ? ' active' : ''}`}
-                aria-pressed={ui.sidebar === 'pulls'}
-                aria-description={pullsWaiting ? t('{0} waiting', { 0: pullsWaiting }) : undefined}
-                onClick={() => ws.setSidebar(ui.sidebar === 'pulls' ? 'projects' : 'pulls')}
-              >
-                <GitPullRequest size={15} /> <span className="grow flex-1 min-w-0 text-left">{t('Pull requests')}</span>
-                {badge(pullsWaiting)}
-              </Button>
-              <Button
-                variant="secondary"
-                className={`nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] w-full bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start${ui.sidebar === 'schedules' ? ' active' : ''}`}
-                aria-pressed={ui.sidebar === 'schedules'}
-                onClick={() => ws.setSidebar(ui.sidebar === 'schedules' ? 'projects' : 'schedules')}
-              >
-                <CalendarClock size={15} /> <span className="grow flex-1 min-w-0 text-left">{t('Schedules')}</span>
-              </Button>
-              <Button
-                variant="secondary"
-                className={`nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible w-full bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start${ui.sidebar === 'artifacts' ? ' active' : ''}`}
-                aria-pressed={ui.sidebar === 'artifacts'}
-                onClick={() => ws.setSidebar(ui.sidebar === 'artifacts' ? 'projects' : 'artifacts')}
-              >
-                <AppWindow size={15} /> <span className="grow flex-1 min-w-0 text-left">{t('Artifacts')}</span>
-              </Button>
             </nav>
             <div className="sidebar-body [&:has(.scm-panel)]:flex [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:flex [&:has(.explorer-panel)]:overflow-hidden flex-1 overflow-auto min-h-0">
               <HostProjects />
