@@ -334,6 +334,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Or enter another address': 'Atau masukkan alamat lain',
   'Showing the last result; the host is not reachable.': 'Menampilkan hasil terakhir; host tidak dapat dijangkau.',
   'Update Ramu': 'Perbarui Ramu',
+  '{0} runs an older Ramu. Update Ramu there to use this.': '{0} memakai Ramu versi lama. Perbarui Ramu di sana untuk memakai ini.',
   'Change executable path': 'Ubah path executable',
   'Compatibility details': 'Detail kompatibilitas',
   Evidence: 'Bukti',

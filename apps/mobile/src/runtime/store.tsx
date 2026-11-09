@@ -1,4 +1,4 @@
-import { attemptStatus, failureStatus, mayConnect, restoredStatus } from './hostConnection'
+import { attemptStatus, failureStatus, isOlderHostRefusal, mayConnect, restoredStatus } from './hostConnection'
 import { relay as relayToHost } from './account'
 import { appForeground } from './chatViewport'
 import { PairRequestUnsupported, requestPairing } from '@ramu/shared/pairRequest'
@@ -482,6 +482,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         connection.client.close()
         status(id, 'revoked', error.message)
       }
+      // A raw "Unknown method" names an internal call; say what fixes it instead.
+      if (isOlderHostRefusal(error))
+        throw new HostError(
+          translate(ref.current.language, '{0} runs an older Ramu. Update Ramu there to use this.', {
+            0:
+              ref.current.computers.find((computer) => computer.id === id)?.name ??
+              translate(ref.current.language, 'This host'),
+          }),
+          error instanceof HostError ? error.status : 0,
+        )
       throw error
     }
   }
