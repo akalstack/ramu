@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Disclosure } from '../../../components/Motion'
 import { Markdown } from '../../../components/Markdown'
-import { Alert, Linking, RefreshControl, View } from 'react-native'
+import { Alert, Linking, Pressable, RefreshControl, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Bot,
@@ -18,6 +19,7 @@ import {
   type MergeOptions,
   type PullRequestAction,
   type PullRequestDraftBatch,
+  type PullRequestFile,
   type PullRequestList,
   type PullRequestSummary,
   type PullRequestThread,
@@ -73,6 +75,8 @@ export default function PullRequestScreen() {
   const [threads, setThreads] = useState<PullRequestThread[] | null>(null)
   const [threadsError, setThreadsError] = useState<string | null>(null)
   const [description, setDescription] = useState<string | null>(null)
+  const [files, setFiles] = useState<{ files: PullRequestFile[]; more: boolean } | null>(null)
+  const [filesOpen, setFilesOpen] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
@@ -117,6 +121,10 @@ export default function PullRequestScreen() {
           void store
             .invoke(computerId, 'forge.pullRequestDescription', taskId, repoId, url)
             .then(setDescription, () => setDescription(null))
+        if (found)
+          void store
+            .invoke(computerId, 'forge.pullRequestFiles', taskId, repoId, url)
+            .then(setFiles, () => setFiles(null))
       } catch (e) {
         setError(message(e))
       } finally {
@@ -440,6 +448,36 @@ export default function PullRequestScreen() {
                   {say('Description')}
                 </T>
                 <Markdown text={description} />
+              </View>
+            ) : null}
+
+            {files?.files.length ? (
+              <View style={{ gap: space.xs }}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: filesOpen }}
+                  onPress={() => setFilesOpen((value) => !value)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: 32 }}
+                >
+                  <Disclosure open={filesOpen} size={14} color={c.muted} />
+                  <T size={font.control} weight="600" tone="muted">
+                    {say('Changed files')}{' '}
+                    <T size={font.control} tone="placeholder">
+                      {`${files.files.length}${files.more ? '+' : ''} · +${files.files.reduce((sum, file) => sum + file.additions, 0)} −${files.files.reduce((sum, file) => sum + file.deletions, 0)}`}
+                    </T>
+                  </T>
+                </Pressable>
+                {filesOpen
+                  ? files.files.map((file) => (
+                      <View key={file.path} style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+                        <T size={font.caption} mono numberOfLines={1} style={{ flex: 1 }}>
+                          {file.path}
+                        </T>
+                        <T size={font.caption} tone="ok">{`+${file.additions}`}</T>
+                        <T size={font.caption} tone="bad">{`−${file.deletions}`}</T>
+                      </View>
+                    ))
+                  : null}
               </View>
             ) : null}
 

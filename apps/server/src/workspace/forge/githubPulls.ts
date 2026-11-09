@@ -1,6 +1,7 @@
 // GitHub pull request lists, actions, review threads and replies. Reads and writes go through `githubGraphql` and
 // `githubRest`, so the signed-in `gh` and a saved token behave the same.
 import type {
+  PullRequestFile,
   MergeMethod,
   MergeOptions,
   PullRequestAction,
@@ -559,4 +560,49 @@ export async function submitReview(
       body: comment.body,
     })),
   })
+}
+
+/** Files per page GitHub returns at most; a pull request with more says so instead of paging on. */
+const FILES_PAGE = 100
+/** A patch longer than this is cut, so one generated file cannot swamp the view or the connection. */
+const PATCH_LIMIT = 40_000
+
+const FILE_STATUS: PullRequestFile['status'][] = [
+  'added',
+  'modified',
+  'removed',
+  'renamed',
+  'copied',
+  'changed',
+  'unchanged',
+]
+
+/** The first page of files `url` changes, with their patches cut at Ramu's limit. */
+export async function pullRequestFiles(cwd: string, url: string): Promise<{ files: PullRequestFile[]; more: boolean }> {
+  const { owner, repo } = await repository(cwd)
+  const raw = await githubRest<
+    {
+      filename: string
+      previous_filename?: string
+      status: string
+      additions: number
+      deletions: number
+      patch?: string
+    }[]
+  >(cwd, 'GET', `/repos/${owner}/${repo}/pulls/${pullNumber(url)}/files?per_page=${FILES_PAGE}`)
+  const files = (raw ?? []).map((file): PullRequestFile => {
+    const patch = typeof file.patch === 'string' ? file.patch : null
+    return {
+      path: file.filename,
+      ...(file.previous_filename ? { previousPath: file.previous_filename } : {}),
+      status: FILE_STATUS.includes(file.status as PullRequestFile['status'])
+        ? (file.status as PullRequestFile['status'])
+        : 'changed',
+      additions: file.additions,
+      deletions: file.deletions,
+      patch: patch && patch.length > PATCH_LIMIT ? patch.slice(0, PATCH_LIMIT) : patch,
+      ...(patch && patch.length > PATCH_LIMIT ? { truncated: true } : {}),
+    }
+  })
+  return { files, more: files.length >= FILES_PAGE }
 }

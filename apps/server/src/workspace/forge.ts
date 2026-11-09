@@ -60,6 +60,11 @@ export const mergeOptions = async (cwd: string, url: string) => (await adapterFo
 export const pullRequestAction = async (cwd: string, url: string, action: PullRequestAction) =>
   (await adapterFor(cwd)).pullRequestAction(cwd, url, action)
 export const pullRequestBody = async (cwd: string, url: string) => (await adapterFor(cwd)).pullRequestBody(cwd, url)
+/** The files a pull request changes, or null where its service is not supported yet. */
+export const pullRequestFiles = async (cwd: string, url: string) => {
+  const adapter = await adapterFor(cwd)
+  return adapter.pullRequestFiles ? adapter.pullRequestFiles(cwd, url) : null
+}
 /** Open pull requests involving the signed-in account across the service; GitHub only, empty elsewhere. */
 export const listInvolvedPullRequests = async (cwd: string) =>
   (await adapterFor(cwd)).id === 'github' ? githubInvolved(cwd) : []

@@ -1175,6 +1175,7 @@ registerForgeAdapter({
   mergeOptions: pulls.mergeOptions,
   pullRequestAction: pulls.pullRequestAction,
   pullRequestBody: pulls.pullRequestBody,
+  pullRequestFiles: pulls.pullRequestFiles,
   reviewThreads: pulls.reviewThreads,
   replyToThread: pulls.replyToThread,
   resolveThread: pulls.resolveThread,

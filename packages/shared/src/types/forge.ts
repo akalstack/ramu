@@ -133,6 +133,20 @@ export interface RepositoryPullRequests extends PullRequestList {
   outside?: boolean
 }
 
+/** One file a pull request changes, as its full view lists them. */
+export interface PullRequestFile {
+  path: string
+  /** Where a renamed file came from. */
+  previousPath?: string
+  status: 'added' | 'modified' | 'removed' | 'renamed' | 'copied' | 'changed' | 'unchanged'
+  additions: number
+  deletions: number
+  /** The unified diff hunks; null for a binary file or one too large for the service to diff. */
+  patch: string | null
+  /** The patch was cut at Ramu's limit. */
+  truncated?: boolean
+}
+
 /** What opening a pull request in a thread needs: the thread already on it, or how to start one. */
 export interface PullRequestHandoff {
   existing: { taskId: string; title: string } | null

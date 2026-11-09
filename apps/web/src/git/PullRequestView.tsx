@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { PullRequestFiles } from './PullRequestFiles'
 import { previewRehypePlugins } from '@ramu/shared/workspace/markdownRendering'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -356,6 +357,8 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
             </div>
           </section>
         )}
+
+        <PullRequestFiles taskId={taskId} repoId={view.repoId} url={view.url} />
 
         <section className="flex flex-col gap-2">
           <h3 className="m-0 text-control font-semibold">

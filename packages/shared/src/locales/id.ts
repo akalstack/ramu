@@ -6387,4 +6387,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   Sort: 'Urutkan',
   '{0} lines added, {1} removed': '{0} baris ditambahkan, {1} dihapus',
   'To review': 'Untuk direview',
+  'No diff to show for this file.': 'Tidak ada diff untuk berkas ini.',
+  'Showing the first {0} files. Open it on the hosting service for the rest.':
+    'Menampilkan {0} berkas pertama. Buka di layanan hosting untuk sisanya.',
+  'The rest of this diff is too long to show here.': 'Sisa diff ini terlalu panjang untuk ditampilkan di sini.',
 }

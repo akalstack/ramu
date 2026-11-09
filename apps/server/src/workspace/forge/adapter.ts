@@ -1,4 +1,5 @@
 import type {
+  PullRequestFile,
   ForgeAccessReport,
   ForgeCheck,
   ForgeRepositoryAccount,
@@ -48,6 +49,8 @@ export interface ForgeAdapter {
   pullRequestAction(cwd: string, url: string, action: PullRequestAction): Promise<void>
   /** The description of `url`, for the first message of a thread opened on it. */
   pullRequestBody(cwd: string, url: string): Promise<string>
+  /** The files `url` changes with their diffs, for its full view; absent where not supported yet. */
+  pullRequestFiles?(cwd: string, url: string): Promise<{ files: PullRequestFile[]; more: boolean }>
   /** Every review thread of `url`, resolved ones included, in one shape across services. */
   reviewThreads(cwd: string, url: string): Promise<PullRequestThread[]>
   /** Posts a reply under a thread and returns the new comment's id. */
