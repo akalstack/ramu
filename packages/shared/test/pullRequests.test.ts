@@ -197,3 +197,24 @@ describe('reading a pull request file diff', () => {
     expect(rows[2]!.text).toBe('old')
   })
 })
+
+describe('the next step on a pull request', () => {
+  it("offers the fix on one's own pull request and the review on someone else's", async () => {
+    const { pullRequestNextStep } = await import('../src/pullRequests')
+    const step = (overrides: Partial<PullRequestSummary>, mine: boolean) => {
+      const value = pr(overrides)
+      return pullRequestNextStep(value, pullRequestStage(value), mine)
+    }
+    expect(step({ reviewDecision: 'approved' }, true)).toBe('merge')
+    expect(step({ checks: 'failure' }, true)).toBe('fix-checks')
+    expect(step({ checks: 'failure' }, false)).toBe('review')
+    expect(step({ mergeable: 'conflicts' }, true)).toBe('resolve-conflicts')
+    expect(step({ reviewDecision: 'changes-requested' }, true)).toBe('address-comments')
+    expect(step({ draft: true }, true)).toBe('mark-ready')
+    expect(step({ checks: 'pending' }, false)).toBe('wait-checks')
+    expect(step({ mergeable: 'behind' }, true)).toBe('update-branch')
+    expect(step({}, false)).toBe('review')
+    expect(step({}, true)).toBe('wait-review')
+    expect(step({ state: 'merged' }, true)).toBe('none')
+  })
+})

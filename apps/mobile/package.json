@@ -85,5 +85,14 @@
   },
   "enriched-markdown": {
     "enableMath": false
+  },
+  "expo": {
+    "autolinking": {
+      "ios": {
+        "buildFromSource": [
+          "expo-video"
+        ]
+      }
+    }
   }
 }

@@ -13,6 +13,7 @@ import {
   CircleDot,
   CircleX,
   ExternalLink,
+  LayoutList,
   FileDiff,
   GitMerge,
   MessageSquare,
@@ -26,8 +27,22 @@ import { OverlayScrollArea } from '@/components/overlay-scroll-area'
 import { ContentSkeleton } from '@/components/content-skeleton'
 import { Button } from '@/components/desktop-button'
 import { Checkbox } from '@/components/desktop-checkbox'
-import type { MergeMethod, PullRequestAction, PullRequestSummary, ViewDescriptor } from '@ramu/shared/types'
-import { FORGE_NAMES, pullRequestRef, pullRequestStage } from '@ramu/shared/pullRequests'
+import type {
+  MergeMethod,
+  PullRequestAction,
+  PullRequestFeedbackKind,
+  PullRequestSummary,
+  PullRequestThread,
+  ViewDescriptor,
+} from '@ramu/shared/types'
+import {
+  FORGE_NAMES,
+  pullRequestNextStep,
+  pullRequestRef,
+  pullRequestStage,
+  type PullRequestNextStep,
+} from '@ramu/shared/pullRequests'
+import { PullRequestReadiness } from './PullRequestReadiness'
 import { forgeBrand } from '@ramu/shared/brands'
 import { BrandIcon } from '@/components/brand-icon'
 import { cn } from 'cn'
@@ -77,7 +92,9 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
   const [error, setError] = useState<string | null>(null)
   const [merging, setMerging] = useState(false)
   const [closing, setClosing] = useState(false)
-  const [tab, setTab] = useState<'conversation' | 'files'>('conversation')
+  const [tab, setTab] = useState<'overview' | 'files'>('overview')
+  const [threadFilter, setThreadFilter] = useState<'open' | 'resolved' | 'all'>('open')
+  const [threadOrder, setThreadOrder] = useState<'newest' | 'oldest'>('newest')
   const fileCount = usePullRequestFiles(taskId, view.repoId, view.url)
 
   const list = useQuery({
@@ -173,16 +190,16 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
       }),
     )
 
-  /** Hands the open review threads to the thread working on this pull request, as one round. */
-  const sendThreadsToAgent = (threadTaskId: string) =>
-    run('reviews', async () => {
-      const sessionId = await invoke('forge.sendFeedback', threadTaskId, view.repoId, 'reviews')
+  /** Hands the failing checks or the open review threads to the thread working on this pull request, as one round. */
+  const sendFeedbackToAgent = (threadTaskId: string, kind: PullRequestFeedbackKind = 'reviews') =>
+    run(kind, async () => {
+      const sessionId = await invoke('forge.sendFeedback', threadTaskId, view.repoId, kind)
       if (sessionId) {
         ws.openTask(threadTaskId)
         ws.openView(threadTaskId, { kind: 'agent', sessionId })
         return
       }
-      const prompt = await invoke('forge.pullRequestFeedback', threadTaskId, view.repoId, 'reviews')
+      const prompt = await invoke('forge.pullRequestFeedback', threadTaskId, view.repoId, kind)
       const session = (await invoke('agent.list', threadTaskId)).findLast((entry) => !entry.parentId)
       if (!session) throw new Error(t('Open the thread and start its agent first.'))
       await invoke('agent.submit', session.id, prompt, 'queue', [], [])
@@ -219,6 +236,24 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
   const open = pr.state === 'open'
   const mine = pr.group === 'mine'
   const openThreads = (threads.data ?? []).filter((thread) => !thread.resolved)
+  const step = pullRequestNextStep(pr, stage, mine)
+  const takeStep = (next: PullRequestNextStep) => {
+    if (next === 'merge') setMerging(true)
+    else if (next === 'resolve-conflicts' || next === 'update-branch') void updateBranch()
+    else if (next === 'mark-ready') void act({ kind: 'ready' })
+    else if (next === 'review') void openThread('review')
+    // Fixes go to the thread already on the pull request; without one, a new thread catches up on it first.
+    else if (next === 'fix-checks' || next === 'address-comments') {
+      const working = linked.at(-1)
+      void (working
+        ? sendFeedbackToAgent(working.taskId, next === 'fix-checks' ? 'checks' : 'reviews')
+        : openThread('work'))
+    }
+  }
+  const lastActivity = (entry: PullRequestThread) => entry.comments.at(-1)?.createdAt ?? 0
+  const shownThreads = (threads.data ?? [])
+    .filter((entry) => (threadFilter === 'all' ? true : threadFilter === 'open' ? !entry.resolved : entry.resolved))
+    .sort((a, b) => (threadOrder === 'newest' ? lastActivity(b) - lastActivity(a) : lastActivity(a) - lastActivity(b)))
   const thread = linked.at(-1)
 
   return (
@@ -292,7 +327,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
               variant="secondary"
               size="sm"
               disabled={!!busy}
-              onClick={() => void sendThreadsToAgent(thread.taskId)}
+              onClick={() => void sendFeedbackToAgent(thread.taskId)}
             >
               <MessageSquare size={13} />
               {busy === 'reviews' ? t('Starting…') : t('Address review comments')}
@@ -351,11 +386,11 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
         )}
 
         {/* As on the services: the conversation and the changed files, one tab each. */}
-        <Tabs value={tab} onValueChange={(value) => setTab(value as 'conversation' | 'files')} className="gap-4">
+        <Tabs value={tab} onValueChange={(value) => setTab(value as 'overview' | 'files')} className="gap-4">
           <TabsList variant="line" className="h-9! w-full justify-start gap-4 border-b border-(--line) p-0">
-            <TabsTrigger value="conversation" className="flex-none gap-1.5 px-0.5 text-control">
-              <MessagesSquare size={14} />
-              {t('Conversation')}
+            <TabsTrigger value="overview" className="flex-none gap-1.5 px-0.5 text-control">
+              <LayoutList size={14} />
+              {t('Overview')}
             </TabsTrigger>
             <TabsTrigger value="files" className="flex-none gap-1.5 px-0.5 text-control">
               <FileDiff size={14} />
@@ -368,7 +403,14 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
               )}
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="conversation" className="flex flex-col gap-5">
+          <TabsContent value="overview" className="flex flex-col gap-5">
+            <PullRequestReadiness
+              pr={pr}
+              openThreads={openThreads.length}
+              step={step}
+              busy={!!busy}
+              onStep={takeStep}
+            />
             {batch && <ReviewDraftsCard key={batch.id} batch={batch} onDone={() => void refresh()} />}
 
             {!!description.data?.trim() && (
@@ -390,22 +432,51 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
             <PullRequestTimeline taskId={taskId} repoId={view.repoId} url={view.url} />
 
             <section className="flex flex-col gap-2">
-              <h3 className="m-0 text-control font-semibold">
-                {t('Open review threads')}
-                {openThreads.length ? (
-                  <span className="ml-1.5 font-normal text-muted-foreground">{openThreads.length}</span>
-                ) : null}
-              </h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="m-0 text-control font-semibold">
+                  {t('Review threads')}
+                  {openThreads.length ? (
+                    <span className="ml-1.5 font-normal text-muted-foreground">
+                      {t('{0} unresolved', { '0': openThreads.length })}
+                    </span>
+                  ) : null}
+                </h3>
+                {/* Filters and an order, as GitHub's Overview page gives its comments. */}
+                <div className="ml-auto flex items-center gap-1.5">
+                  <Dropdown
+                    label={t('Show')}
+                    value={threadFilter}
+                    options={[
+                      { value: 'open', label: t('Unresolved') },
+                      { value: 'resolved', label: t('Resolved') },
+                      { value: 'all', label: t('All') },
+                    ]}
+                    onChange={(value) => setThreadFilter(value as 'open' | 'resolved' | 'all')}
+                  />
+                  <Dropdown
+                    label={t('Sort')}
+                    value={threadOrder}
+                    options={[
+                      { value: 'newest', label: t('Newest first') },
+                      { value: 'oldest', label: t('Oldest first') },
+                    ]}
+                    onChange={(value) => setThreadOrder(value as 'newest' | 'oldest')}
+                  />
+                </div>
+              </div>
               {threads.isPending && <ContentSkeleton />}
               {threads.isError && <p className="m-0 text-caption text-bad">{errorText(threads.error)}</p>}
-              {threads.isSuccess && !openThreads.length && (
-                <p className="m-0 text-caption text-muted-foreground">{t('No open review threads.')}</p>
+              {threads.isSuccess && !shownThreads.length && (
+                <p className="m-0 text-caption text-muted-foreground">
+                  {threadFilter === 'open' ? t('No open review threads.') : t('No review threads here.')}
+                </p>
               )}
-              {openThreads.map((entry) => (
+              {shownThreads.map((entry) => (
                 <article key={entry.id} className="flex flex-col gap-1.5 rounded-(--radius-s) border border-line p-2.5">
                   <div className="text-caption text-muted-foreground">
                     {entry.path ? `${entry.path}${entry.line ? `:${entry.line}` : ''}` : t('Conversation')}
                     {entry.outdated && ` · ${t('Outdated')}`}
+                    {entry.resolved && ` · ${t('Resolved')}`}
                   </div>
                   {entry.comments.map((comment) => (
                     <div key={comment.id} className="text-control [overflow-wrap:anywhere] whitespace-pre-wrap">

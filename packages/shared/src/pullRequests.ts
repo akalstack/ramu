@@ -259,3 +259,51 @@ export function patchRows(patch: string): PatchRow[] {
   }
   return rows
 }
+
+/** The one thing to do next on a pull request, which its Overview offers first, as GitHub's Overview page does. */
+export type PullRequestNextStep =
+  | 'merge'
+  | 'fix-checks'
+  | 'resolve-conflicts'
+  | 'update-branch'
+  | 'address-comments'
+  | 'send-replies'
+  | 'mark-ready'
+  | 'review'
+  | 'wait-checks'
+  | 'wait-review'
+  | 'wait-agent'
+  | 'none'
+
+/**
+ * What comes next, most pressing first: on one's own pull request the fixes are one's own (failing checks, requested
+ * changes, conflicts); on someone else's, the review is.
+ */
+export function pullRequestNextStep(
+  pr: Pick<PullRequestSummary, 'state' | 'draft' | 'mergeable' | 'checks'>,
+  stage: PullRequestStage,
+  mine: boolean,
+): PullRequestNextStep {
+  if (pr.state !== 'open') return 'none'
+  switch (stage) {
+    case 'replies-ready':
+      return 'send-replies'
+    case 'agent-working':
+      return 'wait-agent'
+    case 'conflicts':
+      return mine ? 'resolve-conflicts' : 'review'
+    case 'checks-failing':
+      return mine ? 'fix-checks' : 'review'
+    case 'changes-requested':
+      return mine ? 'address-comments' : 'wait-review'
+    case 'draft':
+      return mine ? 'mark-ready' : 'none'
+    case 'checks-pending':
+      return 'wait-checks'
+    case 'ready':
+      return 'merge'
+    default:
+      if (pr.mergeable === 'behind') return 'update-branch'
+      return mine ? 'wait-review' : 'review'
+  }
+}

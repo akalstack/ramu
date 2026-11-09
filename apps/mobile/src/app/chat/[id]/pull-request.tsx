@@ -26,7 +26,13 @@ import {
   type PullRequestSummary,
   type PullRequestThread,
 } from '@ramu/shared/types'
-import { FORGE_NAMES, pullRequestRef, pullRequestStage } from '@ramu/shared/pullRequests'
+import {
+  FORGE_NAMES,
+  pullRequestNextStep,
+  pullRequestRef,
+  pullRequestStage,
+  type PullRequestNextStep,
+} from '@ramu/shared/pullRequests'
 import { font, space, useTheme } from '../../../theme'
 import { useChat, useStore } from '../../../runtime/store'
 import { canWriteHost } from '../../../runtime/viewerAccess'
@@ -63,6 +69,23 @@ const TIMELINE_VERDICT: Record<NonNullable<PullRequestTimelineEvent['verdict']>,
   dismissed: 'had a review dismissed',
 }
 
+/** The Overview's action for each next step, the same English copy keys as the desktop; waiting steps only say why. */
+const NEXT_ACTION: Partial<Record<PullRequestNextStep, string>> = {
+  merge: 'Merge…',
+  'fix-checks': 'Fix failing checks',
+  'resolve-conflicts': 'Resolve conflicts',
+  'update-branch': 'Update branch',
+  'address-comments': 'Address review comments',
+  'mark-ready': 'Ready for review',
+  review: 'Review with agent',
+}
+const NEXT_WAITING: Partial<Record<PullRequestNextStep, string>> = {
+  'send-replies': 'Replies are drafted below, waiting for you to check and send them.',
+  'wait-checks': 'Waiting for checks to finish.',
+  'wait-review': 'Waiting for a review.',
+  'wait-agent': 'An agent is working on the feedback.',
+}
+
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
 const rawId = (id: string) => id.slice(id.indexOf(':') + 1)
 
@@ -97,7 +120,7 @@ export default function PullRequestScreen() {
   const [threadsError, setThreadsError] = useState<string | null>(null)
   const [description, setDescription] = useState<string | null>(null)
   const [files, setFiles] = useState<{ files: PullRequestFile[]; more: boolean } | null>(null)
-  const [tab, setTab] = useState<'conversation' | 'files'>('conversation')
+  const [tab, setTab] = useState<'overview' | 'files'>('overview')
   const [timeline, setTimeline] = useState<PullRequestTimelineEvent[] | null>(null)
   const [timelineOpen, setTimelineOpen] = useState(false)
   const [loaded, setLoaded] = useState(false)
@@ -245,11 +268,11 @@ export default function PullRequestScreen() {
     })
 
   /** Hands the open review threads to the thread working on this pull request, as one round. */
-  const sendThreadsToAgent = (threadTaskId: string) =>
-    run('reviews', async () => {
-      const sessionId = await store.invoke(computerId, 'forge.sendFeedback', threadTaskId, repoId, 'reviews')
+  const sendThreadsToAgent = (threadTaskId: string, kind: 'checks' | 'reviews' = 'reviews') =>
+    run(kind, async () => {
+      const sessionId = await store.invoke(computerId, 'forge.sendFeedback', threadTaskId, repoId, kind)
       if (!sessionId) {
-        const prompt = await store.invoke(computerId, 'forge.pullRequestFeedback', threadTaskId, repoId, 'reviews')
+        const prompt = await store.invoke(computerId, 'forge.pullRequestFeedback', threadTaskId, repoId, kind)
         const session = (await store.invoke(computerId, 'agent.list', threadTaskId)).findLast(
           (entry) => !entry.parentId,
         )
@@ -281,6 +304,18 @@ export default function PullRequestScreen() {
   const open = pr?.state === 'open'
   const mine = pr?.group === 'mine'
   const openThreads = (threads ?? []).filter((entry) => !entry.resolved)
+  const step = pr && stage ? pullRequestNextStep(pr, stage, mine) : 'none'
+  /** The Overview's one action, as on the desktop: fixes go to the thread on it, or a new one catches up first. */
+  const takeStep = () => {
+    if (step === 'merge') setMerging(true)
+    else if (step === 'resolve-conflicts' || step === 'update-branch') void updateBranch()
+    else if (step === 'mark-ready') void act({ kind: 'ready' })
+    else if (step === 'review') void openThread('review')
+    else if (step === 'fix-checks' || step === 'address-comments')
+      void (thread
+        ? sendThreadsToAgent(thread.taskId, step === 'fix-checks' ? 'checks' : 'reviews')
+        : openThread('work'))
+  }
 
   return (
     <Screen bg="canvas">
@@ -468,13 +503,105 @@ export default function PullRequestScreen() {
               value={tab}
               onChange={setTab}
               options={[
-                { key: 'conversation', label: say('Conversation') },
+                { key: 'overview', label: say('Overview') },
                 { key: 'files', label: say('Files changed'), count: files?.files.length ?? 0 },
               ]}
             />
 
-            {tab === 'conversation' ? (
+            {tab === 'overview' ? (
               <>
+                {pr && pr.state === 'open' ? (
+                  <Card style={{ padding: space.m, gap: space.s }}>
+                    {[
+                      {
+                        tone:
+                          pr.checks === 'success'
+                            ? 'ok'
+                            : pr.checks === 'failure'
+                              ? 'bad'
+                              : pr.checks === 'pending'
+                                ? 'warn'
+                                : 'muted',
+                        text:
+                          pr.checks === 'success'
+                            ? say('All checks passed')
+                            : pr.checks === 'failure'
+                              ? say('Checks failing')
+                              : pr.checks === 'pending'
+                                ? say('Checks running')
+                                : say('No checks'),
+                      },
+                      {
+                        tone:
+                          pr.reviewDecision === 'approved'
+                            ? 'ok'
+                            : pr.reviewDecision === 'changes-requested'
+                              ? 'warn'
+                              : 'muted',
+                        text:
+                          pr.reviewDecision === 'approved'
+                            ? say('Approved')
+                            : pr.reviewDecision === 'changes-requested'
+                              ? say('Changes requested')
+                              : say('Waiting on review'),
+                      },
+                      {
+                        tone:
+                          pr.mergeable === 'clean'
+                            ? 'ok'
+                            : pr.mergeable === 'conflicts'
+                              ? 'bad'
+                              : pr.mergeable === 'unknown'
+                                ? 'muted'
+                                : 'warn',
+                        text:
+                          pr.mergeable === 'conflicts'
+                            ? say('Has conflicts with its base branch')
+                            : pr.mergeable === 'behind'
+                              ? say('Behind its base branch')
+                              : pr.mergeable === 'blocked'
+                                ? say('Blocked by the branch rules')
+                                : pr.mergeable === 'clean'
+                                  ? say('No conflicts with its base branch')
+                                  : say('Mergeability not known yet'),
+                      },
+                      {
+                        tone: openThreads.length ? 'warn' : 'ok',
+                        text: openThreads.length
+                          ? say('{0} unresolved conversations', { 0: openThreads.length })
+                          : say('All conversations resolved'),
+                      },
+                    ].map((row) => (
+                      <View key={row.text} style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+                        <View
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: 4,
+                            backgroundColor:
+                              row.tone === 'ok'
+                                ? c.ok
+                                : row.tone === 'bad'
+                                  ? c.bad
+                                  : row.tone === 'warn'
+                                    ? c.warn
+                                    : c.lineStrong,
+                          }}
+                        />
+                        <T size={font.control} tone="soft" style={{ flex: 1 }}>
+                          {row.text}
+                        </T>
+                      </View>
+                    ))}
+                    {NEXT_ACTION[step] && canWrite ? (
+                      <Button title={say(NEXT_ACTION[step]!)} disabled={!!busy} onPress={takeStep} />
+                    ) : NEXT_WAITING[step] ? (
+                      <T size={font.caption} tone="muted">
+                        {say(NEXT_WAITING[step]!)}
+                      </T>
+                    ) : null}
+                  </Card>
+                ) : null}
                 {batch ? (
                   <ReviewDrafts
                     key={`${batch.id}:${batch.kind === 'review' ? `${batch.body.length}:${batch.comments.length}` : batch.drafts.map((draft) => `${draft.threadId}${draft.reply.length}${draft.postedId ?? ''}`).join()}`}
