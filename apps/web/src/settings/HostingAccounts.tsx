@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { ExternalLink } from 'lucide-react'
 import type {
   AzureSummary,
   BitbucketSummary,
@@ -10,123 +11,198 @@ import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/set
 import { BrandIcon } from '@/components/brand-icon'
 import type { BrandId } from '@ramu/shared/brands'
 import { Button } from '@/components/desktop-button'
-import { Checkbox } from '@/components/desktop-checkbox'
 import { Input } from '@/components/desktop-input'
 import { Dialog } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
-import { useSettingsInvoke } from './SettingsScope'
+import { useSettingsInvoke, useSingleSettingsHost } from './SettingsScope'
 import { runProviderCommand } from '../models/ProviderSetupTerminal'
 import { invoke as openOnThisComputer } from '../ipc'
 import { githubTokenLink } from '@ramu/shared/githubTokenLink'
+import {
+  BITBUCKET_TOKEN_LINK,
+  azureOrganization,
+  azureTokenLink,
+  gitlabTokenLink,
+  serverHost,
+} from '@ramu/shared/forgeTokenLinks'
 import { accountDetail, connectionHeadline, savedDetail } from './hostingStatus'
-
-/** Providers shown for orientation only: no setup, no network calls, no background work until they are built. */
 
 type Form = { replace: ForgeSavedConnection | null }
 
+/** The field beside the token: a server, an account email or an organization. */
+interface TokenField {
+  label: string
+  type: 'email' | 'text'
+  required: boolean
+  placeholder: string
+  /** Shown under the field, such as when it may stay empty. */
+  hint?: string
+  /** Fixed while a credential is replaced, since the replacement is for the same server. */
+  locked?: boolean
+}
+
 /**
- * A credential is written only by an explicit Save connection, never on blur, and never held after the form closes.
- * The token goes to the host as a write-only request; nothing here stores or echoes it.
+ * Connecting a hosting service with a token, the same way for each: open the service's token page, paste the token,
+ * Enter or Connect. The host checks it before saving and keeps it in its credential store, so a refusal stays here to
+ * correct and nothing is stored or echoed in this window.
  */
-function ConnectionForm({
-  replace,
-  busy,
-  error,
+function TokenForm({
+  title,
+  instructions,
+  tokenLink,
+  tokenLinkLabel,
+  field,
+  tokenLabel = t('API token'),
+  minToken,
+  initial = '',
+  service,
+  notes,
+  alternative,
+  submitLabel = t('Connect'),
   onSave,
   onCancel,
 }: {
-  replace: ForgeSavedConnection | null
-  busy: boolean
-  error: string | null
-  onSave: (origin: string, token: string) => void
+  title: string
+  instructions: string
+  /** The page that makes the token, from what the field holds; `null` until the field says enough. */
+  tokenLink: (value: string) => string | null
+  tokenLinkLabel: string
+  field: TokenField
+  tokenLabel?: string
+  minToken: number
+  initial?: string
+  /** Where the token is sent, from what the field holds. */
+  service: (value: string) => string
+  notes?: string
+  /** Another way to connect, such as a CLI sign-in. */
+  alternative?: ReactNode
+  submitLabel?: string
+  onSave: (field: string, token: string) => Promise<void>
   onCancel: () => void
 }) {
-  const [enterprise, setEnterprise] = useState(!!replace && replace.origin !== 'github.com')
-  const [server, setServer] = useState(replace && replace.origin !== 'github.com' ? replace.origin : '')
+  const [value, setValue] = useState(initial)
   const [token, setToken] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const fieldId = useId()
   const tokenId = useId()
-  const serverId = useId()
-  const origin = replace ? replace.origin : enterprise ? server.trim() : 'github.com'
+  const hintId = useId()
+  const link = tokenLink(value)
+  const ready = token.trim().length >= minToken && (!field.required || !!value.trim())
   return (
-    <form
-      className="mb-3 flex flex-col gap-2 rounded-(--radius-m) bg-fill p-4"
-      onSubmit={(event) => {
-        event.preventDefault()
-        if (origin && token.trim()) onSave(origin, token.trim())
-      }}
-    >
-      <strong>{replace ? t('Replace credential') : t('Connect GitHub')}</strong>
-      {!replace && (
-        <label className="flex items-center gap-2 text-caption">
-          <Checkbox checked={enterprise} onCheckedChange={(checked) => setEnterprise(checked === true)} />
-          {t('GitHub Enterprise server')}
-        </label>
-      )}
-      {(enterprise || replace) && (
-        <label htmlFor={serverId} className="flex flex-col gap-1 text-caption">
-          {t('Server')}
-          <Input
-            id={serverId}
-            value={origin}
-            disabled={!!replace || busy}
-            placeholder="ghe.example.com"
-            autoCapitalize="none"
-            spellCheck={false}
-            onChange={(event) => setServer(event.target.value)}
-          />
-        </label>
-      )}
-      <label htmlFor={tokenId} className="flex flex-col gap-1 text-caption">
-        {t('Personal access token')}
-        <Input
-          id={tokenId}
-          type="password"
-          autoComplete="off"
-          autoCapitalize="none"
-          spellCheck={false}
-          autoFocus
-          disabled={busy}
-          value={token}
-          onChange={(event) => setToken(event.target.value)}
-        />
-      </label>
-      {origin && (
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="self-start"
-          onClick={() => void openOnThisComputer('app.openExternal', githubTokenLink(origin))}
-        >
-          {t('Create a fine-grained token on GitHub')}
-        </Button>
-      )}
-      <p className="m-0 text-caption text-muted-foreground">
-        {t(
-          'Prefer a fine-grained token limited to the repositories you need. The host keeps it in its OS credential store, sends it only to {0} and never shows it again.',
-          { '0': origin || t('this server') },
+    <SettingsRow className="settings-stack gap-3!">
+      <form
+        className="flex flex-col gap-3"
+        aria-label={title}
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (!ready || busy) return
+          setBusy(true)
+          setError(null)
+          void onSave(value.trim(), token.trim()).then(
+            () => setBusy(false),
+            (reason) => {
+              setBusy(false)
+              setError(errorText(reason))
+            },
+          )
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && !busy) {
+            event.stopPropagation()
+            onCancel()
+          }
+        }}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+          <div className="flex min-w-0 flex-1 basis-64 flex-col gap-0.5">
+            <strong className="text-body">{title}</strong>
+            <p className="m-0 text-caption text-muted-foreground">{instructions}</p>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={!link}
+            title={link ? undefined : t('Fill in {0} first', { 0: field.label })}
+            onClick={() => link && void openOnThisComputer('app.openExternal', link)}
+          >
+            {tokenLinkLabel}
+            <ExternalLink data-icon="inline-end" />
+          </Button>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor={fieldId} className="text-caption">
+              {field.label}
+              {!field.required && <span className="text-muted-foreground"> · {t('optional')}</span>}
+            </label>
+            <Input
+              id={fieldId}
+              className="w-full! flex-auto!"
+              type={field.type}
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder={field.placeholder}
+              disabled={busy || field.locked}
+              required={field.required}
+              aria-describedby={field.hint ? hintId : undefined}
+              autoFocus={field.required && !initial}
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+            />
+            {field.hint && (
+              <span id={hintId} className="text-caption text-muted-foreground">
+                {field.hint}
+              </span>
+            )}
+          </div>
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor={tokenId} className="text-caption">
+              {tokenLabel}
+            </label>
+            <Input
+              id={tokenId}
+              className="w-full! flex-auto!"
+              type="password"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder={t('Paste the token')}
+              disabled={busy}
+              required
+              autoFocus={!field.required || !!initial}
+              value={token}
+              onChange={(event) => setToken(event.target.value)}
+            />
+          </div>
+        </div>
+        {error && (
+          <p role="alert" className="m-0 text-caption text-destructive">
+            {error}
+          </p>
         )}
-      </p>
-      <p className="m-0 text-caption text-muted-foreground">
-        {t(
-          'A saved token covers pull requests, issues and checks. Git push and fetch keep using your own Git credentials.',
-        )}
-      </p>
-      {error && (
-        <p role="alert" className="m-0 text-caption text-destructive">
-          {error}
-        </p>
-      )}
-      <span className="flex gap-2">
-        <Button type="submit" variant="default" size="sm" disabled={busy || !origin || !token.trim()}>
-          {busy ? t('Checking…') : t('Save connection')}
-        </Button>
-        <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={onCancel}>
-          {t('Cancel')}
-        </Button>
-      </span>
-    </form>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <p className="m-0 min-w-0 flex-1 basis-64 text-caption text-muted-foreground">
+            {t('The host checks the token, keeps it in its credential store and sends it only to {0}.', {
+              0: service(value) || t('this server'),
+            })}
+            {notes ? ` ${notes}` : ''}
+          </p>
+          <span className="flex items-center gap-2">
+            <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={onCancel}>
+              {t('Cancel')}
+            </Button>
+            <Button type="submit" size="sm" disabled={busy || !ready}>
+              {busy ? t('Checking…') : submitLabel}
+            </Button>
+          </span>
+        </div>
+        {alternative}
+      </form>
+    </SettingsRow>
   )
 }
 
@@ -140,7 +216,6 @@ export function HostingAccounts() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState<Form | null>(null)
   const [pending, setPending] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [removing, setRemoving] = useState<ForgeSavedConnection | null>(null)
   const request = useRef(0)
@@ -177,7 +252,9 @@ export function HostingAccounts() {
   }, [check])
 
   const saved = summary?.saved ?? []
-  const canAdminister = summary?.canAdminister !== false
+  // Accounts are connected on one machine: under All hosts the rows only report, until one host is chosen.
+  const single = useSingleSettingsHost()
+  const canAdminister = summary?.canAdminister !== false && single
   const storeLocked = summary?.credentialStore === 'unavailable'
 
   const act = async (work: () => Promise<unknown>) => {
@@ -194,23 +271,18 @@ export function HostingAccounts() {
   }
   const closeForm = () => {
     setForm(null)
-    setFormError(null)
     // Focus returns to where the form was opened from.
     opener.current?.focus()
   }
+  // A failed check keeps the previous connection and throws, so the form stays open to correct the token.
   const save = async (origin: string, token: string) => {
-    setPending(true)
-    setFormError(null)
-    try {
-      await invoke('forge.saveConnection', { origin, token, ...(form?.replace ? { replaceId: form.replace.id } : {}) })
-      closeForm()
-      check()
-    } catch (reason) {
-      // A failed check keeps the previous connection; the form stays open so the token can be corrected.
-      setFormError(errorText(reason))
-    } finally {
-      setPending(false)
-    }
+    await invoke('forge.saveConnection', {
+      origin: serverHost(origin),
+      token,
+      ...(form?.replace ? { replaceId: form.replace.id } : {}),
+    })
+    closeForm()
+    check()
   }
   const origins = [...new Set(saved.map((connection) => connection.origin))]
   const hasCli = (summary?.accounts.length ?? 0) > 0
@@ -218,6 +290,11 @@ export function HostingAccounts() {
   return (
     <>
       <SettingsGroupTitle>{t('Hosting accounts')}</SettingsGroupTitle>
+      {!single && (
+        <p role="status" className="m-0 mb-3 text-caption text-muted-foreground">
+          {t('Accounts connect on one host. Choose a host in the settings header to connect or change them.')}
+        </p>
+      )}
       <SettingsRow>
         <SettingsLabel title="GitHub" icon={<BrandIcon brand="github" />} help={connectionHeadline(summary, failed)} />
         <span className="flex items-center gap-2">
@@ -230,10 +307,7 @@ export function HostingAccounts() {
               variant="secondary"
               size="sm"
               disabled={storeLocked || pending || !summary}
-              onClick={() => {
-                setOpen(true)
-                setForm({ replace: null })
-              }}
+              onClick={() => setForm({ replace: null })}
             >
               {t('Connect')}
             </Button>
@@ -258,7 +332,7 @@ export function HostingAccounts() {
           )}
         </p>
       )}
-      {!canAdminister && (
+      {single && !canAdminister && (
         <p className="m-0 mb-3 px-4 text-caption text-muted-foreground">
           {t('Add, replace or remove GitHub tokens on the machine running this host.')}
         </p>
@@ -268,13 +342,31 @@ export function HostingAccounts() {
           {actionError}
         </p>
       )}
-      {form && (
-        <ConnectionForm
+      {form && canAdminister && (
+        <TokenForm
           key={form.replace?.id ?? 'new'}
-          replace={form.replace}
-          busy={pending}
-          error={formError}
-          onSave={(origin, token) => void save(origin, token)}
+          title={form.replace ? t('Replace credential') : t('Connect GitHub')}
+          instructions={t(
+            'Create a fine-grained token limited to the repositories you need; the page opens with the permissions Ramu uses chosen. For GitHub Enterprise, change the server first.',
+          )}
+          tokenLink={(origin) => (serverHost(origin) ? githubTokenLink(serverHost(origin)) : null)}
+          tokenLinkLabel={t('Create token on GitHub')}
+          field={{
+            label: t('Server'),
+            type: 'text',
+            required: true,
+            placeholder: 'github.com',
+            locked: !!form.replace,
+          }}
+          tokenLabel={t('Personal access token')}
+          initial={form.replace?.origin ?? 'github.com'}
+          minToken={8}
+          service={serverHost}
+          notes={t(
+            'It covers pull requests, issues and checks; Git push and fetch keep using your own Git credentials.',
+          )}
+          submitLabel={form.replace ? t('Save') : t('Connect')}
+          onSave={save}
           onCancel={closeForm}
         />
       )}
@@ -315,10 +407,7 @@ export function HostingAccounts() {
                         variant="ghost"
                         size="sm"
                         disabled={pending || storeLocked}
-                        onClick={() => {
-                          setForm({ replace: connection })
-                          setFormError(null)
-                        }}
+                        onClick={() => setForm({ replace: connection })}
                       >
                         {t('Replace credential')}
                       </Button>
@@ -465,36 +554,14 @@ function GitlabRow({ canAdminister }: { canAdminister: boolean }) {
       <SettingsRow>
         <SettingsLabel title="GitLab" icon={<BrandIcon brand="gitlab" />} help={gitlabHeadline(summary, failed)} />
         <span className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" aria-busy={busy} disabled={!summary} onClick={() => load(true)}>
-            {busy ? t('Checking…') : t('Check connection')}
-          </Button>
-          {canAdminister && summary?.cli === 'installed' && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                runProviderCommand(t('Sign in to GitLab'), 'glab auth login')
-                // The terminal finishes on its own time; read the sign-ins again when the person comes back.
-                window.addEventListener('focus', () => load(false), { once: true })
-              }}
-            >
-              {summary.accounts.length ? t('Add account') : t('Sign in')}
-            </Button>
-          )}
-          {canAdminister && summary?.cli === 'no-cli' && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                void openOnThisComputer('app.openExternal', 'https://gitlab.com/gitlab-org/cli#installation')
-              }
-            >
-              {t('Install glab')}
+          {!!summary?.accounts.length && (
+            <Button variant="secondary" size="sm" aria-busy={busy} disabled={busy} onClick={() => load(true)}>
+              {busy ? t('Checking…') : t('Check connection')}
             </Button>
           )}
           {canAdminister && !form && (
             <Button variant="secondary" size="sm" disabled={!summary} onClick={() => setForm(true)}>
-              {saved ? t('Replace token') : t('Save token')}
+              {saved ? t('Replace credential') : summary?.accounts.length ? t('Add account') : t('Connect')}
             </Button>
           )}
           {canAdminister && saved && !form && (
@@ -507,27 +574,67 @@ function GitlabRow({ canAdminister }: { canAdminister: boolean }) {
                 )
               }
             >
-              {t('Remove saved token')}
+              {t('Disconnect')}
             </Button>
           )}
         </span>
       </SettingsRow>
-      {form && (
+      {form && canAdminister && (
         <TokenForm
+          title={saved ? t('Replace credential') : t('Connect GitLab')}
           instructions={t(
-            'Create a personal access token with the api scope under Preferences → Access tokens on your GitLab server. Ramu uses it for that server before a glab sign-in.',
+            'Create a personal access token with the api scope on your GitLab server; the page opens with it chosen. For a self-managed server, change the server first.',
           )}
-          field={{ label: t('Server'), type: 'text', required: true }}
+          tokenLink={gitlabTokenLink}
+          tokenLinkLabel={t('Create token on GitLab')}
+          field={{ label: t('Server'), type: 'text', required: true, placeholder: 'gitlab.com' }}
+          tokenLabel={t('Personal access token')}
           initial={saved?.origin ?? 'gitlab.com'}
           minToken={8}
+          service={serverHost}
+          submitLabel={saved ? t('Save') : t('Connect')}
+          alternative={
+            summary?.cli === 'installed' ? (
+              <InlineAlternative
+                text={t('Use the GitLab CLI?')}
+                action={t('Sign in with glab instead')}
+                onClick={() => {
+                  setForm(false)
+                  runProviderCommand(t('Sign in to GitLab'), 'glab auth login')
+                  // The terminal finishes on its own time; read the sign-ins again when the person comes back.
+                  window.addEventListener('focus', () => load(false), { once: true })
+                }}
+              />
+            ) : summary?.cli === 'no-cli' ? (
+              <InlineAlternative
+                text={t('Prefer the GitLab CLI? Ramu also uses its sign-in.')}
+                action={t('Install glab')}
+                onClick={() =>
+                  void openOnThisComputer('app.openExternal', 'https://gitlab.com/gitlab-org/cli#installation')
+                }
+              />
+            ) : undefined
+          }
           onCancel={() => setForm(false)}
           onSave={async (origin, token) => {
-            setSummary(await invoke('forge.saveGitlab', { origin, token }))
+            setSummary(await invoke('forge.saveGitlab', { origin: serverHost(origin), token }))
             setForm(false)
           }}
         />
       )}
     </>
+  )
+}
+
+/** A second way to connect, under a form's actions. */
+function InlineAlternative({ text, action, onClick }: { text: string; action: string; onClick: () => void }) {
+  return (
+    <p className="m-0 flex flex-wrap items-center gap-x-2 border-t border-edge pt-3 text-caption text-muted-foreground">
+      {text}
+      <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={onClick}>
+        {action}
+      </Button>
+    </p>
   )
 }
 
@@ -554,76 +661,6 @@ function tokenHeadline(
   return who ? t('Connected as {0} ({1})', { 0: who, 1: via }) : t('Connected ({0})', { 0: via })
 }
 
-/** The token and the one field beside it, checked on the host when saved; a refusal stays in the form. */
-function TokenForm({
-  instructions,
-  field,
-  minToken,
-  initial = '',
-  onSave,
-  onCancel,
-}: {
-  instructions: string
-  field: { label: string; type: 'email' | 'text'; required: boolean }
-  minToken: number
-  initial?: string
-  onSave: (field: string, token: string) => Promise<void>
-  onCancel: () => void
-}) {
-  const [value, setValue] = useState(initial)
-  const [token, setToken] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const submit = () => {
-    setBusy(true)
-    setError(null)
-    void onSave(value.trim(), token).then(
-      () => setBusy(false),
-      (reason) => {
-        setBusy(false)
-        setError(errorText(reason))
-      },
-    )
-  }
-  return (
-    <SettingsRow className="settings-stack gap-3">
-      <p className="m-0 text-caption text-muted-foreground">{instructions}</p>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="flex flex-col gap-1.5 text-caption">
-          {field.label}
-          <Input
-            type={field.type}
-            autoComplete="off"
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-          />
-        </label>
-        <label className="flex flex-col gap-1.5 text-caption">
-          {t('API token')}
-          <Input type="password" autoComplete="off" value={token} onChange={(event) => setToken(event.target.value)} />
-        </label>
-      </div>
-      {error && (
-        <p role="alert" className="m-0 text-caption text-destructive">
-          {error}
-        </p>
-      )}
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" size="sm" disabled={busy} onClick={onCancel}>
-          {t('Cancel')}
-        </Button>
-        <Button
-          size="sm"
-          disabled={busy || token.trim().length < minToken || (field.required && !value.trim())}
-          onClick={submit}
-        >
-          {busy ? t('Checking…') : t('Save')}
-        </Button>
-      </div>
-    </SettingsRow>
-  )
-}
-
 /**
  * A service with no official CLI, connected with a token saved here or given in the environment: Bitbucket Cloud and
  * Azure DevOps. The token is checked on the host before it is saved.
@@ -633,10 +670,8 @@ function TokenServiceRow<S extends TokenSummary>({
   title,
   brand,
   disconnected,
-  instructions,
-  field,
+  form: formProps,
   shown,
-  minToken,
   load,
   save,
   remove,
@@ -645,12 +680,13 @@ function TokenServiceRow<S extends TokenSummary>({
   title: string
   brand: BrandId
   disconnected: string
-  instructions: string
-  /** The one field beside the token: an account email, an organization. */
-  field: { label: string; type: 'email' | 'text'; required: boolean }
+  /** How the connect form reads for this service. */
+  form: Pick<
+    Parameters<typeof TokenForm>[0],
+    'instructions' | 'tokenLink' | 'tokenLinkLabel' | 'field' | 'tokenLabel' | 'minToken' | 'service'
+  >
   /** What the summary shows when it has no login, such as the email. */
   shown: (summary: S) => string | null
-  minToken: number
   load: (check: boolean) => Promise<S> | S
   save: (field: string, token: string) => Promise<S> | S
   remove: () => Promise<S> | S
@@ -678,6 +714,7 @@ function TokenServiceRow<S extends TokenSummary>({
   const loadNow = useRef(load)
   loadNow.current = load
   useEffect(() => call(() => loadNow.current(false)), [call])
+  const replacing = summary?.source === 'saved'
   return (
     <>
       <SettingsRow>
@@ -700,21 +737,21 @@ function TokenServiceRow<S extends TokenSummary>({
           )}
           {canAdminister && !form && (
             <Button variant="secondary" size="sm" disabled={busy || !summary} onClick={() => setForm(true)}>
-              {summary?.source === 'saved' ? t('Replace credential') : t('Connect')}
+              {replacing ? t('Replace credential') : t('Connect')}
             </Button>
           )}
-          {canAdminister && summary?.source === 'saved' && !form && (
+          {canAdminister && replacing && !form && (
             <Button variant="ghost" size="sm" disabled={busy} onClick={() => call(remove)}>
               {t('Disconnect')}
             </Button>
           )}
         </span>
       </SettingsRow>
-      {form && (
+      {form && canAdminister && (
         <TokenForm
-          instructions={instructions}
-          field={field}
-          minToken={minToken}
+          {...formProps}
+          title={replacing ? t('Replace credential') : t('Connect {0}', { 0: title })}
+          submitLabel={replacing ? t('Save') : t('Connect')}
           onCancel={() => setForm(false)}
           onSave={async (value, token) => {
             setSummary(await save(value, token))
@@ -734,13 +771,24 @@ function BitbucketRow({ canAdminister }: { canAdminister: boolean }) {
       canAdminister={canAdminister}
       title="Bitbucket Cloud"
       brand="bitbucket"
-      disconnected={t('Not connected. Pull requests, builds and issues need an Atlassian API token.')}
-      instructions={t(
-        'Create an API token with Bitbucket scopes in your Atlassian account settings, then enter it with your account email. For a workspace or repository access token, leave the email empty.',
-      )}
-      field={{ label: t('Atlassian account email'), type: 'email', required: false }}
+      disconnected={t('Not connected. Connect to work with pull requests, builds and issues.')}
+      form={{
+        instructions: t(
+          'Create an Atlassian API token with Bitbucket scopes for repositories, pull requests, pipelines and issues, then paste it here with the email of that account.',
+        ),
+        tokenLink: () => BITBUCKET_TOKEN_LINK,
+        tokenLinkLabel: t('Create token on Atlassian'),
+        field: {
+          label: t('Atlassian account email'),
+          type: 'email',
+          required: false,
+          placeholder: 'you@example.com',
+          hint: t('Leave empty for a workspace or repository access token.'),
+        },
+        minToken: 8,
+        service: () => 'api.bitbucket.org',
+      }}
       shown={(summary) => summary.email}
-      minToken={8}
       load={(check) => invoke('forge.bitbucket', check)}
       save={(email, token) => invoke('forge.saveBitbucket', { ...(email ? { email } : {}), token })}
       remove={() => invoke('forge.removeBitbucket')}
@@ -756,15 +804,23 @@ function AzureRow({ canAdminister }: { canAdminister: boolean }) {
       canAdminister={canAdminister}
       title="Azure DevOps"
       brand="azure-devops"
-      disconnected={t('Not connected. Pull requests, builds and work items need a personal access token.')}
-      instructions={t(
-        'Create a personal access token under User settings in Azure DevOps with Code (read and write), Build (read) and Work Items (read) scopes, and name its organization.',
-      )}
-      field={{ label: t('Organization'), type: 'text', required: true }}
+      disconnected={t('Not connected. Connect to work with pull requests, builds and work items.')}
+      form={{
+        instructions: t(
+          'Create a personal access token with Code (read and write), Build (read) and Work Items (read) scopes in the organization.',
+        ),
+        tokenLink: azureTokenLink,
+        tokenLinkLabel: t('Create token on Azure DevOps'),
+        field: { label: t('Organization'), type: 'text', required: true, placeholder: 'contoso' },
+        tokenLabel: t('Personal access token'),
+        minToken: 20,
+        service: () => 'dev.azure.com',
+      }}
       shown={(summary) => summary.organization}
-      minToken={20}
       load={(check) => invoke('forge.azure', check)}
-      save={(organization, token) => invoke('forge.saveAzure', { organization, token })}
+      save={(organization, token) =>
+        invoke('forge.saveAzure', { organization: azureOrganization(organization), token })
+      }
       remove={() => invoke('forge.removeAzure')}
     />
   )

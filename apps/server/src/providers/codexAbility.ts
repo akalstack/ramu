@@ -14,7 +14,15 @@ export interface CodexAbilityResult {
   images: ({ path: string } | { base64: string })[]
   sources: AbilitySource[]
   tokens?: { input: number; output: number }
+  /** The window Codex ran the model with, from its token usage. */
+  contextWindow?: number
 }
+
+/**
+ * Asked of Codex for a long read. Codex runs a model with a smaller window than it allows by default and caps a larger
+ * request at the model's own maximum, so asking for more than any model has yields the largest it can serve.
+ */
+const LARGEST_CONTEXT_REQUEST = 10_000_000
 
 /** MCP servers the login's own config.toml defines, so a run can switch each one off. */
 export function configuredCodexServers(configText: string): string[] {
@@ -71,6 +79,8 @@ export async function codexAbility(options: {
   accountId: string
   model?: string
   tool: 'image_gen' | 'web_search' | null
+  /** Run with the largest window the model allows, for reading a long document. */
+  longContext?: boolean
   prompt: string
   /** Images the model sees with the prompt, by host path. */
   images?: string[]
@@ -80,7 +90,10 @@ export async function codexAbility(options: {
 }): Promise<CodexAbilityResult> {
   const rpc = new CodexRpc(
     undefined,
-    codexAbilityConfig(options.tool, loginServers(options.accountId)),
+    [
+      ...codexAbilityConfig(options.tool, loginServers(options.accountId)),
+      ...(options.longContext ? [`model_context_window=${LARGEST_CONTEXT_REQUEST}`] : []),
+    ],
     options.accountId,
   )
   const abort = () => void rpc.close()
@@ -105,6 +118,8 @@ export async function codexAbility(options: {
         const total = p.tokenUsage?.total
         if (typeof total?.inputTokens === 'number' && typeof total?.outputTokens === 'number')
           result.tokens = { input: total.inputTokens, output: total.outputTokens }
+        const window = p.tokenUsage?.modelContextWindow
+        if (typeof window === 'number' && window > 0) result.contextWindow = window
       }
       if (m.method === 'item/completed') {
         const item: Wire = p.item ?? {}

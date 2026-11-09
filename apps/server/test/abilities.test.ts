@@ -223,6 +223,31 @@ describe('ability checks', () => {
     expect(check?.score).toBeCloseTo(4 / 6)
   })
 
+  it('reads long documents with the window the provider reports when its model list has none', async () => {
+    const listed = catalogs.map((catalog) => ({
+      ...catalog,
+      models: catalog.models.map(({ contextWindow: _window, ...model }) => model),
+    }))
+    const windows: Partial<Record<AgentProvider, number>> = { 'claude-code': 1_000_000 }
+    const reported: AbilityRun = async (route, declaration, request, signal, timeout) => ({
+      ...(await working(route, declaration, request, signal, timeout)),
+      ...(windows[route.provider] ? { contextWindow: windows[route.provider] } : {}),
+    })
+    const abilities = service(reported, 'claude-code', undefined, { catalog: async () => listed })
+    await abilities.refresh()
+    expect(abilities.checks.list('claude-code').find((check) => check.ability === 'long_context')).toMatchObject({
+      ok: true,
+      model: 'small',
+    })
+    // A run on a smaller window fails with the figure, not because the list said nothing.
+    windows['claude-code'] = 200_000
+    await abilities.recheck('claude-code')
+    expect(abilities.checks.list('claude-code').find((check) => check.ability === 'long_context')).toMatchObject({
+      ok: false,
+      detail: expect.stringContaining('200,000 tokens'),
+    })
+  })
+
   it('never runs on a simulated host', async () => {
     vi.stubEnv('RAMU_FAKE_AGENT', '1')
     const run = vi.fn(working)

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
@@ -11,6 +11,7 @@ import {
   gitlabMergeOptions,
   gitlabMergeability,
   gitlabSummary,
+  gitlabSignIns,
   gitlabToken,
   jobState,
   parseDiscussions,
@@ -311,6 +312,42 @@ it('sends the token only to the project origin and never echoes a failed respons
   await expect(gitlabApi({ origin: 'gitlab.com', token: 't', fetch: reply(500, 'secret') }, '/user')).rejects.toThrow(
     'GitLab answered 500',
   )
+})
+
+it('uses a glab OAuth sign-in kept in the keyring, refreshing it through glab when it expires', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-glab-oauth-'))
+  try {
+    const host = (expiry: string) =>
+      `hosts:\n  gitlab.com:\n    use_keyring: true\n    is_oauth2: "true"\n    oauth2_expiry_date: "${expiry}"\n`
+    writeFileSync(join(dir, 'config.yml'), host(new Date(Date.now() + 3_600_000).toISOString()))
+    // A stand-in glab: records each call and hands out the keyring token.
+    const calls = join(dir, 'calls')
+    const fake = join(dir, 'glab')
+    writeFileSync(fake, `#!/bin/sh\necho "$*" >> "${calls}"\n[ "$1" = config ] && echo oauth-token\nexit 0\n`)
+    chmodSync(fake, 0o755)
+    const env = { GLAB_CONFIG_DIR: dir, PATH: process.env.PATH }
+    expect(await gitlabSignIns(env, fake)).toEqual(new Map([['gitlab.com', { token: 'oauth-token', oauth: true }]]))
+    expect(readFileSync(calls, 'utf8')).toBe('config get token --host gitlab.com\n')
+    // An expired token is refreshed by an authenticated glab request before the token is read again.
+    writeFileSync(join(dir, 'config.yml'), host(new Date(Date.now() - 60_000).toISOString()))
+    writeFileSync(calls, '')
+    await gitlabSignIns({ ...env, GLAB_CONFIG_DIR: `${dir}/` }, fake)
+    expect(readFileSync(calls, 'utf8')).toBe('api --hostname gitlab.com user\nconfig get token --host gitlab.com\n')
+    // Without glab there is no way to read the keyring, so the host is not offered.
+    expect(await gitlabSignIns(env, null)).toEqual(new Map())
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+it('sends an OAuth token as a bearer token', async () => {
+  let headers: Record<string, string> = {}
+  const fetcher = (async (_url: string, init: RequestInit) => {
+    headers = init.headers as Record<string, string>
+    return new Response('{}', { status: 200 })
+  }) as typeof fetch
+  await gitlabApi({ origin: 'gitlab.com', token: 'o', oauth: true, fetch: fetcher }, '/user')
+  expect(headers).toEqual({ Authorization: 'Bearer o', Accept: 'application/json' })
 })
 
 it('uses GITLAB_TOKEN only for gitlab.com or the server GITLAB_HOST names', async () => {

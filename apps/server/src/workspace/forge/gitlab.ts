@@ -1,5 +1,6 @@
 // GitLab merge requests, pipelines and issues through the REST API (v4), with a token saved in Settings, the user's
 // own `glab` sign-in or a `GITLAB_TOKEN`. Like github.ts, Git runs with argument arrays only; the token is sent only to the project's origin.
+import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -51,13 +52,68 @@ function glabConfigPaths(env: NodeJS.ProcessEnv = process.env): string[] {
   ]
 }
 
-/** Every GitLab host the person is signed in to with `glab`, with its token. Never logged or returned to a client. */
-export async function gitlabSignIns(env: NodeJS.ProcessEnv = process.env): Promise<Map<string, string>> {
+/** A token and how GitLab expects it: OAuth tokens from glab's web sign-in go as bearer tokens. */
+interface GitlabAuth {
+  token: string
+  oauth?: boolean
+}
+
+/** Runs `glab` with an argument array and no prompts; resolves to its output, or null when it fails. */
+function glab(executable: string, args: string[], env: NodeJS.ProcessEnv): Promise<string | null> {
+  return new Promise((resolve) => {
+    execFile(
+      executable,
+      args,
+      { encoding: 'utf8', timeout: 20_000, maxBuffer: 1024 * 1024, env: { ...env, NO_PROMPT: '1', NO_COLOR: '1' } },
+      (error, stdout) => resolve(error ? null : stdout),
+    )
+  })
+}
+
+/** Leaves room for a request to finish before an OAuth token expires. */
+const EXPIRY_MARGIN_MS = 2 * 60_000
+const signInCache = new Map<string, { auth: GitlabAuth; until: number }>()
+
+/**
+ * Every GitLab host the person is signed in to with `glab`, with its token. A token glab keeps in the OS keyring is
+ * asked of glab, and an OAuth token near its expiry is refreshed by glab first, so a web sign-in keeps working. Never
+ * logged or returned to a client.
+ */
+export async function gitlabSignIns(
+  env: NodeJS.ProcessEnv = process.env,
+  executable: string | null = findExecutable('glab'),
+): Promise<Map<string, GitlabAuth>> {
+  let text: string | null = null
   for (const path of glabConfigPaths(env)) {
-    const text = await readFile(path, 'utf8').catch(() => null)
-    if (text !== null) return glabHosts(text.slice(0, 256 * 1024))
+    text = await readFile(path, 'utf8').catch(() => null)
+    if (text !== null) break
   }
-  return new Map()
+  const signIns = new Map<string, GitlabAuth>()
+  if (text === null) return signIns
+  const now = Date.now()
+  for (const [origin, host] of glabHosts(text.slice(0, 256 * 1024))) {
+    const expired = host.oauth && host.expiresAt !== null && host.expiresAt - EXPIRY_MARGIN_MS <= now
+    if (host.token && !expired) {
+      signIns.set(origin, { token: host.token, oauth: host.oauth })
+      continue
+    }
+    if (!executable) continue
+    const key = `${env.GLAB_CONFIG_DIR ?? ''}\n${origin}`
+    const cached = signInCache.get(key)
+    if (cached && cached.until > now) {
+      signIns.set(origin, cached.auth)
+      continue
+    }
+    // Any authenticated request makes glab refresh an expired OAuth token and store the new one.
+    if (expired) await glab(executable, ['api', '--hostname', origin, 'user'], env)
+    const token = (await glab(executable, ['config', 'get', 'token', '--host', origin], env))?.trim()
+    if (!token) continue
+    const auth = { token, oauth: host.oauth }
+    // Ask glab again once the token may have changed: an OAuth token lasts two hours, a keyring token until sign-out.
+    signInCache.set(key, { auth, until: host.oauth ? now + 10 * 60_000 : now + 5 * 60_000 })
+    signIns.set(origin, auth)
+  }
+  return signIns
 }
 
 type TokenSource = 'saved' | 'cli' | 'environment'
@@ -69,11 +125,11 @@ type TokenSource = 'saved' | 'cli' | 'environment'
 export async function gitlabToken(
   origin: string,
   env: NodeJS.ProcessEnv = process.env,
-): Promise<{ token: string; source: TokenSource } | null> {
+): Promise<(GitlabAuth & { source: TokenSource }) | null> {
   const saved = await savedGitlabCredential()
   if (saved?.origin === origin) return { token: saved.token, source: 'saved' }
   const cli = (await gitlabSignIns(env)).get(origin)
-  if (cli) return { token: cli, source: 'cli' }
+  if (cli) return { ...cli, source: 'cli' }
   const named = (env.GITLAB_HOST ?? 'gitlab.com')
     .replace(/^https?:\/\//, '')
     .replace(/\/+$/, '')
@@ -88,11 +144,11 @@ export async function gitlabSummary(
   options: { env?: NodeJS.ProcessEnv; fetch?: typeof fetch; hasCli?: boolean } = {},
 ): Promise<GitlabSummary> {
   const env = options.env ?? process.env
-  const found = new Map<string, { token: string; source: TokenSource }>()
+  const found = new Map<string, GitlabAuth & { source: TokenSource }>()
   const saved = await savedGitlabCredential()
   if (saved) found.set(saved.origin, { token: saved.token, source: 'saved' })
-  for (const [origin, token] of await gitlabSignIns(env))
-    if (!found.has(origin)) found.set(origin, { token, source: 'cli' })
+  for (const [origin, auth] of await gitlabSignIns(env, options.hasCli === false ? null : undefined))
+    if (!found.has(origin)) found.set(origin, { ...auth, source: 'cli' })
   const environment = env.GITLAB_TOKEN ?? env.GL_TOKEN
   if (environment) {
     const origin = (env.GITLAB_HOST ?? 'gitlab.com')
@@ -102,10 +158,10 @@ export async function gitlabSummary(
     if (!found.has(origin)) found.set(origin, { token: environment, source: 'environment' })
   }
   const accounts = await Promise.all(
-    [...found].map(async ([origin, { token, source }]) => {
+    [...found].map(async ([origin, { source, ...auth }]) => {
       if (!check) return { origin, source, login: null, state: 'unchecked' as const }
       try {
-        const user = await gitlabApi<{ username?: string }>({ origin, token, fetch: options.fetch ?? fetch }, '/user')
+        const user = await gitlabApi<{ username?: string }>({ origin, ...auth, fetch: options.fetch ?? fetch }, '/user')
         return { origin, source, login: user?.username ?? null, state: 'ok' as const }
       } catch (error) {
         return {
@@ -140,10 +196,9 @@ export async function gitlabProjectOf(cwd: string): Promise<GitlabProject | null
   }
 }
 
-interface Access {
+interface Access extends GitlabAuth {
   cwd: string
   project: GitlabProject
-  token: string
   source: TokenSource
   fetch: typeof fetch
 }
@@ -164,7 +219,7 @@ async function access(cwd: string, request: typeof fetch = fetch): Promise<Acces
 
 /** One API request. Bounded in time and size; errors never echo the token or the response body. */
 export async function gitlabApi<T>(
-  target: Pick<Access, 'token' | 'fetch'> & { origin: string },
+  target: GitlabAuth & Pick<Access, 'fetch'> & { origin: string },
   path: string,
   init: { method?: string; body?: unknown; text?: boolean } = {},
 ): Promise<T> {
@@ -172,7 +227,7 @@ export async function gitlabApi<T>(
     .fetch(`https://${target.origin}/api/v4${path}`, {
       method: init.method ?? 'GET',
       headers: {
-        'PRIVATE-TOKEN': target.token,
+        ...(target.oauth ? { Authorization: `Bearer ${target.token}` } : { 'PRIVATE-TOKEN': target.token }),
         Accept: init.text ? 'text/plain' : 'application/json',
         ...(init.body ? { 'Content-Type': 'application/json' } : {}),
       },
@@ -487,7 +542,7 @@ export async function searchRepositories(
   const query = search.trim() ? `&search=${encode(search.trim())}` : ''
   return parseProjects(
     await gitlabApi<RawProject[]>(
-      { origin, token: found.token, fetch },
+      { origin, token: found.token, oauth: found.oauth, fetch },
       `/projects?membership=true&simple=true&order_by=last_activity_at&per_page=30${query}`,
     ),
   )
@@ -499,7 +554,7 @@ export async function publishRepository(cwd: string, input: PublishRepositoryInp
   const origin = process.env.GITLAB_HOST?.replace(/^https?:\/\//, '').toLowerCase() || 'gitlab.com'
   const found = await gitlabToken(origin)
   if (!found) throw new ForgeError(`Sign in to ${origin} with glab, or set GITLAB_TOKEN, to publish.`, 'signed-out')
-  const target = { origin, token: found.token, fetch }
+  const target = { origin, token: found.token, oauth: found.oauth, fetch }
   const [namespace, name] = input.name.includes('/')
     ? [input.name.slice(0, input.name.lastIndexOf('/')), input.name.slice(input.name.lastIndexOf('/') + 1)]
     : [null, input.name]
@@ -519,7 +574,10 @@ export async function repositoryAccount(cwd: string): Promise<ForgeRepositoryAcc
   if (!project) return { origin: null, login: null, source: 'none', ambiguous: false }
   const found = await gitlabToken(project.origin)
   if (!found) return { origin: project.origin, login: null, source: 'none', ambiguous: false }
-  const user = await gitlabApi<{ username?: string }>({ origin: project.origin, token: found.token, fetch }, '/user')
+  const user = await gitlabApi<{ username?: string }>(
+    { origin: project.origin, token: found.token, oauth: found.oauth, fetch },
+    '/user',
+  )
     .then((value) => value.username ?? null)
     .catch(() => null)
   return { origin: project.origin, login: user, source: found.source === 'saved' ? 'saved' : 'cli', ambiguous: false }
@@ -560,7 +618,7 @@ export async function checkAccess(cwd: string): Promise<ForgeAccessReport> {
       transport,
       checkedAt,
     }
-  const target = { origin: project.origin, token: found.token, fetch }
+  const target = { origin: project.origin, token: found.token, oauth: found.oauth, fetch }
   const login = await gitlabApi<{ username?: string }>(target, '/user')
     .then((user) => user.username ?? null)
     .catch(() => null)

@@ -1,4 +1,4 @@
-import { useSyncExternalStore, type ReactNode } from 'react'
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 
 /** A notification that has popped up. It stays here, in the background-activity popover, until it is opened or dismissed. */
 export interface CenterNotice {
@@ -52,17 +52,26 @@ export const notices = {
   list: () => all,
 }
 
-let panelOpen = false
+/** How far above the window's bottom edge each open status-bar popover reaches, by popover. */
+const panelReach = new Map<string, number>()
+let reach: number | null = null
 const panelListeners = new Set<() => void>()
 
-/** Toasts and the popover share a corner, so the toasts need to know when it is open. */
-export function setNotificationPanelOpen(open: boolean) {
-  if (open === panelOpen) return
-  panelOpen = open
+/**
+ * Toasts and the status-bar popovers share the bottom-right corner, so toasts stack above whichever open popover
+ * reaches highest. `null` closes that popover's claim.
+ */
+export function setStatusPanelReach(panel: string, fromBottom: number | null) {
+  if (fromBottom === null) panelReach.delete(panel)
+  else panelReach.set(panel, Math.ceil(fromBottom))
+  const next = panelReach.size ? Math.max(...panelReach.values()) : null
+  if (next === reach) return
+  reach = next
   for (const listener of panelListeners) listener()
 }
 
-export function useNotificationPanelOpen(): boolean {
+/** Pixels above the window's bottom edge that toasts must keep clear, or `null` when no status popover is open. */
+export function useStatusPanelReach(): number | null {
   return useSyncExternalStore(
     (listener) => {
       panelListeners.add(listener)
@@ -70,8 +79,42 @@ export function useNotificationPanelOpen(): boolean {
         panelListeners.delete(listener)
       }
     },
-    () => panelOpen,
+    () => reach,
   )
+}
+
+/**
+ * Reports an open status-bar popover's top edge while it is open. Attach the returned ref to the popup; it re-measures
+ * after positioning settles and whenever the window resizes.
+ */
+export function useStatusPanel(panel: string, open: boolean) {
+  const [node, setNode] = useState<HTMLElement | null>(null)
+  useEffect(() => {
+    if (!open || !node) {
+      setStatusPanelReach(panel, null)
+      return
+    }
+    let frame = 0
+    const measure = () => {
+      cancelAnimationFrame(frame)
+      // Positioning lands a frame after mount, so read on the next one.
+      frame = requestAnimationFrame(() => {
+        const top = node.getBoundingClientRect().top
+        setStatusPanelReach(panel, top > 0 ? window.innerHeight - top : null)
+      })
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    window.addEventListener('resize', measure)
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+      window.removeEventListener('resize', measure)
+      setStatusPanelReach(panel, null)
+    }
+  }, [panel, open, node])
+  return setNode
 }
 
 export function useNotices(): CenterNotice[] {

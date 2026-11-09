@@ -383,6 +383,15 @@ const VIEWER_SETTINGS_READS = new Set([
   'settings.models.get',
 ])
 
+/**
+ * Whether machine actions (connecting an account, saving a token) have one host to run on: they never run under All
+ * hosts while several are selected, so the screen offers them only once a single host is chosen.
+ */
+export function useSingleSettingsHost(): boolean {
+  const scope = useContext(SettingsScopeContext)
+  return !scope || scope.target !== 'all' || scope.targets.length <= 1
+}
+
 /** Machine actions use the same explicit target; bulk preference edits never run an action on an arbitrary computer. */
 export function useSettingsInvoke(): typeof invoke {
   return useScopedInvoke(useContext(SettingsScopeContext))
@@ -405,7 +414,14 @@ export function useScopedInvoke(scope: SettingsScope | null): typeof invoke {
       if (!scope.ready || scope.stale) throw new Error(t('Select a connected host.'))
       const readOnly =
         /\.(get|list|status|history|catalog|connections)$/.test(method) ||
-        ['advisor.claude', 'abilities.checks', 'abilities.mcpTools'].includes(method)
+        [
+          'advisor.claude',
+          'abilities.checks',
+          'abilities.mcpTools',
+          'forge.gitlab',
+          'forge.bitbucket',
+          'forge.azure',
+        ].includes(method)
       if (scope.target === 'all' && scope.targets.length > 1 && !readOnly)
         throw new Error(t('Choose one host in the settings header for this action.'))
       const id = scope.primaryId

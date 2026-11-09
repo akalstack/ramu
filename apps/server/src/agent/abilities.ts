@@ -453,6 +453,14 @@ export class AbilityService {
         const out = await ask({ ability: 'long_context', prompt: sample.prompt, images: [] }, 240_000)
         const answered = out.text.toLowerCase()
         const score = sample.answers.filter((answer) => answered.includes(answer)).length / sample.answers.length
+        const minimum = 'contextWindow' in target.declaration.via ? target.declaration.via.contextWindow : 0
+        // The sample fits any window, so the window the provider ran the model with decides whether it reads long ones.
+        if (out.contextWindow !== undefined && out.contextWindow < minimum)
+          return {
+            ok: false,
+            detail: `The model ran with a context window of ${out.contextWindow.toLocaleString('en-US')} tokens; long documents need ${minimum.toLocaleString('en-US')}.`,
+            ...cost(out),
+          }
         return score
           ? { ok: true, score, ...cost(out) }
           : { ok: false, detail: 'The model answered none of the questions about a long document.', ...cost(out) }

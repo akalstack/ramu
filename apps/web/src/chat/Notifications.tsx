@@ -10,7 +10,7 @@ import { ramu, invokerFor } from '../ipc'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { useHostSelection } from '../workspace/HostSelection'
 import { useHost } from '../workspace/HostProvider'
-import { TOAST_MS, notices, useNotificationPanelOpen } from './notificationCenter'
+import { TOAST_MS, notices, useStatusPanelReach } from './notificationCenter'
 import type { InboxNotice } from '@ramu/shared/chat/notices'
 import { isGlobalPage, type ModelNotice } from '@ramu/shared/types'
 
@@ -35,7 +35,7 @@ export function Notifications() {
   const { id: hostId, invoke } = useHost()
   const { on } = useHostRuntime()
   const { preferences } = useAppSettings()
-  const besidePanel = useNotificationPanelOpen()
+  const clearBottom = useStatusPanelReach()
   const dismissedUpdates = useRef(new Set<string>())
   useEffect(() => {
     if (!preferences.providerUpdateChecks) return
@@ -121,59 +121,64 @@ export function Notifications() {
       for (const id of updateIds) hide(id)
     }
   }, [preferences.providerUpdateChecks])
-  // A model a provider started offering: told once on every device, and gone everywhere once dismissed on one.
+  // Models providers started offering: one grouped notice, told once on every device and gone everywhere once dismissed.
   useEffect(() => {
     if (!preferences.newModelNotices) return
     let active = true
-    const shown = new Set<string>()
-    const hide = (id: string) => {
+    const id = 'model-news'
+    let shownKey = ''
+    let latest: ModelNotice[] = []
+    const hide = () => {
       notify.close(id)
       notices.remove(id)
     }
+    const dismiss = () => {
+      hide()
+      shownKey = ''
+      for (const notice of latest) void invoke('models.dismissNews', notice.provider, notice.model).catch(() => {})
+    }
+    const open = () => {
+      dismiss()
+      window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'models' } }))
+    }
     const accept = (list: ModelNotice[]) => {
       if (!active) return
-      const current = new Set(list.map((notice) => `model-news:${notice.provider}:${notice.model}`))
-      for (const id of shown)
-        if (!current.has(id)) {
-          hide(id)
-          shown.delete(id)
-        }
-      for (const notice of list) {
-        const id = `model-news:${notice.provider}:${notice.model}`
-        if (shown.has(id)) continue
-        shown.add(id)
-        const title = t('New model: {0}', { '0': notice.name })
-        const description = t('{0} offers it now. It is tagged New in the model list.', {
-          '0': providerName(notice.provider),
-        })
-        const icon = <ProviderIcon provider={notice.provider} size={18} />
-        const dismiss = () => {
-          hide(id)
-          void invoke('models.dismissNews', notice.provider, notice.model).catch(() => {})
-        }
-        const open = () => {
-          dismiss()
-          window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'models' } }))
-        }
-        notify.add<AppToastData>({
-          id,
-          timeout: TOAST_MS.update,
-          title,
-          description,
-          data: { icon, onDismiss: dismiss },
-          actionProps: { children: t('See models'), onClick: open },
-        })
-        notices.add({
-          id,
-          title,
-          description,
-          type: 'info',
-          icon,
-          actionLabel: t('See models'),
-          onAction: open,
-          onDismiss: dismiss,
-        })
+      latest = list
+      const key = list.map((notice) => `${notice.provider}:${notice.model}`).join('|')
+      if (key === shownKey) return
+      const before = new Set(shownKey.split('|'))
+      const grown = list.some((notice) => !before.has(`${notice.provider}:${notice.model}`))
+      shownKey = key
+      if (!list.length) return hide()
+      const providers = [...new Set(list.map((notice) => notice.provider))]
+      const title =
+        list.length === 1 ? t('New model: {0}', { '0': list[0]!.name }) : t('{0} new models', { '0': list.length })
+      const names = list.map((notice) => notice.name)
+      const shown = names.length > 3 ? [...names.slice(0, 3), t('{0} more', { '0': names.length - 3 })] : names
+      const description =
+        list.length === 1
+          ? t('{0} offers it now. It is tagged New in the model list.', { '0': providerName(list[0]!.provider) })
+          : `${shown.join(', ')}. ${t('Tagged New in the model list.')}`
+      const icon = providers.length === 1 ? <ProviderIcon provider={providers[0]!} size={18} /> : undefined
+      const toast = {
+        title,
+        description,
+        data: { icon, onDismiss: dismiss } satisfies AppToastData,
+        actionProps: { children: t('See models'), onClick: open },
       }
+      // A smaller list (one dismissed elsewhere) updates the notice quietly; more models pop it up again.
+      if (grown) notify.add<AppToastData>({ id, timeout: TOAST_MS.update, ...toast })
+      else notify.update(id, toast)
+      notices.add({
+        id,
+        title,
+        description,
+        type: 'info',
+        icon,
+        actionLabel: t('See models'),
+        onAction: open,
+        onDismiss: dismiss,
+      })
     }
     const off = on('models:news', accept)
     void invoke('models.news')
@@ -182,7 +187,7 @@ export function Notifications() {
     return () => {
       active = false
       off()
-      for (const id of shown) hide(id)
+      hide()
     }
   }, [preferences.newModelNotices, invoke, on])
   const dismissProvider = (status: ProviderStatus) => {
@@ -407,5 +412,5 @@ export function Notifications() {
       window.removeEventListener('ramu:notification', receive)
     }
   }, [])
-  return <AppToaster label={t('Notifications')} closeLabel={t('Dismiss notification')} besidePanel={besidePanel} />
+  return <AppToaster label={t('Notifications')} closeLabel={t('Dismiss notification')} clearBottom={clearBottom} />
 }

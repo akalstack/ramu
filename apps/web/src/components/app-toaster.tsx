@@ -63,24 +63,23 @@ function AppToastList({ closeLabel }: { closeLabel: string }) {
 export function AppToaster({
   label,
   closeLabel,
-  besidePanel,
+  clearBottom,
 }: {
   label: string
   closeLabel: string
-  /** The notification popover is open in this corner. Toasts step aside because not all of them are listed in it. */
-  besidePanel: boolean
+  /** Pixels above the bottom edge an open status-bar popover covers; toasts stack above it so neither hides the other. */
+  clearBottom: number | null
 }) {
+  const bottom = clearBottom === null ? 36 : clearBottom + 8
   return (
     <ToastProvider toastManager={toast} limit={4}>
       <ToastPortal>
         <ToastViewport
           aria-label={label}
           className={cn(
-            'app-toast-viewport left-auto bottom-[36px] z-1250 transition-[right] duration-150 motion-reduce:transition-none',
-            besidePanel
-              ? 'right-[388px] sm:right-[388px] w-[min(380px,_calc(100vw_-_400px))]'
-              : 'right-3 w-[min(380px,_calc(100vw_-_24px))]',
+            'app-toast-viewport left-auto right-3 w-[min(380px,_calc(100vw_-_24px))] z-1250 transition-[bottom] duration-150 motion-reduce:transition-none',
           )}
+          style={{ bottom }}
         >
           <AppToastList closeLabel={closeLabel} />
         </ToastViewport>

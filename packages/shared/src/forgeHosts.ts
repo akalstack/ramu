@@ -55,20 +55,25 @@ export function parseGitlabRemote(url: string): GitlabProject | null {
   return { origin, path: parts.join('/') }
 }
 
-/**
- * The token a signed-in `glab` holds for one origin, read from its config file. Only `hosts.<origin>.token` is read;
- * anything else in the file is ignored. Returns null when the host has no token.
- */
-export function glabToken(config: string, origin: string): string | null {
-  return glabHosts(config).get(origin.toLowerCase()) ?? null
+/** One host `glab` is signed in to, as its config file describes it. */
+export interface GlabHost {
+  /** The token when the file holds it; `null` when glab keeps it in the OS keyring. */
+  token: string | null
+  /** Signed in through glab's OAuth web flow: the token is a short-lived bearer token glab refreshes. */
+  oauth: boolean
+  /** When an OAuth token expires, in milliseconds since the epoch. */
+  expiresAt: number | null
 }
 
-/** Every host `glab` is signed in to, with its token. */
-export function glabHosts(config: string): Map<string, string> {
-  const hosts = new Map<string, string>()
+/**
+ * Every host `glab` is signed in to: one with a token in the file, or with its credentials in the OS keyring. Only the
+ * sign-in fields under `hosts.<origin>` are read; anything else in the file is ignored.
+ */
+export function glabHosts(config: string): Map<string, GlabHost> {
+  const fields = new Map<string, Map<string, string>>()
   let inHosts = false
   let hostIndent = -1
-  let current: string | null = null
+  let current: Map<string, string> | null = null
   for (const raw of config.split(/\r?\n/)) {
     if (!raw.trim() || raw.trim().startsWith('#')) continue
     const indent = raw.length - raw.trimStart().length
@@ -84,13 +89,22 @@ export function glabHosts(config: string): Map<string, string> {
     if (!key) continue
     if (hostIndent === -1 || indent <= hostIndent) {
       hostIndent = indent
-      current = key[1]!.toLowerCase()
+      current = new Map()
+      fields.set(key[1]!.toLowerCase(), current)
       continue
     }
-    if (current && key[1] === 'token') {
-      const value = key[2]!.replace(/^["']|["']$/g, '').trim()
-      if (value) hosts.set(current, value)
-    }
+    current?.set(key[1]!, key[2]!.replace(/^["']|["']$/g, '').trim())
+  }
+  const hosts = new Map<string, GlabHost>()
+  for (const [origin, host] of fields) {
+    const token = host.get('token') || null
+    if (!token && host.get('use_keyring') !== 'true') continue
+    const expiry = Date.parse(host.get('oauth2_expiry_date') ?? '')
+    hosts.set(origin, {
+      token,
+      oauth: host.get('is_oauth2') === 'true',
+      expiresAt: Number.isFinite(expiry) ? expiry : null,
+    })
   }
   return hosts
 }

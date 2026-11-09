@@ -73,11 +73,17 @@ export async function providerLogin(
   }
 }
 
-/** The model a check and later calls use: the declared one, the largest window for long context, else the default. */
+/**
+ * The model a check and later calls use: the declared one, the largest window for long context, else the default.
+ * Claude and Codex list models without their windows; then the default model runs and the check reads the window the
+ * provider reports for that run.
+ */
 export function checkModel(declaration: AbilityDeclaration, models: readonly AgentModel[]): AgentModel | null {
   const current = models.filter((model) => !model.isLegacy)
+  const fallback = current.find((model) => model.isDefault) ?? current[0] ?? null
   if ('contextWindow' in declaration.via) {
     const minimum = declaration.via.contextWindow
+    if (!current.some((model) => model.contextWindow)) return fallback
     return (
       current
         .filter((model) => (model.contextWindow ?? 0) >= minimum)
@@ -85,7 +91,7 @@ export function checkModel(declaration: AbilityDeclaration, models: readonly Age
     )
   }
   if (declaration.models?.length) return current.find((model) => declaration.models!.includes(model.id)) ?? null
-  return current.find((model) => model.isDefault) ?? current[0] ?? null
+  return fallback
 }
 
 /**
@@ -161,7 +167,8 @@ export class AbilityChecks {
       // Results for another version or sign-in of this login are stale; other logins keep theirs.
       (entry) => entry.provider !== target.provider || entry.accountId !== target.accountId || current(entry),
     )
-    if (force) kept = kept.filter((entry) => !current(entry))
+    // A check that found no model made no request, so it runs again: the model list may have changed since.
+    kept = kept.filter((entry) => !(current(entry) && (force || (!entry.ok && !entry.model))))
     const done = new Set(kept.filter(current).map((entry) => entry.ability))
     const results: Stored[] = []
     const passed = (ability: Ability) =>

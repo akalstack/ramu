@@ -1,7 +1,7 @@
 import { readBackgroundActivity } from './backgroundActivityState'
 import { useEffect, useState } from 'react'
 import { Bell, CircleCheck, Info, LoaderCircle, OctagonX, WifiOff, X } from 'lucide-react'
-import { notices, setNotificationPanelOpen, useNotices } from './notificationCenter'
+import { notices, useNotices, useStatusPanel } from './notificationCenter'
 import type { BackgroundActivity as Activity } from '@ramu/shared/chat/activity'
 import { Button } from '@/components/desktop-button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -114,10 +114,7 @@ export function BackgroundActivityIndicator({
 }) {
   useLanguage()
   const [open, setOpen] = useState(false)
-  useEffect(() => {
-    setNotificationPanelOpen(open)
-    return () => setNotificationPanelOpen(false)
-  }, [open])
+  const panelRef = useStatusPanel('notifications', open)
   const [stopping, setStopping] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const stop = async (id: string) => {
@@ -198,6 +195,7 @@ export function BackgroundActivityIndicator({
         </PopoverTrigger>
       </div>
       <PopoverContent
+        ref={panelRef}
         side="top"
         align="end"
         sideOffset={8}

@@ -25,6 +25,8 @@ export interface AbilityOutput {
   tokens?: { input: number; output: number }
   /** What the provider reported the step cost, in US dollars, where it reports one. */
   costUsd?: number
+  /** The context window the provider reported running the model with, in tokens. */
+  contextWindow?: number
 }
 
 /** Runs one ability step on one provider login; Ramu's routing, approval and recording stay with the caller. */
@@ -96,6 +98,7 @@ async function claudeAbility(
     let text = ''
     let tokens: AbilityOutput['tokens']
     let costUsd: number | undefined
+    let contextWindow: number | undefined
     for await (const message of run) {
       if (message.type === 'assistant')
         for (const block of message.message.content) if (block.type === 'text') text += block.text
@@ -110,6 +113,9 @@ async function claudeAbility(
         if (typeof usage?.input_tokens === 'number' && typeof usage.output_tokens === 'number')
           tokens = { input: usage.input_tokens, output: usage.output_tokens }
         if (typeof message.total_cost_usd === 'number') costUsd = message.total_cost_usd
+        // The model that read the most input is the one that read the request; helper calls may use another.
+        const reader = Object.values(message.modelUsage ?? {}).sort((a, b) => b.inputTokens - a.inputTokens)[0]
+        if (reader && reader.contextWindow > 0) contextWindow = reader.contextWindow
       }
     }
     if (abort.signal.aborted)
@@ -120,6 +126,7 @@ async function claudeAbility(
       sources: markdownLinks(text),
       ...(tokens ? { tokens } : {}),
       ...(costUsd === undefined ? {} : { costUsd }),
+      ...(contextWindow ? { contextWindow } : {}),
     }
   } finally {
     clearTimeout(timer)
@@ -148,6 +155,7 @@ export function abilityRunner(query: QueryFn): AbilityRun {
         accountId: route.accountId,
         model: route.model,
         tool: tool === 'image_gen' || tool === 'web_search' ? tool : null,
+        longContext: 'contextWindow' in declaration.via,
         prompt: request.prompt,
         images: request.images,
         cwd,
@@ -163,6 +171,7 @@ export function abilityRunner(query: QueryFn): AbilityRun {
           ),
         sources: out.sources.length ? out.sources : markdownLinks(out.text),
         ...(out.tokens ? { tokens: out.tokens } : {}),
+        ...(out.contextWindow ? { contextWindow: out.contextWindow } : {}),
       }
     } finally {
       rmSync(cwd, { recursive: true, force: true })

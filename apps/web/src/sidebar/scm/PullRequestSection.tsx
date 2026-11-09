@@ -24,6 +24,7 @@ import { useHost } from '../../workspace/HostProvider'
 import { queryInvokerFor } from '../../git/hostQuery'
 import { BrandIcon } from '@/components/brand-icon'
 import { forgeBrand } from '@ramu/shared/brands'
+import { FORGE_NAMES } from '@ramu/shared/pullRequests'
 import { previewLine } from '@ramu/shared/deployText'
 
 const STATE_LABEL: Record<PullRequestInfo['state'], string> = { open: 'Open', closed: 'Closed', merged: 'Merged' }
@@ -220,6 +221,29 @@ export function PullRequestSection({
   const onBase = !!branchInfo.data && status.branch === branchInfo.data.defaultBranch
   const canCreate = !!branchInfo.data && (!pr || pr.state === 'closed') && !onBase
   if (!pr && !canCreate) return null
+  // The title opens the pull request here; only the service mark leaves the app.
+  const openInApp = () =>
+    pr &&
+    ws.openView(taskId, {
+      kind: 'pull-request',
+      repoId: binding.repoId,
+      url: pr.url,
+      number: pr.number,
+      title: pr.title,
+    })
+  const service = query.data?.service ?? 'github'
+  const serviceLink = pr && (
+    <a
+      href={pr.url}
+      target="_blank"
+      rel="noreferrer"
+      className="flex flex-none items-center rounded-(--radius-s) p-0.5 text-muted-foreground hover:bg-hover hover:text-foreground"
+      title={t('Open on {0}', { '0': FORGE_NAMES[service] })}
+      aria-label={t('Open on {0}', { '0': FORGE_NAMES[service] })}
+    >
+      <BrandIcon brand={forgeBrand(service)} size={11} />
+    </a>
+  )
   return (
     <div
       className={cn(
@@ -240,18 +264,21 @@ export function PullRequestSection({
       {!pr || pr.state !== 'open' ? (
         <>
           {pr && (
-            <a
-              href={pr.url}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1.5 min-w-0 text-muted-foreground hover:text-foreground"
-              title={pr.title}
-            >
-              <GitPullRequest size={13} className="flex-none" />
-              <span className="truncate">
-                #{pr.number} · {t(STATE_LABEL[pr.state])}
-              </span>
-            </a>
+            <span className="flex items-center gap-1.5 min-w-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-auto min-h-0 min-w-0 flex-1 justify-start gap-1.5 rounded-none border-0 bg-transparent! p-0 text-left text-control font-normal text-muted-foreground hover:text-foreground"
+                title={pr.title}
+                onClick={openInApp}
+              >
+                <GitPullRequest size={13} className="flex-none" />
+                <span className="truncate">
+                  #{pr.number} · {t(STATE_LABEL[pr.state])}
+                </span>
+              </Button>
+              {serviceLink}
+            </span>
           )}
           {canCreate && (
             <Button
@@ -268,36 +295,26 @@ export function PullRequestSection({
         </>
       ) : (
         <>
-          <a
-            href={pr.url}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-1.5 min-w-0 text-foreground hover:underline"
-            title={t('Open on GitHub')}
-          >
-            <GitPullRequest size={13} className="flex-none text-ok" />
-            <span className="truncate">
-              #{pr.number} {pr.title}
-            </span>
-            <BrandIcon
-              brand={forgeBrand(query.data.service ?? 'github')}
-              size={11}
-              className="flex-none text-muted-foreground"
-            />
-          </a>
+          <span className="flex items-center gap-1.5 min-w-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto min-h-0 min-w-0 flex-1 justify-start gap-1.5 rounded-none border-0 bg-transparent! p-0 text-left text-control font-normal text-foreground hover:underline"
+              title={pr.title}
+              onClick={openInApp}
+            >
+              <GitPullRequest size={13} className="flex-none text-ok" />
+              <span className="truncate">
+                #{pr.number} {pr.title}
+              </span>
+            </Button>
+            {serviceLink}
+          </span>
           <Button
             variant="ghost"
             size="sm"
             className="h-6 justify-start gap-1.5 px-1 text-caption text-muted-foreground"
-            onClick={() =>
-              ws.openView(taskId, {
-                kind: 'pull-request',
-                repoId: binding.repoId,
-                url: pr.url,
-                number: pr.number,
-                title: pr.title,
-              })
-            }
+            onClick={openInApp}
           >
             <PanelRight size={12} />
             {drafts.data ? t('Replies ready · open pull request') : t('Open pull request')}

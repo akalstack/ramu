@@ -15,6 +15,7 @@ import { Button } from '@/components/desktop-button'
 import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
 import { Separator } from '@/components/ui/separator'
 import { notifyError } from './Notifications'
+import { useStatusPanel } from './notificationCenter'
 import { t, useLanguage } from '../i18n'
 import { invokeOn, ramu } from '../ipc'
 import { errorText } from '../lib/errors'
@@ -224,6 +225,7 @@ function ResourcesPanel() {
 export function ResourcesStatus() {
   useLanguage()
   const [open, setOpen] = useState(false)
+  const panelRef = useStatusPanel('resources', open)
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
@@ -239,6 +241,7 @@ export function ResourcesStatus() {
         <MemoryStick data-icon="inline-start" />
       </PopoverTrigger>
       <PopoverContent
+        ref={panelRef}
         side="top"
         align="end"
         sideOffset={8}

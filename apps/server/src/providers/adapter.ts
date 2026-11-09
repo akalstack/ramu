@@ -58,7 +58,7 @@ export interface SkillsLaunch {
 
 /**
  * An ability the runtime can provide and how Ramu invokes it: a built-in tool the model calls in a run limited to that
- * tool, or any model whose context window reaches `contextWindow` tokens. A declaration is only a candidate: the host
+ * tool, or a model run with a context window of at least `contextWindow` tokens. A declaration is only a candidate: the host
  * offers it after a live check on the installed version passes.
  */
 export interface AbilityDeclaration {

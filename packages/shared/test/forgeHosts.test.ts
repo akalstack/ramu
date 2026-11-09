@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { forgeKind, glabHosts, glabToken, parseGitlabRemote } from '../src/forgeHosts'
+import { forgeKind, glabHosts, parseGitlabRemote } from '../src/forgeHosts'
 
 it('recognises each hosting service and keeps unknown servers on GitHub', () => {
   expect(forgeKind('github.com')).toBe('github')
@@ -31,7 +31,7 @@ it('reads nested GitLab namespaces from HTTPS and SSH remotes and refuses embedd
   expect(parseGitlabRemote('/local/path')).toBeNull()
 })
 
-it('reads only host tokens from a glab config', () => {
+it('reads only host sign-ins from a glab config, including OAuth ones kept in the keyring', () => {
   const config = [
     'git_protocol: ssh',
     'token: not-a-host-token',
@@ -41,14 +41,18 @@ it('reads only host tokens from a glab config', () => {
     '        token: glpat-one',
     '    "code.example.com":',
     '        token: "glpat-two"',
+    '    oauth.example.com:',
+    '        # Store the credentials in the keyring',
+    '        use_keyring: true',
+    '        is_oauth2: "true"',
+    '        oauth2_expiry_date: "2026-11-09T22:03:42+07:00"',
     '    empty.example.com:',
     '        user: someone',
     'editor: vim',
   ].join('\n')
   expect([...glabHosts(config)]).toEqual([
-    ['gitlab.com', 'glpat-one'],
-    ['code.example.com', 'glpat-two'],
+    ['gitlab.com', { token: 'glpat-one', oauth: false, expiresAt: null }],
+    ['code.example.com', { token: 'glpat-two', oauth: false, expiresAt: null }],
+    ['oauth.example.com', { token: null, oauth: true, expiresAt: Date.parse('2026-11-09T15:03:42Z') }],
   ])
-  expect(glabToken(config, 'GitLab.com')).toBe('glpat-one')
-  expect(glabToken(config, 'empty.example.com')).toBeNull()
 })
