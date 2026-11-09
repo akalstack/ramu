@@ -32,6 +32,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 ## Acceptance
 
 - **Physical iOS and Android devices:** everything in [apps/mobile/VERIFICATION.md](../apps/mobile/VERIFICATION.md), the Inbox Brief's one-tap rows, from pairing and permissions to the viewers, keyboards, push and Live Activities.
+- **Scoped thread settings on a phone:** in Settings → Threads on a physical phone, **Messages while working** and **Warn before changing model** set for **All mobile devices** reach a second paired phone, **This phone** stays on the first, **All devices** changes the desktop's own setting, and **Use inherited setting** returns each narrower scope to what it inherits.
 - **Linux desktop:** CI installs the x64 `.deb` and runs the startup smoke under a virtual display, without Chromium's sandbox. Still to run by hand: the installed app on a real GNOME or KDE desktop (Wayland and X11), with the sandbox, on Ubuntu 24.04.
 - **Publishing from this computer:** Run on this computer with Docker Desktop on a Mac, opened from a phone on another network, then stopped, with the address gone before the container. **Run without Docker** with a Next.js app the same way.
 - **Lasting address:** an app run on this computer given a hostname on a real Cloudflare zone answers there after Ramu restarts, and **Remove** leaves no tunnel or record behind.

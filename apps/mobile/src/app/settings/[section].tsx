@@ -13,15 +13,17 @@ import { font, space, useTheme, type Appearance, type TextSize } from '../../the
 import { useStore, type Language } from '../../runtime/store'
 import { sectionById, type SettingsSection } from '../../runtime/settingsModel'
 import { useHostSettings } from '../../runtime/useHostSettings'
-import { sharedValue } from '@ramu/shared/sharedFields'
 import { translate } from '@ramu/shared/i18n'
 import {
   BUSY_MODE_DEVICE_KEY,
   MODEL_WARNING_DEVICE_KEY,
-  resolveBusyMode,
-  resolveModelChangeWarning,
+  readBusyMode,
+  readModelWarning,
   type BusyMode,
+  type ModelWarning,
 } from '../../runtime/busyMode'
+import { useScopedChoice } from '../../runtime/useScopedChoice'
+import { ScopedChoiceRow } from '../../components/ScopedChoiceRow'
 import {
   PUSH_CATEGORIES,
   PUSH_MUTED_KEY,
@@ -35,7 +37,7 @@ import { useAccountLogins } from '../../runtime/useAccountLogins'
 import { Header, Screen, useScrolledUnderBar } from '../../components/Screen'
 import { SettingScroll } from '../../components/SettingHighlight'
 import { PlanUsageReading, PlanUsageSummary } from '../../components/PlanUsage'
-import { Button, Card, ConnectionDot, Divider, Row, SectionLabel, Segmented, T } from '../../components/ui'
+import { Card, ConnectionDot, Divider, Row, SectionLabel, Segmented, T } from '../../components/ui'
 import { ComputerScope } from '../../components/SettingsChrome'
 import { RulesSettings } from '../../components/RulesSettings'
 import { AgentSetupSettings, MemoryList } from '../../components/AgentSetupSettings'
@@ -129,62 +131,68 @@ function AppearancePage() {
 }
 
 /**
- * How a message sent while the agent works, and the warning before a model change, behave here: this phone's own choice
- * first, then the setting shared by all your phones on this computer, then the computer's own setting.
+ * How a message sent while the agent works, and the warning before a model change, behave: for all devices (the
+ * computer's own setting), all your phones (kept on the computer), or this phone alone.
  */
-function BusyBehavior({ computerId }: { computerId: string }) {
-  const { drafts, setDraft, appPreferences, mobileLayers } = useStore()
+function BusyBehavior({ host, locked }: { host: ReturnType<typeof useHostSettings>; locked: boolean }) {
+  const { appPreferences } = useStore()
   const t = useT()
-  const sharedBusy = sharedValue(mobileLayers[computerId], 'queueWhileBusy')
-  const sharedWarning = sharedValue(mobileLayers[computerId], 'modelChangeWarning')
-  const hostBusy = appPreferences[computerId]?.busyMessageAction
-  const hostWarn = appPreferences[computerId]?.warnModelChange
-  const resolved = resolveBusyMode(drafts[BUSY_MODE_DEVICE_KEY], sharedBusy, hostBusy)
-  const inheritedBusy = resolveBusyMode(undefined, sharedBusy, hostBusy)
-  const warning = resolveModelChangeWarning(drafts[MODEL_WARNING_DEVICE_KEY], sharedWarning, hostWarn)
-  const inheritedWarning = resolveModelChangeWarning(undefined, sharedWarning, hostWarn)
+  const computerId = host.computerId
+  const ready = host.state.status === 'ready'
+  const allBlocked = locked ? ('permission' as const) : ready ? undefined : ('offline' as const)
+  // The live snapshot shows a save at once; the store's copy covers the moment before it loads.
+  const hostValue = (path: 'busyMessageAction' | 'warnModelChange') =>
+    ready ? host.read(path) : appPreferences[computerId]?.[path]
+  const busy = useScopedChoice<BusyMode>({
+    computerId,
+    field: 'queueWhileBusy',
+    deviceKey: BUSY_MODE_DEVICE_KEY,
+    fallback: 'steer',
+    read: readBusyMode,
+    toShared: (value) => value,
+    all: {
+      value: hostValue('busyMessageAction'),
+      blocked: allBlocked,
+      save: (value) => host.set('busyMessageAction', value),
+    },
+  })
+  const warning = useScopedChoice<ModelWarning>({
+    computerId,
+    field: 'modelChangeWarning',
+    deviceKey: MODEL_WARNING_DEVICE_KEY,
+    fallback: 'on',
+    read: readModelWarning,
+    toShared: (value) => value === 'on',
+    all: {
+      value: hostValue('warnModelChange'),
+      blocked: allBlocked,
+      save: (value) => host.set('warnModelChange', value === 'on'),
+    },
+  })
   return (
     <>
-      <SectionLabel>{t.busyOnPhone}</SectionLabel>
+      <SectionLabel>{t.yourPreferences}</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
-        <Segmented<BusyMode>
-          style={{ margin: space.m }}
-          value={resolved.mode}
-          onChange={(mode) => setDraft(BUSY_MODE_DEVICE_KEY, mode)}
+        <ScopedChoiceRow<BusyMode>
+          title="Messages while working"
+          help={t.busyHint}
+          control={busy}
           options={[
             { key: 'steer', label: t.steer },
             { key: 'queue', label: t.queue },
           ]}
         />
-      </Card>
-      <Hint>{t.busyHint}</Hint>
-      {resolved.source === 'device' ? (
-        <Button
-          kind="ghost"
-          title={`${t.scopeUseInherited} · ${inheritedBusy.mode === 'queue' ? t.queue : t.steer}`}
-          onPress={() => setDraft(BUSY_MODE_DEVICE_KEY, '')}
-        />
-      ) : null}
-      <SectionLabel>{t.modelWarnOnPhone}</SectionLabel>
-      <Card style={{ marginHorizontal: space.l }}>
-        <Segmented<'on' | 'off'>
-          style={{ margin: space.m }}
-          value={warning.warn ? 'on' : 'off'}
-          onChange={(value) => setDraft(MODEL_WARNING_DEVICE_KEY, value)}
+        <Divider inset={space.l} />
+        <ScopedChoiceRow<ModelWarning>
+          title="Warn before changing model"
+          help={t.modelWarnHint}
+          control={warning}
           options={[
             { key: 'on', label: t.modelWarnOn },
             { key: 'off', label: t.modelWarnOff },
           ]}
         />
       </Card>
-      <Hint>{t.modelWarnHint}</Hint>
-      {warning.source === 'device' ? (
-        <Button
-          kind="ghost"
-          title={`${t.scopeUseInherited} · ${inheritedWarning.warn ? t.modelWarnOn : t.modelWarnOff}`}
-          onPress={() => setDraft(MODEL_WARNING_DEVICE_KEY, '')}
-        />
-      ) : null}
     </>
   )
 }
@@ -479,7 +487,7 @@ export default function SettingsSectionPage() {
         ) : null}
         {id === 'providers' ? <DeployStatus key={`MediaStatus:${selected}`} hostId={selected} only="media" /> : null}
         {id === 'providers' ? <Usage computer={selected} /> : null}
-        {id === 'chats' ? <BusyBehavior key={`BusyBehavior:${selected}`} computerId={selected} /> : null}
+        {id === 'chats' ? <BusyBehavior key={`BusyBehavior:${selected}`} host={host} locked={locked} /> : null}
         {id === 'computer' ? <ComputerUseSettings key={`ComputerUseSettings:${selected}`} hostId={selected} /> : null}
         {id === 'computer' ? <TestDeviceSettings key={`TestDeviceSettings:${selected}`} hostId={selected} /> : null}
         {id === 'git' ? <HostingStatus key={`HostingStatus:${selected}`} hostId={selected} /> : null}

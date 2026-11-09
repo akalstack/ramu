@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Check, ExternalLink, FolderGit2, Layers, SlidersHorizontal, Wifi } from 'lucide-react'
 import { cn } from 'cn'
 import { providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
-import type { AgentProvider, ModelPreferences, NetworkStatus, Project } from '@ramu/shared/types'
+import type { AgentModel, AgentProvider, ModelPreferences, NetworkStatus, Project } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { RowButton } from '@/components/row-button'
 import { StepSlider } from '@/components/step-slider'
@@ -15,6 +15,8 @@ import { errorText } from '../lib/errors'
 import { effortDisplayName, modelDisplayName, modelStepName, useModelSets } from '../models/ModelSets'
 import { ProviderIcon } from '../models/ProviderIcon'
 import { runProviderCommand } from '../models/ProviderSetupTerminal'
+import { useAppSettings } from '../settings/AppSettings'
+import { choosableEfforts, initialChoice, onboardingModels, withModel, type DefaultModelChoice } from './defaultModel'
 import { FEWEST_TOKENS, TOKEN_FEATURES, sameChoices, type TokenChoices } from './tokenChoices'
 
 /** A rounded group of rows on the raised fill, like a Settings card. */
@@ -42,19 +44,14 @@ function Row({ title, help, children }: { title: ReactNode; help?: ReactNode; ch
 
 export function AgentsStep({
   statuses,
-  provider,
-  onProvider,
   onRefresh,
   onError,
 }: {
   statuses: ProviderStatus[] | null
-  provider: AgentProvider
-  onProvider(provider: AgentProvider): void
   onRefresh(): Promise<void>
   onError(message: string): void
 }) {
   const [checking, setChecking] = useState(false)
-  const installed = statuses?.filter((status) => status.installed) ?? []
   const signIn = async (status: ProviderStatus) => {
     onError('')
     try {
@@ -112,14 +109,6 @@ export function AgentsStep({
         </Group>
       )}
       <div className="flex flex-wrap items-center gap-3">
-        {installed.length > 1 && (
-          <Dropdown
-            label={t('Default provider')}
-            value={provider}
-            options={installed.map((status) => ({ value: status.provider, label: providerName(status.provider) }))}
-            onChange={(value) => onProvider(value as AgentProvider)}
-          />
-        )}
         <Button
           variant="ghost"
           disabled={checking}
@@ -265,6 +254,168 @@ export function ModelsStep({
           }
         />
       </ModeCard>
+      <p className="m-0 text-caption text-muted-foreground">
+        {t('Higher steps and effort give better answers on hard work but use more tokens and take longer.')}
+      </p>
+    </div>
+  )
+}
+
+/** A radio row: the choice, a short note and the check, as Settings cards show a selection. */
+function Choice({
+  selected,
+  title,
+  note,
+  onSelect,
+}: {
+  selected: boolean
+  title: ReactNode
+  note?: ReactNode
+  onSelect(): void
+}) {
+  return (
+    <RowButton
+      role="radio"
+      aria-checked={selected}
+      onClick={onSelect}
+      className={cn('gap-3 rounded-none px-4 py-2.5 text-foreground', selected && 'bg-hover')}
+    >
+      <span className="min-w-0 flex-1">
+        <strong className="flex items-center gap-2 font-medium">{title}</strong>
+        {note && <span className="mt-0.5 block text-caption leading-[18px] text-muted-foreground">{note}</span>}
+      </span>
+      <span
+        aria-hidden
+        className={cn(
+          'flex size-4 flex-none items-center justify-center rounded-full border',
+          selected ? 'border-primary bg-primary text-primary-foreground' : 'border-(--edge)',
+        )}
+      >
+        {selected && <Check size={11} strokeWidth={3} />}
+      </span>
+    </RowButton>
+  )
+}
+
+/** The model new threads start on, from the providers that can run here. */
+export function ModelChoiceStep({
+  providers,
+  choice,
+  onChoice,
+}: {
+  providers: AgentProvider[]
+  choice: DefaultModelChoice
+  onChoice(choice: DefaultModelChoice): void
+}) {
+  const { catalogs, reload } = useModelSets()
+  const { visibleModels } = useAppSettings().preferences
+  const [checking, setChecking] = useState(false)
+  const all = catalogs.flatMap((catalog) => catalog.models)
+  const offered = providers.filter((provider) => all.some((model) => model.provider === provider))
+  const models = onboardingModels(all, choice.provider, visibleModels)
+  return (
+    <div className="flex flex-col gap-3">
+      {offered.length > 1 && (
+        <div>
+          <Dropdown
+            label={t('Provider')}
+            value={choice.provider}
+            options={offered.map((provider) => ({ value: provider, label: providerName(provider) }))}
+            onChange={(value) => {
+              const provider = offered.find((entry) => entry === value)
+              if (provider) onChoice(initialChoice(choice, provider, all))
+            }}
+          />
+        </div>
+      )}
+      {models.length ? (
+        <div
+          role="radiogroup"
+          aria-label={t('Default model')}
+          className="overflow-hidden rounded-(--radius-m) bg-fill [&>*+*]:border-t [&>*+*]:border-(--line)"
+        >
+          {models.map((model) => (
+            <Choice
+              key={model.id}
+              selected={model.id === choice.model}
+              title={
+                <>
+                  <ProviderIcon provider={model.provider} size={14} />
+                  {modelDisplayName(model.name)}
+                  {model.isDefault && (
+                    <Badge variant="secondary" className="font-normal">
+                      {t('Recommended')}
+                    </Badge>
+                  )}
+                </>
+              }
+              note={
+                choosableEfforts(model).length
+                  ? t('{0} effort levels', { 0: choosableEfforts(model).length })
+                  : undefined
+              }
+              onSelect={() => onChoice(withModel(model, choice.effort))}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="m-0 min-w-0 flex-1 text-caption text-muted-foreground">
+            {t('No models yet. Sign in to an agent, then check again, or choose later in Settings › Models.')}
+          </p>
+          <Button
+            variant="ghost"
+            disabled={checking}
+            onClick={() => {
+              setChecking(true)
+              void reload()
+                .catch(() => {})
+                .finally(() => setChecking(false))
+            }}
+          >
+            {checking ? t('Checking…') : t('Check again')}
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** How hard the chosen model thinks by default; only the efforts it supports. */
+export function EffortStep({
+  model,
+  choice,
+  onChoice,
+}: {
+  model: AgentModel
+  choice: DefaultModelChoice
+  onChoice(choice: DefaultModelChoice): void
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div
+        role="radiogroup"
+        aria-label={t('Effort for {0}', { 0: modelDisplayName(model.name) })}
+        className="overflow-hidden rounded-(--radius-m) bg-fill [&>*+*]:border-t [&>*+*]:border-(--line)"
+      >
+        {choosableEfforts(model).map((effort) => (
+          <Choice
+            key={effort}
+            selected={effort === choice.effort}
+            title={
+              <>
+                {effortDisplayName(effort, model.provider)}
+                {effort === model.defaultEffort && (
+                  <Badge variant="secondary" className="font-normal">
+                    {t('Recommended')}
+                  </Badge>
+                )}
+              </>
+            }
+            onSelect={() => onChoice({ ...choice, effort })}
+          />
+        ))}
+      </div>
       <p className="m-0 text-caption text-muted-foreground">
         {t('Higher steps and effort give better answers on hard work but use more tokens and take longer.')}
       </p>

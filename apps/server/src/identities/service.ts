@@ -36,8 +36,8 @@ export interface IdentityHost {
   home?: string
   /** Tells the person's devices that the guardrail stopped an action, so the card opens where they are. */
   mismatched?(mismatch: IdentityMismatch): void
-  /** `user.email` from the host's Git config, used when it has no identities. */
-  gitEmail?(): string | null
+  /** `user.name` and `user.email` from the host's global Git config: the fallback email, and a first identity's author. */
+  gitUser?(): { name: string | null; email: string | null }
 }
 
 export class IdentityService {
@@ -256,7 +256,12 @@ export class IdentityService {
       place !== null && typeof place === 'object'
         ? identityFor(place, this.settings(), this.home)?.identity
         : this.forProject(place)
-    return identity?.gitAuthor.email ?? this.host.gitEmail?.() ?? null
+    return identity?.gitAuthor.email ?? this.gitUser().email
+  }
+
+  /** The host's global Git user, so setup can offer it as the first identity's author. */
+  gitUser(): { name: string | null; email: string | null } {
+    return this.host.gitUser?.() ?? { name: null, email: null }
   }
 
   allowed(projectId: string | null, accountKey: string): boolean {

@@ -791,8 +791,16 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
 
 /** Settings that live on this phone, for search. Their pages draw them directly. */
 const PHONE_ENTRIES: { section: SettingsSection; title: string; words: string }[] = [
-  { section: 'chats', title: 'Messages while working, on this phone', words: 'queue steer steering enter busy' },
-  { section: 'chats', title: 'Warn before changing model, on this phone', words: 'model switch cache usage warning' },
+  {
+    section: 'chats',
+    title: 'Messages while working',
+    words: 'queue steer steering enter busy this phone all phones all devices',
+  },
+  {
+    section: 'chats',
+    title: 'Warn before changing model',
+    words: 'model switch cache usage warning this phone all phones all devices',
+  },
   { section: 'appearance', title: 'Theme', words: 'light dark system appearance mode' },
   { section: 'appearance', title: 'Language', words: 'bahasa indonesia english' },
   { section: 'appearance', title: 'Haptic feedback', words: 'vibration taps feel' },

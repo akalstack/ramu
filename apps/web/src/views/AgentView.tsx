@@ -867,7 +867,7 @@ export const AgentView = memo(function AgentView({
                       ref={scroller}
                       onScroll={onScroll}
                       aria-label={translate('Conversation')}
-                      className={`scroll-fade-y px-6 pt-3 pb-7 ${showingSubmission ? 'motion-safe:scroll-smooth' : ''}`}
+                      className={`scroll-fade-y px-6 pt-3 pb-7 outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--line)] ${showingSubmission ? 'motion-safe:scroll-smooth' : ''}`}
                     >
                       {hiddenTurns > 0 && (
                         <Button

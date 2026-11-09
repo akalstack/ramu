@@ -15,7 +15,7 @@ function service(
     places: () => places,
     changed: () => {},
     home: '/Users/ada',
-    gitEmail: () => 'ada@host.example',
+    gitUser: () => ({ name: 'Ada', email: 'ada@host.example' }),
   })
   const personal = identities.add({ name: 'Personal', gitAuthor: { name: 'Ada', email: 'ada@gmail.com' } })
   const work = identities.add({
@@ -88,9 +88,22 @@ describe('identities on a host', () => {
       setState: () => {},
       places: () => [],
       changed: () => {},
-      gitEmail: () => 'ada@host.example',
+      gitUser: () => ({ name: 'Ada', email: 'ada@host.example' }),
     })
     expect(bare.email('anything')).toBe('ada@host.example')
+  })
+
+  it('offers the host’s global Git user for a first identity, and nothing when Git has none', () => {
+    const { identities } = service()
+    expect(identities.gitUser()).toEqual({ name: 'Ada', email: 'ada@host.example' })
+    const bare = new IdentityService({
+      getState: (_key, fallback) => fallback,
+      setState: () => {},
+      places: () => [],
+      changed: () => {},
+    })
+    expect(bare.gitUser()).toEqual({ name: null, email: null })
+    expect(bare.email(null)).toBeNull()
   })
 })
 

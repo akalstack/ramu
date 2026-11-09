@@ -11,6 +11,8 @@ import * as mobileTranscript from '../src/runtime/transcript.ts'
 import * as chatViewport from '../src/runtime/chatViewport.ts'
 import * as transcriptChanges from '../src/runtime/transcriptChanges.ts'
 import * as phoneBehavior from '../src/runtime/busyMode.ts'
+import * as sharedFields from '../../../packages/shared/src/sharedFields.ts'
+import * as preferenceScopes from '../../../packages/shared/src/preferenceScopes.ts'
 import * as chatPresentation from '../../../packages/shared/src/chat/presentation.ts'
 import * as browserViewerState from '../src/runtime/browserViewerState.ts'
 import * as browserBridge from '../../../packages/shared/src/browserBridge.ts'
@@ -6918,47 +6920,121 @@ test('native profile saves serialize async writes, freeze snapshots, and recover
 })
 
 for (const os of ['ios', 'android']) {
-  test(`${os} thread settings show one phone control for busy messages and one model warning`, () => {
+  test(`${os} busy messages and the model warning are set for all devices, all phones or this phone`, async () => {
+    const hooks = hookHarness()
     const drafts = {},
-      writes = []
+      calls = [],
+      hostWrites = []
+    const t = new Proxy({}, { get: (_, key) => String(key) })
+    const i18n = { useT: () => t, useSay: () => (text) => text, fill: (text, ...values) => `${text}${values}` }
     const store = {
       mayUse: () => true,
       selected: 'host',
       language: 'en',
-      computers: [],
+      computers: [{ id: 'host', access: 'owner' }],
       drafts,
-      mobileLayers: {},
+      mobileLayers: { host: { v: 1, fields: {} } },
       appPreferences: { host: { busyMessageAction: 'queue', warnModelChange: false } },
       setDraft: (key, value) => {
         drafts[key] = value
-        writes.push([key, value])
+      },
+      setMobileLayer: (id, layer) => {
+        store.mobileLayers[id] = layer
+      },
+      invoke: async (_host, method, edit) => {
+        calls.push([method, edit])
+        return { protocol: 1, mobile: { v: 1, fields: { [edit.id]: { value: edit.value, at: edit.at, by: edit.by } } } }
       },
     }
+    let host = { computerId: 'host', state: { status: 'offline' }, read: () => undefined, set() {} }
+    const scopeControl = load('components/ScopeControl.tsx', os, {
+      '@ramu/shared/preferenceScopes': preferenceScopes,
+      '../i18n': i18n,
+    })
     const { default: Section } = load('app/settings/[section].tsx', os, {
       'expo-router': { useLocalSearchParams: () => ({ section: 'chats' }) },
       '../../runtime/settingsModel': settingsModel,
       '../../runtime/store': { useStore: () => store },
-      '../../runtime/useHostSettings': { useHostSettings: () => ({ state: { status: 'offline' } }) },
+      '../../runtime/useHostSettings': { useHostSettings: () => host },
       '../../runtime/busyMode': phoneBehavior,
-      '../../i18n': { useT: () => new Proxy({}, { get: (_, key) => key }) },
+      '../../runtime/useScopedChoice': load('runtime/useScopedChoice.ts', os, {
+        react: hooks.react,
+        './store': { useStore: () => store },
+        './busyMode': phoneBehavior,
+        '@ramu/shared/sharedFields': sharedFields,
+      }),
+      '../../components/ScopedChoiceRow': load('components/ScopedChoiceRow.tsx', os, {
+        react: hooks.react,
+        '../i18n': i18n,
+        './ScopeControl': scopeControl,
+      }),
+      '../../i18n': i18n,
     })
-    const component = nodes(Section()).find(
-      (node) => typeof node.type === 'function' && node.type.name === 'BusyBehavior',
-    )
-    const render = () => component.type(component.props)
-    const controls = nodes(render()).filter((node) => node.type === 'Segmented')
-    assert.equal(controls.length, 2)
-    assert.equal(controls[0].props.value, 'queue')
-    assert.equal(controls[1].props.value, 'off')
-    controls[0].props.onChange('steer')
-    controls[1].props.onChange('on')
+    // Each row's two controls: where it applies, then the value there.
+    const render = () =>
+      hooks.render(() => {
+        const behavior = nodes(Section()).find((node) => node.type?.name === 'BusyBehavior')
+        return nodes(behavior.type(behavior.props))
+          .filter((node) => node.type?.name === 'ScopedChoiceRow')
+          .map((row) => {
+            const tree = row.type(row.props)
+            const [scope, value] = nodes(tree).filter((node) => node.type === 'Segmented')
+            return { scope, value, tree }
+          })
+      })
+    let [busy, warning] = render()
+    // The computer's own setting is in effect, so each row opens on All devices with its value.
+    assert.equal(busy.scope.props.value, 'all')
+    assert.equal(busy.value.props.value, 'queue')
+    assert.equal(warning.value.props.value, 'off')
+    assert.ok(nodes(busy.tree).some((node) => node.props?.children === 'scopeOfflineBlocked'))
+
+    busy.scope.props.onChange('device')
+    ;[busy, warning] = render()
+    busy.value.props.onChange('steer')
+    warning.scope.props.onChange('device')
+    ;[, warning] = render()
+    warning.value.props.onChange('on')
     assert.equal(drafts[phoneBehavior.BUSY_MODE_DEVICE_KEY], 'steer')
     assert.equal(drafts[phoneBehavior.MODEL_WARNING_DEVICE_KEY], 'on')
-    assert.equal(store.appPreferences.host.busyMessageAction, 'queue', 'phone choices never change the host default')
-    assert.equal(writes.length, 2)
-    const paths = settingsModel.SETTINGS_ROWS.chats.flatMap((group) => group.rows.map((row) => row.path))
-    assert.ok(!paths.includes('busyMessageAction') && !paths.includes('warnModelChange'))
+    assert.equal(store.appPreferences.host.busyMessageAction, 'queue', 'a phone choice never changes the host setting')
+    ;[busy] = render()
+    assert.equal(busy.value.props.value, 'steer')
+
+    busy.scope.props.onChange('mobile')
+    ;[busy] = render()
+    busy.value.props.onChange('queue')
+    await settle()
+    assert.deepEqual(
+      calls.map(([method, edit]) => [method, edit.id, edit.value]),
+      [['preferences.layers.set', 'queueWhileBusy', 'queue']],
+    )
+    ;[busy] = render()
+    // This phone's own choice still wins over the one for all phones.
+    assert.equal(busy.value.props.value, 'queue')
+    assert.equal(
+      phoneBehavior.resolveBusyMode(drafts[phoneBehavior.BUSY_MODE_DEVICE_KEY], 'queue', 'queue').mode,
+      'steer',
+    )
+
+    host = {
+      computerId: 'host',
+      state: { status: 'ready', settings: [] },
+      read: (path) => store.appPreferences.host[path],
+      set: (path, value) => hostWrites.push([path, value]),
+    }
+    busy.scope.props.onChange('all')
+    ;[busy, warning] = render()
+    busy.value.props.onChange('steer')
+    warning.scope.props.onChange('all')
+    ;[, warning] = render()
+    warning.value.props.onChange('on')
+    assert.deepEqual(hostWrites, [
+      ['busyMessageAction', 'steer'],
+      ['warnModelChange', true],
+    ])
     assert.equal(settingsModel.searchSettings('steer', []).length, 1)
+    hooks.dispose()
   })
 }
 

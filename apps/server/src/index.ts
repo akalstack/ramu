@@ -387,18 +387,17 @@ const identities = new IdentityService({
   places: () => places.places(),
   changed: () => send('identities:changed', null),
   mismatched: (mismatch) => send('identities:mismatch', mismatch),
-  gitEmail: (() => {
-    let cached: string | null | undefined
-    return () => {
-      if (cached !== undefined) return cached
+  gitUser: (() => {
+    const read = (key: string) => {
       try {
-        cached =
-          execFileSync('git', ['config', '--global', 'user.email'], { encoding: 'utf8', timeout: 3000 }).trim() || null
+        return execFileSync('git', ['config', '--global', key], { encoding: 'utf8', timeout: 3000 }).trim() || null
       } catch {
-        cached = null
+        // Unset keys exit non-zero, and a host without Git has no user to offer.
+        return null
       }
-      return cached ?? null
     }
+    let cached: { name: string | null; email: string | null } | undefined
+    return () => (cached ??= { name: read('user.name'), email: read('user.email') })
   })(),
 })
 void places.refresh().catch(() => {})

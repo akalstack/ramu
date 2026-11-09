@@ -1,6 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { otherBusyMode, resolveBusyMode, resolveModelChangeWarning } from '../src/runtime/busyMode.ts'
+import {
+  otherBusyMode,
+  readBusyMode,
+  readModelWarning,
+  resolveBusyMode,
+  resolveLayered,
+  resolveModelChangeWarning,
+} from '../src/runtime/busyMode.ts'
 
 test('this phone wins, then all your phones, then the computer, then Steer', () => {
   assert.deepEqual(resolveBusyMode('queue', 'steer', 'steer'), { mode: 'queue', source: 'device' })
@@ -27,4 +34,25 @@ test('the model-change warning follows this phone, then all your phones, then th
   assert.deepEqual(resolveModelChangeWarning(undefined, undefined, false), { warn: false, source: 'all' })
   assert.deepEqual(resolveModelChangeWarning(undefined, undefined, undefined), { warn: true, source: 'default' })
   assert.deepEqual(resolveModelChangeWarning('never', 'x', 'y'), { warn: true, source: 'default' })
+})
+
+test('the narrowest scope with its own value wins, and clearing it falls back a scope at a time', () => {
+  assert.deepEqual(resolveLayered({ device: 'queue', mobile: 'steer', all: 'steer' }, 'steer'), {
+    value: 'queue',
+    source: 'device',
+  })
+  assert.deepEqual(resolveLayered({ mobile: 'queue', all: 'steer' }, 'steer'), { value: 'queue', source: 'mobile' })
+  assert.deepEqual(resolveLayered({ all: 'queue' }, 'steer'), { value: 'queue', source: 'all' })
+  assert.deepEqual(resolveLayered({}, 'steer'), { value: 'steer', source: 'default' })
+})
+
+test('Settings reads every scope the same way the composer does', () => {
+  assert.equal(readBusyMode('queue'), 'queue')
+  assert.equal(readBusyMode(''), undefined)
+  assert.equal(readBusyMode('interrupt'), undefined)
+  assert.equal(readModelWarning('off'), 'off')
+  assert.equal(readModelWarning(false), 'off')
+  assert.equal(readModelWarning(true), 'on')
+  assert.equal(readModelWarning(''), undefined)
+  assert.equal(readModelWarning('never'), undefined)
 })

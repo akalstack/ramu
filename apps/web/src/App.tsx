@@ -100,6 +100,8 @@ import { HostNavigation } from './workspace/HostNavigation'
 import { ActiveHostSettings } from './settings/hostPreferences'
 import { HostSelectionProvider, useHostSelection } from './workspace/HostSelection'
 import { useHost } from './workspace/HostProvider'
+import { useProjectIdentity } from './workspace/identities'
+import { IdentityChip } from './settings/IdentityChip'
 import { TaskPane } from './workspace/TaskPane'
 import {
   isWorkspaceCtx,
@@ -869,6 +871,8 @@ function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode 
 
   const ws = useWorkspace()
   const ctx = ws.ui.activeTaskId
+  // Which identity the thread acts as sits with its title, beside the worktree and host it runs in: context, not an action.
+  const identity = useProjectIdentity(activeHost, ws.tasks.find((entry) => entry.id === ctx)?.projectId)
   const isProject = !!ctx && isWorkspaceCtx(ctx)
   const task = !starting && ctx && !isProject ? ws.task(ctx) : undefined
   const project = ctx ? ws.projectOf(ctx) : undefined
@@ -995,6 +999,7 @@ function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode 
               {task.title}
             </span>
           ))}
+        {task && identity && <IdentityChip identity={identity} className="no-drag [-webkit-app-region:no-drag]" />}
         {task?.mode === 'worktree' && (
           <span
             className="chip tabular-nums text-caption bg-hover rounded-full p-[1px_8px] text-soft whitespace-nowrap header-worktree max-w-[180px] min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"

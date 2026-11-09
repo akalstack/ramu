@@ -329,6 +329,10 @@ export function useSettingsScope(section: string, host?: string) {
   }
 }
 
+/** How long a call waits for the hosts' settings to load before it is refused. */
+const SETTLE_TIMEOUT_MS = 20_000
+const SETTLE_POLL_MS = 50
+
 /**
  * A setting's control: it marks the setting edited, and outside a compact row disables the control and says so when
  * this device may only view. Where the setting stands on each host goes beside its title (`SettingTitleHosts`).
@@ -406,9 +410,21 @@ export function useScopedInvoke(scope: SettingsScope | null): typeof invoke {
   const forward = invoke as unknown as (method: string, ...args: unknown[]) => Promise<unknown>
   return useMemo(() => {
     return (async (method: string, ...args: unknown[]) => {
-      const scope = current.current
       if (method.startsWith('computers.')) return forward(method, ...args)
-      if ((scope?.primaryId ?? null) !== (origin ?? null) || (scope !== null) !== scoped)
+      let scope = current.current
+      const waited = !!scope && (scope.loading || scope.stale)
+      // Calls made while the hosts' settings are (re)loading wait for them, so a screen opened or reloaded at that
+      // moment gets its data instead of a "select a host" refusal that would stay on screen after the load finished.
+      for (
+        const until = Date.now() + SETTLE_TIMEOUT_MS;
+        scope && (scope.loading || scope.stale) && Date.now() < until;
+      ) {
+        await new Promise((resume) => setTimeout(resume, SETTLE_POLL_MS))
+        scope = current.current
+      }
+      // A call that waited for the first load had no host yet; one that did not must still be for the host it saw.
+      const moved = waited && origin === undefined ? false : (scope?.primaryId ?? null) !== (origin ?? null)
+      if (moved || (scope !== null) !== scoped)
         throw new Error(t('The selected host changed. Reopen this action before continuing.'))
       if (!scope) return forward(method, ...args)
       if (!scope.ready || scope.stale) throw new Error(t('Select a connected host.'))

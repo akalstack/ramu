@@ -1,22 +1,11 @@
-import { useState } from 'react'
-import { Platform, View } from 'react-native'
 import { translate } from '@ramu/shared/i18n'
 import type { ModelFlow } from '@ramu/shared/modelFlow'
-import { scopeLabel, sourceLabel, type DeviceKind, type PreferenceScope } from '@ramu/shared/preferenceScopes'
-import { space } from '../theme'
 import { useStore } from '../runtime/store'
 import { useModelFlow } from '../runtime/useModelFlow'
-import { Row, Segmented, T } from './ui'
-import { Hint, RowLabel } from './SettingRowContent'
+import type { ScopedChoiceControl } from '../runtime/useScopedChoice'
+import { ScopedChoiceRow } from './ScopedChoiceRow'
 
-const deviceKind = (): DeviceKind =>
-  Platform.OS === 'web' ? 'unknown' : Platform.OS === 'ios' && Platform.isPad ? 'tablet' : 'phone'
-
-/**
- * Steps versus Model then effort, with an explicit **Apply to** scope. All devices is the computer's own setting
- * (desktop and every phone without its own choice); All mobile devices is kept on the computer for its paired phones;
- * This phone stays on this device. Narrower settings survive a broader change, and one tap returns to the inherited value.
- */
+/** Steps versus Model then effort, for all devices, all your phones or this phone. */
 export function ModelFlowRow({
   title,
   help,
@@ -31,71 +20,33 @@ export function ModelFlowRow({
   save: (value: ModelFlow) => void
   disabled?: boolean
 }) {
-  const { language, selected } = useStore()
+  const { language, selected, computers } = useStore()
   const flow = useModelFlow(selected)
-  const kind = deviceKind()
+  const viewer = computers.find((computer) => computer.id === selected)?.access === 'viewer'
   const tr = (text: string) => translate(language, text)
-  const [scope, setScope] = useState<PreferenceScope>('all')
-  const label = (value: unknown) => tr(options.find((o) => o.value === value)?.label ?? String(value))
-  const hasOverride = scope !== 'all' && flow.overridden[scope]
-  const scoped = scope === 'mobile' && !flow.sharedAvailable
-  const choose = (value: ModelFlow) => {
-    if (scope === 'all') save(value)
-    else if (scope === 'device') flow.setDevice(value)
-    else void flow.setMobile(value)
+  const control: ScopedChoiceControl<ModelFlow> = {
+    effective: flow.effective,
+    held: { all: flow.host, ...flow.held },
+    // Clearing the setting for all your phones leaves phones without their own choice on the computer's setting.
+    inherited: (scope) => (scope === 'mobile' ? { value: flow.host, source: 'all' } : flow.inherited(scope)),
+    blocked: {
+      ...(disabled ? { all: 'permission' as const } : {}),
+      ...(!flow.sharedAvailable ? { mobile: 'host-update' as const } : viewer ? { mobile: 'viewer' as const } : {}),
+    },
+    pending: flow.pending,
+    error: flow.error,
+    set(scope, value) {
+      if (scope === 'device') flow.setDevice(value)
+      else if (scope === 'mobile') void flow.setMobile(value)
+      else if (value && !disabled) save(value)
+    },
   }
-  const clear = () => {
-    if (scope === 'device') flow.setDevice(null)
-    else if (scope === 'mobile') void flow.setMobile(null)
-  }
-  const inherited = scope === 'all' ? null : flow.inherited(scope)
-  const shownScope = (s: PreferenceScope) => tr(scopeLabel(s, kind))
-  const source = flow.effective.source === 'all' || flow.effective.source === 'default' ? 'all' : flow.effective.source
   return (
-    <View>
-      <Row style={{ paddingVertical: space.m }}>
-        <RowLabel title={tr(title)} help={help ? tr(help) : undefined} />
-      </Row>
-      <View style={{ paddingHorizontal: space.l, gap: space.s, paddingBottom: space.s }}>
-        <T size={12} tone="muted">
-          {tr('Apply to')}
-        </T>
-        <Segmented<PreferenceScope>
-          value={scope}
-          onChange={setScope}
-          options={[
-            { key: 'all', label: shownScope('all') },
-            { key: 'mobile', label: shownScope('mobile') },
-            { key: 'device', label: shownScope('device') },
-          ]}
-        />
-        <Segmented<ModelFlow>
-          value={
-            scope === 'all'
-              ? flow.host
-              : hasOverride
-                ? flow.effective.value
-                : (inherited?.value ?? flow.effective.value)
-          }
-          onChange={(value) => {
-            if (!disabled && !scoped) choose(value)
-          }}
-          options={options.map((o) => ({ key: o.value as ModelFlow, label: label(o.value) }))}
-        />
-      </View>
-      <Hint>
-        {`${tr(sourceLabel(source, kind))}: ${label(flow.effective.value)}. ${tr('Devices with their own setting keep it.')}`}
-      </Hint>
-      {scoped ? (
-        <Hint>{tr('This computer needs an update before it can share a setting with all mobile devices.')}</Hint>
-      ) : null}
-      {scope !== 'all' && hasOverride && inherited ? (
-        <Row accessibilityRole="button" onPress={clear} style={{ paddingVertical: space.s }}>
-          <T tone="accent">{`${tr('Use inherited setting')} (${label(inherited.value)})`}</T>
-        </Row>
-      ) : null}
-      {flow.pending ? <Hint>{tr('Saving…')}</Hint> : null}
-      {flow.error ? <Hint>{`${tr('Could not save')}: ${flow.error}`}</Hint> : null}
-    </View>
+    <ScopedChoiceRow<ModelFlow>
+      title={title}
+      help={help ? tr(help) : undefined}
+      options={options.map((o) => ({ key: o.value as ModelFlow, label: tr(o.label) }))}
+      control={control}
+    />
   )
 }

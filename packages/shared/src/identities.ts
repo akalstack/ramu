@@ -304,6 +304,8 @@ export interface IdentitySnapshot {
   accounts: IdentityAccountOption[]
   /** Projects whose remote owner no rule catches yet: "Projects from github.com/acme use Work?" */
   suggestions?: { projectId: string; rule: IdentityRule }[]
+  /** The host's global Git `user.name` and `user.email`, offered as the first identity's author. */
+  gitUser: { name: string | null; email: string | null }
 }
 
 /** Identities show up once a second account of any kind exists, or once there are identities already. */

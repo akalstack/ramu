@@ -49,8 +49,13 @@ it('invalidates loads when access/readiness changes without allowing stale viewe
   const stale = { ...viewer, stale: true }
   const staleRoute = useScopedInvoke(stale)
   expect(staleRoute).not.toBe(route)
-  await expect(staleRoute('settings.app.snapshot')).rejects.toThrow('connected host')
+  // A read made while the settings reload waits for them instead of failing, then goes to the same host.
+  const read = staleRoute('settings.app.snapshot')
+  await new Promise((resume) => setTimeout(resume, 20))
   expect(state.invoke).not.toHaveBeenCalled()
+  useScopedInvoke({ ...viewer, stale: false } as SettingsScope)
+  await read
+  expect(state.invoke).toHaveBeenCalledWith('computers.settings.invoke', 'a', 'settings.app.snapshot', [])
 })
 it('reads ability checks across all hosts from the primary host, but still asks for one host before an action', async () => {
   const all = {

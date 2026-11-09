@@ -4,7 +4,9 @@
 import { Fragment, useState, type ReactNode } from 'react'
 import type { Project } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
-import { Dropdown } from '../Menu'
+import { Menu } from '../Menu'
+import { Rows3, X } from 'lucide-react'
+import { cn } from 'cn'
 import { t } from '../i18n'
 import { IdentityDot } from '../settings/IdentityChip'
 import { useIdentities } from '../workspace/identities'
@@ -39,20 +41,74 @@ export function useIdentityView(hostId: string) {
       ? 'all'
       : view
     : 'all'
+  const only = identities?.find((identity) => `only:${identity.id}` === active)
+  const viewName = only
+    ? t('Only {name}', { name: only.name })
+    : active === 'group'
+      ? t('Grouped by identity')
+      : t('All identities')
+  // A compact trigger that shows the state itself: the identities' colors when all show, and the one identity's name
+  // when narrowed, so a filtered list never looks like missing projects.
   const picker = identities ? (
-    <Dropdown
-      label={t('Show projects')}
-      value={active}
-      options={[
-        { value: 'all', label: t('All projects') },
-        { value: 'group', label: t('Group by identity') },
+    <Menu
+      label={`${t('Show projects')} · ${viewName}`}
+      align="end"
+      className={cn(
+        'h-6 min-h-6 flex-none gap-1 rounded-(--radius-s) border-0 px-1 text-caption shadow-none hover:bg-hover! hover:text-foreground aria-expanded:bg-hover!',
+        only ? 'bg-fill! px-1.5 text-foreground' : 'bg-transparent! text-muted-foreground',
+      )}
+      icon={
+        only ? (
+          <>
+            <IdentityDot color={only.color} />
+            <span className="max-w-[7rem] truncate">{only.name}</span>
+            <X
+              size={11}
+              aria-hidden
+              className="opacity-60"
+              onClick={(event) => {
+                event.stopPropagation()
+                choose('all')
+              }}
+            />
+          </>
+        ) : (
+          <>
+            <span className="flex -space-x-0.5" aria-hidden>
+              {identities.slice(0, 4).map((identity) => (
+                <IdentityDot
+                  key={identity.id}
+                  color={identity.color}
+                  className="ring-1 ring-(--sidebar-bg,var(--bg))"
+                />
+              ))}
+            </span>
+            {active === 'group' && <Rows3 size={12} aria-hidden />}
+          </>
+        )
+      }
+      items={[
+        { key: 'show', heading: t('Show') },
+        { key: 'all', label: t('All identities'), selected: active === 'all', onSelect: () => choose('all') },
         ...identities.map((identity) => ({
-          value: `only:${identity.id}`,
-          label: t('Show only {name}', { name: identity.name }),
+          key: `only:${identity.id}`,
+          label: (
+            <span className="inline-flex items-center gap-2">
+              <IdentityDot color={identity.color} />
+              {t('Only {name}', { name: identity.name })}
+            </span>
+          ),
+          selected: active === `only:${identity.id}`,
+          onSelect: () => choose(`only:${identity.id}`),
         })),
+        { key: 'sep', separator: true as const },
+        {
+          key: 'group',
+          label: t('Group by identity'),
+          selected: active === 'group',
+          onSelect: () => choose(active === 'group' ? 'all' : 'group'),
+        },
       ]}
-      onChange={(value) => choose(value as View)}
-      className="max-w-[9rem]"
     />
   ) : null
 
@@ -65,15 +121,16 @@ export function useIdentityView(hostId: string) {
         const caught = projects.filter((project) => of(project) === identity.id)
         return caught.length ? (
           <Fragment key={identity.id}>
-            <p className="m-0 flex items-center gap-1.5 px-2 pt-2 pb-0.5 text-caption text-muted-foreground">
+            <p className="m-0 flex items-center gap-1.5 px-2 pt-3 pb-1 text-caption font-medium text-muted-foreground first:pt-1">
               <IdentityDot color={identity.color} />
               {identity.name}
+              <span className="font-normal tabular-nums opacity-70">{caught.length}</span>
             </p>
             {caught.map(render)}
           </Fragment>
         ) : null
       })
-    const only = identities.find((identity) => `only:${identity.id}` === active)!
+    if (!only) return projects.map(render)
     const shown = projects.filter((project) => of(project) === only.id)
     return (
       <>

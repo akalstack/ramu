@@ -36,7 +36,7 @@ export function SectionHead({
           className={`flex-none transition-transform ${open ? '' : '-rotate-90'}`}
         />
       </SidebarDisclosureButton>
-      {children}
+      {children && <span className="ml-auto flex flex-none items-center gap-0.5">{children}</span>}
     </div>
   )
 }

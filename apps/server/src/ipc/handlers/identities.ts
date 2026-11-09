@@ -109,6 +109,7 @@ export const registerIdentityHandlers: RegisterHandlers = (ctx) => {
         const rule = service().suggestion(entry.projectId)
         return rule ? [{ projectId: entry.projectId, rule }] : []
       }),
+    gitUser: service().gitUser(),
   })
   return {
     'identities.get': { args: z.tuple([]), run: snapshot },

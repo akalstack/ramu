@@ -683,6 +683,14 @@ export interface PluginListing {
   installed: boolean
 }
 
+/** Whether a listing matches what the person typed: every word appears in its name, description, keywords or stacks. */
+export function listingMatches(listing: PluginListing, query: string): boolean {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
+  if (!words.length) return true
+  const haystack = [listing.name, listing.description, ...listing.keywords, ...listing.stacks].join(' ').toLowerCase()
+  return words.every((word) => haystack.includes(word))
+}
+
 export interface PluginIndexInfo {
   url: string
   name: string

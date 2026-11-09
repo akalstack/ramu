@@ -7,6 +7,7 @@ import {
   type PluginListing,
   type PluginReview,
   type PluginScope,
+  listingMatches,
 } from '@ramu/shared/plugins'
 import { ABILITY_LABELS } from '@ramu/shared/providers/abilities'
 import type { Project } from '@ramu/shared/types'
@@ -14,6 +15,8 @@ import { Button } from '@/components/desktop-button'
 import { Checkbox } from '@/components/desktop-checkbox'
 import { Input } from '@/components/desktop-input'
 import { InlineAction } from '@/components/inline-action'
+import { ContentSkeleton } from '@/components/content-skeleton'
+import { ExpandRow } from '@/components/expand-row'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, Dropdown } from '../Menu'
 import { useViewOnly } from '../composer/useViewOnly'
@@ -376,12 +379,14 @@ export function PluginSettings() {
   const invoke = useSettingsInvoke()
   const on = useSettingsEvents()
   const viewOnly = useViewOnly()
-  const [plugins, setPlugins] = useState<InstalledPlugin[]>([])
+  const [plugins, setPlugins] = useState<InstalledPlugin[] | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [indexes, setIndexes] = useState<PluginIndexInfo[]>([])
   const [listings, setListings] = useState<PluginListing[] | null>(null)
+  const [listingError, setListingError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [link] = useState(takePendingPluginSource)
+  const [more, setMore] = useState(() => !!link && !link.index)
   const [source, setSource] = useState(link && !link.index ? link.source : '')
   const [newIndex, setNewIndex] = useState('')
   const [review, setReview] = useState<PluginReview | null>(null)
@@ -395,9 +400,23 @@ export function PluginSettings() {
   }, [invoke])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Installed plugins and every listing load when the page opens; typing filters the listings here, without a request.
   const reload = useCallback(() => {
-    void invoke('plugins.list').then(setPlugins, (cause) => setError(errorText(cause)))
+    void invoke('plugins.list').then(
+      (next) => {
+        setPlugins(next)
+        setError(null)
+      },
+      (cause) => setError(errorText(cause)),
+    )
     void invoke('plugins.indexes').then(setIndexes, () => {})
+    void invoke('plugins.browse').then(
+      (next) => {
+        setListings(next)
+        setListingError(null)
+      },
+      (cause) => setListingError(errorText(cause)),
+    )
   }, [invoke])
   useEffect(() => {
     reload()
@@ -420,8 +439,6 @@ export function PluginSettings() {
       setBusy(false)
     }
   }
-  const browse = (words: string) =>
-    act(async () => setListings(await invoke('plugins.browse', words.trim() || undefined)))
   // A link from getramu.dev opens the review straight away.
   useEffect(() => {
     if (link)
@@ -430,33 +447,39 @@ export function PluginSettings() {
       )
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the link the page opened with
   }, [link])
+  const installed = plugins ?? []
+  const shown = (listings ?? []).filter((listing) => listingMatches(listing, query))
+  const indexProblems = indexes.filter((index) => index.error)
   return (
     <section className="flex flex-col gap-2" aria-label={t('Plugins')}>
-      <SettingsSectionHead
-        title={t('Plugins')}
-        help={t(
-          'One install adds a service’s skills, MCP servers, credential and safe commands for every provider. Plugins in the Claude Code and Codex layout work here too.',
-        )}
-        action={
+      <div className="mb-1 flex items-start justify-between gap-4">
+        <p className="m-0 max-w-[560px] text-caption text-muted-foreground">
+          {t(
+            'One install adds a service’s skills, MCP servers, credential and safe commands for every provider. Plugins in the Claude Code and Codex layout work here too.',
+          )}
+        </p>
+        {installed.some((plugin) => plugin.source.kind === 'git') && (
           <Button
             size="sm"
-            variant="ghost"
-            disabled={viewOnly || busy || !plugins.some((plugin) => plugin.source.kind === 'git')}
+            variant="secondary"
+            disabled={viewOnly || busy}
             onClick={() => void act(async () => setPlugins(await invoke('plugins.checkUpdates')))}
           >
             <RefreshCw size={13} />
             {t('Check for updates')}
           </Button>
-        }
-      />
+        )}
+      </div>
       {error && !review && <Problem>{error}</Problem>}
+      <SettingsSectionHead title={plugins ? t('Installed · {count}', { count: installed.length }) : t('Installed')} />
       <SettingsCardList>
-        {!plugins.length && (
+        {!plugins && !error && <ContentSkeleton />}
+        {plugins && !installed.length && (
           <SettingsEmpty>
-            {t('No plugins yet. Browse the index below, or install one from a Git address or a folder.')}
+            {t('Nothing installed yet. Pick a plugin below; each one shows what it adds first.')}
           </SettingsEmpty>
         )}
-        {plugins.map((plugin) => {
+        {installed.map((plugin) => {
           const missing = plugin.credentials.filter((slot) => slot.state !== 'saved')
           return (
             <SettingsCard
@@ -548,42 +571,51 @@ export function PluginSettings() {
       </SettingsCardList>
 
       <SettingsSectionHead
-        title={t('Browse')}
-        help={t('Plugins listed in the indexes below. Each one shows what it adds before anything is installed.')}
+        title={listings ? t('Available · {count}', { count: listings.length }) : t('Available')}
+        help={t('From the indexes Ramu reads. Each one shows what it adds before anything is installed.')}
       />
-      <form
-        className="flex items-center gap-2"
-        onSubmit={(event) => {
-          event.preventDefault()
-          void browse(query)
-        }}
-      >
+      <div className="relative">
+        <Search
+          size={13}
+          aria-hidden
+          className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground"
+        />
         <Input
           aria-label={t('Search plugins')}
-          placeholder={t('Search plugins, such as render or analytics')}
+          className="w-full pl-8"
+          placeholder={t('Filter by name or what it is for, such as render or analytics')}
           value={query}
           maxLength={200}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <Button type="submit" size="sm" variant="secondary" disabled={busy}>
-          <Search size={13} />
-          {t('Search')}
-        </Button>
-      </form>
-      {listings && !listings.length && <SettingsEmpty>{t('No listed plugin matches.')}</SettingsEmpty>}
-      {listings && listings.length > 0 && (
+      </div>
+      {listingError && <Problem>{listingError}</Problem>}
+      {indexProblems.map((index) => (
+        <Problem key={index.url}>
+          {t('{name} could not be read: {error}', { name: index.name, error: index.error! })}
+        </Problem>
+      ))}
+      {!listings && !listingError && <ContentSkeleton />}
+      {listings && !shown.length && (
+        <SettingsEmpty>
+          {query.trim()
+            ? t('No listed plugin matches “{query}”.', { query: query.trim() })
+            : t('The indexes list no plugins yet.')}
+        </SettingsEmpty>
+      )}
+      {shown.length > 0 && (
         <SettingsCardList>
-          {listings.map((listing) => (
+          {shown.map((listing) => (
             <SettingsCard
               key={`${listing.index}:${listing.name}`}
               title={listing.name}
               badges={
                 <>
                   {listing.byRamu && <Badge variant="secondary">{t('By Ramu')}</Badge>}
-                  <Badge variant="outline">{listing.signed ? t('Signed') : t('Unsigned')}</Badge>
+                  {!listing.signed && <Badge variant="outline">{t('Unsigned')}</Badge>}
                 </>
               }
-              meta={[listing.description, listing.indexName].filter(Boolean).join(' · ')}
+              meta={[listing.description, indexes.length > 1 ? listing.indexName : ''].filter(Boolean).join(' · ')}
               actions={
                 listing.installed ? (
                   <Badge variant="outline">{t('Installed')}</Badge>
@@ -608,80 +640,96 @@ export function PluginSettings() {
         </SettingsCardList>
       )}
 
-      <SettingsSectionHead
-        title={t('Install from a source')}
-        help={t('A Git address (GitHub, GitLab, or anywhere git can clone) or a folder on this computer.')}
-      />
-      <form
-        className="flex items-center gap-2"
-        onSubmit={(event) => {
-          event.preventDefault()
-          void act(async () => setReview(await invoke('plugins.stage', { source: source.trim() })))
-        }}
-      >
-        <Input
-          aria-label={t('Plugin source')}
-          placeholder="https://github.com/acme/render-plugin"
-          value={source}
-          maxLength={1000}
-          disabled={viewOnly}
-          onChange={(event) => setSource(event.target.value)}
-        />
-        <Button type="submit" size="sm" variant="secondary" disabled={viewOnly || busy || !source.trim()}>
-          {busy ? t('Reading…') : t('Review')}
-        </Button>
-      </form>
-
-      <SettingsSectionHead
-        title={t('Indexes')}
-        help={t('Marketplaces Browse lists. Claude Code marketplaces work too.')}
-      />
-      <SettingsCardList>
-        {indexes.map((index) => (
-          <SettingsCard
-            key={index.url}
-            title={index.name}
-            meta={[index.url, index.error ?? (index.checkedAt ? t('{count} plugins', { count: index.count }) : '')]
-              .filter(Boolean)
-              .join(' · ')}
-            actions={
-              !index.builtIn && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  aria-label={t('Remove {name}', { name: index.name })}
-                  disabled={viewOnly || busy}
-                  onClick={() => void act(async () => setIndexes(await invoke('plugins.removeIndex', index.url)))}
-                >
-                  <Trash2 size={13} />
-                </Button>
-              )
-            }
+      <ExpandRow expanded={more} onToggle={() => setMore((value) => !value)} className="mt-3 rounded-(--radius-s) px-1">
+        {t('Install from a Git address or folder, or add an index')}
+      </ExpandRow>
+      {more && (
+        <div className="flex flex-col gap-2">
+          <SettingsSectionHead
+            title={t('Install from a source')}
+            help={t('A Git address (GitHub, GitLab, or anywhere git can clone) or a folder on this computer.')}
           />
-        ))}
-      </SettingsCardList>
-      <form
-        className="flex items-center gap-2"
-        onSubmit={(event) => {
-          event.preventDefault()
-          void act(async () => {
-            setIndexes(await invoke('plugins.addIndex', newIndex.trim()))
-            setNewIndex('')
-          })
-        }}
-      >
-        <Input
-          aria-label={t('Index address')}
-          placeholder="https://github.com/acme/plugins"
-          value={newIndex}
-          maxLength={1000}
-          disabled={viewOnly}
-          onChange={(event) => setNewIndex(event.target.value)}
-        />
-        <Button type="submit" size="sm" variant="secondary" disabled={viewOnly || busy || !newIndex.trim()}>
-          {t('Add index')}
-        </Button>
-      </form>
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void act(async () => setReview(await invoke('plugins.stage', { source: source.trim() })))
+            }}
+          >
+            <Input
+              aria-label={t('Plugin source')}
+              className="min-w-0 flex-1"
+              placeholder="https://github.com/acme/render-plugin"
+              value={source}
+              maxLength={1000}
+              disabled={viewOnly}
+              onChange={(event) => setSource(event.target.value)}
+            />
+            <Button type="submit" size="sm" variant="secondary" disabled={viewOnly || busy || !source.trim()}>
+              {busy ? t('Reading…') : t('Review')}
+            </Button>
+          </form>
+
+          <SettingsSectionHead
+            title={t('Indexes')}
+            help={t('Marketplaces Available lists. Claude Code marketplaces work too.')}
+          />
+          <SettingsCardList>
+            {indexes.map((index) => (
+              <SettingsCard
+                key={index.url}
+                title={index.name}
+                badges={index.builtIn ? <Badge variant="secondary">{t('Built in')}</Badge> : undefined}
+                meta={[index.url, index.error ?? (index.checkedAt ? t('{count} plugins', { count: index.count }) : '')]
+                  .filter(Boolean)
+                  .join(' · ')}
+                actions={
+                  !index.builtIn && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-label={t('Remove {name}', { name: index.name })}
+                      disabled={viewOnly || busy}
+                      onClick={() =>
+                        void act(async () => {
+                          setIndexes(await invoke('plugins.removeIndex', index.url))
+                          reload()
+                        })
+                      }
+                    >
+                      <Trash2 size={13} />
+                    </Button>
+                  )
+                }
+              />
+            ))}
+          </SettingsCardList>
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void act(async () => {
+                setIndexes(await invoke('plugins.addIndex', newIndex.trim()))
+                setNewIndex('')
+                reload()
+              })
+            }}
+          >
+            <Input
+              aria-label={t('Index address')}
+              className="min-w-0 flex-1"
+              placeholder="https://github.com/acme/plugins"
+              value={newIndex}
+              maxLength={1000}
+              disabled={viewOnly}
+              onChange={(event) => setNewIndex(event.target.value)}
+            />
+            <Button type="submit" size="sm" variant="secondary" disabled={viewOnly || busy || !newIndex.trim()}>
+              {t('Add index')}
+            </Button>
+          </form>
+        </div>
+      )}
 
       {review && (
         <Review

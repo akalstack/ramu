@@ -49,7 +49,7 @@ import { ThreadPreviewList, useThreadPreview } from './ThreadPreviewList'
 import { useSlideMount } from './useSlideMount'
 import { useHost } from '../../workspace/HostProvider'
 import { refreshIdentities, useIdentities, useProjectIdentity } from '../../workspace/identities'
-import { IdentityChip } from '../../settings/IdentityChip'
+import { identityReason, identityTextColor } from '../../settings/IdentityChip'
 import { draftKey, draftStore, saveDraft } from '../../composer/drafts'
 
 export function ProjectGroup({ project, previewLimit }: { project: Project; previewLimit?: number }) {
@@ -382,11 +382,26 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
             }}
             onMouseDown={() => setHover(false)}
           >
-            {open ? (
-              <FolderOpen size={15} className="muted text-muted-foreground" />
-            ) : (
-              <FolderClosed size={15} className="muted text-muted-foreground" />
-            )}
+            {/* With several identities the folder takes the project's identity color: the list reads at a glance
+                without a name on every row, and the tooltip says which identity and why. */}
+            <span
+              className="inline-flex flex-none"
+              title={identity ? `${identityReason(identity)} · ${identity.email}` : undefined}
+            >
+              {open ? (
+                <FolderOpen
+                  size={15}
+                  className={identity ? identityTextColor(identity.color) : 'muted text-muted-foreground'}
+                  aria-label={identity ? identity.name : undefined}
+                />
+              ) : (
+                <FolderClosed
+                  size={15}
+                  className={identity ? identityTextColor(identity.color) : 'muted text-muted-foreground'}
+                  aria-label={identity ? identity.name : undefined}
+                />
+              )}
+            </span>
             {renaming ? (
               <InlineEdit
                 readOnly={viewOnly}
@@ -403,7 +418,6 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
                 text={project.name}
               />
             )}
-            {identity && !renaming && <IdentityChip identity={identity} />}
             <span className={ROW_ACTIONS_CLASS}>
               <Button
                 variant="ghost"

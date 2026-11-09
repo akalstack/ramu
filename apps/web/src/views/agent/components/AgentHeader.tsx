@@ -2,9 +2,6 @@ import { rankHosts } from '@ramu/shared/continuation'
 import { useComputers } from '../../../workspace/computers'
 import { useHostOverviews } from '../../../workspace/hostOverview'
 import { useHost } from '../../../workspace/HostProvider'
-import { useProjectIdentity } from '../../../workspace/identities'
-import { useWorkspace } from '../../../workspace/workspace'
-import { IdentityChip } from '../../../settings/IdentityChip'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
 import {
@@ -82,8 +79,6 @@ export function AgentHeader({
 }) {
   useLanguage()
   const host = useHost()
-  const ws = useWorkspace()
-  const identity = useProjectIdentity(host.id, ws.tasks.find((task) => task.id === taskId)?.projectId)
   const computers = useComputers()
   const connected = (computers?.computers ?? []).filter(
     (computer) => computer.id !== host.id && computer.status === 'connected',
@@ -130,7 +125,6 @@ export function AgentHeader({
       {taskId && !readOnly && <CommitPushButton taskId={taskId} />}
       <SessionCheckpointButton sessionId={sessionId} />
       <ThreadOriginChip taskId={taskId} />
-      {identity && <IdentityChip identity={identity} className="small" />}
       {state && STATE_LABEL[state] && (
         <span
           className={`state [&.running]:text-brand [&.starting]:text-brand [&.needs-input]:text-warn [&.failed]:text-bad [&::before]:[content:''] [&::before]:w-1.5 [&::before]:h-1.5 [&::before]:rounded-full [&::before]:[background:var(--muted)] [&.idle::before]:[background:var(--ok)] [&.running::before]:[background:var(--accent)] [&.running::before]:[animation:pulse_1.6s_ease-in-out_infinite] [&.starting::before]:[background:var(--accent)] [&.starting::before]:[animation:pulse_1.6s_ease-in-out_infinite] [&.needs-input::before]:[background:var(--warn)] [&.failed::before]:[background:var(--bad)] [&:empty]:hidden tabular-nums text-muted-foreground whitespace-nowrap inline-flex items-center gap-1.5 p-[2px_9px_2px_8px] rounded-full bg-hover text-caption ${state}`}

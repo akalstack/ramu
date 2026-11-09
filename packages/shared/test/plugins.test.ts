@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  listingMatches,
   checkQuery,
   fillBody,
   marketplaceFile,
@@ -246,5 +247,27 @@ describe('data sources', () => {
       queries: [{ expr: 'up', n: 6 }],
       from: 'now-6h',
     })
+  })
+})
+
+describe('listingMatches', () => {
+  const listing = {
+    index: 'https://example.com/index',
+    indexName: 'Example',
+    name: 'render',
+    description: 'Deploy web services',
+    source: 'https://example.com/render',
+    commit: null,
+    byRamu: false,
+    signed: true,
+    stacks: ['node'],
+    keywords: ['hosting'],
+    installed: false,
+  }
+  it('matches every typed word anywhere in what the listing says about itself', () => {
+    expect(listingMatches(listing, '')).toBe(true)
+    expect(listingMatches(listing, 'Render hosting')).toBe(true)
+    expect(listingMatches(listing, 'node deploy')).toBe(true)
+    expect(listingMatches(listing, 'render python')).toBe(false)
   })
 })
