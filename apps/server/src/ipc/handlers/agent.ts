@@ -243,6 +243,14 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, id]),
       run: (s: string, messageId: string) => agents.removeQueued(s, messageId),
     },
+    'agent.holdQueued': {
+      args: z.tuple([id, id, z.boolean()]),
+      run: (s: string, messageId: string, held: boolean) => agents.holdQueued(s, messageId, held),
+    },
+    'agent.editQueued': {
+      args: z.tuple([id, id, text]),
+      run: (s: string, messageId: string, t: string) => agents.editQueued(s, messageId, t),
+    },
     'agent.reorderQueued': {
       args: z.tuple([id, z.array(id).max(1000)]),
       run: (s: string, order: string[]) => lockSession(ctx, s, async () => agents.reorderQueued(s, order)),

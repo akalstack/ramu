@@ -243,6 +243,10 @@ interface Store extends State {
   /** This thread's own auto-resume choice at a limit; null clears it so the thread follows the host's default. */
   setAutoResume(id: string, autoResume: boolean | null): void
   removeQueued(id: string, message: string): void
+  /** Holds a waiting steer while the person edits it, or releases it unchanged. */
+  holdQueued(id: string, message: string, held: boolean): void
+  /** Sends the edited text as a new steer in place of the waiting one. */
+  editQueued(id: string, message: string, text: string): void
   /** Sends one queued message now, stopping a running turn first. */
   sendQueuedNow(id: string, message: string): void
   /** Steers one queued message into the running turn once its active tools finish, without stopping it. */
@@ -1987,6 +1991,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       sessionAction(id, (pc, session) => invoke(pc, 'agent.answerSecret', session, request, answer)),
     removeQueued: (id, message) =>
       sessionAction(id, (pc, session) => invoke(pc, 'agent.removeQueued', session, message)),
+    holdQueued: (id, message, held) =>
+      sessionAction(id, (pc, session) => invoke(pc, 'agent.holdQueued', session, message, held)),
+    editQueued: (id, message, text) =>
+      sessionAction(id, (pc, session) => invoke(pc, 'agent.editQueued', session, message, text)),
     sendQueuedNow: (id, message) =>
       sessionAction(id, (pc, session) => invoke(pc, 'agent.sendQueuedNow', session, message, true)),
     steerQueued: (id, message) =>

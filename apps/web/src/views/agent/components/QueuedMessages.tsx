@@ -106,7 +106,7 @@ function QueuedRowActions({
   )
 }
 
-/** A message the host has queued. Steering keeps the row until the active tools finish; an idle chat sends it straight away. */
+/** A message the host has queued for the next turn. Steers wait in the transcript instead. */
 function HostQueuedRow({
   message,
   sessionId,
@@ -138,15 +138,11 @@ function HostQueuedRow({
   const sendNow = () => void act(() => invoke('agent.sendQueuedNow', sessionId, message.id))
   // Waiting for tools to finish is the wrong call when the turn is heading the wrong way; this stops it instead.
   const interruptAndSend = () => void act(() => invoke('agent.sendQueuedNow', sessionId, message.id, true))
-  // Steering stays visible but disabled while it waits; the hover tip says why.
-  const steering = message.mode === 'steer'
-  const sendTip = steering
-    ? translate('Steering pending until active tools finish')
-    : !busyAgent
-      ? translate('Send now')
-      : supportsSteering
-        ? translate('Send after active tools finish')
-        : translate("This provider can't steer a running turn")
+  const sendTip = !busyAgent
+    ? translate('Send now')
+    : supportsSteering
+      ? translate('Send after active tools finish')
+      : translate("This provider can't steer a running turn")
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: message.id,
     disabled: configuring || reorderDisabled,
@@ -184,7 +180,7 @@ function HostQueuedRow({
           size="icon-xs"
           className={`${ICON_BUTTON_CLASS} queued-steer gap-[5px] text-soft disabled:pointer-events-none`}
           aria-label={busyAgent ? translate('Steer') : translate('Send now')}
-          disabled={configuring || steering || (busyAgent && !supportsSteering)}
+          disabled={configuring || (busyAgent && !supportsSteering)}
           onClick={sendNow}
         >
           {busyAgent ? <CornerDownRight size={14} /> : <Send size={14} />}

@@ -1873,6 +1873,36 @@ describe('busy agent messages', () => {
     await service.stopAndWait(second.id)
   })
 
+  it('keeps a message the person is editing until they save it, then sends the edited text', async () => {
+    const { service, session, send, complete } = setup()
+    await service.submit(session.id, 'use the old file', 'queue', [], undefined, true)
+    const [message] = service.queued(session.id)
+    service.holdQueued(session.id, message!.id, true)
+    complete()
+    await until(() => service.get(session.id).state === 'idle')
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(send).not.toHaveBeenCalled()
+    service.editQueued(session.id, message!.id, 'use the new file')
+    await until(() => send.mock.calls.length === 1)
+    expect(send.mock.calls[0]![0]).toContain('use the new file')
+    expect(service.queued(session.id)).toEqual([])
+  })
+
+  it('sends an edited message as the newest one, after messages queued before it', async () => {
+    const { service, session, send, complete } = setup()
+    await service.submit(session.id, 'first', 'queue', [], undefined, true)
+    await service.submit(session.id, 'second', 'queue', [], undefined, true)
+    const [first] = service.queued(session.id)
+    service.holdQueued(session.id, first!.id, true)
+    service.editQueued(session.id, first!.id, 'first, edited')
+    expect(service.queued(session.id).map((m) => m.text)).toEqual(['second', 'first, edited'])
+    expect(service.queued(session.id)[1]!.id).not.toBe(first!.id)
+    complete()
+    await until(() => send.mock.calls.length === 1)
+    expect(send.mock.calls[0]![0]).toContain('second')
+    service.stopAll()
+  })
+
   it('holds messages from other agents on a done thread until the person continues it', async () => {
     const { service, session, send, complete } = setup()
     complete()

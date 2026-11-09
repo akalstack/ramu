@@ -111,6 +111,7 @@ import { Button, Chip, ConnectionDot, IconButton, Segmented, Sheet, T, tap } fro
 import { BottomFade, Glass, TopFade, floatingChrome } from '../../../components/Glass'
 import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
 import { PendingBubble } from '../../../components/Outbox'
+import { SteeringBubble } from '../../../components/SteeringBubble'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { ContextMeter } from '../../../components/ContextMeter'
 import { Presence, PressGrow, SentArrive, useReducedMotion } from '../../../components/Motion'
@@ -123,7 +124,10 @@ const TURN_PAGE = 15
 const RowSeparator = () => <View style={{ height: space.m + 2 }} />
 
 /** A transcript row, or a message from this phone on its way to the host. */
-type ListRow = TranscriptItem | { kind: 'pending'; id: string; outbox: OutboxItem }
+type ListRow =
+  | TranscriptItem
+  | { kind: 'pending'; id: string; outbox: OutboxItem }
+  | { kind: 'steering'; id: string; message: QueuedMessage }
 
 /**
  * A choice that changes nothing the thread runs with, every field included: the login too, so switching accounts is
@@ -173,6 +177,7 @@ export default function ChatScreen() {
   // The host's row for a message sent from here keeps the key its sending row had (see listRows).
   const aliases = useRef(new Map<string, string>())
   const handedOver = useRef<OutboxItem[]>([])
+  const steeringShown = useRef<QueuedMessage[]>([])
   // The keys the list showed last render, so a row that replaces others can keep one of their keys.
   const shownKeys = useRef<string[]>([])
   const rowKey = (item: ListRow) => aliases.current.get(item.id) ?? item.id
@@ -680,6 +685,8 @@ export default function ChatScreen() {
     const key = rowKey(item)
     const fresh = !seen.current.has(key)
     seen.current.add(key)
+    if (item.kind === 'steering')
+      return <SteeringBubble chatId={chat!.id} message={item.message} readOnly={viewOnly || offline} />
     if (item.kind === 'pending')
       return (
         <SentArrive identity={key} start={fresh && item.outbox.createdAt >= openedAt.current}>
@@ -856,9 +863,26 @@ export default function ChatScreen() {
     const replaced = at > 0 || before === null ? shownKeys.current[at] : undefined
     if (replaced && !keysNow.has(replaced) && !replaced.startsWith('pending:')) aliases.current.set(row.id, replaced)
   })
-  const listRows: ListRow[] = pending.length
-    ? [...pageRows, ...pending.map((outbox) => ({ kind: 'pending' as const, id: `pending:${outbox.id}`, outbox }))]
-    : pageRows
+  // Steers wait after the latest tool call, as on the desktop. Once the turn takes one, its sent message keeps the
+  // steer's key, so the row stays put instead of being removed and measured again.
+  const steering = (chat.queue ?? []).filter((message) => message.mode === 'steer')
+  for (const sent of steeringShown.current)
+    if (!steering.some((message) => message.id === sent.id)) {
+      const shown = visibleText(sent.text)
+      const arrived = pageRows.findLast(
+        (row) => row.kind === 'user' && row.text === shown && !aliases.current.has(row.id),
+      )
+      if (arrived) aliases.current.set(arrived.id, `steering:${sent.id}`)
+    }
+  steeringShown.current = steering
+  const listRows: ListRow[] =
+    pending.length || steering.length
+      ? [
+          ...pageRows,
+          ...steering.map((message) => ({ kind: 'steering' as const, id: `steering:${message.id}`, message })),
+          ...pending.map((outbox) => ({ kind: 'pending' as const, id: `pending:${outbox.id}`, outbox })),
+        ]
+      : pageRows
   shownKeys.current = listRows.map(rowKey)
   const editPending = (text: string) => setRestore((r) => ({ text, n: (r?.n ?? 0) + 1 }))
   // Editing a queued message takes it out of the queue first, so it is not sent while being changed.
@@ -1504,7 +1528,7 @@ export default function ChatScreen() {
                 renderItem={renderRow}
                 // Each kind keeps its own measured size, so unmeasured rows above and below are estimated closely.
                 // A message on its way is measured as the sent message it becomes.
-                getItemType={(item) => (item.kind === 'pending' ? 'user' : item.kind)}
+                getItemType={(item) => (item.kind === 'pending' || item.kind === 'steering' ? 'user' : item.kind)}
                 estimatedItemSize={260}
                 drawDistance={400}
                 // Lays out the newest rows first instead of the whole page from the top.
@@ -1815,7 +1839,7 @@ export default function ChatScreen() {
                       draftKey={`${chat.computerId}:chat:${chat.taskId || chat.id}`}
                       onStop={() => store.stop(chat.id)}
                       goal={chat.goal}
-                      queue={chat.queue}
+                      queue={chat.queue?.filter((message) => message.mode !== 'steer')}
                       queuePaused={chat.queuePaused}
                       onResumeQueue={
                         chat.sessionId

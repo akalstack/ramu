@@ -15,6 +15,11 @@ import type { AgentService } from '../agent'
 /** How long Send now waits for a stopped turn to end before giving up. */
 const STOP_WAIT_MS = 15_000
 
+function withHold(message: QueuedMessage, held: boolean): QueuedMessage {
+  const { held: _wasHeld, ...rest } = message
+  return held ? { ...rest, held: true } : rest
+}
+
 /** What MessageDispatcher needs from the rest of the service. */
 export interface MessageDispatcherHost
   extends
@@ -76,6 +81,42 @@ export class MessageDispatcher {
     )
   }
 
+  /** A held message waits while the person edits it; releasing it sends it at its usual moment. */
+  holdQueued(id: string, messageId: string, held: boolean): void {
+    this.host.get(id)
+    if (this.sendingMessages.has(messageId)) throw new Error('This message is already being sent.')
+    const messages = this.host.queued(id)
+    if (!messages.some((message) => message.id === messageId))
+      throw new Error('That message has already been sent or removed.')
+    this.updateQueue(
+      id,
+      messages.map((message) => (message.id === messageId ? withHold(message, held) : message)),
+    )
+    if (!held) this.release(id)
+  }
+
+  /** Saving an edit cancels the message and sends the new text in its place, as the newest message. */
+  editQueued(id: string, messageId: string, text: string): void {
+    this.host.get(id)
+    if (!text.trim()) throw new Error('Enter a message, or remove it instead.')
+    if (this.sendingMessages.has(messageId)) throw new Error('This message is already being sent.')
+    const messages = this.host.queued(id)
+    const message = messages.find((entry) => entry.id === messageId)
+    if (!message) throw new Error('That message has already been sent or removed.')
+    this.updateQueue(id, [
+      ...messages.filter((entry) => entry !== message),
+      { ...withHold(message, false), id: randomUUID(), text },
+    ])
+    this.release(id)
+  }
+
+  private release(id: string): void {
+    void this.dispatchSteering(id)
+    queueMicrotask(() => {
+      void this.dispatchQueued(id)
+    })
+  }
+
   /** Puts the queue in the given order. Messages missing from `order` keep their place at the end; unknown ids are ignored. */
   reorderQueued(id: string, order: string[]): void {
     this.host.get(id)
@@ -117,7 +158,9 @@ export class MessageDispatcher {
         )
       this.updateQueue(
         id,
-        this.host.queued(id).map((entry) => (entry.id === messageId ? { ...entry, mode: 'steer' } : entry)),
+        this.host
+          .queued(id)
+          .map((entry) => (entry.id === messageId ? { ...withHold(entry, false), mode: 'steer' } : entry)),
         false,
       )
       return this.dispatchSteering(id)
@@ -326,7 +369,7 @@ export class MessageDispatcher {
         !this.host.queuePaused(id) &&
         !this.host.activeTools.get(id)?.size
       ) {
-        const batch = this.host.queued(id).filter((message) => message.mode === 'steer')
+        const batch = this.host.queued(id).filter((message) => message.mode === 'steer' && !message.held)
         if (!batch.length) break
         const codex = this.host.runners.get(id)
         const live = this.host.live.get(id)
@@ -384,7 +427,8 @@ export class MessageDispatcher {
       return
     const messages = this.host.queued(id),
       first = messages[0]
-    if (!first || this.sendingMessages.has(first.id)) return
+    // Order holds: a message the person is editing keeps everything after it waiting too.
+    if (!first || first.held || this.sendingMessages.has(first.id)) return
     if (this.workspaceBusy(this.host.get(id).covers, id)) {
       this.workspaceQueue.add(id)
       return

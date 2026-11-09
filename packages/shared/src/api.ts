@@ -1765,6 +1765,10 @@ export interface RamuMethods extends ArtifactMethods {
    */
   'agent.retryLimitNow'(sessionId: string): LimitRetryResult
   /**
+  /** Holds a queued message while the person edits it, or releases it unchanged. */
+  'agent.holdQueued'(sessionId: string, messageId: string, held: boolean): void
+  /** Replaces a queued message's text and releases its hold, so it goes out at its usual moment. */
+  'agent.editQueued'(sessionId: string, messageId: string, text: string): void
    * Sets this thread's own auto-resume choice (true or false), or clears it with null to follow the global
    * `fallback.autoResume`. Takes effect at once: it clears or re-arms the thread's limit timer. Does not touch the provider.
    */

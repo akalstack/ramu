@@ -41,13 +41,8 @@ it('matches attachment-only messages by their exact attachment identities', () =
     ),
   ).toBe(true)
 })
-it('keeps a just-sent steer out of the queue until it has waited past the grace period', () => {
+it('keeps steers in the transcript and only queued messages in the tray', () => {
   const steer: QueuedMessage = { id: 's', text: 'Use the other file', mode: 'steer' }
   const later: QueuedMessage = { id: 'q', text: 'Then run tests', mode: 'queue' }
-  const seenAt = new Map([
-    ['s', 1000],
-    ['q', 1000],
-  ])
-  expect(splitSteering([steer, later], seenAt, 1500, 1000)).toEqual({ tray: [later], steering: [steer] })
-  expect(splitSteering([steer, later], seenAt, 2000, 1000)).toEqual({ tray: [steer, later], steering: [] })
+  expect(splitSteering([steer, later])).toEqual({ tray: [later], steering: [steer] })
 })

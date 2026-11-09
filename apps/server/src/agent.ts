@@ -758,6 +758,14 @@ export class AgentService {
   }
 
   sendQueuedNow(...args: Parameters<MessageDispatcher['sendQueuedNow']>) {
+  holdQueued(...args: Parameters<MessageDispatcher['holdQueued']>) {
+    return this.parts.dispatcher.holdQueued(...args)
+  }
+
+  editQueued(...args: Parameters<MessageDispatcher['editQueued']>) {
+    return this.parts.dispatcher.editQueued(...args)
+  }
+
     return this.parts.dispatcher.sendQueuedNow(...args)
   }
 

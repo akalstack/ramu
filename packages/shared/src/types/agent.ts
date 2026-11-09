@@ -284,6 +284,8 @@ export interface QueuedMessage {
   from?: MessageOrigin
   /** Background feedback must still belong to the checked-out branch when it is sent. */
   checkout?: { cwd: string; branch: string }
+  /** The person is editing it; it is not sent until they save or remove it. */
+  held?: boolean
 }
 
 /** When the event was recorded (ms). Absent on events stored before timestamps existed.
