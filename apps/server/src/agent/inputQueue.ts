@@ -2,7 +2,7 @@ import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentEvent, Attachment, MessageOrigin, QueuedMessage } from '@ramu/shared/types'
 import { attachmentPrompt, nativeBlocks } from '../attachments'
 
-/** Merges several pending messages into one request so the provider answers them together. */
+/** Merges messages steered into a running turn within the same moment into one request. */
 export function combineQueued(messages: QueuedMessage[]): {
   text: string
   attachments: Attachment[]

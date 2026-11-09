@@ -366,28 +366,25 @@ export class MessageDispatcher {
     const messages = this.host.queued(id),
       first = messages[0]
     if (!first || this.sendingMessages.has(first.id)) return
-    // Checkout-specific feedback and review follow-ups carry their own validation, and another thread's message keeps
-    // its sender, so each goes out on its own.
-    const alone = (entry: QueuedMessage) => !!(entry.reviewId || entry.checkout || entry.from)
-    const batch = alone(first) ? [first] : messages.filter((entry) => !alone(entry))
     if (this.workspaceBusy(this.host.get(id).covers, id)) {
       this.workspaceQueue.add(id)
       return
     }
     this.workspaceQueue.delete(id)
-    const sent = new Set(batch.map((entry) => entry.id))
-    this.updateQueue(
-      id,
-      messages.filter((entry) => !sent.has(entry.id)),
-    )
-    const combined = combineQueued(batch)
+    // Like Codex and Claude Code, each queued message gets its own turn; the rest wait for that turn to finish.
+    this.updateQueue(id, messages.slice(1))
     try {
       if (first.checkout) await this.validateCheckout(first)
-      await this.sendMessage(id, { ...combined, from: first.from })
+      await this.sendMessage(id, {
+        text: first.text,
+        attachments: first.attachments ?? [],
+        ...(first.reviewId ? { reviewId: first.reviewId } : {}),
+        from: first.from,
+      })
     } catch (error) {
       this.updateQueue(
         id,
-        [...batch, ...this.host.queued(id)],
+        [first, ...this.host.queued(id)],
         first.reviewId || first.checkout ? true : this.host.queuePaused(id),
       )
       this.host.record(id, { kind: 'error', message: `Queued message was not sent: ${String(error)}` })

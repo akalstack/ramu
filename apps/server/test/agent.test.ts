@@ -1535,8 +1535,8 @@ describe('Conversation provider settings and handoffs', () => {
         .events(s.id)
         .filter((e) => e.kind === 'user')
         .map((e) => (e.kind === 'user' ? e.text : ''))
-        .at(-1),
-    ).toBe('typed during the limit\n\nalso during the limit')
+        .slice(-2),
+    ).toEqual(['typed during the limit', 'also during the limit'])
     svc.stopAll()
   })
 
@@ -1900,14 +1900,20 @@ describe('busy agent messages', () => {
     service.stopAll()
   })
 
-  it('waits for completion and sends queued messages together in one turn, in order', async () => {
+  it('waits for completion and sends queued messages one turn at a time, in order', async () => {
     const { service, session, send, complete } = setup()
     await service.submit(session.id, 'first', 'queue')
     await service.submit(session.id, 'second', 'queue')
     expect(send).not.toHaveBeenCalled()
     complete()
     await until(() => send.mock.calls.length === 1)
-    expect(send).toHaveBeenNthCalledWith(1, 'first\n\nsecond', [])
+    expect(send).toHaveBeenNthCalledWith(1, 'first', [])
+    expect(service.queued(session.id).map((m) => m.text)).toEqual(['second'])
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(send).toHaveBeenCalledTimes(1)
+    complete()
+    await until(() => send.mock.calls.length === 2)
+    expect(send).toHaveBeenNthCalledWith(2, 'second', [])
     expect(service.queued(session.id)).toEqual([])
     service.stopAll()
   })
