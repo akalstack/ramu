@@ -72,10 +72,15 @@ export function AgentSetupSection({ sessionId }: { sessionId: string }) {
     }
   }, [refresh])
   return (
-    <section className="mt-4 flex flex-col gap-2" aria-label={t('Agent setup for this thread')}>
-      <h3 className="m-0 text-sm font-medium">{t('Agent setup')}</h3>
+    <section className="mt-2 flex flex-col gap-2" aria-label={t('Agent setup for this thread')}>
+      {/* Not an h3: the dialog styles those as its own title. */}
+      <h4 className="m-0 text-caption font-medium text-muted-foreground">{t('Agent setup')}</h4>
       {error && <p className="m-0 break-words text-bad">{error}</p>}
-      {!snapshot && !error && <p role="status">{t('Checking agent setup…')}</p>}
+      {!snapshot && !error && (
+        <p role="status" className="m-0 text-caption text-muted-foreground">
+          {t('Checking agent setup…')}
+        </p>
+      )}
       {snapshot && (
         <>
           <p className="m-0 text-caption text-muted-foreground">
@@ -87,44 +92,55 @@ export function AgentSetupSection({ sessionId }: { sessionId: string }) {
                 '2': snapshot.rulesLimit.toLocaleString(),
               })}`}
           </p>
-          {!snapshot.items.length && <p className="m-0">{t('Nothing from Agent setup applies to this thread.')}</p>}
-          <ul className="m-0 flex list-none flex-col gap-2 p-0">
-            {snapshot.items.map((item) => (
-              <li key={`${item.kind}:${item.name}`} className="flex flex-col gap-0.5">
-                <div className="flex items-center gap-2">
-                  <strong className="min-w-0 flex-1 break-words">{item.name}</strong>
-                  <span className="text-caption text-muted-foreground">{kindLabel(item.kind)}</span>
-                  <span>{stateLabel(item.state)}</span>
-                </div>
-                <span className="text-caption text-muted-foreground">{t(item.reason)}</span>
-                {item.requires?.map((need) => (
-                  <span key={need.tool} className="text-caption text-muted-foreground">
-                    {need.server} · {t(requirementLabels[need.status])}
-                  </span>
-                ))}
-                {item.duplicate && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="self-start"
-                    onClick={() => {
-                      const { connectionId, use } = item.duplicate!
-                      void invoke(
-                        'agent.chooseDuplicate',
-                        sessionId,
-                        connectionId,
-                        use === 'native' ? 'both' : 'native',
-                      )
-                        .then(refresh)
-                        .catch((reason: unknown) => setError(errorText(reason)))
-                    }}
-                  >
-                    {t(item.duplicate.use === 'native' ? 'Use both copies' : "Use the provider's copy only")}
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
+          {!snapshot.items.length && (
+            <p className="m-0 rounded-(--radius-m) border border-dashed border-(--line) px-3 py-4 text-center text-caption text-muted-foreground">
+              {t('Nothing from Agent setup applies to this thread.')}
+            </p>
+          )}
+          {snapshot.items.length > 0 && (
+            <ul className="m-0 flex list-none flex-col overflow-hidden rounded-(--radius-m) bg-fill p-0">
+              {snapshot.items.map((item) => (
+                <li
+                  key={`${item.kind}:${item.name}`}
+                  className="flex flex-col gap-0.5 px-3 py-2.5 [&+&]:border-t [&+&]:border-(--line)"
+                >
+                  <div className="flex items-center gap-2">
+                    <strong className="min-w-0 flex-1 truncate font-medium text-foreground">{item.name}</strong>
+                    <span className="rounded-full border border-(--line) px-2 py-px text-caption text-muted-foreground">
+                      {kindLabel(item.kind)}
+                    </span>
+                    <span className="text-caption text-foreground">{stateLabel(item.state)}</span>
+                  </div>
+                  <span className="text-caption text-muted-foreground">{t(item.reason)}</span>
+                  {item.requires?.map((need) => (
+                    <span key={need.tool} className="text-caption text-muted-foreground">
+                      {need.server} · {t(requirementLabels[need.status])}
+                    </span>
+                  ))}
+                  {item.duplicate && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="self-start"
+                      onClick={() => {
+                        const { connectionId, use } = item.duplicate!
+                        void invoke(
+                          'agent.chooseDuplicate',
+                          sessionId,
+                          connectionId,
+                          use === 'native' ? 'both' : 'native',
+                        )
+                          .then(refresh)
+                          .catch((reason: unknown) => setError(errorText(reason)))
+                      }}
+                    >
+                      {t(item.duplicate.use === 'native' ? 'Use both copies' : "Use the provider's copy only")}
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </>
       )}
     </section>

@@ -377,10 +377,13 @@ export function Dialog({
   error,
   onConfirm,
   onCancel,
+  cancellable = true,
 }: {
   title: string
   children?: ReactNode
   confirmLabel: string
+  /** False for a dialog that only informs: its one button closes it, so a Cancel beside it would mean the same. */
+  cancellable?: boolean
   extraActions?: ReactNode
   footerLeading?: ReactNode
   confirmDisabled?: boolean
@@ -416,9 +419,11 @@ export function Dialog({
         )}
         <div className="dialog-actions [&_button]:p-[5px_14px] flex flex-wrap items-center justify-end gap-2 mt-3.5">
           {footerLeading}
-          <Button variant="outline" className="whitespace-nowrap" onClick={onCancel} disabled={busy}>
-            {t('Cancel')}
-          </Button>
+          {cancellable && (
+            <Button variant="outline" className="whitespace-nowrap" onClick={onCancel} disabled={busy}>
+              {t('Cancel')}
+            </Button>
+          )}
           {extraActions}
           <Button
             variant={danger ? 'destructive' : 'default'}
