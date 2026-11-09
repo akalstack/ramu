@@ -2,6 +2,10 @@ import { useContext, useEffect, useId, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { AgentProvider, Project } from '@ramu/shared/types'
 import type { SharedMcpConnection, SharedMcpInspection, SharedMcpSelection } from '@ramu/shared/mcp'
+import { namesPrivateHost, serverNameFromUrl } from '@ramu/shared/mcp'
+import { Globe, SquareTerminal } from 'lucide-react'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { ExpandRow } from '@/components/expand-row'
 import { AGENT_PROVIDERS, providerName, providerAccountRows } from '@ramu/shared/providers/providers'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
@@ -143,7 +147,6 @@ function ConnectionEditor({
   initial,
   projects,
   defaultProject,
-  defaultProvider,
   hostName,
   busy,
   error,
@@ -155,7 +158,6 @@ function ConnectionEditor({
   initial?: SharedMcpConnection
   projects: Project[]
   defaultProject?: string
-  defaultProvider: AgentProvider
   hostName: string
   busy: boolean
   error?: string
@@ -170,24 +172,31 @@ function ConnectionEditor({
   const [name, setName] = useState(initial?.name ?? '')
   const [kind, setKind] = useState<'http' | 'stdio'>(first?.type ?? 'http')
   const [url, setUrl] = useState(first?.type === 'http' ? first.url : '')
-  const [privateNetwork, setPrivateNetwork] = useState(first?.type === 'http' && first.allowPrivateNetwork === true)
+  // A typed private address needs no opt-in; this keeps it for a public name that resolves inside the network.
+  const [privateName, setPrivateName] = useState(
+    first?.type === 'http' && first.allowPrivateNetwork === true && !namesPrivateHost(first.url),
+  )
   const [clientId, setClientId] = useState(first?.type === 'http' ? (first.oauthClientId ?? '') : '')
   const [command, setCommand] = useState(first?.type === 'stdio' ? first.command : '')
   const [args, setArgs] = useState(first?.type === 'stdio' ? first.args.join('\n') : '')
   const [cwd, setCwd] = useState(first?.type === 'stdio' ? first.cwd : '')
-  const [account, setAccount] = useState(initial?.serviceAccountId ?? 'public')
-  const [providers, setProviders] = useState<AgentProvider[]>(initial?.providers ?? [defaultProvider])
+  // Every agent can use a new server; narrowing it is a choice, not a first step.
+  const [providers, setProviders] = useState<AgentProvider[]>(initial?.providers ?? [...AGENT_PROVIDERS])
   const [scope, setScope] = useState(
-    initial?.scope ?? { projectIds: defaultProject ? [defaultProject] : [], hostWide: false },
+    initial?.scope ?? { projectIds: defaultProject ? [defaultProject] : [], hostWide: !defaultProject },
   )
+  const [advanced, setAdvanced] = useState(!!(first?.type === 'http' && (first.oauthClientId || privateName)))
+  const privateAddress = kind === 'http' && namesPrivateHost(url)
+  const suggestedName = kind === 'http' ? serverNameFromUrl(url) : (command.trim().split('/').pop() ?? '')
   const live = initial?.transport
   const credentialNames = live
     ? Object.keys(live.type === 'http' ? live.headerSecretRefs : live.envSecretRefs).sort()
     : []
   const save = () =>
     onSave({
-      name,
-      serviceAccountId: account.trim() || 'public',
+      name: name.trim() || suggestedName,
+      // The service account only keys the server's stored credentials; identities choose accounts, not this label.
+      serviceAccountId: initial?.serviceAccountId ?? 'public',
       enabled: initial?.enabled ?? true,
       scope,
       providers,
@@ -197,7 +206,7 @@ function ConnectionEditor({
               type: 'http',
               url,
               headerSecretRefs: live?.type === 'http' ? live.headerSecretRefs : {},
-              ...(privateNetwork ? { allowPrivateNetwork: true } : {}),
+              ...(privateAddress || privateName ? { allowPrivateNetwork: true } : {}),
               ...(clientId.trim() ? { oauthClientId: clientId.trim() } : {}),
             }
           : {
@@ -209,15 +218,18 @@ function ConnectionEditor({
             },
     })
   const ready = kind === 'http' ? Boolean(url.trim()) : Boolean(command.trim() && cwd.trim())
+  const chip = 'flex items-center gap-1.5 text-control'
   return (
     <Dialog
       title={t(initial ? 'Edit MCP server' : 'Add MCP server')}
-      confirmLabel={t('Save')}
+      confirmLabel={t(initial ? 'Save' : 'Add server')}
       onCancel={onCancel}
       onConfirm={() => form.current?.requestSubmit()}
       busy={busy}
       error={error}
-      confirmDisabled={!name.trim() || !ready || !providers.length || (!scope.hostWide && !scope.projectIds.length)}
+      confirmDisabled={
+        !(name.trim() || suggestedName) || !ready || !providers.length || (!scope.hostWide && !scope.projectIds.length)
+      }
     >
       <form
         ref={form}
@@ -226,72 +238,45 @@ function ConnectionEditor({
           save()
         }}
       >
-        <p>{t('Connection host: {host}', { host: hostName })}</p>
         <fieldset disabled={busy} className="m-0 flex flex-col gap-4 border-0 p-0">
-          <Field>
-            <FieldLabel htmlFor={`${id}-name`}>{t('Name')}</FieldLabel>
-            <Input
-              id={`${id}-name`}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              maxLength={200}
-              required
-            />
-          </Field>
-          <fieldset className="m-0 flex gap-4 border-0 p-0">
-            <legend>{t('Type')}</legend>
-            {(['http', 'stdio'] as const).map((value) => (
-              <label key={value} className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name={`${id}-kind`}
-                  checked={kind === value}
-                  disabled={Boolean(initial)}
-                  onChange={() => setKind(value)}
-                />
-                {t(value === 'http' ? 'Remote server' : 'Local command')}
-              </label>
-            ))}
-          </fieldset>
+          {!initial && (
+            <ToggleGroup
+              size="sm"
+              variant="outline"
+              spacing={2}
+              className="gap-1.5"
+              aria-label={t('Type')}
+              value={[kind]}
+              onValueChange={(values) => values[0] && setKind(values[0] as 'http' | 'stdio')}
+            >
+              <ToggleGroupItem value="http" className="gap-1.5 px-2.5">
+                <Globe size={13} aria-hidden />
+                {t('Remote server')}
+              </ToggleGroupItem>
+              <ToggleGroupItem value="stdio" className="gap-1.5 px-2.5">
+                <SquareTerminal size={13} aria-hidden />
+                {t('Local command')}
+              </ToggleGroupItem>
+            </ToggleGroup>
+          )}
           {kind === 'http' ? (
-            <>
-              <Field>
-                <FieldLabel htmlFor={`${id}-url`}>{t('Server URL')}</FieldLabel>
-                <Input
-                  id={`${id}-url`}
-                  type="url"
-                  placeholder="https://mcp.deepwiki.com/mcp"
-                  value={url}
-                  onChange={(event) => setUrl(event.target.value)}
-                  required
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor={`${id}-client`}>{t('OAuth client ID (optional)')}</FieldLabel>
-                <Input
-                  id={`${id}-client`}
-                  value={clientId}
-                  onChange={(event) => setClientId(event.target.value)}
-                  maxLength={500}
-                  autoComplete="off"
-                />
-                <FieldDescription>
-                  {t(
-                    'Only for servers that do not register apps automatically. Use the ID the service issued for Ramu.',
-                  )}
-                </FieldDescription>
-              </Field>
-              <Field orientation="horizontal">
-                <Checkbox
-                  id={`${id}-private`}
-                  checked={privateNetwork}
-                  onCheckedChange={(checked) => setPrivateNetwork(checked === true)}
-                />
-                <FieldLabel htmlFor={`${id}-private`}>
-                  {t('This server is on a private network. Allow the host to reach private addresses.')}
-                </FieldLabel>
-              </Field>
-            </>
+            <Field>
+              <FieldLabel htmlFor={`${id}-url`}>{t('Server URL')}</FieldLabel>
+              <Input
+                id={`${id}-url`}
+                type="url"
+                autoFocus={!initial}
+                placeholder="https://mcp.deepwiki.com/mcp"
+                value={url}
+                onChange={(event) => setUrl(event.target.value)}
+                required
+              />
+              <FieldDescription>
+                {privateAddress
+                  ? t('A private address: {host} reaches it on your network.', { host: hostName })
+                  : t('Ramu signs in to the service the first time an agent uses it, if it asks.')}
+              </FieldDescription>
+            </Field>
           ) : (
             <>
               <Alert>
@@ -305,6 +290,7 @@ function ConnectionEditor({
                 <FieldLabel htmlFor={`${id}-command`}>{t('Executable path')}</FieldLabel>
                 <Input
                   id={`${id}-command`}
+                  autoFocus={!initial}
                   placeholder="/usr/local/bin/my-mcp-server"
                   value={command}
                   onChange={(event) => setCommand(event.target.value)}
@@ -334,68 +320,110 @@ function ConnectionEditor({
             </>
           )}
           <Field>
-            <FieldLabel htmlFor={`${id}-account`}>{t('Service account')}</FieldLabel>
+            <FieldLabel htmlFor={`${id}-name`}>{t('Name')}</FieldLabel>
             <Input
-              id={`${id}-account`}
-              value={account}
-              onChange={(event) => setAccount(event.target.value)}
+              id={`${id}-name`}
+              value={name}
+              placeholder={suggestedName || t('Name it')}
+              onChange={(event) => setName(event.target.value)}
               maxLength={200}
             />
-            <p className="m-0 text-caption text-muted-foreground">
-              {t(
-                'A label for the external service account this connection uses. Changing it removes stored credentials so the new account signs in with its own.',
-              )}
-            </p>
           </Field>
           <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-            <legend>{t('Providers')}</legend>
-            {AGENT_PROVIDERS.map((provider) => (
-              <Field key={provider} orientation="horizontal">
-                <Checkbox
-                  id={`${id}-${provider}`}
-                  checked={providers.includes(provider)}
-                  onCheckedChange={(checked) =>
-                    setProviders((current) =>
-                      checked ? [...current, provider] : current.filter((entry) => entry !== provider),
-                    )
-                  }
-                />
-                <FieldLabel htmlFor={`${id}-${provider}`}>{providerName(provider)}</FieldLabel>
-              </Field>
-            ))}
-          </fieldset>
-          <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-            <legend>{t('Project access')}</legend>
-            <Field orientation="horizontal">
-              <Checkbox
-                id={`${id}-host`}
-                checked={scope.hostWide}
-                onCheckedChange={(hostWide) => setScope((current) => ({ ...current, hostWide }))}
-              />
-              <FieldLabel htmlFor={`${id}-host`}>{t('All projects and no-project threads on this host')}</FieldLabel>
-            </Field>
-            {!scope.hostWide &&
-              projects.map((project) => (
-                <Field key={project.id} orientation="horizontal">
+            <legend className="mb-1.5 text-caption text-muted-foreground">{t('Agents that can use it')}</legend>
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {AGENT_PROVIDERS.map((provider) => (
+                <label key={provider} className={chip}>
                   <Checkbox
-                    id={`${id}-${project.id}`}
-                    checked={scope.projectIds.includes(project.id)}
+                    checked={providers.includes(provider)}
                     onCheckedChange={(checked) =>
-                      setScope((current) => ({
-                        ...current,
-                        projectIds: checked
-                          ? [...current.projectIds, project.id]
-                          : current.projectIds.filter((entry) => entry !== project.id),
-                      }))
+                      setProviders((current) =>
+                        checked ? [...current, provider] : current.filter((entry) => entry !== provider),
+                      )
                     }
                   />
-                  <FieldLabel htmlFor={`${id}-${project.id}`}>{project.name}</FieldLabel>
-                </Field>
+                  {providerName(provider)}
+                </label>
               ))}
+            </div>
           </fieldset>
-          <p className="m-0 text-caption text-muted-foreground">
-            {t('Saving does not connect or run commands. Provider login and external service sign-in are separate.')}
-          </p>
+          <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+            <legend className="mb-1.5 text-caption text-muted-foreground">{t('Projects')}</legend>
+            <ToggleGroup
+              size="sm"
+              variant="outline"
+              spacing={2}
+              className="gap-1.5"
+              aria-label={t('Projects')}
+              value={[scope.hostWide ? 'all' : 'chosen']}
+              onValueChange={(values) =>
+                values[0] && setScope((current) => ({ ...current, hostWide: values[0] === 'all' }))
+              }
+            >
+              <ToggleGroupItem value="all" className="px-2.5">
+                {t('All projects')}
+              </ToggleGroupItem>
+              <ToggleGroupItem value="chosen" className="px-2.5" disabled={!projects.length}>
+                {t('Chosen projects')}
+              </ToggleGroupItem>
+            </ToggleGroup>
+            {!scope.hostWide && (
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {projects.map((project) => (
+                  <label key={project.id} className={chip}>
+                    <Checkbox
+                      checked={scope.projectIds.includes(project.id)}
+                      onCheckedChange={(checked) =>
+                        setScope((current) => ({
+                          ...current,
+                          projectIds: checked
+                            ? [...current.projectIds, project.id]
+                            : current.projectIds.filter((entry) => entry !== project.id),
+                        }))
+                      }
+                    />
+                    {project.name}
+                  </label>
+                ))}
+              </div>
+            )}
+          </fieldset>
+          {kind === 'http' && (
+            <>
+              <ExpandRow
+                expanded={advanced}
+                onToggle={() => setAdvanced((value) => !value)}
+                className="rounded-(--radius-s) px-1"
+              >
+                {t('Advanced')}
+              </ExpandRow>
+              {advanced && (
+                <>
+                  <Field>
+                    <FieldLabel htmlFor={`${id}-client`}>{t('OAuth client ID')}</FieldLabel>
+                    <Input
+                      id={`${id}-client`}
+                      value={clientId}
+                      onChange={(event) => setClientId(event.target.value)}
+                      maxLength={500}
+                      autoComplete="off"
+                    />
+                    <FieldDescription>
+                      {t(
+                        'Only for servers that do not register apps automatically. Use the ID the service issued for Ramu.',
+                      )}
+                    </FieldDescription>
+                  </Field>
+                  {!privateAddress && (
+                    <label className={chip}>
+                      <Checkbox checked={privateName} onCheckedChange={(checked) => setPrivateName(checked === true)} />
+                      {t('Its name resolves to a private address on this host’s network')}
+                    </label>
+                  )}
+                </>
+              )}
+            </>
+          )}
         </fieldset>
       </form>
       {initial ? (
@@ -758,7 +786,6 @@ export function McpSettings() {
           defaultProject={
             projects.data?.some((project) => project.id === ws.composing) ? (ws.composing ?? undefined) : undefined
           }
-          defaultProvider={defaultProvider}
           hostName={hostName}
           busy={busy}
           error={error}

@@ -6792,4 +6792,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Android emulator": "Emulator Android",
   "Needs setup": "Perlu disiapkan",
   "iOS Simulator": "Simulator iOS",
+  "A private address: {host} reaches it on your network.": "Alamat privat: {host} menjangkaunya di jaringan Anda.",
+  "Agents that can use it": "Agen yang dapat memakainya",
+  "Chosen projects": "Proyek terpilih",
+  "Its name resolves to a private address on this host’s network": "Namanya mengarah ke alamat privat di jaringan host ini",
+  "Name it": "Beri nama",
+  "OAuth client ID": "ID klien OAuth",
+  "Ramu signs in to the service the first time an agent uses it, if it asks.": "Ramu masuk ke layanan saat agen pertama kali memakainya, jika diminta.",
 }

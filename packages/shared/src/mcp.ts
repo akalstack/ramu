@@ -238,3 +238,40 @@ export function mcpStatusLabel(status: string): string {
     }[status] ?? status
   )
 }
+
+/**
+ * Whether a server address itself names a host on a private network: localhost, a private or link-local IP, or a
+ * name only a local network resolves (.local, .internal, .lan, .home.arpa). Typing one is the person's own choice to
+ * reach it, so it needs no separate opt-in; a public name that resolves privately still does.
+ */
+export function namesPrivateHost(url: string): boolean {
+  let host: string
+  try {
+    host = new URL(url).hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  } catch {
+    return false
+  }
+  if (host === 'localhost' || host.endsWith('.localhost')) return true
+  if (/\.(local|internal|lan|home\.arpa)$/.test(host)) return true
+  const ip = host.split('.').map(Number)
+  if (ip.length === 4 && ip.every((part) => Number.isInteger(part) && part >= 0 && part <= 255)) {
+    const [a, b] = ip as [number, number, number, number]
+    return (
+      a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254)
+    )
+  }
+  return host === '::1' || /^f[cd][0-9a-f]{2}:/.test(host) || /^fe80:/.test(host)
+}
+
+/** A name for a server from its address, so most people never type one: `https://mcp.deepwiki.com/mcp` → `deepwiki`. */
+export function serverNameFromUrl(url: string): string {
+  let host: string
+  try {
+    host = new URL(url).hostname.toLowerCase()
+  } catch {
+    return ''
+  }
+  const parts = host.split('.').filter((part) => part && !['www', 'mcp', 'api'].includes(part))
+  // The registrable name: the label before the top-level domain, or the whole host when it has no dots.
+  return (parts.length > 1 ? parts[parts.length - 2] : parts[0]) ?? ''
+}
