@@ -80,6 +80,6 @@ Neon is the first database (free plan; the first request after idle can be slowe
 
 ## Later options
 
-- **Cloud Ramu hosts** attached to the account, listed in the host switcher and paired like any other host.
+- **Cloud Ramu hosts** attached to the account, listed in the host switcher and paired like any other host, with the web app at `ramu.akalstack.com`; sign-in stays at `account.akalstack.com`.
 - **Your hosts** from the account, so a signed-in device can find a host and send a pairing request without a code (the host still approves).
 - Backing up the phone's own device preferences.
