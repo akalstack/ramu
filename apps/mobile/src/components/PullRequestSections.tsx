@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Linking, Pressable, View } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Eye, ChevronDown, ChevronRight, Globe, MessageSquare, PanelRight, Wrench } from 'lucide-react-native'
+import {
+  Eye,
+  ChevronDown,
+  ChevronRight,
+  GitPullRequest,
+  Globe,
+  MessageSquare,
+  PanelRight,
+  Wrench,
+} from 'lucide-react-native'
 import { previewLine } from '@ramu/shared/deployText'
 import type { Deployment } from '@ramu/shared/types/deploy'
 import type {
@@ -149,7 +158,12 @@ export function CurrentPullRequest({
   if (!pr)
     return readOnly || !status ? null : (
       <>
-        <Button kind="secondary" title={say('Create pull request')} onPress={() => setCreating(true)} />
+        <Button
+          kind="secondary"
+          icon={GitPullRequest}
+          title={say('Create pull request')}
+          onPress={() => setCreating(true)}
+        />
         <CreatePullRequest
           computerId={computerId}
           taskId={taskId}
@@ -262,12 +276,15 @@ export function CurrentPullRequest({
         </View>
       </Pressable>
       <PreviewRow line={previewLine(preview, say)} />
-      <Button
-        kind="secondary"
-        icon={PanelRight}
-        title={draftsReady ? say('Replies ready · open pull request') : say('Open pull request')}
-        onPress={() => openPullRequest(router, chat.id, repoId, pr.url)}
-      />
+      {/* The card's title opens the pull request; a button only calls out replies waiting there. */}
+      {draftsReady ? (
+        <Button
+          kind="secondary"
+          icon={PanelRight}
+          title={say('Replies ready · open pull request')}
+          onPress={() => openPullRequest(router, chat.id, repoId, pr.url)}
+        />
+      ) : null}
       {pr.state === 'open' && !readOnly ? (
         <View style={{ flexDirection: 'row', gap: space.s }}>
           {failing ? (

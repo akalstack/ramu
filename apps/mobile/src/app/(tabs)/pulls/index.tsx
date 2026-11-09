@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Linking, RefreshControl, ScrollView, TextInput, View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { ExternalLink, GitPullRequest, MessageSquare } from 'lucide-react-native'
+import { ExternalLink, GitPullRequest, MessageSquare, Search, X } from 'lucide-react-native'
 import type { ForgeService, RepositoryPullRequests } from '@ramu/shared/types'
 import { forgeBrand } from '@ramu/shared/brands'
 import { BrandIcon } from '../../../components/Logos'
@@ -19,13 +19,13 @@ import {
   type PullRequestSort,
   type PullRequestRow,
 } from '@ramu/shared/pullRequests'
-import { font, space, useTheme } from '../../../theme'
+import { font, radius, space, useTheme } from '../../../theme'
 import { ago, useSay } from '../../../i18n'
 import { useStore } from '../../../runtime/store'
 import { Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from '../../../components/Screen'
 import { useTabActions } from '../../../components/Overlays'
 import { Nothing } from '../../../components/InboxParts'
-import { Chip, Row, SectionLabel, T, tap } from '../../../components/ui'
+import { Chip, Divider, IconButton, Row, SectionLabel, T, tap } from '../../../components/ui'
 import { ChecksLine, PullRequestGlyph, StageText } from '../../../components/PullRequestParts'
 import { unavailableText } from '../../../components/PullRequestSections'
 
@@ -167,25 +167,36 @@ export default function PullRequestsScreen() {
         }
       >
         <LargeTitle>{say('Pull requests')}</LargeTitle>
-        <TextInput
-          accessibilityLabel={say('Search pull requests')}
-          placeholder={say('Search pull requests')}
-          placeholderTextColor={c.muted}
-          value={search}
-          onChangeText={setSearch}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
+        <View
           style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space.s,
             marginHorizontal: space.l,
             marginTop: space.m,
-            minHeight: 40,
-            paddingHorizontal: space.m,
-            borderRadius: 10,
-            backgroundColor: c.fill,
-            color: c.text,
+            height: 44,
+            paddingLeft: space.m,
+            paddingRight: search ? 4 : space.m,
+            borderRadius: radius.m,
+            backgroundColor: c.raised2,
           }}
-        />
+        >
+          <Search size={16} color={c.muted} />
+          <TextInput
+            accessibilityLabel={say('Search pull requests')}
+            placeholder={say('Search pull requests')}
+            placeholderTextColor={c.placeholder}
+            value={search}
+            onChangeText={setSearch}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+            style={{ flex: 1, alignSelf: 'stretch', color: c.text, fontSize: font.body }}
+          />
+          {search ? (
+            <IconButton icon={X} label={say('Clear search')} size={36} tone="muted" onPress={() => setSearch('')} />
+          ) : null}
+        </View>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -202,6 +213,18 @@ export default function PullRequestsScreen() {
               }}
             />
           ) : null}
+          {PULL_REQUEST_FILTERS.map((entry) => {
+            const count = entry === 'closed' ? 0 : openRows.filter((row) => inPullRequestFilter(row, entry)).length
+            return (
+              <Chip
+                key={entry}
+                label={say(PULL_REQUEST_FILTER_LABEL[entry])}
+                count={count || undefined}
+                selected={filter === entry}
+                onPress={() => setFilter(entry)}
+              />
+            )
+          })}
           {services.length > 1 ? (
             <Chip
               label={service ? FORGE_NAMES[service] : say('All services')}
@@ -222,26 +245,15 @@ export default function PullRequestsScreen() {
             chevron
             onPress={() => setSort((value) => (value === 'readiness' ? 'updated' : 'readiness'))}
           />
-          {PULL_REQUEST_FILTERS.map((entry) => {
-            const count = entry === 'closed' ? 0 : openRows.filter((row) => inPullRequestFilter(row, entry)).length
-            return (
-              <Chip
-                key={entry}
-                label={say(PULL_REQUEST_FILTER_LABEL[entry])}
-                count={count || undefined}
-                selected={filter === entry}
-                onPress={() => setFilter(entry)}
-              />
-            )
-          })}
         </ScrollView>
-        {Object.entries(failed).map(([computerId, text]) => (
-          <T key={computerId} size={font.caption} tone="bad" style={{ paddingHorizontal: space.l }}>
-            {multi ? `${name(computerId)}: ${text}` : text}
-          </T>
-        ))}
-        {notes.length ? (
-          <View style={{ gap: space.xs, paddingHorizontal: space.l, paddingBottom: space.s }}>
+        {/* Why a host or repository is missing from the list, in one block above it. */}
+        {Object.keys(failed).length || notes.length ? (
+          <View style={{ gap: space.xs, paddingHorizontal: space.l, paddingBottom: space.m }}>
+            {Object.entries(failed).map(([computerId, text]) => (
+              <T key={computerId} size={font.caption} tone="bad">
+                {multi ? `${name(computerId)}: ${text}` : text}
+              </T>
+            ))}
             {notes.map(({ key, item, text }) => (
               <T key={key} size={font.caption} tone="muted">
                 {`${repoLabel(item)}: ${say(text!)}`}
@@ -252,85 +264,89 @@ export default function PullRequestsScreen() {
         {rows.length ? (
           <View>
             {filter === 'needs-you' ? <SectionLabel>{say('Waiting on you')}</SectionLabel> : null}
-            {rows.map((row) => {
+            {rows.map((row, index) => {
               const thread = row.threads.at(-1)
               return (
-                <Row
-                  key={`${row.computerId}:${row.pr.url}`}
-                  accessibilityLabel={[
-                    say('Pull request #{0}: {1}', { 0: row.pr.number, 1: row.pr.title }),
-                    repoLabel(row),
-                    FORGE_NAMES[row.service],
-                    say(PULL_REQUEST_STAGE_LABEL[row.stage]),
-                    thread ? say('In {0}', { 0: thread.title }) : null,
-                  ]
-                    .filter(Boolean)
-                    .join(', ')}
-                  onPress={() => open(row)}
-                  style={{ flexDirection: 'row', gap: space.m, paddingHorizontal: space.l, paddingVertical: space.s }}
-                >
-                  <View style={{ paddingTop: 3 }}>
-                    <PullRequestGlyph pr={row.pr} stage={row.stage} />
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-                    <View style={{ flexDirection: 'row', gap: space.s }}>
-                      <T size={font.body - 1} weight="500" numberOfLines={2} style={{ flex: 1 }}>
-                        {row.pr.title}
-                      </T>
-                      {row.outside ? <ExternalLink size={12} color={c.muted} /> : null}
-                      <T size={font.caption} tone="muted">
-                        {ago(row.pr.updatedAt)}
-                      </T>
+                <View key={`${row.computerId}:${row.pr.url}`}>
+                  {/* Inset to the text, past the glyph column, as the other lists divide their rows. */}
+                  {index ? <Divider inset={space.l + 16 + space.m} /> : null}
+                  <Row
+                    accessibilityLabel={[
+                      say('Pull request #{0}: {1}', { 0: row.pr.number, 1: row.pr.title }),
+                      repoLabel(row),
+                      FORGE_NAMES[row.service],
+                      say(PULL_REQUEST_STAGE_LABEL[row.stage]),
+                      thread ? say('In {0}', { 0: thread.title }) : null,
+                    ]
+                      .filter(Boolean)
+                      .join(', ')}
+                    onPress={() => open(row)}
+                    style={{ alignItems: 'flex-start', paddingVertical: space.m }}
+                  >
+                    {/* A fixed column, so every title starts at the same edge whatever the glyph. */}
+                    <View style={{ width: 16, paddingTop: 3, alignItems: 'center' }}>
+                      <PullRequestGlyph pr={row.pr} stage={row.stage} size={14} />
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <BrandIcon brand={forgeBrand(row.service)} size={11} />
-                      <T size={font.caption} tone="muted" numberOfLines={1} style={{ flex: 1 }}>
-                        {[
-                          multi ? row.hostName : null,
-                          `${repoLabel(row)} ${pullRequestRef(row.service, row.pr.number)}`,
-                          row.pr.author,
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </T>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, overflow: 'hidden' }}>
-                      <ChecksLine checks={row.pr.checks} compact />
-                      <StageText stage={row.stage} />
-                      {row.pr.openThreads ? (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0 }}>
-                          <MessageSquare size={11} color={c.muted} />
-                          <T size={font.caption} tone="muted">
-                            {String(row.pr.openThreads)}
+                    <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.s }}>
+                        <T size={font.body - 1} weight="500" numberOfLines={2} style={{ flex: 1 }}>
+                          {row.pr.title}
+                        </T>
+                        {row.outside ? <ExternalLink size={12} color={c.muted} style={{ marginTop: 4 }} /> : null}
+                        <T size={font.caption} tone="muted" style={{ marginTop: 2 }}>
+                          {ago(row.pr.updatedAt)}
+                        </T>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <BrandIcon brand={forgeBrand(row.service)} size={11} />
+                        <T size={font.caption} tone="muted" numberOfLines={1} style={{ flex: 1 }}>
+                          {[
+                            multi ? row.hostName : null,
+                            `${repoLabel(row)} ${pullRequestRef(row.service, row.pr.number)}`,
+                            row.pr.author,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </T>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, overflow: 'hidden' }}>
+                        <ChecksLine checks={row.pr.checks} compact />
+                        <StageText stage={row.stage} />
+                        {row.pr.openThreads ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+                            <MessageSquare size={11} color={c.muted} />
+                            <T size={font.caption} tone="muted">
+                              {String(row.pr.openThreads)}
+                            </T>
+                          </View>
+                        ) : null}
+                        {row.pr.additions !== undefined && row.pr.deletions !== undefined ? (
+                          <T
+                            size={font.caption}
+                            style={{ flexShrink: 0, fontVariant: ['tabular-nums'] }}
+                            accessibilityLabel={say('{0} lines added, {1} removed', {
+                              0: row.pr.additions,
+                              1: row.pr.deletions,
+                            })}
+                          >
+                            <T size={font.caption} tone="ok">{`+${row.pr.additions}`}</T>{' '}
+                            <T size={font.caption} tone="bad">{`−${row.pr.deletions}`}</T>
                           </T>
-                        </View>
-                      ) : null}
-                      {row.pr.additions !== undefined && row.pr.deletions !== undefined ? (
-                        <T
-                          size={font.caption}
-                          style={{ flexShrink: 0, fontVariant: ['tabular-nums'] }}
-                          accessibilityLabel={say('{0} lines added, {1} removed', {
-                            0: row.pr.additions,
-                            1: row.pr.deletions,
-                          })}
-                        >
-                          <T size={font.caption} tone="ok">{`+${row.pr.additions}`}</T>{' '}
-                          <T size={font.caption} tone="bad">{`−${row.pr.deletions}`}</T>
-                        </T>
-                      ) : null}
-                      {row.pr.labels?.[0] ? (
-                        <T size={font.caption} tone="muted" numberOfLines={1} style={{ flexShrink: 0 }}>
-                          {row.pr.labels[0]}
-                        </T>
-                      ) : null}
-                      {thread ? (
-                        <T size={font.caption} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
-                          {say('In {0}', { 0: thread.title })}
-                        </T>
-                      ) : null}
+                        ) : null}
+                        {row.pr.labels?.[0] ? (
+                          <T size={font.caption} tone="muted" numberOfLines={1} style={{ flexShrink: 0 }}>
+                            {row.pr.labels[0]}
+                          </T>
+                        ) : null}
+                        {thread ? (
+                          <T size={font.caption} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+                            {say('In {0}', { 0: thread.title })}
+                          </T>
+                        ) : null}
+                      </View>
                     </View>
-                  </View>
-                </Row>
+                  </Row>
+                </View>
               )
             })}
           </View>

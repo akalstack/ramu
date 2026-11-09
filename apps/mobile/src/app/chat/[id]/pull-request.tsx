@@ -2,10 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { PullRequestFilesList } from '../../../components/PullRequestFilesList'
 import { Disclosure } from '../../../components/Motion'
 import { Markdown } from '../../../components/Markdown'
-import { Alert, Linking, Pressable, RefreshControl, View } from 'react-native'
+import { ActivityIndicator, Alert, Linking, Pressable, RefreshControl, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Bot,
+  CircleAlert,
+  Ellipsis,
   ExternalLink,
   GitMerge,
   MessageSquare,
@@ -33,12 +35,12 @@ import {
   pullRequestStage,
   type PullRequestNextStep,
 } from '@ramu/shared/pullRequests'
-import { font, space, useTheme } from '../../../theme'
+import { font, radius, space, useTheme } from '../../../theme'
 import { useChat, useStore } from '../../../runtime/store'
 import { canWriteHost } from '../../../runtime/viewerAccess'
 import { openPullRequestThread } from '../../../runtime/pullRequestThread'
 import { ago, useSay } from '../../../i18n'
-import { Header, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
+import { Header, HeaderButton, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { Button, Card, Divider, Segmented, Sheet, T, Toggle } from '../../../components/ui'
 import { ChecksLine, PullRequestGlyph, StageText } from '../../../components/PullRequestParts'
@@ -134,6 +136,7 @@ export default function PullRequestScreen() {
   const [people, setPeople] = useState<'reviewers' | 'labels' | 'assignees' | null>(null)
   const [revision, setRevision] = useState(0)
   const [notice, setNotice] = useState<string | null>(null)
+  const [more, setMore] = useState(false)
 
   const read = useCallback(
     async (force: boolean) => {
@@ -328,7 +331,20 @@ export default function PullRequestScreen() {
 
   return (
     <Screen bg="canvas">
-      <Header title={pr ? pullRequestRef(service, pr.number) : say('Pull request')} subtitle={pr?.title} />
+      <Header
+        title={pr ? pullRequestRef(service, pr.number) : say('Pull request')}
+        subtitle={pr?.title}
+        right={
+          pr ? (
+            <HeaderButton
+              icon={ExternalLink}
+              label={say('Open on {0}', { 0: FORGE_NAMES[service] })}
+              systemIcon="safari"
+              onPress={() => void Linking.openURL(pr.url).catch(() => {})}
+            />
+          ) : null
+        }
+      />
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l, paddingBottom: space.xl }}
@@ -336,7 +352,7 @@ export default function PullRequestScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={() => void pullToRefresh()} tintColor={c.muted} />
         }
       >
-        {!loaded ? <T tone="muted">{say('Loading…')}</T> : null}
+        {!loaded ? <ActivityIndicator color={c.muted} style={{ paddingVertical: space.xl }} /> : null}
         {loaded && !pr ? (
           <View style={{ gap: space.m }}>
             <T tone={error ? 'bad' : 'muted'}>{error ?? say('This pull request was not found with this account.')}</T>
@@ -351,10 +367,7 @@ export default function PullRequestScreen() {
                   <PullRequestGlyph pr={pr} stage={stage} size={18} />
                 </View>
                 <T size={font.heading} weight="600" style={{ flex: 1 }}>
-                  {pr.title}{' '}
-                  <T size={font.heading} tone="muted" weight="400">
-                    {pullRequestRef(service, pr.number)}
-                  </T>
+                  {pr.title}
                 </T>
               </View>
               <View
@@ -390,13 +403,6 @@ export default function PullRequestScreen() {
                   {say('Review requested from {0}', { 0: pr.requestedReviewers.join(', ') })}
                 </T>
               ) : null}
-              <Button
-                kind="ghost"
-                icon={ExternalLink}
-                title={say('Open on {0}', { 0: FORGE_NAMES[service] })}
-                onPress={() => void Linking.openURL(pr.url).catch(() => {})}
-                style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }}
-              />
             </View>
 
             <View style={{ gap: space.s }}>
@@ -433,14 +439,13 @@ export default function PullRequestScreen() {
                 />
               ) : null}
               {open && canWrite ? (
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
+                <>
                   {pr.draft ? (
                     <Button
                       kind="secondary"
                       title={busy === 'ready' ? say('Working…') : say('Ready for review')}
                       disabled={!!busy}
                       onPress={() => void act({ kind: 'ready' })}
-                      style={{ flexGrow: 1 }}
                     />
                   ) : null}
                   {pr.mergeable === 'behind' || pr.mergeable === 'conflicts' ? (
@@ -456,56 +461,36 @@ export default function PullRequestScreen() {
                       }
                       disabled={!!busy}
                       onPress={() => void updateBranch()}
-                      style={{ flexGrow: 1 }}
                     />
                   ) : null}
-                  <Button
-                    kind="secondary"
-                    icon={GitMerge}
-                    title={say('Merge…')}
-                    disabled={!!busy || pr.draft}
-                    onPress={() => setMerging(true)}
-                    style={{ flexGrow: 1 }}
-                  />
-                  <Button
-                    kind="danger"
-                    icon={X}
-                    title={busy === 'close' ? say('Working…') : say('Close')}
-                    disabled={!!busy}
-                    onPress={() => confirmClose(pr.number)}
-                    style={{ flexGrow: 1 }}
-                  />
                   {pr.checks === 'failure' && supportsPullRequest(service, 'rerun-checks') ? (
                     <Button
                       kind="secondary"
                       title={busy === 'rerun' ? say('Working…') : say('Re-run failed checks')}
                       disabled={!!busy}
                       onPress={() => void write('rerun', { kind: 'rerun-checks' })}
-                      style={{ flexGrow: 1 }}
                     />
                   ) : null}
-                  {!pr.draft && supportsPullRequest(service, 'draft') ? (
+                  {/* Merge stays one tap away; the rarer changes and Close wait behind More actions. */}
+                  <View style={{ flexDirection: 'row', gap: space.s }}>
                     <Button
-                      kind="ghost"
-                      title={busy === 'draft' ? say('Working…') : say('Back to draft')}
-                      disabled={!!busy}
-                      onPress={() => void act({ kind: 'draft' })}
-                      style={{ flexGrow: 1 }}
+                      kind="secondary"
+                      icon={GitMerge}
+                      title={say('Merge…')}
+                      disabled={!!busy || pr.draft}
+                      onPress={() => setMerging(true)}
+                      style={{ flex: 1 }}
                     />
-                  ) : null}
-                  {(['reviewers', 'labels', 'assignees'] as const)
-                    .filter((kind) => supportsPullRequest(service, kind))
-                    .map((kind) => (
-                      <Button
-                        key={kind}
-                        kind="ghost"
-                        title={say(kind === 'reviewers' ? 'Reviewers…' : kind === 'labels' ? 'Labels…' : 'Assignees…')}
-                        disabled={!!busy}
-                        onPress={() => setPeople(kind)}
-                        style={{ flexGrow: 1 }}
-                      />
-                    ))}
-                </View>
+                    <Button
+                      kind="secondary"
+                      icon={Ellipsis}
+                      title={say('More actions')}
+                      disabled={!!busy}
+                      onPress={() => setMore(true)}
+                      style={{ flex: 1 }}
+                    />
+                  </View>
+                </>
               ) : pr.state === 'closed' && canWrite ? (
                 <Button
                   kind="secondary"
@@ -525,9 +510,21 @@ export default function PullRequestScreen() {
                 </T>
               ) : null}
               {error ? (
-                <T size={font.control} tone="bad" accessibilityLiveRegion="polite">
-                  {error}
-                </T>
+                <View
+                  accessibilityLiveRegion="polite"
+                  style={{
+                    flexDirection: 'row',
+                    gap: space.s,
+                    padding: space.m,
+                    borderRadius: radius.m,
+                    backgroundColor: c.badWash,
+                  }}
+                >
+                  <CircleAlert size={16} color={c.bad} style={{ marginTop: 2 }} />
+                  <T size={font.control} tone="bad" style={{ flex: 1 }}>
+                    {error}
+                  </T>
+                </View>
               ) : null}
               {pr.fork && !mine && open ? (
                 <T size={font.caption} tone="muted">
@@ -812,6 +809,47 @@ export default function PullRequestScreen() {
           }}
         />
       ) : null}
+      {pr ? (
+        <Sheet open={more} onClose={() => setMore(false)} title={say('Pull request actions')}>
+          {(['reviewers', 'labels', 'assignees'] as const).some((kind) => supportsPullRequest(service, kind)) ? (
+            <SheetGroup>
+              {(['reviewers', 'labels', 'assignees'] as const)
+                .filter((kind) => supportsPullRequest(service, kind))
+                .map((kind) => (
+                  <SheetOption
+                    key={kind}
+                    title={say(kind === 'reviewers' ? 'Reviewers…' : kind === 'labels' ? 'Labels…' : 'Assignees…')}
+                    onPress={() => {
+                      setMore(false)
+                      // iOS presents the next sheet only once this one has gone.
+                      setTimeout(() => setPeople(kind), 300)
+                    }}
+                  />
+                ))}
+            </SheetGroup>
+          ) : null}
+          <SheetGroup>
+            {!pr.draft && supportsPullRequest(service, 'draft') ? (
+              <SheetOption
+                title={say('Back to draft')}
+                onPress={() => {
+                  setMore(false)
+                  void act({ kind: 'draft' })
+                }}
+              />
+            ) : null}
+            <SheetOption
+              icon={X}
+              title={say('Close pull request')}
+              danger
+              onPress={() => {
+                setMore(false)
+                setTimeout(() => confirmClose(pr.number), 300)
+              }}
+            />
+          </SheetGroup>
+        </Sheet>
+      ) : null}
       {people && pr ? (
         <PeopleSheet
           kind={people}
@@ -853,6 +891,7 @@ function MergeSheet({
 }) {
   const say = useSay()
   const store = useStore()
+  const { c } = useTheme()
   const [options, setOptions] = useState<MergeOptions | null>(null)
   const [method, setMethod] = useState<MergeMethod | null>(null)
   const [deleteBranch, setDeleteBranch] = useState(true)
@@ -892,17 +931,24 @@ function MergeSheet({
 
   return (
     <Sheet open onClose={() => !busy && onClose(false)} title={say('Merge pull request')}>
-      {!options && !error ? (
-        <T tone="muted" style={{ paddingHorizontal: space.l }}>
-          {say('Loading…')}
-        </T>
-      ) : null}
+      {!options && !error ? <ActivityIndicator color={c.muted} style={{ paddingVertical: space.l }} /> : null}
       {blockers.length ? (
-        <View style={{ paddingHorizontal: space.l, gap: 4 }}>
+        <View
+          style={{
+            marginHorizontal: space.l,
+            padding: space.m,
+            gap: space.xs,
+            borderRadius: radius.m,
+            backgroundColor: c.warnWash,
+          }}
+        >
           {blockers.map((blocker) => (
-            <T key={blocker} size={font.control} tone="warn">
-              {say(blocker)}
-            </T>
+            <View key={blocker} style={{ flexDirection: 'row', gap: space.s }}>
+              <CircleAlert size={15} color={c.warn} style={{ marginTop: 2 }} />
+              <T size={font.control} tone="warn" style={{ flex: 1 }}>
+                {say(blocker)}
+              </T>
+            </View>
           ))}
         </View>
       ) : null}
@@ -954,7 +1000,7 @@ function MergeSheet({
           ) : null}
         </SheetGroup>
       ) : null}
-      <View style={{ paddingHorizontal: space.l, gap: space.s }}>
+      <View style={{ paddingHorizontal: space.l, paddingBottom: space.l, gap: space.s }}>
         {error ? (
           <T size={font.control} tone="bad" accessibilityLiveRegion="polite">
             {error}
