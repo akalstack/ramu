@@ -100,7 +100,7 @@ function InteractiveDocumentCard({
     const thread = ws?.ui.activeTaskId
     if (ws && thread && !isWorkspaceCtx(thread) && ws.task(thread))
       ws.openView(thread, { kind: 'artifact', artifactId: info.id, title: info.title })
-    else openPage(info.id)
+    else openPage(info.id, host.id)
   }
   const cache = useMemo(() => interactiveStorage(hostStorageFor(host.id), 'content'), [host.id])
   const [document, setDocument] = useState<InteractiveDocument | null>(() =>
@@ -332,7 +332,7 @@ function InteractiveDocumentCard({
               title: t('List it under Artifacts, open it on any device and change it from any thread'),
               onSelect: () =>
                 void invoke('artifacts.keep', reference.sessionId, reference.id)
-                  .then((kept) => openPage(kept.id))
+                  .then((kept) => openPage(kept.id, host.id))
                   .catch((e) => setError(String(e))),
             },
           ]),

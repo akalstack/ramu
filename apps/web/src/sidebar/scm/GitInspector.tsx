@@ -10,6 +10,7 @@ import { StashesPane } from './StashesPane'
 import { Button } from '@/components/desktop-button'
 import { showPullRequests } from '../../git/PullRequestsPage'
 import { useWorkspace } from '../../workspace/workspace'
+import { useHost } from '../../workspace/HostProvider'
 import type { GitTab } from './types'
 
 /** The pinned Git section: branch, tracking state, commit history and stashes of one repository. */
@@ -65,6 +66,7 @@ export function GitInspector({
   onStash: () => void
 }) {
   const ws = useWorkspace()
+  const host = useHost().id
   return (
     <Tabs
       value={tab}
@@ -114,7 +116,7 @@ export function GitInspector({
               variant="ghost"
               size="sm"
               className="mx-1 h-7 justify-start gap-1.5 px-1.5 text-caption text-muted-foreground"
-              onClick={() => showPullRequests(ws, binding.repoId)}
+              onClick={() => showPullRequests(ws, { host, repoId: binding.repoId })}
             >
               <GitPullRequest size={13} className="flex-none" aria-hidden="true" />
               {t('All pull requests in {0}', { '0': binding.repoName })}

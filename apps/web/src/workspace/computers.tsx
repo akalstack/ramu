@@ -1,5 +1,5 @@
 import { ChevronsUpDown, Network, Settings2 } from 'lucide-react'
-import { useSyncExternalStore, type ReactNode } from 'react'
+import { useMemo, useSyncExternalStore, type ReactNode } from 'react'
 import type { Computer, ComputerStatus, Computers } from '@ramu/shared/types'
 import { Menu, type MenuEntry } from '../Menu'
 import { DeviceIcon } from '@/components/device-icon'
@@ -8,6 +8,7 @@ import { invoke, ramu } from '../ipc'
 import { errorText } from '../lib/errors'
 import { notifyError } from '../chat/Notifications'
 import { t, useLanguage } from '../i18n'
+import { ownHostId } from '../hosts'
 
 let computerState: Computers | null = null
 let started = false,
@@ -40,6 +41,27 @@ function subscribeComputers(listener: () => void) {
 /** One shared computer snapshot per renderer, regardless of how many components display it. */
 export function useComputers(): Computers | null {
   return useSyncExternalStore(subscribeComputers, () => computerState)
+}
+
+/** A host a page lists, with what the page shows of it. */
+export interface ScopedHost {
+  id: string
+  name: string
+  status: ComputerStatus
+}
+
+/**
+ * The hosts a page that lists every host's items shows: the sidebar's host filter applies as it does to threads. A
+ * rejected pairing is left out. Before the host list loads, only this window's own host.
+ */
+export function useScopedHosts(): ScopedHost[] {
+  const state = useComputers()
+  return useMemo(() => {
+    if (!state) return [{ id: ownHostId(), name: '', status: 'connected' }]
+    return state.computers
+      .filter((computer) => computer.status !== 'rejected' && (!state.scope || computer.id === state.scope))
+      .map(({ id, name, status }) => ({ id, name, status }))
+  }, [state])
 }
 
 export const statusText = (status: ComputerStatus) =>

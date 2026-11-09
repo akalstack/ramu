@@ -78,6 +78,7 @@ import {
   type ViewInput,
 } from './workspaceModel'
 import { stableContext } from '../lib/stableContext'
+import type { HostDestination } from '@ramu/shared/hostOverview'
 
 /** Reads one store runs at once per host; well under the calls one host connection allows in flight. */
 const HOST_READ_CONCURRENCY = 8
@@ -310,6 +311,53 @@ export function HostScope({
     </HostProvider>
   )
 }
+/**
+ * A view of `host` shown inside another host's shell, such as one pull request or artifact on a page that lists every
+ * host's: below it `useHost()`, `useWorkspace()` and `useHostRuntime()` are that host's, so the view reads and acts
+ * there. Opening or starting a thread goes to `navigate` when given, which brings that host on screen; its store alone
+ * would open it out of sight. Shows `fallback` until the host's store has loaded.
+ */
+export function HostStore({
+  host,
+  navigate,
+  fallback = null,
+  children,
+}: {
+  host: string
+  navigate?: (destination: HostDestination) => void
+  fallback?: ReactNode
+  children: ReactNode
+}) {
+  useEffect(() => mountRequests.request(host), [host])
+  const shell = useSyncExternalStore(subscribeShells, () => shells.get(host) ?? null)
+  const routed = useMemo(() => {
+    if (!shell || !navigate) return shell
+    const toTask = (taskId: string, sessionId?: string) =>
+      navigate({ kind: 'task', taskId, ...(sessionId ? { sessionId } : {}) })
+    const openView = (taskId: string, view: ViewInput) => {
+      if (view.kind === 'agent') return toTask(taskId, view.sessionId)
+      shell.actions.openView(taskId, view)
+      toTask(taskId)
+    }
+    const newTask = (projectId?: string) => navigate({ kind: 'new', ...(projectId ? { projectId } : {}) })
+    return {
+      ...shell,
+      api: { ...shell.api, openTask: (taskId: string) => toTask(taskId), openView, newTask },
+      actions: { ...shell.actions, openTask: (taskId: string) => toTask(taskId), openView, newTask },
+    }
+  }, [shell, navigate])
+  if (!routed?.loaded) return fallback
+  return (
+    <HostProvider hostId={host}>
+      <RuntimeCtx.Provider value={routed.runtime}>
+        <ActionsCtx.Provider value={routed.actions}>
+          <Ctx.Provider value={routed.api}>{children}</Ctx.Provider>
+        </ActionsCtx.Provider>
+      </RuntimeCtx.Provider>
+    </HostProvider>
+  )
+}
+
 /** The store a row belongs to: the nearest `HostScope`'s (maybe not loaded yet), else the store on screen. */
 export function useRowStore(): WorkspaceApi | null {
   const active = useContext(Ctx)

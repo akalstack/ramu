@@ -6452,4 +6452,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Install a compatible version yourself, then check again.': 'Pasang versi yang kompatibel sendiri, lalu periksa lagi.',
   'Cannot be used with this Ramu release': 'Tidak dapat digunakan dengan rilis Ramu ini',
   'Installed providers': 'Penyedia terpasang',
+  'Opens on {0}. Also on {1}': 'Dibuka di {0}. Juga ada di {1}',
+  'Host for this pull request': 'Host untuk pull request ini',
+  'Its thread and checkout are on this host': 'Thread dan checkout-nya ada di host ini',
+  '{0}. Its pull requests show when it is back.': '{0}. Pull request-nya tampil saat host kembali.',
+  '{0}. Its artifacts show when it is back.': '{0}. Artefaknya tampil saat host kembali.',
 }

@@ -5,6 +5,7 @@ import {
   inPullRequestFilter,
   matchesPullRequest,
   matchesPullRequestRow,
+  mergedPullRequestRows,
   pullRequestGlyph,
   pullRequestRows,
   pullRequestRef,
@@ -126,6 +127,64 @@ describe('the Pull requests page', () => {
 
   it('finds a row by its project or repository', () => {
     expect(rows.filter((row) => matchesPullRequestRow(row, 'shop api'))).toHaveLength(2)
+  })
+})
+
+describe('the Pull requests page across hosts', () => {
+  const repo = (overrides: Partial<RepositoryPullRequests>): RepositoryPullRequests => ({
+    projectId: 'p',
+    projectName: 'Bakery',
+    repoId: 'r',
+    repoName: 'site',
+    availability: 'ready',
+    viewer: 'ana',
+    pullRequests: [pr({ url: 'u/1', number: 1, updatedAt: 2 })],
+    local: {},
+    ...overrides,
+  })
+
+  it('lists a pull request once when several hosts have its repository', () => {
+    const rows = mergedPullRequestRows([
+      { host: 'laptop', repositories: [repo({})] },
+      {
+        host: 'vps',
+        repositories: [repo({ repoId: 'r2', pullRequests: [pr({ url: 'u/1' }), pr({ url: 'u/2', updatedAt: 9 })] })],
+      },
+    ])
+    expect(rows.map((row) => [row.pr.url, row.host, row.sources.map((source) => source.host)])).toEqual([
+      ['u/2', 'vps', ['vps']],
+      ['u/1', 'laptop', ['laptop', 'vps']],
+    ])
+  })
+
+  it('opens it where a thread works on it, else on the host on screen', () => {
+    const working = repo({ threads: { 'u/1': [{ taskId: 't', title: 'Fix' }] } })
+    expect(
+      mergedPullRequestRows(
+        [
+          { host: 'laptop', repositories: [repo({})] },
+          { host: 'vps', repositories: [working] },
+        ],
+        ['laptop'],
+      )[0],
+    ).toMatchObject({ host: 'vps', repoId: 'r' })
+    expect(
+      mergedPullRequestRows(
+        [
+          { host: 'laptop', repositories: [repo({})] },
+          { host: 'vps', repositories: [repo({})] },
+        ],
+        ['vps'],
+      )[0]?.host,
+    ).toBe('vps')
+  })
+
+  it('prefers a host with a checkout over one that only lists it from the service', () => {
+    const rows = mergedPullRequestRows([
+      { host: 'laptop', repositories: [repo({ outside: true })] },
+      { host: 'vps', repositories: [repo({})] },
+    ])
+    expect(rows[0]).toMatchObject({ host: 'vps', outside: false })
   })
 })
 

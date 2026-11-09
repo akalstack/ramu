@@ -88,7 +88,7 @@ function setBase<T extends { base: number }>(edit: (change: (current: T | null) 
 
 export function PageView({ artifactId, onBack }: { artifactId: string; onBack(): void }) {
   useLanguage()
-  const { invoke } = useHost()
+  const { invoke, id: host } = useHost()
   const { on } = useHostRuntime()
   const ws = useWorkspace()
   const viewOnly = useViewOnly()
@@ -519,7 +519,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
       disabled: viewOnly,
       onSelect: () =>
         void invoke('artifacts.duplicate', artifactId)
-          .then((copy) => openPage(copy.id))
+          .then((copy) => openPage(copy.id, host))
           .catch((e) => notifyError(message(e))),
     },
     ...(page.kind === 'design' && document && designTokensOf(document)

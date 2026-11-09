@@ -7,7 +7,7 @@ import { openPage } from './openPage'
 
 /** A page's notification on this desktop: a toast that opens the page. Phones get the same one as a push. */
 export function PageNotices() {
-  const { on } = useHostRuntime()
+  const { on, id: host } = useHostRuntime()
   useEffect(
     () =>
       on('artifacts:changed', (payload) => {
@@ -24,13 +24,13 @@ export function PageNotices() {
           actionProps: {
             children: t('Open'),
             onClick: () => {
-              openPage(payload.artifactId)
+              openPage(payload.artifactId, host)
               notify.close(id)
             },
           },
         })
       }),
-    [on],
+    [on, host],
   )
   return null
 }

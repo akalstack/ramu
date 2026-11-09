@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AppState } from 'react-native'
-import { inPullRequestFilter, pullRequestRows } from '@ramu/shared/pullRequests'
+import type { RepositoryPullRequests } from '@ramu/shared/types'
+import { inPullRequestFilter, mergedPullRequestRows } from '@ramu/shared/pullRequests'
 import { useStore } from './store'
 
 /** The hosts keep their own short cache; this only decides how often the badge asks them. */
@@ -13,7 +14,7 @@ export function usePullRequestsWaiting(): number {
     .filter((pc) => pc.status === 'online')
     .map((pc) => pc.id)
     .join(',')
-  const [counts, setCounts] = useState<Record<string, number>>({})
+  const [lists, setLists] = useState<Record<string, RepositoryPullRequests[]>>({})
   useEffect(() => {
     const ids = online.split(',').filter(Boolean)
     let cancelled = false
@@ -23,8 +24,7 @@ export function usePullRequestsWaiting(): number {
         void store.invoke(id, 'forge.allPullRequests', false, false).then(
           (repositories) => {
             if (cancelled) return
-            const waiting = pullRequestRows(repositories).filter((row) => inPullRequestFilter(row, 'needs-you')).length
-            setCounts((all) => ({ ...all, [id]: waiting }))
+            setLists((all) => ({ ...all, [id]: repositories }))
           },
           () => {
             // An older or unreachable host shows no count rather than a wrong one.
@@ -43,8 +43,9 @@ export function usePullRequestsWaiting(): number {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the online hosts; the store's invoke is stable
   }, [online])
-  return online
-    .split(',')
-    .filter(Boolean)
-    .reduce((sum, id) => sum + (counts[id] ?? 0), 0)
+  // A pull request whose repository several hosts have counts once.
+  const ids = online.split(',').filter(Boolean)
+  return mergedPullRequestRows(ids.map((host) => ({ host, repositories: lists[host] ?? [] }))).filter((row) =>
+    inPullRequestFilter(row, 'needs-you'),
+  ).length
 }

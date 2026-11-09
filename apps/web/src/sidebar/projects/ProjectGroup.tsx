@@ -159,7 +159,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
             submenu: projectPages.map((page) => ({
               key: page.id,
               label: `${page.icon} ${page.title}`,
-              onSelect: () => openPage(page.id),
+              onSelect: () => openPage(page.id, host.id),
             })),
           } as MenuEntry,
         ]

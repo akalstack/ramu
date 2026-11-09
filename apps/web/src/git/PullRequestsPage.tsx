@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useRef, useState } from 'react'
+import { useQueries } from '@tanstack/react-query'
 import {
   ArrowLeft,
   CircleCheck,
@@ -26,10 +26,12 @@ import {
   PULL_REQUEST_FILTER_LABEL,
   inPullRequestFilter,
   matchesPullRequestRow,
+  mergedPullRequestRows,
   FORGE_NAMES,
   pullRequestRef,
-  pullRequestRows,
+  pullRequestRepoKey,
   sortPullRequestRows,
+  type MergedPullRequestRow,
   type PullRequestFilter,
   type PullRequestRow,
   type PullRequestSort,
@@ -38,10 +40,16 @@ import { cn } from 'cn'
 import { t, useLanguage } from '../i18n'
 import { Dropdown, timeAgo } from '../Menu'
 import { ipcQueryKeyOn } from '../dataQueries'
-import { useHost } from '../workspace/HostProvider'
+import { HostProvider } from '../workspace/HostProvider'
+import { HostContent } from '../workspace/HostContent'
+import { useHostSelection } from '../workspace/HostSelection'
+import { statusText, useScopedHosts } from '../workspace/computers'
 import { projectCtx, type useWorkspace } from '../workspace/workspace'
+import { ownHostId } from '../hosts'
+import { DeviceIcon } from '@/components/device-icon'
 import { ForgeAccessPanel } from '../sidebar/scm/ForgeAccessPanel'
 import { queryInvokerFor } from './hostQuery'
+import { errorText } from '../lib/errors'
 import { invoke as openOnThisComputer } from '../ipc'
 import { PullRequestIcon, StageChip } from './PullRequestIcon'
 import { PullRequestView } from './PullRequestView'
@@ -59,35 +67,39 @@ function savedSort(): PullRequestSort {
   }
 }
 const FILTER_EVENT = 'ramu:pull-requests-filter'
+/** One host's repository, as a thread's Source Control names it. */
+type RepoTarget = { host: string; repoId: string }
 /** A repository asked for before the page mounted, such as from a thread's Source Control. */
-let pendingRepo: string | null = null
+let pendingRepo: RepoTarget | null = null
 
 /** Opens the Pull requests page, narrowed to one repository when given. */
-export function showPullRequests(ws: ReturnType<typeof useWorkspace>, repoId: string | null = null) {
-  pendingRepo = repoId
-  window.dispatchEvent(new CustomEvent(FILTER_EVENT, { detail: repoId }))
+export function showPullRequests(ws: ReturnType<typeof useWorkspace>, repo: RepoTarget | null = null) {
+  pendingRepo = repo
+  window.dispatchEvent(new CustomEvent(FILTER_EVENT, { detail: repo }))
   ws.setSidebar('pulls')
 }
 
-/** Every repository's pull requests on this host, refreshed while the window has focus. */
-export function useAllPullRequests(includeClosed: boolean, enabled = true) {
-  const host = useHost()
-  const call = queryInvokerFor(host.id)
-  return useQuery({
-    queryKey: ipcQueryKeyOn(host.id, 'forge.allPullRequests', includeClosed),
-    queryFn: () => call('forge.allPullRequests', includeClosed, false),
-    enabled,
-    refetchInterval: () => (document.hasFocus() ? 120_000 : false),
+/** Every repository's pull requests on each listed host, refreshed while the window has focus. */
+function useHostsPullRequests(includeClosed: boolean, enabled = true) {
+  const hosts = useScopedHosts()
+  const results = useQueries({
+    queries: hosts.map((host) => ({
+      queryKey: ipcQueryKeyOn(host.id, 'forge.allPullRequests', includeClosed),
+      queryFn: () => queryInvokerFor(host.id)('forge.allPullRequests', includeClosed, false),
+      // An offline host is named on the page instead; it lists again once it is back.
+      enabled: enabled && host.status === 'connected',
+      refetchInterval: () => (document.hasFocus() ? 120_000 : false),
+    })),
   })
+  return hosts.map((host, index) => ({ host, query: results[index]! }))
 }
 
-/** How many open pull requests wait on the person, for the sidebar's badge. */
+/** How many open pull requests wait on the person on the listed hosts, for the sidebar's badge. */
 export function usePullRequestsWaiting(): number {
-  const { data } = useAllPullRequests(false)
-  return useMemo(
-    () => pullRequestRows(data ?? []).filter((row) => inPullRequestFilter(row, 'needs-you')).length,
-    [data],
-  )
+  const lists = useHostsPullRequests(false)
+  return mergedPullRequestRows(
+    lists.map(({ host, query }) => ({ host: host.id, repositories: query.data ?? [] })),
+  ).filter((row) => inPullRequestFilter(row, 'needs-you')).length
 }
 
 function ChecksMark({ checks }: { checks: PullRequestSummary['checks'] }) {
@@ -103,28 +115,36 @@ const repoLabel = (row: Pick<PullRequestRow, 'projectName' | 'repoName'>) =>
   row.projectName === row.repoName ? row.repoName : `${row.projectName} / ${row.repoName}`
 
 /**
- * Every pull request across this host's projects in one list, as GitHub's own page shows them across repositories,
- * with what only Ramu knows: the thread working on each one, replies an agent drafted, and the next step that is
- * yours. Choosing one shows it in full beside the list.
+ * Every pull request across the listed hosts' projects in one list, as GitHub's own page shows them across
+ * repositories, with what only Ramu knows: the thread working on each one, replies an agent drafted, and the next step
+ * that is yours. A pull request whose repository several hosts have shows once. Choosing one shows it in full beside
+ * the list, read from and acted on at the host it is on.
  */
 export function PullRequestsPage() {
   useLanguage()
-  const host = useHost()
-  const call = queryInvokerFor(host.id)
+  const { activeHost } = useHostSelection()
   const [filter, setFilter] = useState<PullRequestFilter>('needs-you')
-  const [repoId, setRepoId] = useState<string>(() => pendingRepo ?? ALL)
+  // `pending` holds a host's repository until that host's list arrives and gives it a key.
+  const [repoKey, setRepoKey] = useState<string>(ALL)
+  const [pending, setPending] = useState<RepoTarget | null>(() => pendingRepo)
   const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState<PullRequestRow | null>(null)
+  const [selected, setSelected] = useState<MergedPullRequestRow | null>(null)
   const [sort, setSort] = useState<PullRequestSort>(savedSort)
   const [refreshing, setRefreshing] = useState(false)
-  const open = useAllPullRequests(false)
-  const closed = useAllPullRequests(true, filter === 'closed')
-  const query = filter === 'closed' ? closed : open
+  const open = useHostsPullRequests(false)
+  const closed = useHostsPullRequests(true, filter === 'closed')
+  const lists = filter === 'closed' ? closed : open
+  const hosts = lists.map((entry) => entry.host)
+  const manyHosts = hosts.length > 1
+  const hostName = (id: string) => hosts.find((host) => host.id === id)?.name ?? ''
+  const connected = (id: string) => hosts.some((host) => host.id === id && host.status === 'connected')
 
   useEffect(() => {
     pendingRepo = null
     const onFilter = (event: Event) => {
-      setRepoId((event as CustomEvent<string | null>).detail ?? ALL)
+      const repo = (event as CustomEvent<RepoTarget | null>).detail
+      setPending(repo)
+      if (!repo) setRepoKey(ALL)
       setSelected(null)
       pendingRepo = null
     }
@@ -132,28 +152,47 @@ export function PullRequestsPage() {
     return () => window.removeEventListener(FILTER_EVENT, onFilter)
   }, [])
 
-  const { refetch } = query
+  const refetchAll = () => Promise.all(lists.map(({ query }) => query.refetch()))
+  const latestRefetch = useRef(refetchAll)
+  latestRefetch.current = refetchAll
   useEffect(() => {
-    const refresh = () => void refetch()
+    const refresh = () => void latestRefetch.current()
     window.addEventListener('ramu:git-updated', refresh)
     return () => window.removeEventListener('ramu:git-updated', refresh)
-  }, [refetch])
+  }, [])
 
-  const repositories: RepositoryPullRequests[] = useMemo(() => query.data ?? [], [query.data])
-  const allRows = useMemo(() => pullRequestRows(repositories), [repositories])
+  const hostLists = lists.map(({ host, query }) => ({ host: host.id, repositories: query.data ?? [] }))
+  // Each host's repositories, labelled with the host when the page lists several.
+  const repositories: (RepositoryPullRequests & { host: string })[] = hostLists.flatMap(({ host, repositories }) =>
+    repositories.map((repo) => ({ ...repo, host })),
+  )
+  const preferred = [activeHost, ownHostId()]
+  const allRows = mergedPullRequestRows(hostLists, preferred)
+
+  const pendingKey = pending
+    ? repositories.find((repo) => repo.host === pending.host && repo.repoId === pending.repoId)
+    : undefined
+  useEffect(() => {
+    if (!pendingKey) return
+    setRepoKey(pullRequestRepoKey(pendingKey))
+    setPending(null)
+  }, [pendingKey])
+
   // The repository picker also narrows to one service: a value of `service:<id>`.
-  const inScope = (entry: { repoId: string; service?: ForgeService }) =>
-    repoId === ALL ||
-    (repoId.startsWith(SERVICE)
-      ? (entry.service ?? 'github') === repoId.slice(SERVICE.length)
-      : entry.repoId === repoId)
+  const inScope = (entry: { projectName: string; repoName: string; service?: ForgeService }) =>
+    repoKey === ALL ||
+    (repoKey.startsWith(SERVICE)
+      ? (entry.service ?? 'github') === repoKey.slice(SERVICE.length)
+      : pullRequestRepoKey(entry) === repoKey)
   const scoped = allRows.filter((row) => inScope(row) && matchesPullRequestRow(row, search))
   const rows = sortPullRequestRows(
     scoped.filter((row) => inPullRequestFilter(row, filter)),
     sort,
   )
-  // Counts come from the open list, so switching to Merged and closed does not blank them.
-  const openRows = useMemo(() => pullRequestRows(open.data ?? []), [open.data])
+  // Counts come from the open lists, so switching to Merged and closed does not blank them.
+  const openRows = mergedPullRequestRows(
+    open.map(({ host, query }) => ({ host: host.id, repositories: query.data ?? [] })),
+  )
   const count = (entry: PullRequestFilter) =>
     entry === 'closed'
       ? 0
@@ -168,21 +207,34 @@ export function PullRequestsPage() {
         repo.availability === 'choose-account'),
   )
   const reachable = repositories.filter((repo) => repo.availability === 'ready' && !repo.error)
+  const loading = lists.some(({ query }) => query.isLoading)
+  const fetching = lists.some(({ query }) => query.isFetching)
+  const settled = lists.some(({ query }) => query.isSuccess) && !loading
+  // A host that is offline or could not answer is named above the list; the other hosts' pull requests still show.
+  const unreachable = lists.filter(({ host, query }) => host.status !== 'connected' || query.isError)
 
   const refresh = async () => {
     setRefreshing(true)
     try {
-      await call('forge.allPullRequests', filter === 'closed', true).catch(() => {})
-      await query.refetch()
+      await Promise.all(
+        lists
+          .filter(({ host }) => host.status === 'connected')
+          .map(({ host, query }) =>
+            queryInvokerFor(host.id)('forge.allPullRequests', filter === 'closed', true)
+              .catch(() => {})
+              .then(() => query.refetch()),
+          ),
+      )
     } finally {
       setRefreshing(false)
     }
   }
 
-  const row = (entry: PullRequestRow) => {
+  const row = (entry: MergedPullRequestRow) => {
     const { pr } = entry
     const thread = entry.threads.at(-1)
     const active = selected?.pr.url === pr.url
+    const elsewhere = entry.sources.slice(1).map((source) => hostName(source.host))
     return (
       <RowButton
         key={pr.url}
@@ -231,12 +283,28 @@ export function PullRequestsPage() {
             {pr.author ?? ''}
             {thread ? ` · ${t('In {0}', { '0': thread.title })}` : ''}
           </span>
+          {manyHosts && (
+            <span
+              className="ml-auto inline-flex min-w-0 flex-none items-center gap-1"
+              title={
+                elsewhere.length
+                  ? t('Opens on {0}. Also on {1}', { '0': hostName(entry.host), '1': elsewhere.join(', ') })
+                  : t('On {0}', { '0': hostName(entry.host) })
+              }
+            >
+              <DeviceIcon name={hostName(entry.host)} size={11} />
+              <span className="max-w-[120px] truncate">{hostName(entry.host)}</span>
+              {elsewhere.length > 0 && <span className="tabular-nums">+{elsewhere.length}</span>}
+            </span>
+          )}
         </span>
       </RowButton>
     )
   }
 
   const services = [...new Set(repositories.map((repo) => repo.service ?? 'github'))]
+  // One option per repository, however many hosts have it.
+  const uniqueRepos = [...new Map(repositories.map((repo) => [pullRequestRepoKey(repo), repo])).values()]
   const repoOptions = [
     { value: ALL, label: t('All repositories') },
     // With more than one service, each can be chosen whole, and each repository says which it is on.
@@ -246,8 +314,8 @@ export function PullRequestsPage() {
           label: t('All on {0}', { '0': FORGE_NAMES[service] }),
         }))
       : []),
-    ...repositories.map((repo) => ({
-      value: repo.repoId,
+    ...uniqueRepos.map((repo) => ({
+      value: pullRequestRepoKey(repo),
       label: services.length > 1 ? `${repoLabel(repo)} · ${FORGE_NAMES[repo.service ?? 'github']}` : repoLabel(repo),
     })),
   ]
@@ -285,7 +353,7 @@ export function PullRequestsPage() {
               disabled={refreshing}
               onClick={() => void refresh()}
             >
-              <RefreshCw size={14} className={cn((refreshing || query.isFetching) && 'animate-spin')} />
+              <RefreshCw size={14} className={cn((refreshing || fetching) && 'animate-spin')} />
             </Button>
           </div>
           <div className="flex items-center gap-1.5">
@@ -307,13 +375,13 @@ export function PullRequestsPage() {
               }}
               className="flex-1"
             />
-            {repositories.length > 1 && (
+            {uniqueRepos.length > 1 && (
               <Dropdown
                 label={t('Repository')}
-                value={repoId}
+                value={repoKey}
                 options={repoOptions}
                 onChange={(value) => {
-                  setRepoId(value)
+                  setRepoKey(value)
                   setSelected(null)
                 }}
                 className="flex-1"
@@ -340,25 +408,56 @@ export function PullRequestsPage() {
         </div>
         <OverlayScrollArea className="min-h-0 flex-1">
           <div className="flex flex-col gap-px px-2 pt-1 pb-6">
+            {unreachable.map(({ host, query }) => (
+              <p
+                key={host.id}
+                role="status"
+                className={cn(
+                  'mx-2 my-1 flex items-center gap-1.5 text-caption',
+                  query.isError ? 'text-bad' : 'text-muted-foreground',
+                )}
+              >
+                {manyHosts && <DeviceIcon name={host.name} size={12} />}
+                <span className="min-w-0 flex-1 truncate">
+                  {[
+                    manyHosts ? host.name : '',
+                    host.status !== 'connected'
+                      ? t('{0}. Its pull requests show when it is back.', { '0': statusText(host.status) })
+                      : errorText(query.error),
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+                {host.status === 'connected' && (
+                  <Button variant="ghost" size="xs" onClick={() => void query.refetch()}>
+                    {t('Retry')}
+                  </Button>
+                )}
+              </p>
+            ))}
             {attention.map((repo) => (
-              <div key={repo.repoId} className="mx-2 my-1 flex flex-col gap-1">
-                <span className="text-caption text-muted-foreground">{repoLabel(repo)}</span>
+              <div key={`${repo.host}\n${repo.repoId}`} className="mx-2 my-1 flex flex-col gap-1">
+                <span className="text-caption text-muted-foreground">
+                  {manyHosts ? `${repoLabel(repo)} · ${hostName(repo.host)}` : repoLabel(repo)}
+                </span>
                 {repo.error ? (
                   <p className="m-0 text-caption text-bad">{repo.error}</p>
                 ) : (
-                  <ForgeAccessPanel
-                    taskId={projectCtx(repo.projectId)}
-                    repoId={repo.repoId}
-                    unavailable={repo.availability}
-                    service={repo.service}
-                  />
+                  // Signing in happens on the host whose checkout it is.
+                  <HostProvider hostId={repo.host}>
+                    <ForgeAccessPanel
+                      taskId={projectCtx(repo.projectId)}
+                      repoId={repo.repoId}
+                      unavailable={repo.availability}
+                      service={repo.service}
+                    />
+                  </HostProvider>
                 )}
               </div>
             ))}
-            {query.isPending && <ContentSkeleton />}
-            {query.isError && <p className="m-2 text-caption text-bad">{String(query.error.message)}</p>}
+            {loading && !rows.length && <ContentSkeleton />}
             {rows.map(row)}
-            {query.isSuccess && !rows.length && (
+            {settled && !rows.length && (
               <Empty className="py-12">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
@@ -394,24 +493,41 @@ export function PullRequestsPage() {
       >
         {selected ? (
           <>
-            <div className="flex flex-none items-center gap-1 px-3 pt-2 @min-[900px]:hidden">
-              <Button variant="ghost" size="sm" onClick={() => setSelected(null)}>
+            <div className={cn('flex flex-none items-center gap-1 px-3 pt-2', !manyHosts && '@min-[900px]:hidden')}>
+              <Button variant="ghost" size="sm" className="@min-[900px]:hidden" onClick={() => setSelected(null)}>
                 <ArrowLeft size={13} />
                 {t('Pull requests')}
               </Button>
+              {manyHosts && (
+                <PullRequestHost
+                  row={selected}
+                  name={hostName}
+                  connected={connected}
+                  onChange={(source) => setSelected({ ...selected, ...source })}
+                />
+              )}
             </div>
-            <PullRequestView
-              key={selected.pr.url}
-              taskId={projectCtx(selected.projectId)}
-              view={{
-                kind: 'pull-request',
-                id: `pull-request:${selected.pr.url}`,
-                repoId: selected.repoId,
-                url: selected.pr.url,
-                number: selected.pr.number,
-                title: selected.pr.title,
-              }}
-            />
+            <HostContent
+              key={`${selected.host}\n${selected.pr.url}`}
+              host={selected.host}
+              fallback={
+                <div className="flex-1 p-6">
+                  <ContentSkeleton />
+                </div>
+              }
+            >
+              <PullRequestView
+                taskId={projectCtx(selected.projectId)}
+                view={{
+                  kind: 'pull-request',
+                  id: `pull-request:${selected.pr.url}`,
+                  repoId: selected.repoId,
+                  url: selected.pr.url,
+                  number: selected.pr.number,
+                  title: selected.pr.title,
+                }}
+              />
+            </HostContent>
           </>
         ) : (
           <Empty className="flex-1">
@@ -426,5 +542,46 @@ export function PullRequestsPage() {
         )}
       </section>
     </div>
+  )
+}
+
+/**
+ * Which host the open pull request is read from and worked on: its thread and checkout live there. When several hosts
+ * have its repository, the person can move it to another one that is connected.
+ */
+function PullRequestHost({
+  row,
+  name,
+  connected,
+  onChange,
+}: {
+  row: MergedPullRequestRow
+  name: (host: string) => string
+  connected: (host: string) => boolean
+  onChange: (source: MergedPullRequestRow['sources'][number]) => void
+}) {
+  const choices = row.sources.filter(
+    (source) => !source.outside && (source.host === row.host || connected(source.host)),
+  )
+  if (choices.length < 2)
+    return (
+      <span className="ml-auto inline-flex min-w-0 items-center gap-1.5 px-1.5 text-caption text-muted-foreground">
+        <DeviceIcon name={name(row.host)} size={12} />
+        <span className="truncate">{t('On {0}', { '0': name(row.host) })}</span>
+      </span>
+    )
+  return (
+    <Dropdown
+      label={t('Host for this pull request')}
+      title={t('Its thread and checkout are on this host')}
+      icon={<DeviceIcon name={name(row.host)} size={13} />}
+      value={row.host}
+      options={choices.map((source) => ({ value: source.host, label: t('On {0}', { '0': name(source.host) }) }))}
+      onChange={(host) => {
+        const source = choices.find((entry) => entry.host === host)
+        if (source) onChange(source)
+      }}
+      className="ml-auto max-w-[220px]"
+    />
   )
 }

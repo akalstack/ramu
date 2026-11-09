@@ -13,7 +13,7 @@ import { openPage } from './openPage'
  */
 export function ImportPageDialog({ onClose }: { onClose(): void }) {
   useLanguage()
-  const { invoke } = useHost()
+  const { invoke, id: host } = useHost()
   const [link, setLink] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -36,7 +36,7 @@ export function ImportPageDialog({ onClose }: { onClose(): void }) {
             const from = { title: shared.artifact.title, icon: shared.artifact.icon }
             const page = await invoke('artifacts.import', shared.document, from)
             onClose()
-            openPage(page.id)
+            openPage(page.id, host)
           })
           .catch((e: unknown) =>
             setError(

@@ -3,11 +3,13 @@ import { RowButton } from '../components/row-button'
 import { t, useLanguage } from '../i18n'
 import { usePageIndex } from './pageIndex'
 import { openPage } from './openPage'
+import { useHost } from '../workspace/HostProvider'
 
 /** Runs pages do on their own, listed in Schedules under each page, opening the page to change or allow them. */
 export function PageSchedules() {
   useLanguage()
   const { pages } = usePageIndex()
+  const host = useHost().id
   const rows = [...pages.values()].flatMap((page) =>
     (page.capabilities.schedules ?? []).map((schedule, index) => ({ page, schedule, index })),
   )
@@ -16,7 +18,7 @@ export function PageSchedules() {
     <section className="flex flex-col gap-1" aria-label={t('Page runs')}>
       <h2 className="m-0 text-control font-medium text-muted-foreground">{t('Page runs')}</h2>
       {rows.map(({ page, schedule, index }) => (
-        <RowButton key={`${page.id}:${index}`} onClick={() => openPage(page.id)}>
+        <RowButton key={`${page.id}:${index}`} onClick={() => openPage(page.id, host)}>
           <span aria-hidden className="w-6 flex-none text-center">
             {page.icon}
           </span>

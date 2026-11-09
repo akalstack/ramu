@@ -171,6 +171,59 @@ export function pullRequestRows(repositories: RepositoryPullRequests[]): PullReq
     .sort((a, b) => b.pr.updatedAt - a.pr.updatedAt)
 }
 
+/** A row of the Pull requests page as one host lists it. */
+export interface HostPullRequestRow extends PullRequestRow {
+  host: string
+}
+
+/**
+ * A pull request on the Pull requests page across hosts: shown once however many hosts have a checkout of its
+ * repository, and opened on the host in `host`. `sources` holds every host's row, that one first.
+ */
+export interface MergedPullRequestRow extends HostPullRequestRow {
+  sources: HostPullRequestRow[]
+}
+
+/**
+ * Every host's pull requests as one list, newest change first. A pull request listed by several hosts opens where the
+ * work on it is: a host with a checkout before one without, then a host with a thread on it, then the earliest host in
+ * `preferred` (the one on screen first), then the order of `hosts`.
+ */
+export function mergedPullRequestRows(
+  hosts: { host: string; repositories: RepositoryPullRequests[] }[],
+  preferred: readonly string[] = [],
+): MergedPullRequestRow[] {
+  const rank = (row: HostPullRequestRow) => {
+    const index = preferred.indexOf(row.host)
+    return [row.outside ? 1 : 0, row.threads.length ? 0 : 1, index < 0 ? preferred.length : index]
+  }
+  const before = (a: HostPullRequestRow, b: HostPullRequestRow) => {
+    const [x, y] = [rank(a), rank(b)]
+    const at = x.findIndex((value, i) => value !== y[i])
+    return at < 0 ? 0 : x[at]! - y[at]!
+  }
+  const byUrl = new Map<string, HostPullRequestRow[]>()
+  for (const { host, repositories } of hosts)
+    for (const row of pullRequestRows(repositories)) {
+      const list = byUrl.get(row.pr.url) ?? []
+      list.push({ ...row, host })
+      byUrl.set(row.pr.url, list)
+    }
+  return [...byUrl.values()]
+    .map((list) => {
+      const sources = [...list].sort(before)
+      return { ...sources[0]!, sources }
+    })
+    .sort((a, b) => b.pr.updatedAt - a.pr.updatedAt)
+}
+
+/**
+ * Names a repository the same on every host, for the page's repository filter: hosts with a checkout of one
+ * repository list it under the same project and repository names.
+ */
+export const pullRequestRepoKey = (entry: { service?: ForgeService; projectName: string; repoName: string }) =>
+  [entry.service ?? 'github', entry.projectName, entry.repoName].join('\n')
+
 /**
  * Whether the next step on an open pull request is the person's: a review someone asked of them, or one of their own
  * that is ready to merge, has replies drafted, or is blocked on conflicts, failing checks or requested changes.

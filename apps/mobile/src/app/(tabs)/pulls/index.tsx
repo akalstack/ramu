@@ -13,7 +13,7 @@ import {
   inPullRequestFilter,
   matchesPullRequestRow,
   pullRequestRef,
-  pullRequestRows,
+  mergedPullRequestRows,
   sortPullRequestRows,
   type PullRequestFilter,
   type PullRequestSort,
@@ -93,18 +93,23 @@ export default function PullRequestsScreen() {
 
   const multi = store.computers.length > 1
   const name = (computerId: string) => store.computers.find((pc) => pc.id === computerId)?.name ?? ''
+  // A pull request whose repository several hosts have shows once, opening where its thread is.
   const rowsOf = (which: 'open' | 'closed'): HostRow[] =>
-    Object.entries(lists)
-      .flatMap(([computerId, entry]) =>
-        pullRequestRows(entry[which] ?? []).map((row) => ({ ...row, computerId, hostName: name(computerId) })),
-      )
+    mergedPullRequestRows(
+      Object.entries(lists).map(([host, entry]) => ({ host, repositories: entry[which] ?? [] })),
+      online.map((pc) => pc.id),
+    )
       .filter(
         (row) =>
-          (!repo || (row.computerId === repo.computer && row.repoId === repo.repoId)) &&
+          (!repo || row.sources.some((source) => source.host === repo.computer && source.repoId === repo.repoId)) &&
           (!service || row.service === service) &&
           matchesPullRequestRow(row, search),
       )
-      .sort((a, b) => b.pr.updatedAt - a.pr.updatedAt)
+      .map((row) => {
+        // From a thread's Source Control, the pull request opens on that thread's host.
+        const source = (repo && row.sources.find((entry) => entry.host === repo.computer)) || row
+        return { ...source, computerId: source.host, hostName: name(source.host) }
+      })
   const openRows = rowsOf('open')
   const services = [
     ...new Set(Object.values(lists).flatMap((entry) => (entry.open ?? []).map((item) => item.service ?? 'github'))),
