@@ -19,6 +19,7 @@ An **identity** names the accounts that belong together, and nothing else:
 - A Git hosting connection per origin (GitHub, GitHub Enterprise, GitLab, Bitbucket, Azure DevOps).
 - Hosting accounts for deploys, databases and store releases.
 - A browser profile (**Default**, or one made with **Import…**), so an agent browsing in a work project opens the work sign-ins.
+- An account per Shared MCP server and plugin credential that has more than one ([One server, an account per identity](#one-server-an-account-per-identity)).
 - A memory level of its own ([Memory](#memory-three-levels)).
 
 Theme, layout, keybindings, models, abilities, rules and every other setting stay host-wide. Shared MCP servers and skills are available under every identity unless their **Applies to** limits one to an identity. An identity holds only references to accounts already connected on the host; no credential is copied or moved.
@@ -30,6 +31,16 @@ Theme, layout, keybindings, models, abilities, rules and every other setting sta
 **Mismatch guardrail.** Before a commit, push, pull request, merge, deploy or store release, Ramu compares the account it is about to use with the project's identity. If they differ (a thread whose login was changed by hand, an account removed, a repository moved to another owner), the approval card or button names both and offers **Use Work** or **Continue as Personal**. Agents see the same refusal through their tools and cannot pick another identity. A schedule run has nobody to ask, so a mismatch stops the run and puts it in the Inbox with both accounts named.
 
 **No borrowing between identities.** Provider fallback and abilities pick only from the logins in the project's identity. A work thread at its limit moves to another Work login or stops with the existing message; it never moves to a personal subscription. A provider the identity has no login for offers **Connect ‹provider› for Work** instead of using another identity's.
+
+#### One server, an account per identity
+
+A Shared MCP connection already keeps the server's definition apart from its credentials. It gains one account per identity: **Linear** is set up once, with its URL or command, tools, grants and approvals, and holds a work sign-in for Work and a personal one for Personal. When a thread calls a tool, Ramu picks the account from the project's identity; the agent sees one `linear` server and never chooses the account.
+
+- An HTTP server keeps OAuth tokens or header secrets per account; a stdio server runs one process per account, each with its own environment.
+- Each account's tool list is checked on its own, since a work workspace can offer tools a personal one does not; a tool missing for an account is not offered under that identity.
+- An identity with no account for a server does not see its tools in its projects, and the server's row offers **Sign in to Linear for Work**. It never falls back to another identity's account.
+- With one identity a connection has one account and looks as it does today. **Applies to** still limits a whole server to one identity, for a client's internal server.
+- A plugin's credential slot holds a value per identity the same way ([Plugins](plugins.md)).
 
 **Everything in a project follows it.** Anything that runs inside a project uses that project's identity; anything outside a project uses the default identity:
 
@@ -90,6 +101,7 @@ Encrypted backups to a Ramu account or to your own GitHub are planned in [Ramu a
 - Forge connections, per-origin selection and per-repository overrides: `apps/server/src/workspace/forgeAccounts.ts`.
 - Hosting accounts: `apps/server/src/workspace/deploy/accounts.ts`.
 - Memory scopes and Shared MCP and skill **Applies to** exceptions: `apps/server/src/memory`, `apps/server/src/mcp`.
+- Shared MCP connections, their service account and secret references, OAuth tokens and the call gateway: `packages/shared/src/mcp.ts`, `apps/server/src/mcp/service.ts`, `oauth.ts`, `gateway.ts`.
 - Provider fallback and abilities: `apps/server/src/agent/fallbackRouter.ts`, `apps/server/src/agent/abilities.ts`.
 - Schedules, webhooks and pull request watches: `apps/server/src/background/schedules.ts`, `webhookSetup.ts`, `pullRequestWatches.ts`.
 - Browser profiles: `apps/server/src/browser/browserProfiles.ts`.
@@ -105,11 +117,12 @@ Encrypted backups to a Ramu account or to your own GitHub are planned in [Ramu a
 - A work thread at its Claude limit never moves to the personal Claude or Codex login; with no other Work login it stops and offers **Connect Codex for Work**.
 - A scheduled run in a work project whose forge account was removed stops before pushing and appears in the Inbox naming both accounts.
 - An agent browsing in a work project opens Work's browser profile.
+- One Linear connection with a work and a personal sign-in creates issues in the work workspace from a work project and in the personal one from a personal project, with one set of approvals; a third identity with no Linear account sees no Linear tools and is offered **Sign in to Linear for ‹identity›**.
 - With a work laptop and a personal home server and no identities set up, **Continue on home-server** for a work thread warns with both Git emails before copying; continuing between two hosts with the same email shows nothing new.
 - Removing an identity moves its projects to the identity chosen in **Remove**, and they act with its accounts from the next thread.
 - On a second Mac paired with the first, **Copy settings from…** brings over appearance, models and identities with one review, and lists the logins still to connect there; no credential appears on the second host.
 - An exported file contains no paths, tokens or account secrets, and importing it on a fresh host gives the same review.
-- Server tests for identity matching, environment applied to started processes, the guardrail on each action and on schedule runs, fallback limited to the identity's logins, the three memory levels, the cross-host email check and the portable export; web tests for the chip, the mismatch card, the Continue warning and the copy review; strings translated to Indonesian.
+- Server tests for identity matching, environment applied to started processes, the guardrail on each action and on schedule runs, fallback limited to the identity's logins, the three memory levels, the cross-host email check, Shared MCP account selection per identity and the portable export; web tests for the chip, the mismatch card, the Continue warning and the copy review; strings translated to Indonesian.
 
 ## Later options
 
