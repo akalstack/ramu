@@ -27,7 +27,7 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
   editor: ['defaultMarkdownView', 'previewTabs', 'editorFontSize', 'terminalFontSize', 'defaultTerminalDock'],
   access: ['defaultAccess'],
   browser: ['agentBrowser'],
-  models: ['defaultAutoFallback', 'fallback', 'modelCatalogLookups', 'newModelNotices'],
+  models: ['defaultAutoFallback', 'fallback', 'abilities', 'modelCatalogLookups', 'newModelNotices'],
   workflows: ['goals', 'subagents', 'advisor'],
   memory: ['memory'],
   chats: [
@@ -73,6 +73,9 @@ export const MEMORY_INTELLIGENCE_KEYS = [
   'maintenanceModel',
   'dailyReviews',
   'archiveSkillDays',
+  'summaryInterval',
+  'summaryMemory',
+  'summarySkills',
 ] as const
 
 export const MAX_MODEL_SETS = 20

@@ -1,4 +1,4 @@
-import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
+import { SettingsAdvanced, SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { EfficiencySettings } from './IntelligenceSettings'
 import { Input } from '@/components/desktop-input'
 import { t } from '../i18n'
@@ -120,56 +120,58 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
         title="Show branches in projects"
         description="Threads under a project get a second line with the branch their work lands on. Recent threads always show it."
       />
-      <SettingsGroupTitle>{t('Thread history')}</SettingsGroupTitle>
-      <SettingsRow setting="recentChats">
-        <SettingsLabel
-          title={t('Recent threads per project')}
-          help={t('Older threads stay available under Show more.')}
-        />
-        <Dropdown
-          label={t('Recent threads per project')}
-          value={String(draft.recentChats)}
-          options={Array.from({ length: 18 }, (_, index) => ({
-            value: String(index + 3),
-            label: String(index + 3),
-          }))}
-          onChange={(value) => onChange({ ...draft, recentChats: Number(value) })}
-        />
-      </SettingsRow>
-      <SettingsRow setting="cleanupArchivedDays">
-        <SettingsLabel title={t('Delete archived threads after')} help={t('Worktrees and branches are kept.')} />
-        <Dropdown
-          label={t('Delete archived threads after')}
-          value={String(draft.cleanupArchivedDays)}
-          options={[
-            { value: '0', label: t('Never') },
-            { value: '7', label: t('7 days') },
-            { value: '30', label: t('30 days') },
-            { value: '90', label: t('90 days') },
-            { value: '365', label: t('1 year') },
-          ]}
-          onChange={(value) => onChange({ ...draft, cleanupArchivedDays: Number(value) || 0 })}
-        />
-      </SettingsRow>
-      <SettingsRow setting="autoBackgroundSeconds">
-        <SettingsLabel
-          title={t('Move slow commands to background')}
-          help={t('Let the agent keep working when a command runs longer than this.')}
-        />
-        <Dropdown
-          label={t('Move slow commands to background')}
-          value={String(draft.autoBackgroundSeconds)}
-          options={[
-            { value: '0', label: t('Never') },
-            { value: '30', label: t('After 30 seconds') },
-            { value: '60', label: t('After 1 minute') },
-            { value: '120', label: t('After 2 minutes') },
-            { value: '300', label: t('After 5 minutes') },
-          ]}
-          onChange={(value) => onChange({ ...draft, autoBackgroundSeconds: Number(value) })}
-        />
-      </SettingsRow>
       <EfficiencySettings value={draft.intelligence} onChange={setIntelligence} />
+      <SettingsAdvanced>
+        <SettingsGroupTitle>{t('Thread history')}</SettingsGroupTitle>
+        <SettingsRow setting="recentChats">
+          <SettingsLabel
+            title={t('Recent threads per project')}
+            help={t('Older threads stay available under Show more.')}
+          />
+          <Dropdown
+            label={t('Recent threads per project')}
+            value={String(draft.recentChats)}
+            options={Array.from({ length: 18 }, (_, index) => ({
+              value: String(index + 3),
+              label: String(index + 3),
+            }))}
+            onChange={(value) => onChange({ ...draft, recentChats: Number(value) })}
+          />
+        </SettingsRow>
+        <SettingsRow setting="cleanupArchivedDays">
+          <SettingsLabel title={t('Delete archived threads after')} help={t('Worktrees and branches are kept.')} />
+          <Dropdown
+            label={t('Delete archived threads after')}
+            value={String(draft.cleanupArchivedDays)}
+            options={[
+              { value: '0', label: t('Never') },
+              { value: '7', label: t('7 days') },
+              { value: '30', label: t('30 days') },
+              { value: '90', label: t('90 days') },
+              { value: '365', label: t('1 year') },
+            ]}
+            onChange={(value) => onChange({ ...draft, cleanupArchivedDays: Number(value) || 0 })}
+          />
+        </SettingsRow>
+        <SettingsRow setting="autoBackgroundSeconds">
+          <SettingsLabel
+            title={t('Move slow commands to background')}
+            help={t('Let the agent keep working when a command runs longer than this.')}
+          />
+          <Dropdown
+            label={t('Move slow commands to background')}
+            value={String(draft.autoBackgroundSeconds)}
+            options={[
+              { value: '0', label: t('Never') },
+              { value: '30', label: t('After 30 seconds') },
+              { value: '60', label: t('After 1 minute') },
+              { value: '120', label: t('After 2 minutes') },
+              { value: '300', label: t('After 5 minutes') },
+            ]}
+            onChange={(value) => onChange({ ...draft, autoBackgroundSeconds: Number(value) })}
+          />
+        </SettingsRow>
+      </SettingsAdvanced>
     </div>
   )
 }

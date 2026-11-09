@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './SettingsScope'
 import { useCallback, useContext, useEffect, useRef, useState } from 'react'
-import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
+import { SettingsAdvanced, SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
 import { Dropdown } from '../Menu'
@@ -17,6 +17,7 @@ import { SettingsCard, SettingsCardList } from './cards'
 import { ModelChoice } from './ModelChoice'
 import {
   type IntelligencePreferences,
+  type MemoryPreferences,
   type LearningSnapshot,
   type ManagedSkill,
   type Project,
@@ -104,6 +105,49 @@ function LearningLimitsSettings({ value, onChange }: Props) {
         />
       </SettingsRow>
     </>
+  )
+}
+
+/**
+ * The Memory page's tuning, folded under Advanced: how long unused memories and skills are kept, and how many learning
+ * reviews run a day.
+ */
+export function MemoryAdvancedSettings({
+  memory,
+  intelligence,
+  onMemory,
+  onIntelligence,
+}: {
+  memory: MemoryPreferences
+  intelligence: IntelligencePreferences
+  onMemory: (value: MemoryPreferences) => void
+  onIntelligence: (value: IntelligencePreferences) => void
+}) {
+  if (!memory.enabled && intelligence.learning === 'off') return null
+  return (
+    <div className="settings-form flex flex-col gap-0">
+      <SettingsAdvanced>
+        {memory.enabled && (
+          <SettingsRow setting="memory.staleAfterDays">
+            <SettingsLabel
+              title={t('Archive unused memories after')}
+              help={t(
+                'Applies to project notes that were never used. Notes you wrote and essential memories are kept.',
+              )}
+            />
+            <Dropdown
+              label={t('Archive unused memories after')}
+              value={String(memory.staleAfterDays)}
+              options={[...new Set([30, 60, 90, 180, 365, memory.staleAfterDays])]
+                .sort((a, b) => a - b)
+                .map((days) => ({ value: String(days), label: t('{0} days', { 0: days }) }))}
+              onChange={(days) => onMemory({ ...memory, staleAfterDays: Number(days) })}
+            />
+          </SettingsRow>
+        )}
+        <LearningLimitsSettings value={intelligence} onChange={onIntelligence} />
+      </SettingsAdvanced>
+    </div>
   )
 }
 
@@ -210,7 +254,6 @@ export function LearningSettings({ value, onChange }: Props) {
           onChange={(learning) => onChange({ ...value, learning: learning as IntelligencePreferences['learning'] })}
         />
       </SettingsRow>
-      <LearningLimitsSettings value={value} onChange={onChange} />
       <Button
         disabled={viewOnly || busy || snapshot?.running || value.learning === 'off'}
         variant="secondary"

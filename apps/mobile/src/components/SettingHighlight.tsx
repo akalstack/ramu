@@ -22,6 +22,9 @@ type Target = {
 
 const SettingTarget = createContext<Target | null>(null)
 
+/** The title of the setting a search opened this page for, so a fold holding it opens. */
+export const useSettingTargetTitle = () => useContext(SettingTarget)?.title
+
 /**
  * A settings page's scroll view. When a search result opened the page for one setting (`target`, its title), that row
  * scrolls itself to the middle and lights up.

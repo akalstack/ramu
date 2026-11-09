@@ -15,7 +15,13 @@ import {
 } from '@ramu/shared/settingsMenu'
 import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
 import type { AgentProvider } from '@ramu/shared/types'
-import type { SettingEdit, SettingSchema, SettingsSnapshot, SharedSetting } from '@ramu/shared/settingsCompatibility'
+import {
+  defaultEdits,
+  type SettingEdit,
+  type SettingSchema,
+  type SettingsSnapshot,
+  type SharedSetting,
+} from '@ramu/shared/settingsCompatibility'
 
 // The phone's settings menu: this phone's own pages first, then the desktop's groups and sections
 // (`@ramu/shared/settingsMenu`) under their names, without the ones that only matter at the host's keyboard.
@@ -82,6 +88,8 @@ interface RowBase {
   words?: string
   /** Shown only while another setting has this value, like the desktop's "When to keep awake". */
   when?: { path: string; equals: Value }
+  /** Few people change it, so it sits under the page's closed Advanced fold, as on the desktop. */
+  advanced?: true
 }
 export type SettingRow =
   | (RowBase & { kind: 'toggle' })
@@ -351,6 +359,7 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
         {
           kind: 'choice',
           path: 'autoBackgroundSeconds',
+          advanced: true,
           title: 'Move slow commands to background',
           help: 'Let the agent keep working when a command runs longer than this.',
           words: 'background long running slow dev server watcher build test shell command async timeout seconds',
@@ -371,6 +380,7 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
         {
           kind: 'choice',
           path: 'recentChats',
+          advanced: true,
           title: 'Recent threads per project',
           help: 'Older threads stay available under Show more.',
           words: 'sidebar count project',
@@ -382,6 +392,7 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
         {
           kind: 'choice',
           path: 'cleanupArchivedDays',
+          advanced: true,
           title: 'Delete archived threads after',
           help: 'Worktrees and branches are kept.',
           words: 'cleanup retention history delete days',
@@ -596,6 +607,7 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
         {
           kind: 'choice',
           path: 'memory.staleAfterDays',
+          advanced: true,
           title: 'Archive unused memories after',
           help: 'Unused, low-importance memories are archived after this long.',
           words: 'memory stale decay archive expire days',
@@ -663,6 +675,7 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
         {
           kind: 'choice',
           path: 'intelligence.dailyReviews',
+          advanced: true,
           title: 'Reviews per day',
           help: 'Maximum daily learning reviews. Each one uses model tokens.',
           words: 'maximum daily limit tokens learning',
@@ -679,6 +692,7 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
         {
           kind: 'choice',
           path: 'intelligence.archiveSkillDays',
+          advanced: true,
           title: 'Archive unused skills after',
           help: 'Skills that no thread has used are archived after this long.',
           words: 'skill stale expire days',
@@ -837,6 +851,24 @@ export function visibleGroups(
       rows: group.rows.filter((row) => offered(row, known) && (!row.when || read(row.when.path) === row.when.equals)),
     }))
     .filter((group) => group.rows.length)
+}
+
+/** A page's groups split into the rows it shows and the ones under its Advanced fold, each keeping its group. */
+export function splitAdvanced(groups: RowGroup[]): { main: RowGroup[]; advanced: RowGroup[] } {
+  const part = (advanced: boolean) =>
+    groups
+      .map((group) => ({ ...group, rows: group.rows.filter((row) => !!row.advanced === advanced) }))
+      .filter((group) => group.rows.length)
+  return { main: part(false), advanced: part(true) }
+}
+
+/** The edits that put these rows back to the defaults the host advertises; a limit row stores two settings. */
+export function rowDefaultEdits(rows: SettingRow[], settings: SharedSetting[], read: (path: string) => unknown) {
+  return defaultEdits(
+    settings,
+    rows.flatMap((row) => (row.kind === 'limit' ? [row.path, row.resumePath] : [row.path])),
+    read,
+  )
 }
 
 /** The choices a row offers on this computer: the server's own enum and numeric range win over the phone's list. */

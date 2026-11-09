@@ -2,6 +2,8 @@ import { expect, it } from 'vitest'
 import {
   PERSON_ONLY,
   commonSettings,
+  defaultEdits,
+  differsFromDefault,
   intersectCatalogs,
   portableSettings,
   schemaKey,
@@ -122,4 +124,33 @@ it('marks settings only the person may change, including every setting in a mark
 
 it('leaves the person-only mark out of schema compatibility', () => {
   expect(schemaKey({ type: 'boolean', [PERSON_ONLY]: true })).toBe(schemaKey({ type: 'boolean' }))
+})
+
+it('tells a changed setting from its advertised default, and leaves rows without one alone', () => {
+  const schema: SettingSchema = { type: 'number', default: 60 }
+  expect(differsFromDefault({ schema }, 30)).toBe(true)
+  expect(differsFromDefault({ schema }, 60)).toBe(false)
+  // Unset follows the default; a schema with no default has nothing to differ from.
+  expect(differsFromDefault({ schema }, undefined)).toBe(false)
+  expect(differsFromDefault({ schema: { type: 'number' } }, 30)).toBe(false)
+  expect(differsFromDefault(undefined, 30)).toBe(false)
+  expect(differsFromDefault({ schema: { type: 'object', default: { a: 1 } } }, { a: 1 })).toBe(false)
+})
+
+it('puts back only the defaults of the rows that differ', () => {
+  const settings = [
+    { path: 'a', schema: { type: 'number', default: 1 }, value: 2, agentMayChange: true },
+    { path: 'b', schema: { type: 'number', default: 1 }, value: 1, agentMayChange: true },
+    { path: 'c', schema: { type: 'number' }, value: 5, agentMayChange: true },
+    { path: 'd', schema: { type: 'array', default: ['x'] }, value: [], agentMayChange: true },
+  ]
+  const read = (path: string) => settings.find((setting) => setting.path === path)?.value
+  const edits = defaultEdits(settings, ['a', 'b', 'c', 'd', 'missing'], read)
+  expect(edits).toEqual([
+    ['a', 1],
+    ['d', ['x']],
+  ])
+  // The default is copied, so editing the result never changes the advertised schema.
+  ;(edits[1]![1] as string[]).push('y')
+  expect(settings[3]!.schema.default).toEqual(['x'])
 })

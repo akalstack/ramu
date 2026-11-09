@@ -45,3 +45,21 @@ it('gives every settings row search and agents can find a catalog entry, and eve
   // Builds without automatic updates leave that row out of Settings and search alike.
   expect([...rows].filter((path) => !catalogued.has(path) && (APP_AUTO_UPDATE || path !== 'appAutoUpdate'))).toEqual([])
 })
+
+it('advertises the default of every catalogued setting, so a changed row shows its dot and Reset', () => {
+  const schema = z.toJSONSchema(appPreferences, { unrepresentable: 'any' }) as SettingSchema
+  const fields = portableSettings(schema, DEFAULT_APP_PREFERENCES as unknown as Record<string, unknown>)
+  // An ordered list has no single default to put back.
+  const listed = new Set(['fallback.order'])
+  const missing = SETTINGS_CATALOG.flatMap((entry) => (entry.path ? [entry.path] : [])).filter(
+    (path) =>
+      !path.startsWith('$') &&
+      !listed.has(path) &&
+      fields.find((field) => field.path === path)?.schema.default === undefined,
+  )
+  expect(missing).toEqual([])
+  // The advertised default is the one the app itself starts from.
+  for (const field of fields)
+    if (field.schema.default !== undefined)
+      expect([field.path, field.value]).toEqual([field.path, field.schema.default])
+})

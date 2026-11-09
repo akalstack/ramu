@@ -13,9 +13,11 @@ import {
   patchSettings,
   providerEnabledEdits,
   providerSwitches,
+  rowDefaultEdits,
   searchSettings,
   sectionById,
   setHostSetting,
+  splitAdvanced,
   visibleGroups,
 } from '../src/runtime/settingsModel.ts'
 
@@ -422,4 +424,40 @@ test('each provider can override the agent browser, and Use default removes its 
     undefined,
   )
   assert.deepEqual(calls[0], [{ ...field, before: 'provider', value: undefined }])
+})
+
+test('tuning rows sit under Advanced and keep their group, while the rest of the page stays in view', () => {
+  const settings = [
+    setting('recentChats', 10),
+    setting('cleanupArchivedDays', 0),
+    setting('autoBackgroundSeconds', 60),
+    setting('resumeChatsOnRestart', true),
+  ]
+  const { main, advanced } = splitAdvanced(visibleGroups('chats', settings))
+  const paths = (groups) => groups.flatMap((group) => group.rows.map((row) => row.path))
+  assert.deepEqual(paths(main), ['resumeChatsOnRestart'])
+  assert.deepEqual(paths(advanced), ['autoBackgroundSeconds', 'recentChats', 'cleanupArchivedDays'])
+  assert.deepEqual(
+    advanced.map((group) => group.title),
+    ['While agents work', 'Thread history'],
+  )
+})
+
+test("a page's Reset defaults puts back only rows that differ from the host's advertised defaults", () => {
+  const settings = [
+    setting('recentChats', 5, { type: 'integer', default: 10 }),
+    setting('cleanupArchivedDays', 0, { type: 'integer', default: 0 }),
+    setting('autoBackgroundSeconds', 30, { type: 'integer' }),
+    setting('defaultAutoFallback', false, { type: 'boolean', default: true }),
+    setting('fallback.autoResume', false, { type: 'boolean', default: true }),
+  ]
+  const read = (path) => settings.find((entry) => entry.path === path)?.value
+  const rows = [...visibleGroups('chats', settings), ...visibleGroups('models', settings)].flatMap(
+    (group) => group.rows,
+  )
+  assert.deepEqual(rowDefaultEdits(rows, settings, read), [
+    ['recentChats', 10],
+    ['defaultAutoFallback', true],
+    ['fallback.autoResume', true],
+  ])
 })

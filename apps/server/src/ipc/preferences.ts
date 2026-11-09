@@ -158,17 +158,17 @@ export const appPreferences = z.object({
     .string()
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
     .default('08:00'),
-  accent: z.enum(['blue', 'violet', 'teal']),
-  fontFamily: z.enum(['system', 'geist']),
-  fontSize: z.number().int().min(12).max(18),
+  accent: z.enum(['blue', 'violet', 'teal']).default(DEFAULT_APP_PREFERENCES.accent),
+  fontFamily: z.enum(['system', 'geist']).default(DEFAULT_APP_PREFERENCES.fontFamily),
+  fontSize: z.number().int().min(12).max(18).default(DEFAULT_APP_PREFERENCES.fontSize),
   fontSmoothing: z.boolean().default(true),
   reduceMotion: z.boolean().default(false),
   recentChatMode: z.boolean().default(false),
   threadRowBranches: z.boolean().default(false),
   defaultMarkdownView: z.enum(['source', 'edit', 'preview']).default(DEFAULT_APP_PREFERENCES.defaultMarkdownView),
-  editorFontSize: z.number().int().min(10).max(22),
-  terminalFontSize: z.number().int().min(8).max(22),
-  previewTabs: z.boolean(),
+  editorFontSize: z.number().int().min(10).max(22).default(DEFAULT_APP_PREFERENCES.editorFontSize),
+  terminalFontSize: z.number().int().min(8).max(22).default(DEFAULT_APP_PREFERENCES.terminalFontSize),
+  previewTabs: z.boolean().default(DEFAULT_APP_PREFERENCES.previewTabs),
   pullMode: pullMode.default('rebase'),
   autoPull: z.boolean().default(true),
   autoWatchPullRequests: z.boolean().default(false),
@@ -186,12 +186,12 @@ export const appPreferences = z.object({
     })
     .nullable()
     .default(null),
-  recentChats: z.number().int().min(3).max(20),
+  recentChats: z.number().int().min(3).max(20).default(DEFAULT_APP_PREFERENCES.recentChats),
   cleanupArchivedDays: z.number().int().min(0).max(3650).default(DEFAULT_APP_PREFERENCES.cleanupArchivedDays),
-  terminalTabPosition: z.enum(['top', 'right']),
+  terminalTabPosition: z.enum(['top', 'right']).default(DEFAULT_APP_PREFERENCES.terminalTabPosition),
   defaultTerminalDock: z.enum(['right', 'bottom']).default(DEFAULT_APP_PREFERENCES.defaultTerminalDock),
-  defaultAccess: agentSettings.shape.access.meta(personOnly),
-  defaultAutoFallback: z.boolean(),
+  defaultAccess: agentSettings.shape.access.default(DEFAULT_APP_PREFERENCES.defaultAccess).meta(personOnly),
+  defaultAutoFallback: z.boolean().default(DEFAULT_APP_PREFERENCES.defaultAutoFallback),
   busyMessageAction: z.enum(['queue', 'steer']).default('steer'),
   includeTabContext: z.boolean().default(true),
   warnModelChange: z.boolean().default(true),
@@ -204,7 +204,7 @@ export const appPreferences = z.object({
   liveViewDesktop: z.boolean().default(true),
   agentBrowser: z
     .object({
-      agentBrowser: z.enum(['integrated', 'provider']),
+      agentBrowser: z.enum(['integrated', 'provider']).default('integrated'),
       providerOverrides: z.partialRecord(providerId, z.enum(['integrated', 'provider'])).default({}),
       defaultProfileId: z
         .string()

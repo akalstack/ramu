@@ -5,6 +5,7 @@ import { SettingsTargetSelector, SettingsScopeContext } from './SettingsScope'
 import { t, useLanguage } from '../i18n'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/desktop-button'
+import { openFoldAround } from '@/components/settings-row'
 import {
   Archive,
   MessageSquare,
@@ -137,7 +138,9 @@ export function SettingsPage({
     let tries = 0
     const attempt = () => {
       const target = find()
-      if (target) revealFound(target, target.closest<HTMLElement>('.settings-page-content'))
+      // A folded row is found but has no place on screen until its Advanced fold opens.
+      if (target && tries++ < 40 && openFoldAround(target)) window.requestAnimationFrame(attempt)
+      else if (target) revealFound(target, target.closest<HTMLElement>('.settings-page-content'))
       else if (++tries < 40) window.requestAnimationFrame(attempt)
     }
     window.requestAnimationFrame(attempt)

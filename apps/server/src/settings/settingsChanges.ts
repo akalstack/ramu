@@ -37,8 +37,7 @@ interface Sessions {
   settingsChangeShown(sessionId: string, cardId: string): void
 }
 
-const pageLabel = (section: SettingsMenuId) =>
-  SETTINGS_MENU.find((entry) => entry.id === section)?.label ?? section
+const pageLabel = (section: SettingsMenuId) => SETTINGS_MENU.find((entry) => entry.id === section)?.label ?? section
 
 /** A setting's constraints for an agent: its allowed values and limits, without Settings' own annotations. */
 function allowedValues(schema: SettingSchema): SettingSchema {

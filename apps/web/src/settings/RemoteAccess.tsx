@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
+import { SettingsAdvanced, SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { LocalInlineAction } from '@/components/inline-action'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { SETTINGS_CARD_LINE, SettingsEmpty } from './cards'
@@ -512,47 +512,37 @@ function ThisComputer() {
       {!status.devices.length && (
         <SettingsEmpty>{t('No devices paired yet. Pair a phone or another computer above.')}</SettingsEmpty>
       )}
-      <Collapsible className="mt-3">
-        <CollapsibleTrigger
-          render={<Button variant="ghost" size="sm" className="group/options text-caption text-muted-foreground" />}
-        >
-          {t('Advanced')}
-          <ChevronDown size={14} className="transition-transform group-data-[panel-open]/options:rotate-180" />
-        </CollapsibleTrigger>
-        <CollapsibleContent className="pt-2">
-          {!managed && (
-            <SettingsRow>
-              <SettingsLabel title={t('Port')} help={portValid ? undefined : t('Use a number from 1024 to 65535.')} />
-              <Input
-                aria-label={t('Port')}
-                inputMode="numeric"
-                value={port}
-                aria-invalid={!portValid}
-                onChange={(event) =>
-                  stageConfig({ ...config, port: event.target.value.replace(/\D/g, '').slice(0, 5) })
-                }
-              />
-            </SettingsRow>
-          )}
-          {status.deviceLifetime && (
-            <SettingsRow>
-              <SettingsLabel
-                title={t('Keep devices paired')}
-                help={t(
-                  'A device unused for this long must be paired again. Each use resets the timer. Changes apply when each device next connects.',
-                )}
-              />
-              <Dropdown
-                label={t('Keep devices paired')}
-                value={lifetime}
-                options={lifetimeOptions(status.deviceLifetime.days, status.deviceLifetime.saved)}
-                onChange={stageLifetime}
-              />
-            </SettingsRow>
-          )}
-          <DefaultPermissions status={status} invoke={changePermission} />
-        </CollapsibleContent>
-      </Collapsible>
+      <SettingsAdvanced>
+        {!managed && (
+          <SettingsRow>
+            <SettingsLabel title={t('Port')} help={portValid ? undefined : t('Use a number from 1024 to 65535.')} />
+            <Input
+              aria-label={t('Port')}
+              inputMode="numeric"
+              value={port}
+              aria-invalid={!portValid}
+              onChange={(event) => stageConfig({ ...config, port: event.target.value.replace(/\D/g, '').slice(0, 5) })}
+            />
+          </SettingsRow>
+        )}
+        {status.deviceLifetime && (
+          <SettingsRow>
+            <SettingsLabel
+              title={t('Keep devices paired')}
+              help={t(
+                'A device unused for this long must be paired again. Each use resets the timer. Changes apply when each device next connects.',
+              )}
+            />
+            <Dropdown
+              label={t('Keep devices paired')}
+              value={lifetime}
+              options={lifetimeOptions(status.deviceLifetime.days, status.deviceLifetime.saved)}
+              onChange={stageLifetime}
+            />
+          </SettingsRow>
+        )}
+        <DefaultPermissions status={status} invoke={changePermission} />
+      </SettingsAdvanced>
 
       {confirm && (
         <ConfirmDialog

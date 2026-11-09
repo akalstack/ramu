@@ -3,20 +3,24 @@ export { RowLabel, Hint } from './SettingRowContent'
 import { useState, type ReactNode } from 'react'
 import { translate } from '@ramu/shared/i18n'
 import { ModelFlowRow } from './ModelFlowRow'
-import { useStore } from '../runtime/store'
+import { useStore, type Language } from '../runtime/store'
 import { modelStepLabel } from '@ramu/shared/providers/providers'
 import type { AgentProvider, ModelPreferences, ReasoningEffort } from '@ramu/shared/types'
-import { ActivityIndicator, Pressable, TextInput, View } from 'react-native'
+import { ActivityIndicator, Alert, Pressable, TextInput, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import type { AgentSettingMark } from '@ramu/shared/settingsCompatibility'
-import { ChevronsUpDown } from 'lucide-react-native'
+import { ChevronDown, ChevronsUpDown, RotateCcw } from 'lucide-react-native'
 import type { LimitChoice } from '@ramu/shared/chat/limitPolicy'
 import { font, radius, space, useTheme } from '../theme'
 import {
   allowedOptions,
   limitChoiceEdits,
   limitChoiceState,
+  rowDefaultEdits,
+  sectionLabel,
+  splitAdvanced,
   visibleGroups,
+  type RowGroup,
   type SettingRow,
   type SettingsSection,
   type Option,
@@ -24,7 +28,7 @@ import {
 import type { useHostSettings } from '../runtime/useHostSettings'
 import { Button, Card, Divider, Row, SectionLabel, Sheet, T, Toggle } from './ui'
 import { SheetGroup, SheetOption } from './SheetOptions'
-import { SettingHighlight } from './SettingHighlight'
+import { SettingHighlight, useSettingTargetTitle } from './SettingHighlight'
 import { useSay } from '../i18n'
 
 type Host = ReturnType<typeof useHostSettings>
@@ -326,19 +330,26 @@ export function HostNotice({ host, name, children }: { host: Host; name?: string
   )
 }
 
-/** Under a row an agent changed: a dot and the thread it changed in, which opens that thread. */
-function AgentChangeLine({ mark, computerId }: { mark?: AgentSettingMark; computerId: string }) {
+/**
+ * Under a changed row: a dot, the thread whose agent changed it (which opens that thread), and Reset when it differs
+ * from the default the host advertises.
+ */
+function ChangeLine({
+  mark,
+  computerId,
+  onReset,
+}: {
+  mark?: AgentSettingMark
+  computerId: string
+  onReset?: () => void
+}) {
   const say = useSay()
   const { c } = useTheme()
   const store = useStore()
   const router = useRouter()
-  if (!mark) return null
+  if (!mark && !onReset) return null
   return (
-    <Pressable
-      accessibilityRole="link"
-      onPress={() =>
-        router.push({ pathname: '/chat/[id]', params: { id: store.resolveChat(computerId, mark.taskId) } })
-      }
+    <View
       style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -349,14 +360,96 @@ function AgentChangeLine({ mark, computerId }: { mark?: AgentSettingMark; comput
       }}
     >
       <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: c.accent }} />
-      <T size={font.caption} tone="muted" numberOfLines={1} style={{ flex: 1 }}>
-        {say('Changed by an agent in {0}', { '0': mark.thread })}
-      </T>
-    </Pressable>
+      {mark ? (
+        <Pressable
+          accessibilityRole="link"
+          style={{ flexShrink: 1 }}
+          onPress={() =>
+            router.push({ pathname: '/chat/[id]', params: { id: store.resolveChat(computerId, mark.taskId) } })
+          }
+        >
+          <T size={font.caption} tone="muted" numberOfLines={1}>
+            {say('Changed by an agent in {0}', { '0': mark.thread })}
+          </T>
+        </Pressable>
+      ) : null}
+      {onReset ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={say('Put back the default')}
+          hitSlop={space.s}
+          onPress={onReset}
+        >
+          <T size={font.caption} tone="accent" weight="500">
+            {say('Reset')}
+          </T>
+        </Pressable>
+      ) : null}
+    </View>
   )
 }
 
-/** A section's computer-side rows in the desktop's groups. */
+/** A page's groups of computer-side rows, each row with its change line. */
+function rowGroups(groups: RowGroup[], host: Host, locked: boolean, language: Language) {
+  if (host.state.status !== 'ready') return null
+  const { settings, marks } = host.state
+  return groups.map((group) => (
+    <View key={group.title ?? 'rows'}>
+      {group.title ? <SectionLabel>{translate(language, group.title)}</SectionLabel> : null}
+      <Card style={{ marginHorizontal: space.l }}>
+        {group.rows.map((row, index) => {
+          const reset = locked ? [] : rowDefaultEdits([row], settings, host.read)
+          return (
+            <View key={row.path}>
+              {index ? <Divider inset={space.l} /> : null}
+              <HostRow row={row} host={host} disabled={locked} />
+              <ChangeLine
+                mark={marks.find((entry) => entry.path === row.path)}
+                computerId={host.computerId}
+                onReset={reset.length ? () => host.setAll(reset) : undefined}
+              />
+            </View>
+          )
+        })}
+      </Card>
+    </View>
+  ))
+}
+
+/** Rows few people change, under a fold that starts closed unless a search opened the page for one of them. */
+function AdvancedGroups({ groups, host, locked }: { groups: RowGroup[]; host: Host; locked: boolean }) {
+  const say = useSay()
+  const { c } = useTheme()
+  const { language } = useStore()
+  const target = useSettingTargetTitle()
+  const [open, setOpen] = useState(() => groups.some((group) => group.rows.some((row) => row.title === target)))
+  if (!groups.length) return null
+  return (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen((value) => !value)}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: space.xs,
+          paddingHorizontal: space.l,
+          paddingTop: space.l,
+          paddingBottom: space.s,
+        }}
+      >
+        <T size={font.caption} tone="muted" weight="500">
+          {say('Advanced')}
+        </T>
+        <ChevronDown size={14} color={c.muted} style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }} />
+      </Pressable>
+      {open ? rowGroups(groups, host, locked, language) : null}
+    </>
+  )
+}
+
+/** A section's computer-side rows in the desktop's groups, with the rows few people change folded under Advanced. */
 export function HostGroups({
   section,
   host,
@@ -369,6 +462,7 @@ export function HostGroups({
   /** This device may read the host's settings but not change them. */
   locked?: boolean
 }) {
+  const say = useSay()
   const { language } = useStore()
   if (host.state.status !== 'ready') return <HostNotice host={host} name={name} />
   const groups = visibleGroups(section, host.state.settings, host.read)
@@ -378,29 +472,34 @@ export function HostGroups({
         {name ?? 'This host'} offers no settings here.
       </T>
     )
+  const { main, advanced } = splitAdvanced(groups)
+  const reset = rowDefaultEdits(
+    groups.flatMap((group) => group.rows),
+    host.state.settings,
+    host.read,
+  )
+  const resetPage = () =>
+    Alert.alert(
+      say('Reset {0} to defaults?', { '0': translate(language, sectionLabel(section)) }),
+      say('Every setting on this page goes back to its default on {0}.', { '0': name ?? say('This host') }),
+      [
+        { text: say('Cancel'), style: 'cancel' },
+        { text: say('Reset'), style: 'destructive', onPress: () => host.setAll(reset) },
+      ],
+    )
   return (
     <>
-      {groups.map((group) => (
-        <View key={group.title ?? 'rows'}>
-          {group.title ? <SectionLabel>{translate(language, group.title)}</SectionLabel> : null}
-          <Card style={{ marginHorizontal: space.l }}>
-            {group.rows.map((row, index) => (
-              <View key={row.path}>
-                {index ? <Divider inset={space.l} /> : null}
-                <HostRow row={row} host={host} disabled={locked} />
-                <AgentChangeLine
-                  mark={
-                    host.state.status === 'ready'
-                      ? host.state.marks.find((entry) => entry.path === row.path)
-                      : undefined
-                  }
-                  computerId={host.computerId}
-                />
-              </View>
-            ))}
-          </Card>
-        </View>
-      ))}
+      {rowGroups(main, host, locked, language)}
+      <AdvancedGroups groups={advanced} host={host} locked={locked} />
+      <View style={{ paddingHorizontal: space.l, paddingTop: space.m, alignItems: 'flex-start' }}>
+        <Button
+          kind="ghost"
+          icon={RotateCcw}
+          title={say('Reset defaults')}
+          disabled={locked || !reset.length}
+          onPress={resetPage}
+        />
+      </View>
     </>
   )
 }

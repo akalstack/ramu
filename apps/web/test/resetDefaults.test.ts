@@ -1,7 +1,8 @@
 import { expect, it } from 'vitest'
 import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
 import { DEFAULT_APP_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
-import { inResetSection, resetSection } from '../src/settings/resetDefaults'
+import { SETTINGS_CATALOG } from '@ramu/shared/settingsCatalog'
+import { inResetSection, resetSection, resetSetting } from '../src/settings/resetDefaults'
 
 const other = (value: 'auto' | 'off' | 'review') => (value === 'off' ? 'auto' : 'off')
 
@@ -60,4 +61,24 @@ it('matches setting paths to the section that resets them', () => {
   expect(inResetSection('memory', 'intelligence.crossThreadRecall')).toBe(true)
   expect(inResetSection('memory', 'memoryExtra')).toBe(false)
   expect(inResetSection('shortcuts', 'warnModelChange')).toBe(false)
+})
+
+it("lets each page's Reset to defaults reach every setting on that page", () => {
+  // Model sets ($models) restore through their own Restore button.
+  const unreached = SETTINGS_CATALOG.flatMap((entry) =>
+    entry.path && !entry.path.startsWith('$') && !inResetSection(entry.section, entry.path)
+      ? [`${entry.section}: ${entry.path}`]
+      : [],
+  )
+  expect(unreached).toEqual([])
+})
+
+it('puts one setting back to the default its host advertises, leaving the rest of the draft alone', () => {
+  const current = { ...changed(), memory: { ...DEFAULT_APP_PREFERENCES.memory, staleAfterDays: 30, dream: false } }
+  const next = resetSetting(current, 'memory.staleAfterDays', { type: 'integer', default: 90 })
+  expect(next.memory).toEqual({ ...current.memory, staleAfterDays: 90 })
+  expect(next.warnModelChange).toBe(current.warnModelChange)
+  expect(current.memory.staleAfterDays).toBe(30)
+  // A setting whose schema names no default has nothing to put back.
+  expect(resetSetting(current, 'memory.staleAfterDays', { type: 'integer' })).toBe(current)
 })

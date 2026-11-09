@@ -147,6 +147,29 @@ export function commonSettings(snapshots: SettingsSnapshot[]): SharedSetting[] {
   })
 }
 
+/**
+ * Whether a setting holds something other than the default its host advertises. A setting whose schema names no
+ * default, or that is unset and so follows the default, never differs from it.
+ */
+export function differsFromDefault(setting: { schema?: SettingSchema } | undefined, value: unknown): boolean {
+  const fallback = setting?.schema?.default
+  return fallback !== undefined && value !== undefined && !sameValue(value, fallback)
+}
+
+/** The edits that put each of `paths` that differs from its advertised default back to that default. */
+export function defaultEdits(
+  settings: readonly SharedSetting[],
+  paths: readonly string[],
+  read: (path: string) => unknown,
+): [path: string, value: unknown][] {
+  const edits: [path: string, value: unknown][] = []
+  for (const path of paths) {
+    const setting = settings.find((entry) => entry.path === path)
+    if (differsFromDefault(setting, read(path))) edits.push([path, structuredClone(setting!.schema.default)])
+  }
+  return edits
+}
+
 export function settingValue(preferences: unknown, path: string): unknown {
   return path
     .split('.')

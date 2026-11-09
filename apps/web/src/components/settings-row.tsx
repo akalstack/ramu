@@ -2,6 +2,10 @@ import { SettingsField, SettingsFieldNotice, SettingTitleHosts } from '../settin
 import { Children, createContext, useContext, type ComponentProps, type ReactNode } from 'react'
 import { cn } from 'cn'
 import { Field } from '@/components/ui/field'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { ChevronDown } from 'lucide-react'
+import { Button } from './desktop-button'
+import { t } from '../i18n'
 
 /** The setting a row edits, so its title can show where that setting stands on each host. */
 const RowSetting = createContext<string | undefined>(undefined)
@@ -88,4 +92,34 @@ export function SettingsGroupTitle({ className, ...props }: ComponentProps<'h4'>
       {...props}
     />
   )
+}
+
+/**
+ * Rows few people change, folded under a closed Advanced disclosure. The rows stay mounted while folded, so a search
+ * for one of them finds it and opens the fold (`openFoldAround`).
+ */
+export function SettingsAdvanced({ className, children }: { className?: string; children: ReactNode }) {
+  return (
+    <Collapsible className={cn('mt-3', className)} data-settings-advanced="">
+      <CollapsibleTrigger
+        data-settings-advanced-trigger=""
+        render={<Button variant="ghost" size="sm" className="group/options text-caption text-muted-foreground" />}
+      >
+        {t('Advanced')}
+        <ChevronDown size={14} className="transition-transform group-data-[panel-open]/options:rotate-180" />
+      </CollapsibleTrigger>
+      <CollapsibleContent keepMounted className="pt-2">
+        {children}
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+/** Opens the closed Advanced fold holding `element`, if it is in one; true when it did, so the caller looks again. */
+export function openFoldAround(element: HTMLElement) {
+  const trigger = element
+    .closest<HTMLElement>('[data-settings-advanced]')
+    ?.querySelector<HTMLElement>('[data-settings-advanced-trigger][aria-expanded="false"]')
+  trigger?.click()
+  return !!trigger
 }

@@ -1,4 +1,5 @@
 import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
+import { setSettingValue, type SettingSchema } from '@ramu/shared/settingsCompatibility'
 import { DEFAULT_APP_PREFERENCES, DEFAULT_INTELLIGENCE_PREFERENCES, type AppPreferences } from '@ramu/shared/types'
 import type { SettingsSection } from './SettingsPage'
 import { CHATS_INTELLIGENCE_KEYS, MEMORY_INTELLIGENCE_KEYS, RESET_KEYS } from './constants'
@@ -45,4 +46,12 @@ export function resetSection(current: AppPreferences, section: SettingsSection):
         }
       : {}),
   }
+}
+
+/** The draft with one setting put back to the default its host advertises; unchanged when it names none. */
+export function resetSetting(current: AppPreferences, path: string, schema: SettingSchema | undefined): AppPreferences {
+  if (schema?.default === undefined) return current
+  const next = structuredClone(current)
+  setSettingValue(next as unknown as Record<string, unknown>, path, structuredClone(schema.default))
+  return next
 }

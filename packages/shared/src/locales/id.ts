@@ -1149,6 +1149,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Check for Updates…': 'Periksa pembaruan…',
   'Settings…': 'Pengaturan…',
   Reset: 'Atur ulang',
+  'Put back the default': 'Kembalikan nilai bawaan',
   'Reset layout sizes?': 'Atur ulang ukuran tata letak?',
   'Restore default model sets?': 'Pulihkan set model bawaan?',
   'Reset this section to defaults?': 'Atur ulang bagian ini ke bawaan?',
@@ -2390,6 +2391,8 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Ganti {0} hasil di {1} file? Perubahan akan disimpan ke disk.',
   'Replacing…': 'Mengganti…',
   'Reset defaults': 'Kembalikan ke bawaan',
+  'Every setting on this page goes back to its default on {0}.':
+    'Semua pengaturan di halaman ini kembali ke bawaannya di {0}.',
   'Resolve the conflicts first': 'Selesaikan konflik dulu',
   'Resolve the conflicts in {0} first.': 'Selesaikan konflik di {0} dulu.',
   'Restart Ramu': 'Mulai ulang Ramu',

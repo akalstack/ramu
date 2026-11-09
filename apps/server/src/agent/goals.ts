@@ -8,7 +8,9 @@ export const goalPreferencesSchema = z.object({
   mode: z
     .enum(['auto', 'manual', 'off'])
     .default('auto')
-    .transform((mode) => (mode === 'off' ? 'manual' : mode)),
+    .transform((mode) => (mode === 'off' ? 'manual' : mode))
+    // The transform hides the default from the advertised schema; Settings reads it there to offer Reset.
+    .meta({ default: 'auto' }),
   maxTurns: z.number().int().min(1).max(1000).nullable().default(10),
 })
 

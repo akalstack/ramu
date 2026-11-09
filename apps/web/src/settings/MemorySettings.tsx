@@ -76,22 +76,6 @@ export function MemorySettings({
               onCheckedChange={(dream) => onChange({ ...value, dream })}
             />
           </SettingsRow>
-          <SettingsRow setting="memory.staleAfterDays">
-            <SettingsLabel
-              title={t('Archive unused memories after')}
-              help={t(
-                'Applies to project notes that were never used. Notes you wrote and essential memories are kept.',
-              )}
-            />
-            <Dropdown
-              label={t('Archive unused memories after')}
-              value={String(value.staleAfterDays)}
-              options={[...new Set([30, 60, 90, 180, 365, value.staleAfterDays])]
-                .sort((a, b) => a - b)
-                .map((days) => ({ value: String(days), label: t('{0} days', { 0: days }) }))}
-              onChange={(days) => onChange({ ...value, staleAfterDays: Number(days) })}
-            />
-          </SettingsRow>
         </>
       )}
     </div>

@@ -11,7 +11,7 @@ import {
   type SettingsSnapshot,
 } from '@ramu/shared/settingsCompatibility'
 import { SettingHosts } from './SettingHosts'
-import { AgentChangeMark } from './AgentChangeMark'
+import { ChangeMark } from './ChangeMark'
 import { recommendedSets } from '@ramu/shared/providers/modelDefaults'
 import { invoke, invokeOn, ramu } from '../ipc'
 import { isViewOnly, VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
@@ -372,13 +372,13 @@ export function SettingsField({
   )
 }
 
-/** Beside a setting's title: where it stands on each selected host, and the agent that changed it, if one did. */
+/** Beside a setting's title: where it stands on each selected host, and whether an agent or the person changed it. */
 export function SettingTitleHosts({ path }: { path: string }) {
   const scope = useContext(SettingsScopeContext)
   return scope ? (
     <>
       <SettingHosts path={path} scope={scope} inline />
-      <AgentChangeMark path={path} scope={scope} />
+      <ChangeMark path={path} scope={scope} />
     </>
   ) : null
 }

@@ -8373,6 +8373,49 @@ test('a row an agent changed carries that thread’s mark, and other rows none',
   assert.deepEqual(marks, [mark, undefined])
 })
 
+test('a row that differs from its default offers Reset, which puts the default back, and a locked device none', () => {
+  const { HostGroups } = load('components/SettingRows.tsx', 'ios', {
+    '../runtime/store': { useStore: () => ({ language: 'en' }) },
+    '../runtime/settingsModel': {
+      ...settingsModel,
+      visibleGroups: () => [
+        {
+          title: null,
+          rows: [
+            { path: 'recentChats', kind: 'toggle', title: 'Recent' },
+            { path: 'warnModelChange', kind: 'toggle', title: 'Warn' },
+            { path: 'hostDescription', kind: 'toggle', title: 'Describe' },
+          ],
+        },
+      ],
+    },
+  })
+  const settings = [
+    { path: 'recentChats', schema: { default: 10 }, value: 5 },
+    { path: 'warnModelChange', schema: { default: true }, value: true },
+    // No advertised default, so nothing to put back.
+    { path: 'hostDescription', schema: {}, value: 'Mac' },
+  ]
+  const saved = []
+  const host = {
+    state: { status: 'ready', settings, marks: [] },
+    read: (path) => settings.find((entry) => entry.path === path)?.value,
+    setAll: (values) => saved.push(values),
+    computerId: 'c',
+  }
+  const resets = (locked) =>
+    nodes(HostGroups({ section: 'chats', host, locked }))
+      .filter((node) => node.props && 'onReset' in node.props)
+      .map((node) => node.props.onReset)
+  const [recent, warn, describe] = resets(false)
+  assert.equal(typeof recent, 'function')
+  assert.equal(warn, undefined)
+  assert.equal(describe, undefined)
+  recent()
+  assert.deepEqual(saved, [[['recentChats', 10]]])
+  assert.deepEqual(resets(true), [undefined, undefined, undefined])
+})
+
 test('a choice with an unset option shows it while unset and removes the setting when chosen', () => {
   const row = {
     path: 'agentBrowser.providerOverrides.codex',
