@@ -1,4 +1,4 @@
-# Test devices on Simlock, and a regrouped Settings
+# Test devices on Simlock, a regrouped Settings, and settings agents can change
 
 ## The need
 
@@ -93,6 +93,24 @@ The **Test devices** page, in order:
 
 On the phone the page is the same list; **Set up** runs on the host and the checklist updates as it goes.
 
+### 5. Agents change settings when asked
+
+Today a person who says "make the default iPhone a 16 Pro" or "stop warning before I change model" gets instructions to follow in Settings. The agent knows what they want but cannot do it.
+
+**OpenCode's way:** its config is a file (`opencode.json`, global and per project) and its docs say "you can also ask OpenCode to update this file for you": the agent edits the file with its ordinary edit tool, under the same allow, ask or deny permission as any edit, the `$schema` field gives editors validation, and undo is the session's file snapshots. That is simple, but the agent writes raw JSON, nothing stops it from widening its own permissions, and the person learns what changed only by reading a diff.
+
+**Ramu's way** builds on what already exists: host settings live in `settings.json` (`apps/server/src/settings/settingsStore.ts`), every portable setting has a dotted path and a schema (`portableSettings` in `packages/shared/src/settingsCompatibility.ts`), and `applySettingEdits` in `apps/server/src/sharedSettings.ts` already validates a batch of `{ path, before, value }` edits and refuses one that changed elsewhere, which is how the phone saves. Agents get two typed tools instead of file access:
+
+- **`settings_find`** takes words ("simulator model", "commit") and returns the matching settings: path, title, help, the page they are on, the current value and the allowed values. It searches the same titles and words as Settings search, so the agent and the person find the same rows.
+- **`settings_change`** takes a batch of `{ path, value }` with a one-line reason. Ramu fills `before` from the current value, checks the batch with `applySettingEdits` and `validateSettingModels`, and posts a **settings card** in the thread: each row's title, old value → new value, and the page it is on.
+  - In **Ask** modes the card waits with **Apply**, **Open in Settings** and **Dismiss**, the way `propose_theme`'s card waits for **Keep**.
+  - In **Full access** it applies at once and the card shows **Undo**, which applies the reverse edit and is refused, with **Open in Settings**, if the person has changed that row since.
+  - From a paired phone, applying needs the device's existing **Change settings** permission.
+
+What agents can never change, marked in the settings schema rather than listed in the tool: anything that widens what agents may do or who can reach the host (Permissions and saved approvals, the mode, Remote access, pairing and device permissions, Identities, Account, provider credentials, environment variable values, **Let agents use this computer** and **Let agents use test devices**). `settings_find` still returns them, marked **Change it yourself**, with the page to open, so the agent can point the person to the right row instead of guessing. Phone-only preferences stay on the phone. File tools refuse Ramu's own `settings.json` and data folder, so the typed tools are the only way in.
+
+In Settings, a row an agent changed shows the dot from part 4 with "Changed by an agent in *thread name*", linking to the thread, until the person changes it again.
+
 ## Services to extend
 
 - `apps/server/src/testDevice/testDevices.ts`: the `ComputerBackend` and the agent tools stay; lifecycle, capture and input move onto `simlock/client` and the input socket.
@@ -100,6 +118,7 @@ On the phone the page is the same list; **Set up** runs on the host and the chec
 - `apps/web/src/settings/TestDeviceSettings.tsx` and `apps/mobile/src/components/ComputerUseSettings.tsx`: setup and doctor rows.
 - The computer viewer and Float (web and mobile) for the stream; `apps/server/src/background/resources.ts` for the Resources figures of Simlock's devices.
 - `packages/shared/src/settingsMenu.ts` (groups and ids), the search entries in `apps/web/src/settings/SettingsPage.tsx`, the page switch in `apps/web/src/settings/SettingsPanel.tsx`, `apps/mobile/src/runtime/settingsModel.ts`, and the sidebar's thread lists (`apps/web/src/sidebar/projects/threadLists.ts`) for **Archived**.
+- `apps/server/src/sharedSettings.ts`, `packages/shared/src/settingsCompatibility.ts` (an agent-changeable mark per setting) and `apps/server/src/themeTools.ts` as the pattern for registering the settings tools and their card.
 - `docs/guide/browser-and-computer.md` **Test devices** once it ships, and every guide that names a Settings path that moves.
 
 ## Acceptance
@@ -113,6 +132,9 @@ On the phone the page is the same list; **Set up** runs on the host and the chec
 - An Android emulator on a Linux host runs the same checks.
 - Searching Settings for "simulator", "emulator", "environment", "fallback" or "archived" opens the right page or view in one step, on the desktop and the phone.
 - Someone new to Ramu, asked to "let the agent test on an iPhone", finds **Test devices** from the menu without search and reaches a ready device with one button.
+- "Make the default iPhone a 16 Pro and stop warning before I change model" in an Ask-mode thread: one card with both rows, **Apply** saves them, Settings shows both as changed by that thread, and **Undo** restores them.
+- "Turn on Full access" or "let my phone change settings": the agent changes nothing and names the page and row to change.
+- A row the person edited after the agent's change: **Undo** refuses and offers **Open in Settings**.
 
 Representative task: "check the sign-up screen on iPhone and Android" while a second thread fixes another bug on an iPhone. Today the person installs idb, then stops one thread to free a device. With this they press nothing after setup.
 
