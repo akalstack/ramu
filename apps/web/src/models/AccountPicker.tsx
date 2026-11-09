@@ -33,8 +33,8 @@ export function useLoginChoices(settings: AgentSettings) {
 type LoginChoices = NonNullable<ReturnType<typeof useLoginChoices>>
 
 /**
- * The model panel's account row: which login the thread runs on, and whether it is at a limit. Usage limits still move a
- * thread to the next login by themselves; this lets a person choose one on purpose, such as a work login for work.
+ * The model panel's account row: which login the thread runs on, and whether it is at a limit. At a limit Ramu moves on
+ * only to a login billed through an API key, so switching subscriptions is always the person's choice, made here.
  */
 export function AccountRow({
   choices,

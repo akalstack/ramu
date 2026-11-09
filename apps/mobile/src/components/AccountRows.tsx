@@ -10,8 +10,8 @@ import { SheetGroup, SheetOption } from './SheetOptions'
 
 /**
  * Which login of the provider the thread runs on, as on the desktop: in the model sheet, each with how much room it has
- * for this model, so a person does not pick one that is also at its limit. Usage limits still move a thread to the next
- * login by themselves. Shown only when the provider has more than one login turned on.
+ * for this model, so a person does not pick one that is also at its limit. At a limit Ramu moves on only to a login
+ * billed through an API key, never to another subscription. Shown only when the provider has more than one login on.
  */
 export function AccountRows({
   computerId,
@@ -40,7 +40,7 @@ export function AccountRows({
   return (
     <SheetGroup
       title={say('{0} account', { '0': providerName(provider) })}
-      footer={say('A usage limit still moves the thread to the next login by itself.')}
+      footer={say('At a usage limit, Ramu switches only to a login with an API key, never to another subscription.')}
     >
       {order.map((id) => (
         <SheetOption

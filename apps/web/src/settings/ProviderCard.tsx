@@ -235,7 +235,7 @@ export function ProviderCard({
               <ProviderAddAccount preferences={preferences} onAdd={onAddAccount} />
               <span className="min-w-0 flex-1 text-caption text-muted-foreground">
                 {t(
-                  'New threads use the top login. When it reaches its limit, a thread moves to the next one before switching models.',
+                  'New threads use the top login. At a limit, a thread moves only to a login with an API key, never to another subscription.',
                 )}
                 <SettingTitleHosts path={`providerBinaries.${provider}.accountOrder`} />
               </span>
@@ -249,7 +249,7 @@ export function ProviderCard({
             title={t('Share MCP approvals between logins')}
             help={
               order.every((id) => mcpSharing(id) === true) || !order.some((id) => mcpSharing(id) === true)
-                ? t('Switching logins at a limit keeps your approved MCP connections, with no new approval.')
+                ? t('Switching logins keeps your approved MCP connections, with no new approval.')
                 : t('On for {0} of {1} logins. Turn on to share between all of them.', {
                     0: order.filter((id) => mcpSharing(id) === true).length,
                     1: order.length,

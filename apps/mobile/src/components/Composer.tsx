@@ -211,7 +211,7 @@ export function ModelChip({
         (!needle || `${m.label} ${m.model} ${providerNames[m.provider]}`.toLowerCase().includes(needle)),
     )
   }, [models, provider, query])
-  const title = provider ? providerNames[provider] : 'Model'
+  const title = provider ? providerNames[provider] : say('Model')
   const back = provider
     ? () => {
         setProvider(null)
@@ -224,8 +224,8 @@ export function ModelChip({
     value: query,
     onChangeText: setQuery,
     placeholder: provider
-      ? `Search ${providerCount} ${providerNames[provider]} models`
-      : `Search ${providerCount} models`,
+      ? say('Search {0} {1} models', { 0: providerCount, 1: providerNames[provider] })
+      : say('Search {0} models', { 0: providerCount }),
   }
   const [limit, setLimit] = useState(MODEL_PAGE)
   useEffect(() => setLimit(MODEL_PAGE), [provider, query])
@@ -302,7 +302,7 @@ export function ModelChip({
     <>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Model: ${label}${effort ? `, ${effort}` : ''}`}
+        accessibilityLabel={say('Model: {0}', { 0: effort ? `${label}, ${effort}` : label })}
         onPress={() => {
           tap()
           setExpanded(null)
@@ -347,7 +347,7 @@ export function ModelChip({
         {back ? (
           <Row onPress={back}>
             <ChevronLeft size={18} color={c.soft} />
-            <T tone="soft">All providers</T>
+            <T tone="soft">{say('All providers')}</T>
           </Row>
         ) : null}
         {provider || query.trim() ? (
@@ -356,13 +356,16 @@ export function ModelChip({
             {shown.length > limit ? (
               <Row onPress={() => setLimit((value) => value + MODEL_PAGE)}>
                 <T tone="accent" weight="500">
-                  {`Show ${Math.min(MODEL_PAGE, shown.length - limit)} more of ${shown.length - limit}`}
+                  {say('Show {0} more of {1}', {
+                    0: Math.min(MODEL_PAGE, shown.length - limit),
+                    1: shown.length - limit,
+                  })}
                 </T>
               </Row>
             ) : null}
             {!shown.length ? (
               <T tone="muted" style={{ padding: space.l }}>
-                No model matches.
+                {say('No model matches.')}
               </T>
             ) : null}
           </View>
@@ -433,7 +436,7 @@ export function ModelChip({
                       }}
                     >
                       <T tone="accent" weight="500" style={{ flex: 1 }}>
-                        {`All ${own.length} ${providerNames[p.provider]} models`}
+                        {say('All {0} {1} models', { 0: own.length, 1: providerNames[p.provider] })}
                       </T>
                       <ChevronRight size={15} color={c.placeholder} />
                     </Row>
@@ -443,7 +446,9 @@ export function ModelChip({
             })}
             {!providers.length ? (
               <T tone="muted" style={{ padding: space.l }}>
-                {offline ? 'Reconnect this host to choose a model.' : 'No models reported by this host yet.'}
+                {offline
+                  ? say('Reconnect this host to choose a model.')
+                  : say('This host has not reported any models yet.')}
               </T>
             ) : null}
           </View>
@@ -1834,6 +1839,7 @@ function QuickSteps({
   onChange: (m: ModelChoice) => void
 }) {
   const { c } = useTheme()
+  const say = useSay()
   // This phone's own choice, then the shared mobile setting, then the computer's. Changing it only redraws the control.
   const flow = useModelFlow(computerId).effective.value
   const [mode, setMode] = useState<'model' | 'effort'>(flow)
@@ -1860,7 +1866,7 @@ function QuickSteps({
           pick: { provider: step.provider, model: step.model, effort: step.effort ?? '' },
         }))
       : efforts.map((e) => ({
-          label: e || 'Default',
+          label: e || say('Default'),
           pick: { provider: value.provider, model: value.model, effort: e },
         }))
   const index =
@@ -1879,7 +1885,7 @@ function QuickSteps({
   const heading =
     mode === 'effort'
       ? `${current?.label ?? value.model ?? ''}${shown ? ` · ${cap(shown.label)}` : ''}`
-      : (shown?.label ?? 'Custom')
+      : (shown?.label ?? say('Custom'))
   return (
     <View style={{ paddingHorizontal: space.l, paddingTop: space.s, paddingBottom: space.m, gap: space.xs }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
@@ -1890,15 +1896,19 @@ function QuickSteps({
           value={mode}
           onChange={setMode}
           options={[
-            { key: 'model', label: 'Steps' },
-            { key: 'effort', label: 'Effort' },
+            { key: 'model', label: say('Steps') },
+            { key: 'effort', label: say('Effort') },
           ]}
           style={{ width: 150 }}
         />
       </View>
       {mode === 'model' ? (
         // One tap per step: a slider inside a sheet fought the sheet's own drag.
-        <View accessibilityRole="radiogroup" accessibilityLabel="Model set step" style={{ marginHorizontal: -space.l }}>
+        <View
+          accessibilityRole="radiogroup"
+          accessibilityLabel={say('Model set step')}
+          style={{ marginHorizontal: -space.l }}
+        >
           {items.map((item, i) => (
             <Row
               key={`${item.pick.provider}:${item.pick.model}:${item.pick.effort}`}
@@ -1919,7 +1929,7 @@ function QuickSteps({
       ) : (
         <View
           accessibilityRole="radiogroup"
-          accessibilityLabel="Reasoning effort level"
+          accessibilityLabel={say('Reasoning effort level')}
           style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s, paddingTop: space.xs }}
         >
           {items.map((item, i) => (

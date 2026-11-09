@@ -588,7 +588,7 @@ function UsageDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (ope
           <DialogDescription className="text-caption">
             {multiHost
               ? t('Every login on every connected host. A login signed in on several hosts shows once.')
-              : t('Every login on this host. Fallback moves a thread to the next one when a limit is reached.')}
+              : t('Every login on this host. At a limit, fallback moves a thread only to a login with an API key.')}
           </DialogDescription>
         </DialogHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto scroll-fade-y px-5 pt-4 pb-5">

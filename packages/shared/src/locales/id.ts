@@ -458,8 +458,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   Always: 'Selalu',
   'Share MCP approvals between logins': 'Bagikan persetujuan MCP antar login',
   'Share MCP approvals between {0} logins': 'Bagikan persetujuan MCP antar login {0}',
-  'Switching logins at a limit keeps your approved MCP connections, with no new approval.':
-    'Saat berpindah login karena batas, koneksi MCP yang disetujui tetap berlaku tanpa persetujuan baru.',
+  'Switching logins keeps your approved MCP connections, with no new approval.': 'Saat ganti login, koneksi MCP yang sudah disetujui tetap berlaku tanpa persetujuan baru.',
   'On for {0} of {1} logins. Turn on to share between all of them.':
     'Aktif untuk {0} dari {1} login. Aktifkan untuk membagikan ke semuanya.',
   Delivered: 'Terkirim',
@@ -2047,8 +2046,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'No usage yet. It appears after this login runs again.': 'Belum ada data. Muncul setelah login ini dipakai lagi.',
   'Every login on every connected host. A login signed in on several hosts shows once.':
     'Setiap login di setiap host yang terhubung. Login yang masuk di beberapa host ditampilkan sekali.',
-  'Every login on this host. Fallback moves a thread to the next one when a limit is reached.':
-    'Setiap login di host ini. Fallback memindahkan thread ke login berikutnya saat batas tercapai.',
+  'Every login on this host. At a limit, fallback moves a thread only to a login with an API key.': 'Setiap login di host ini. Saat batas tercapai, fallback hanya memindahkan thread ke login dengan API key.',
   'Reading usage…': 'Membaca pemakaian…',
   'No usage reported yet. It appears once a provider runs.': 'Belum ada pemakaian. Muncul setelah provider berjalan.',
   'Fallback settings': 'Pengaturan fallback',
@@ -4493,8 +4491,7 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Namanya harus berupa kata huruf kecil yang dihubungkan tanda hubung.',
   'Off. Hidden from model pickers and never started.':
     'Mati. Disembunyikan dari pemilih model dan tidak pernah dijalankan.',
-  'New threads use the top login. When it reaches its limit, a thread moves to the next one before switching models.':
-    'Thread baru memakai login teratas. Saat batasnya tercapai, thread pindah ke login berikutnya sebelum berganti model.',
+  'New threads use the top login. At a limit, a thread moves only to a login with an API key, never to another subscription.': 'Thread baru memakai login teratas. Saat batas tercapai, thread hanya pindah ke login dengan API key, tidak pernah ke langganan lain.',
   'Runs in the background, even while Ramu is closed.': 'Berjalan di latar belakang, bahkan saat Ramu ditutup.',
   'Check now': 'Periksa sekarang',
   'Applies to new threads. Running threads stay connected.':
@@ -5168,8 +5165,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Hide accounts': 'Sembunyikan akun',
   'Show account names and emails': 'Tampilkan nama dan email akun',
   'Hide account names and emails': 'Sembunyikan nama dan email akun',
-  'A usage limit still moves the thread to the next login by itself.':
-    'Batas pemakaian tetap memindahkan thread ke login berikutnya secara otomatis.',
+  'At a usage limit, Ramu switches only to a login with an API key, never to another subscription.': 'Saat batas pemakaian tercapai, Ramu hanya pindah ke login dengan API key, tidak pernah ke langganan lain.',
   'Applies to this thread from its next step.': 'Berlaku untuk thread ini mulai langkah berikutnya.',
   Behavior: 'Perilaku',
   'Automatic provider fallback': 'Fallback provider otomatis',
@@ -6466,4 +6462,14 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0} is not connected': '{0} belum terhubung',
   'Hide this notice': 'Sembunyikan pemberitahuan ini',
   '{0} repositories that need access are hidden': '{0} repositori yang perlu akses disembunyikan',
+  'Search {0} {1} models': 'Cari di {0} model {1}',
+  'Search {0} models': 'Cari di {0} model',
+  'Model: {0}': 'Model: {0}',
+  'Show {0} more of {1}': 'Tampilkan {0} lagi dari {1}',
+  'No model matches.': 'Tidak ada model yang cocok.',
+  'All {0} {1} models': 'Semua {0} model {1}',
+  'Reconnect this host to choose a model.': 'Hubungkan ulang host ini untuk memilih model.',
+  'This host has not reported any models yet.': 'Host ini belum melaporkan model apa pun.',
+  'Model set step': 'Langkah set model',
+  'Reasoning effort level': 'Level effort penalaran',
 }
