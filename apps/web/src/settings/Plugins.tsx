@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Download, RefreshCw, Search, Trash2 } from 'lucide-react'
+import { Download, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react'
+import { SearchInput } from '../SearchInput'
+import { Switch } from '@/components/ui/switch'
 import {
   UNUSED_PART_NAMES,
   type InstalledPlugin,
@@ -24,7 +26,7 @@ import { t, useLanguage } from '../i18n'
 import { invoke as onThisComputer } from '../ipc'
 import { errorText } from '../lib/errors'
 import { takePendingPluginSource } from './pluginLinks'
-import { SettingsCard, SettingsCardList, SettingsEmpty, SettingsSectionHead } from './cards'
+import { SETTINGS_CARD, SettingsCard, SettingsCardList, SettingsEmpty, SettingsSectionHead } from './cards'
 import { useSettingsEvents, useSettingsInvoke } from './SettingsScope'
 import { accountKey } from '@ramu/shared/identities'
 import { AccountIdentityPicker, IdentityDropdown, IdentityName, useAccountIdentities } from './AccountIdentity'
@@ -226,6 +228,8 @@ function Credential({
     try {
       await run()
       setToken('')
+      setFields({})
+      setEditing(false)
       onChanged()
     } catch (cause) {
       setError(errorText(cause))
@@ -304,7 +308,13 @@ function Credential({
     )
   return (
     <form
-      className="flex flex-col gap-1.5"
+      className="flex flex-col gap-2 border-t border-line pt-2.5"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && slot.state === 'saved') {
+          event.stopPropagation()
+          setEditing(false)
+        }
+      }}
       onSubmit={(event) => {
         event.preventDefault()
         if (declared.kind === 'sign-in')
@@ -332,62 +342,69 @@ function Credential({
           </>
         )}
       </p>
-      <Input
-        type={declared.kind === 'sign-in' ? 'text' : 'password'}
-        aria-label={declared.kind === 'sign-in' ? t('Client id') : declared.label}
-        placeholder={declared.kind === 'sign-in' ? t('Client id') : declared.label}
-        autoComplete="off"
-        value={token}
-        disabled={viewOnly || busy}
-        onChange={(event) => setToken(event.target.value)}
-      />
-      {declared.kind === 'token' &&
-        declared.fields.map((field) =>
-          field.values ? (
-            <Dropdown
-              key={field.id}
-              label={field.label}
-              value={fields[field.id] ?? ''}
-              options={field.values.map((value) => ({ value, label: value }))}
-              onChange={(value) => setFields({ ...fields, [field.id]: value })}
-            />
-          ) : (
-            <Input
-              key={field.id}
-              type={field.kind === 'secret' ? 'password' : 'text'}
-              aria-label={field.label}
-              placeholder={field.label}
-              value={fields[field.id] ?? ''}
-              disabled={viewOnly || busy}
-              onChange={(event) => setFields({ ...fields, [field.id]: event.target.value })}
-            />
-          ),
-        )}
-      {declared.kind === 'token' && identities && (
-        <IdentityDropdown
-          identities={identities}
-          caption={t('For')}
-          label={t('Which identity uses it')}
-          value={forIdentity}
-          onChange={setForIdentity}
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Input
+          type={declared.kind === 'sign-in' ? 'text' : 'password'}
+          className="w-full"
+          aria-label={declared.kind === 'sign-in' ? t('Client id') : declared.label}
+          placeholder={declared.kind === 'sign-in' ? t('Client id') : declared.label}
+          autoComplete="off"
+          value={token}
+          disabled={viewOnly || busy}
+          onChange={(event) => setToken(event.target.value)}
         />
-      )}
-      {declared.kind === 'sign-in' && (
-        <label className="flex items-center gap-2 text-caption">
-          <Checkbox checked={sandbox} onCheckedChange={(value) => setSandbox(value === true)} />
-          {t('Sandbox')}
-        </label>
-      )}
+        {declared.kind === 'token' &&
+          declared.fields.map((field) =>
+            field.values ? (
+              <Dropdown
+                key={field.id}
+                label={field.label}
+                value={fields[field.id] ?? ''}
+                options={field.values.map((value) => ({ value, label: value }))}
+                onChange={(value) => setFields({ ...fields, [field.id]: value })}
+              />
+            ) : (
+              <Input
+                key={field.id}
+                className="w-full"
+                type={field.kind === 'secret' ? 'password' : 'text'}
+                aria-label={field.label}
+                placeholder={field.label}
+                value={fields[field.id] ?? ''}
+                disabled={viewOnly || busy}
+                onChange={(event) => setFields({ ...fields, [field.id]: event.target.value })}
+              />
+            ),
+          )}
+      </div>
       {error && <Problem>{error}</Problem>}
-      <div className="flex justify-end gap-1.5">
-        {slot.state === 'saved' && (
-          <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
-            {t('Cancel')}
-          </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        {/* A first value is for every identity; "For" appears when adding one for a single identity beside it. */}
+        {declared.kind === 'token' && identities && slot.state === 'saved' && (
+          <IdentityDropdown
+            identities={identities}
+            caption={t('For')}
+            label={t('Which identity uses it')}
+            value={forIdentity}
+            onChange={setForIdentity}
+          />
         )}
-        <Button size="sm" type="submit" disabled={viewOnly || busy || !token.trim()}>
-          {declared.kind === 'sign-in' ? t('Sign in') : busy ? t('Checking…') : t('Save')}
-        </Button>
+        {declared.kind === 'sign-in' && (
+          <label className="flex items-center gap-2 text-caption">
+            <Checkbox checked={sandbox} onCheckedChange={(value) => setSandbox(value === true)} />
+            {t('Sandbox')}
+          </label>
+        )}
+        <span className="ml-auto flex items-center gap-1.5">
+          {slot.state === 'saved' && (
+            <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
+              {t('Cancel')}
+            </Button>
+          )}
+          <Button size="sm" type="submit" disabled={viewOnly || busy || !token.trim()}>
+            {declared.kind === 'sign-in' ? t('Sign in') : busy ? t('Checking…') : t('Save')}
+          </Button>
+        </span>
       </div>
     </form>
   )
@@ -498,37 +515,52 @@ export function PluginSettings() {
         {installed.map((plugin) => {
           const missing = plugin.credentials.filter((slot) => slot.state !== 'saved')
           return (
-            <SettingsCard
-              key={plugin.id}
-              title={plugin.name}
-              badges={
-                <>
-                  {plugin.byRamu && <Badge variant="secondary">{t('By Ramu')}</Badge>}
-                  {plugin.source.kind === 'development' && <Badge variant="outline">{t('Development')}</Badge>}
-                  {plugin.source.kind === 'git' && (
-                    <Badge variant="outline">
-                      {plugin.source.signedBy ? t('Signed by {name}', { name: plugin.source.signedBy }) : t('Unsigned')}
-                    </Badge>
-                  )}
-                  {!plugin.enabled && <Badge variant="outline">{t('Off')}</Badge>}
-                  {missing.length > 0 && (
-                    <Badge variant="destructive">
-                      {t('Needs {what}', { what: missing.map((slot) => slot.label).join(', ') })}
-                    </Badge>
-                  )}
-                </>
-              }
-              meta={[
-                plugin.contents.description,
-                plugin.scope.kind === 'project'
-                  ? (projects.find((project) => project.id === (plugin.scope as { projectId: string }).projectId)
-                      ?.name ?? t('One project'))
-                  : t('All projects'),
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-              actions={
-                <>
+            <article key={plugin.id} className={`${SETTINGS_CARD} gap-2! px-3.5! py-3!`}>
+              {/* The name and its facts on the left, the controls in one fixed group on the right, so neither
+                  squeezes the other. */}
+              <div className="flex items-start gap-3">
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <strong className="text-control font-medium">{plugin.name}</strong>
+                    {plugin.byRamu && <Badge variant="secondary">{t('By Ramu')}</Badge>}
+                    {plugin.source.kind === 'development' && <Badge variant="outline">{t('Development')}</Badge>}
+                    {plugin.source.kind === 'git' &&
+                      (plugin.source.signedBy ? (
+                        <Badge
+                          variant="outline"
+                          title={t('Signed by {name}', { name: plugin.source.signedBy })}
+                          className="gap-1"
+                        >
+                          <ShieldCheck size={11} aria-hidden />
+                          {t('Signed')}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-warn">
+                          {t('Unsigned')}
+                        </Badge>
+                      ))}
+                    {missing.length > 0 && (
+                      <Badge variant="outline" className="border-warn/40 text-warn">
+                        {t('Needs {what}', { what: missing.map((slot) => slot.label).join(', ') })}
+                      </Badge>
+                    )}
+                  </div>
+                  <p
+                    className="m-0 line-clamp-2 text-caption text-muted-foreground"
+                    title={plugin.contents.description}
+                  >
+                    {[
+                      plugin.contents.description,
+                      plugin.scope.kind === 'project'
+                        ? (projects.find((project) => project.id === (plugin.scope as { projectId: string }).projectId)
+                            ?.name ?? t('One project'))
+                        : t('All projects'),
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                </div>
+                <div className="flex flex-none items-center gap-1">
                   <AccountIdentityPicker
                     accountKey={accountKey('plugin', plugin.id)}
                     name={plugin.name}
@@ -544,26 +576,25 @@ export function PluginSettings() {
                       {t('Update')}
                     </Button>
                   )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
+                  <Switch
+                    aria-label={t('Use {name}', { name: plugin.name })}
+                    title={plugin.enabled ? t('On') : t('Off')}
+                    checked={plugin.enabled}
                     disabled={viewOnly || busy}
-                    onClick={() => void act(() => invoke('plugins.setEnabled', plugin.id, !plugin.enabled))}
-                  >
-                    {plugin.enabled ? t('Turn off') : t('Turn on')}
-                  </Button>
+                    onCheckedChange={(enabled) => void act(() => invoke('plugins.setEnabled', plugin.id, enabled))}
+                  />
                   <Button
-                    size="sm"
+                    size="icon-sm"
                     variant="ghost"
                     aria-label={t('Remove {name}', { name: plugin.name })}
+                    title={t('Remove {name}', { name: plugin.name })}
                     disabled={viewOnly || busy}
                     onClick={() => setRemoving(plugin)}
                   >
                     <Trash2 size={13} />
                   </Button>
-                </>
-              }
-            >
+                </div>
+              </div>
               {plugin.update && plugin.update.changes.length > 0 && (
                 <p className="m-0 text-caption text-muted-foreground">
                   {t('Update: {changes}', { changes: plugin.update.changes.join('; ') })}
@@ -579,7 +610,7 @@ export function PluginSettings() {
               {plugin.credentials.map((slot) => (
                 <Credential key={slot.id} plugin={plugin} slot={slot} viewOnly={viewOnly} onChanged={reload} />
               ))}
-            </SettingsCard>
+            </article>
           )
         })}
       </SettingsCardList>
@@ -588,21 +619,14 @@ export function PluginSettings() {
         title={listings ? t('Available · {count}', { count: listings.length }) : t('Available')}
         help={t('From the indexes Ramu reads. Each one shows what it adds before anything is installed.')}
       />
-      <div className="relative">
-        <Search
-          size={13}
-          aria-hidden
-          className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground"
-        />
-        <Input
-          aria-label={t('Search plugins')}
-          className="w-full pl-8"
-          placeholder={t('Filter by name or what it is for, such as render or analytics')}
-          value={query}
-          maxLength={200}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-      </div>
+      <SearchInput
+        aria-label={t('Search plugins')}
+        placeholder={t('Filter by name or what it is for, such as render or analytics')}
+        value={query}
+        maxLength={200}
+        onChange={(event) => setQuery(event.target.value)}
+        onClear={() => setQuery('')}
+      />
       {listingError && <Problem>{listingError}</Problem>}
       {indexProblems.map((index) => (
         <Problem key={index.url}>
