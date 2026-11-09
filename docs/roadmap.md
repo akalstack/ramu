@@ -24,6 +24,7 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 - **Site screenshots:** a real capture from a release build beside each of the five steps in **From an idea to a live app** (`apps/site`). Claim "anyone can ship an app" only after the non-coder task under [Acceptance](#acceptance) has passed with real people.
 - **Presenting from the phone:** **Present** a deck on a display the phone is connected to (AirPlay or a cable), with the speaker notes on the phone, as the desktop does with two displays ([Artifacts](guide/artifacts.md)).
 - **Pull requests page:** diffs and line counts for Azure DevOps's changed files, which are listed without them: its API returns no diff text, only changed line ranges per file, so a patch needs both versions of every file read.
+- **Identities and moving settings:** work and personal accounts chosen from the project's folder or remote, with a guardrail before acting as the wrong one, and settings copied between hosts ([plan](plans/identities-and-settings.md)).
 - **Code quality:** push events are checked for channel and shape where they enter the phone and the desktop, and RPC results take each method's declared type; checking RPC results against runtime schemas is still to do. About 140 `react-hooks/exhaustive-deps` disables name the trigger they are keyed on and are mostly deliberate; convert one only when touching it, after checking it neither loops nor refetches.
 
 ## Acceptance
@@ -75,7 +76,7 @@ Representative tasks to run once the above is available:
 ## Decisions and deferred scope
 
 - **Certificate pinning:** not built. It needs a native transport replacement that cannot be verified without device builds. Reopen with a concrete threat that HTTPS pairing and host-identity checks do not cover.
-- **Preference sync:** hosts talk to each other only through host pairings for agent-started threads, so settings do not follow a person across hosts; credentials and workspace state stay out of any future sync.
+- **Preference sync:** no Ramu account or hosted sync. Settings move between a person's hosts over host pairing, an export file or a backup in their own GitHub ([Identities and moving settings](plans/identities-and-settings.md)); credentials and workspace state never move.
 - **Remote access:** devices reach a host over the LAN, a private network (Tailscale, NetBird, ZeroTier, WireGuard), SSH, or a tunnel: Cloudflare's quick tunnel, Tailscale Funnel or ngrok run by Ramu with the person's own tool, or one they run and name. A hosted relay and paid plans are deferred until there is a way to fund them; tunnels provisioned per host by a Ramu service are the cheapest option to revisit (free up to 1,000 tunnels).
 - **Remote administration:** network access, pairing and device permissions are managed only at the host. A device's **Change settings** permission covers settings, not this; widening it needs reviewable changes and recovery first.
 - **Netlify branch previews:** Netlify previews come from pull requests, as its Git integration makes them; Ramu does not declare a branch preview through Netlify's API, since every Ramu change reaches review as a pull request.
