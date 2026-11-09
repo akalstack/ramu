@@ -63,4 +63,3 @@ Only checks that still need a physical phone, an account or a live provider. Tes
 - [ ] **Edit text** on a doc, a Mermaid diagram, a deck (including both columns and a quote's attribution) and a design saves a new version marked "Edited by you on" the phone's name, and the desktop shows it.
 - [ ] A deck's PowerPoint, a doc's Word file, a diagram's PNG and a motion's MP4 reach the share sheet and open in the phone's apps.
 - [ ] A live dashboard opened offline shows the "As of" of its last read; a watched figure's change arrives as a notification.
-- [ ] **Start from a template** makes a new artifact from a starter and from one of your own templates.

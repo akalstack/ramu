@@ -372,16 +372,6 @@ export function parseArtifactLink(url: string): ArtifactLink | null {
   }
 }
 
-/** A saved starting point: an artifact's drawn version without its records, values, grants or history. */
-export interface ArtifactTemplate {
-  /** A saved template's id, or `starter:…` for one Ramu ships. */
-  id: string
-  kind: ArtifactKind
-  title: string
-  icon: string
-  createdAt: number
-}
-
 /** Where the host keeps which design artifact is its design system; a project's own adds `:<projectId>`. */
 export const DESIGN_SYSTEM_KEY = 'design-system'
 export const designSystemKey = (projectId: string | null) =>

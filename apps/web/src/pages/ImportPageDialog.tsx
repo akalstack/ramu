@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { parseArtifactLink } from '@ramu/shared/artifacts'
 import { Input } from '../components/desktop-input'
-import { Checkbox } from '@/components/desktop-checkbox'
 import { Dialog } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { invokerFor } from '../ipc'
@@ -18,7 +17,6 @@ export function ImportPageDialog({ onClose }: { onClose(): void }) {
   const [link, setLink] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [asTemplate, setAsTemplate] = useState(false)
   const found = parseArtifactLink(link)
   const parsed = found?.share ? { host: found.computerId, token: found.share } : null
   return (
@@ -36,11 +34,6 @@ export function ImportPageDialog({ onClose }: { onClose(): void }) {
         void invokerFor(parsed.host)('artifacts.openShare', parsed.token)
           .then(async (shared) => {
             const from = { title: shared.artifact.title, icon: shared.artifact.icon }
-            if (asTemplate) {
-              await invoke('artifacts.importTemplate', shared.document, from)
-              onClose()
-              return
-            }
             const page = await invoke('artifacts.import', shared.document, from)
             onClose()
             openPage(page.id)
@@ -67,10 +60,6 @@ export function ImportPageDialog({ onClose }: { onClose(): void }) {
         value={link}
         onChange={(event) => setLink(event.target.value)}
       />
-      <label className="flex items-center gap-2 text-control">
-        <Checkbox checked={asTemplate} onCheckedChange={(checked) => setAsTemplate(checked === true)} />
-        {t('Keep it as a template')}
-      </label>
     </Dialog>
   )
 }

@@ -3,14 +3,14 @@ import { RefreshControl, TextInput, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { AppWindow, Pin } from 'lucide-react-native'
 import { useTabActions } from '../../../components/Overlays'
-import { ARTIFACT_KINDS, type ArtifactInfo, type ArtifactKind, type ArtifactTemplate } from '@ramu/shared/artifacts'
+import { ARTIFACT_KINDS, type ArtifactInfo, type ArtifactKind } from '@ramu/shared/artifacts'
 import { font, space, useTheme } from '../../../theme'
 import { useStore } from '../../../runtime/store'
 import { ago, useSay } from '../../../i18n'
 import { Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from '../../../components/Screen'
 import { Nothing } from '../../../components/InboxParts'
 import { HostChip } from '../../../components/HostChip'
-import { Chip, Row, SectionLabel, Sheet, T } from '../../../components/ui'
+import { Chip, Row, Sheet, T } from '../../../components/ui'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { ArtifactKindMark, kindIcon, kindLabel } from '../../../components/ArtifactKindMark'
 
@@ -58,24 +58,6 @@ export default function PagesScreen() {
       )
     return () => offs.forEach((off) => off())
   }, [onlineKey, load, store])
-  const viewOnly = store.computers.find((x) => x.id === store.selected)?.access === 'viewer'
-  // Starting points on the selected host: the person's own templates, then the set Ramu ships.
-  const [templates, setTemplates] = useState<ArtifactTemplate[]>([])
-  const selectedOnline = online.includes(store.selected)
-  useEffect(() => {
-    if (viewOnly || !selectedOnline) {
-      setTemplates([])
-      return
-    }
-    void store.invoke(store.selected, 'artifacts.templates').then(setTemplates, () => setTemplates([]))
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [store.selected, viewOnly, selectedOnline] by design; the store is current as of that run
-  }, [store.selected, viewOnly, selectedOnline])
-  const startFrom = (template: ArtifactTemplate) =>
-    void store.invoke(store.selected, 'artifacts.fromTemplate', template.id).then(
-      (made) =>
-        router.push({ pathname: '/artifact/[computer]/[id]', params: { computer: store.selected, id: made.id } }),
-      () => {},
-    )
   // Artifacts come from threads; this tab is where they are found again, so it has no New of its own.
   const actions = useTabActions()
   const kinds = ARTIFACT_KINDS.filter((entry) =>
@@ -180,26 +162,6 @@ export default function PagesScreen() {
             )}
           />
         )}
-        {templates.length ? (
-          <View style={{ marginTop: space.l }}>
-            <SectionLabel>{say('Start from a template')}</SectionLabel>
-            {templates.map((template) => (
-              <Row
-                key={template.id}
-                accessibilityLabel={template.title}
-                accessibilityHint={say('Makes a new artifact from this template')}
-                onPress={() => startFrom(template)}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l }}
-              >
-                <T size={22}>{template.icon}</T>
-                <T numberOfLines={1} style={{ flex: 1 }}>
-                  {template.title}
-                </T>
-                <ArtifactKindMark kind={template.kind} size={12} color={c.muted} />
-              </Row>
-            ))}
-          </View>
-        ) : null}
       </PageScrollView>
       <Sheet open={choosingKind} onClose={() => setChoosingKind(false)} title={say('Kind')}>
         <SheetGroup>

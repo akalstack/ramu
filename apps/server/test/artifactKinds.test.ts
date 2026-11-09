@@ -406,23 +406,6 @@ it('edits a Mermaid diagram’s source in place, and offers no text to edit for 
   ).toBeNull()
 })
 
-it('keeps an artifact as a template without its values, and starts new artifacts from it', async () => {
-  const { interactive, pages } = setup()
-  const preview = await interactive.preview('s', doc('## Weekly report\n\nWhat shipped.\n'))
-  const kept = pages.keep('s', interactive.publish('s', preview.id, 'r1').id, { title: 'Weekly report' })
-  const template = pages.saveTemplate(kept.id)
-  expect(pages.templates()).toEqual([expect.objectContaining({ id: template.id, kind: 'doc', title: 'Weekly report' })])
-  const made = pages.fromTemplate(template.id)
-  expect(made.id).not.toBe(kept.id)
-  expect(made.version).toBe(1)
-  expect(made.kind).toBe('doc')
-  expect(pages.document(made.id).files).toEqual(pages.document(kept.id).files)
-  expect(pages.state(made.id).state).toBeNull()
-  pages.removeTemplate(template.id)
-  expect(pages.templates()).toEqual([])
-  expect(() => pages.fromTemplate(template.id)).toThrow('That template was removed.')
-})
-
 it('restyles a deck with the host’s design system as a new version, and needs one chosen first', async () => {
   const { interactive, pages } = setup()
   const system = await interactive.preview('s', {
@@ -448,15 +431,4 @@ it('restyles a deck with the host’s design system as a new version, and needs 
   const document = pages.document(kept.id)
   expect(document.reference.changes).toBe('Restyled with Brand')
   expect(document.html).toContain('--primary:#ff5500')
-})
-
-it('keeps an artifact another host shared as a template here, ready to start new artifacts from', async () => {
-  const { interactive, pages } = setup()
-  const preview = await interactive.preview('s', doc('## Weekly\n\nNotes.\n'))
-  const shared = interactive.get('s', interactive.publish('s', preview.id, 'r1').id, 1)
-  const template = pages.saveTemplateFrom(shared, { title: 'Weekly from the studio', icon: '📝' })
-  expect(template).toMatchObject({ kind: 'doc', title: 'Weekly from the studio' })
-  expect(pages.list()).toEqual([])
-  const made = pages.fromTemplate(template.id)
-  expect(pages.document(made.id).files).toEqual([{ path: 'document.md', content: '## Weekly\n\nNotes.\n' }])
 })

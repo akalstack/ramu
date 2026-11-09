@@ -35,10 +35,6 @@ Docs, diagrams, decks, dashboards, designs and motions are drawn on the host int
 
 Below, an App's **page** is the web page it shows, as in **Page settings**. Records, AI and the other capabilities are for apps.
 
-## Templates
-
-**Save as template** in an artifact's menu on the desktop keeps its current version as a starting point: its code or source only, never its records, values, grants or history. Templates are listed above your artifacts, after which come the starting points Ramu ships: a weekly report, a pitch deck, a metrics dashboard, a flowchart, a landing page and a 30-second explainer; **New** on the desktop offers them too, after **Ask an agent for something new**. **Use** makes a new artifact from one, with a history of its own, and **Remove** deletes the template, not anything made from it. To bring one from another host, share the artifact there and choose **Keep it as a template** in **Import an artifact…** here.
-
 ## In a thread
 
 **Artifact** on a kept artifact's card (or **Open** in its menu) opens it as a tab beside the thread, with the same toolbar as under **Artifacts**: Edit text, Outline, Range and Refresh, playback, Present and Export. Its back arrow closes the tab.

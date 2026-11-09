@@ -25,7 +25,6 @@ import {
   type ArtifactVersion,
 } from '@ramu/shared/artifacts'
 import { interactiveExport, slideCount } from '@ramu/shared/interactiveExport'
-import { notify } from '@/components/app-toaster'
 import { dashboardTimeColumn, type Slide } from '@ramu/shared/artifactSource'
 import { Button } from '../components/desktop-button'
 import { Input } from '../components/desktop-input'
@@ -540,15 +539,6 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           })
           .catch((e) => notifyError(message(e))),
     })),
-    {
-      key: 'template',
-      label: t('Save as template'),
-      disabled: viewOnly,
-      onSelect: () =>
-        void invoke('artifacts.saveTemplate', artifactId)
-          .then(() => notify.add({ type: 'success', title: t('Saved as a template'), description: page.title }))
-          .catch((e) => notifyError(message(e))),
-    },
     { key: 'sep2', separator: true },
     {
       key: 'delete',

@@ -258,12 +258,6 @@ interface ArtifactMethods {
   'artifacts.restyle'(artifactId: string, base: number): import('./artifacts').ArtifactInfo
   /** Makes a design with tokens the design system of a project (or the host), or stops using one with null. */
   'artifacts.setDesignSystem'(artifactId: string | null, projectId?: string | null): void
-  /** Keeps an artifact's current version as a template, without its records, values, grants or history. */
-  'artifacts.saveTemplate'(artifactId: string): import('./artifacts').ArtifactTemplate
-  'artifacts.templates'(): import('./artifacts').ArtifactTemplate[]
-  /** Starts a new artifact from a template, with a history of its own. */
-  'artifacts.fromTemplate'(templateId: string): import('./artifacts').ArtifactInfo
-  'artifacts.removeTemplate'(templateId: string): void
   /** Sets how often a dashboard's live tables are read again, as a new version on top of `base`. */
   'artifacts.setRefresh'(artifactId: string, base: number, minutes: number): import('./artifacts').ArtifactInfo
   /** Shows only a dashboard's last `days` of dated rows (all of them when null), as a new version on top of `base`. */
@@ -438,11 +432,6 @@ interface ArtifactMethods {
     document: import('./interactive').InteractiveDocument,
     from: { title: string; icon: string },
   ): import('./artifacts').ArtifactInfo
-  /** Keeps an artifact another host shared as a template here, without making an artifact of it. */
-  'artifacts.importTemplate'(
-    document: import('./interactive').InteractiveDocument,
-    from: { title: string; icon: string },
-  ): import('./artifacts').ArtifactTemplate
 }
 
 export interface RamuMethods extends ArtifactMethods {

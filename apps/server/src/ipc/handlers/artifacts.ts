@@ -40,7 +40,6 @@ import {
   designTokensOf,
   editableSource,
 } from '@ramu/shared/artifacts'
-import { STARTER_TEMPLATES } from '@ramu/shared/starterTemplates'
 import { renderArtifactSource } from '../../interactive/kinds'
 import { restyleArtifact } from '../../interactive/restyle'
 import { HOST_EXPORT_FORMATS, type HostExportFormat } from '@ramu/shared/interactiveExport'
@@ -573,52 +572,6 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
         return restyleArtifact(pages, artifactId, base, appliedDesignSystem(stateOf, pages.get(artifactId).projectId))
       },
     },
-    'artifacts.saveTemplate': {
-      args: z.tuple([id]),
-      run: (artifactId: string) => need().pages.saveTemplate(artifactId),
-    },
-    // The person's own templates first, then the starting set Ramu ships.
-    'artifacts.templates': {
-      args: z.tuple([]),
-      run: () => [
-        ...need().pages.templates(),
-        ...STARTER_TEMPLATES.map(({ id, kind, title, icon }) => ({ id, kind, title, icon, createdAt: 0 })),
-      ],
-    },
-    'artifacts.fromTemplate': {
-      args: z.tuple([z.string().min(1).max(80)]),
-      run: async (templateId: string) => {
-        const { pages } = need()
-        const starter = STARTER_TEMPLATES.find((entry) => entry.id === templateId)
-        if (!starter) return pages.fromTemplate(templateId)
-        const drawn = await renderArtifactSource(
-          parseArtifactSource({ kind: starter.kind, ...starter.source }),
-          starter.title,
-        )
-        const document: InteractiveDocument = {
-          reference: {
-            id: '',
-            version: 1,
-            sessionId: '',
-            title: starter.title,
-            summary: starter.title,
-            digest: '',
-            createdAt: Date.now(),
-            checked: true,
-            network: { resources: [], connect: [] },
-            kind: starter.kind,
-          },
-          html: drawn.html,
-          preview: null,
-          files: drawn.files,
-        }
-        return pages.importPage(document, { title: starter.title, icon: starter.icon })
-      },
-    },
-    'artifacts.removeTemplate': {
-      args: z.tuple([z.string().uuid()]),
-      run: (templateId: string) => need().pages.removeTemplate(templateId),
-    },
     'artifacts.setRefresh': {
       args: z.tuple([id, z.number().int().positive(), z.number().int().min(5).max(1440)]),
       run: async (artifactId: string, base: number, minutes: number) => {
@@ -835,12 +788,6 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       args: importArgs,
       run: (document: InteractiveDocument, from: { title: string; icon: string }) =>
         need().pages.importPage(document, from),
-    },
-    // A shared artifact kept as a template on this host instead of as an artifact.
-    'artifacts.importTemplate': {
-      args: importArgs,
-      run: (document: InteractiveDocument, from: { title: string; icon: string }) =>
-        need().pages.saveTemplateFrom(document, from),
     },
     'artifacts.state': { args: z.tuple([id]), run: (artifactId: string) => need().pages.state(artifactId) },
     'artifacts.saveState': {

@@ -18,7 +18,6 @@ import {
   type ArtifactRun,
   type ArtifactShare,
   type ArtifactState,
-  type ArtifactTemplate,
   type ArtifactUsage,
   type ArtifactVersion,
 } from '@ramu/shared/artifacts'
@@ -383,68 +382,6 @@ export class PageStore {
       throw error
     }
     return this.get(artifactId)
-  }
-
-  /** Keeps the current version as a template: its code and source only, never records, values, grants or history. */
-  saveTemplate(artifactId: string): ArtifactTemplate {
-    const artifact = this.get(artifactId)
-    const document = this.document(artifactId)
-    const template: ArtifactTemplate = {
-      id: randomUUID(),
-      kind: artifact.kind,
-      title: artifact.title,
-      icon: artifact.icon,
-      createdAt: Date.now(),
-    }
-    const kept: InteractiveDocument = { reference: document.reference, html: document.html, preview: document.preview }
-    if (document.files) kept.files = document.files
-    this.db
-      .prepare('INSERT INTO artifact_templates(id,kind,title,icon,document,created_at) VALUES(?,?,?,?,?,?)')
-      .run(template.id, template.kind, template.title, template.icon, JSON.stringify(kept), template.createdAt)
-    return template
-  }
-
-  /** A document another host shared, kept as a template here: its code and source, with nothing of its values. */
-  saveTemplateFrom(document: InteractiveDocument, from: { title: string; icon: string }): ArtifactTemplate {
-    const template: ArtifactTemplate = {
-      id: randomUUID(),
-      kind: artifactKind(document.reference.kind),
-      title: clipTitle(from.title),
-      icon: pageIcon(from.icon),
-      createdAt: Date.now(),
-    }
-    const kept: InteractiveDocument = { reference: document.reference, html: document.html, preview: document.preview }
-    if (document.files) kept.files = document.files
-    this.db
-      .prepare('INSERT INTO artifact_templates(id,kind,title,icon,document,created_at) VALUES(?,?,?,?,?,?)')
-      .run(template.id, template.kind, template.title, template.icon, JSON.stringify(kept), template.createdAt)
-    return template
-  }
-
-  templates(): ArtifactTemplate[] {
-    return (
-      this.db
-        .prepare('SELECT id,kind,title,icon,created_at FROM artifact_templates ORDER BY created_at DESC')
-        .all() as { id: string; kind: string; title: string; icon: string; created_at: number }[]
-    ).map((row) => ({
-      id: row.id,
-      kind: artifactKind(row.kind),
-      title: row.title,
-      icon: row.icon,
-      createdAt: row.created_at,
-    }))
-  }
-
-  /** A new artifact from a template, with a fresh history and nothing of the one it was saved from. */
-  fromTemplate(templateId: string): ArtifactInfo {
-    const row = this.db.prepare('SELECT title,icon,document FROM artifact_templates WHERE id=?').get(templateId) as
-      { title: string; icon: string; document: string } | undefined
-    if (!row) throw new Error('That template was removed.')
-    return this.importPage(JSON.parse(row.document) as InteractiveDocument, { title: row.title, icon: row.icon })
-  }
-
-  removeTemplate(templateId: string) {
-    this.db.prepare('DELETE FROM artifact_templates WHERE id=?').run(templateId)
   }
 
   /** A copy with the same code and capabilities and none of the records, state, grants or history. */
