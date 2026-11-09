@@ -50,8 +50,8 @@ export interface ForgeAdapter {
   pullRequestAction(cwd: string, url: string, action: PullRequestAction): Promise<void>
   /** The description of `url`, for the first message of a thread opened on it. */
   pullRequestBody(cwd: string, url: string): Promise<string>
-  /** The latest history of `url`, oldest first, for its full view; absent where not supported yet. */
-  pullRequestTimeline?(cwd: string, url: string): Promise<PullRequestTimelineEvent[]>
+  /** The latest history of `url`, oldest first, for its full view. */
+  pullRequestTimeline(cwd: string, url: string): Promise<PullRequestTimelineEvent[]>
   /** The files `url` changes with their diffs, for its full view; absent where not supported yet. */
   pullRequestFiles?(cwd: string, url: string): Promise<{ files: PullRequestFile[]; more: boolean }>
   /** Every review thread of `url`, resolved ones included, in one shape across services. */
@@ -83,6 +83,23 @@ export const PATCH_LIMIT = 40_000
 /** A file's patch cut at Ramu's limit, marked when it was cut. */
 export function boundedPatch(patch: string | null): Pick<PullRequestFile, 'patch' | 'truncated'> {
   return patch && patch.length > PATCH_LIMIT ? { patch: patch.slice(0, PATCH_LIMIT), truncated: true } : { patch }
+}
+
+/** How many of the latest events a pull request's full view shows. */
+export const TIMELINE_LENGTH = 50
+/** A comment or commit line longer than this is cut to its opening. */
+const TEXT_LIMIT = 200
+
+/** The first line of a text, cut to the timeline's limit; undefined when there is nothing to show. */
+export function opening(text: unknown): string | undefined {
+  if (typeof text !== 'string') return undefined
+  const line = text
+    .trim()
+    .split('\n')
+    .find((entry) => entry.trim())
+    ?.trim()
+  if (!line) return undefined
+  return line.length > TEXT_LIMIT ? `${line.slice(0, TEXT_LIMIT - 1)}…` : line
 }
 
 const adapters = new Map<ForgeProviderId, ForgeAdapter>()

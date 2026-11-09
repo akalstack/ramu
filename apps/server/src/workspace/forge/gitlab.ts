@@ -22,6 +22,7 @@ import type {
   PullRequestList,
   PullRequestSummary,
   PullRequestThread,
+  PullRequestTimelineEvent,
   ReviewCommentDraft,
   ReviewVerdict,
   PullRequestInfo,
@@ -31,7 +32,7 @@ import type {
 import { glabHosts, parseGitlabRemote, type GitlabProject } from '@ramu/shared/forgeHosts'
 import { redactSecrets } from '@ramu/shared/forgeRemote'
 import { currentBranch, git, publishRemote } from '../git'
-import { FILES_PAGE, boundedPatch, registerForgeAdapter } from './adapter'
+import { FILES_PAGE, TIMELINE_LENGTH, boundedPatch, opening, registerForgeAdapter } from './adapter'
 import { enrichOpen } from './enrich'
 import { checksRollup } from '@ramu/shared/pullRequests'
 import { findExecutable } from '../../providers/providerBinaries'
@@ -891,6 +892,55 @@ interface RawDiscussion {
   notes: RawDiscussionNote[]
 }
 
+/** One note as timeline events: a person's note is a comment, a system note the event its wording names. */
+function noteEvents(note: RawDiscussionNote, url: string): PullRequestTimelineEvent[] {
+  const actor = note.author?.username ?? null
+  const at = note.created_at ? Date.parse(note.created_at) || 0 : 0
+  if (!note.system) {
+    const text = opening(note.body)
+    return [{ kind: 'comment', actor, at, ...(text ? { text } : {}), url: `${url}#note_${note.id}` }]
+  }
+  // The API gives a system note only as its sentence, which GitLab writes in English whatever the account's language.
+  const sentence = note.body.trim().split('\n')[0]?.trim() ?? ''
+  if (sentence === 'approved this merge request') return [{ kind: 'review', actor, at, verdict: 'approved' }]
+  if (sentence.startsWith('requested review from '))
+    return [...sentence.matchAll(/@([\w.-]*[\w-])/g)].map((match) => ({
+      kind: 'review-requested' as const,
+      actor,
+      at,
+      text: match[1]!,
+    }))
+  if (/^added \d+ commits?$/.test(sentence)) {
+    // The note lists the pushed commits as `<li>sha - headline</li>`; a long push folds some into a summary item.
+    const lines = [...note.body.matchAll(/<li>[0-9a-f]{7,40} - (.+?)<\/li>/g)].map((match) => opening(match[1]))
+    return (lines.length ? lines : [undefined]).map((text) => ({
+      kind: 'commit' as const,
+      actor,
+      at,
+      ...(text ? { text } : {}),
+    }))
+  }
+  if (/^marked (?:this merge request )?as \**ready\**$/i.test(sentence)) return [{ kind: 'ready', actor, at }]
+  if (sentence === 'merged') return [{ kind: 'merged', actor, at }]
+  if (sentence === 'closed') return [{ kind: 'closed', actor, at }]
+  if (sentence === 'reopened') return [{ kind: 'reopened', actor, at }]
+  return []
+}
+
+/** The latest history of `url`, oldest first, from its notes: comments, approvals, review requests, pushes, states. */
+export async function pullRequestTimeline(cwd: string, url: string): Promise<PullRequestTimelineEvent[]> {
+  // Newest first, so a long discussion's one page holds its latest notes rather than its earliest.
+  const notes = await projectApi<RawDiscussionNote[] | null>(
+    await access(cwd),
+    `/merge_requests/${iidOf(url)}/notes?sort=desc&order_by=created_at&per_page=100`,
+  )
+  const link = url.replace(/[?#].*$/, '')
+  return (notes ?? [])
+    .reverse()
+    .flatMap((note) => noteEvents(note, link))
+    .slice(-TIMELINE_LENGTH)
+}
+
 const isBotName = (name: string) => /(?:^|_)bot(?:_|\d|$)|\[bot\]$/i.test(name)
 
 /**
@@ -1048,6 +1098,7 @@ registerForgeAdapter({
   mergeOptions,
   pullRequestAction,
   pullRequestBody,
+  pullRequestTimeline,
   pullRequestFiles,
   reviewThreads,
   replyToThread,

@@ -1,11 +1,7 @@
 import type { PullRequestTimelineEvent } from '@ramu/shared/types'
 import { ForgeError, forgeRemoteOf, githubGraphql } from './github'
 import { pullNumber } from './githubPulls'
-
-/** How many of the latest events a pull request's full view shows. */
-const TIMELINE_LENGTH = 50
-/** A comment or commit line longer than this is cut to its opening. */
-const TEXT_LIMIT = 200
+import { TIMELINE_LENGTH, opening } from './adapter'
 
 const TIMELINE_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $last: Int!) {
   repository(owner: $owner, name: $repo) { pullRequest(number: $number) {
@@ -36,18 +32,6 @@ const VERDICT: Record<string, PullRequestTimelineEvent['verdict']> = {
   CHANGES_REQUESTED: 'changes-requested',
   COMMENTED: 'commented',
   DISMISSED: 'dismissed',
-}
-
-/** The first line of a text, cut to the timeline's limit; undefined when there is nothing to show. */
-function opening(text: unknown): string | undefined {
-  if (typeof text !== 'string') return undefined
-  const line = text
-    .trim()
-    .split('\n')
-    .find((entry) => entry.trim())
-    ?.trim()
-  if (!line) return undefined
-  return line.length > TEXT_LIMIT ? `${line.slice(0, TEXT_LIMIT - 1)}…` : line
 }
 
 const login = (value: unknown) => (value as { login?: string } | null)?.login ?? null

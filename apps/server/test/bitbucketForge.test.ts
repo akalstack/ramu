@@ -11,6 +11,7 @@ import {
   pipelineNumber,
   pullRequestAction,
   pullRequestFiles,
+  pullRequestTimeline,
   checksFeedback,
 } from '../src/workspace/forge/bitbucket'
 import { FILES_PAGE, PATCH_LIMIT } from '../src/workspace/forge/adapter'
@@ -423,6 +424,76 @@ it('lists a pull request’s files from its diffstat with each file’s hunks fr
     expect(seen.find((entry) => entry.url.includes('/diff/acme'))?.auth).toBe('Bearer workspace-token')
     next = `${base}/pullrequests/3/diffstat?page=2`
     expect((await pullRequestFiles(dir, url)).more).toBe(true)
+  } finally {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+it('reads a pull request’s activity as its timeline, oldest first, with state changes and pushes against the update before', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-bitbucket-timeline-'))
+  execFileSync('git', ['init', '-q', '-b', 's'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'git@bitbucket.org:acme/app.git'], { cwd: dir })
+  vi.stubEnv('BITBUCKET_ACCESS_TOKEN', 'workspace-token')
+  const at = (minute: number) => new Date(Date.UTC(2026, 10, 8, 10, minute)).toISOString()
+  const ana = { username: 'ana' }
+  const bo = { nickname: 'bo' }
+  const update = (minute: number, state: string, hash: string) => ({
+    update: { state, date: at(minute), author: ana, source: { commit: { hash } } },
+  })
+  // Newest first, as Bitbucket lists it.
+  let activity: unknown[] = [
+    update(9, 'MERGED', 'b2'),
+    update(8, 'OPEN', 'b2'),
+    update(7, 'DECLINED', 'b2'),
+    update(6, 'OPEN', 'b2'),
+    { changes_request: { date: at(5), user: bo } },
+    { approval: { date: at(4), user: bo } },
+    { comment: { id: 3, deleted: true, content: { raw: 'gone' }, user: bo, created_on: at(3) } },
+    {
+      comment: {
+        id: 2,
+        content: { raw: `${'Please rename this. '.repeat(20)}\nMore` },
+        user: bo,
+        created_on: at(2),
+        links: { html: { href: 'https://bitbucket.org/acme/app/pull-requests/3/_/diff#comment-2' } },
+      },
+    },
+    update(1, 'OPEN', 'a1'),
+  ]
+  const requested: string[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      requested.push(url)
+      return new Response(JSON.stringify({ values: activity }))
+    }),
+  )
+  try {
+    const events = await pullRequestTimeline(dir, 'https://bitbucket.org/acme/app/pull-requests/3')
+    expect(requested).toEqual([
+      'https://api.bitbucket.org/2.0/repositories/acme/app/pullrequests/3/activity?pagelen=50',
+    ])
+    expect(events.map((event) => [event.kind, event.actor, event.verdict ?? null])).toEqual([
+      ['comment', 'bo', null],
+      ['review', 'bo', 'approved'],
+      ['review', 'bo', 'changes-requested'],
+      ['commit', 'ana', null],
+      ['closed', 'ana', null],
+      ['reopened', 'ana', null],
+      ['merged', 'ana', null],
+    ])
+    expect(events[0]).toMatchObject({
+      at: Date.parse(at(2)),
+      url: 'https://bitbucket.org/acme/app/pull-requests/3/_/diff#comment-2',
+    })
+    expect(events[0]!.text).toHaveLength(200)
+    expect(events[0]!.text?.endsWith('…')).toBe(true)
+    expect(events[3]!.at).toBe(Date.parse(at(6)))
+    // The oldest update read is only the baseline, so an unchanged one shows nothing.
+    activity = [update(2, 'OPEN', 'a1'), update(1, 'OPEN', 'a1')]
+    expect(await pullRequestTimeline(dir, 'https://bitbucket.org/acme/app/pull-requests/3')).toEqual([])
   } finally {
     vi.unstubAllGlobals()
     vi.unstubAllEnvs()

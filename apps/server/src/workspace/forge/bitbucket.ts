@@ -19,6 +19,7 @@ import type {
   PullRequestList,
   PullRequestSummary,
   PullRequestThread,
+  PullRequestTimelineEvent,
   ReviewCommentDraft,
   ReviewVerdict,
   PullRequestInfo,
@@ -28,7 +29,7 @@ import type {
 import { parseGitlabRemote } from '@ramu/shared/forgeHosts'
 import { redactSecrets } from '@ramu/shared/forgeRemote'
 import { currentBranch, git, publishRemote } from '../git'
-import { FILES_PAGE, boundedPatch, registerForgeAdapter } from './adapter'
+import { FILES_PAGE, TIMELINE_LENGTH, boundedPatch, opening, registerForgeAdapter } from './adapter'
 import { enrichOpen } from './enrich'
 import { checksRollup } from '@ramu/shared/pullRequests'
 import { ForgeError, pullRequestDraft } from './github'
@@ -778,6 +779,85 @@ interface RawComment {
   created_on?: string
 }
 
+interface RawActivity {
+  comment?: RawComment & { links?: { html?: { href?: string } } }
+  approval?: { date?: string; user?: RawUser }
+  changes_request?: { date?: string; user?: RawUser }
+  update?: { state?: string; date?: string; author?: RawUser; source?: { commit?: { hash?: string } | null } }
+}
+
+const STATE_EVENT: Record<string, PullRequestTimelineEvent['kind']> = {
+  MERGED: 'merged',
+  DECLINED: 'closed',
+  OPEN: 'reopened',
+}
+
+const activityTime = (date: string | undefined) => (date ? Date.parse(date) || 0 : 0)
+
+/**
+ * Activity, oldest first, as timeline events. An update records the pull request's state and head after it, so a
+ * state change or a new head shows only against the update before it; the oldest update read is that baseline.
+ */
+function activityEvents(activity: RawActivity[]): PullRequestTimelineEvent[] {
+  let state: string | undefined
+  let head: string | undefined
+  return activity.flatMap((entry): PullRequestTimelineEvent[] => {
+    if (entry.comment) {
+      const comment = entry.comment
+      if (comment.deleted || comment.pending) return []
+      const text = opening(comment.content?.raw)
+      const url = comment.links?.html?.href
+      return [
+        {
+          kind: 'comment',
+          actor: userName(comment.user),
+          at: activityTime(comment.created_on),
+          ...(text ? { text } : {}),
+          ...(url ? { url } : {}),
+        },
+      ]
+    }
+    if (entry.approval)
+      return [
+        {
+          kind: 'review',
+          actor: userName(entry.approval.user),
+          at: activityTime(entry.approval.date),
+          verdict: 'approved',
+        },
+      ]
+    if (entry.changes_request)
+      return [
+        {
+          kind: 'review',
+          actor: userName(entry.changes_request.user),
+          at: activityTime(entry.changes_request.date),
+          verdict: 'changes-requested',
+        },
+      ]
+    if (!entry.update) return []
+    const update = entry.update
+    const hash = update.source?.commit?.hash
+    const base = { actor: userName(update.author), at: activityTime(update.date) }
+    const stateEvent = state && update.state && update.state !== state ? STATE_EVENT[update.state] : undefined
+    const pushed = !!head && !!hash && hash !== head
+    state = update.state ?? state
+    head = hash ?? head
+    if (stateEvent) return [{ kind: stateEvent, ...base }]
+    return pushed ? [{ kind: 'commit', ...base }] : []
+  })
+}
+
+/** The latest history of `url`, oldest first: comments, approvals, change requests, pushes and state changes. */
+export async function pullRequestTimeline(cwd: string, url: string): Promise<PullRequestTimelineEvent[]> {
+  const page = await repoApi<{ values?: RawActivity[] }>(
+    await access(cwd),
+    `/pullrequests/${idOf(url)}/activity?pagelen=${TIMELINE_LENGTH}`,
+  )
+  // Bitbucket lists activity newest first.
+  return activityEvents([...(page.values ?? [])].reverse()).slice(-TIMELINE_LENGTH)
+}
+
 const isBot = (user: RawUser | undefined) => user?.type === 'app_user' || /\[bot\]$/i.test(userName(user) ?? '')
 
 /**
@@ -934,6 +1014,7 @@ registerForgeAdapter({
   mergeOptions,
   pullRequestAction,
   pullRequestBody,
+  pullRequestTimeline,
   pullRequestFiles,
   reviewThreads,
   replyToThread,

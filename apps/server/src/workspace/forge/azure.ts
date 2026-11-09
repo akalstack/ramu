@@ -21,6 +21,7 @@ import type {
   PullRequestMergeability,
   PullRequestSummary,
   PullRequestThread,
+  PullRequestTimelineEvent,
   ReviewCommentDraft,
   ReviewVerdict,
   PullRequestInfo,
@@ -29,7 +30,7 @@ import type {
 } from '@ramu/shared/types'
 import { redactSecrets } from '@ramu/shared/forgeRemote'
 import { currentBranch, git, publishRemote } from '../git'
-import { FILES_PAGE, registerForgeAdapter } from './adapter'
+import { FILES_PAGE, TIMELINE_LENGTH, opening, registerForgeAdapter } from './adapter'
 import { enrichOpen } from './enrich'
 import { checksRollup } from '@ramu/shared/pullRequests'
 import { ForgeError, pullRequestDraft } from './github'
@@ -860,8 +861,9 @@ const repoPath = (path: string) => path.replace(/^\//, '')
 
 /**
  * The first page of files the latest iteration of `url` changes. Azure DevOps reports which files changed and how,
- * but not their diffs or line counts (its file diff API needs a request per file), so every patch is null and every
- * count is zero.
+ * but has no API that returns a diff's text: its file diffs give only changed line ranges, and building a patch from
+ * them means reading both versions of every file. So every patch is null and every count is zero rather than costing
+ * requests per file.
  */
 export async function pullRequestFiles(cwd: string, url: string): Promise<{ files: PullRequestFile[]; more: boolean }> {
   const a = await access(cwd)
@@ -896,6 +898,11 @@ interface RawThread {
   id: number
   status?: 'active' | 'pending' | 'fixed' | 'wontFix' | 'closed' | 'byDesign' | 'unknown'
   isDeleted?: boolean
+  publishedDate?: string
+  /** A system thread's type and details, such as `CodeReviewThreadType` and who voted what. */
+  properties?: Record<string, { $value?: string | number } | undefined>
+  /** The people a system thread's properties name, keyed by the index they use. */
+  identities?: Record<string, RawIdentity | undefined>
   threadContext?: {
     filePath?: string
     rightFileStart?: { line?: number }
@@ -946,6 +953,79 @@ export function parseThreads(threads: RawThread[]): PullRequestThread[] {
       },
     ]
   })
+}
+
+const VOTE_VERDICT: Record<string, PullRequestTimelineEvent['verdict']> = {
+  '10': 'approved',
+  '5': 'approved',
+  '-5': 'changes-requested',
+  '-10': 'changes-requested',
+}
+
+const STATUS_EVENT: Record<string, PullRequestTimelineEvent['kind']> = {
+  completed: 'merged',
+  abandoned: 'closed',
+  active: 'reopened',
+}
+
+/** One thread as timeline events: each person's comment, or the vote, reviewer, status or push a system thread records. */
+function threadEvents(thread: RawThread, link: string): PullRequestTimelineEvent[] {
+  if (thread.isDeleted) return []
+  const property = (name: string) => {
+    const value = thread.properties?.[name]?.$value
+    return value === undefined ? undefined : String(value)
+  }
+  const person = (key: string | undefined) => (key ? nameOf(thread.identities?.[key]) : null)
+  const at = Date.parse(thread.publishedDate ?? thread.comments?.[0]?.publishedDate ?? '') || 0
+  switch (property('CodeReviewThreadType')) {
+    case undefined:
+      return (thread.comments ?? []).flatMap((comment): PullRequestTimelineEvent[] => {
+        const text = opening(comment.content)
+        if (comment.isDeleted || comment.commentType !== 'text' || !text) return []
+        return [
+          {
+            kind: 'comment',
+            actor: nameOf(comment.author),
+            at: Date.parse(comment.publishedDate ?? '') || at,
+            text,
+            url: `${link}?discussionId=${thread.id}`,
+          },
+        ]
+      })
+    case 'VoteUpdate': {
+      const verdict = VOTE_VERDICT[property('CodeReviewVoteResult') ?? '']
+      if (!verdict) return []
+      return [{ kind: 'review', actor: person(property('CodeReviewVotedByIdentity')), at, verdict }]
+    }
+    case 'ReviewersUpdate': {
+      const added = property('CodeReviewReviewersUpdatedAddedIdentity')
+      if (!added) return []
+      const actor = person(property('CodeReviewReviewersUpdatedByIdentity'))
+      // One added reviewer is named by its index; several come as a JSON list of indexes.
+      return (added.match(/\d+/g) ?? []).flatMap((key): PullRequestTimelineEvent[] => {
+        const reviewer = person(key)
+        return reviewer ? [{ kind: 'review-requested', actor, at, text: reviewer }] : []
+      })
+    }
+    case 'StatusUpdate': {
+      const kind = STATUS_EVENT[property('CodeReviewStatus')?.toLowerCase() ?? '']
+      return kind ? [{ kind, actor: person(property('CodeReviewStatusUpdatedByIdentity')), at }] : []
+    }
+    case 'RefUpdate':
+      return [{ kind: 'commit', actor: person(property('CodeReviewRefUpdatedByIdentity')), at }]
+    default:
+      return []
+  }
+}
+
+/** The latest history of `url`, oldest first, from its threads: comments, votes, reviewers, pushes and status. */
+export async function pullRequestTimeline(cwd: string, url: string): Promise<PullRequestTimelineEvent[]> {
+  const page = await repoApi<{ value: RawThread[] }>(await access(cwd), `/pullrequests/${idOf(url)}/threads`)
+  const link = url.replace(/[?#].*$/, '')
+  return page.value
+    .flatMap((thread) => threadEvents(thread, link))
+    .sort((a, b) => a.at - b.at)
+    .slice(-TIMELINE_LENGTH)
 }
 
 export async function reviewThreads(cwd: string, url: string): Promise<PullRequestThread[]> {
@@ -1031,6 +1111,7 @@ registerForgeAdapter({
   mergeOptions,
   pullRequestAction,
   pullRequestBody,
+  pullRequestTimeline,
   pullRequestFiles,
   reviewThreads,
   replyToThread,

@@ -15,6 +15,7 @@ import {
   parseThreads,
   pullRequestAction,
   pullRequestFiles,
+  pullRequestTimeline,
   reviewDecision,
 } from '../src/workspace/forge/azure'
 import { FILES_PAGE } from '../src/workspace/forge/adapter'
@@ -395,6 +396,114 @@ it('lists the latest iteration’s files with renames and without diffs, and say
     })
     nextTop = 100
     expect((await pullRequestFiles(dir, url)).more).toBe(true)
+  } finally {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  }
+})
+
+it('reads a pull request’s threads as its timeline: comments, votes, reviewers, status and pushes, oldest first', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-azure-timeline-'))
+  dirs.push(dir)
+  execFileSync('git', ['init', '-q', '-b', 'fix/login'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'https://dev.azure.com/acme/Web%20App/_git/site'], { cwd: dir })
+  vi.stubEnv('AZURE_DEVOPS_EXT_PAT', 'pat')
+  const at = (minute: number) => new Date(Date.UTC(2026, 10, 8, 10, minute)).toISOString()
+  const identities = { '1': { displayName: 'Ana' }, '2': { displayName: 'Bo' }, '3': { displayName: 'Cy' } }
+  const system = (id: number, minute: number, properties: Record<string, string>) => ({
+    id,
+    publishedDate: at(minute),
+    identities,
+    properties: Object.fromEntries(Object.entries(properties).map(([key, value]) => [key, { $value: value }])),
+    comments: [
+      {
+        id: 1,
+        commentType: 'system',
+        content: 'Microsoft.VisualStudio.Services.TFS updated',
+        publishedDate: at(minute),
+      },
+    ],
+  })
+  let threads: unknown[] = [
+    system(10, 9, {
+      CodeReviewThreadType: 'StatusUpdate',
+      CodeReviewStatus: 'Completed',
+      CodeReviewStatusUpdatedByIdentity: '1',
+    }),
+    system(11, 8, {
+      CodeReviewThreadType: 'StatusUpdate',
+      CodeReviewStatus: 'Active',
+      CodeReviewStatusUpdatedByIdentity: '1',
+    }),
+    system(12, 7, {
+      CodeReviewThreadType: 'StatusUpdate',
+      CodeReviewStatus: 'Abandoned',
+      CodeReviewStatusUpdatedByIdentity: '1',
+    }),
+    system(13, 6, { CodeReviewThreadType: 'RefUpdate', CodeReviewRefUpdatedByIdentity: '1' }),
+    system(14, 5, { CodeReviewThreadType: 'VoteUpdate', CodeReviewVoteResult: '-10', CodeReviewVotedByIdentity: '3' }),
+    system(15, 4, { CodeReviewThreadType: 'VoteUpdate', CodeReviewVoteResult: '0', CodeReviewVotedByIdentity: '2' }),
+    system(16, 3, { CodeReviewThreadType: 'VoteUpdate', CodeReviewVoteResult: '5', CodeReviewVotedByIdentity: '2' }),
+    system(17, 2, {
+      CodeReviewThreadType: 'ReviewersUpdate',
+      CodeReviewReviewersUpdatedAddedIdentity: '[2,3]',
+      CodeReviewReviewersUpdatedByIdentity: '1',
+    }),
+    system(18, 2, { CodeReviewThreadType: 'PolicyStatusUpdate' }),
+    { id: 19, isDeleted: true, comments: [{ id: 1, commentType: 'text', content: 'gone', publishedDate: at(1) }] },
+    {
+      id: 20,
+      publishedDate: at(1),
+      comments: [
+        {
+          id: 1,
+          commentType: 'text',
+          content: `${'Rename this. '.repeat(20)}\nMore`,
+          publishedDate: at(1),
+          author: { displayName: 'Bo' },
+        },
+        { id: 2, commentType: 'text', content: 'Done', publishedDate: at(4), author: { displayName: 'Ana' } },
+        { id: 3, commentType: 'text', content: 'old', isDeleted: true, publishedDate: at(4) },
+      ],
+    },
+  ]
+  const requested: string[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      requested.push(url)
+      return new Response(JSON.stringify({ value: threads }))
+    }),
+  )
+  const url = 'https://dev.azure.com/acme/Web%20App/_git/site/pullrequest/7'
+  try {
+    const events = await pullRequestTimeline(dir, url)
+    expect(requested).toEqual([
+      'https://dev.azure.com/acme/Web%20App/_apis/git/repositories/site/pullrequests/7/threads?api-version=7.1',
+    ])
+    expect(events.map((event) => [event.kind, event.actor, event.verdict ?? null])).toEqual([
+      ['comment', 'Bo', null],
+      ['review-requested', 'Ana', null],
+      ['review-requested', 'Ana', null],
+      ['review', 'Bo', 'approved'],
+      ['comment', 'Ana', null],
+      ['review', 'Cy', 'changes-requested'],
+      ['commit', 'Ana', null],
+      ['closed', 'Ana', null],
+      ['reopened', 'Ana', null],
+      ['merged', 'Ana', null],
+    ])
+    expect([events[1]!.text, events[2]!.text]).toEqual(['Bo', 'Cy'])
+    expect(events[0]).toMatchObject({ at: Date.parse(at(1)), url: `${url}?discussionId=20` })
+    expect(events[0]!.text).toHaveLength(200)
+    expect(events[0]!.text?.endsWith('…')).toBe(true)
+    threads = Array.from({ length: 60 }, (_, i) => ({
+      id: i,
+      comments: [{ id: 1, commentType: 'text', content: `note ${i}`, publishedDate: at(60 - i) }],
+    }))
+    const latest = await pullRequestTimeline(dir, url)
+    expect(latest).toHaveLength(50)
+    expect([latest[0]!.text, latest[49]!.text]).toEqual(['note 49', 'note 0'])
   } finally {
     vi.unstubAllGlobals()
     vi.unstubAllEnvs()

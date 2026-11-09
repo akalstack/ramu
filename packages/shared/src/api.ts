@@ -1436,12 +1436,8 @@ export interface RamuMethods extends ArtifactMethods {
   'forge.allPullRequests'(includeClosed: boolean, force: boolean): import('./types').RepositoryPullRequests[]
   /** The pull request's description as Markdown, for its full view. */
   'forge.pullRequestDescription'(taskId: string, repoId: string, url: string): string
-  /** The pull request's latest history, oldest first; null where the service is not supported yet. */
-  'forge.pullRequestTimeline'(
-    taskId: string,
-    repoId: string,
-    url: string,
-  ): import('./types').PullRequestTimelineEvent[] | null
+  /** The pull request's latest history, oldest first. */
+  'forge.pullRequestTimeline'(taskId: string, repoId: string, url: string): import('./types').PullRequestTimelineEvent[]
   /** The files the pull request changes with their diffs; null where the service is not supported yet. */
   'forge.pullRequestFiles'(
     taskId: string,

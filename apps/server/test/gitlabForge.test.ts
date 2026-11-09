@@ -20,6 +20,7 @@ import {
   parseProjects,
   pullRequestAction,
   pullRequestFiles,
+  pullRequestTimeline,
   readyTitle,
   requirePipeline,
   setGitlabVariables,
@@ -499,6 +500,71 @@ it('lists a merge request’s files with counts from their hunks, renames, cut p
     expect(files[3]).toMatchObject({ path: 'gone.png', status: 'removed', patch: null })
     diffs = Array.from({ length: FILES_PAGE }, (_, i) => ({ ...entry, old_path: `f${i}`, new_path: `f${i}`, diff: '' }))
     expect((await pullRequestFiles(dir, url)).more).toBe(true)
+  } finally {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+it('reads a merge request’s notes as its timeline, oldest first, and skips system notes it does not show', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-gitlab-timeline-'))
+  execFileSync('git', ['init', '-q', '-b', 'search'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'git@gitlab.com:a/b.git'], { cwd: dir })
+  vi.stubEnv('GLAB_CONFIG_DIR', '/nonexistent')
+  vi.stubEnv('GITLAB_HOST', 'gitlab.com')
+  vi.stubEnv('GITLAB_TOKEN', 'glpat-test')
+  const at = (minute: number) => new Date(Date.UTC(2026, 10, 8, 10, minute)).toISOString()
+  const note = (id: number, body: string, username: string, system = true) => ({
+    id,
+    body,
+    system,
+    created_at: at(id),
+    author: { id, username },
+  })
+  // Newest first, as the request asks for.
+  let notes: unknown[] = [
+    note(9, 'reopened', 'ana'),
+    note(8, 'closed', 'ana'),
+    note(7, 'merged', 'ana'),
+    note(6, 'changed the description', 'ana'),
+    note(5, 'marked this merge request as **ready**', 'ana'),
+    note(4, 'added 2 commits\n\n<ul><li>abc1234 - Fix the export</li><li>def5678 - Add a test</li></ul>', 'ana'),
+    note(3, 'requested review from @bo and @cy.d', 'ana'),
+    note(2, 'approved this merge request', 'bo'),
+    note(1, `\n${'Looks good. '.repeat(30)}\nSecond line`, 'bo', false),
+  ]
+  const requested: string[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      requested.push(url)
+      return new Response(JSON.stringify(notes))
+    }),
+  )
+  try {
+    const events = await pullRequestTimeline(dir, 'https://gitlab.com/a/b/-/merge_requests/4#note_1')
+    expect(requested).toEqual([
+      'https://gitlab.com/api/v4/projects/a%2Fb/merge_requests/4/notes?sort=desc&order_by=created_at&per_page=100',
+    ])
+    expect(events.map((event) => [event.kind, event.actor, event.verdict ?? event.text ?? null])).toEqual([
+      ['comment', 'bo', expect.stringMatching(/^Looks good\. .*…$/)],
+      ['review', 'bo', 'approved'],
+      ['review-requested', 'ana', 'bo'],
+      ['review-requested', 'ana', 'cy.d'],
+      ['commit', 'ana', 'Fix the export'],
+      ['commit', 'ana', 'Add a test'],
+      ['ready', 'ana', null],
+      ['merged', 'ana', null],
+      ['closed', 'ana', null],
+      ['reopened', 'ana', null],
+    ])
+    expect(events[0]).toMatchObject({ at: Date.parse(at(1)), url: 'https://gitlab.com/a/b/-/merge_requests/4#note_1' })
+    expect(events[0]!.text).toHaveLength(200)
+    notes = Array.from({ length: 60 }, (_, i) => note(60 - i, `comment ${60 - i}`, 'bo', false))
+    const latest = await pullRequestTimeline(dir, 'https://gitlab.com/a/b/-/merge_requests/4')
+    expect(latest).toHaveLength(50)
+    expect([latest[0]!.text, latest[49]!.text]).toEqual(['comment 11', 'comment 60'])
   } finally {
     vi.unstubAllGlobals()
     vi.unstubAllEnvs()

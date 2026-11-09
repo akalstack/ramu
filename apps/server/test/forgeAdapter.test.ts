@@ -13,6 +13,7 @@ const OPERATIONS: (keyof ForgeAdapter)[] = [
   'mergeOptions',
   'pullRequestAction',
   'pullRequestBody',
+  'pullRequestTimeline',
   'reviewThreads',
   'replyToThread',
   'resolveThread',
