@@ -3,7 +3,7 @@ import { forgeChoiceOf } from '@ramu/shared/identities'
 import { fileURLToPath } from 'node:url'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 import type { AgentProvider, AppPreferences, FileContext, UsageReading, ModelPreferences } from '@ramu/shared/types'
-import { providerEnabled } from '@ramu/shared/providers/providers'
+import { providerAccountRows, providerEnabled } from '@ramu/shared/providers/providers'
 import { withContext as withFileContext } from '../context'
 import { HostFolders } from '../remote/hostFolders'
 import { ActivityService } from '../background/activity'
@@ -144,6 +144,7 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     () => workspace.getAppState<UsageReading[]>('usage-limits', []),
     (readings) => workspace.setAppState('usage-limits', readings),
     (readings) => host.send('usage:changed', readings),
+    (provider, accountId) => providerAccountRows(loadPreferences().providerBinaries, provider).includes(accountId),
   )
   const extraUsage = new ExtraUsageReader(
     (readings) => usage.update(readings),

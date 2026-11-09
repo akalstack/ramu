@@ -14,6 +14,8 @@ export class UsageService {
     load: () => UsageReading[],
     private readonly persist: (readings: UsageReading[]) => void,
     private readonly broadcast: (readings: UsageReading[]) => void,
+    /** Whether a login still exists; readings of a removed login are not shown and are dropped at the next save. */
+    private readonly known: (provider: AgentProvider, accountId: string) => boolean = () => true,
   ) {
     this.readings = load()
     // Lets screenshots and UI work show gauges without a live account: RAMU_FAKE_USAGE='[{"provider":"codex","window":"five_hour","usedPercent":40}]'.
@@ -34,9 +36,9 @@ export class UsageService {
     )
   }
 
-  /** Every account's readings, for choosing which login a chat continues on. */
+  /** Every current login's readings, for choosing which login a chat continues on and for plan usage. */
   all(): UsageReading[] {
-    return this.readings
+    return this.readings.filter((reading) => this.known(reading.provider, reading.accountId ?? 'default'))
   }
 
   update(next: UsageReading[]): void {
@@ -52,7 +54,9 @@ export class UsageService {
         // A limit notice is not part of the service's reading, so a fresh read keeps it.
         (r.source === 'notice' || !snapshots.has(login(r))),
     )
-    const merged = new Map(current.map((r) => [key(r), r]))
+    const merged = new Map(
+      current.filter((r) => this.known(r.provider, r.accountId ?? 'default')).map((r) => [key(r), r]),
+    )
     for (const reading of next) merged.set(key(reading), reading)
     this.readings = [...merged.values()]
     this.persist(this.readings)

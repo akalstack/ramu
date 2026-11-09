@@ -7,12 +7,15 @@ import {
   type IdentityAccountOption,
   type IdentityRule,
 } from '@ramu/shared/identities'
-import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
+import { AGENT_PROVIDERS, accountName, providerName } from '@ramu/shared/providers/providers'
 import { connectionSummary, forgeRemoteOf } from '../../workspace/forge/github'
 import { git } from '../../workspace/git'
 import type { HandlerContext, RegisterHandlers } from '../types'
 
 const id = z.string().min(1).max(100)
+/** Labels are built here in English, like the rest of this list, and never show a login's internal id. */
+const english = (text: string, values: Record<string, string | number> = {}) =>
+  text.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key] ?? ''))
 const rule = identitySchema.shape.rules.element
 const author = identitySchema.shape.gitAuthor
 
@@ -29,14 +32,14 @@ export async function identityAccounts(
       options.push({
         key: accountKey('provider', provider, 'default'),
         kind: 'provider',
-        label: `${providerName(provider)} · Default login`,
+        label: `${providerName(provider)} · ${accountName(binaries, provider, 'default', undefined, english)}`,
         email: null,
       })
     for (const account of config?.accounts ?? [])
       options.push({
         key: accountKey('provider', provider, account.id),
         kind: 'provider',
-        label: `${providerName(provider)} · ${account.name ?? account.id}`,
+        label: `${providerName(provider)} · ${accountName(binaries, provider, account.id, undefined, english)}`,
         email: account.name && account.name.includes('@') ? account.name : null,
       })
   }

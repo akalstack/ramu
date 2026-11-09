@@ -200,3 +200,22 @@ describe('sub-agent notes to their thread', () => {
     expect(parseTaskReport(ask)).toEqual({ name: 'Map', verb: 'asks', body: 'Rename or wrap?' })
   })
 })
+
+it('leaves out and then drops the readings of a login that was removed', () => {
+  const accounts = new Set(['default', 'second'])
+  const stored: UsageReading[][] = []
+  const base = { provider: 'claude-code' as const, window: 'weekly' as const, status: 'ok' as const, updatedAt: 1 }
+  const service = new UsageService(
+    () => [
+      { ...base, usedPercent: 10 },
+      { ...base, usedPercent: 20, accountId: 'second' },
+      { ...base, usedPercent: 30, accountId: 'removed' },
+    ],
+    (readings) => stored.push(readings),
+    () => {},
+    (_provider, accountId) => accounts.has(accountId),
+  )
+  expect(service.all().map((reading) => reading.usedPercent)).toEqual([10, 20])
+  service.update([{ ...base, usedPercent: 11 }])
+  expect(stored.at(-1)!.map((reading) => reading.accountId ?? 'default')).toEqual(['default', 'second'])
+})
