@@ -6,22 +6,23 @@ import { FILE_LOGO_PATHS, type FileLogoName } from './fileLogos'
 
 export type FileIconName =
   | 'Box'
+  | 'Braces'
   | 'Database'
   | 'File'
   | 'FileArchive'
   | 'FileAudio'
   | 'FileCode'
   | 'FileCog'
+  | 'FileDiff'
   | 'FileImage'
-  | 'FileJson'
   | 'FileKey'
   | 'FileLock'
   | 'FileSpreadsheet'
-  | 'FileTerminal'
   | 'FileText'
   | 'FileType'
   | 'FileVideo'
   | 'Presentation'
+  | 'SquareTerminal'
 export type FileIconTone = 'ok' | 'brand' | 'warn' | 'bad' | 'muted'
 export interface FileLogo {
   /** A filled path in a 24×24 box. */
@@ -43,10 +44,11 @@ const logo = (name: FileLogoName, color: string | undefined, tone: FileIconTone 
 })
 const set = (exts: string, value: FileIconStyle) => exts.split(' ').map((ext) => [ext, value] as const)
 const CODE = style('FileCode', 'brand')
+// Shell scripts and JSON read better as a terminal window and braces than as their logos, which blur at icon size.
+const SHELL = style('SquareTerminal', 'ok'),
+  JSON_ICON = style('Braces', 'warn')
 const TYPESCRIPT = logo('typescript', '#3178C6'),
-  JSON_LOGO = logo('json', undefined, 'warn'),
   MARKDOWN = logo('markdown', undefined, 'muted'),
-  SHELL = logo('shell', '#4EAA25', 'ok'),
   DOCKER = logo('docker', '#2496ED'),
   GIT = logo('git', '#F05032', 'muted'),
   NODE = logo('node', '#5FA04E', 'ok')
@@ -74,26 +76,29 @@ const BY_EXT = new Map<string, FileIconStyle>([
   ...set('css', logo('css', '#2D8CDB')),
   ...set('scss sass', logo('sass', '#CC6699')),
   ...set('md markdown mdx', MARKDOWN),
-  ...set('json jsonc json5', JSON_LOGO),
+  ...set('json jsonc json5', JSON_ICON),
   ...set('yaml yml', logo('yaml', '#CB171E', 'bad')),
   ...set('toml', logo('toml', '#C0582F', 'warn')),
-  ...set('sh bash zsh fish', SHELL),
+  ...set('sh bash zsh fish ps1 psm1 bat cmd', SHELL),
   ...set('prisma', logo('prisma', '#5A67D8')),
   ...set('zig', logo('zig', '#F7A41D', 'warn')),
-  ...set('tf tfvars', logo('terraform', '#844FBA')),
+  ...set('tf tfvars hcl', logo('terraform', '#844FBA')),
   ...set('db sqlite sqlite3', logo('sqlite', '#0F80CC')),
-  ...set('lua cs scala sql proto', CODE),
+  ...set('lua cs scala sql proto less hs ex exs erl clj cljs pl pm r groovy gradle nix m mm vim cmake http', CODE),
+  ...set('diff patch', style('FileDiff', 'brand')),
+  ...set('env', style('FileKey', 'warn')),
+  ...set('conf cfg', style('FileCog', 'muted')),
   ...set('png jpg jpeg gif webp avif bmp ico svg heic tiff', style('FileImage', 'ok')),
   ...set('mp4 webm mov mkv avi', style('FileVideo', 'bad')),
   ...set('mp3 wav ogg m4a flac aac', style('FileAudio', 'bad')),
   ...set('pdf', style('FileType', 'bad')),
-  ...set('xml ini plist', style('FileJson', 'warn')),
+  ...set('xml', style('FileCode', 'warn')),
+  ...set('ini plist', style('FileCog', 'muted')),
   ...set('txt rst log', style('FileText', 'muted')),
   ...set('csv tsv xls xlsx ods', style('FileSpreadsheet', 'ok')),
   ...set('ppt pptx key odp', style('Presentation', 'warn')),
   ...set('doc docx rtf odt', style('FileText', 'brand')),
   ...set('zip tar gz tgz bz2 xz 7z rar', style('FileArchive', 'warn')),
-  ...set('ps1 bat cmd', style('FileTerminal', 'ok')),
   ...set('lock', style('FileLock', 'muted')),
   ...set('pem crt cer p12', style('FileKey', 'warn')),
   ...set('wasm bin exe dll so dylib', style('Box', 'muted')),
@@ -115,7 +120,7 @@ const BY_NAME = new Map<string, FileIconStyle>([
   ['docker-compose.yaml', DOCKER],
   ['compose.yml', DOCKER],
   ['compose.yaml', DOCKER],
-  ['makefile', SHELL],
+  ['makefile', style('FileCog', 'warn')],
   ['.gitignore', GIT],
   ['.gitattributes', GIT],
   ['.gitmodules', GIT],
