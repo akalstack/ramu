@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { RefreshControl, ScrollView, TextInput, View } from 'react-native'
+import { Linking, RefreshControl, ScrollView, TextInput, View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { GitPullRequest, MessageSquare } from 'lucide-react-native'
+import { ExternalLink, GitPullRequest, MessageSquare } from 'lucide-react-native'
 import type { RepositoryPullRequests } from '@ramu/shared/types'
 import {
   PULL_REQUEST_FILTERS,
@@ -10,7 +10,9 @@ import {
   inPullRequestFilter,
   matchesPullRequestRow,
   pullRequestRows,
+  sortPullRequestRows,
   type PullRequestFilter,
+  type PullRequestSort,
   type PullRequestRow,
 } from '@ramu/shared/pullRequests'
 import { font, space, useTheme } from '../../../theme'
@@ -52,6 +54,7 @@ export default function PullRequestsScreen() {
     setFilter('open')
   }, [params.computer, params.repo])
   const [search, setSearch] = useState('')
+  const [sort, setSort] = useState<PullRequestSort>('updated')
   const [lists, setLists] = useState<
     Record<string, { open?: RepositoryPullRequests[]; closed?: RepositoryPullRequests[] }>
   >({})
@@ -96,7 +99,10 @@ export default function PullRequestsScreen() {
       )
       .sort((a, b) => b.pr.updatedAt - a.pr.updatedAt)
   const openRows = rowsOf('open')
-  const rows = (closed ? rowsOf('closed') : openRows).filter((row) => inPullRequestFilter(row, filter))
+  const rows = sortPullRequestRows(
+    (closed ? rowsOf('closed') : openRows).filter((row) => inPullRequestFilter(row, filter)),
+    sort,
+  )
   const repoName = useMemo(() => {
     if (!repo) return null
     const found = (lists[repo.computer]?.open ?? []).find((entry) => entry.repoId === repo.repoId)
@@ -118,6 +124,8 @@ export default function PullRequestsScreen() {
 
   const open = (row: HostRow) => {
     tap()
+    // A repository outside every project has no checkout on the host, so its pull request opens on the service.
+    if (row.outside) return void Linking.openURL(row.pr.url).catch(() => {})
     router.push({
       pathname: '/pull-request',
       params: { computer: row.computerId, project: row.projectId, repoId: row.repoId, url: row.pr.url },
@@ -179,6 +187,12 @@ export default function PullRequestsScreen() {
               }}
             />
           ) : null}
+          <Chip
+            label={say(sort === 'readiness' ? 'Closest to merging' : 'Recently updated')}
+            accessibilityLabel={say('Sort')}
+            chevron
+            onPress={() => setSort((value) => (value === 'readiness' ? 'updated' : 'readiness'))}
+          />
           {PULL_REQUEST_FILTERS.map((entry) => {
             const count = entry === 'closed' ? 0 : openRows.filter((row) => inPullRequestFilter(row, entry)).length
             return (
@@ -233,6 +247,7 @@ export default function PullRequestsScreen() {
                       <T size={font.body - 1} weight="500" numberOfLines={2} style={{ flex: 1 }}>
                         {row.pr.title}
                       </T>
+                      {row.outside ? <ExternalLink size={12} color={c.muted} /> : null}
                       <T size={font.caption} tone="muted">
                         {ago(row.pr.updatedAt)}
                       </T>
@@ -252,6 +267,24 @@ export default function PullRequestsScreen() {
                             {String(row.pr.openThreads)}
                           </T>
                         </View>
+                      ) : null}
+                      {row.pr.additions !== undefined && row.pr.deletions !== undefined ? (
+                        <T
+                          size={font.caption}
+                          style={{ flexShrink: 0, fontVariant: ['tabular-nums'] }}
+                          accessibilityLabel={say('{0} lines added, {1} removed', {
+                            0: row.pr.additions,
+                            1: row.pr.deletions,
+                          })}
+                        >
+                          <T size={font.caption} tone="ok">{`+${row.pr.additions}`}</T>{' '}
+                          <T size={font.caption} tone="bad">{`−${row.pr.deletions}`}</T>
+                        </T>
+                      ) : null}
+                      {row.pr.labels?.[0] ? (
+                        <T size={font.caption} tone="muted" numberOfLines={1} style={{ flexShrink: 0 }}>
+                          {row.pr.labels[0]}
+                        </T>
                       ) : null}
                       {thread ? (
                         <T size={font.caption} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>

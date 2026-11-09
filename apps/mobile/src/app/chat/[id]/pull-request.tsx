@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Markdown } from '../../../components/Markdown'
 import { Alert, Linking, RefreshControl, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
@@ -71,6 +72,7 @@ export default function PullRequestScreen() {
   const [batch, setBatch] = useState<PullRequestDraftBatch | null>(null)
   const [threads, setThreads] = useState<PullRequestThread[] | null>(null)
   const [threadsError, setThreadsError] = useState<string | null>(null)
+  const [description, setDescription] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
@@ -110,6 +112,11 @@ export default function PullRequestScreen() {
         ])
         setBatch(drafts)
         setThreads(open)
+        // The description is extra: a host that cannot read it still shows everything else.
+        if (found)
+          void store
+            .invoke(computerId, 'forge.pullRequestDescription', taskId, repoId, url)
+            .then(setDescription, () => setDescription(null))
       } catch (e) {
         setError(message(e))
       } finally {
@@ -425,6 +432,15 @@ export default function PullRequestScreen() {
                 readOnly={!canWrite}
                 onDone={() => void read(true)}
               />
+            ) : null}
+
+            {description?.trim() ? (
+              <View style={{ gap: space.s }}>
+                <T size={font.control} weight="600" tone="muted">
+                  {say('Description')}
+                </T>
+                <Markdown text={description} />
+              </View>
             ) : null}
 
             <View style={{ gap: space.s }}>
