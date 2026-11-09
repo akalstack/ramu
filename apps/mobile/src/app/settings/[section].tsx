@@ -197,53 +197,6 @@ function BusyBehavior({ host, locked }: { host: ReturnType<typeof useHostSetting
   )
 }
 
-/** Archived threads on every paired host; one opens it, and the Threads list filters to all of them. */
-function ArchivedThreads() {
-  const { chats, computers, language } = useStore()
-  const { c } = useTheme()
-  const router = useRouter()
-  const t = useT()
-  const archived = chats.filter((chat) => chat.status === 'archived').slice(0, 200)
-  return (
-    <>
-      <Card style={{ marginHorizontal: space.l, marginTop: space.m }}>
-        {archived.length ? (
-          archived.map((chat, index) => (
-            <View key={chat.id}>
-              {index ? <Divider inset={space.l} /> : null}
-              <Row
-                accessibilityRole="button"
-                onPress={() => router.push({ pathname: '/chat/[id]', params: { id: chat.id } })}
-              >
-                <RowLabel
-                  title={chat.title}
-                  help={computers.length > 1 ? computers.find((x) => x.id === chat.computerId)?.name : undefined}
-                />
-                <ChevronRight size={16} color={c.muted} />
-              </Row>
-            </View>
-          ))
-        ) : (
-          <Row>
-            <RowLabel title={translate(language, 'No archived threads')} />
-          </Row>
-        )}
-      </Card>
-      {archived.length ? (
-        <Card style={{ marginHorizontal: space.l, marginTop: space.m }}>
-          <Row
-            accessibilityRole="button"
-            onPress={() => router.dismissTo({ pathname: '/', params: { filter: 'archived' } })}
-          >
-            <T style={{ flex: 1 }}>{t.homeArchived}</T>
-            <ChevronRight size={16} color={c.muted} />
-          </Row>
-        </Card>
-      ) : null}
-    </>
-  )
-}
-
 function Notifications({ host, name }: { host: ReturnType<typeof useHostSettings>; name?: string }) {
   const say = useSay()
   const { drafts, setDraft, enablePush, disablePush, setPushCategory } = useStore()
@@ -479,7 +432,6 @@ export default function SettingsSectionPage() {
         {id === 'appearance' ? <AppearancePage /> : null}
         {id === 'notifications' ? <Notifications host={host} name={name} /> : null}
         {id === 'remote' ? <Computers /> : null}
-        {id === 'archived' ? <ArchivedThreads /> : null}
         {id === 'about' ? <About /> : null}
         {id === 'account' ? <AccountSettings /> : null}
         {id === 'providers' ? (
@@ -489,7 +441,7 @@ export default function SettingsSectionPage() {
         {id === 'providers' ? <Usage computer={selected} /> : null}
         {id === 'chats' ? <BusyBehavior key={`BusyBehavior:${selected}`} host={host} locked={locked} /> : null}
         {id === 'computer' ? <ComputerUseSettings key={`ComputerUseSettings:${selected}`} hostId={selected} /> : null}
-        {id === 'computer' ? <TestDeviceSettings key={`TestDeviceSettings:${selected}`} hostId={selected} /> : null}
+        {id === 'devices' ? <TestDeviceSettings key={`TestDeviceSettings:${selected}`} hostId={selected} /> : null}
         {id === 'git' ? <HostingStatus key={`HostingStatus:${selected}`} hostId={selected} /> : null}
         {id === 'deploy' ? <DeployStatus key={`DeployStatus:${selected}`} hostId={selected} /> : null}
         {id === 'agent-setup' ? <AgentSetupSettings key={`AgentSetupSettings:${selected}`} hostId={selected} /> : null}
@@ -501,7 +453,7 @@ export default function SettingsSectionPage() {
         {id === 'identities' ? (
           <IdentitySettings key={`IdentitySettings:${selected}`} hostId={selected} locked={locked} />
         ) : null}
-        {section.scope === 'host' && id !== 'computer' && id !== 'deploy' ? (
+        {section.scope === 'host' && id !== 'computer' && id !== 'devices' && id !== 'deploy' ? (
           <HostGroups section={id} host={host} name={name} locked={locked} />
         ) : null}
         {id === 'models' ? <AbilitySummary key={`AbilitySummary:${selected}`} hostId={selected} /> : null}

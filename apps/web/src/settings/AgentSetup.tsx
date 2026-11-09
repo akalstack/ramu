@@ -33,7 +33,7 @@ import { RulesSettings } from './RulesSettings'
 
 const CAPTION = 'm-0 text-caption text-muted-foreground'
 
-export type SetupView = 'mcp' | 'skills' | 'rules'
+export type SetupView = 'mcp' | 'skills' | 'rules' | 'environment'
 
 /** An empty list says so inside a soft panel instead of leaving bare text between headings. */
 function EmptyNote({ children }: { children: ReactNode }) {
@@ -280,9 +280,20 @@ function Skills({
 /**
  * Settings → Agent setup. For one project, what its agents get: MCP servers and skills from the person's own provider
  * files (every project) and from the project's folders, each with one switch that gives it to every provider and
- * account, followed by servers connected through Ramu itself.
+ * account, followed by servers connected through Ramu itself. Rules and the host's environment variables, which those
+ * servers and skills read, are tabs beside them.
  */
-export function AgentSetup({ initialView = 'mcp' }: { initialView?: SetupView }) {
+export function AgentSetup({
+  initialView = 'mcp',
+  show,
+  environment,
+}: {
+  initialView?: SetupView
+  /** A tab to switch to, such as Settings search opening Environment variables; a new object asks again. */
+  show?: { view: SetupView }
+  /** The Environment variables tab's content, owned by the settings panel so Save covers it. */
+  environment?: ReactNode
+}) {
   useLanguage()
   const invoke = useSettingsInvoke(),
     on = useSettingsEvents()
@@ -296,7 +307,12 @@ export function AgentSetup({ initialView = 'mcp' }: { initialView?: SetupView })
     enabled: ready,
   })
   const status = useQuery({ queryKey: ['mcp-settings', hostKey], queryFn: () => invoke('mcp.status'), enabled: ready })
-  const [view, setView] = useState<SetupView>(() => (libraryFocusWaiting('skill') ? 'skills' : initialView))
+  const [view, setView] = useState<SetupView>(() =>
+    libraryFocusWaiting('skill') ? 'skills' : (show?.view ?? initialView),
+  )
+  useEffect(() => {
+    if (show) setView(show.view)
+  }, [show])
   const [picked, setPicked] = useState<string>()
   const [pending, setPending] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -418,8 +434,13 @@ export function AgentSetup({ initialView = 'mcp' }: { initialView?: SetupView })
         <TabsTrigger value="rules" className="flex-none px-0.5 text-control">
           {t('Rules')}
         </TabsTrigger>
+        {environment && (
+          <TabsTrigger value="environment" className="flex-none px-0.5 text-control">
+            {t('Environment variables')}
+          </TabsTrigger>
+        )}
       </TabsList>
-      {view !== 'rules' && projects.data && projects.data.length > 0 && (
+      {(view === 'mcp' || view === 'skills') && projects.data && projects.data.length > 0 && (
         <SettingsRow className="mb-0">
           <SettingsLabel
             title={t('Applies to')}
@@ -440,12 +461,12 @@ export function AgentSetup({ initialView = 'mcp' }: { initialView?: SetupView })
           />
         </SettingsRow>
       )}
-      {view !== 'rules' && (error || setup.error || projects.error) && (
+      {(view === 'mcp' || view === 'skills') && (error || setup.error || projects.error) && (
         <Alert variant="destructive">
           <AlertDescription>{error || errorText(setup.error ?? projects.error)}</AlertDescription>
         </Alert>
       )}
-      {view !== 'rules' && !data && !setup.error && (
+      {(view === 'mcp' || view === 'skills') && !data && !setup.error && (
         <p role="status" className={CAPTION}>
           {t('Loading…')}
         </p>
@@ -587,6 +608,11 @@ export function AgentSetup({ initialView = 'mcp' }: { initialView?: SetupView })
             are instructions agents load. */}
         <ManagedSkills />
       </TabsContent>
+      {environment && (
+        <TabsContent value="environment" className="flex flex-col">
+          {environment}
+        </TabsContent>
+      )}
     </Tabs>
   )
 }

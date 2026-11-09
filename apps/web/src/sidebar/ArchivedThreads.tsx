@@ -3,18 +3,19 @@ import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { useState } from 'react'
 import { readRemovalCommands } from '@ramu/shared/chat/taskRemoval'
 import { Button } from '@/components/desktop-button'
-import { SettingsGroupTitle } from '@/components/settings-row'
+import { Dialog as DialogRoot, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { X } from 'lucide-react'
 import { t, useLanguage } from '../i18n'
 import { Dialog } from '../Menu'
 import { useHost } from '../workspace/HostProvider'
 import { errorText } from '../workspace/TaskPane'
 import { useWorkspace } from '../workspace/workspace'
-import { TaskRow } from '../sidebar/projects/TaskRow'
-import { SETTINGS_FORM_CLASS } from './constants'
-import { ListCount, ListEmpty, ListToolbar, useListView } from './ListView'
+import { TaskRow } from './projects/TaskRow'
+import { archivedThreads } from './projects/threadLists'
+import { ListCount, ListEmpty, ListToolbar, useListView } from '../settings/ListView'
 
-/** Archived history belongs to the current workspace, independently of preference targets. */
-export function ArchivedThreads() {
+/** The window's own host's archived threads, searchable, with each row's own actions (Unarchive, Delete). */
+export function ArchivedThreads({ onOpen }: { onOpen?: () => void }) {
   useLanguage()
   const { invoke } = useHost()
   const { viewOnly, canWrite } = useHostWriteAccess()
@@ -22,20 +23,14 @@ export function ArchivedThreads() {
   const [clearingArchived, setClearingArchived] = useState(false)
   const [clearBusy, setClearBusy] = useState(false)
   const [clearError, setClearError] = useState<string | null>(null)
-  const archivedChats = ws.tasks
-    .filter((task) => task.status === 'archived')
-    .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+  const archivedChats = archivedThreads(ws.tasks)
   const projectName = (id: string) => ws.projects.find((project) => project.id === id)?.name
   const view = useListView(archivedChats, {
     text: (task) => `${task.title} ${projectName(task.projectId) ?? ''}`,
     size: 30,
   })
   return (
-    <div className={SETTINGS_FORM_CLASS}>
-      <SettingsGroupTitle>
-        {t('Archived threads')}
-        {archivedChats.length ? ` · ${archivedChats.length}` : ''}
-      </SettingsGroupTitle>
+    <div className="flex min-h-0 flex-col">
       <div className="flex flex-col gap-3">
         <ListToolbar view={view} label={t('Search archived threads')} />
         <ListCount view={view} />
@@ -46,7 +41,7 @@ export function ArchivedThreads() {
         />
         <div className="task-list flex flex-col gap-0.5">
           {view.paged.shown.map((task) => (
-            <TaskRow key={task.id} task={task} projectName={projectName(task.projectId)} />
+            <TaskRow key={task.id} task={task} projectName={projectName(task.projectId)} onOpen={onOpen} />
           ))}
           {view.paged.more}
         </div>
@@ -107,5 +102,39 @@ export function ArchivedThreads() {
         </Dialog>
       )}
     </div>
+  )
+}
+
+/** The Archived view over the window, opened from the sidebar's foot, the command menu or Settings search. */
+export function ArchivedThreadsDialog({ onClose }: { onClose: () => void }) {
+  useLanguage()
+  const ws = useWorkspace()
+  const count = archivedThreads(ws.tasks).length
+  return (
+    <DialogRoot
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose()
+      }}
+    >
+      <DialogContent
+        className="[[data-slot='dialog-content']&]:max-w-[none] [[data-slot='dialog-content']&]:w-[min(640px,_calc(100vw_-_48px))] flex max-h-[min(640px,_calc(100vh_-_96px))] flex-col gap-3 overflow-hidden rounded-(--radius-xl) [border:1px_solid_var(--edge)] bg-canvas p-5"
+        showCloseButton={false}
+        aria-describedby={undefined}
+      >
+        <header className="flex items-center gap-3">
+          <DialogTitle className="m-0 grow text-heading font-semibold">
+            {t('Archived threads')}
+            {count ? ` · ${count}` : ''}
+          </DialogTitle>
+          <Button variant="ghost" size="icon-sm" aria-label={t('Close')} onClick={onClose}>
+            <X size={16} />
+          </Button>
+        </header>
+        <div className="min-h-0 overflow-y-auto">
+          <ArchivedThreads onOpen={onClose} />
+        </div>
+      </DialogContent>
+    </DialogRoot>
   )
 }

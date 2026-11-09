@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, View } from 'react-native'
 import type { RamuMethods } from '@ramu/shared/api'
-import type { PlatformReadiness, TestDeviceStatus } from '@ramu/shared/testDevices'
+import { testDeviceSummary, type PlatformReadiness, type TestDeviceStatus } from '@ramu/shared/testDevices'
 import { appControlHelp, runtimeHelp } from '@ramu/shared/computerStatus'
 import { space } from '../theme'
 import { useSay } from '../i18n'
@@ -12,7 +12,7 @@ import { Button, Card, Divider, SectionLabel, T } from './ui'
 type Status = ReturnType<RamuMethods['computer.status']>
 
 /**
- * Settings → Computer & devices for the selected computer: whether agents may use its screen and real-pointer drags. Which
+ * Settings → Computer for the selected computer: whether agents may use its screen and real-pointer drags. Which
  * paired devices share their screen with it is a permission, so it lives in Remote access. Installing the helper and granting macOS permissions need someone at that Mac, so
  * this page reports their state and leaves the steps to Ramu on the host.
  */
@@ -129,9 +129,12 @@ function Readiness({ title, value }: { title: string; value: PlatformReadiness }
   const say = useSay()
   return (
     <View style={{ padding: space.l, gap: 4 }}>
-      <T weight="500">
-        {title} · {say(value.ready ? 'Ready' : 'Not ready')}
-      </T>
+      <T weight="500">{value.unsupported ? title : `${title} · ${say(value.ready ? 'Ready' : 'Needs setup')}`}</T>
+      {value.unsupported ? (
+        <T size={12} tone="muted" style={{ lineHeight: 18 }}>
+          {say(value.unsupported)}
+        </T>
+      ) : null}
       {value.missing.map((entry) => (
         <T key={entry.item} size={12} tone="muted" style={{ lineHeight: 18 }}>
           {entry.item}: {entry.fix}
@@ -147,9 +150,9 @@ function Readiness({ title, value }: { title: string; value: PlatformReadiness }
 }
 
 /**
- * Test devices on the selected computer, as on the desktop: whether agents may boot its iOS Simulators and Android
- * emulators, what each platform still needs, and Stop for a device left running. Installing Xcode, the Android SDK or
- * the tap helper happens at that computer.
+ * Settings → Test devices on the selected computer, in the desktop page's order: the switch with its status line, what
+ * each platform still needs, and the devices in use with Stop. Installing Xcode, the Android SDK or the tap helper
+ * happens at that computer.
  */
 export function TestDeviceSettings({ hostId }: { hostId: string }) {
   const say = useSay()
@@ -192,44 +195,52 @@ export function TestDeviceSettings({ hostId }: { hostId: string }) {
     await load()
     if (live.current) setBusy(false)
   }
-  // A host without test devices answers with an error; the section stays out of the way rather than alarming.
-  if (!status || !online) return null
+  if (!online) return <Hint>{say('Connect to this host to see its test devices.')}</Hint>
+  if (!status) return error ? <Hint>{error}</Hint> : null
   const running = status.devices.filter((device) => device.running)
   return (
     <>
-      <SectionLabel>{say('Test devices')}</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         <ToggleRow
           title={say('Let agents use test devices')}
-          help={say(
-            'Agents boot iOS Simulators and Android emulators on this host, install the app they built and check it like computer use. You install Xcode and the Android SDK yourself.',
-          )}
+          help={testDeviceSummary(status)
+            .parts.map((part) => say(part.text, part.values))
+            .join(' · ')}
           value={status.enabled}
           disabled={busy || readOnly}
           onChange={(enabled) => void act(() => store.invoke(hostId, 'testDevices.setEnabled', enabled))}
         />
-        <Divider inset={space.l} />
+      </Card>
+      <SectionLabel>{say('Setup')}</SectionLabel>
+      <Card style={{ marginHorizontal: space.l }}>
         <Readiness title="iOS" value={status.ios} />
         <Divider inset={space.l} />
         <Readiness title="Android" value={status.android} />
-        {running.map((device) => (
-          <View key={device.id}>
-            <Divider inset={space.l} />
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, padding: space.l }}>
-              <T style={{ flex: 1 }} numberOfLines={1}>
-                {device.name}
-              </T>
-              <Button
-                kind="secondary"
-                title={say('Stop')}
-                accessibilityLabel={say('Stop {0}', { 0: device.name })}
-                disabled={busy || readOnly}
-                onPress={() => void act(() => store.invoke(hostId, 'testDevices.stop', device.id))}
-              />
-            </View>
-          </View>
-        ))}
       </Card>
+      {running.length ? (
+        <>
+          <SectionLabel>{say('In use')}</SectionLabel>
+          <Card style={{ marginHorizontal: space.l }}>
+            {running.map((device, index) => (
+              <View key={device.id}>
+                {index ? <Divider inset={space.l} /> : null}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, padding: space.l }}>
+                  <T style={{ flex: 1 }} numberOfLines={1}>
+                    {device.name}
+                  </T>
+                  <Button
+                    kind="secondary"
+                    title={say('Stop')}
+                    accessibilityLabel={say('Stop {0}', { 0: device.name })}
+                    disabled={busy || readOnly}
+                    onPress={() => void act(() => store.invoke(hostId, 'testDevices.stop', device.id))}
+                  />
+                </View>
+              </View>
+            ))}
+          </Card>
+        </>
+      ) : null}
       {error ? (
         <T tone="bad" style={{ paddingHorizontal: space.l + 4, paddingTop: space.s }}>
           {error}

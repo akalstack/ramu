@@ -12,6 +12,13 @@ export function sidebarThreads(tasks: Task[]) {
   }
 }
 
+/** Archived threads, most recently active first, for the sidebar's Archived view. */
+export const archivedThreads = (tasks: Task[]) =>
+  tasks.filter((task) => task.status === 'archived').sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+
+/** Opens the Archived view: the sidebar's foot, the command menu and Settings search all lead here. */
+export const openArchivedThreads = () => window.dispatchEvent(new Event('ramu:archived'))
+
 /** The project a row names in a list across projects; a thread outside any project says so rather than naming none. */
 export const threadProjectName = (projects: Project[], projectId: string) =>
   projectId === NO_PROJECT ? t('No project') : projects.find((project) => project.id === projectId)?.name

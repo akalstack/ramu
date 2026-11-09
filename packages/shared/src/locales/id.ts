@@ -1,6 +1,25 @@
 // Friendly Indonesian copy. Keep English technical terms when an Indonesian equivalent feels uncommon or forced.
 // English source copy is the key and the fallback for new strings.
 export const indonesian: Readonly<Record<string, string>> = {
+  'Agent tools': 'Alat agent',
+  'Access & host': 'Akses & host',
+  'Ready on iOS and Android': 'Siap di iOS dan Android',
+  'Ready on iOS': 'Siap di iOS',
+  'Ready on Android': 'Siap di Android',
+  'Needs setup: {0}': 'Perlu disiapkan: {0}',
+  '{0} in use': '{0} dipakai',
+  'Not available on this host': 'Tidak tersedia di host ini',
+  'iOS Simulators run only on a Mac.': 'iOS Simulator hanya berjalan di Mac.',
+  'iOS Simulators here need a Mac with Apple silicon.': 'iOS Simulator di sini butuh Mac dengan Apple silicon.',
+  'Connect to this host to see its test devices.': 'Hubungkan ke host ini untuk melihat perangkat ujinya.',
+  'Agents boot iOS Simulators and Android emulators on this host and check the app they built.':
+    'Agent menyalakan iOS Simulator dan emulator Android di host ini lalu memeriksa aplikasi yang dibuatnya.',
+  'Choose one host to manage test devices. Devices belong to the computer that runs them.':
+    'Pilih satu host untuk mengelola perangkat uji. Perangkat milik komputer yang menjalankannya.',
+  'Held by a thread': 'Dipakai sebuah thread',
+  Setup: 'Penyiapan',
+  'Show archived threads': 'Tampilkan thread yang diarsipkan',
+  'Taps and typing': 'Ketuk dan ketik',
   'That didn’t work': 'Tidak berhasil',
   'This model isn’t available': 'Model ini tidak tersedia',
   'Sign-in needed': 'Perlu masuk',
@@ -22,9 +41,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Panel Browser, Computer, dan perangkat uji bisa mengambang sebagai tampilan langsung kecil di sudut atau jendela di atas aplikasi lain. Tombol Hentikan selalu terjangkau.',
   'Test devices': 'Perangkat uji',
   'Let agents use test devices': 'Izinkan agent memakai perangkat uji',
-  'Agents boot iOS Simulators and Android emulators on this host, install the app they built and check it like computer use. You install Xcode and the Android SDK yourself.':
-    'Agent menyalakan iOS Simulator dan emulator Android di host ini, memasang aplikasi yang dibuatnya, lalu mengeceknya seperti computer use. Xcode dan Android SDK kamu pasang sendiri.',
-  'Not ready': 'Belum siap',
   'Keep on top of other apps': 'Tetap di atas aplikasi lain',
   'Hide from screen sharing': 'Sembunyikan dari berbagi layar',
   'Changes apply to the connected host. Offline hosts keep their settings.':
@@ -6788,7 +6804,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Where agents can load it": "Tempat agen dapat memuatnya",
   "Written by you": "Ditulis oleh Anda",
   "Memory & learning": "Memori & pembelajaran",
-  "Computer & devices": "Komputer & perangkat",
   "Android emulator": "Emulator Android",
   "Needs setup": "Perlu disiapkan",
   "iOS Simulator": "Simulator iOS",

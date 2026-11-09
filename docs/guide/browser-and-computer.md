@@ -18,7 +18,7 @@ On the phone, the Browser pill opens a full-screen viewer. **Open on this phone*
 
 ## Computer use
 
-**Settings → Computer & devices** is off by default. Once on, each thread still needs a screen or app grant, and paired devices need the host's **Computer use** permission. The Computer tray lists your paired devices and whether each can watch and control; **Allow for 1 day** grants that permission there, and Remote access sets anything longer.
+**Settings → Computer** is off by default. Once on, each thread still needs a screen or app grant, and paired devices need the host's **Computer use** permission. The Computer tray lists your paired devices and whether each can watch and control; **Allow for 1 day** grants that permission there, and Remote access sets anything longer.
 
 - The agent calls `computer_open`, optionally naming one app. Main threads open automatically once computer use is on; helpers ask.
 - On desktop, the header's **Computer** button (⌘⌥M) opens the viewer. While you control the screen, your clicks and keys go to it; Escape returns the keyboard to Ramu.
@@ -30,7 +30,7 @@ macOS needs the Open Computer Use tool: **Install & set up** installs it and ask
 
 ## Test devices
 
-**Settings → Computer & devices → Test devices** (off by default) lets agents check an app on an iOS Simulator or Android emulator on the host. It shows what each platform is missing and how to fix it. Xcode and the Android SDK are your install. Watching an iOS Simulator works without anything else; to let agents tap and type, **Install idb** sets up the helper (Homebrew's `idb-companion` and a pinned `fb-idb` in `~/.ramu/tools`), or **Copy command** gives you the same install for your own terminal.
+**Settings → Test devices** lets agents check an app on an iOS Simulator or Android emulator on the host. The page opens with **Let agents use test devices** (off by default) and a status line such as "Ready on iOS and Android · 1 in use" or "Needs setup: Xcode". **Setup** lists each platform as **Ready** or with each missing item and its fix; a platform the host cannot run (iOS off an Apple silicon Mac) says so in one line. The page checks again when Ramu regains focus. **In use** lists running devices with the thread holding each, **Watch** (opens Float on that thread's screen) and **Stop**. Xcode and the Android SDK are your install. Watching an iOS Simulator works without anything else; to let agents tap and type, **Install idb** sets up the helper (Homebrew's `idb-companion` and a pinned `fb-idb` in `~/.ramu/tools`), or **Copy command** gives you the same install for your own terminal.
 
 The agent boots a device, installs a build from the workspace (`.app` or `.apk`), launches it and reads its logs, with no shell. The device then works like computer use: observe, tap, type, watch and take control. One thread holds a device at a time, at most two run per host, and an idle device shuts down after 15 minutes.
 

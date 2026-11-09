@@ -81,6 +81,8 @@ import { LiveView } from './liveView/LiveView'
 import { openComputer } from './chat/openComputer'
 import { AUTO_PROJECT, DEFAULT_SIDEBAR_WIDTH, NO_PROJECT, SIDEBAR_WIDTH_RANGE, isGlobalPage } from '@ramu/shared/types'
 import { SettingsPanel } from './settings/SettingsPanel'
+import { ArchivedThreadsDialog } from './sidebar/ArchivedThreads'
+import { openArchivedThreads } from './sidebar/projects/threadLists'
 import { UsageFooter, UsageRings } from './settings/Usage'
 import { ProjectSwitcher } from './workspace/ProjectSwitcher'
 import { runProjectAction, useProjectActions, WindowActions } from './WindowActions'
@@ -221,6 +223,12 @@ function Shell() {
   const [settingsHost, setSettingsHost] = useState<string | undefined>()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [searchingChats, setSearchingChats] = useState(false)
+  const [archivedOpen, setArchivedOpen] = useState(false)
+  useEffect(() => {
+    const open = () => setArchivedOpen(true)
+    window.addEventListener('ramu:archived', open)
+    return () => window.removeEventListener('ramu:archived', open)
+  }, [])
   useEffect(() => {
     const open = (event: Event) => {
       const detail = (event as CustomEvent<{ section?: SettingsSection; target?: string; host?: string }>).detail
@@ -291,6 +299,12 @@ function Shell() {
         },
       ),
       // ⌘K is left to the editor's own chords while a file has focus.
+      {
+        id: 'chat.archived',
+        title: t('Show archived threads'),
+        category: t('Thread'),
+        run: openArchivedThreads,
+      },
       {
         id: 'chat.search',
         title: t('Search threads'),
@@ -830,6 +844,7 @@ function Shell() {
       )}
       {palette && <Palette ws={ws} commands={commands} mode={palette} onClose={() => setPalette(null)} />}
       {searchingChats && <SearchChats onClose={() => setSearchingChats(false)} />}
+      {archivedOpen && <ArchivedThreadsDialog key={`archived:${shownHost}`} onClose={() => setArchivedOpen(false)} />}
       <Notifications />
       <PageNotices />
       <PendingThreadDelivery />

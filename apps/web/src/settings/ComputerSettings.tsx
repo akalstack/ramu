@@ -1,4 +1,3 @@
-import { TestDeviceSettings } from './TestDeviceSettings'
 import { Dialog as ConfirmDialog } from '../Menu'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { useStagedValue } from './stagedChanges'
@@ -359,7 +358,7 @@ function LockedUseRow({ hostId, visible, canWrite }: { hostId: string; visible: 
   )
 }
 
-/** Settings → Computer & devices: the selected host's computer access, kept apart from the browser settings. */
+/** Settings → Computer: the selected host's computer access, kept apart from the browser settings. */
 export function ComputerUseSettings(props: DraftProps) {
   useLanguage()
   const scope = useContext(SettingsScopeContext)
@@ -377,10 +376,6 @@ export function ComputerUseSettings(props: DraftProps) {
         hostId={hostId}
         readOnly={!!scope?.targets.find((target) => target.id === hostId)?.viewOnly}
         awakeControl={<KeepAwakeSettings {...props} />}
-      />
-      <TestDeviceSettings
-        hostId={hostId}
-        readOnly={!!scope?.targets.find((target) => target.id === hostId)?.viewOnly}
       />
     </div>
   )

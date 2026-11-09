@@ -162,13 +162,13 @@ it('keeps a routing draft and blocks an old Save callback when the dialog become
 })
 
 it('blocks an archived-history deletion confirmation retained across a viewer change', async () => {
-  const { ArchivedThreads } = await import('../src/settings/ArchivedThreads')
+  const { ArchivedThreads } = await import('../src/sidebar/ArchivedThreads')
   state.rows = tasks.map((task) => ({ ...task, status: 'archived' }))
   const nodes = (node: any): any[] =>
     !node || typeof node !== 'object' ? [] : [node, ...[node.props?.children].flat(Infinity).flatMap(nodes)]
   const RenderHistory = () => {
     state.cursor = 0
-    return ArchivedThreads()
+    return ArchivedThreads({})
   }
   const remove = nodes(RenderHistory()).find((node) => node.props?.children === 'Delete all archived threads')
   remove.props.onClick()

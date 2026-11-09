@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { NO_PROJECT, type Task } from '@ramu/shared/types'
-import { sidebarThreads } from '../src/sidebar/projects/threadLists'
+import { archivedThreads, sidebarThreads } from '../src/sidebar/projects/threadLists'
 
 const task = (id: string, extra: Partial<Task> = {}): Task => ({
   id,
@@ -112,4 +112,13 @@ it('counts only threads blocked on the person as needing them', async () => {
   expect(threadNeedsYou(task('failed', { status: 'failed' }))).toBe(false)
   expect(threadNeedsYou(task('running', { status: 'running' }))).toBe(false)
   expect(threadNeedsYou(task('idle'))).toBe(false)
+})
+
+it('lists only archived threads for the Archived view, most recently active first', () => {
+  const tasks = [
+    task('old', { status: 'archived', lastActiveAt: 1 }),
+    task('active', { lastActiveAt: 5 }),
+    task('new', { status: 'archived', lastActiveAt: 9, doneAt: 3 }),
+  ]
+  expect(archivedThreads(tasks).map((entry) => entry.id)).toEqual(['new', 'old'])
 })

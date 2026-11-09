@@ -15,6 +15,8 @@ export interface TestDevice {
 
 export interface PlatformReadiness {
   ready: boolean
+  /** Why this host cannot run the platform at all (iOS off a Mac), said once instead of as a failed check. */
+  unsupported?: string
   /** Each missing item and its fix, in the order to do them. */
   missing: { item: string; fix: string }[]
   /** Ready to boot and watch, but taps need this optional helper. */
@@ -28,6 +30,35 @@ export interface TestDeviceStatus {
   ios: PlatformReadiness
   android: PlatformReadiness
   devices: TestDevice[]
+}
+
+/** One part of the Test devices status line: an English copy key and its values, translated where it is drawn. */
+export interface SummaryPart {
+  text: string
+  values?: Record<string, string | number>
+}
+
+/**
+ * The Test devices page's status line, such as "Ready on iOS and Android · 1 in use" or "Needs setup: Xcode", and
+ * whether anything is left to set up on a platform this host can run.
+ */
+export function testDeviceSummary(status: TestDeviceStatus): {
+  state: 'off' | 'ready' | 'setup'
+  parts: SummaryPart[]
+} {
+  if (!status.enabled) return { state: 'off', parts: [{ text: 'Off' }] }
+  const platforms = [status.ios, status.android]
+  const ios = status.ios.ready,
+    android = status.android.ready
+  const missing = platforms.filter((entry) => !entry.unsupported).flatMap((entry) => entry.missing.map((m) => m.item))
+  const inUse = status.devices.filter((device) => device.running).length
+  const parts: SummaryPart[] = []
+  if (ios || android)
+    parts.push({ text: ios && android ? 'Ready on iOS and Android' : ios ? 'Ready on iOS' : 'Ready on Android' })
+  if (missing.length) parts.push({ text: 'Needs setup: {0}', values: { 0: missing.join(', ') } })
+  if (!parts.length) parts.push({ text: 'Not available on this host' })
+  if (inUse) parts.push({ text: '{0} in use', values: { 0: inUse } })
+  return { state: missing.length ? 'setup' : 'ready', parts }
 }
 
 /** At most this many devices run at once on a host; each is a full virtual phone. */

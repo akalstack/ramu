@@ -64,7 +64,6 @@ interface Target {
 /** These pages configure one machine (binaries, login, service, network, its deploy accounts), so "all environments" has no meaning. */
 const SINGLE_ENVIRONMENT_SECTIONS: readonly string[] = [
   'providers',
-  'environment',
   'agent-setup',
   'plugins',
   'identities',
@@ -73,8 +72,8 @@ const SINGLE_ENVIRONMENT_SECTIONS: readonly string[] = [
   'remote',
   'deploy',
 ]
-/** Remote access and archived history describe the current environment; it is not selectable. */
-const CURRENT_ENVIRONMENT_SECTIONS: readonly string[] = ['remote', 'archived']
+/** Remote access describes the current environment; it is not selectable. */
+const CURRENT_ENVIRONMENT_SECTIONS: readonly string[] = ['remote']
 export const isSingleEnvironmentSection = (section: string) => SINGLE_ENVIRONMENT_SECTIONS.includes(section)
 export const isCurrentEnvironmentSection = (section: string) => CURRENT_ENVIRONMENT_SECTIONS.includes(section)
 

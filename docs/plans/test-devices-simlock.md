@@ -1,4 +1,4 @@
-# Test devices on Simlock, a regrouped Settings, and settings agents can change
+# Test devices on Simlock, clearer Settings pages, and settings agents can change
 
 ## The need
 
@@ -9,7 +9,7 @@ A person asks an agent to check their app on an iPhone or Android screen while o
 - **iOS taps cost a setup step.** Tapping and typing on a simulator needs idb: Homebrew's `idb-companion` plus a Python venv. It is the one install on the page most people stop at.
 - **Watching is a slideshow.** The viewer and Float poll a PNG screenshot every 500 ms, and a crashed simulator ends the thread's device with no recovery.
 
-Settings make the same work harder to find. Test devices sit at the bottom of **Computer & devices**, under computer use's permissions, so a person looking for "simulator" scrolls past a page about their Mac. The menu has 21 pages in three groups, and the groups do not match how people look for things: **Workspace** mixes how Ramu looks (Appearance, Shortcuts) with tools agents use (Browser, Computer, Git, Deploy) and a list that is not a setting (Archived threads); **Agents** holds 11 pages; **Ask before using another provider** is under Permissions while the rest of fallback is under Models; environment variables have their own page apart from the MCP servers and skills that use them; and moving settings to another computer is under Remote access.
+Settings pages still make the person read to find what changed: a row someone set looks the same as a default, and rows few people touch sit beside the ones everyone needs.
 
 ## Is Simlock the right base
 
@@ -40,7 +40,7 @@ Ramu does this differently:
 
 ### 1. Simlock as the engine
 
-- **Setup:** **Settings → Computer & devices → Test devices** replaces **Install idb** with one **Set up test devices** button: it installs the pinned `simlock` into `~/.ramu/tools/simlock-<version>` with Ramu's Node, runs `simlock doctor`, and shows each finding in the existing missing-item rows with its fix. **Copy command** keeps the same install for a terminal. Ramu writes the daemon's settings it relies on (HTTP on loopback, `capabilities.input.enabled`, `capabilities.stream`) with `simlock config set`, and creates one agent token for its server with `simlock/admin`, kept in `credentials/`.
+- **Setup:** **Settings → Test devices** replaces **Install idb** with one **Set up test devices** button: it installs the pinned `simlock` into `~/.ramu/tools/simlock-<version>` with Ramu's Node, runs `simlock doctor`, and shows each finding in the existing missing-item rows with its fix. **Copy command** keeps the same install for a terminal. Ramu writes the daemon's settings it relies on (HTTP on loopback, `capabilities.input.enabled`, `capabilities.stream`) with `simlock config set`, and creates one agent token for its server with `simlock/admin`, kept in `credentials/`.
 - **Leases:** `TestDevices` talks to the daemon through `simlock/client` with principal `ramu:<thread id>`, so a thread holds one lease and a helper agent shares its parent's. `test_device_list` reads the catalog (models and OS versions that can be leased) instead of `simctl list`; `test_device_open` takes a platform and an optional model and OS. Ramu renews every third of the TTL and releases when the thread ends, stops or is archived. If the Ramu server dies, the lease ends one TTL later, so there is no ledger.
 - **Queue:** while a lease waits, the thread's device pill shows **Waiting for a device · 2nd in line** with **Stop waiting**; the tool returns once the device is ready. `TEST_DEVICE_LIMIT` and the "already running" error go away: capacity is Simlock's, from the machine's RAM.
 - **Commands:** install, launch, open URL and logs run through `client.exec` with `simctl` or `adb`, which refuses verbs that would break a lease. Workspace path checks stay as they are.
@@ -66,36 +66,18 @@ Today an agent on Android reads uiautomator's tree and taps "Sign up" by name, w
 - **Save as starting point** on a thread's device makes a Simlock baseline (an app signed in, test data loaded). `test_device_open` takes an optional starting point, and the project remembers the last one used, so the next thread starts signed in without the person repeating the setup.
 - **Use my own simulator** stays possible: setting `drivers.ios.deviceSet` to `default` puts Simlock's simulators in Xcode's own list, so Xcode builds can target them by UDID. Ramu never leases the person's own devices; a baseline is how their state reaches an agent.
 
-### 4. Settings: groups, pages and the Test devices page
+### 4. Settings: page conventions and the rest of the Test devices page
 
-The menu goes from three groups of uneven size to four groups of four to six pages, each named for what the person is trying to do. Pages keep their ids and content unless listed; old ids are dropped, with no aliases.
+Settings has its four groups (Personal, Agents, Agent tools, Access & host), **Test devices** is its own page (`devices`) with a status row, a setup checklist and an **In use** list built from today's idb and simctl readiness, and **Archived** is a sidebar view. What remains:
 
-| Group | Pages |
-| --- | --- |
-| **Personal** | Appearance · Threads · Editor & Terminal · Keyboard shortcuts |
-| **Agents** | Providers · Models · Agent setup · Plugins · Goals & delegation · Memory & learning |
-| **Agent tools** | Browser · Computer · **Test devices** · Git · Deploy |
-| **Access & host** | Permissions · Identities · Remote access · Account · Background & updates |
-
-What moves:
-
-- **Split:** **Computer & devices** becomes **Computer** (agent access, app control, locked use, keep awake) and **Test devices**, a page of its own (`devices`), so each is found by its own name in the menu and in search.
-- **Merge:** **Environment variables** joins **Agent setup** as a group beside MCP servers and skills, the things that read them; **Provider fallback** (the limit choice and **Ask before using another provider**) moves from Permissions to Models next to the other fallback rows; **Settings transfer** moves from Remote access to Account, beside the settings backup.
-- **Out of Settings:** **Archived threads** is a list, not a setting: it becomes an **Archived** view at the foot of the sidebar's thread list and a command in the command menu, and Settings search still finds it and opens that view.
-- The phone uses the same four groups from `SETTINGS_MENU_GROUPS`; its phone-only pages (such as Paired computers) stay in a **This phone** group at the top.
-
-How every page reads, using the components that exist (`SettingsRow`, `SettingsLabel`, `SettingsGroupTitle`):
-
-- **Status first.** A page that has a state opens with one summary row and its one next action: "Ready on iOS and Android · 2 in use · 1 waiting", "Needs setup: Xcode", "Off". Explanations move into each row's help.
-- **Setup as a checklist.** What a feature needs is a list of items, each **Ready** or with its own fix button (**Set up**, **Open Xcode**, **Copy command**, **Install iOS 18.4 · 8 GB**), instead of paragraphs of instructions. The page re-checks when Ramu regains focus, so the person never presses refresh after installing something.
 - **Defaults show as defaults.** A changed row shows a small dot and its own **Reset**; each page keeps one **Reset defaults** at the foot.
 - **Advanced stays folded.** Rows few people change (capacity, slim simulators, idle shutdown, a custom tool path) sit under a closed **Advanced** disclosure.
 
-The **Test devices** page, in order:
+On the **Test devices** page, with Simlock:
 
-1. **Status row** with the switch **Let agents use test devices**, the summary, and **Set up test devices** while anything is missing.
-2. **Setup checklist:** Simlock, Xcode, an iOS runtime, the Android SDK, a system image, each from `simlock doctor` with its fix. A platform that cannot run on this host (iOS on Linux) shows one line saying so, not a failed check.
-3. **In use:** one row per lease and per waiting request: the device and OS, the thread (opens it), how long it has been held or its place in line, **Watch** (opens the viewer) and **Stop** (releases it; the agent is told).
+1. **Status row:** **Set up test devices** while anything is missing, and the summary counts waiting requests ("2 in use · 1 waiting").
+2. **Setup checklist:** Simlock, Xcode, an iOS runtime, the Android SDK and a system image, each from `simlock doctor` with its own fix button (**Set up**, **Open Xcode**, **Install iOS 18.4 · 8 GB**).
+3. **In use:** one row per lease and per waiting request, with how long it has been held or its place in line.
 4. **Defaults:** the iPhone and Android model and OS a thread gets when it names none, chosen from Simlock's catalog with installed ones first.
 5. **Starting points:** each saved baseline with its platform, size and the projects that use it, with **Rename** and **Delete**. Empty, it says how to make one from a thread's device.
 6. **Advanced:** how many devices may run (automatic from this host's memory, or a number), slim simulators, and the keep-warm choice.
@@ -118,7 +100,7 @@ Today a person who says "make the default iPhone a 16 Pro" or "stop warning befo
 
 What agents can never change, marked in the settings schema rather than listed in the tool: anything that widens what agents may do or who can reach the host (Permissions and saved approvals, the mode, Remote access, pairing and device permissions, Identities, Account, provider credentials, environment variable values, **Let agents use this computer** and **Let agents use test devices**). `settings_find` still returns them, marked **Change it yourself**, with the page to open, so the agent can point the person to the right row instead of guessing. Phone-only preferences stay on the phone. File tools refuse Ramu's own `settings.json` and data folder, so the typed tools are the only way in.
 
-In Settings, a row an agent changed shows the dot from part 4 with "Changed by an agent in *thread name*", linking to the thread, until the person changes it again.
+In Settings, a row an agent changed shows the changed-row dot from part 4 with "Changed by an agent in *thread name*", linking to the thread, until the person changes it again.
 
 ## Services to extend
 
@@ -126,7 +108,6 @@ In Settings, a row an agent changed shows the dot from part 4 with "Changed by a
 - `packages/shared/src/testDevices.ts`: readiness, the device shape (a lease instead of a UDID, a queue position) and the guide text.
 - `apps/web/src/settings/TestDeviceSettings.tsx` and `apps/mobile/src/components/ComputerUseSettings.tsx`: setup and doctor rows.
 - The computer viewer and Float (web and mobile) for the stream; `apps/server/src/background/resources.ts` for the Resources figures of Simlock's devices.
-- `packages/shared/src/settingsMenu.ts` (groups and ids), the search entries in `apps/web/src/settings/SettingsPage.tsx`, the page switch in `apps/web/src/settings/SettingsPanel.tsx`, `apps/mobile/src/runtime/settingsModel.ts`, and the sidebar's thread lists (`apps/web/src/sidebar/projects/threadLists.ts`) for **Archived**.
 - `apps/server/src/sharedSettings.ts`, `packages/shared/src/settingsCompatibility.ts` (an agent-changeable mark per setting) and `apps/server/src/themeTools.ts` as the pattern for registering the settings tools and their card.
 - `docs/guide/browser-and-computer.md` **Test devices** once it ships, and every guide that names a Settings path that moves.
 

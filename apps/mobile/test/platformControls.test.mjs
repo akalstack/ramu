@@ -8872,6 +8872,7 @@ for (const access of ['full', 'viewer']) {
       '../runtime/store': { useStore: () => store },
       './SettingRows': { ToggleRow: 'ToggleRow', Hint: 'Hint' },
       './ui': proxyUi(),
+      '@ramu/shared/testDevices': await import('../../../packages/shared/src/testDevices.ts'),
     })
     const render = () => hooks.render(() => TestDeviceSettings({ hostId: 'host' }))
     render()
@@ -8880,6 +8881,7 @@ for (const access of ['full', 'viewer']) {
     const toggle = find(tree, 'ToggleRow')
     const stops = nodes(tree).filter((node) => node.type === 'Button' && node.props.title === 'Stop')
     assert.equal(toggle.props.title, 'Let agents use test devices')
+    assert.equal(toggle.props.help, 'Off')
     // Only the running device offers Stop, and each platform says what it still needs.
     assert.equal(stops.length, 1)
     assert.deepEqual(

@@ -21,7 +21,7 @@ The first time a destination is turned on, the host makes a random 256-bit backu
 
 ## Restoring
 
-A new host's first-run setup offers **Restore your settings?**: **From a backup** opens **Settings → Account**, and **From another host** opens **Copy settings from…** in **Settings → Remote access**.
+A new host's first-run setup offers **Restore your settings?**: **From a backup** opens **Settings → Account**, and **From another host** opens **Copy settings from…** in **Settings → Account**.
 
 A new host needs the backup key first, in one of two ways:
 

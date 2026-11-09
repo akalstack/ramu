@@ -82,10 +82,9 @@ export class TestDevices {
 
   async readiness(): Promise<{ ios: PlatformReadiness; android: PlatformReadiness }> {
     const ios: PlatformReadiness = { ready: false, missing: [] }
-    if (this.platform !== 'darwin') ios.missing.push({ item: 'macOS', fix: 'iOS Simulators run only on a Mac.' })
+    if (this.platform !== 'darwin') ios.unsupported = 'iOS Simulators run only on a Mac.'
+    else if (this.arch !== 'arm64') ios.unsupported = 'iOS Simulators here need a Mac with Apple silicon.'
     else {
-      if (this.arch !== 'arm64')
-        ios.missing.push({ item: 'Apple silicon', fix: 'Use a Mac with Apple silicon for iOS Simulators.' })
       const xcode = await run('/usr/bin/xcrun', ['simctl', 'help'], { timeout: 10_000 }).then(
         () => true,
         () => false,
@@ -100,7 +99,7 @@ export class TestDevices {
         ios.install = idbInstallCommand()
       }
     }
-    ios.ready = !ios.missing.length
+    ios.ready = !ios.unsupported && !ios.missing.length
     const android: PlatformReadiness = { ready: false, missing: [] }
     if (!androidTool('platform-tools/adb'))
       android.missing.push({
@@ -177,7 +176,7 @@ export class TestDevices {
   /** Boots the device for this thread, waiting until it is ready. One thread holds a device at a time. */
   async open(id: string, taskId: string): Promise<{ id: string; name: string }> {
     if (!this.enabled())
-      throw new Error('Test devices are turned off on this host. Turn them on in Settings → Computer & devices.')
+      throw new Error('Test devices are turned off on this host. Turn them on in Settings → Test devices.')
     const existing = this.running.get(id)
     if (existing) {
       if (existing.heldBy !== taskId) throw new Error('Another thread is using that test device.')
@@ -458,9 +457,7 @@ export class TestDevices {
         const path = idbExecutable()
         const companion = idbCompanion()
         if (!path || !companion)
-          throw new ComputerNotRun(
-            'Tapping an iOS Simulator needs idb. Install it in Settings › Computer & devices › Test devices.',
-          )
+          throw new ComputerNotRun('Tapping an iOS Simulator needs idb. Install it in Settings → Test devices.')
         const ui = (...args: string[]) =>
           run(path, ['--companion-path', companion, 'ui', ...args, '--udid', entry.handle], OPTIONS)
         const p = (value: number) => String(Math.round(value / scale))

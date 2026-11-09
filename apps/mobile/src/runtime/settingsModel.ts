@@ -6,17 +6,22 @@ import {
   limitChoicePatch,
   type LimitChoice,
 } from '@ramu/shared/chat/limitPolicy'
-import { HOST_ONLY_SECTIONS, SETTINGS_MENU, type PhoneSettingsMenuId } from '@ramu/shared/settingsMenu'
+import {
+  HOST_ONLY_SECTIONS,
+  SETTINGS_MENU,
+  SETTINGS_MENU_GROUPS,
+  type PhoneSettingsMenuId,
+  type SettingsMenuGroup,
+} from '@ramu/shared/settingsMenu'
 import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
 import type { AgentProvider } from '@ramu/shared/types'
 import type { SettingEdit, SettingSchema, SettingsSnapshot, SharedSetting } from '@ramu/shared/settingsCompatibility'
 
-// The phone's settings menu: the desktop's sections (`@ramu/shared/settingsMenu`) and their names, without the ones
-// that only matter at the host's keyboard, arranged for a phone: this phone first, then what you change on a host away
-// from it (its agents before its workspace), and history and About last.
+// The phone's settings menu: this phone's own pages first, then the desktop's groups and sections
+// (`@ramu/shared/settingsMenu`) under their names, without the ones that only matter at the host's keyboard.
 
 export type Language = 'en' | 'id'
-export type SettingsGroup = 'phone' | 'agents' | 'workspace' | 'more'
+export type SettingsGroup = 'phone' | SettingsMenuGroup
 export type SettingsSection = PhoneSettingsMenuId | 'notifications' | 'about'
 
 /** Labels are English copy keys, translated where they are drawn (as the desktop does). */
@@ -26,53 +31,35 @@ const text = (key: string): Text => key
 /** The menu's groups in order; the host picker sits after This phone, above the groups that edit a host. */
 export const SETTINGS_GROUPS: { id: SettingsGroup; label: Text }[] = [
   { id: 'phone', label: text('This phone') },
-  { id: 'agents', label: text('Agents') },
-  { id: 'workspace', label: text('Workspace') },
-  { id: 'more', label: text('More') },
+  ...SETTINGS_MENU_GROUPS.map((group) => ({ id: group, label: text(group) })),
 ]
 
-/** Pages about this phone rather than the selected host: no host picker on them. */
-const PHONE_PAGES: readonly SettingsSection[] = [
-  'appearance',
-  'archived',
-  'remote',
-  'account',
-  'notifications',
-  'about',
+/** Pages about this phone rather than the selected host, in the This phone group with no host picker on them. */
+const PHONE_MENU: readonly { id: SettingsSection; label?: Text }[] = [
+  { id: 'appearance' },
+  { id: 'notifications', label: text('Notifications') },
+  { id: 'remote', label: text('Paired computers') },
+  { id: 'account', label: text('Ramu account') },
+  { id: 'about', label: text('About') },
 ]
-
-/** Every section the phone shows, in its order. Paired hosts are what Remote access holds on a phone. */
-const PHONE_MENU: readonly { id: SettingsSection; group: SettingsGroup; label?: Text }[] = [
-  { id: 'appearance', group: 'phone' },
-  { id: 'notifications', group: 'phone', label: text('Notifications') },
-  { id: 'remote', group: 'phone', label: text('Paired computers') },
-  { id: 'account', group: 'phone', label: text('Ramu account') },
-  { id: 'chats', group: 'agents' },
-  { id: 'access', group: 'agents' },
-  { id: 'models', group: 'agents' },
-  { id: 'providers', group: 'agents' },
-  { id: 'workflows', group: 'agents' },
-  { id: 'memory', group: 'agents' },
-  { id: 'agent-setup', group: 'agents' },
-  { id: 'plugins', group: 'agents' },
-  { id: 'identities', group: 'agents' },
-  { id: 'git', group: 'workspace' },
-  { id: 'deploy', group: 'workspace' },
-  { id: 'browser', group: 'workspace' },
-  { id: 'computer', group: 'workspace' },
-  { id: 'system', group: 'workspace' },
-  { id: 'archived', group: 'more' },
-  { id: 'about', group: 'more', label: text('About') },
-]
+const PHONE_PAGES: readonly SettingsSection[] = PHONE_MENU.map((entry) => entry.id)
 
 /** `host` pages edit the selected computer's shared preferences; `phone` pages only touch this device. */
 export const SETTINGS_SECTIONS: { id: SettingsSection; group: SettingsGroup; scope: 'host' | 'phone'; label: Text }[] =
-  PHONE_MENU.map((entry) => ({
-    id: entry.id,
-    group: entry.group,
-    scope: PHONE_PAGES.includes(entry.id) ? 'phone' : 'host',
-    label: entry.label ?? text(SETTINGS_MENU.find((menu) => menu.id === entry.id)!.label),
-  }))
+  [
+    ...PHONE_MENU.map((entry) => ({
+      id: entry.id,
+      group: 'phone' as const,
+      scope: 'phone' as const,
+      label: entry.label ?? text(SETTINGS_MENU.find((menu) => menu.id === entry.id)!.label),
+    })),
+    ...SETTINGS_MENU.filter((entry) => entry.phone && !PHONE_PAGES.includes(entry.id)).map((entry) => ({
+      id: entry.id as SettingsSection,
+      group: entry.group,
+      scope: 'host' as const,
+      label: text(entry.label),
+    })),
+  ]
 
 /** The desktop sections the phone leaves to the host, named once under the menu. */
 export const HOST_ONLY_LABELS = HOST_ONLY_SECTIONS
@@ -813,7 +800,11 @@ const PHONE_ENTRIES: { section: SettingsSection; title: string; words: string }[
     words: 'screen display desktop control agent app pointer accessibility screen recording share',
   },
   { section: 'remote', title: 'Paired hosts', words: 'pair connect switch host reconnect revoke forget hosts' },
-  { section: 'archived', title: 'Archived threads', words: 'history restore unarchive delete' },
+  {
+    section: 'devices',
+    title: 'Let agents use test devices',
+    words: 'test devices simulator emulator ios android iphone pixel phone app setup xcode in use stop',
+  },
   { section: 'agent-setup', title: 'MCP servers', words: 'shared tools external service connection skills' },
   { section: 'plugins', title: 'Installed plugins', words: 'plugin marketplace index integration service credential' },
   { section: 'agent-setup', title: 'Skills', words: 'installed skills your own skill archive restore' },
@@ -876,10 +867,10 @@ export function applyValue(snapshot: SettingsSnapshot, path: string, value: unkn
   }
 }
 
-export interface SearchHit {
-  section: SettingsSection
-  title: string
-}
+/** A settings row on a page, or the Threads list's Archived filter, which search still finds. */
+export type SearchHit = { section: SettingsSection; title: string } | { view: 'archived'; title: string }
+
+const ARCHIVED_VIEW = { title: 'Archived threads', words: 'archived archive history restore unarchive delete threads' }
 
 const norm = (text: string) => text.toLowerCase()
 /** Every word of the query must appear in the title, the section name or the row's search terms. */
@@ -892,7 +883,7 @@ export function searchSettings(
   const words = norm(query).split(/\s+/).filter(Boolean)
   if (!words.length) return []
   const known = settings ? new Set(settings.map((setting) => setting.path)) : null
-  const candidates: (SearchHit & { words: string })[] = [
+  const candidates: { section: SettingsSection; title: string; words: string }[] = [
     ...Object.entries(SETTINGS_ROWS).flatMap(([section, groups]) =>
       (groups ?? []).flatMap((group) =>
         group.rows
@@ -912,7 +903,18 @@ export function searchSettings(
     },
     ...PHONE_ENTRIES,
   ]
-  return candidates
+  const matches = (title: string, label: string, terms: string) => {
+    const haystack = `${norm(title)} ${norm(label)} ${norm(say(label))} ${norm(terms)}`
+    return words.every((word) => haystack.includes(word))
+  }
+  const views: SearchHit[] = matches(
+    say(ARCHIVED_VIEW.title),
+    'Threads',
+    `${ARCHIVED_VIEW.title} ${ARCHIVED_VIEW.words}`,
+  )
+    ? [{ view: 'archived', title: ARCHIVED_VIEW.title }]
+    : []
+  const rows = candidates
     .map((entry) => {
       const title = norm(entry.title)
       const label = sectionLabel(entry.section)
@@ -925,8 +927,12 @@ export function searchSettings(
     })
     .filter((hit): hit is NonNullable<typeof hit> => !!hit)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 12)
-    .map(({ entry }) => ({ section: entry.section, title: entry.title }))
+    .map(({ entry }): SearchHit => ({ section: entry.section, title: entry.title }))
+  // The view leads when its title holds what was typed ("archived"), and follows the rows when only its terms do.
+  const leads = words.some(
+    (word) => norm(say(ARCHIVED_VIEW.title)).includes(word) || norm(ARCHIVED_VIEW.title).includes(word),
+  )
+  return (leads ? [...views, ...rows] : [...rows, ...views]).slice(0, 12)
 }
 
 /** The store's typed `invoke`, seen as the plain call these helpers make with method names they have checked themselves. */

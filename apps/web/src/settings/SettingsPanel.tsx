@@ -28,13 +28,13 @@ import { useWorkspace } from '../workspace/workspace'
 import { AccessSettings, ProviderFallbackSettings } from './AccessSettings'
 import { EnvironmentSettings, useProviderEnvironment } from './EnvironmentSettings'
 import { AppearanceSettings } from './AppearanceSettings'
-import { ArchivedThreads } from './ArchivedThreads'
 import { ChatsSettings } from './ChatsSettings'
 import { GHOST_BUTTON_CLASS, RESET_KEYS, SETTINGS_FORM_CLASS } from './constants'
 import { EditorSettings } from './EditorSettings'
 import { BrowserSettings } from './BrowserSettings'
 import { VoiceSettings } from './VoiceSettings'
 import { ComputerUseSettings } from './ComputerSettings'
+import { TestDevicesPage } from './TestDeviceSettings'
 import { GitSettings } from './GitSettings'
 import { DeployAccounts } from './DeployAccounts'
 import { ModelSetsEditor } from './ModelSetsEditor'
@@ -95,7 +95,12 @@ export function SettingsPanel({
       )
       .map((field) => field.path) ?? []
   const modelsChanged = !sameValue(draft, scope.models)
-  const environment = useProviderEnvironment(scope, page === 'environment')
+  const environment = useProviderEnvironment(scope, page === 'agent-setup')
+  // Search lands on the Environment variables tab of Agent setup; a new object each time, as `jump` is.
+  const setupTab = useMemo(
+    () => (jump?.title === 'Environment variables' ? { view: 'environment' as const } : undefined),
+    [jump],
+  )
   const settingsChanged = paths.length > 0 || modelsChanged || scope.edited.size > 0
   const [staged, setStaged] = useState<StagedChanges>(new Map())
   const stage = useCallback(
@@ -206,9 +211,6 @@ export function SettingsPanel({
                 if (!busy) onClose()
               }}
             >
-              {page === 'environment' && (
-                <EnvironmentSettings environment={environment} preferences={appDraft} busy={busy} />
-              )}
               {page === 'providers' && (
                 <>
                   <SettingsGroupTitle>{t('Providers')}</SettingsGroupTitle>
@@ -225,16 +227,22 @@ export function SettingsPanel({
                   </div>
                 </>
               )}
-              {page === 'remote' && (
-                <>
-                  <RemoteAccessSettings />
-                  <SettingsTransfer />
-                </>
+              {page === 'remote' && <RemoteAccessSettings />}
+              {page === 'agent-setup' && (
+                <AgentSetup
+                  show={setupTab}
+                  environment={<EnvironmentSettings environment={environment} preferences={appDraft} busy={busy} />}
+                />
               )}
-              {page === 'agent-setup' && <AgentSetup />}
               {page === 'plugins' && <PluginSettings />}
               {page === 'identities' && <IdentitySettings />}
-              {page === 'account' && <AccountSettings />}
+              {page === 'account' && (
+                <>
+                  <AccountSettings />
+                  {/* Copying settings acts on the window's own host, so it shows only while that host is selected. */}
+                  {scope.primaryId === scope.currentId && <SettingsTransfer />}
+                </>
+              )}
               {page === 'system' && <SystemSettings {...draftProps} />}
               {page === 'appearance' && (
                 <AppearanceSettings {...draftProps} sizesReset={sizesReset} onResetSizes={() => setReset('sizes')} />
@@ -242,6 +250,7 @@ export function SettingsPanel({
               {page === 'editor' && <EditorSettings {...draftProps} />}
               {page === 'browser' && <BrowserSettings {...draftProps} />}
               {page === 'computer' && <ComputerUseSettings {...draftProps} />}
+              {page === 'devices' && <TestDevicesPage onLeave={hasChanges ? undefined : onClose} />}
               {page === 'access' && <AccessSettings {...draftProps} />}
               {page === 'memory' && (
                 <>
@@ -271,7 +280,6 @@ export function SettingsPanel({
                   <AdvisorSettings value={appDraft} onChange={setAppDraft} busy={busy} />
                 </>
               )}
-              {page === 'archived' && <ArchivedThreads />}
               {page === 'chats' && (
                 <>
                   <ChatsSettings {...draftProps} />

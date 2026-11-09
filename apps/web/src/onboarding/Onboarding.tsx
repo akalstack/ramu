@@ -328,7 +328,9 @@ export function Onboarding() {
                 variant="ghost"
                 onClick={() =>
                   void finish().then(() =>
-                    window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'remote' } })),
+                    window.dispatchEvent(
+                      new CustomEvent('ramu:settings', { detail: { section: 'account', target: 'Copy settings' } }),
+                    ),
                   )
                 }
               >

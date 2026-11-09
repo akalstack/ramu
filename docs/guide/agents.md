@@ -86,7 +86,7 @@ From a host's row in **Settings → Remote access**, request **Agents** to let t
 
 ## Acting on several threads
 
-In the sidebar, Cmd/Ctrl-click adds a thread to the selection and Shift-click selects a range, starting from the open thread when nothing is selected yet. The bar above the list pins, finishes, archives or deletes them together; **Delete** or **Backspace** deletes them, and **Esc** clears the selection. Archive and done can be undone; delete still reviews each thread so a running command is never lost.
+In the sidebar, Cmd/Ctrl-click adds a thread to the selection and Shift-click selects a range, starting from the open thread when nothing is selected yet. The bar above the list pins, finishes, archives or deletes them together; **Delete** or **Backspace** deletes them, and **Esc** clears the selection. Archive and done can be undone; delete still reviews each thread so a running command is never lost. **Archived** at the foot of the thread list (also **Show archived threads** in the command menu, or "archived" in Settings search) lists archived threads with search, each row's own actions and **Delete all archived threads**. On the phone, the Threads list's **Archived** filter does the same.
 
 A thread marked done leaves its project and moves to **Done** at the bottom of the list, on the desktop and the phone alike, newest first; sending it a message brings it back.
 
@@ -137,7 +137,7 @@ Threads in a project check its deployments and logs with `deploy_status` and `de
 
 When an agent needs a token, password, PIN or pairing code only you can give, it asks with a masked card in the thread instead of in chat, on the desktop and the phone. **Save** sends the value to the host, which writes it to a private file only your user can read and gives the agent that file's path, never the value; the agent reads it inside the command that needs it. The value is not stored in the thread, and the file is deleted after a day. **Decline** tells the agent to go on without it. A card left unanswered for ten minutes, or still open when the run stops, closes, and the agent asks again only if it still needs it.
 
-When the agent names the variable a tool reads, such as `VERCEL_TOKEN`, the card on the host offers **Keep as VERCEL_TOKEN for later threads**. That adds it to [**Settings → Environment variables**](providers.md#environment-variables) for all providers, so new threads have it and do not ask again.
+When the agent names the variable a tool reads, such as `VERCEL_TOKEN`, the card on the host offers **Keep as VERCEL_TOKEN for later threads**. That adds it to [**Settings → Agent setup → Environment variables**](providers.md#environment-variables) for all providers, so new threads have it and do not ask again.
 
 ## Thread titles
 

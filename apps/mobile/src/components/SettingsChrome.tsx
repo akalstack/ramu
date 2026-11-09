@@ -1,7 +1,6 @@
 import { Platform, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import {
-  Archive,
   Bell,
   Brain,
   CalendarClock,
@@ -22,6 +21,7 @@ import {
   UsersRound,
   CircleUserRound,
   ShieldCheck,
+  Smartphone,
   Target,
   type LucideIcon,
 } from 'lucide-react-native'
@@ -38,7 +38,7 @@ const icons: Record<SettingsSection, LucideIcon> = {
   deploy: Rocket,
   browser: Globe,
   computer: MonitorCog,
-  archived: Archive,
+  devices: Smartphone,
   chats: MessageSquare,
   providers: Cpu,
   models: Layers,
@@ -55,10 +55,10 @@ const icons: Record<SettingsSection, LucideIcon> = {
   about: Info,
 }
 
-/** The tinted square a section wears in the menu, like the desktop's section icons. */
-export function SectionIcon({ section }: { section: SettingsSection }) {
+/** The tinted square a section (or a view search finds, by its own icon) wears in the menu, as on the desktop. */
+export function SectionIcon(props: { section: SettingsSection } | { icon: LucideIcon }) {
   const { c } = useTheme()
-  const Icon = icons[section]
+  const Icon = 'icon' in props ? props.icon : icons[props.section]
   return (
     <View
       style={{

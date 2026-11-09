@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { translate } from '@ramu/shared/i18n'
 import { Platform, TextInput, View } from 'react-native'
 import { Stack, useRouter } from 'expo-router'
-import { ChevronRight, Search } from 'lucide-react-native'
+import { Archive, ChevronRight, Search } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../theme'
 import { useStore } from '../../runtime/store'
 import {
@@ -11,6 +11,7 @@ import {
   SETTINGS_SECTIONS,
   searchSettings,
   sectionLabel,
+  type SearchHit,
   type SettingsSection,
 } from '../../runtime/settingsModel'
 import { useHostSettings } from '../../runtime/useHostSettings'
@@ -33,6 +34,8 @@ export default function SettingsMenu() {
     : []
   const open = (section: SettingsSection, target?: string) =>
     router.push({ pathname: '/settings/[section]', params: target ? { section, target } : { section } })
+  const choose = (hit: SearchHit) =>
+    'view' in hit ? router.dismissTo({ pathname: '/', params: { filter: 'archived' } }) : open(hit.section, hit.title)
   return (
     <Screen bg="window">
       <Header modal align="center" title={t.settings} scrollEdge scrolled={edge.scrolled} />
@@ -97,14 +100,14 @@ export default function SettingsMenu() {
           >
             {results.length ? (
               results.map((hit, index) => (
-                <View key={`${hit.section}:${hit.title}`}>
+                <View key={'view' in hit ? `view:${hit.view}` : `${hit.section}:${hit.title}`}>
                   {index ? <Divider inset={60} /> : null}
-                  <Row onPress={() => open(hit.section, hit.title)} style={{ paddingVertical: space.m }}>
-                    <SectionIcon section={hit.section} />
+                  <Row onPress={() => choose(hit)} style={{ paddingVertical: space.m }}>
+                    {'view' in hit ? <SectionIcon icon={Archive} /> : <SectionIcon section={hit.section} />}
                     <View style={{ flex: 1, gap: 2 }}>
-                      <T>{hit.title}</T>
+                      <T>{translate(language, hit.title)}</T>
                       <T size={font.caption} tone="muted">
-                        {translate(language, sectionLabel(hit.section))}
+                        {translate(language, 'view' in hit ? 'Threads' : sectionLabel(hit.section))}
                       </T>
                     </View>
                     <ChevronRight size={16} color={c.muted} />
@@ -122,7 +125,7 @@ export default function SettingsMenu() {
             {SETTINGS_GROUPS.map((group) => (
               <View key={group.id}>
                 {/* The groups after This phone edit a host, so the picker for which one sits right above them. */}
-                {group.id === 'agents' ? <ComputerScope host={host} /> : null}
+                {group.id === SETTINGS_GROUPS[1]?.id ? <ComputerScope host={host} /> : null}
                 <SectionLabel>{translate(language, group.label)}</SectionLabel>
                 <Card
                   style={{

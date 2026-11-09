@@ -56,6 +56,7 @@ export function TaskRow({
   merged,
   earlierRuns,
   hideBranch,
+  onOpen,
 }: {
   task: Task
   projectName?: string
@@ -67,6 +68,8 @@ export function TaskRow({
   earlierRuns?: number
   /** Inside a project's own group the branch line is optional (`threadRowBranches`). */
   hideBranch?: boolean
+  /** Called once the thread opens, so a list shown over the window can get out of the way. */
+  onOpen?: () => void
 }) {
   useLanguage()
   const ws = useRowStore()
@@ -92,6 +95,8 @@ export function TaskRow({
   const open = () => {
     if (onScreen) ws?.openTask(task.id)
     else if (!unavailable) select(host.id, { kind: 'task', taskId: task.id })
+    else return
+    onOpen?.()
   }
   const [renaming, setRenaming] = useState(false)
   const [hover, setHover] = useState(false)

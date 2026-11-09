@@ -2,7 +2,7 @@ import { createElement, type ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { Task } from '@ramu/shared/types'
-import { ArchivedThreads } from '../src/settings/ArchivedThreads'
+import { ArchivedThreads } from '../src/sidebar/ArchivedThreads'
 
 const state = vi.hoisted(() => ({ tasks: [] as Task[], viewer: false }))
 vi.mock('../src/composer/useHostWriteAccess', () => ({
@@ -16,9 +16,6 @@ vi.mock('../src/workspace/HostProvider', () => ({ useHost: () => ({ invoke: vi.f
 vi.mock('../src/ipc', () => ({ invoke: vi.fn() }))
 vi.mock('../src/Menu', () => ({ Dialog: () => null }))
 vi.mock('../src/workspace/TaskPane', () => ({ errorText: String }))
-vi.mock('@/components/settings-row', () => ({
-  SettingsGroupTitle: ({ children }: ComponentProps<'h4'>) => createElement('h4', {}, children),
-}))
 vi.mock('@/components/desktop-button', () => ({
   Button: ({ variant: _variant, ...props }: ComponentProps<'button'> & { variant?: string }) =>
     createElement('button', props),

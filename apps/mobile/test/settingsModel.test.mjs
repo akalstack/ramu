@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  SETTINGS_GROUPS,
   SETTINGS_ROWS,
   SETTINGS_SECTIONS,
   allowedOptions,
@@ -157,6 +158,14 @@ test('search finds host and phone settings by title, words and section', () => {
   assert.deepEqual(hit('zzzz'), [])
 })
 
+test('search opens test devices by the words people use, and archived threads as the Threads filter', () => {
+  assert.equal(searchSettings('simulator', null)[0].section, 'devices')
+  assert.equal(searchSettings('emulator', null)[0].section, 'devices')
+  assert.ok(searchSettings('fallback', null).every((hit) => hit.section === 'models'))
+  assert.deepEqual(searchSettings('archived', null)[0], { view: 'archived', title: 'Archived threads' })
+  assert.equal(sectionById('devices').scope, 'host')
+})
+
 test('search leaves out rows the host does not have, but keeps phone settings', () => {
   const settings = [setting('autoPull', true)]
   const titles = searchSettings('a', settings).map((entry) => entry.title)
@@ -281,23 +290,18 @@ test('the phone menu has every desktop section a phone can use, arranged for a p
       .filter((id) => !shown.includes(id)),
     [],
   )
-  for (const hidden of ['editor', 'shortcuts', 'environment']) assert.equal(sectionById(hidden), undefined)
-  // This phone first, then a host's agents before its workspace, and history and About last.
+  for (const hidden of ['editor', 'shortcuts', 'environment', 'archived']) assert.equal(sectionById(hidden), undefined)
+  // This phone first, then the desktop's four groups in the desktop's order.
   const byGroup = (group) => SETTINGS_SECTIONS.filter((section) => section.group === group).map((section) => section.id)
-  assert.deepEqual(byGroup('phone'), ['appearance', 'notifications', 'remote', 'account'])
-  assert.deepEqual(byGroup('agents'), [
-    'chats',
-    'access',
-    'models',
-    'providers',
-    'workflows',
-    'memory',
-    'agent-setup',
-    'plugins',
-    'identities',
-  ])
-  assert.deepEqual(byGroup('workspace'), ['git', 'deploy', 'browser', 'computer', 'system'])
-  assert.deepEqual(byGroup('more'), ['archived', 'about'])
+  assert.deepEqual(
+    SETTINGS_GROUPS.map((group) => group.id),
+    ['phone', 'Personal', 'Agents', 'Agent tools', 'Access & host'],
+  )
+  assert.deepEqual(byGroup('phone'), ['appearance', 'notifications', 'remote', 'account', 'about'])
+  assert.deepEqual(byGroup('Personal'), ['chats'])
+  assert.deepEqual(byGroup('Agents'), ['providers', 'models', 'agent-setup', 'plugins', 'workflows', 'memory'])
+  assert.deepEqual(byGroup('Agent tools'), ['browser', 'computer', 'devices', 'git', 'deploy'])
+  assert.deepEqual(byGroup('Access & host'), ['access', 'identities', 'system'])
   // Host pages keep the desktop's names, so a section reads the same on both.
   for (const section of SETTINGS_SECTIONS.filter((entry) => entry.scope === 'host'))
     assert.equal(section.label, SETTINGS_MENU.find((entry) => entry.id === section.id).label)

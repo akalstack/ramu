@@ -1,6 +1,6 @@
 import { Button } from '@/components/desktop-button'
 import { useIdentityView } from './identityView'
-import { CheckCheck, FolderClosed, FolderPlus, MessageCircle, Pin, Plus } from 'lucide-react'
+import { Archive, CheckCheck, FolderClosed, FolderPlus, MessageCircle, Pin, Plus } from 'lucide-react'
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { NO_PROJECT } from '@ramu/shared/types'
@@ -17,7 +17,8 @@ import { ProjectGroup } from './projects/ProjectGroup'
 import { SectionHead } from './projects/SectionHead'
 import { TaskRow } from './projects/TaskRow'
 import { BulkThreadActionsContext, ThreadSelectionBar, useBulkThreadActions } from './projects/ThreadSelectionBar'
-import { sidebarThreads, threadProjectName } from './projects/threadLists'
+import { SidebarDisclosureButton } from '@/components/sidebar-disclosure-button'
+import { archivedThreads, openArchivedThreads, sidebarThreads, threadProjectName } from './projects/threadLists'
 import { useSidebarExpansion } from './projects/sidebarExpansion'
 import { EMBEDDED_THREAD_LIMIT, ThreadPreviewList, useThreadPreview } from './projects/ThreadPreviewList'
 
@@ -26,6 +27,7 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
   const ws = useWorkspace()
   const addProject = useAddProject()
   const { active, done } = sidebarThreads(ws.tasks)
+  const archivedCount = archivedThreads(ws.tasks).length
   const host = useHost()
   const identityView = useIdentityView(host.id)
   const tree = useSidebarExpansion(host.id)
@@ -192,6 +194,20 @@ export function ProjectsPanel({ embedded = false }: { embedded?: boolean }) {
               ))}
             </Collapse>
           </>
+        )}
+        {/* Archived threads are a list, not a setting: their view opens from the foot of the thread lists. */}
+        {!embedded && archivedCount > 0 && (
+          <div className="flex min-h-8 items-center px-2 pb-1 pt-3 text-caption font-medium text-muted-foreground">
+            <SidebarDisclosureButton
+              className="-ml-1 h-6 w-auto min-w-0 shrink gap-1.5 px-1 py-0 text-[length:var(--font-caption)]"
+              aria-haspopup="dialog"
+              onClick={openArchivedThreads}
+            >
+              <Archive size={13} className="flex-none" aria-hidden="true" />
+              <span className="truncate">{t('Archived')}</span>
+              <span className="tabular-nums font-normal">{archivedCount}</span>
+            </SidebarDisclosureButton>
+          </div>
         )}
       </div>
     </BulkThreadActionsContext.Provider>
