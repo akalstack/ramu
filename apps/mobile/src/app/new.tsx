@@ -673,23 +673,32 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
         {/* Nothing here scrolls: the hero simply centers in the space above the composer. */}
         {routing ? (
           <View
-            style={{ flex: 1, justifyContent: 'flex-end', alignItems: 'flex-end', padding: space.l, gap: space.s }}
+            style={{
+              flex: 1,
+              justifyContent: 'flex-end',
+              alignItems: 'flex-end',
+              paddingHorizontal: space.l,
+              paddingBottom: space.m,
+              gap: space.s,
+            }}
             accessibilityLiveRegion="polite"
           >
+            {/* Drawn like the thread's own message bubble, so opening the thread does not visibly swap it. */}
             {routing.text ? (
               <View
                 style={{
-                  maxWidth: '85%',
+                  maxWidth: '86%',
                   backgroundColor: c.bubble,
-                  borderRadius: radius.l,
-                  paddingHorizontal: space.m,
-                  paddingVertical: space.s,
+                  borderRadius: radius.l - 2,
+                  borderBottomRightRadius: radius.xs,
+                  paddingHorizontal: space.m + 2,
+                  paddingVertical: space.s + 2,
                 }}
               >
                 <T numberOfLines={8}>{routing.text}</T>
               </View>
             ) : null}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingRight: space.xs }}>
               <ActivityIndicator size="small" color={c.muted} />
               <T tone="muted" size={font.caption}>
                 {routing.status}

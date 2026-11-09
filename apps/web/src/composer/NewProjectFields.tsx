@@ -28,7 +28,7 @@ export function NewProjectFields({
 }) {
   const named = !!value.name.trim()
   return (
-    <div className="flex flex-wrap items-center gap-2 px-2" role="group" aria-label={t('New project')}>
+    <div className="flex flex-wrap items-center gap-2 px-3" role="group" aria-label={t('New project')}>
       {designs.length > 0 && onFromDesign && (
         <Combobox
           label={t('Start from a design')}

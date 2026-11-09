@@ -7,6 +7,7 @@ import { clipText } from '@ramu/shared/text'
 import { useModelSets } from './models/ModelSets'
 import {
   ChevronRight,
+  CircleAlert,
   CircleDot,
   FolderClosed,
   GitBranch,
@@ -192,9 +193,9 @@ function NewWorktreeSummary({
   const plan = previewTitle === title ? preview.data : undefined
   const bases = [...new Set(plan?.map((entry) => entry.baseRef))]
   return (
-    <details className="worktree-preview group mb-2 px-2 text-caption text-muted-foreground">
+    <details className="worktree-preview group px-3 text-caption text-muted-foreground">
       <summary
-        className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 py-1 [&::-webkit-details-marker]:hidden"
+        className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 rounded-(--radius-s) py-0.5 hover:text-foreground [&::-webkit-details-marker]:hidden"
         title={t('Worktrees separate files and the Git index. They do not sandbox processes, ports or credentials.')}
       >
         {creating ? <Spinner className="size-3.5" aria-hidden="true" /> : <GitBranch size={13} aria-hidden="true" />}
@@ -208,7 +209,7 @@ function NewWorktreeSummary({
           <ChevronRight size={12} className="group-open:rotate-90" aria-hidden="true" />
         </span>
       </summary>
-      <div className="worktree-preview-details space-y-2 py-2 pl-5">
+      <div className="worktree-preview-details space-y-2 pt-2 pb-1 pl-5">
         {children}
         {!title ? (
           t('Enter a message to preview branch names and paths.')
@@ -777,65 +778,76 @@ export function NewThread({
   const start = (
     <div className="start-view flex-1 flex flex-col min-h-0 min-w-0">
       <div className="start-hero [&_h1]:m-0 [&_h1]:text-hero [&_h1]:text-center [&_h1]:leading-[1.3] [&_h1]:font-semibold [&_h1]:tracking-[-0.022em] flex-1 flex flex-col items-center justify-center gap-2.5 p-6">
-        <AnimatedMark
-          className="start-mark [&:is(img)]:w-[56px] [&:is(img)]:h-[56px] [&:is(img)]:bg-transparent [&:is(img)]:[border-radius:0] [&:is(img)]:mb-1.5 w-[54px] h-[54px] rounded-(--radius-l) flex items-center justify-center text-muted-foreground bg-hover mb-2"
-          size={56}
-        />
-        <h1>
-          {general ? (
-            t('What should we work on?')
-          ) : (
-            <>
-              {t('What should we work on in')} <span className="start-project">{project?.name ?? t('a project')}</span>?
-            </>
-          )}
-        </h1>
-        {ws.projects.length === 0 && (
-          <div className="flex flex-col items-center gap-1.5">
-            <Button
-              variant="secondary"
-              size="sm"
-              className="bg-fill hover:bg-fill-hover"
-              disabled={addProject.busy}
-              onClick={() => void addProject.add()}
-            >
-              <FolderClosed size={14} />
-              {t('Open a folder')}
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="bg-fill hover:bg-fill-hover"
-              aria-pressed={startingNew}
-              onClick={() => setStartingNew((on) => !on)}
-            >
-              <Sparkles size={14} />
-              {t('Start something new')}
-            </Button>
-            <p className="muted text-muted-foreground small text-caption m-0">{t('or drop a folder here')}</p>
-          </div>
-        )}
-        {repos.length > 0 && (
-          <p className="muted text-muted-foreground start-repos m-0 text-control">
-            {repos.map((r) => r.name).join(' · ')}
-          </p>
+        {/* While a sent message is routed, it stands in for the thread to come; the welcome would only compete with it. */}
+        {!pending && (
+          <>
+            <AnimatedMark
+              className="start-mark [&:is(img)]:w-[56px] [&:is(img)]:h-[56px] [&:is(img)]:bg-transparent [&:is(img)]:[border-radius:0] [&:is(img)]:mb-1.5 w-[54px] h-[54px] rounded-(--radius-l) flex items-center justify-center text-muted-foreground bg-hover mb-2"
+              size={56}
+            />
+            <h1>
+              {general ? (
+                t('What should we work on?')
+              ) : (
+                <>
+                  {t('What should we work on in')}{' '}
+                  <span className="start-project">{project?.name ?? t('a project')}</span>?
+                </>
+              )}
+            </h1>
+            {ws.projects.length === 0 && (
+              <div className="flex flex-col items-center gap-1.5">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="bg-fill hover:bg-fill-hover"
+                  disabled={addProject.busy}
+                  onClick={() => void addProject.add()}
+                >
+                  <FolderClosed size={14} />
+                  {t('Open a folder')}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="bg-fill hover:bg-fill-hover"
+                  aria-pressed={startingNew}
+                  onClick={() => setStartingNew((on) => !on)}
+                >
+                  <Sparkles size={14} />
+                  {t('Start something new')}
+                </Button>
+                <p className="muted text-muted-foreground small text-caption m-0">{t('or drop a folder here')}</p>
+              </div>
+            )}
+            {repos.length > 0 && (
+              <p className="muted text-muted-foreground start-repos m-0 text-control">
+                {repos.map((r) => r.name).join(' · ')}
+              </p>
+            )}
+          </>
         )}
       </div>
-      <div className="start-dock [&_.composer]:relative [&_.composer]:z-1 flex-none w-full m-[0_auto] p-[0_20px_22px] max-w-[780px] pb-3.5">
+      <div className="start-dock [&_.composer]:relative [&_.composer]:z-1 flex-none flex flex-col gap-2 w-full m-[0_auto] p-[0_20px_22px] max-w-[780px] pb-3.5">
         {!general && workspaceDraft.problem && (
-          <p className="m-0 px-2 text-caption text-muted-foreground" role="status">
-            {workspaceDraft.confirmed
-              ? t('Workspace choice is kept for this session but could not be saved.')
-              : t('Choose where to work before starting. The saved workspace choice could not be restored.')}
+          <p
+            className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 px-3 text-caption leading-[1.45] text-muted-foreground"
+            role="status"
+          >
+            <span>
+              {workspaceDraft.confirmed
+                ? t('Workspace choice is kept for this session but could not be saved.')
+                : t('Choose where to work before starting. The saved workspace choice could not be restored.')}
+            </span>
             {workspaceDraft.confirmed && (
-              <Button variant="ghost" size="xs" onClick={workspaceDraft.retry}>
+              <Button variant="ghost" size="xs" className="-my-1" onClick={workspaceDraft.retry}>
                 {t('Retry')}
               </Button>
             )}
           </p>
         )}
         {workspaceId && !existingWorkspace && (
-          <p className="m-0 px-2 text-caption text-muted-foreground" role="status">
+          <p className="m-0 px-3 text-caption leading-[1.45] text-muted-foreground" role="status">
             {t('Saved workspace is unavailable. Choose another workspace.')}
           </p>
         )}
@@ -846,7 +858,7 @@ export function NewThread({
             resolution.reason ||
             options.data.configSource ||
             options.data.configError) && (
-            <p className="m-0 px-2 text-caption text-muted-foreground" role="status">
+            <p className="m-0 px-3 text-caption leading-[1.45] text-muted-foreground" role="status">
               {options.data
                 ? [
                     options.data.defaultCheckoutMode === 'worktree' || resolution.reason
@@ -897,13 +909,13 @@ export function NewThread({
           />
         )}
         {pending && (
-          <div className="flex flex-col items-end gap-1.5 px-2" role="status" aria-live="polite">
+          <div className="flex flex-col items-end gap-2 px-1 pb-1" role="status" aria-live="polite">
             {pending.text && (
-              <div className="max-w-[80%] whitespace-pre-wrap rounded-(--radius-l) bg-(--bubble) px-3.5 py-2 text-body line-clamp-6">
+              <div className="line-clamp-6 max-w-[78%] whitespace-pre-wrap break-words rounded-[calc(var(--radius-l)_-_2px)] rounded-br-(--radius-xs) bg-(--bubble) px-3.5 py-2.5 text-chat leading-[1.55] text-(--text-body)">
                 {pending.text}
               </div>
             )}
-            <span className="flex items-center gap-2 text-caption text-muted-foreground">
+            <span className="flex items-center gap-2 px-2 text-caption text-muted-foreground">
               <LoadingDots />
               {pending.status}
             </span>
@@ -1067,13 +1079,13 @@ export function NewThread({
           />
         </ComposerStack>
         {routeNote && (
-          <p className="m-0 px-2 text-caption text-muted-foreground" role="status">
+          <p className="m-0 px-3 text-caption leading-[1.45] text-muted-foreground" role="status">
             {routeNote}
           </p>
         )}
         {choices && (
-          <div className="flex flex-col gap-1 px-2 py-1.5" role="group" aria-label={t('Choose a project')}>
-            <p className="m-0 text-caption text-muted-foreground">
+          <div className="flex flex-col gap-2 px-3" role="group" aria-label={t('Choose a project')}>
+            <p className="m-0 text-caption leading-[1.45] text-muted-foreground">
               {choices.length === 1 || choices.some((c) => c.reason)
                 ? t('More than one project could fit. Choose where to start.')
                 : suggestNew
@@ -1138,7 +1150,12 @@ export function NewThread({
             </div>
           </div>
         )}
-        {error && <div className="error text-bad start-error p-[6px_8px_0] text-control">{error}</div>}
+        {error && (
+          <p role="alert" className="m-0 flex items-start gap-1.5 px-3 text-caption leading-[1.45] text-bad">
+            <CircleAlert size={14} className="mt-px flex-none" aria-hidden="true" />
+            <span className="min-w-0 break-words">{error}</span>
+          </p>
+        )}
         {renamingWorkspace?.host === host.id &&
           renamingWorkspace.project === projectId &&
           renamingWorkspace.openedOn === activeHost && (
