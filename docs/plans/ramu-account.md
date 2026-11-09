@@ -19,7 +19,7 @@ A Ramu account is also where cloud Ramu hosts will attach later, so it is design
 
 ### 1. Account service
 
-`apps/account`, a new package: [Better Auth](https://www.better-auth.com) in a small [Hono](https://hono.dev) app, served at `api.getramu.dev`.
+`apps/account`, a new package: [Better Auth](https://www.better-auth.com) in a small [Hono](https://hono.dev) app, served at `account.akalstack.com`, under the company's domain so the same account can later sign in to other Akalstack apps. Google's consent screen, the GitHub app and the sign-in page all name Akalstack, with the privacy notice and terms on akalstack.com, which Google's brand verification checks. Passkeys use `akalstack.com` as their relying party, so they keep working if the service later splits across subdomains. In Ramu the button still reads **Sign in**, and Settings names it an Akalstack account.
 
 - **Sign-in:** **Continue with GitHub**, **Continue with Google**, then a passkey. No passwords to store or reset. Every client signs in with Better Auth's device authorization flow: the app shows a short code and opens the sign-in page in the system browser, the person signs in and confirms the code, and the client continues on its own. No embedded web view (Google refuses them), no callback port, no app URL scheme, so it works the same on the desktop, on a phone, and from `ramu account login` over SSH.
 - **What the account holds:** name, email and avatar from the identity provider; linked sign-ins; sessions per device, each revocable; backup slots (below). Identity providers' access tokens are not kept after sign-in.
@@ -31,7 +31,7 @@ A Ramu account is also where cloud Ramu hosts will attach later, so it is design
 - Schema changes are SQL migration files in `apps/account/migrations`, run by `pnpm --filter @ramu/account migrate` against `DATABASE_URL`. Better Auth's tables are generated into the same folder, so one tool owns the schema.
 - Moving providers is `pg_dump` from the old database, `pg_restore` into the new one, and a new `DATABASE_URL`. A test runs the migrations and the backup round trip against a throwaway Postgres container in CI, which proves the service needs nothing beyond Postgres.
 
-Neon is the first database (free plan; the first request after idle can be slower while it wakes, which is acceptable for sign-in and backup). The app likewise has no host-specific code: it runs first on Cloudflare Workers (free plan, with `nodejs_compat` for `pg` and Hyperdrive for pooled connections to the database), where getramu.dev's DNS also lives, and the same entry point runs under Node on any server. Cloudflare-only features (KV, D1, Durable Objects) stay out of it.
+Neon is the first database (free plan; the first request after idle can be slower while it wakes, which is acceptable for sign-in and backup). The app likewise has no host-specific code: it runs first on Cloudflare Workers (free plan, with `nodejs_compat` for `pg` and Hyperdrive for pooled connections to the database), where akalstack.com's DNS also lives, and the same entry point runs under Node on any server. Cloudflare-only features (KV, D1, Durable Objects) stay out of it.
 
 ### 2. Encrypted settings backup
 
@@ -57,7 +57,7 @@ Neon is the first database (free plan; the first request after idle can be slowe
 
 ### 3. Docs and trust
 
-[Security](../../SECURITY.md) gets an account section: what the service stores, that it cannot read backups, that an account grants no host access, and what a compromised service could and could not do (withhold or delete backups, see sign-in metadata and backup sizes and times; not read settings or pair a device). The privacy notice on getramu.dev lists the same. [Configuration](../guide/configuration.md) documents backup and restore.
+[Security](../../SECURITY.md) gets an account section: what the service stores, that it cannot read backups, that an account grants no host access, and what a compromised service could and could not do (withhold or delete backups, see sign-in metadata and backup sizes and times; not read settings or pair a device). The privacy notice on akalstack.com lists the same, and getramu.dev links to it. [Configuration](../guide/configuration.md) documents backup and restore.
 
 ## Existing services to extend
 
