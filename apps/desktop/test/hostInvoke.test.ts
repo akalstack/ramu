@@ -98,6 +98,11 @@ describe('isHostInvokeAllowed', () => {
       'projects.list',
       // Import reads a share from another connected host.
       'artifacts.openShare',
+      // A project's deploy sheet and CI setup run on the host that owns the project.
+      'deploy.project',
+      'deploy.production',
+      'ci.setup',
+      'abilities.teammateModels',
     ])
       expect(isHostInvokeAllowed(method)).toBe(true)
     for (const method of [
@@ -183,6 +188,24 @@ describe('isSettingsActionAllowed', () => {
     ])
       expect(isSettingsActionAllowed(operation)).toBe(true)
     for (const operation of ['forge.createPullRequest', 'computer.grant', 'computer.input'])
+      expect(isSettingsActionAllowed(operation)).toBe(false)
+  })
+  it('lets Settings → Deploy and Models manage deploy accounts and abilities on the chosen host', () => {
+    for (const operation of [
+      'deploy.accounts',
+      'deploy.signIn',
+      'deploy.signInStatus',
+      'deploy.signInMatch',
+      'deploy.cancelSignIn',
+      'deploy.salesforceSignIn',
+      'deploy.saveToken',
+      'deploy.disconnect',
+      'abilities.check',
+      'abilities.checks',
+      'abilities.mcpTools',
+    ])
+      expect(isSettingsActionAllowed(operation)).toBe(true)
+    for (const operation of ['deploy.production', 'deploy.rollback', 'abilities.again'])
       expect(isSettingsActionAllowed(operation)).toBe(false)
   })
   it('keeps thread, file and unlisted project actions out', () => {

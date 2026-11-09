@@ -52,3 +52,20 @@ it('invalidates loads when access/readiness changes without allowing stale viewe
   await expect(staleRoute('settings.app.snapshot')).rejects.toThrow('connected host')
   expect(state.invoke).not.toHaveBeenCalled()
 })
+it('reads ability checks across all hosts from the primary host, but still asks for one host before an action', async () => {
+  const all = {
+    primaryId: 'a',
+    target: 'all',
+    ready: true,
+    targets: [
+      { id: 'a', viewOnly: false },
+      { id: 'b', viewOnly: false },
+    ],
+  } as SettingsScope
+  const route = useScopedInvoke(all)
+  await route('abilities.checks')
+  await route('abilities.mcpTools')
+  expect(state.invoke).toHaveBeenCalledWith('computers.settings.invoke', 'a', 'abilities.checks', [])
+  expect(state.invoke).toHaveBeenCalledWith('computers.settings.invoke', 'a', 'abilities.mcpTools', [])
+  await expect(route('abilities.check', 'claude')).rejects.toThrow('Choose one host')
+})

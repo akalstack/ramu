@@ -61,8 +61,15 @@ interface Target {
   needsPermission?: boolean
 }
 
-/** These pages configure one machine (binaries, login, service, network), so "all environments" has no meaning. */
-const SINGLE_ENVIRONMENT_SECTIONS: readonly string[] = ['providers', 'environment', 'agent-setup', 'system', 'remote']
+/** These pages configure one machine (binaries, login, service, network, its deploy accounts), so "all environments" has no meaning. */
+const SINGLE_ENVIRONMENT_SECTIONS: readonly string[] = [
+  'providers',
+  'environment',
+  'agent-setup',
+  'system',
+  'remote',
+  'deploy',
+]
 /** Remote access and archived history describe the current environment; it is not selectable. */
 const CURRENT_ENVIRONMENT_SECTIONS: readonly string[] = ['remote', 'archived']
 export const isSingleEnvironmentSection = (section: string) => SINGLE_ENVIRONMENT_SECTIONS.includes(section)
@@ -392,7 +399,9 @@ export function useScopedInvoke(scope: SettingsScope | null): typeof invoke {
         throw new Error(t('The selected host changed. Reopen this action before continuing.'))
       if (!scope) return forward(method, ...args)
       if (!scope.ready || scope.stale) throw new Error(t('Select a connected host.'))
-      const readOnly = /\.(get|list|status|history|catalog|connections)$/.test(method) || method === 'advisor.claude'
+      const readOnly =
+        /\.(get|list|status|history|catalog|connections)$/.test(method) ||
+        ['advisor.claude', 'abilities.checks', 'abilities.mcpTools'].includes(method)
       if (scope.target === 'all' && scope.targets.length > 1 && !readOnly)
         throw new Error(t('Choose one host in the settings header for this action.'))
       const id = scope.primaryId

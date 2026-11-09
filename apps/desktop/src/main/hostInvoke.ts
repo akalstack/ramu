@@ -40,6 +40,9 @@ const DOMAINS = new Set([
   'attachments',
   'advisor',
   'threads',
+  'deploy',
+  'ci',
+  'abilities',
 ])
 /** Methods inside an allowed domain that still open a native dialog or menu on this machine. */
 const NATIVE = new Set([
@@ -77,7 +80,7 @@ export const isHostInvokeAllowed = (method: unknown): method is string =>
 /** Operations the Settings window may run on a chosen host through `computers.settings.invoke`. */
 export const isSettingsActionAllowed = (operation: unknown): operation is string =>
   typeof operation === 'string' &&
-  /^(mcp\.|providers\.|updates\.|background\.|network\.|memory\.|learning\.|skills\.|rules\.|summaries\.|settings\.permissions\.(clear|list|remove)$|codex\.hook\.|advisor\.claude$|projects\.(list|setup)$|forge\.(connections|gitlab|saveGitlab|removeGitlab|bitbucket|saveBitbucket|removeBitbucket|azure|saveAzure|removeAzure|saveConnection|checkConnection|setConnectionEnabled|removeConnection|selectAccount)$|computer\.(status|setEnabled|setGlobalPointer|installApps|lockedUse|lockedUseEnable|lockedUseDisable)$|diagnostics\.(export|clear)$)/.test(
+  /^(mcp\.|providers\.|updates\.|background\.|network\.|memory\.|learning\.|skills\.|rules\.|summaries\.|settings\.permissions\.(clear|list|remove)$|codex\.hook\.|advisor\.claude$|projects\.(list|setup)$|forge\.(connections|gitlab|saveGitlab|removeGitlab|bitbucket|saveBitbucket|removeBitbucket|azure|saveAzure|removeAzure|saveConnection|checkConnection|setConnectionEnabled|removeConnection|selectAccount)$|computer\.(status|setEnabled|setGlobalPointer|installApps|lockedUse|lockedUseEnable|lockedUseDisable)$|deploy\.(accounts|signIn|signInStatus|signInMatch|cancelSignIn|salesforceSignIn|saveToken|disconnect)$|abilities\.(check|checks|mcpTools)$|diagnostics\.(export|clear)$)/.test(
     operation,
   )
 
