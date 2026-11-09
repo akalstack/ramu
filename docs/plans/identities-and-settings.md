@@ -15,14 +15,16 @@ Profiles switched by hand would copy every setting and add one more thing to rem
 An **identity** names the accounts that belong together, and nothing else:
 
 - Git author name and email, and optionally a signing key reference.
-- One login per provider (references to the logins in **Settings → Providers**).
-- A Git hosting connection per origin (GitHub, GitHub Enterprise, GitLab, Bitbucket, Azure DevOps).
-- Hosting accounts for deploys, databases and store releases.
+- Provider logins (references to the logins in **Settings → Providers**).
+- Git hosting connections per origin (GitHub, GitHub Enterprise, GitLab, Bitbucket, Azure DevOps).
+- Hosting accounts for deploys, databases and store releases, and data services such as Grafana or Amplitude.
+- Media service keys (**Settings → Providers → Media**).
 - A browser profile (**Default**, or one made with **Import…**), so an agent browsing in a work project opens the work sign-ins.
-- An account per Shared MCP server and plugin credential that has more than one ([One server, an account per identity](#one-server-an-account-per-identity)).
-- A memory level of its own ([Memory](#memory-three-levels)).
+- Shared MCP accounts and plugin credentials ([One server, an account per identity](#one-server-an-account-per-identity)).
 
-Theme, layout, keybindings, models, abilities, rules and every other setting stay host-wide. Shared MCP servers and skills are available under every identity unless their **Applies to** limits one to an identity. An identity holds only references to accounts already connected on the host; no credential is copied or moved.
+It also gets a level of its own for memory and other knowledge ([Knowledge: three levels](#knowledge-three-levels)). Theme, layout, keybindings, models, abilities and every other setting stay host-wide. An identity holds only references to accounts already connected on the host; no credential is copied or moved.
+
+**Shared unless split.** Every account above is for all identities until it is put in one. An identity uses its own account of a kind when it has one, otherwise one that is for all identities, and never one put in another identity. A person with one Claude login and two identities uses it in both; adding a personal Claude login and putting it in Personal splits Claude alone, while GitHub, Vercel and every Shared MCP server stay shared. Connecting a second account of a kind asks **Which identities is it for?**, with **All identities** first.
 
 **Inferred, not switched.** Each identity has match rules: folders (`~/work/**`), and repository remotes by origin and owner (`github.com/acme/*`). Ramu picks a project's identity from them when the project is added; a project that matches nothing uses the default identity. The first time a project has a remote whose owner matches a connected work account, Ramu offers to create the rule ("Projects from github.com/acme use Work?"). A project's menu and thread header show a small identity chip; choosing another identity there pins it for that project.
 
@@ -30,16 +32,16 @@ Theme, layout, keybindings, models, abilities, rules and every other setting sta
 
 **Mismatch guardrail.** Before a commit, push, pull request, merge, deploy or store release, Ramu compares the account it is about to use with the project's identity. If they differ (a thread whose login was changed by hand, an account removed, a repository moved to another owner), the approval card or button names both and offers **Use Work** or **Continue as Personal**. Agents see the same refusal through their tools and cannot pick another identity. A schedule run has nobody to ask, so a mismatch stops the run and puts it in the Inbox with both accounts named.
 
-**No borrowing between identities.** Provider fallback and abilities pick only from the logins in the project's identity. A work thread at its limit moves to another Work login or stops with the existing message; it never moves to a personal subscription. A provider the identity has no login for offers **Connect ‹provider› for Work** instead of using another identity's.
+**No borrowing between identities.** Provider fallback and abilities pick only from the project's identity's own logins and keys and those for all identities. A work thread at its limit moves to another Work or shared login, or stops with the existing message; it never moves to a login put in Personal. A provider whose only logins belong to other identities offers **Connect ‹provider› for Work** instead.
 
 #### One server, an account per identity
 
-A Shared MCP connection already keeps the server's definition apart from its credentials. It gains one account per identity: **Linear** is set up once, with its URL or command, tools, grants and approvals, and holds a work sign-in for Work and a personal one for Personal. When a thread calls a tool, Ramu picks the account from the project's identity; the agent sees one `linear` server and never chooses the account.
+A Shared MCP connection already keeps the server's definition apart from its credentials. Its first account is for all identities, so a server such as a docs server, or one with no sign-in, works everywhere as it does today. Adding a second account splits it: **Linear** stays set up once, with its URL or command, tools, grants and approvals, and holds a work sign-in for Work and a personal one for Personal. When a thread calls a tool, Ramu picks the account from the project's identity; the agent sees one `linear` server and never chooses the account.
 
 - An HTTP server keeps OAuth tokens or header secrets per account; a stdio server runs one process per account, each with its own environment.
 - Each account's tool list is checked on its own, since a work workspace can offer tools a personal one does not; a tool missing for an account is not offered under that identity.
-- An identity with no account for a server does not see its tools in its projects, and the server's row offers **Sign in to Linear for Work**. It never falls back to another identity's account.
-- With one identity a connection has one account and looks as it does today. **Applies to** still limits a whole server to one identity, for a client's internal server.
+- Once a server is split, an identity with neither its own account nor one for all identities does not see the server's tools in its projects, and the server's row offers **Sign in to Linear for ‹identity›**. It never falls back to another identity's account.
+- With one account a connection looks as it does today. **Applies to** still limits a whole server to one identity, for a client's internal server.
 - A plugin's credential slot holds a value per identity the same way ([Plugins](plugins.md)).
 
 **Everything in a project follows it.** Anything that runs inside a project uses that project's identity; anything outside a project uses the default identity:
@@ -55,21 +57,29 @@ Inbox, notifications and usage stay host-wide with the chip on each item; usage 
 
 **Projects stay one list.** Projects belong to the host, and the identity is a property of each project: matched by a rule or pinned from its menu, stored on the host. The sidebar shows every project with its chip; nothing is hidden behind a switch, and moving a project to another identity changes only that field.
 
-**One identity is no change.** With a single identity nothing new appears. **Settings → Identities** shows up once a second login, forge connection or hosting account exists, with **Add identity** prefilled from it.
+**One identity is no change.** With a single identity nothing new appears. **Settings → Identities** shows up once a second account of any kind above exists, with **Add identity** prefilled from it.
 
 **More than two works the same way.** Work and Personal are the case to design for; further identities are more entries in the same list, with no extra screens. Each has a name and a color for its chip. **Add identity** starts from the accounts not yet in one, and **Remove** asks which identity its projects move to. One identity is the default for projects no rule matches. When two rules match, the more specific one wins (a remote owner over a folder, a deeper folder over a shallower one), and the identity's rules list shows which projects each rule catches.
 
 **Each host has its own.** Identities are host settings that reference that host's accounts, and a project's identity is resolved and applied on the host that holds it, memory scope included. A person who keeps work on one machine and personal projects on another needs no identities at all.
 
-#### Memory: three levels
+#### Knowledge: three levels
 
-Memory today has project notes and global notes. Identities add one level between them, so company context stays with the company while preferences about the person follow them everywhere:
+What agents know and are told follows one rule: **Everywhere** by default, narrowed to an identity or a project only when it is about that employer, client or repository. Identities add the middle level; it appears only once a second identity exists, and until then everything works as it does today.
 
-- **Project:** seen in that project only, as today.
-- **Identity:** seen in every project under that identity. Facts about an employer or client (`reference` notes, company conventions) default here.
-- **Everywhere:** today's global notes, seen under every identity. Preferences about the person (`user` and `feedback` notes) default here.
+- **Project:** that project only, as today.
+- **Identity:** every project under that identity, such as "Acme's tickets are in Linear" or "Work requires signed commits".
+- **Everywhere:** every project under every identity, such as "prefer pnpm" or "answer briefly".
 
-The identity level appears only once a second identity exists; until then memory works as it does today. A note's menu offers **Move to Everywhere**, **Move to ‹identity›** and **Move to this project**, as skills move between user and project scope. The agent is told the three levels and picks one when it saves; a note it saves in a project stays there unless it says otherwise.
+It applies to:
+
+- **Memory:** `user` and `feedback` notes default to Everywhere; `reference` notes and company conventions saved in a project default to its identity. A note's menu offers **Move to Everywhere**, **Move to ‹identity›** and **Move to this project**. The agent is told the three levels and picks one when it saves.
+- **Learned skills:** a skill learning proposes from a work thread defaults to Work, since it is built from that company's code and habits; one about the person's own way of working can be moved to Everywhere. The review shows the level before **Apply**.
+- **Past conversations:** `session_search` with scope all searches the projects of the thread's identity, not every project on the host, so a work thread never cites a personal one.
+- **Rules:** a host-wide rule can be limited to an identity, so "sign every commit" reaches only Work projects. Ramu writes such a rule into each of those projects' rule files rather than the provider's home folder, which every identity shares.
+- **Shared MCP servers, installed and your own skills, and custom agents:** for every identity by default; **Applies to** gains the identity beside All projects and a single project.
+
+**What Ramu learned** and the learning reviews stay in one Inbox list, each item showing its level and chip.
 
 ### 2. Identities between hosts
 
@@ -100,7 +110,9 @@ Encrypted backups to a Ramu account or to your own GitHub are planned in [Ramu a
 - Provider logins and per-thread login choice: `apps/server/src/providers` and **Settings → Providers**.
 - Forge connections, per-origin selection and per-repository overrides: `apps/server/src/workspace/forgeAccounts.ts`.
 - Hosting accounts: `apps/server/src/workspace/deploy/accounts.ts`.
-- Memory scopes and Shared MCP and skill **Applies to** exceptions: `apps/server/src/memory`, `apps/server/src/mcp`.
+- Memory scopes, learned skills, past-conversation search and Shared MCP and skill **Applies to** exceptions: `apps/server/src/memory` (`memory.ts`, `learning.ts`, `sessionSearch.ts`), `apps/server/src/mcp`.
+- Rules and the files Ramu writes for them: `apps/server/src/rules`.
+- Media service keys: `apps/server/src/media/mediaServices.ts`.
 - Shared MCP connections, their service account and secret references, OAuth tokens and the call gateway: `packages/shared/src/mcp.ts`, `apps/server/src/mcp/service.ts`, `oauth.ts`, `gateway.ts`.
 - Provider fallback and abilities: `apps/server/src/agent/fallbackRouter.ts`, `apps/server/src/agent/abilities.ts`.
 - Schedules, webhooks and pull request watches: `apps/server/src/background/schedules.ts`, `webhookSetup.ts`, `pullRequestWatches.ts`.
@@ -114,6 +126,8 @@ Encrypted backups to a Ramu account or to your own GitHub are planned in [Ramu a
 - Representative task: a person with a work and a personal Claude login, a company GitHub organization and their own account adds `~/work/api` and `~/code/blog`. Without choosing anything, a thread in each uses the right login, commits with the right email, opens pull requests and deploys with the right account. Before, they had to switch the login per thread, set Git config per repository and check the forge selection.
 - A thread in a work project with its login changed by hand to the personal one is stopped at its next push with both accounts named; **Use Work** pushes as Work.
 - A company note saved at the Work level is not recalled in a personal project; a preference saved **Everywhere** ("prefer pnpm") is recalled in both.
+- With one Claude login, one GitHub account and two identities, both identities use them with nothing to assign; adding a personal Claude login for Personal changes Claude only.
+- A docs MCP server with one account works under every identity; a skill learned from a work thread is offered at the Work level; `session_search` across projects from a work thread returns no personal threads; a host-wide rule limited to Work does not reach a personal project.
 - A work thread at its Claude limit never moves to the personal Claude or Codex login; with no other Work login it stops and offers **Connect Codex for Work**.
 - A scheduled run in a work project whose forge account was removed stops before pushing and appears in the Inbox naming both accounts.
 - An agent browsing in a work project opens Work's browser profile.
@@ -122,7 +136,7 @@ Encrypted backups to a Ramu account or to your own GitHub are planned in [Ramu a
 - Removing an identity moves its projects to the identity chosen in **Remove**, and they act with its accounts from the next thread.
 - On a second Mac paired with the first, **Copy settings from…** brings over appearance, models and identities with one review, and lists the logins still to connect there; no credential appears on the second host.
 - An exported file contains no paths, tokens or account secrets, and importing it on a fresh host gives the same review.
-- Server tests for identity matching, environment applied to started processes, the guardrail on each action and on schedule runs, fallback limited to the identity's logins, the three memory levels, the cross-host email check, Shared MCP account selection per identity and the portable export; web tests for the chip, the mismatch card, the Continue warning and the copy review; strings translated to Indonesian.
+- Server tests for identity matching, environment applied to started processes, the guardrail on each action and on schedule runs, shared and split accounts, fallback limited to the identity's and shared logins, the three knowledge levels for memory, learned skills, past-conversation search and rules, the cross-host email check, Shared MCP account selection per identity and the portable export; web tests for the chip, the mismatch card, the Continue warning and the copy review; strings translated to Indonesian.
 
 ## Later options
 
