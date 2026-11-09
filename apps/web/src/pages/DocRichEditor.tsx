@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { InteractiveFile } from '@ramu/shared/interactive'
 import { monaco } from '../editor/monaco'
 import { mergeText } from '@ramu/shared/textMerge'
 import { MarkdownEditor, richTextMarkdown } from '../editor/MarkdownEditor'
@@ -23,6 +24,8 @@ export function keepWritten(written: { raw: string; rich: string }, edited: stri
   )
 }
 const LINE = '\u0000'
+/** A doc's images are PNG or JPEG, told apart by their first bytes. */
+const imageMime = (base64: string) => (base64.startsWith('/9j/') ? 'image/jpeg' : 'image/png')
 /** One line per block, its own line breaks held as a character no Markdown has. */
 const asBlocks = (text: string) =>
   text
@@ -39,14 +42,26 @@ const asBlocks = (text: string) =>
 export function DocRichEditor({
   artifactId,
   text,
+  files,
   onChange,
   onSave,
 }: {
   artifactId: string
   text: string
+  /** The version's files, which hold the doc's images by the relative path its Markdown shows them at. */
+  files: InteractiveFile[]
   onChange: (markdown: string) => void
   onSave: () => void
 }) {
+  const images = useMemo(
+    () =>
+      new Map(
+        files
+          .filter((file) => file.encoding === 'base64')
+          .map((file) => [file.path.replace(/^(\.\/)+/, ''), `data:${imageMime(file.content)};base64,${file.content}`]),
+      ),
+    [files],
+  )
   const [model, setModel] = useState<monaco.editor.ITextModel | null>(null)
   const initial = useRef(text)
   // The Markdown the person's changes are put back onto, and the rich editor's spelling of it.
@@ -97,9 +112,11 @@ export function DocRichEditor({
       <MarkdownEditor
         model={model}
         viewId={`artifact:${artifactId}`}
-        taskId=""
-        repoId=""
         path="document.md"
+        image={(local) => {
+          const url = images.get(local)
+          return url ? Promise.resolve(url) : Promise.reject(new Error(local))
+        }}
         onSave={onSave}
         onOpenLink={() => {}}
       />

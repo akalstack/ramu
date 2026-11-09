@@ -9,6 +9,7 @@ import { renderDesign } from './design'
 import { renderMotion } from './motion'
 import { INTERACTIVE_KIT_CSS } from './kit'
 import { renderSlides } from './slides'
+import { docImagePath, docImages } from './docImages'
 import { cleanSvg } from './svg'
 
 /** What a Doc, Diagram or deck becomes: the HTML the frame runs, the files its version keeps, and what its checks found. */
@@ -66,10 +67,28 @@ async function drawMermaid(source: string): Promise<string> {
 
 const reason = (error: unknown) => (error instanceof Error ? error.message : String(error)).trim()
 
-async function renderDoc(markdown: string): Promise<RenderedKind> {
+async function renderDoc(markdown: string, files: InteractiveFile[]): Promise<RenderedKind> {
   const problems: string[] = []
   // Raw HTML in the Markdown is shown as text, and unsafe link protocols are dropped, by micromark's defaults.
   let html = micromark(markdown, { extensions: [gfm()], htmlExtensions: [gfmHtml()] })
+  // The doc's pictures are kept with the version and drawn as data, since the frame loads nothing.
+  const { images, others } = docImages(files)
+  for (const path of others)
+    problems.push(`${path} is not a PNG or JPEG sent with encoding base64. A doc's files are its images.`)
+  const used = new Set<string>()
+  html = html.replace(/<img src="([^"]*)"/g, (match, src: string) => {
+    const path = docImagePath(decodeHtml(src))
+    if (path === null) return match
+    const image = images.get(path)
+    if (!image) {
+      problems.push(
+        `The doc shows ${path}, which is not among the images in files. Send it as a PNG or JPEG with encoding base64.`,
+      )
+      return match
+    }
+    used.add(path)
+    return `<img src="data:${image.mime};base64,${image.content}"`
+  })
   const blocks = [...html.matchAll(/<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>/g)]
   const drawn = await Promise.all(
     blocks.map(async (match, index) => {
@@ -108,7 +127,10 @@ async function renderDoc(markdown: string): Promise<RenderedKind> {
   html = html.replace(/<table>([\s\S]*?)<\/table>/g, '<div class="ramu-table"><table class="table">$1</table></div>')
   return {
     html: `<style>${INTERACTIVE_KIT_CSS}${DIAGRAM_CSS}${DOC_CSS}</style><article class="ramu-doc">${html}</article>`,
-    files: [{ path: ARTIFACT_SOURCE_FILES.doc, content: markdown }],
+    files: [
+      { path: ARTIFACT_SOURCE_FILES.doc, content: markdown },
+      ...[...used].map((path) => ({ path, content: images.get(path)!.content, encoding: 'base64' as const })),
+    ],
     problems: [...new Set(problems)].slice(0, 20),
   }
 }
@@ -147,8 +169,8 @@ async function renderDiagram(format: DiagramFormat, source: string, title: strin
 }
 
 /**
- * Draws a Doc, Diagram or deck as the HTML the sandboxed frame runs. It has no script and loads nothing; a deck's images
- * come from `files`.
+ * Draws a Doc, Diagram or deck as the HTML the sandboxed frame runs. It has no script and loads nothing; a doc's or
+ * deck's images come from `files`.
  */
 export async function renderArtifactSource(
   source: ArtifactSource,
@@ -159,5 +181,5 @@ export async function renderArtifactSource(
   if (source.kind === 'dashboard') return renderDashboard(source, title)
   if (source.kind === 'design') return renderDesign(source, title, files)
   if (source.kind === 'motion') return renderMotion(source, title, files)
-  return source.kind === 'doc' ? renderDoc(source.source) : renderDiagram(source.format, source.source, title)
+  return source.kind === 'doc' ? renderDoc(source.source, files) : renderDiagram(source.format, source.source, title)
 }

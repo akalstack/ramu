@@ -1,8 +1,8 @@
 import { NAMED_SERVICE_NAMES } from '@ramu/shared/types/deploy'
 import { joinedText, LiveTextEditor, syncLiveText } from '@ramu/shared/liveText'
 import { deckText, slideWords } from '@ramu/shared/deckText'
-import { changedAt, headingAt } from '@ramu/shared/editingPart'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { caretAfter, changedAt, headingAt } from '@ramu/shared/editingPart'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { Alert, Image, PanResponder, Pressable, Share, Text, TextInput, View, useWindowDimensions } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react-native'
@@ -73,6 +73,50 @@ const unreachable = (error: unknown) =>
  */
 function movedBase<T extends { base: number }>(current: T | null, version: number): T | null {
   return current && current.base < version ? { ...current, base: version } : current
+}
+
+type Caret = { start: number; end: number }
+
+/**
+ * One formatted block's text box. Others' typing merged into the block moves the caret only when it lands before it:
+ * left alone, iOS keeps the caret's distance from the end, so it jumped whenever someone typed later in the block.
+ */
+function BlockInput({
+  text,
+  onChangeText,
+  ...props
+}: Omit<ComponentProps<typeof TextInput>, 'value' | 'selection' | 'onChangeText'> & {
+  text: string
+  onChangeText: (text: string) => void
+}) {
+  // What this box last typed, so only text from elsewhere moves the caret; and where the caret is while focused.
+  const sent = useRef(text)
+  const caret = useRef<Caret | null>(null)
+  const [shown, setShown] = useState(text)
+  const [selection, setSelection] = useState<Caret | undefined>(undefined)
+  if (text !== shown) {
+    setShown(text)
+    const at = caret.current
+    if (text !== sent.current && at)
+      setSelection({ start: caretAfter(shown, text, at.start), end: caretAfter(shown, text, at.end) })
+  }
+  return (
+    <TextInput
+      {...props}
+      selection={selection}
+      onSelectionChange={(event) => {
+        caret.current = event.nativeEvent.selection
+        if (selection) setSelection(undefined)
+      }}
+      onBlur={() => {
+        caret.current = null
+      }}
+      onChangeText={(next) => {
+        sent.current = next
+        onChangeText(next)
+      }}
+    />
+  )
 }
 
 export default function PageScreen() {
@@ -1165,7 +1209,8 @@ export default function PageScreen() {
                         <T>{block.done ? '☑' : '☐'}</T>
                       </Pressable>
                     ) : null}
-                    <TextInput
+                    <BlockInput
+                      text={block.text}
                       accessibilityLabel={say('Block {number}', { number: index + 1 })}
                       multiline
                       onChangeText={(text) => change({ text })}
@@ -1199,7 +1244,7 @@ export default function PageScreen() {
                           {run.text}
                         </Text>
                       ))}
-                    </TextInput>
+                    </BlockInput>
                   </View>
                 )
               })

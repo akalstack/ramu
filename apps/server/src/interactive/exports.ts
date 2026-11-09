@@ -460,7 +460,11 @@ export class ArtifactExports {
     if (kept) return file(kept.data)
     const made = this.queue.then(() =>
       format === 'docx'
-        ? writeDocx(docOf(document), document.reference.title)
+        ? writeDocx(
+            docOf(document),
+            document.reference.title,
+            (document.files ?? []).filter((candidate) => candidate.encoding === 'base64'),
+          )
         : format === 'pptx'
           ? writePptx(
               deckOf(document),

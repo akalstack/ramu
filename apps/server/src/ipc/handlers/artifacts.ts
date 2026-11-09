@@ -412,7 +412,9 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
         ? { kind: 'diagram', format: 'mermaid', source: merged }
         : { kind: 'doc', source: merged },
     )
-    const drawn = await renderArtifactSource(source, artifact.title)
+    // A doc keeps the pictures its current version carries; text that drops one leaves it out of the new version.
+    const images = (pages.document(artifactId, current).files ?? []).filter((file) => file.encoding === 'base64')
+    const drawn = await renderArtifactSource(source, artifact.title, images)
     if (drawn.problems.length) throw new Error(drawn.problems[0])
     return pages.saveEdit(artifactId, current, drawn, current === base ? by : `${by}, merged with v${current}`)
   }

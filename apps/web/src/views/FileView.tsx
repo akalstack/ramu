@@ -505,9 +505,8 @@ function TextFileView({
                 <MarkdownEditor
                   model={editorRef.current.getModel()!}
                   viewId={view.id}
-                  taskId={taskId}
-                  repoId={binding.repoId}
                   path={view.path}
+                  image={(local) => invoke('files.image', taskId, binding.repoId, local)}
                   onSave={() => saveRef.current()}
                   onOpenLink={openMarkdownLink}
                 />

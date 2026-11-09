@@ -107,8 +107,16 @@ it('checks each kind’s source before drawing it', async () => {
     'Write the doc as Markdown in source.',
   )
   await expect(interactive.preview('s', { ...base, kind: 'doc', source: '# Hi', html: '<p>x</p>' })).rejects.toThrow(
-    'html and files are for apps',
+    'with its images in files; html is for apps',
   )
+  await expect(
+    interactive.preview('s', {
+      ...base,
+      kind: 'diagram',
+      source: 'graph TD; A-->B',
+      files: [{ path: 'a.png', content: '' }],
+    }),
+  ).rejects.toThrow('html and files are for apps')
   await expect(interactive.preview('s', { ...base, source: '# Hi' })).rejects.toThrow(
     'Set kind to doc, diagram, slides or dashboard',
   )
@@ -431,4 +439,30 @@ it('restyles a deck with the host’s design system as a new version, and needs 
   const document = pages.document(kept.id)
   expect(document.reference.changes).toBe('Restyled with Brand')
   expect(document.html).toContain('--primary:#ff5500')
+})
+
+it('draws a doc’s own images from its files and keeps them with the version', async () => {
+  // A 1 × 1 PNG.
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+  const source = parseArtifactSource({
+    kind: 'doc',
+    source: '![Chart](./images/q3%20chart.png) ![Logo](https://example.com/a.png)\n',
+  })
+  const drawn = await renderArtifactSource(source, 'Launch plan', [
+    { path: 'images/q3 chart.png', content: png, encoding: 'base64' },
+  ])
+  expect(drawn.problems).toEqual([])
+  expect(drawn.html).toContain(`src="data:image/png;base64,${png}"`)
+  expect(drawn.html).toContain('src="https://example.com/a.png"')
+  expect(drawn.files.map((file) => file.path)).toEqual(['document.md', 'images/q3 chart.png'])
+  // A picture the doc shows but does not carry, or a file that is not a picture, fails the preview.
+  const missing = await renderArtifactSource(
+    parseArtifactSource({ kind: 'doc', source: '![Chart](chart.png)\n' }),
+    'Plan',
+    [{ path: 'notes.txt', content: 'hi' }],
+  )
+  expect(missing.problems).toEqual([
+    "notes.txt is not a PNG or JPEG sent with encoding base64. A doc's files are its images.",
+    'The doc shows chart.png, which is not among the images in files. Send it as a PNG or JPEG with encoding base64.',
+  ])
 })

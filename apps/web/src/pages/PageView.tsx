@@ -1035,6 +1035,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
             <DocRichEditor
               artifactId={artifactId}
               text={editing.text}
+              files={document?.files ?? []}
               onChange={typed}
               onSave={() => editForm.current?.requestSubmit()}
             />

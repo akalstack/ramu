@@ -1,11 +1,13 @@
 // A Doc's Word file, written from its Markdown source with a pinned writer library, never by a model. Nothing is
-// fetched: images keep their description, and links stay links only for web and mail addresses.
+// fetched: the doc's own images are embedded, others keep their description, and links stay links only for web and mail
+// addresses.
 import {
   AlignmentType,
   BorderStyle,
   Document,
   ExternalHyperlink,
   HeadingLevel,
+  ImageRun,
   LevelFormat,
   Packer,
   Paragraph,
@@ -20,6 +22,8 @@ import {
 import { fromMarkdown } from 'mdast-util-from-markdown'
 import { gfmFromMarkdown } from 'mdast-util-gfm'
 import { gfm } from 'micromark-extension-gfm'
+import type { InteractiveFile } from '@ramu/shared/interactive'
+import { docImagePath, docImages, type DocImage } from './docImages'
 
 /** The parts of a Markdown syntax tree this writer reads. */
 interface MdNode {
@@ -33,6 +37,8 @@ interface MdNode {
   identifier?: string
   label?: string | null
   children?: MdNode[]
+  /** The doc's own image an image node shows, found before writing. */
+  picture?: DocImage
 }
 
 interface RunStyle {
@@ -52,6 +58,8 @@ const HEADINGS = [
 ] as const
 const MONO = 'Courier New'
 const LINKABLE = /^(https?:|mailto:)/i
+/** A picture is at most a page's text width, 6.5 inches at 96 pixels each. */
+const PAGE_WIDTH = 624
 
 function runs(nodes: MdNode[] | undefined, style: RunStyle = {}): ParagraphChild[] {
   const out: ParagraphChild[] = []
@@ -87,7 +95,20 @@ function runs(nodes: MdNode[] | undefined, style: RunStyle = {}): ParagraphChild
         else out.push(...runs(node.children, style))
         break
       case 'image':
-        if (node.alt) out.push(text(`[${node.alt}]`, { ...style, italics: true }))
+        if (node.picture) {
+          const scale = Math.min(1, PAGE_WIDTH / node.picture.width)
+          out.push(
+            new ImageRun({
+              type: node.picture.mime === 'image/png' ? 'png' : 'jpg',
+              data: node.picture.bytes,
+              transformation: {
+                width: Math.round(node.picture.width * scale),
+                height: Math.round(node.picture.height * scale),
+              },
+              altText: { name: node.alt || 'Image', description: node.alt ?? '' },
+            }),
+          )
+        } else if (node.alt) out.push(text(`[${node.alt}]`, { ...style, italics: true }))
         break
       case 'footnoteReference':
         out.push(new TextRun({ text: `[${node.label ?? node.identifier ?? ''}]`, superScript: true }))
@@ -238,11 +259,22 @@ const levels = (format: (typeof LevelFormat)[keyof typeof LevelFormat], marks: s
     style: { paragraph: { indent: { left: 360 * (level + 1), hanging: 260 } } },
   }))
 
-export async function writeDocx(markdown: string, title: string): Promise<Buffer> {
+/** Points each image node at the doc's own image it shows, if any. */
+function findPictures(node: MdNode, images: Map<string, DocImage>) {
+  if (node.type === 'image') {
+    const path = node.url ? docImagePath(node.url) : null
+    const picture = path === null ? undefined : images.get(path)
+    if (picture) node.picture = picture
+  }
+  for (const child of node.children ?? []) findPictures(child, images)
+}
+
+export async function writeDocx(markdown: string, title: string, files: InteractiveFile[] = []): Promise<Buffer> {
   const tree = fromMarkdown(markdown, {
     extensions: [gfm()],
     mdastExtensions: [gfmFromMarkdown()],
   }) as unknown as MdNode
+  findPictures(tree, docImages(files).images)
   const document = new Document({
     title,
     creator: 'Ramu',

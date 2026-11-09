@@ -28,7 +28,6 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Input } from '@/components/ui/input'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Dialog, Menu } from '../Menu'
-import { useHost } from '../workspace/HostProvider'
 import { t, useLanguage } from '../i18n'
 import { registerSelection } from './editorBuffers'
 import type { monaco } from './monaco'
@@ -89,25 +88,23 @@ export function richTextMarkdown(text: string): string {
 export function MarkdownEditor({
   model,
   viewId,
-  taskId,
-  repoId,
   path,
+  image,
   onSave,
   onOpenLink,
 }: {
   model: monaco.editor.ITextModel
   viewId: string
-  taskId: string
-  repoId: string
   path: string
+  /** The address an image at a relative path (resolved against `path`) is shown from. */
+  image: (local: string) => Promise<string>
   onSave: () => void
   onOpenLink: (target: MarkdownLinkTarget) => void
 }) {
   useLanguage()
-  const { invoke } = useHost()
   const host = useRef<HTMLDivElement>(null)
-  const callbacks = useRef({ onSave, onOpenLink })
-  callbacks.current = { onSave, onOpenLink }
+  const callbacks = useRef({ onSave, onOpenLink, image })
+  callbacks.current = { onSave, onOpenLink, image }
   const [editor, setEditor] = useState<Editor | null>(null)
   const [, refresh] = useState(0)
   const [linkUrl, setLinkUrl] = useState<string | null>(null)
@@ -135,7 +132,7 @@ export function MarkdownEditor({
                 const local = safe ? previewImagePath(path, safe) : null
                 image.removeAttribute('src')
                 if (local)
-                  void invoke('files.image', taskId, repoId, local).then(
+                  void callbacks.current.image(local).then(
                     (url) => {
                       if (!disposed && request === current) image.src = url
                     },
@@ -274,7 +271,7 @@ export function MarkdownEditor({
       rich.view.dom.removeEventListener('keydown', keydown, true)
       rich.destroy()
     }
-  }, [model, viewId, taskId, repoId, path, invoke])
+  }, [model, viewId, path])
   const run = (action: (editor: Editor) => void) => {
     if (!editor) return
     model.pushStackElement()

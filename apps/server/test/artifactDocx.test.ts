@@ -48,3 +48,17 @@ it('keeps only web and mail links as links and never fetches an image', async ()
   expect(xml).toContain('local')
   expect(xml).toContain('[a chart of signups]')
 })
+
+it('embeds the doc’s own images and describes others', async () => {
+  // A 1 × 1 PNG.
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+  const zip = await JSZip.loadAsync(
+    await writeDocx('![Chart](chart.png)\n\n![Logo](https://example.com/logo.png)\n', 'Launch plan', [
+      { path: 'chart.png', content: png, encoding: 'base64' },
+    ]),
+  )
+  const xml = await zip.file('word/document.xml')!.async('string')
+  expect(xml).toContain('descr="Chart"')
+  expect(xml).toContain('[Logo]')
+  expect(Object.keys(zip.files).some((name) => name.startsWith('word/media/'))).toBe(true)
+})

@@ -329,10 +329,14 @@ export class InteractiveStore {
     signal: AbortSignal | undefined,
     kept: InteractiveInput['checks'],
   ) {
-    // Decks and designs carry their images and fonts in files, and a motion its music and sounds.
+    // Docs and decks carry their images in files, designs their images and fonts, and a motion its music and sounds.
     if (
       input.html !== undefined ||
-      (input.files !== undefined && input.kind !== 'slides' && input.kind !== 'design' && input.kind !== 'motion')
+      (input.files !== undefined &&
+        input.kind !== 'doc' &&
+        input.kind !== 'slides' &&
+        input.kind !== 'design' &&
+        input.kind !== 'motion')
     )
       throw new Error(
         input.kind === 'slides'
@@ -343,7 +347,9 @@ export class InteractiveStore {
               ? 'A design is written in frames, each with its own html and css; html and files are for apps.'
               : input.kind === 'motion'
                 ? 'A motion is written in scenes, each with its seconds, html and css; html is for apps.'
-                : `A ${input.kind} is written in source; html and files are for apps.`,
+                : input.kind === 'doc'
+                  ? 'A doc is written in source, with its images in files; html is for apps.'
+                  : `A ${input.kind} is written in source; html and files are for apps.`,
       )
     const source = parseArtifactSource({ ...input, kind: input.kind ?? 'app' })
     const offline = { ...input, network: OFFLINE_NETWORK }
