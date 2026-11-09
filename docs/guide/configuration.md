@@ -8,6 +8,17 @@ The host keeps its settings in `settings.json` in its data folder, beside `ramu.
 { "language": "en", "accent": "teal", "defaultCheckoutMode": "worktree" }
 ```
 
+### Asking an agent to change a setting
+
+Say what you want ("stop warning before I change model", "keep 12 recent threads per project") and the thread's agent changes it for you:
+
+- `settings_find` searches the same titles and words as Settings search and returns each row's page, help, current value and allowed values.
+- `settings_change` puts the change in a card in the thread: each row's title, old value → new value, its page, and the agent's reason. In **Ask** modes the card waits for **Apply**, **Open in Settings** or **Dismiss**. In **Full access** it applies at once and the card offers **Undo**. Undo is refused, with **Open in Settings**, if you changed that row since; Apply is refused the same way if the row changed after the agent asked.
+- Applying from a paired phone needs that phone's **Change settings** permission on the host.
+- In Settings, on the desktop and the phone, a row an agent changed shows a dot and **Changed by an agent in** *thread name*, which opens the thread, until you change the row yourself.
+
+Agents never change what widens what agents may do or who can reach the host: **Default access**, **Let agents start threads**, **Ask before using another provider**, provider logins and executables, abilities routed to Shared MCP tools, and everything without a typed setting (Permissions and saved approvals, Remote access, pairing and device permissions, Identities, Account, environment variables, **Computer use** and **Let agents use test devices**). `settings_find` still lists these as **Change it yourself** with the page to open, so the agent points you to the right row. Claude's file tools refuse `settings.json` and the rest of the data folder (apart from the thread's own folders), so the card is the only way an agent changes settings there.
+
 ## Repository settings
 
 An optional `ramu.json` at a project's root (or `.ramu/config.json`) shares team defaults. Ramu reads it without running anything, and ignores credentials, paths and permissions in it.

@@ -412,6 +412,11 @@ export class AgentService {
     this.record(sessionId, { kind: 'pull-request-writes', cardId })
   }
 
+  /** A card of settings changes, shown where the agent asked for them. */
+  settingsChangeShown(sessionId: string, cardId: string): void {
+    this.record(sessionId, { kind: 'settings-change', cardId })
+  }
+
   /** Threads this thread's agent started appear in it as one card that opens each of them. */
   threadsStarted(sessionId: string, threads: StartedThread[]): void {
     this.record(sessionId, { kind: 'threads-started', threads })

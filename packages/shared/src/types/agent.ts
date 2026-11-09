@@ -407,6 +407,8 @@ type AgentEventBody =
   | { kind: 'threads-started'; threads: StartedThread[] }
   /** Pull request writes the agent asked for in one turn; the card itself is read from the host by id. */
   | { kind: 'pull-request-writes'; cardId: string }
+  /** Settings the agent asked to change in one call; the card itself is read from the host by id. */
+  | { kind: 'settings-change'; cardId: string }
   /** One ability call (an image, a web search, a long read) that Ramu ran on a provider that has the ability. */
   | { kind: 'ability'; call: import('../providers/abilities').AbilityCall }
   | ({ kind: 'provider-wait' } & ProviderWaitFields)

@@ -136,7 +136,12 @@ export function createCanUseTool({
       )
         return resolve({ behavior: 'allow', updatedInput: toolInput })
       // Starting threads, continuing in a worktree and adding a project show Ramu's own approval card outside Full access.
-      if (/^mcp__ramu__(thread_start|thread_continue_in_worktree|project_add)$/.test(toolName))
+      // Settings changes wait in their own card for Apply outside Full access, and finding settings only reads.
+      if (
+        /^mcp__ramu__(thread_start|thread_continue_in_worktree|project_add|settings_find|settings_change)$/.test(
+          toolName,
+        )
+      )
         return resolve({ behavior: 'allow', updatedInput: toolInput })
       // These scoped tools only manage questions; they never authorize file or command access.
       // request_secret only shows the person a card; what the agent then runs with the file still asks as usual.

@@ -6877,4 +6877,13 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Logins, separated by commas": "Login, dipisahkan koma",
   "Labels, separated by commas": "Label, dipisahkan koma",
   "Merge automatically once required checks pass": "Merge otomatis setelah pemeriksaan wajib lolos",
+  'Changed by an agent in {0}': 'Diubah agent di {0}',
+  'This settings card is gone.': 'Kartu pengaturan ini sudah tidak ada.',
+  Applied: 'Diterapkan',
+  'Settings changes': 'Perubahan pengaturan',
+  'Change a setting': 'Ubah satu pengaturan',
+  'Change {0} settings': 'Ubah {0} pengaturan',
+  'Open in Settings': 'Buka di Pengaturan',
+  '1 item': '1 item',
+  '{0} items': '{0} item',
 }

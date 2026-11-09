@@ -8335,11 +8335,41 @@ test('a device without Change settings sees a host’s settings rows read-only',
     },
   })
   const rows = (locked) =>
-    nodes(HostGroups({ section: 'chats', host: { state: { status: 'ready', settings: [] }, read: () => {} }, locked }))
+    nodes(
+      HostGroups({
+        section: 'chats',
+        host: { state: { status: 'ready', settings: [], marks: [] }, read: () => {} },
+        locked,
+      }),
+    )
       .filter((node) => node.props?.row)
       .map((node) => node.props.disabled)
   assert.deepEqual(rows(true), [true])
   assert.deepEqual(rows(false), [false])
+})
+
+test('a row an agent changed carries that thread’s mark, and other rows none', () => {
+  const { HostGroups } = load('components/SettingRows.tsx', 'ios', {
+    '../runtime/store': { useStore: () => ({ language: 'en' }) },
+    '../runtime/settingsModel': {
+      ...settingsModel,
+      visibleGroups: () => [
+        {
+          title: null,
+          rows: [
+            { path: 'warnModelChange', kind: 'toggle', title: 'Warn' },
+            { path: 'recentChats', kind: 'toggle', title: 'Recent' },
+          ],
+        },
+      ],
+    },
+  })
+  const mark = { path: 'warnModelChange', taskId: 't-1', thread: 'Tidy settings', at: 1 }
+  const host = { state: { status: 'ready', settings: [], marks: [mark] }, read: () => {}, computerId: 'c' }
+  const marks = nodes(HostGroups({ section: 'chats', host }))
+    .filter((node) => node.props && 'mark' in node.props)
+    .map((node) => node.props.mark)
+  assert.deepEqual(marks, [mark, undefined])
 })
 
 test('a choice with an unset option shows it while unset and removes the setting when chosen', () => {
@@ -8361,7 +8391,11 @@ test('a choice with an unset option shows it while unset and removes the setting
   let value
   const choice = () => {
     const host = {
-      state: { status: 'ready', settings: [{ path: row.path, schema: { enum: ['integrated', 'provider'] }, value }] },
+      state: {
+        status: 'ready',
+        settings: [{ path: row.path, schema: { enum: ['integrated', 'provider'] }, value }],
+        marks: [],
+      },
       read: () => value,
       set: (path, next) => sets.push([path, next]),
     }

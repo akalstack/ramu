@@ -13,7 +13,7 @@ import type { SharedMobileField } from '@ramu/shared/sharedFields'
 import { parseLayer, type PreferenceLayer } from '@ramu/shared/preferenceScopes'
 import { migrateModelDefaults, recommendedSets } from '@ramu/shared/providers/modelDefaults'
 import { applySettingEdits, validateSettingModels } from '../../sharedSettings'
-import { appPreferences, modelPreferences } from '../preferences'
+import { appPreferences, appPreferencesSchema, modelPreferences } from '../preferences'
 import type { RegisterHandlers } from '../types'
 
 /** App preferences (including the portable settings snapshot and patching) and model sets. */
@@ -24,8 +24,8 @@ export const registerSettingsHandlers: RegisterHandlers = ({
   loadPreferences,
   savePreferences,
   diagnostics,
+  settingsChanges,
 }) => {
-  const sharedSettingsSchema = z.toJSONSchema(appPreferences, { unrepresentable: 'any' }) as SettingSchema
   const modelSettingsSchema = z.toJSONSchema(modelPreferences.nullable(), { unrepresentable: 'any' }) as SettingSchema
   const selectionMode = z.enum(['model', 'effort'])
   const selectionModeSchema = z.toJSONSchema(selectionMode) as SettingSchema
@@ -42,12 +42,28 @@ export const registerSettingsHandlers: RegisterHandlers = ({
       models,
       catalogs: known ?? (agents ? await agents.catalog() : []),
       settings: [
-        ...portableSettings(sharedSettingsSchema, preferences as unknown as Record<string, unknown>),
-        { path: '$models', schema: modelSettingsSchema, value: models },
-        { path: '$models.defaultBarMode', schema: selectionModeSchema, value: models?.defaultBarMode ?? 'model' },
-        { path: '$models.mobileBarMode', schema: mobileModeSchema, value: models?.mobileBarMode ?? 'inherit' },
+        ...portableSettings(appPreferencesSchema, preferences as unknown as Record<string, unknown>),
+        { path: '$models', schema: modelSettingsSchema, value: models, agentMayChange: true },
+        {
+          path: '$models.defaultBarMode',
+          schema: selectionModeSchema,
+          value: models?.defaultBarMode ?? 'model',
+          agentMayChange: true,
+        },
+        {
+          path: '$models.mobileBarMode',
+          schema: mobileModeSchema,
+          value: models?.mobileBarMode ?? 'inherit',
+          agentMayChange: true,
+        },
       ],
+      ...(settingsChanges ? { agentMarks: settingsChanges.marks() } : {}),
     }
+  }
+
+  const changeCards = () => {
+    if (!settingsChanges) throw new Error('Settings cards are unavailable on this host.')
+    return settingsChanges
   }
 
   // The mobile layer of shared display preferences lives on the host the phones are paired with; the host's own
@@ -181,7 +197,7 @@ export const registerSettingsHandlers: RegisterHandlers = ({
             : undefined
         const stored = loadPreferences()
         const preferences = applySettingEdits(
-          sharedSettingsSchema,
+          appPreferencesSchema,
           appPreferences,
           { ...stored, agentBrowser: stored.agentBrowser ?? appPreferences.shape.agentBrowser.parse(undefined) },
           edits.filter((edit) => !MODEL_PATHS.includes(edit.path)),
@@ -216,9 +232,27 @@ export const registerSettingsHandlers: RegisterHandlers = ({
         }
         if (catalogs) validateSettingModels(edits, catalogs)
         savePreferences(preferences, models)
+        // A save is the person's own choice; an agent's card marks its rows again after its save returns.
+        settingsChanges?.personChanged(edits.map((edit) => edit.path))
         // Answer with the list already read: a provider change must not hold the save behind a new discovery.
         return settingsSnapshot(catalogs ?? undefined)
       },
+    },
+    'settings.changeCard.get': {
+      args: z.tuple([z.string().min(1).max(100)]),
+      run: (cardId: string) => settingsChanges?.get(cardId) ?? null,
+    },
+    'settings.changeCard.apply': {
+      args: z.tuple([z.string().min(1).max(100)]),
+      run: (cardId: string) => changeCards().apply(cardId),
+    },
+    'settings.changeCard.undo': {
+      args: z.tuple([z.string().min(1).max(100)]),
+      run: (cardId: string) => changeCards().undo(cardId),
+    },
+    'settings.changeCard.dismiss': {
+      args: z.tuple([z.string().min(1).max(100)]),
+      run: (cardId: string) => changeCards().dismiss(cardId),
     },
     'settings.app.set': {
       args: z.tuple([appPreferences]),

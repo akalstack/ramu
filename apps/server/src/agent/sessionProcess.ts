@@ -27,6 +27,7 @@ import { InputQueue, userEvent } from './inputQueue'
 import { errorMessage } from './util'
 import { helperRoleReadOnly } from '@ramu/shared/chat/helperRoles'
 import { claudeHooks, createCanUseTool, dangerousCommandHooks, readOnlyBashHooks } from './permissions'
+import { ramuFileHooks } from './ramuFiles'
 import { claudeLaunchOptions } from './claudeOptions'
 import { sessionGuidance } from './guidance'
 import { usesRamuQuestionTools } from './nativeFeatures'
@@ -582,6 +583,7 @@ export class SessionProcess {
             !s.parentId && this.host.preferencesSource() ? this.host.subagentHooks(id) : undefined,
             s.settings.access === 'full' && !readOnly && !connection?.restricted ? dangerousCommandHooks(s) : undefined,
             readOnly ? readOnlyBashHooks() : undefined,
+            ramuFileHooks(s),
           ),
         }),
         spawnClaudeCodeProcess: claudeSpawn(id),

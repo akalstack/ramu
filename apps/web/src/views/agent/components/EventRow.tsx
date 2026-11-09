@@ -4,6 +4,7 @@ import { ContinuedCard } from './ContinuedCard'
 import { AbilityRow } from './AbilityRow'
 import { ThemeCard } from '../../../theme/ThemeCard'
 import { PullRequestWritesCard } from '../../../git/PullRequestWritesCard'
+import { SettingsChangeCard } from '../../../settings/SettingsChangeCard'
 import { InteractiveContent } from '../../../interactive/InteractiveContent'
 import { t as translate, useLanguage } from '../../../i18n'
 import { AgentContentView } from '../../../chat/AgentContentView'
@@ -128,6 +129,8 @@ export function EventRow({
       return <ThreadsStartedCard threads={e.threads} />
     case 'pull-request-writes':
       return <PullRequestWritesCard cardId={e.cardId} />
+    case 'settings-change':
+      return <SettingsChangeCard cardId={e.cardId} />
     case 'settings':
       return (
         <div className={CONVERSATION_SEPARATOR_CLASS}>

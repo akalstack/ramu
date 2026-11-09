@@ -19,6 +19,16 @@ export interface SharedSetting {
   path: string
   schema: SettingSchema
   value: unknown
+  /** False for a setting only the person may change (`PERSON_ONLY` in its schema or a group's above it). */
+  agentMayChange: boolean
+}
+/** Where an agent's change to a setting came from, shown on its row until the person changes it again. */
+export interface AgentSettingMark {
+  path: string
+  taskId: string
+  /** The thread's name when the change was made; the row links to the thread itself. */
+  thread: string
+  at: number
 }
 export interface SettingsSnapshot {
   protocol: 1
@@ -26,6 +36,8 @@ export interface SettingsSnapshot {
   preferences?: AppPreferences
   models?: ModelPreferences | null
   catalogs?: ProviderCatalog[]
+  /** Settings an agent changed that the person has not changed since. */
+  agentMarks?: AgentSettingMark[]
 }
 export interface SettingEdit {
   path: string
@@ -33,6 +45,12 @@ export interface SettingEdit {
   before: unknown
   value: unknown
 }
+
+/**
+ * Schema keyword marking a setting, or a group of them, that agents can never change: anything that widens what agents
+ * may do or who can reach the host. Agents still find these rows and point the person to them.
+ */
+export const PERSON_ONLY = 'personOnly'
 
 /** Ignore presentation/default annotations; preserve every validation constraint. */
 export function schemaKey(value: unknown): string {
@@ -42,7 +60,7 @@ export function schemaKey(value: unknown): string {
       : value && typeof value === 'object'
         ? Object.fromEntries(
             Object.entries(value)
-              .filter(([key]) => !['default', 'description', 'title', '$schema'].includes(key))
+              .filter(([key]) => !['default', 'description', 'title', '$schema', PERSON_ONLY].includes(key))
               .sort(([a], [b]) => a.localeCompare(b))
               .map(([key, entry]) => [key, normalize(entry)]),
           )
@@ -56,13 +74,15 @@ export function portableSettings(
   schema: SettingSchema,
   preferences: Record<string, unknown>,
   prefix = '',
+  personOnly = schema[PERSON_ONLY] === true,
 ): SharedSetting[] {
-  return Object.entries(schema.properties ?? {}).flatMap(([key, field]) => {
+  return Object.entries(schema.properties ?? {}).flatMap(([key, field]): SharedSetting[] => {
     if (['__proto__', 'constructor', 'prototype'].includes(key)) return []
     const path = prefix ? `${prefix}.${key}` : key
     const value = preferences[key]
+    const protectedField = personOnly || field[PERSON_ONLY] === true
     if (field.type === 'object' && field.properties)
-      return portableSettings(field, (value ?? {}) as Record<string, unknown>, path)
+      return portableSettings(field, (value ?? {}) as Record<string, unknown>, path, protectedField)
     if (
       field.type === 'object' &&
       field.additionalProperties &&
@@ -76,10 +96,11 @@ export function portableSettings(
         { properties: Object.fromEntries(keys.map((key) => [key, field.additionalProperties as SettingSchema])) },
         (value ?? {}) as Record<string, unknown>,
         path,
+        protectedField,
       )
     }
     if (field.const !== undefined) return []
-    return [{ path, schema: field, value }]
+    return [{ path, schema: field, value, agentMayChange: !protectedField }]
   })
 }
 

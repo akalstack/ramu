@@ -1283,6 +1283,13 @@ export interface RamuMethods extends ArtifactMethods {
   /** Sets or clears (no `value`) one shared mobile field; the host refuses any other field or value. */
   'preferences.layers.set'(edit: {
     id: import('./sharedFields').SharedMobileField
+  /** A card of settings an agent asked to change, or null once it is gone. */
+  'settings.changeCard.get'(cardId: string): import('./settingsChanges').SettingsChangeCard | null
+  /** Saves the card's changes; refused for a row that changed since the agent asked. */
+  'settings.changeCard.apply'(cardId: string): import('./settingsChanges').SettingsChangeCard
+  /** Puts back the values from before the card applied; refused for a row the person changed since. */
+  'settings.changeCard.undo'(cardId: string): import('./settingsChanges').SettingsChangeCard
+  'settings.changeCard.dismiss'(cardId: string): import('./settingsChanges').SettingsChangeCard
     value?: string | boolean
     at: number
     by: string

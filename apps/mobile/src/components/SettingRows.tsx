@@ -6,7 +6,9 @@ import { ModelFlowRow } from './ModelFlowRow'
 import { useStore } from '../runtime/store'
 import { modelStepLabel } from '@ramu/shared/providers/providers'
 import type { AgentProvider, ModelPreferences, ReasoningEffort } from '@ramu/shared/types'
-import { ActivityIndicator, TextInput, View } from 'react-native'
+import { ActivityIndicator, Pressable, TextInput, View } from 'react-native'
+import { useRouter } from 'expo-router'
+import type { AgentSettingMark } from '@ramu/shared/settingsCompatibility'
 import { ChevronsUpDown } from 'lucide-react-native'
 import type { LimitChoice } from '@ramu/shared/chat/limitPolicy'
 import { font, radius, space, useTheme } from '../theme'
@@ -324,6 +326,36 @@ export function HostNotice({ host, name, children }: { host: Host; name?: string
   )
 }
 
+/** Under a row an agent changed: a dot and the thread it changed in, which opens that thread. */
+function AgentChangeLine({ mark, computerId }: { mark?: AgentSettingMark; computerId: string }) {
+  const say = useSay()
+  const { c } = useTheme()
+  const store = useStore()
+  const router = useRouter()
+  if (!mark) return null
+  return (
+    <Pressable
+      accessibilityRole="link"
+      onPress={() =>
+        router.push({ pathname: '/chat/[id]', params: { id: store.resolveChat(computerId, mark.taskId) } })
+      }
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space.s,
+        paddingHorizontal: space.l,
+        paddingBottom: space.m,
+        marginTop: -space.xs,
+      }}
+    >
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: c.accent }} />
+      <T size={font.caption} tone="muted" numberOfLines={1} style={{ flex: 1 }}>
+        {say('Changed by an agent in {0}', { '0': mark.thread })}
+      </T>
+    </Pressable>
+  )
+}
+
 /** A section's computer-side rows in the desktop's groups. */
 export function HostGroups({
   section,
@@ -356,6 +388,14 @@ export function HostGroups({
               <View key={row.path}>
                 {index ? <Divider inset={space.l} /> : null}
                 <HostRow row={row} host={host} disabled={locked} />
+                <AgentChangeLine
+                  mark={
+                    host.state.status === 'ready'
+                      ? host.state.marks.find((entry) => entry.path === row.path)
+                      : undefined
+                  }
+                  computerId={host.computerId}
+                />
               </View>
             ))}
           </Card>

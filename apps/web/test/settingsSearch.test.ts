@@ -30,3 +30,16 @@ it('only points at pages the menu has', () => {
   for (const result of searchSettings('e', (text) => text, label))
     if (result.kind === 'page') expect(sections.has(result.section)).toBe(true)
 })
+
+it('finds rows agents can change by the same titles the page shows', () => {
+  expect(first('warn before changing')).toMatchObject({
+    kind: 'page',
+    section: 'chats',
+    title: 'Warn before changing model',
+  })
+  expect(first('terminal position')).toMatchObject({
+    kind: 'page',
+    section: 'editor',
+    title: 'Default terminal position',
+  })
+})

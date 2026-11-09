@@ -77,6 +77,7 @@ export interface Services {
   pullRequestDrafts?: import('../background/pullRequestDrafts').PullRequestDrafts
   pullRequestWrites?: import('../background/pullRequestWrites').PullRequestWrites
   recaps: RecapService
+  settingsChanges?: import('../settings/settingsChanges').SettingsChanges
   learning?: LearningService
   memory?: MemoryService
   summaries?: SummaryService

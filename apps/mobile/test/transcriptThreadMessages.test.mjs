@@ -11,3 +11,9 @@ test('a report from another thread keeps its sender, so it draws as that threadâ
   assert.deepEqual(report.from, from)
   assert.equal(own.from, undefined)
 })
+
+test('a settings change the agent asked for draws as its card, read from the host by id', () => {
+  const [card] = transcript([{ kind: 'settings-change', cardId: 'card-1', at: 1 }])
+  assert.equal(card.kind, 'settings-change')
+  assert.equal(card.cardId, 'card-1')
+})

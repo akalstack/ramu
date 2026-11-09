@@ -31,6 +31,7 @@ const ALIASES: Record<string, string> = {
   session: 'history transcript checkpoint',
   request: 'secret token password credential key pin login',
   theme: 'palette colors colours appearance dark light look style',
+  settings: 'preferences option configure default toggle turn on off ramu',
   artifact:
     'interactive page visual chart simulation calculator diagram prototype playground explorer walkthrough visualize tracker dashboard',
 }

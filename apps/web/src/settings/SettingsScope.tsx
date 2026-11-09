@@ -11,6 +11,7 @@ import {
   type SettingsSnapshot,
 } from '@ramu/shared/settingsCompatibility'
 import { SettingHosts } from './SettingHosts'
+import { AgentChangeMark } from './AgentChangeMark'
 import { recommendedSets } from '@ramu/shared/providers/modelDefaults'
 import { invoke, invokeOn, ramu } from '../ipc'
 import { isViewOnly, VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
@@ -233,6 +234,12 @@ export function useSettingsScope(section: string, host?: string) {
         schema: definition.schema,
       }
     })
+  /**
+   * The agent change still shown on this row: from the host Settings shows, until the person edits the row here or
+   * saves it from anywhere.
+   */
+  const agentMark = (path: string) =>
+    edited.has(path) ? undefined : primary?.snapshot?.agentMarks?.find((entry) => entry.path === path)
   const mark = (path: string) => {
     setEdited((current) => new Set([...current, path]))
     setMessage(null)
@@ -317,6 +324,7 @@ export function useSettingsScope(section: string, host?: string) {
     message,
     field,
     hosts,
+    agentMark,
     mark,
     edited,
     save,
@@ -364,10 +372,15 @@ export function SettingsField({
   )
 }
 
-/** Beside a setting's title: where it stands on each selected host. */
+/** Beside a setting's title: where it stands on each selected host, and the agent that changed it, if one did. */
 export function SettingTitleHosts({ path }: { path: string }) {
   const scope = useContext(SettingsScopeContext)
-  return scope ? <SettingHosts path={path} scope={scope} inline /> : null
+  return scope ? (
+    <>
+      <SettingHosts path={path} scope={scope} inline />
+      <AgentChangeMark path={path} scope={scope} />
+    </>
+  ) : null
 }
 
 /** Under a setting's description: a view-only notice when saving is refused. */

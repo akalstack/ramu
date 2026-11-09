@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Alert } from 'react-native'
-import type { SettingsSnapshot, SharedSetting } from '@ramu/shared/settingsCompatibility'
+import type { AgentSettingMark, SettingsSnapshot, SharedSetting } from '@ramu/shared/settingsCompatibility'
 import { useStore } from './store'
 import { applyValue, looseInvoke, patchSettings, type SettingsHost } from './settingsModel'
 
@@ -8,7 +8,8 @@ export type HostSettingsState =
   | { status: 'offline' }
   | { status: 'loading' }
   | { status: 'error'; message: string }
-  | { status: 'ready'; settings: SharedSetting[] }
+  /** `marks`: rows an agent changed that the person has not changed since. */
+  | { status: 'ready'; settings: SharedSetting[]; marks: AgentSettingMark[] }
 
 /**
  * The shared preferences of one computer, edited live: each change shows at once, is saved in order against what the
@@ -30,7 +31,7 @@ export function useHostSettings(computerId: string) {
 
   const show = (snapshot: SettingsSnapshot) => {
     shown.current = snapshot
-    setState({ status: 'ready', settings: snapshot.settings })
+    setState({ status: 'ready', settings: snapshot.settings, marks: snapshot.agentMarks ?? [] })
   }
   const load = () => {
     const mine = ++generation.current
@@ -69,7 +70,12 @@ export function useHostSettings(computerId: string) {
   const setAll = (values: readonly (readonly [path: string, value: unknown])[]) => {
     if (!shown.current || !confirmed.current || !values.length) return
     pending.current++
-    show(values.reduce((snapshot, [path, value]) => applyValue(snapshot, path, value), shown.current))
+    const optimistic = values.reduce((snapshot, [path, value]) => applyValue(snapshot, path, value), shown.current)
+    // The person's own change replaces an agent's, so its mark goes with it.
+    show({
+      ...optimistic,
+      agentMarks: optimistic.agentMarks?.filter((mark) => !values.some(([path]) => path === mark.path)),
+    })
     queue.current = queue.current.then(async () => {
       try {
         const next = await patchSettings(hostRef.current, confirmed.current!, values)

@@ -14,12 +14,16 @@ import {
   SIDEBAR_WIDTH_RANGE,
 } from '@ramu/shared/types'
 import { agentSettings, id, pullMode, providerId } from './schemas'
+import { PERSON_ONLY, type SettingSchema } from '@ramu/shared/settingsCompatibility'
 import {
   ABILITIES,
   DEFAULT_ABILITY_PREFERENCES,
   AUTO_MCP_ABILITIES,
   type AbilityPreferences,
 } from '@ramu/shared/providers/abilities'
+
+/** Only the person may change it: it widens what agents may do or who can reach the host (see `PERSON_ONLY`). */
+const personOnly = { [PERSON_ONLY]: true }
 
 export const providerBinaries = z
   .object(
@@ -32,7 +36,8 @@ export const providerBinaries = z
               .string()
               .trim()
               .max(4096)
-              .refine((path) => !path.includes('\0'), 'Invalid binary path'),
+              .refine((path) => !path.includes('\0'), 'Invalid binary path')
+              .meta(personOnly),
             accounts: z
               .array(
                 z.object({
@@ -45,24 +50,28 @@ export const providerBinaries = z
                 }),
               )
               .max(20)
-              .optional(),
+              .optional()
+              .meta(personOnly),
             accountId: z
               .string()
               .regex(/^[a-zA-Z0-9_-]{1,80}$/)
-              .optional(),
+              .optional()
+              .meta(personOnly),
             accountOrder: z
               .array(z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/))
               .max(21)
-              .optional(),
+              .optional()
+              .meta(personOnly),
             autoUpdate: z.boolean().optional(),
             enabled: z.boolean().optional(),
-            defaultAccountEnabled: z.boolean().optional(),
+            defaultAccountEnabled: z.boolean().optional().meta(personOnly),
             harness: z
               .string()
               .trim()
               .max(4096)
               .refine((path) => !path.includes('\0'), 'Invalid helper path')
-              .optional(),
+              .optional()
+              .meta(personOnly),
           })
           .optional(),
       ]),
@@ -126,8 +135,11 @@ export const abilityChoices = z.object(
 const mcpTool = z.object({ connectionId: z.string().min(1).max(200), tool: z.string().min(1).max(200) })
 const abilityPreferences = z.object({
   choices: abilityChoices.default({}),
-  autoMcp: z.object(Object.fromEntries(AUTO_MCP_ABILITIES.map((ability) => [ability, mcpTool.optional()]))).optional(),
-  askBeforeOtherProvider: z.boolean().default(false),
+  autoMcp: z
+    .object(Object.fromEntries(AUTO_MCP_ABILITIES.map((ability) => [ability, mcpTool.optional()])))
+    .optional()
+    .meta(personOnly),
+  askBeforeOtherProvider: z.boolean().default(false).meta(personOnly),
 })
 const advisorPreferences = z.object({
   enabled: z.boolean().default(false),
@@ -178,13 +190,13 @@ export const appPreferences = z.object({
   cleanupArchivedDays: z.number().int().min(0).max(3650).default(DEFAULT_APP_PREFERENCES.cleanupArchivedDays),
   terminalTabPosition: z.enum(['top', 'right']),
   defaultTerminalDock: z.enum(['right', 'bottom']).default(DEFAULT_APP_PREFERENCES.defaultTerminalDock),
-  defaultAccess: agentSettings.shape.access,
+  defaultAccess: agentSettings.shape.access.meta(personOnly),
   defaultAutoFallback: z.boolean(),
   busyMessageAction: z.enum(['queue', 'steer']).default('steer'),
   includeTabContext: z.boolean().default(true),
   warnModelChange: z.boolean().default(true),
   autoProjectSelection: z.boolean().default(true),
-  agentThreads: z.boolean().default(true),
+  agentThreads: z.boolean().default(true).meta(personOnly),
   teammateSuggestions: z.boolean().default(true),
   modelCatalogLookups: z.boolean().default(true),
   newModelNotices: z.boolean().default(true),
@@ -227,6 +239,9 @@ export const appPreferences = z.object({
     })
     .default(DEFAULT_MEMORY_PREFERENCES),
 })
+
+/** The JSON schema every host advertises for its portable settings, with each setting's constraints and marks. */
+export const appPreferencesSchema = z.toJSONSchema(appPreferences, { unrepresentable: 'any' }) as SettingSchema
 
 export const modelPreferences = z
   .object({

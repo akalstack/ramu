@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import {
+  PERSON_ONLY,
   commonSettings,
   intersectCatalogs,
   portableSettings,
@@ -10,7 +11,7 @@ import {
 
 const snapshot = (schema: SettingSchema, value: unknown = 'blue'): SettingsSnapshot => ({
   protocol: 1,
-  settings: [{ path: 'accent', schema, value }],
+  settings: [{ path: 'accent', schema, value, agentMayChange: true }],
 })
 it('offers only choices accepted by every version, regardless of saved values', () => {
   const fields = commonSettings([
@@ -92,4 +93,33 @@ it('offers the common range when versions have different numeric limits', () => 
   expect(
     commonSettings([snapshot({ type: 'integer', maximum: 2 }), snapshot({ type: 'integer', minimum: 3 })]),
   ).toEqual([])
+})
+
+it('marks settings only the person may change, including every setting in a marked group', () => {
+  const fields = portableSettings(
+    {
+      properties: {
+        accent: { type: 'string', enum: ['blue', 'teal'] },
+        defaultAccess: { type: 'string', enum: ['edits', 'full'], [PERSON_ONLY]: true },
+        abilities: {
+          type: 'object',
+          properties: {
+            choice: { type: 'string' },
+            autoMcp: { type: 'object', [PERSON_ONLY]: true, properties: { tool: { type: 'string' } } },
+          },
+        },
+      },
+    },
+    {},
+  )
+  expect(Object.fromEntries(fields.map((field) => [field.path, field.agentMayChange]))).toEqual({
+    accent: true,
+    defaultAccess: false,
+    'abilities.choice': true,
+    'abilities.autoMcp.tool': false,
+  })
+})
+
+it('leaves the person-only mark out of schema compatibility', () => {
+  expect(schemaKey({ type: 'boolean', [PERSON_ONLY]: true })).toBe(schemaKey({ type: 'boolean' }))
 })
