@@ -5,6 +5,7 @@ import { intelligenceSchema } from '../intelligence'
 import { goalPreferencesSchema } from '../agent/goals'
 import {
   DEFAULT_APP_PREFERENCES,
+  DEFAULT_TEST_DEVICE_PREFERENCES,
   DEFAULT_GOAL_PREFERENCES,
   DEFAULT_MEMORY_PREFERENCES,
   DEFAULT_FALLBACK_PREFERENCES,
@@ -225,6 +226,15 @@ export const appPreferences = z.object({
   appAutoUpdate: z.boolean().default(false),
   keepAwake: z.boolean().default(false),
   keepAwakeWhen: z.enum(['plugged-in', 'always']).default('plugged-in'),
+  testDevices: z
+    .object({
+      iosModel: z.string().trim().min(1).max(120).nullable().default(null),
+      androidModel: z.string().trim().min(1).max(120).nullable().default(null),
+      keepWarm: z.boolean().default(false),
+      maxRunning: z.number().int().min(1).max(16).nullable().default(null),
+      slim: z.boolean().default(false),
+    })
+    .default(DEFAULT_TEST_DEVICE_PREFERENCES),
   showUsageLimits: z.boolean().default(true),
   fallback: fallbackPreferences.default(DEFAULT_FALLBACK_PREFERENCES),
   subagents: subagentPreferences.default(DEFAULT_SUBAGENT_PREFERENCES),

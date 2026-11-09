@@ -2,6 +2,7 @@ import { useCallback, useContext, useEffect, useState } from 'react'
 import { Check, ChevronDown, CircleCheck, Copy, Hourglass, Smartphone, TriangleAlert } from 'lucide-react'
 import {
   queuePlace,
+  testDeviceFix,
   testDeviceSummary,
   type PlatformReadiness,
   type TestDeviceLease,
@@ -77,12 +78,23 @@ function Checklist({ platform, value }: { platform: TestPlatform; value: Platfor
     )
   return (
     <>
-      {value.missing.map((entry) => (
-        <SettingsRow key={entry.item}>
-          <SettingsLabel title={`${title} · ${entry.item}`} help={entry.fix} />
-          <Status ready={false} />
-        </SettingsRow>
-      ))}
+      {value.missing.map((entry) => {
+        const fix = testDeviceFix(entry.item)
+        return (
+          <SettingsRow key={entry.item}>
+            <SettingsLabel title={`${title} · ${t(entry.name)}`} help={entry.fix} />
+            <span className="flex flex-none items-center gap-1">
+              {fix?.kind === 'command' && <CopyCommand command={fix.command} />}
+              {fix?.kind === 'link' && (
+                <Button variant="ghost" size="xs" onClick={() => window.open(fix.url, '_blank', 'noopener')}>
+                  {t(fix.label)}
+                </Button>
+              )}
+              <Status ready={false} />
+            </span>
+          </SettingsRow>
+        )
+      })}
     </>
   )
 }
@@ -314,7 +326,13 @@ function TestDeviceSettings({
                 options={[...status.models[platform]]
                   .sort((a, b) => Number(b.kind === 'phone') - Number(a.kind === 'phone'))
                   .map((model) => ({ value: model.name, label: model.name }))}
-                onChange={(model) => call(invokeOn(hostId, 'testDevices.setDefault', platform, model))}
+                onChange={(model) =>
+                  call(
+                    invokeOn(hostId, 'testDevices.setPreferences', {
+                      [platform === 'ios' ? 'iosModel' : 'androidModel']: model,
+                    }),
+                  )
+                }
               />
             </SettingsRow>
           ))}
@@ -340,9 +358,47 @@ function TestDeviceSettings({
                 checked={status.keepWarm}
                 disabled={readOnly}
                 aria-label={t('Keep a spare device ready')}
-                onCheckedChange={(checked) => call(invokeOn(hostId, 'testDevices.setKeepWarm', checked))}
+                onCheckedChange={(checked) =>
+                  call(invokeOn(hostId, 'testDevices.setPreferences', { keepWarm: checked }))
+                }
               />
             </SettingsRow>
+            <SettingsRow>
+              <SettingsLabel
+                title={t('Devices at once')}
+                help={t('Automatic follows this host’s memory; threads past the limit wait in line.')}
+              />
+              <Dropdown
+                label={t('Devices at once')}
+                value={status.maxRunning === null ? 'auto' : String(status.maxRunning)}
+                disabled={readOnly}
+                options={[
+                  { value: 'auto', label: t('Automatic') },
+                  ...[1, 2, 3, 4, 5, 6].map((count) => ({ value: String(count), label: String(count) })),
+                ]}
+                onChange={(value) =>
+                  call(
+                    invokeOn(hostId, 'testDevices.setPreferences', {
+                      maxRunning: value === 'auto' ? null : Number(value),
+                    }),
+                  )
+                }
+              />
+            </SettingsRow>
+            {!status.ios.unsupported && (
+              <SettingsRow className="settings-toggle">
+                <SettingsLabel
+                  title={t('Slim iOS Simulators')}
+                  help={t('Quicker to start and lighter on memory, without some system apps such as Safari.')}
+                />
+                <Switch
+                  checked={status.slim}
+                  disabled={readOnly}
+                  aria-label={t('Slim iOS Simulators')}
+                  onCheckedChange={(checked) => call(invokeOn(hostId, 'testDevices.setPreferences', { slim: checked }))}
+                />
+              </SettingsRow>
+            )}
           </CollapsibleContent>
         </Collapsible>
       )}

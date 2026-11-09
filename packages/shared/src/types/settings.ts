@@ -121,6 +121,7 @@ export interface AppPreferences extends WorkspaceDefaults {
   reduceMotion: boolean
   keepAwake: boolean
   keepAwakeWhen: 'plugged-in' | 'always'
+  testDevices: TestDevicePreferences
   /** Show the 5-hour and weekly plan usage gauges. */
   showUsageLimits: boolean
   fallback: FallbackPreferences
@@ -131,6 +132,27 @@ export interface AppPreferences extends WorkspaceDefaults {
   goals: GoalPreferences
   intelligence: IntelligencePreferences
   memory: MemoryPreferences
+}
+
+/** Test devices on this host: the model a thread gets when it names none, and whether a spare stays ready. */
+export interface TestDevicePreferences {
+  /** null: the platform's own default phone. */
+  iosModel: string | null
+  androidModel: string | null
+  /** A spare device of the kind last used stays booted, so the next thread starts sooner; it holds memory. */
+  keepWarm: boolean
+  /** How many devices may run at once; null leaves it to this host's memory. */
+  maxRunning: number | null
+  /** iOS Simulators boot with fewer system services: quicker and lighter, without some system apps. */
+  slim: boolean
+}
+
+export const DEFAULT_TEST_DEVICE_PREFERENCES: TestDevicePreferences = {
+  iosModel: null,
+  androidModel: null,
+  keepWarm: false,
+  maxRunning: null,
+  slim: false,
 }
 
 export const DEFAULT_SIDEBAR_WIDTH = 312
@@ -180,6 +202,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   appAutoUpdate: false,
   keepAwake: false,
   keepAwakeWhen: 'plugged-in',
+  testDevices: DEFAULT_TEST_DEVICE_PREFERENCES,
   showUsageLimits: true,
   fallback: DEFAULT_FALLBACK_PREFERENCES,
   subagents: DEFAULT_SUBAGENT_PREFERENCES,

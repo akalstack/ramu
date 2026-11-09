@@ -12,6 +12,18 @@ import { findExecutable } from '../providers/providerBinaries'
 export const SIMLOCK_VERSION = '0.6.0'
 export const AGENT_DEVICE_VERSION = '0.21.36'
 
+/** Simlock 0.6.0's own cap on devices running at once, put back when the person leaves it to the host's memory. */
+export const SIMLOCK_DEFAULT_MAX_RUNNING = 7
+
+/** Simlock's settings for the person's choices on the Test devices page. */
+export function chosenConfig(choice: { keepWarm: boolean; maxRunning: number | null; slim: boolean }) {
+  return {
+    'warmPool.enabled': String(choice.keepWarm),
+    'capacity.config.limits.maxRunning': String(choice.maxRunning ?? SIMLOCK_DEFAULT_MAX_RUNNING),
+    'ios.defaultMode': choice.slim ? 'slim' : 'full',
+  }
+}
+
 /** Settings Ramu writes into Simlock's configuration, measured to give a sharp, smooth picture. */
 export const SIMLOCK_CONFIG: Record<string, string> = {
   'http.host': '127.0.0.1',

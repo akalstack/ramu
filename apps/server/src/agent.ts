@@ -407,6 +407,11 @@ export class AgentService {
     this.record(sessionId, { kind: 'schedule', schedule })
   }
 
+  /** The thread waits in line for a test device; its card shows the place and offers Stop waiting. */
+  testDeviceWaiting(sessionId: string, platform: import('@ramu/shared/testDevices').TestPlatform): void {
+    this.record(sessionId, { kind: 'test-device-wait', platform })
+  }
+
   /** A card of pull request writes, shown where the agent asked for them. */
   pullRequestWritesShown(sessionId: string, cardId: string): void {
     this.record(sessionId, { kind: 'pull-request-writes', cardId })

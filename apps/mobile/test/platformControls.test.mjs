@@ -8937,12 +8937,17 @@ for (const access of ['full', 'viewer']) {
             installed: true,
             setupCommand: 'npm install',
             ios: { ready: true, missing: [] },
-            android: { ready: false, missing: [{ item: 'Android SDK', fix: 'Install Android Studio' }] },
+            android: {
+              ready: false,
+              missing: [{ item: 'android-sdk', name: 'Android SDK', fix: 'Install Android Studio' }],
+            },
             inUse: [{ taskId: 'thread-a', platform: 'ios', name: 'iPhone 17 · iOS 27.0', since: 0 }],
             waiting: [],
             models: { ios: [{ name: 'iPhone 17', kind: 'phone', systems: ['27.0'] }], android: [] },
             defaults: { ios: 'iPhone 17', android: null },
             keepWarm: false,
+            maxRunning: null,
+            slim: false,
           }),
         },
         calls,
@@ -8977,7 +8982,7 @@ for (const access of ['full', 'viewer']) {
     assert.deepEqual(
       nodes(tree)
         .filter((node) => node.props?.title === 'Android emulator')
-        .map((node) => node.props.value.missing[0].item),
+        .map((node) => node.props.value.missing[0].name),
       ['Android SDK'],
     )
     if (access === 'viewer') {
