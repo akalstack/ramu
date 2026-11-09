@@ -86,6 +86,9 @@ export function HostBrowserSettings({
       setBusy(false)
     }
   }
+  const idle = !status?.reason || status.reason.startsWith('The browser starts')
+  const preparing = !!status?.reason?.startsWith('Downloading')
+  const chromiumShown = !!status && (status.available || !idle)
   if (readOnly)
     return (
       <p role="status" className="text-caption text-muted-foreground">
@@ -126,43 +129,44 @@ export function HostBrowserSettings({
           />
         </SettingsRow>
       )}
-      <SettingsRow>
-        <SettingsLabel
-          title={t('Host Chromium')}
-          help={
-            status?.available
-              ? t(
-                  'Running. Website sign-ins stay on this host. Stopping it closes its tabs; the next tab starts it again.',
-                )
-              : t(
-                  status?.reason ||
-                    'Starts by itself when a tab opens; it downloads once on first use. Website sign-ins stay on this host.',
-                )
-          }
-        />
-        <span className="flex items-center gap-2">
-          {local && status && !status.available && status.reason && !status.reason.startsWith('The browser starts') && (
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={busy}
-              onClick={() => void act(() => invokeOn(hostId, 'hostBrowser.setup'))}
-            >
-              {t('Retry')}
-            </Button>
-          )}
-          {local && status?.available && (
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={busy}
-              onClick={() => void act(() => invokeOn(hostId, 'hostBrowser.stop'))}
-            >
-              {t('Stop browser')}
-            </Button>
-          )}
-        </span>
-      </SettingsRow>
+      {/* Only worth a row while it runs (to stop it and free its memory), while it downloads, or after it failed to
+          start (to retry); idle, it starts by itself with the next tab and there is nothing to do here. */}
+      {chromiumShown && (
+        <SettingsRow>
+          <SettingsLabel
+            title={t('Host Chromium')}
+            help={
+              status?.available
+                ? t(
+                    'Running. Website sign-ins stay on this host. Stopping it closes its tabs; the next tab starts it again.',
+                  )
+                : t(status?.reason ?? '')
+            }
+          />
+          <span className="flex items-center gap-2">
+            {local && status && !status.available && !preparing && (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy}
+                onClick={() => void act(() => invokeOn(hostId, 'hostBrowser.setup'))}
+              >
+                {t('Retry')}
+              </Button>
+            )}
+            {local && status?.available && (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy}
+                onClick={() => void act(() => invokeOn(hostId, 'hostBrowser.stop'))}
+              >
+                {t('Stop browser')}
+              </Button>
+            )}
+          </span>
+        </SettingsRow>
+      )}
       {local && status?.selected !== false && (
         <>
           <SettingsGroupTitle className="mt-3">{t('Host browser profiles')}</SettingsGroupTitle>
