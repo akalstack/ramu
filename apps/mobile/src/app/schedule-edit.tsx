@@ -1,8 +1,8 @@
 import { goBackOrHome } from '../runtime/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, View } from 'react-native'
+import { ActivityIndicator, Alert, Platform, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { Check, Folder, MessagesSquare } from 'lucide-react-native'
 import type { ScheduleInput } from '@ramu/shared/types'
 import { font, space, useTheme } from '../theme'
@@ -192,7 +192,11 @@ export default function ScheduleEdit() {
       <PageScrollView
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
-        contentContainerStyle={{ padding: space.l, gap: space.l + 4, paddingBottom: insets.bottom + 96 }}
+        contentContainerStyle={{
+          padding: space.l,
+          gap: space.l + 4,
+          paddingBottom: Platform.OS === 'ios' ? space.xl : insets.bottom + 96,
+        }}
       >
         {hosts.length > 1 ? (
           <Field label={say('Runs on')}>
@@ -373,15 +377,32 @@ export default function ScheduleEdit() {
           </T>
         ) : null}
       </PageScrollView>
-      <View style={{ position: 'absolute', left: space.l, right: space.l, bottom: Math.max(insets.bottom, space.m) }}>
-        <GlassButton
-          primary
-          title={busy ? '…' : t.save}
-          icon={busy ? undefined : Check}
-          disabled={busy || !online || Boolean(problem)}
-          onPress={() => void save()}
-        />
-      </View>
+      {Platform.OS === 'ios' ? (
+        // The system's floating bottom toolbar, as Settings and Search use, with a native prominent button.
+        <Stack.Toolbar placement="bottom">
+          <Stack.Toolbar.Spacer />
+          <Stack.Toolbar.Button
+            variant="prominent"
+            tintColor={c.primary}
+            disabled={busy || !online || Boolean(problem)}
+            accessibilityLabel={t.save}
+            onPress={() => void save()}
+          >
+            {busy ? '…' : t.save}
+          </Stack.Toolbar.Button>
+          <Stack.Toolbar.Spacer />
+        </Stack.Toolbar>
+      ) : (
+        <View style={{ position: 'absolute', left: space.l, right: space.l, bottom: Math.max(insets.bottom, space.m) }}>
+          <GlassButton
+            primary
+            title={busy ? '…' : t.save}
+            icon={busy ? undefined : Check}
+            disabled={busy || !online || Boolean(problem)}
+            onPress={() => void save()}
+          />
+        </View>
+      )}
       {busy ? <ActivityIndicator style={{ position: 'absolute', alignSelf: 'center', top: 120 }} /> : null}
       <Sheet open={projectSheet} onClose={() => setProjectSheet(false)} title={t.scope}>
         <SheetGroup>

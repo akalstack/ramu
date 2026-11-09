@@ -1,8 +1,8 @@
 import { translate } from '@ramu/shared/i18n'
 import { useEffect, useState } from 'react'
-import { Alert, Pressable, TextInput, View } from 'react-native'
+import { Alert, Platform, Pressable, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useLocalSearchParams } from 'expo-router'
+import { Stack, useLocalSearchParams } from 'expo-router'
 import { ChevronDown, ChevronRight, MessageSquarePlus, Undo2, X } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
 import { useChat, useStore } from '../../../runtime/store'
@@ -311,7 +311,11 @@ export default function Changes() {
       />
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ padding: space.l, gap: space.s, paddingBottom: insets.bottom + 90 }}
+        contentContainerStyle={{
+          padding: space.l,
+          gap: space.s,
+          paddingBottom: Platform.OS === 'ios' ? space.xl : insets.bottom + 90,
+        }}
       >
         {error ? <T tone="bad">{error}</T> : null}
         {!reviews.length ? <T tone="muted">No recorded changes for this thread yet.</T> : null}
@@ -394,38 +398,63 @@ export default function Changes() {
           />
         ))}
       </ScrollView>
-      <BottomFade height={insets.bottom + 96} color={c.canvas} />
-      <View
-        style={[
-          {
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            flexDirection: 'row',
-            gap: 10,
-            paddingHorizontal: space.l,
-            paddingBottom: Math.max(insets.bottom, space.m),
-          },
-          !floatingChrome && { backgroundColor: c.canvas, paddingTop: space.m },
-        ]}
-      >
-        <GlassButton
-          icon={Undo2}
-          title={say('Undo run')}
-          disabled={busy || !review}
-          onPress={undo}
-          style={{ flex: 1 }}
-        />
-        <GlassButton
-          icon={MessageSquarePlus}
-          title={drafts.length ? `Send ${drafts.length} comment${drafts.length === 1 ? '' : 's'}` : 'Send review'}
-          disabled={busy || !review || (!note.trim() && !drafts.length)}
-          onPress={drafts.length ? sendDrafts : sendReview}
-          primary
-          style={{ flex: 1 }}
-        />
-      </View>
+      {Platform.OS === 'ios' ? (
+        // The system's floating bottom toolbar, as Settings and Search use, with native buttons.
+        <Stack.Toolbar placement="bottom">
+          <Stack.Toolbar.Button
+            tintColor={c.text}
+            disabled={busy || !review}
+            accessibilityLabel={say('Undo run')}
+            onPress={undo}
+          >
+            {say('Undo run')}
+          </Stack.Toolbar.Button>
+          <Stack.Toolbar.Spacer />
+          <Stack.Toolbar.Button
+            variant="prominent"
+            tintColor={c.primary}
+            disabled={busy || !review || (!note.trim() && !drafts.length)}
+            onPress={drafts.length ? sendDrafts : sendReview}
+          >
+            {drafts.length ? `Send ${drafts.length} comment${drafts.length === 1 ? '' : 's'}` : 'Send review'}
+          </Stack.Toolbar.Button>
+        </Stack.Toolbar>
+      ) : (
+        <>
+          <BottomFade height={insets.bottom + 96} color={c.canvas} />
+          <View
+            style={[
+              {
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                bottom: 0,
+                flexDirection: 'row',
+                gap: 10,
+                paddingHorizontal: space.l,
+                paddingBottom: Math.max(insets.bottom, space.m),
+              },
+              !floatingChrome && { backgroundColor: c.canvas, paddingTop: space.m },
+            ]}
+          >
+            <GlassButton
+              icon={Undo2}
+              title={say('Undo run')}
+              disabled={busy || !review}
+              onPress={undo}
+              style={{ flex: 1 }}
+            />
+            <GlassButton
+              icon={MessageSquarePlus}
+              title={drafts.length ? `Send ${drafts.length} comment${drafts.length === 1 ? '' : 's'}` : 'Send review'}
+              disabled={busy || !review || (!note.trim() && !drafts.length)}
+              onPress={drafts.length ? sendDrafts : sendReview}
+              primary
+              style={{ flex: 1 }}
+            />
+          </View>
+        </>
+      )}
       <Sheet
         open={Boolean(commenting)}
         onClose={() => setCommenting(null)}
