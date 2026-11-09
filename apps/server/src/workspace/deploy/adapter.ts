@@ -237,42 +237,6 @@ function refusal(name: string, kind: DeployFailureKind | null, status: number | 
   return new DeployError(`${name} answered ${status ?? 'with an error'} while ${what}.`, null, status)
 }
 
-/** How a GraphQL API words a refusal it answers beside a 200. */
-const GRAPHQL_KINDS: [RegExp, DeployFailureKind][] = [
-  [/unauthenticated|invalid (api )?token|token (is )?(expired|revoked)|not logged in/i, 'signed-out'],
-  [/not authori[sz]ed|unauthori[sz]ed|forbidden|permission|access denied/i, 'missing-permission'],
-  [/not found|could not find|does not exist|no such/i, 'not-found'],
-  [LIMIT, 'plan-limit'],
-]
-
-/**
- * One GraphQL call. GraphQL APIs answer most refusals as `errors` beside a 200, so those are classified like HTTP
- * refusals; their text is never shown either.
- */
-export async function graphqlCall<T>(
-  name: string,
-  fetcher: typeof fetch,
-  url: string,
-  init: { token: string; headers?: Record<string, string> },
-  query: string,
-  variables: Record<string, unknown>,
-  what: string,
-): Promise<T> {
-  const reply = await platformCall<{ data?: T | null; errors?: { message?: string }[] }>(
-    name,
-    fetcher,
-    url,
-    { method: 'POST', body: JSON.stringify({ query, variables }), ...init },
-    what,
-  )
-  if (reply.errors?.length) {
-    const text = reply.errors.map((error) => error.message ?? '').join('\n')
-    throw refusal(name, GRAPHQL_KINDS.find(([pattern]) => pattern.test(text))?.[1] ?? null, null, what)
-  }
-  if (!reply.data) throw new DeployError(`${name} sent no answer while ${what}.`, null)
-  return reply.data
-}
-
 /** The last `lines` non-empty lines of a log. */
 export function tail(text: string, lines: number): string {
   return text

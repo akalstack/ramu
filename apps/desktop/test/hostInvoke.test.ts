@@ -197,7 +197,6 @@ describe('isSettingsActionAllowed', () => {
       'deploy.signInStatus',
       'deploy.signInMatch',
       'deploy.cancelSignIn',
-      'deploy.salesforceSignIn',
       'deploy.saveToken',
       'deploy.disconnect',
       'abilities.check',

@@ -27,7 +27,7 @@ Connect an account once in **Settings → Deploy**, or with **Connect** in the d
 | Target | What Ramu sets up | Details |
 | --- | --- | --- |
 | Vercel or Netlify | Links the platform to the repository: a preview for every pull request, and production from every push to the default branch | [Deploy a project](deploy.md#deploy-a-project) |
-| Railway, Fly.io, Cloudflare or Supabase | The agent writes the platform's config and runs its own CLI with your connected account; each command that changes anything asks you first | [Railway, Fly.io, Cloudflare and Supabase](deploy.md#railway-flyio-cloudflare-and-supabase) |
+| Railway, Fly.io, Cloudflare or Supabase | Install the platform's plugin; the agent writes the platform's config and runs its own CLI with your token; each command that changes anything asks you first | [Railway, Fly.io, Cloudflare and Supabase](deploy.md#railway-flyio-cloudflare-and-supabase) |
 | App Store and Google Play | For an Expo app: the store checks, an `eas.json` pull request, and **Release** to TestFlight and Play's internal track | [Store releases](deploy.md#store-releases) |
 
 **Deploy to production**, **Roll back**, adding a domain, creating DNS records and **Release** are always yours: in the sheet you confirm them, and an agent asking for one shows an approval card in every access mode. Ramu never submits an app for store review.

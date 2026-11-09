@@ -8,7 +8,6 @@ import type {
   ArtifactUsage,
 } from '@ramu/shared/artifacts'
 import { artifactLink, declaredCapabilities } from '@ramu/shared/artifacts'
-import { NAMED_SERVICE_NAMES } from '@ramu/shared/types/deploy'
 import { Button } from '../components/desktop-button'
 import { Checkbox } from '../components/desktop-checkbox'
 import { Input } from '../components/desktop-input'
@@ -56,8 +55,8 @@ export function capabilityLine(name: ArtifactCapability, page: Pick<ArtifactInfo
     case 'ramu':
       return t('Reads what you see in Ramu, read-only: {purpose}', { purpose: c.ramu?.purpose ?? '' })
     case 'services':
-      return t('Reads {services} with your accounts in Settings, read-only: {purpose}', {
-        services: (c.services?.services ?? []).map((service) => NAMED_SERVICE_NAMES[service]).join(', '),
+      return t('Reads {services} with your plugins’ credentials in Settings, read-only: {purpose}', {
+        services: (c.services?.services ?? []).join(', '),
         purpose: c.services?.purpose ?? '',
       })
   }
@@ -210,7 +209,7 @@ function GrantChoices({
                 checked={chosen[`services:${service}`] !== false}
                 onCheckedChange={(checked) => setChosen({ ...chosen, [`services:${service}`]: checked === true })}
               />
-              {NAMED_SERVICE_NAMES[service]}
+              {service}
             </label>
           ))}
         </div>

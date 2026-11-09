@@ -19,8 +19,20 @@ export type StackId = (typeof STACK_IDS)[number]
 /** A new project's folder name: letters, digits, dots, dashes and underscores, starting with a letter or digit. */
 export const PROJECT_NAME = /^[A-Za-z0-9][\w.-]{0,99}$/
 
-/** Where a stack deploys by default: a hosting platform with an adapter, Expo, or a platform run through its CLI. */
+/** Where a stack deploys by default: a hosting platform with an adapter, Expo, or a platform a plugin provides. */
 export type DeployTargetId = 'vercel' | 'netlify' | 'expo' | 'railway' | 'fly' | 'cloudflare'
+
+/**
+ * Deploy targets an agent reaches through the plugin of the same name, with `platform_cli`, rather than through an
+ * adapter; each with the platform's own name.
+ */
+export const PLUGIN_DEPLOY_TARGETS = {
+  railway: 'Railway',
+  fly: 'Fly.io',
+  cloudflare: 'Cloudflare',
+} as const satisfies Partial<Record<DeployTargetId, string>>
+export const isPluginDeployTarget = (value: unknown): value is keyof typeof PLUGIN_DEPLOY_TARGETS =>
+  typeof value === 'string' && Object.hasOwn(PLUGIN_DEPLOY_TARGETS, value)
 
 export interface Stack {
   id: StackId

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { NAMED_SERVICES } from '@ramu/shared/types/deploy'
+import { DATA_SOURCE_ID } from '@ramu/shared/artifactSource'
 import type { ArtifactCapabilities } from '@ramu/shared/artifacts'
 import type { InteractiveInput } from './store'
 
@@ -103,7 +103,7 @@ export const pageCapabilitiesSchema = z
     services: z
       .object({
         purpose: z.string().trim().min(3).max(200),
-        services: z.array(z.enum(NAMED_SERVICES)).min(1).max(NAMED_SERVICES.length),
+        services: z.array(z.string().regex(DATA_SOURCE_ID, 'Name a data source such as grafana.')).min(1).max(8),
       })
       .optional(),
   })

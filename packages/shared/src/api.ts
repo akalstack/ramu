@@ -263,17 +263,14 @@ interface ArtifactMethods {
   'artifacts.setRefresh'(artifactId: string, base: number, minutes: number): import('./artifacts').ArtifactInfo
   /** Shows only a dashboard's last `days` of dated rows (all of them when null), as a new version on top of `base`. */
   'artifacts.setRange'(artifactId: string, base: number, days: number | null): import('./artifacts').ArtifactInfo
-  /** The named services a dashboard's tables read, and the ones the person allowed it to read. */
-  'artifacts.services'(artifactId: string): {
-    needed: import('./types/deploy').NamedService[]
-    allowed: import('./types/deploy').NamedService[]
-  }
-  /** Allows a dashboard to read a named service with the account in Settings, or stops it. */
+  /** The plugin data sources a dashboard's tables read, by id, and the ones the person allowed it to read. */
+  'artifacts.services'(artifactId: string): { needed: string[]; allowed: string[] }
+  /** Allows a dashboard to read a plugin data source with the credential saved for its plugin, or stops it. */
   'artifacts.allowService'(
     artifactId: string,
-    service: import('./types/deploy').NamedService,
+    service: string,
     allowed: boolean,
-  ): { needed: import('./types/deploy').NamedService[]; allowed: import('./types/deploy').NamedService[] }
+  ): { needed: string[]; allowed: string[] }
   /** Says this device is (or stopped) editing an artifact's text, and returns the other devices editing it now. */
   /** `part` is where this device is: the heading above its last change, or the slide it changed. */
   'artifacts.editing'(artifactId: string, editing: boolean, part?: string | null): string[]
@@ -725,6 +722,39 @@ export interface RamuMethods extends ArtifactMethods {
   /** Which providers' exports carry a managed skill. Applies to new threads. */
   'skills.setProviders'(id: string, providers: import('./types').AgentProvider[]): void
   'skills.remove'(id: string): void
+  'plugins.list'(): import('./plugins').InstalledPlugin[]
+  'plugins.indexes'(): import('./plugins').PluginIndexInfo[]
+  /** Listed plugins across every index, matching the words in `query`. */
+  'plugins.browse'(query?: string): import('./plugins').PluginListing[]
+  /** Reads a plugin into a review; nothing is saved. `source` is a Git URL, a folder, or a name listed in `index`. */
+  'plugins.stage'(input: {
+    source: string
+    ref?: string
+    path?: string
+    index?: string
+  }): import('./plugins').PluginReview
+  'plugins.cancel'(stageId: string): void
+  'plugins.confirm'(
+    stageId: string,
+    options: { scope: import('./plugins').PluginScope; includeScripts: boolean },
+  ): import('./plugins').InstalledPlugin
+  'plugins.updateReview'(id: string): import('./plugins').PluginReview
+  'plugins.checkUpdates'(): import('./plugins').InstalledPlugin[]
+  'plugins.remove'(id: string): void
+  'plugins.setEnabled'(id: string, enabled: boolean): import('./plugins').InstalledPlugin
+  'plugins.setCredential'(
+    id: string,
+    slot: string,
+    value: { token: string; fields: Record<string, string> },
+  ): import('./plugins').InstalledPlugin
+  'plugins.removeCredential'(id: string, slot: string): import('./plugins').InstalledPlugin
+  /** Opens the service's sign-in; the host keeps the token once the browser comes back to its loopback callback. */
+  'plugins.signIn'(id: string, slot: string, input: { clientId: string; sandbox: boolean }): { url: string }
+  'plugins.addIndex'(url: string): import('./plugins').PluginIndexInfo[]
+  'plugins.removeIndex'(url: string): import('./plugins').PluginIndexInfo[]
+  /** Installs a folder as a Development plugin, reloaded when its files change. */
+  'plugins.dev'(folder: string): import('./plugins').InstalledPlugin
+  'plugins.dataSources'(): { id: string; label: string; plugin: string }[]
   'agent.all'(): AgentSessionInfo[]
   'learning.get'(): import('./types').LearningSnapshot
   'learning.apply'(id: string): void
@@ -1300,8 +1330,6 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.accounts'(check: boolean): HostingAccountsSummary
   /** Starts the platform CLI's browser sign-in on the host. Host only. */
   'deploy.signIn'(platform: CliSignInPlatform): HostingSignIn
-  /** Starts Salesforce's sign-in through the person's connected app, by its consumer key; production or a sandbox. */
-  'deploy.salesforceSignIn'(clientId: string, sandbox: boolean): HostingSignIn
   'deploy.signInStatus'(id: string): HostingSignIn
   /** Sends the number the platform's sign-in page shows, for a sign-in that asks for one. */
   'deploy.signInMatch'(id: string, number: string): HostingSignIn
@@ -1754,6 +1782,8 @@ export type PushEvents = {
   'menu:action': { action: 'settings' | 'check-updates' }
   /** A `ramu://pair` link was opened; the text is validated by the screen that uses it. */
   'pair:link': { link: string }
+  /** A `ramu://plugin/install` link from getramu.dev: Settings → Plugins opens its review. */
+  'plugin:link': { link: string }
   /** The live view window closed. */
   'live:closed': Record<string, never>
   /** The live view window asked to open its thread here. */
@@ -1773,6 +1803,8 @@ export type PushEvents = {
   /** `created` is the id of a summary that just became ready, so clients can raise one notification. */
   'summaries:changed': { created: string | null }
   'rules:changed': Record<string, never>
+  'plugins:changed': null
+  'plugins:signInFailed': { pluginId: string; slot: string; message: string }
   /** `rejected`: the server no longer accepts this device's token, so reconnecting is pointless until it is paired again. */
   'background:connection': {
     connected: boolean

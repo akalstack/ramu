@@ -9,7 +9,8 @@ import type {
   Project,
   Repository,
 } from '@ramu/shared/types'
-import { isCliPlatform, isHostingPlatform } from '@ramu/shared/types/deploy'
+import { isHostingPlatform } from '@ramu/shared/types/deploy'
+import { PLUGIN_DEPLOY_TARGETS, isPluginDeployTarget } from '@ramu/shared/stacks'
 import { BrandIcon } from '@/components/brand-icon'
 import { Button } from '@/components/desktop-button'
 import { Checkbox } from '@/components/desktop-checkbox'
@@ -22,6 +23,7 @@ import { useHost } from '../../workspace/HostProvider'
 import { projectCtx } from '../../workspace/workspace'
 import { openPublishRepository } from '../../git/PublishRepositoryHost'
 import { openDeploySettings } from '../../settings/DeployAccounts'
+import { openPluginSettings } from '../../settings/openPluginSettings'
 import { CiSetupSection } from './CiSetup'
 import { DatabaseSection } from './Database'
 import { DomainsSection } from './Domains'
@@ -51,8 +53,12 @@ export function DeployDialog({
   const [status, setStatus] = useState<ProjectDeployment | null>(null)
   const [accounts, setAccounts] = useState<(HostingAccount & { platform: HostingPlatform })[]>([])
   const [platform, setPlatform] = useState<HostingPlatform | null>(null)
-  // The account of a platform the stack names that deploys through its own CLI, such as Railway.
-  const [cliAccount, setCliAccount] = useState<HostingAccount | null>(null)
+  // A platform the stack names that deploys through its plugin, such as Railway, and how far its plugin is set up.
+  const [pluginTarget, setPluginTarget] = useState<{
+    id: keyof typeof PLUGIN_DEPLOY_TARGETS
+    name: string
+    state: 'missing' | 'credential' | 'ready'
+  } | null>(null)
   const [repoId, setRepoId] = useState<string | null>(repos[0]?.id ?? null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -62,16 +68,33 @@ export function DeployDialog({
   // A new database adds variables, so the sync table reads them again.
   const [provisioned, setProvisioned] = useState(0)
   const load = useCallback(() => {
-    void Promise.all([host.invoke('deploy.project', project.id), host.invoke('deploy.accounts', false)]).then(
-      ([next, summary]) => {
+    void Promise.all([
+      host.invoke('deploy.project', project.id),
+      host.invoke('deploy.accounts', false),
+      // A host without plugins shows the plugin as not installed.
+      Promise.resolve(host.invoke('plugins.list')).catch(() => []),
+    ]).then(
+      ([next, summary, plugins]) => {
         setStatus(next)
         const hosting = summary.accounts.flatMap((account) =>
           isHostingPlatform(account.platform) ? [{ ...account, platform: account.platform }] : [],
         )
         setAccounts(hosting)
-        setCliAccount(
-          isCliPlatform(next.recommended)
-            ? (summary.accounts.find((account) => account.platform === next.recommended) ?? null)
+        const target = next.recommended
+        const plugin = isPluginDeployTarget(target)
+          ? plugins.find((entry) => entry.name === target && entry.enabled)
+          : undefined
+        setPluginTarget(
+          isPluginDeployTarget(target)
+            ? {
+                id: target,
+                name: PLUGIN_DEPLOY_TARGETS[target],
+                state: !plugin
+                  ? 'missing'
+                  : plugin.credentials.every((slot) => slot.state === 'saved')
+                    ? 'ready'
+                    : 'credential',
+              }
             : null,
         )
         setPlatform(
@@ -181,22 +204,36 @@ export function DeployDialog({
         <p className="text-muted-foreground">{t('Checking…')}</p>
       ) : storeOnly ? null : !binding ? (
         <>
-          {cliAccount && (
-            <p role="status" className="m-0 mb-3 text-caption">
-              {t(
-                '{0} is recommended for this project’s stack. It deploys through its own CLI. Ask the project’s agent to deploy, and Ramu runs the CLI with your {0} account, asking before each command that changes anything.',
-                { 0: cliAccount.name },
-              )}{' '}
-              {cliAccount.connected && t('Connected as {0}', { 0: cliAccount.account ?? cliAccount.name })}
+          {pluginTarget && (
+            <p role="status" className="m-0 mb-3 flex items-start gap-2 text-caption">
+              <BrandIcon brand={pluginTarget.id} className="mt-0.5" />
+              <span>
+                {t('Deploys to {0} through its plugin.', { 0: pluginTarget.name })}{' '}
+                {pluginTarget.state === 'ready'
+                  ? t('Ask the project’s agent to deploy, and Ramu asks before each command that changes anything.')
+                  : pluginTarget.state === 'missing'
+                    ? t('Install it, then ask the project’s agent to deploy.')
+                    : t('Save its token, then ask the project’s agent to deploy.')}
+              </span>
             </p>
           )}
-          {cliAccount && !cliAccount.connected && (
-            <Button size="sm" variant="secondary" className="mb-3" onClick={() => connect(cliAccount.name)}>
-              {t('Connect {0}', { 0: cliAccount.name })}
+          {pluginTarget && pluginTarget.state !== 'ready' && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="mb-3"
+              onClick={() => {
+                onClose()
+                openPluginSettings(host.id)
+              }}
+            >
+              {pluginTarget.state === 'missing'
+                ? t('Install the {0} plugin', { 0: pluginTarget.name })
+                : t('Open plugin settings')}
             </Button>
           )}
           <p>
-            {cliAccount
+            {pluginTarget
               ? t(
                   'Or link Vercel or Netlify, which watch the repository: every pull request gets a preview and the default branch deploys to production.',
                 )

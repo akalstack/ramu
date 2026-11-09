@@ -2,19 +2,21 @@ import { interactiveExport } from '@ramu/shared/interactiveExport'
 import type { ArtifactInfo } from '@ramu/shared/artifacts'
 import type { ForgeAccountStore } from '../workspace/forgeAccounts'
 import type { HostingAccounts } from '../workspace/deploy/accounts'
+import type { PluginService } from '../plugins/service'
 import { STATIC_TARGETS, staticAdapter, type StaticTarget } from '../hosting/staticSite'
 import type { PageStore } from './pages'
 
 /**
  * Publish to the web: a page's exact tested bytes as a one-file static site on the person's own account. GitHub Pages
- * uses the GitHub login saved in Settings; Netlify, Vercel and Cloudflare Pages the hosting accounts deploys use
- * (Settings → Hosting accounts).
+ * uses the GitHub login saved in Settings; Netlify and Vercel the hosting accounts deploys use (Settings → Deploy);
+ * Cloudflare Pages the token saved for the Cloudflare plugin (Settings → Plugins).
  */
 export class PagePublisher {
   constructor(
     private readonly pages: PageStore,
     private readonly forge: () => ForgeAccountStore | undefined,
-    private readonly hosting: HostingAccounts | undefined,
+    private readonly hosting: Pick<HostingAccounts, 'auth' | 'connected'> | undefined,
+    private readonly plugins: Pick<PluginService, 'credentialOf' | 'hasCredential'> | undefined,
     private readonly fetcher: typeof fetch = fetch,
   ) {}
 
@@ -26,7 +28,9 @@ export class PagePublisher {
       connected:
         target === 'github-pages'
           ? !!this.forge()?.choiceId('https://github.com')
-          : !!this.hosting?.connected(target === 'cloudflare-pages' ? 'cloudflare' : target),
+          : target === 'cloudflare-pages'
+            ? !!this.plugins?.hasCredential('cloudflare', 'token')
+            : !!this.hosting?.connected(target),
     }))
   }
 
@@ -36,12 +40,15 @@ export class PagePublisher {
       if (account?.kind !== 'saved') throw new Error('Connect a GitHub account in Settings → Git hosting first.')
       return account.token
     }
-    if (!this.hosting) throw new Error('Update this host to publish there.')
     if (target === 'cloudflare-pages') {
-      // A token limited to Pages often cannot list accounts, so the account it was connected with goes beside it.
-      const { auth, defaultScope } = await this.hosting.auth('cloudflare')
-      return defaultScope ? `${defaultScope}:${auth.token}` : auth.token
+      const saved = await this.plugins?.credentialOf('cloudflare', 'token')
+      if (!saved) throw new Error('Install the Cloudflare plugin and save its token in Settings → Plugins first.')
+      // A token limited to Pages often cannot list accounts, so the account ID saved with it goes beside it; without
+      // one, the first account the token reaches is used.
+      const account = saved.fields.account?.trim()
+      return account ? `${account}:${saved.token}` : saved.token
     }
+    if (!this.hosting) throw new Error('Update this host to publish there.')
     return (await this.hosting.auth(target)).auth.token
   }
 

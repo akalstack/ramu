@@ -53,7 +53,7 @@ Open a project, say what you want, and review the result. The defaults work out 
 
 **Shipping and running the app**
 
-- **More places to deploy.** Production from the default branch on Vercel or Netlify; Railway, Fly.io, Cloudflare and Supabase through their own CLI with your account, asking before each change; Expo apps to TestFlight and Play's internal track.
+- **More places to deploy.** Production from the default branch on Vercel or Netlify; Railway, Fly.io, Cloudflare, Supabase and any other service through [plugins](docs/guide/plugins.md) that bring their CLI, skills and MCP servers, asking before each change; Expo apps to TestFlight and Play's internal track.
 - **Everything around it.** CI through a pull request, environment variables synced, a Neon database, custom domains, usage beside your plan's limits, and an incident thread when the live address stops answering.
 
 **Anywhere**

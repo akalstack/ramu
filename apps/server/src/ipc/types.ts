@@ -36,6 +36,8 @@ export interface Services {
   hostBrowser?: import('../browser/hostBrowser').HostBrowser
   browser?: import('../browser/desktopBroker').DesktopBrowserBroker
   getSharedMcp?: () => import('../mcp/service').SharedMcpService
+  /** Installed plugins, their credentials and the indexes they are listed in. */
+  plugins?: import('../plugins/service').PluginService
   threadTitles?: import('../agent/threadTitles').ThreadTitles
   interactive?: import('../interactive/store').InteractiveStore
   pages?: import('../interactive/pages').PageStore

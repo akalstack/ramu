@@ -1,9 +1,8 @@
-// One sign-in per hosting platform, resource provider and store service on this host, used by deploys, databases,
-// store releases and Publish to the web. The token lives in the host credential store; ordinary state keeps only a
-// reference and the account name Settings shows.
+// One sign-in per hosting platform, resource provider, store service and media service on this host, used by deploys,
+// databases, store releases, Publish to the web and abilities. The token lives in the host credential store; ordinary
+// state keeps only a reference and the account name Settings shows.
 import {
   ACCOUNT_PLATFORMS,
-  isCliPlatform,
   isHostingPlatform,
   isMediaService,
   type AccountPlatform,
@@ -14,13 +13,9 @@ import { SavedCredential } from '../forge/savedCredential'
 import { DeployError, hostingAdapter, type HostingAdapter, type HostingAuth } from './adapter'
 import { expoClient } from './expo'
 import { resourceAdapter } from './resource'
-import { CLI_PLATFORM_SPECS } from './cliPlatforms'
 import './vercel'
 import './netlify'
 import './neon'
-import { amplitude } from '../../interactive/amplitude'
-import { salesforce } from '../../interactive/salesforce'
-import { grafana } from '../../interactive/grafana'
 import { mediaConnector } from '../../media/mediaServices'
 
 /** What an account needs from its platform's adapter: a name, a token page and who a token belongs to. */
@@ -30,14 +25,7 @@ const expo = expoClient()
 
 function accountAdapter(platform: AccountPlatform): AccountAdapter {
   if (platform === 'expo') return expo
-  if (platform === 'grafana') return grafana
-  if (platform === 'amplitude') return amplitude
-  if (platform === 'salesforce') return salesforce
   if (isMediaService(platform)) return mediaConnector(platform)
-  if (isCliPlatform(platform)) {
-    const spec = CLI_PLATFORM_SPECS[platform]
-    return { name: spec.name, tokenPage: spec.tokenPage, account: (auth) => spec.account(auth), kind: 'cli' }
-  }
   if (!isHostingPlatform(platform)) return resourceAdapter(platform)
   const adapter = hostingAdapter(platform)
   return { name: adapter.name, tokenPage: adapter.tokenPage, account: (auth) => adapter.account(auth), kind: 'hosting' }
@@ -51,12 +39,10 @@ interface SavedHosting {
   via?: 'cli' | 'token'
   defaultScope?: string | null
   broadScope?: string | null
-  /** A CLI sign-in (Vercel, Railway) is an OAuth session: its access token expires and is renewed with this. */
+  /** A CLI sign-in (Vercel) is an OAuth session: its access token expires and is renewed with this. */
   refreshToken?: string
   /** Milliseconds. */
   expiresAt?: number
-  /** The OAuth client and token address a session renews with, when it is the person's own (Salesforce). */
-  oauthClient?: { url: string; client: string }
 }
 
 /** What a CLI sign-in or a pasted token hands over before it is checked. */
@@ -64,7 +50,6 @@ export interface HostingSecret {
   token: string
   refreshToken?: string
   expiresAt?: number
-  oauthClient?: { url: string; client: string }
 }
 
 /** Where a platform's CLI session is renewed, and the CLI's OAuth client it was issued to. */
@@ -72,7 +57,6 @@ export type OAuthRenewal = Partial<Record<AccountPlatform, { url: string; client
 
 const CLI_OAUTH: OAuthRenewal = {
   vercel: { url: 'https://api.vercel.com/login/oauth/token', client: 'cl_HYyOPBNtFMfHhaUn9L4QPfTZz6TP47bp' },
-  railway: { url: 'https://backboard.railway.com/oauth/token', client: 'rlwy_oaci_onEklvmksh1hRUiCo7E2zX12' },
 }
 const RENEW_BEFORE_MS = 5 * 60_000
 
@@ -102,14 +86,7 @@ export class HostingAccounts {
     this.saved = {
       vercel: saved('vercel'),
       netlify: saved('netlify'),
-      railway: saved('railway'),
-      fly: saved('fly'),
-      cloudflare: saved('cloudflare'),
-      supabase: saved('supabase'),
       neon: saved('neon'),
-      grafana: saved('grafana'),
-      amplitude: saved('amplitude'),
-      salesforce: saved('salesforce'),
       expo: saved('expo'),
       gemini: saved('gemini'),
       elevenlabs: saved('elevenlabs'),
@@ -179,7 +156,6 @@ export class HostingAccounts {
       defaultScope: identity.defaultScope,
       broadScope: identity.broadScope,
       ...(secret.refreshToken ? { refreshToken: secret.refreshToken } : {}),
-      ...(secret.oauthClient ? { oauthClient: secret.oauthClient } : {}),
       ...((secret.expiresAt ?? identity.expiresAt) ? { expiresAt: secret.expiresAt ?? identity.expiresAt! } : {}),
     })
     this.errors.delete(platform)
@@ -220,7 +196,7 @@ export class HostingAccounts {
 
   private async renew(platform: AccountPlatform, value: SavedHosting): Promise<SavedHosting> {
     const name = this.adapter(platform).name
-    const oauth = value.oauthClient ?? this.oauth[platform]
+    const oauth = this.oauth[platform]
     if (!oauth)
       throw new DeployError(`The ${name} sign-in ended. Connect ${name} again in Settings → Deploy.`, 'signed-out')
     let response: Response
@@ -246,11 +222,9 @@ export class HostingAccounts {
       )
     const renewed = (await response.json()) as { access_token?: string; refresh_token?: string; expires_in?: number }
     if (!renewed.access_token) throw new DeployError(`${name} sent no new sign-in.`, 'signed-out')
-    // A token saved with its address (`address|token`) keeps the address.
-    const address = value.token.includes('|') ? value.token.slice(0, value.token.lastIndexOf('|') + 1) : ''
     const next: SavedHosting = {
       ...value,
-      token: `${address}${renewed.access_token}`,
+      token: renewed.access_token,
       // Refresh tokens rotate: the old one stops working once a new one is issued.
       refreshToken: renewed.refresh_token ?? value.refreshToken,
       expiresAt: Date.now() + (renewed.expires_in ?? 3600) * 1000,

@@ -10,7 +10,6 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import type { CliSignInPlatform, HostingSignIn } from '@ramu/shared/types/deploy'
 import { findExecutable } from '../../providers/providerBinaries'
-import { startSalesforceSignIn } from '../../interactive/salesforce'
 import type { HostingAccounts, HostingSecret } from './accounts'
 
 const TIMEOUT_MS = 10 * 60_000
@@ -101,7 +100,6 @@ export function signInPrompt(output: string): { url: string | null; code: string
   const code =
     (url ? new URL(url).searchParams.get('user_code') : null) ??
     plain.match(/enter (?:the code )?([A-Z0-9]{4}-[A-Z0-9]{4})/)?.[1] ??
-    plain.match(/enter this code:\s*([A-Za-z0-9-]{4,32})/i)?.[1] ??
     null
   return { url, code }
 }
@@ -153,39 +151,6 @@ export async function netlifyCliToken(home: string): Promise<HostingSecret> {
   throw new Error('The Netlify CLI finished without saving a sign-in.')
 }
 
-/**
- * Railway's CLI keeps its OAuth session in `~/.railway/config.json`: an access token, the refresh token that renews it
- * and when it expires (seconds). Older versions kept a plain token there instead.
- */
-export async function railwayCliToken(home: string): Promise<HostingSecret> {
-  const file = join(home, '.railway', 'config.json')
-  if (!existsSync(file)) throw new Error('The Railway CLI finished without saving a sign-in.')
-  const { user } = JSON.parse(await readFile(file, 'utf8')) as {
-    user?: { token?: string; accessToken?: string; refreshToken?: string; tokenExpiresAt?: number }
-  }
-  if (user?.accessToken)
-    return {
-      token: user.accessToken,
-      ...(user.refreshToken ? { refreshToken: user.refreshToken } : {}),
-      ...(user.tokenExpiresAt ? { expiresAt: user.tokenExpiresAt * 1000 } : {}),
-    }
-  if (user?.token) return { token: user.token }
-  throw new Error('The Railway CLI finished without saving a sign-in.')
-}
-
-/**
- * flyctl keeps its login as `access_token` in `~/.fly/config.yml`: a user token, macaroons, or both, comma-separated.
- * It has no expiry Ramu can renew; a revoked one shows as signed out.
- */
-export async function flyCliToken(home: string): Promise<HostingSecret> {
-  const file = join(home, '.fly', 'config.yml')
-  if (!existsSync(file)) throw new Error('The Fly.io CLI finished without saving a sign-in.')
-  const line = /^access_token:\s*(.+)$/m.exec(await readFile(file, 'utf8'))?.[1]?.trim()
-  const token = line?.replace(/^(["'])(.*)\1$/, '$2').trim()
-  if (!token) throw new Error('The Fly.io CLI finished without saving a sign-in.')
-  return { token }
-}
-
 interface Running {
   view: HostingSignIn
   children: Set<ChildProcess>
@@ -193,8 +158,6 @@ interface Running {
   folder: string | null
   /** The number the person picked on the platform's page, for a sign-in that asks for one. */
   match?: string
-  /** Stops a sign-in that runs no CLI (Salesforce's loopback callback). */
-  stop?: () => void
 }
 
 type Spawn = typeof spawn
@@ -208,7 +171,6 @@ export class HostingSignIns {
     private readonly spawner: Spawn = spawn,
     private readonly pollMs = POLL_MS,
     private readonly expoToken: (session: string) => Promise<HostingSecret> = expoSessionToken,
-    private readonly salesforce: typeof startSalesforceSignIn = startSalesforceSignIn,
   ) {}
 
   start(platform: CliSignInPlatform): HostingSignIn {
@@ -233,13 +195,9 @@ export class HostingSignIns {
             ? await this.vercel(entry, executable, entry.folder)
             : platform === 'netlify'
               ? await this.netlify(entry, executable, entry.folder)
-              : platform === 'railway'
-                ? await this.railway(entry, executable, entry.folder)
-                : platform === 'expo'
-                  ? await this.expo(entry, executable, entry.folder)
-                  : platform === 'neon'
-                    ? await this.neon(entry, executable, entry.folder)
-                    : await this.fly(entry, executable, entry.folder)
+              : platform === 'expo'
+                ? await this.expo(entry, executable, entry.folder)
+                : await this.neon(entry, executable, entry.folder)
         if (entry.stopped) return
         const account = await this.accounts.save(platform, secret, 'cli')
         entry.view = { ...entry.view, state: 'connected', account: account.account, error: null }
@@ -252,40 +210,6 @@ export class HostingSignIns {
         setTimeout(() => this.running.delete(entry.view.id), 60_000).unref()
       }
     })()
-    return entry.view
-  }
-
-  /**
-   * Salesforce's browser sign-in through the person's connected app: the link opens in this computer's browser, whose
-   * redirect reaches the loopback callback; the tokens it brings are checked and saved like any sign-in.
-   */
-  async startSalesforce(clientId: string, sandbox: boolean): Promise<HostingSignIn> {
-    for (const [id, entry] of this.running) if (entry.view.platform === 'salesforce') this.cancel(id)
-    const flow = await this.salesforce({ clientId, sandbox })
-    const entry: Running = {
-      view: {
-        id: randomUUID(),
-        platform: 'salesforce',
-        state: 'waiting',
-        url: flow.url,
-        code: null,
-        account: null,
-        error: null,
-      },
-      children: new Set(),
-      stopped: false,
-      folder: null,
-      stop: flow.stop,
-    }
-    this.running.set(entry.view.id, entry)
-    void flow.done
-      .then(async (grant) => {
-        if (entry.stopped) return
-        const account = await this.accounts.save('salesforce', grant, 'token')
-        entry.view = { ...entry.view, state: 'connected', account: account.account, error: null }
-      })
-      .catch((error: unknown) => this.fail(entry, error instanceof Error ? error.message : String(error)))
-      .finally(() => setTimeout(() => this.running.delete(entry.view.id), 60_000).unref())
     return entry.view
   }
 
@@ -314,7 +238,6 @@ export class HostingSignIns {
     if (entry.view.state === 'connected' || entry.view.state === 'failed') return
     entry.stopped = true
     for (const child of entry.children) child.kill()
-    entry.stop?.()
     entry.view = { ...entry.view, state: 'failed', error: message }
   }
 
@@ -358,26 +281,6 @@ export class HostingSignIns {
     // The code can be printed after the link, in a later chunk.
     if (prompt.url && (!entry.view.url || (!entry.view.code && prompt.code)))
       entry.view = { ...entry.view, state: 'waiting', ...prompt }
-  }
-
-  /**
-   * `railway login --browserless` runs Railway's device sign-in: it prints a link (with its code) that works from any
-   * device and waits for approval, then saves the session in the private HOME.
-   */
-  private async railway(entry: Running, executable: string, folder: string): Promise<HostingSecret> {
-    await this.run(entry, executable, ['login', '--browserless'], cliEnvironment(folder), (output) =>
-      this.show(entry, output),
-    )
-    return railwayCliToken(folder)
-  }
-
-  /**
-   * `fly auth login` opens Fly.io's sign-in in the host's browser and prints its link; the page hands the token back to
-   * flyctl on a loopback port, which saves it in the private HOME's `.fly` folder.
-   */
-  private async fly(entry: Running, executable: string, folder: string): Promise<HostingSecret> {
-    await this.run(entry, executable, ['auth', 'login'], cliEnvironment(folder), (output) => this.show(entry, output))
-    return flyCliToken(folder)
   }
 
   /** `vercel login` runs Vercel's device sign-in and prints the link with its code, then waits for approval. */

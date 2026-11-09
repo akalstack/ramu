@@ -1,4 +1,3 @@
-import { NAMED_SERVICE_NAMES } from '@ramu/shared/types/deploy'
 import { joinedText, LiveTextEditor, syncLiveText } from '@ramu/shared/liveText'
 import { deckText, slideWords } from '@ramu/shared/deckText'
 import { caretAfter, changedAt, headingAt } from '@ramu/shared/editingPart'
@@ -1656,8 +1655,8 @@ function grantText(say: ReturnType<typeof useSay>, name: string, page: ArtifactI
     case 'ramu':
       return say('Reads what you see in Ramu, read-only: {purpose}', { purpose: c.ramu?.purpose ?? '' })
     case 'services':
-      return say('Reads {services} with your accounts in Settings, read-only: {purpose}', {
-        services: (c.services?.services ?? []).map((service) => NAMED_SERVICE_NAMES[service]).join(', '),
+      return say('Reads {services} with your plugins’ credentials in Settings, read-only: {purpose}', {
+        services: (c.services?.services ?? []).join(', '),
         purpose: c.services?.purpose ?? '',
       })
     case 'schedules':

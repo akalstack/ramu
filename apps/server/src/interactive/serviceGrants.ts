@@ -1,6 +1,7 @@
-// Which named services each kept Dashboard may read: its own grant per service, given by the person on the dashboard
-// and taken back there or in its settings. A dashboard naming a service it was not allowed reads nothing from it.
-import { NAMED_SERVICES, type NamedService } from '@ramu/shared/types/deploy'
+// Which plugin data sources each kept Dashboard may read: its own grant per data source, given by the person on the
+// dashboard and taken back there or in its settings. A dashboard naming a data source it was not allowed reads nothing
+// from it.
+import { DATA_SOURCE_ID } from '@ramu/shared/artifactSource'
 
 const key = (artifactId: string) => `artifact-services:${artifactId}`
 
@@ -10,13 +11,15 @@ export class ServiceGrants {
     private readonly setState: (key: string, value: unknown) => void,
   ) {}
 
-  allowed(artifactId: string): NamedService[] {
+  allowed(artifactId: string): string[] {
     const value = this.getState<unknown>(key(artifactId), [])
-    return Array.isArray(value) ? NAMED_SERVICES.filter((service) => (value as unknown[]).includes(service)) : []
+    return Array.isArray(value)
+      ? value.filter((entry): entry is string => typeof entry === 'string' && DATA_SOURCE_ID.test(entry))
+      : []
   }
 
-  set(artifactId: string, service: NamedService, allowed: boolean): NamedService[] {
-    const next: NamedService[] = this.allowed(artifactId).filter((entry) => entry !== service)
+  set(artifactId: string, service: string, allowed: boolean): string[] {
+    const next = this.allowed(artifactId).filter((entry) => entry !== service)
     if (allowed) next.push(service)
     this.setState(key(artifactId), next)
     return next

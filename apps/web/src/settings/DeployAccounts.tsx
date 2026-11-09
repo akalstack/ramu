@@ -7,13 +7,11 @@ import {
   DEPLOY_ACCOUNT_GROUPS,
   REMOTE_SIGN_IN_PLATFORMS,
   isMediaService,
-  SALESFORCE_CALLBACK,
   type CliSignInPlatform,
 } from '@ramu/shared/types/deploy'
 import { BrandIcon } from '@/components/brand-icon'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/desktop-input'
-import { Checkbox } from '@/components/desktop-checkbox'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { t } from '../i18n'
 import { invoke as openOnThisComputer } from '../ipc'
@@ -24,18 +22,7 @@ import { useSettingsInvoke } from './SettingsScope'
 const SCOPE_HINT: Record<AccountPlatform, string> = {
   vercel: 'Scope: the team your projects are in, not Full Account',
   netlify: 'Netlify tokens reach every team you belong to, so choose an expiry',
-  railway: 'Pick the workspace your projects are in, so the token reaches only that workspace',
-  cloudflare:
-    'Create a custom token for the one account your apps go in, with Edit on only what your agent deploys (Workers Scripts, Cloudflare Pages, D1, Workers KV Storage or R2)',
-  fly: 'Create an organization token for the organization your apps go in, rather than a personal access token',
   neon: 'Create a personal API key. Neon keys reach your whole account and do not expire, so revoke it on Neon when Ramu no longer needs it',
-  supabase: 'Create an access token with an expiry. Supabase tokens reach every organization you belong to',
-  grafana:
-    'Create a service account with the Viewer role and a token for it, then paste your Grafana address and the token joined by | (https://acme.grafana.net|glsa_…). Dashboards read it only where you allow it',
-  amplitude:
-    'Copy the project’s API key and secret key from its settings and paste them joined by a colon (key:secret), with eu| before them for an EU project. Dashboards read it only where you allow it',
-  salesforce:
-    'Create a connected app in your org with OAuth on, the api and refresh_token scopes, PKCE required and no secret for the web server flow, and the callback below; then paste its consumer key here',
   expo: 'Create it for a robot user with the Developer role on the account that owns the app; a personal token reaches every account you belong to',
   gemini:
     'Create an API key in Google AI Studio on a project with billing turned on; video and music need the paid tier',
@@ -47,19 +34,15 @@ function deployAccountHeadline(account: HostingAccount): string {
   if (!account.connected)
     return account.kind === 'hosting'
       ? t('Not connected. Deploys and Publish to the web need an account.')
-      : account.kind === 'cli'
-        ? t('Not connected. Agents deploy here through its CLI with this account, asking before each change.')
-        : account.kind === 'store'
-          ? t('Not connected. Store releases of phone apps need an account.')
-          : account.kind === 'service'
-            ? t('Not connected. Dashboards that read it need an account.')
-            : account.kind === 'media' && isMediaService(account.platform)
-              ? t('Not connected. Abilities can use it for {0}.', {
-                  0: MEDIA_ABILITIES[account.platform]
-                    .map((ability) => t(ABILITY_LABELS[ability]).toLowerCase())
-                    .join(', '),
-                })
-              : t('Not connected. Databases for your projects need an account.')
+      : account.kind === 'store'
+        ? t('Not connected. Store releases of phone apps need an account.')
+        : account.kind === 'media' && isMediaService(account.platform)
+          ? t('Not connected. Abilities can use it for {0}.', {
+              0: MEDIA_ABILITIES[account.platform]
+                .map((ability) => t(ABILITY_LABELS[ability]).toLowerCase())
+                .join(', '),
+            })
+          : t('Not connected. Databases for your projects need an account.')
   if (account.error) return account.error
   const via = account.via === 'cli' ? t('signed in through its CLI') : t('token saved on this host')
   const who = t('Connected as {0} ({1})', { 0: account.account ?? account.name, 1: via })
@@ -126,7 +109,7 @@ export function DeployAccounts({ only }: { only?: HostingAccount['kind'] } = {})
                 'Paste API keys in Ramu on the machine running this host. The key stays in that host’s credential store.',
               )
             : t(
-                'Paste tokens on the machine running this host. Vercel, Netlify, Railway and Expo can also be signed in from here: their sign-in runs on the host and keeps the token there.',
+                'Paste tokens on the machine running this host. Vercel, Netlify and Expo can also be signed in from here: their sign-in runs on the host and keeps the token there.',
               )}
         </p>
       )}
@@ -148,7 +131,6 @@ function DeployAccountRow({
   const [signIn, setSignIn] = useState<HostingSignIn | null>(null)
   const [token, setToken] = useState('')
   const [number, setNumber] = useState('')
-  const [sandbox, setSandbox] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const tokenId = useId()
@@ -303,60 +285,7 @@ function DeployAccountRow({
               )}
             </section>
           )}
-          {canAdminister && account.platform === 'salesforce' && (
-            <form
-              className="flex flex-col gap-2"
-              aria-label={t('Sign in with {0}', { 0: account.name })}
-              onSubmit={(event) => {
-                event.preventDefault()
-                void run(async () => setSignIn(await invoke('deploy.salesforceSignIn', token.trim(), sandbox)))
-              }}
-            >
-              <strong>{t('Sign in with {0}', { 0: account.name })}</strong>
-              <p className="m-0 text-muted-foreground">{t(SCOPE_HINT.salesforce)}</p>
-              <p className="m-0 text-muted-foreground">
-                {t('Callback URL')} <code className="font-mono">{SALESFORCE_CALLBACK}</code>
-              </p>
-              <label htmlFor={tokenId} className="flex flex-col gap-1">
-                {t('Consumer key')}
-                <Input
-                  id={tokenId}
-                  value={token}
-                  autoComplete="off"
-                  onChange={(event) => setToken(event.target.value)}
-                />
-              </label>
-              <label className="flex items-center gap-2">
-                <Checkbox checked={sandbox} onCheckedChange={(checked) => setSandbox(checked === true)} />
-                {t('A sandbox org')}
-              </label>
-              {signIn?.state === 'waiting' && signIn.url && (
-                <span className="flex flex-wrap items-center gap-2" role="status">
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => void openOnThisComputer('app.openExternal', signIn.url!)}
-                  >
-                    {t('Open the sign-in page')}
-                  </Button>
-                  <span className="text-muted-foreground">{t('Waiting for you to authorize…')}</span>
-                </span>
-              )}
-              {signIn?.state === 'failed' && signIn.error && (
-                <p role="alert" className="m-0 text-destructive">
-                  {signIn.error}
-                </p>
-              )}
-              {!waiting && (
-                <span>
-                  <Button type="submit" size="sm" disabled={busy || token.trim().length < 10}>
-                    {t('Sign in with {0}', { 0: account.name })}
-                  </Button>
-                </span>
-              )}
-            </form>
-          )}
-          {canAdminister && account.platform !== 'salesforce' && (
+          {canAdminister && (
             <form
               className="flex flex-col gap-2"
               onSubmit={(event) => {
@@ -390,7 +319,7 @@ function DeployAccountRow({
                   </Button>
                 </li>
                 <li>{t('Name it Ramu.')}</li>
-                <li>{t(SCOPE_HINT[account.platform as keyof typeof SCOPE_HINT])}</li>
+                <li>{t(SCOPE_HINT[account.platform])}</li>
                 <li>
                   {account.kind === 'hosting'
                     ? t('Set an expiry, then copy the token and paste it here.')
@@ -436,8 +365,8 @@ function DeployAccountRow({
               </span>
             </form>
           )}
-          {/* Without the token form (Salesforce, or a paired device), the panel still shows what failed and can be closed. */}
-          {(!canAdminister || account.platform === 'salesforce') && (
+          {/* Without the token form (a paired device), the panel still shows what failed and can be closed. */}
+          {!canAdminister && (
             <>
               {error && (
                 <p role="alert" className="m-0 text-destructive">

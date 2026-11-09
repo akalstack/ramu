@@ -66,6 +66,7 @@ const SINGLE_ENVIRONMENT_SECTIONS: readonly string[] = [
   'providers',
   'environment',
   'agent-setup',
+  'plugins',
   'system',
   'remote',
   'deploy',

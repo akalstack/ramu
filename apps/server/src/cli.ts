@@ -62,6 +62,11 @@ Usage:
                                  Reach this host from anywhere through a tunnel Ramu runs: Cloudflare's quick tunnel (no
                                  account), Tailscale Funnel, or ngrok (with your static domain). Turns on access for this
                                  computer only if it is off. ramu tunnel alone shows its state and address.
+  ramu plugin new <name> [--mcp] [--cli]
+                                 Write a working plugin folder (manifest, a skill, a README) to build on
+  ramu plugin check [folder] [--json]
+                                 Validate a plugin: manifest, skills, MCP servers and their tools, ability mappings
+  ramu plugin dev [folder]       Install a folder as a Development plugin here; it reloads when its files change
   ramu up [--private-network] [--no-private-network] [--yes]
                                  Set up how other devices reach this host, keep it running as a service, and pair one.
                                  Without a terminal it never asks; pass --private-network (or --yes).
@@ -146,6 +151,8 @@ const booleans = new Set([
   'discoverable',
   'no-private-network',
   'yes',
+  'mcp',
+  'cli',
 ])
 const flags = new Map<string, string | true>()
 const positional: string[] = []
@@ -560,6 +567,42 @@ if (command === 'start') {
       `${{ quick: 'cloudflared', tailscale: 'tailscale', ngrok: 'ngrok' }[tunnel.choice.kind]} is not installed. Install it, then run this again.`,
     )
   else console.log(`Tunnel ${tunnel.state}${tunnel.error ? `: ${tunnel.error}` : ''}`)
+} else if (command === 'plugin') {
+  const [, action, target] = positional
+  if (action === 'new') {
+    if (!target) fail('Name the plugin: ramu plugin new <name>')
+    const { newPlugin } = await import('./plugins/authoring')
+    try {
+      const root = newPlugin(process.cwd(), target, { mcp: flags.has('mcp'), cli: flags.has('cli') })
+      console.log(
+        `Wrote ${root}.\nNext: cd ${target} && ramu plugin dev . to try it in a thread, then ramu plugin check .`,
+      )
+    } catch (error) {
+      fail((error as Error).message)
+    }
+  } else if (action === 'check') {
+    const { checkPlugin } = await import('./plugins/authoring')
+    const report = await checkPlugin(target ?? '.')
+    if (flags.has('json')) console.log(JSON.stringify(report, null, 2))
+    else {
+      for (const server of report.servers)
+        console.log(`MCP server ${server.name}: ${server.tools.join(', ') || 'no tools'}`)
+      if (report.signed !== null)
+        console.log(report.signed ? 'The latest commit is signed.' : 'The latest commit is not signed.')
+      for (const problem of report.problems) console.error(`${problem.file}: ${problem.message}`)
+      console.log(report.problems.length ? `${report.problems.length} problem(s).` : `${report.name} is ready.`)
+    }
+    process.exit(report.problems.length ? 1 : 0)
+  } else if (action === 'dev') {
+    const { resolve } = await import('node:path')
+    const plugin = await call<{ name: string; credentials: { label: string; state: string }[] }>('plugins.dev', [
+      resolve(target ?? '.'),
+    ])
+    const missing = plugin.credentials.filter((slot) => slot.state !== 'saved').map((slot) => slot.label)
+    console.log(
+      `${plugin.name} is installed here as a Development plugin and reloads when a file changes.${missing.length ? ` Add ${missing.join(', ')} in Settings → Plugins.` : ''}`,
+    )
+  } else fail('Use ramu plugin new <name>, ramu plugin check [folder] or ramu plugin dev [folder].')
 } else if (command === 'up') {
   await up()
 } else fail(`unknown command "${command}". Run ramu --help.`)

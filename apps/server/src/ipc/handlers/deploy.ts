@@ -115,27 +115,11 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([cliPlatform]),
       run: (name: CliSignInPlatform) => {
         // A sign-in whose link opens on any device may be started from a paired owner device: the CLI runs and keeps
-        // the token on the host, and the device only shows the link. Fly.io's opens a browser on the host itself.
+        // the token on the host, and the device only shows the link. Neon's opens a browser on the host itself.
         const device = ctx.host.browserDevice?.()
         const owner = !!device && device !== 'local' && !!ctx.host.browserGrantEligible?.(device)
         if (!administrator() && !(owner && REMOTE_SIGN_IN_PLATFORMS.includes(name))) administrate()
         return deploys().signIns.start(name)
-      },
-    },
-    'deploy.salesforceSignIn': {
-      args: z.tuple([
-        z
-          .string()
-          .trim()
-          .min(10)
-          .max(300)
-          .regex(/^[\w.]+$/, 'Paste the consumer key alone'),
-        z.boolean(),
-      ]),
-      run: (clientId: string, sandbox: boolean) => {
-        // The callback reaches this computer's loopback, so the browser must be here too.
-        administrate()
-        return deploys().signIns.startSalesforce(clientId, sandbox)
       },
     },
     'deploy.signInStatus': { args: z.tuple([signIn]), run: (signInId: string) => deploys().signIns.status(signInId) },
@@ -145,16 +129,7 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
     },
     'deploy.cancelSignIn': { args: z.tuple([signIn]), run: (signInId: string) => deploys().signIns.cancel(signInId) },
     'deploy.saveToken': {
-      args: z.tuple([
-        account,
-        // Fly.io shows its tokens after a `FlyV1` scheme, which is part of what people copy.
-        z
-          .string()
-          .trim()
-          .min(8)
-          .max(4000)
-          .regex(/^(?:FlyV1 )?\S+$/, 'Paste the token alone'),
-      ]),
+      args: z.tuple([account, z.string().trim().min(8).max(4000).regex(/^\S+$/, 'Paste the token alone')]),
       run: (name: AccountPlatform, token: string) => {
         administrate()
         return deploys().accounts.save(name, { token }, 'token')

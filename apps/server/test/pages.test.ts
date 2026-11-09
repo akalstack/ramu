@@ -528,8 +528,13 @@ it('publishes a page without records or AI to the web and updates the same site 
     return new Response('{}')
   }) as typeof fetch
   // Netlify and Vercel come from the hosting accounts deploys use; only Vercel is connected here.
-  const hosting = { connected: (target: string) => target === 'vercel' || target === 'cloudflare' }
-  const publisher = new PagePublisher(pages, () => forge as never, hosting as never, fetcher)
+  const hosting = { connected: (target: string) => target === 'vercel' }
+  // Cloudflare Pages uses the token saved for the Cloudflare plugin.
+  const plugins = {
+    hasCredential: (name: string, slot: string) => name === 'cloudflare' && slot === 'token',
+    credentialOf: async () => null,
+  }
+  const publisher = new PagePublisher(pages, () => forge as never, hosting as never, plugins, fetcher)
   await expect(publisher.publish(page.id, 'github-pages')).rejects.toThrow('Make it a project')
   const plain = interactive.publish('s', (await interactive.preview('s', { ...input, html: '<p>Trip</p>' })).id, 'p1')
   const trip = pages.keep('s', plain.id, { title: 'Trip costs' })
@@ -546,8 +551,36 @@ it('publishes a page without records or AI to the web and updates the same site 
   expect(publisher.targets().find((target) => target.target === 'github-pages')?.connected).toBe(true)
   expect(publisher.targets().find((target) => target.target === 'vercel')?.connected).toBe(true)
   expect(publisher.targets().find((target) => target.target === 'netlify')?.connected).toBe(false)
-  // Cloudflare Pages uses the Cloudflare hosting account deploys use.
   expect(publisher.targets().find((target) => target.target === 'cloudflare-pages')?.connected).toBe(true)
+})
+
+it('publishes to Cloudflare Pages with the Cloudflare plugin’s token and the account saved beside it', async () => {
+  const { PagePublisher } = await import('../src/interactive/pagePublish')
+  const { interactive, pages } = await setup()
+  const requests: { url: string; auth: string }[] = []
+  const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    requests.push({ url, auth: String((init?.headers as Record<string, string>)?.Authorization) })
+    return new Response(JSON.stringify(url.endsWith('/upload-token') ? { result: { jwt: 'upload' } } : {}))
+  }) as typeof fetch
+  const saved = { token: 'cf_token', fields: { account: 'acc_1' }, account: 'Ana' }
+  const plugins = { hasCredential: () => true, credentialOf: vi.fn(async () => saved) }
+  const publisher = new PagePublisher(pages, () => undefined, undefined, plugins, fetcher)
+  const plain = interactive.publish('s', (await interactive.preview('s', { ...input, html: '<p>Trip</p>' })).id, 'p1')
+  const trip = pages.keep('s', plain.id, { title: 'Trip costs' })
+  const live = await publisher.publish(trip.id, 'cloudflare-pages')
+  expect(plugins.credentialOf).toHaveBeenCalledWith('cloudflare', 'token')
+  expect(live.published).toMatchObject({ target: 'cloudflare-pages', url: 'https://trip-costs.pages.dev' })
+  expect(requests[0]).toEqual({
+    url: 'https://api.cloudflare.com/client/v4/accounts/acc_1/pages/projects',
+    auth: 'Bearer cf_token',
+  })
+  const missing = new PagePublisher(pages, () => undefined, undefined, {
+    hasCredential: () => false,
+    credentialOf: async () => null,
+  })
+  expect(missing.targets().find((target) => target.target === 'cloudflare-pages')?.connected).toBe(false)
+  await expect(missing.publish(trip.id, 'cloudflare-pages')).rejects.toThrow('Install the Cloudflare plugin')
 })
 
 it('reads Ramu data only for the sources declared and allowed, scoped to the page project', async () => {
@@ -579,15 +612,13 @@ it('reads Ramu data only for the sources declared and allowed, scoped to the pag
   expect(() => read('pullRequests')).toThrow('did not declare')
 })
 
-it('queries a named service only when the page declared it and the person allowed it', async () => {
+it('queries a plugin data source only when the page declared it and the person allowed it', async () => {
   const { registerArtifactHandlers } = await import('../src/ipc/handlers/artifacts')
   const { interactive, pages } = await setup()
   const declared = { services: { purpose: 'Signups beside errors', services: ['grafana'] } }
   const v = interactive.publish('s', (await interactive.preview('s', { ...input, html: html(declared) })).id, 'sv')
   const page = pages.keep('s', v.id, { projectId: 'p' })
-  const auth = vi.fn(async () => {
-    throw new Error('Connect Grafana in Settings → Deploy first.')
-  })
+  const pluginQuery = vi.fn(async () => [{ Value: 3 }])
   const methods = registerArtifactHandlers({
     pages,
     pageAi: new PageAi(
@@ -595,19 +626,25 @@ it('queries a named service only when the page declared it and the person allowe
       async () => ({ message: '', provider: 'codex', model: 'm' }),
       () => DEFAULT_AGENT_SETTINGS,
     ),
-    deploys: { accounts: { auth } },
+    plugins: { query: pluginQuery },
     activity: { run: (_l: string, _d: string, work: () => unknown) => work() },
   } as never)
   const query = (spec: Record<string, unknown>) => methods['artifacts.call']!.run(page.id, 'services.query', [spec])
   const grafana = { id: 'grafana', datasource: 'prom1', query: { expr: 'up' }, columns: ['Value'] }
-  await expect(query(grafana)).rejects.toThrow('not allowed to read Grafana')
+  await expect(query(grafana)).rejects.toThrow('not allowed to read grafana')
   await expect(query({ id: 'amplitude', event: 'Signed up', columns: ['value'] })).rejects.toThrow(
-    'did not declare Amplitude',
+    'did not declare amplitude',
   )
+  expect(pluginQuery).not.toHaveBeenCalled()
   pages.grant(page.id, { services: ['grafana'] })
-  // Allowed, the query reaches the account in Settings, which is not connected here.
-  await expect(query(grafana)).rejects.toThrow('Connect Grafana')
-  expect(auth).toHaveBeenCalledWith('grafana')
+  // Allowed, the query reaches the plugin with the data source's own fields and the columns asked for.
+  await expect(query(grafana)).resolves.toEqual([{ Value: 3 }])
+  expect(pluginQuery).toHaveBeenCalledWith(
+    'grafana',
+    { id: 'grafana', datasource: 'prom1', query: { expr: 'up' } },
+    ['Value'],
+    5000,
+  )
 })
 
 it('opens a page to people without Ramu on its own listener that serves only that page', async () => {

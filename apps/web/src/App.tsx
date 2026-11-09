@@ -1,4 +1,5 @@
 import { ResourcesStatus } from './chat/ResourcesStatus'
+import { receivePluginLink } from './settings/pluginLinks'
 import { PendingThreadDelivery } from './composer/WaitingThreads'
 import { useHostWriteAccess } from './composer/useHostWriteAccess'
 import { ownHostId } from './hosts'
@@ -240,10 +241,15 @@ function Shell() {
       offerPairLink(link)
       window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'remote' } }))
     })
+    const offPluginLink = ramu.on('plugin:link', ({ link }) => {
+      if (receivePluginLink(link))
+        window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'plugins' } }))
+    })
     window.addEventListener('ramu:settings', open)
     return () => {
       off()
       offLink()
+      offPluginLink()
       window.removeEventListener('ramu:settings', open)
     }
   }, [])

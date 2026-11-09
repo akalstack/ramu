@@ -1,5 +1,12 @@
 import { expect, it } from 'vitest'
-import { STACKS, chooseStack, commandLine, stackCheck } from '../src/stacks'
+import {
+  PLUGIN_DEPLOY_TARGETS,
+  STACKS,
+  chooseStack,
+  commandLine,
+  isPluginDeployTarget,
+  stackCheck,
+} from '../src/stacks'
 
 it('chooses the smallest stack that does the job', () => {
   expect(chooseStack({ kind: 'web', signIn: false, data: false })).toBe('static')
@@ -20,4 +27,13 @@ it('gives every stack a deploy target and argument-list commands, and checks wit
   expect(stackCheck(STACKS.nextjs)).toBe('npm run build && npm run lint')
   expect(stackCheck(STACKS.static)).toBeNull()
   expect(commandLine(['uv', 'add', 'fastapi[standard]', "it's here"])).toBe(`uv add fastapi[standard] 'it'\\''s here'`)
+})
+
+it('names the deploy targets a plugin provides, and no others', () => {
+  const targets = new Set(Object.values(STACKS).map((stack) => stack.deployTarget))
+  expect([...targets].filter(isPluginDeployTarget).sort()).toEqual(['fly', 'railway'])
+  expect(PLUGIN_DEPLOY_TARGETS.cloudflare).toBe('Cloudflare')
+  expect(isPluginDeployTarget('vercel')).toBe(false)
+  expect(isPluginDeployTarget('toString')).toBe(false)
+  expect(isPluginDeployTarget(null)).toBe(false)
 })

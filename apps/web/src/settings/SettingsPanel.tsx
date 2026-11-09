@@ -44,6 +44,7 @@ import { ShortcutsSettings, type Shortcut } from './ShortcutsSettings'
 import { SystemSettings } from './SystemSettings'
 import { ToggleRow } from './ToggleRow'
 import { AgentSetup } from './AgentSetup'
+import { PluginSettings } from './Plugins'
 
 export function SettingsPanel({
   onClose,
@@ -223,6 +224,7 @@ export function SettingsPanel({
               )}
               {page === 'remote' && <RemoteAccessSettings />}
               {page === 'agent-setup' && <AgentSetup />}
+              {page === 'plugins' && <PluginSettings />}
               {page === 'system' && <SystemSettings {...draftProps} />}
               {page === 'appearance' && (
                 <AppearanceSettings {...draftProps} sizesReset={sizesReset} onResetSizes={() => setReset('sizes')} />

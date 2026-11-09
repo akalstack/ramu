@@ -15,12 +15,27 @@ type LiveTable = Pick<
  * Reads one live table, its rows in the table's column order: a project's deploys or file, or an App's records. A
  * dashboard in no project (`projectId` null) reads only the host's agent activity and records of an App in no project.
  */
-/** `artifactId` is the kept dashboard, null for one not kept; a named service is read only for a kept one it allows. */
+/** `artifactId` is the kept dashboard, null for one not kept; a data source is read only for a kept one it allows. */
 export type ReadDashboardSource = (
   projectId: string | null,
   table: LiveTable,
   artifactId: string | null,
 ) => Promise<Cell[][]>
+/**
+ * A plugin data source's rows in the table's column order, as a table holds them: a yes or no counts as 1 or 0, as
+ * the threads table counts done, and text is cut to what a table cell keeps.
+ */
+export function dataSourceTable(
+  rows: readonly Record<string, string | number | boolean | null>[],
+  columns: readonly string[],
+): Cell[][] {
+  return rows.map((row) =>
+    columns.map((column) => {
+      const value = row[column] ?? null
+      return typeof value === 'boolean' ? (value ? 1 : 0) : typeof value === 'string' ? value.slice(0, 200) : value
+    }),
+  )
+}
 const isLive = (table: LiveTable, projectId: string | null) =>
   !!table.service ||
   !!table.records ||

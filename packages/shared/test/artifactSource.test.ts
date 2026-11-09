@@ -72,3 +72,24 @@ it('applies a project’s own design system before the host’s', () => {
   expect(appliedDesignSystem(read, 'p1')).toBe('client-brand')
   expect(appliedDesignSystem(read, 'p2')).toBe('host-brand')
 })
+
+it('takes a dashboard table from any plugin data source, with its own query fields', () => {
+  const board = (service: unknown) =>
+    parseArtifactSource({
+      kind: 'dashboard',
+      datasets: [{ id: 'up', columns: ['Time', 'Value'], service }],
+      figures: [{ label: 'Up', dataset: 'up', column: 'Value' }],
+    })
+  const parsed = board({ id: 'grafana', datasource: 'prom', query: { expr: 'sum(up)' }, from: 'now-7d' })
+  expect(parsed.kind === 'dashboard' && parsed.datasets[0]?.service).toEqual({
+    id: 'grafana',
+    datasource: 'prom',
+    query: { expr: 'sum(up)' },
+    from: 'now-7d',
+  })
+  expect(() => board({ id: 'Grafana!' })).toThrow('Name a data source such as grafana.')
+  expect(() => board({ id: 'grafana', query: ['a'] })).toThrow()
+  expect(() =>
+    board({ id: 'grafana', ...Object.fromEntries(Array.from({ length: 22 }, (_, n) => [`f${n}`, n])) }),
+  ).toThrow('at most 20 fields')
+})

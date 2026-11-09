@@ -13,6 +13,7 @@ import { registerDeployHandlers } from './handlers/deploy'
 import { registerCiHandlers } from './handlers/ci'
 import { registerGitHandlers } from './handlers/git'
 import { registerMemoryHandlers } from './handlers/memory'
+import { registerPluginHandlers } from './handlers/plugins'
 import { registerProviderHandlers } from './handlers/providers'
 import { registerSharedMcpHandlers } from './handlers/mcp'
 import { registerProjectSetupHandlers } from './handlers/projectSetup'
@@ -97,6 +98,7 @@ export const registerHandlers = (ctx: HandlerContext): MethodTable => {
     registerReviewHandlers(ctx),
     registerTerminalHandlers(ctx),
     registerMemoryHandlers(ctx),
+    registerPluginHandlers(ctx),
     registerSummaryHandlers(ctx),
     registerRuleHandlers(ctx),
     registerSettingsHandlers(ctx),

@@ -1,8 +1,5 @@
 import { MEDIA_SERVICES } from '@ramu/shared/types/deploy'
 import { ServiceGrants } from './interactive/serviceGrants'
-import { grafana } from './interactive/grafana'
-import { amplitude } from './interactive/amplitude'
-import { salesforce } from './interactive/salesforce'
 import { DASHBOARD_ROWS_MAX } from '@ramu/shared/artifactSource'
 import { LastingAddresses } from './workspace/deploy/namedTunnel'
 import { ShellPushes } from './agent/shellPushes'
@@ -62,11 +59,13 @@ import { registerThemeTools } from './themeTools'
 import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
 import { createDeploys } from './workspace/deploy/deploys'
 import { LocalApps, type SavedApp } from './workspace/deploy/localApp'
-import { LiveDashboards, watchDashboards } from './interactive/liveDashboard'
+import { LiveDashboards, dataSourceTable, watchDashboards } from './interactive/liveDashboard'
 import { tableFromFile } from './interactive/dashboardFile'
 import { readText } from './workspace/files'
 import { appliedDesignSystem, designTokensOf } from '@ramu/shared/artifacts'
-import { registerDeployTools, registerPlatformCliTools, registerReleaseTools } from './workspace/deploy/tools'
+import { registerDeployTools, registerReleaseTools } from './workspace/deploy/tools'
+import { registerPluginCliTools } from './plugins/cli'
+import { registerPluginTools } from './plugins/tools'
 import { registerCiTools } from './workspace/ci/tools'
 import { setAcpTerminalService } from './providers/acpTerminals'
 import { SqliteBackgroundTerminalHistory } from './workspace/backgroundTerminalHistory'
@@ -172,6 +171,8 @@ import { RecapService } from './memory/recaps'
 import { MemoryService, registerMemoryTools } from './memory/memory'
 import { RuleStore } from './rules/rules'
 import { RuleFiles } from './rules/ruleFiles'
+import { PluginService } from './plugins/service'
+import { RAMU_INDEX_KEY } from '@ramu/shared/plugins'
 import { SummaryService, registerLibraryTools, withoutTools } from './memory/summaries'
 import { discoverSkills } from './context'
 import { NO_PROJECT, type AgentSessionInfo, type ScheduleInput, type SetupOmission } from '@ramu/shared/types'
@@ -826,14 +827,10 @@ const serviceGrants = new ServiceGrants(
 const liveDashboards = new LiveDashboards(
   async (projectId, { source, file, records, mcp, service, columns }, artifactId) => {
     if (service) {
-      // A named service is read only for a kept dashboard the person allowed to read it, with the account in Settings.
+      // A plugin's data source is read only for a kept dashboard the person allowed to read it, with the credential
+      // saved for that plugin.
       if (!artifactId || !serviceGrants.allowed(artifactId).includes(service.id)) return []
-      const { auth } = await deploys.accounts.auth(service.id)
-      return service.id === 'grafana'
-        ? grafana.query(auth, service, columns, DASHBOARD_ROWS_MAX)
-        : service.id === 'amplitude'
-          ? amplitude.query(auth, service, columns, DASHBOARD_ROWS_MAX)
-          : salesforce.query(auth, service, columns, DASHBOARD_ROWS_MAX)
+      return dataSourceTable(await plugins.query(service.id, service, columns, DASHBOARD_ROWS_MAX), columns)
     }
     if (mcp && projectId) {
       // Only a tool the server marks read-only, on a server Shared MCP approved for this project, is called.
@@ -972,6 +969,48 @@ const getSharedMcp = () => {
     throw new Error('Shared MCP configuration could not be loaded. Restore valid configuration on this host.')
   }
 }
+const plugins = new PluginService({
+  getState: (key, fallback) => workspace.getAppState(key, fallback),
+  setState: (key, value) => workspace.setAppState(key, value),
+  dir: join(userData, 'plugins'),
+  ramuVersion: serviceVersion,
+  skills: {
+    list: () => learning.skills(),
+    write: (skill) => learning.write(skill),
+    remove: (id) => learning.remove(id),
+  },
+  mcp: {
+    connections: () => getSharedMcp().policy.snapshot().connections,
+    save: (input, id) => getSharedMcp().save(input, id),
+    remove: (id) => getSharedMcp().remove(id),
+    setSecret: (id, kind, name, value) => getSharedMcp().setSecret(id, kind, name, value),
+  },
+  agents: customAgents,
+  rules: {
+    save: (input) => {
+      const rule = rules.save(input)
+      ruleFiles.sync()
+      send('rules:changed', {})
+      return rule
+    },
+    remove: (id) => {
+      rules.remove(id)
+      ruleFiles.sync()
+      send('rules:changed', {})
+    },
+  },
+  projects: () => workspace.listProjects(),
+  preferences: {
+    load: () => workspace.getAppState<AppPreferences>('app-preferences', DEFAULT_APP_PREFERENCES),
+    save: (preferences) => workspace.setAppState('app-preferences', preferences),
+  },
+  changed: () => {
+    send('memory:changed', {})
+    send('plugins:changed', null)
+  },
+  indexKey: RAMU_INDEX_KEY,
+})
+plugins.start()
 const externalTools = new ExternalSessionTools(getSharedMcp, (sessionId, title, detail, signal) =>
   agents.requestPermission(sessionId, title, detail, signal),
 )
@@ -1094,6 +1133,7 @@ const dispatcher = createDispatcher(
   {
     workspace,
     getSharedMcp,
+    plugins,
     browser: browserBroker,
     hostBrowser,
     computer,
@@ -1560,14 +1600,22 @@ const mcpHttp = createServer(async (req, res) => {
     registerReleaseTools(server, deploys.releases, deploys.deployWatch, source, deployProject, (detail, signal) =>
       agents.requestPermission(source.id, 'Release', detail, signal),
     )
-  if (!review)
-    registerPlatformCliTools(
+  if (!review) {
+    const pluginProject = deployProject && deployProject !== NO_PROJECT ? deployProject : null
+    registerPluginCliTools(
       server,
-      deploys.accounts,
+      { clis: () => plugins.clis(pluginProject), secret: (id, slot) => plugins.secret(id, slot) },
       source,
       () => agents.get(source.id),
       (detail, signal) => agents.requestPermission(source.id, 'Platform CLI', detail, signal),
     )
+    registerPluginTools(
+      server,
+      plugins,
+      (detail, signal) => agents.requestPermission(source.id, 'Plugin', detail, signal),
+      () => send('plugins:changed', null),
+    )
+  }
   if (!review) registerCiTools(server, source, () => agents.get(source.id))
   if (!review && !source.parentId) registerSecretTools(server, agents, source.id)
   // A chat keeps the settings it launched with, so its tools match its instructions until it relaunches. Turning a

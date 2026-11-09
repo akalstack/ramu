@@ -181,7 +181,28 @@ const slidesSource = z
 export type SlidesSource = z.infer<typeof slidesSource>
 
 export const DASHBOARD_ROWS_MAX = 5000
+/** What a dashboard table or a page names a plugin's data source by, such as `grafana`. */
+export const DATA_SOURCE_ID = /^[a-z][a-z0-9-]{0,39}$/
+const queryValue = z.union([
+  z.string().max(4000),
+  z.number(),
+  z.boolean(),
+  z.record(z.string().max(60), z.union([z.string().max(2000), z.number(), z.boolean()])),
+])
+const dataSourceQuery = z
+  .object({ id: z.string().regex(DATA_SOURCE_ID, 'Name a data source such as grafana.') })
+  .catchall(queryValue)
+const FIELDS_MAX = 20
+const fewFields = (value: object) => Object.keys(value).length <= FIELDS_MAX + 2
+const tooMany = `A data source query has at most ${FIELDS_MAX} fields.`
+/** A data source and its query fields; the host checks the fields against what the source declares. */
+const dashboardService = dataSourceQuery.refine(fewFields, tooMany)
+
 const columnName = z.string().trim().min(1).max(60)
+/** What a page's code asks a data source for: a dashboard table's query, and the columns it wants back. */
+export const pageServiceQuery = dataSourceQuery
+  .extend({ columns: z.array(columnName).min(1).max(30) })
+  .refine(fewFields, tooMany)
 /**
  * Live tables a dashboard reads from its own project on the host, each with fixed columns; the host reads them again
  * when the dashboard is opened, at most every few minutes.
@@ -245,39 +266,10 @@ export const dashboardDatasetSchema = z
       .describe(
         "A read-only tool of a Shared MCP server approved for the dashboard's project, called again when it is opened; its JSON result (an array of objects) fills the table by the names in columns. Leave rows out.",
       ),
-    service: z
-      .discriminatedUnion('id', [
-        z.object({
-          id: z.literal('grafana'),
-          datasource: z.string().trim().min(1).max(120).describe("The Grafana data source's uid."),
-          query: z
-            .record(z.string().max(60), z.union([z.string().max(2000), z.number(), z.boolean()]))
-            .describe(
-              "The data source's own query fields, such as { expr } for Prometheus or { rawSql, format: 'table' } for SQL.",
-            ),
-          from: z.string().trim().max(40).optional().describe('The start, such as now-7d; now-24h when absent.'),
-          to: z.string().trim().max(40).optional(),
-        }),
-        z.object({
-          id: z.literal('amplitude'),
-          event: z.string().trim().min(1).max(200).describe('The event type, as Amplitude names it.'),
-          metric: z.enum(['uniques', 'totals', 'pct_dau', 'average']).optional(),
-          days: z.number().int().min(1).max(365).optional().describe('Days back from today; 30 when absent.'),
-          interval: z.union([z.literal(1), z.literal(7), z.literal(30)]).optional(),
-        }),
-        z.object({
-          id: z.literal('salesforce'),
-          soql: z
-            .string()
-            .trim()
-            .max(4000)
-            .regex(/^select\s/i, 'A Salesforce query is a SOQL SELECT.')
-            .describe('A SOQL SELECT, such as SELECT StageName, Amount FROM Opportunity WHERE IsClosed = false.'),
-        }),
-      ])
+    service: dashboardService
       .optional()
       .describe(
-        'A query to a named service the person connected, run again when the dashboard is opened and only after they allow this dashboard to read it; columns names the fields of its first result to show. Leave rows out.',
+        "A query to a data source of an installed plugin, run again when the dashboard is opened with the credential the person saved for that plugin, and only after they allow this dashboard to read it: id names the data source, and the rest are its own query fields, such as { id: 'grafana', datasource, query, from, to }, { id: 'amplitude', event, metric, days, interval } or { id: 'salesforce', soql }. columns names the fields of its result to show. Leave rows out.",
       ),
   })
   .transform((table, ctx) => {

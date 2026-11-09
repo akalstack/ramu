@@ -1,4 +1,3 @@
-import type { NamedService } from './types/deploy'
 import type { InteractiveReference, InteractiveState, JsonValue } from './interactive'
 
 /** A field type in an artifact's record schema; a trailing `?` makes the field optional. */
@@ -70,8 +69,11 @@ export interface ArtifactCapabilities {
   folder?: { path: string }
   /** Figures the person already sees in Ramu, read-only, each source granted on its own. */
   ramu?: { purpose: string; sources: RamuDataSource[] }
-  /** Named services the page's code queries with the accounts in Settings, read-only, each granted on its own. */
-  services?: { purpose: string; services: NamedService[] }
+  /**
+   * Data sources of installed plugins (by id, such as `grafana`) the page's code queries with the credentials saved
+   * for those plugins, read-only, each granted on its own.
+   */
+  services?: { purpose: string; services: string[] }
 }
 
 /** Ramu's own figures an artifact may read: token activity by day, thread titles and states, and pull requests. */
@@ -94,8 +96,8 @@ export interface ArtifactGrants {
   folder?: boolean
   /** The Ramu data sources allowed, or false when the person said no. */
   ramu?: RamuDataSource[] | false
-  /** The named services allowed, or false when the person said no. */
-  services?: NamedService[] | false
+  /** The data sources allowed, by id, or false when the person said no. */
+  services?: string[] | false
 }
 
 export interface ArtifactError {

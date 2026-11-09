@@ -42,7 +42,7 @@ A Shared MCP connection already keeps the server's definition apart from its cre
 - Each account's tool list is checked on its own, since a work workspace can offer tools a personal one does not; a tool missing for an account is not offered under that identity.
 - Once a server is split, an identity with neither its own account nor one for all identities does not see the server's tools in its projects, and the server's row offers **Sign in to Linear for ‹identity›**. It never falls back to another identity's account.
 - With one account a connection looks as it does today. **Applies to** still limits a whole server to one identity, for a client's internal server.
-- A plugin's credential slot holds a value per identity the same way ([Plugins](plugins.md)).
+- A plugin's credential slot holds a value per identity the same way ([Plugins](../guide/plugins.md)): its first value is for every identity, a second splits it, and an identity left with neither is asked for one rather than given another's.
 
 **Everything in a project follows it.** Anything that runs inside a project uses that project's identity; anything outside a project uses the default identity:
 
@@ -79,7 +79,7 @@ It applies to:
 - **Learned skills:** a skill learning proposes from a work thread defaults to Work, since it is built from that company's code and habits; one about the person's own way of working can be moved to Everywhere. The review shows the level before **Apply**.
 - **Past conversations:** `session_search` with scope all searches the projects of the thread's identity, not every project on the host, so a work thread never cites a personal one.
 - **Rules:** a host-wide rule can be limited to an identity, so "sign every commit" reaches only Work projects. Ramu writes such a rule into each of those projects' rule files rather than the provider's home folder, which every identity shares.
-- **Shared MCP servers, installed and your own skills, and custom agents:** for every identity by default; **Applies to** gains the identity beside All projects and a single project.
+- **Shared MCP servers, installed and your own skills, custom agents and plugins:** for every identity by default; **Applies to** gains the identity beside All projects and a single project. A plugin limited to an identity is not offered to Auto, listed by `plugin_search`, suggested by a stack or able to reach its credential in projects of another identity.
 
 **What Ramu learned** and the learning reviews stay in one Inbox list, each item showing its level and chip.
 

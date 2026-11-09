@@ -14,14 +14,11 @@ export const BRAND_IDS = [
   'fly',
   'railway',
   'neon',
-  'supabase',
   'postgres',
   'sentry',
   'expo',
   'appstore',
   'googleplay',
-  'grafana',
-  'salesforce',
   'gemini',
   'elevenlabs',
 ] as const
@@ -42,12 +39,8 @@ export function forgeBrand(service: ForgeService): BrandId {
   return FORGE_BRANDS[service]
 }
 
-/** The mark beside an account: the platform's own; none for a service without a mark here. */
-export function accountBrand(platform: AccountPlatform): BrandId | undefined {
-  // Amplitude's mark is in neither SVGL nor Simple Icons and its guidelines are for its partners, so it shows the
-  // generic shape.
-  if (platform === 'amplitude') return undefined
+/** The mark beside an account: the platform's own. */
+export function accountBrand(platform: AccountPlatform): BrandId {
   // Typed, so a new account platform without a mark fails here rather than showing nothing.
-  const brand: BrandId = platform
-  return brand
+  return platform
 }

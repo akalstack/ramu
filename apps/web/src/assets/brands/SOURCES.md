@@ -12,17 +12,12 @@ Brand marks for forges, hosting platforms, databases and services, in each brand
 | `fly.svg` | SVGL | https://fly.io/docs/about/brand |
 | `railway.svg`, `railway-dark.svg` | SVGL | https://railway.com/brand |
 | `neon.svg` | SVGL | https://neon.com/brand |
-| `supabase.svg` | SVGL | https://supabase.com/brand-assets |
 | `postgres.svg` | SVGL | https://www.postgresql.org/about/policies/trademarks/ |
 | `sentry.svg`, `sentry-dark.svg` | SVGL; the dark version is the same mark in white | https://sentry.io/branding/ |
-| `salesforce.svg` | SVGL | https://www.salesforce.com/company/legal/trademarks/ |
-| `grafana.svg` | SVGL | https://grafana.com/legal/grafana-labs-trademark-policy/ |
 | `expo.svg`, `expo-dark.svg` | SVGL; the dark version is the same mark in white | https://expo.dev/brand/ |
 | `appstore.svg` | SVGL | https://developer.apple.com/app-store/marketing/guidelines/ |
 | `googleplay.svg` | SVGL | https://partnermarketinghub.withgoogle.com/brands/google-play/ |
 | `gemini.svg` | SVGL | https://about.google/brand-resource-center/ |
 | `elevenlabs.svg`, `elevenlabs-dark.svg` | Simple Icons 13.21 (CC0 1.0), black and white | https://elevenlabs.io/brand |
-
-Amplitude has no mark here: it is in neither SVGL nor Simple Icons, so it shows the generic shape.
 
 After adding or changing a file here, add it to `BRAND_IDS` in `packages/shared/src/brands.ts` and run `node apps/mobile/scripts/gen-assets.mjs`.

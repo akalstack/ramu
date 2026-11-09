@@ -11,16 +11,7 @@ import type { DeployService } from './service'
 const BILLING_PAGES: Record<AccountPlatform, string> = {
   vercel: 'https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings%2Fbilling&title=Billing',
   netlify: 'https://app.netlify.com/',
-  // Platforms run through their CLI report no usage to Ramu, so no report is made for them.
-  railway: 'https://railway.com/workspace/usage',
-  fly: 'https://fly.io/dashboard/personal/billing',
-  cloudflare: 'https://dash.cloudflare.com/?to=/:account/billing',
-  supabase: 'https://supabase.com/dashboard/org/_/usage',
   neon: 'https://console.neon.tech/app/billing',
-  // A Grafana account is read by dashboards, not billed through Ramu, so no report is made for it.
-  grafana: '',
-  amplitude: '',
-  salesforce: '',
   expo: 'https://expo.dev/settings/billing',
   // A media account is read by ability calls, not deployed to, so no report is made for it.
   gemini: '',

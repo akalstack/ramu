@@ -1,6 +1,12 @@
 import { expect, it, vi } from 'vitest'
 import type { InteractiveDocument } from '@ramu/shared/interactive'
-import { LiveDashboards, refreshMs, watchDashboards, type ReadDashboardSource } from '../src/interactive/liveDashboard'
+import {
+  LiveDashboards,
+  dataSourceTable,
+  refreshMs,
+  watchDashboards,
+  type ReadDashboardSource,
+} from '../src/interactive/liveDashboard'
 import { parseArtifactSource } from '@ramu/shared/artifactSource'
 import { dashboardCsv } from '@ramu/shared/interactiveExport'
 import { aggregate, dashboardChart, renderDashboard } from '../src/interactive/dashboard'
@@ -147,7 +153,7 @@ it('reads a table from a project file, by header or key, and refuses paths outsi
   } as unknown as InteractiveDocument
   const read = vi.fn<ReadDashboardSource>(async (_project, { file, columns }) => tableFromFile(file!, csv, columns))
   expect((await new LiveDashboards(read).serve(document, 'p1')).html).toContain('<strong>10.5</strong>')
-  // A dashboard not kept as an artifact has no artifact id, so it can read no named service.
+  // A dashboard not kept as an artifact has no artifact id, so it can read no plugin data source.
   expect(read).toHaveBeenCalledWith('p1', expect.objectContaining({ file: 'data/s.csv' }), null)
 })
 
@@ -360,4 +366,15 @@ it('reads a dashboard again only as often as its refresh rule says', async () =>
   expect(read).toHaveBeenCalledTimes(1)
   await round()
   expect(read).toHaveBeenCalledTimes(2)
+})
+
+it('lays a plugin data source’s rows out in the table’s columns, with yes or no as 1 or 0', () => {
+  const rows = [
+    { StageName: 'Won', Amount: 1200, IsClosed: true },
+    { StageName: 'x'.repeat(300), Amount: null, IsClosed: false },
+  ]
+  expect(dataSourceTable(rows, ['StageName', 'IsClosed', 'Missing'])).toEqual([
+    ['Won', 1, null],
+    ['x'.repeat(200), 0, null],
+  ])
 })

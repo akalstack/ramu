@@ -24,6 +24,7 @@ export const SETTINGS_MENU = [
   { id: 'models', label: 'Models', group: 'Agents', phone: true },
   { id: 'environment', label: 'Environment variables', group: 'Agents', phone: false },
   { id: 'agent-setup', label: 'Agent setup', group: 'Agents', phone: true },
+  { id: 'plugins', label: 'Plugins', group: 'Agents', phone: true },
   { id: 'access', label: 'Permissions', group: 'Agents', phone: true },
   { id: 'workflows', label: 'Goals & delegation', group: 'Agents', phone: true },
   { id: 'memory', label: 'Memory & skills', group: 'Agents', phone: true },

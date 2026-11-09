@@ -36,7 +36,7 @@ import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { notifyError } from '../chat/Notifications'
 import { StepSlider } from '@/components/step-slider'
-import { NAMED_SERVICE_NAMES, type NamedService } from '@ramu/shared/types/deploy'
+import { openPluginSettings } from '../settings/openPluginSettings'
 import { joinedText, LiveTextEditor, syncLiveText } from '@ramu/shared/liveText'
 import { deckText, slideWords } from '@ramu/shared/deckText'
 import { changedAt, headingAt } from '@ramu/shared/editingPart'
@@ -203,8 +203,9 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
       window.clearInterval(timer)
     }
   }, [editingDeck, invoke, artifactId, liveSync])
-  // Named services this dashboard reads, and the ones the person allowed it to.
-  const [services, setServices] = useState<{ needed: NamedService[]; allowed: NamedService[] } | null>(null)
+  // Plugin data sources this dashboard reads, the ones the person allowed it to, and those installed plugins provide.
+  const [services, setServices] = useState<{ needed: string[]; allowed: string[] } | null>(null)
+  const [dataSources, setDataSources] = useState<{ id: string; label: string }[] | null>(null)
   const dashboardVersion = page?.kind === 'dashboard' ? page.version : null
   useEffect(() => {
     if (dashboardVersion === null) return
@@ -213,11 +214,23 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
       (next) => live && setServices(next),
       () => {},
     )
+    void invoke('plugins.dataSources').then(
+      (next) => live && setDataSources(next),
+      () => live && setDataSources([]),
+    )
     return () => {
       live = false
     }
   }, [dashboardVersion, invoke, artifactId])
-  const unallowed = services ? services.needed.filter((service) => !services.allowed.includes(service)) : []
+  const sourceName = (id: string) => dataSources?.find((source) => source.id === id)?.label ?? id
+  // Until the installed data sources are known, nothing is reported missing.
+  const uninstalled =
+    services && dataSources
+      ? services.needed.filter((service) => !dataSources.some((source) => source.id === service))
+      : []
+  const unallowed = services
+    ? services.needed.filter((service) => !services.allowed.includes(service) && !uninstalled.includes(service))
+    : []
   // The person's other devices editing this text too; saving merges edits that changed different lines.
   const [alsoEditing, setAlsoEditing] = useState<string[]>([])
   const editingText = !!editing
@@ -557,7 +570,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
       : []),
     ...(services?.allowed ?? []).map((service) => ({
       key: `service:${service}`,
-      label: t('Stop reading {0}', { 0: NAMED_SERVICE_NAMES[service] }),
+      label: t('Stop reading {0}', { 0: sourceName(service) }),
       disabled: viewOnly,
       onSelect: () =>
         void invoke('artifacts.allowService', artifactId, service, false)
@@ -870,12 +883,29 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           )}
         </div>
       )}
+      {uninstalled.length > 0 && (
+        <div role="status" className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-caption">
+          <span className="min-w-0 flex-1 text-muted-foreground">
+            {t(
+              'This dashboard reads {0}, which no installed plugin provides. Its tables stay empty until you install one.',
+              {
+                0: uninstalled.join(', '),
+              },
+            )}
+          </span>
+          {!viewOnly && (
+            <Button size="sm" variant="secondary" onClick={() => openPluginSettings(host)}>
+              {t('Open plugin settings')}
+            </Button>
+          )}
+        </div>
+      )}
       {unallowed.length > 0 && (
         <div role="status" className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-caption">
           <span className="min-w-0 flex-1 text-muted-foreground">
             {t(
-              'This dashboard reads {0} with the account in Settings → Deploy. Its tables stay empty until you allow it.',
-              { 0: unallowed.map((service) => NAMED_SERVICE_NAMES[service]).join(', ') },
+              'This dashboard reads {0} with the credential saved for its plugin in Settings → Plugins. Its tables stay empty until you allow it.',
+              { 0: unallowed.map(sourceName).join(', ') },
             )}
           </span>
           <Button

@@ -24,6 +24,8 @@ export const HOST_PUSH_CHANNELS = [
   'artifacts:slide',
   'summaries:changed',
   'rules:changed',
+  'plugins:changed',
+  'plugins:signInFailed',
   'usage:changed',
   'models:news',
   'logins:changed',
@@ -53,6 +55,7 @@ export const STREAMING_KINDS: readonly string[] = ['text', 'thinking', 'tool-use
 export const WINDOW_PUSH_CHANNELS = [
   'menu:action',
   'pair:link',
+  'plugin:link',
   'updates:changed',
   'notify:inapp',
   'notify:open',

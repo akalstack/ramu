@@ -9,11 +9,9 @@ import { HostingAccounts } from '../src/workspace/deploy/accounts'
 import { DeployError, type HostingAdapter } from '../src/workspace/deploy/adapter'
 import {
   expoSessionToken,
-  flyCliToken,
   HostingSignIns,
   neonCliKey,
   netlifyCliToken,
-  railwayCliToken,
   signInPrompt,
   vercelCliToken,
 } from '../src/workspace/deploy/signIn'
@@ -40,26 +38,6 @@ it('reads the link and code from what the CLIs print, with or without terminal e
     code: 'WXYZ-1234',
   })
   expect(signInPrompt('Logging in...')).toEqual({ url: null, code: null })
-  // Railway prints its one-click link, then the code on the line after.
-  expect(
-    signInPrompt(
-      '  → Sign in with one click:\n    https://railway.com/activate?code=PLUM-RIVER\n\n  → Or go to https://railway.com/activate and enter this code:\n    PLUM-RIVER\n',
-    ),
-  ).toEqual({ url: 'https://railway.com/activate?code=PLUM-RIVER', code: 'PLUM-RIVER' })
-})
-
-it('reads the Railway CLI session from ~/.railway/config.json, expiry in milliseconds', async () => {
-  const home = await folder()
-  await mkdir(join(home, '.railway'), { recursive: true })
-  await writeFile(
-    join(home, '.railway', 'config.json'),
-    JSON.stringify({
-      projects: {},
-      user: { accessToken: 'rw_1', refreshToken: 'rr_1', tokenExpiresAt: 2_000_000_000 },
-    }),
-  )
-  expect(await railwayCliToken(home)).toEqual({ token: 'rw_1', refreshToken: 'rr_1', expiresAt: 2_000_000_000_000 })
-  await expect(railwayCliToken(await folder())).rejects.toThrow('without saving')
 })
 
 it('reads the Vercel CLI login from auth.json in its configuration folder, expiry in milliseconds', async () => {
@@ -171,64 +149,6 @@ it('runs netlify login --request in a private HOME and checks the ticket until i
   expect(saved).toEqual([['netlify', { token: 'nfp_1' }, 'cli']])
 })
 
-it('runs railway login --browserless in a private HOME, shows its link and code, and saves the session', async () => {
-  const saved: unknown[] = []
-  const accounts = { save: async (...args: unknown[]) => (saved.push(args), { account: 'Ana' }) }
-  let home = ''
-  const spawner = vi.fn((_file: string, args: string[], options: { env: NodeJS.ProcessEnv }) => {
-    home = options.env.HOME!
-    return child(
-      '  → Sign in with one click:\n    https://railway.com/activate?code=PLUM-RIVER\n  → Or go to https://railway.com/activate and enter this code:\n    PLUM-RIVER\n',
-      async () => {
-        await until(() => signIns.status(started.id).state === 'waiting')
-        await mkdir(join(home, '.railway'), { recursive: true })
-        await writeFile(
-          join(home, '.railway', 'config.json'),
-          JSON.stringify({ user: { accessToken: 'rw_1', refreshToken: 'rr_1', tokenExpiresAt: 2_000_000_000 } }),
-        )
-      },
-    )
-  })
-  const signIns = new HostingSignIns(accounts as never, () => '/bin/railway', spawner as never)
-  const started = signIns.start('railway')
-  await until(() => signIns.status(started.id).state === 'waiting')
-  expect(signIns.status(started.id)).toMatchObject({
-    url: 'https://railway.com/activate?code=PLUM-RIVER',
-    code: 'PLUM-RIVER',
-  })
-  await until(() => signIns.status(started.id).state === 'connected')
-  expect(spawner.mock.calls[0]![1]).toEqual(['login', '--browserless'])
-  expect(home).not.toBe(process.env.HOME)
-  expect(saved).toEqual([['railway', { token: 'rw_1', refreshToken: 'rr_1', expiresAt: 2_000_000_000_000 }, 'cli']])
-  await until(() => !existsSync(home))
-  expect(existsSync(home)).toBe(false)
-})
-
-it('runs fly auth login in a private HOME and reads the token flyctl saved in .fly/config.yml', async () => {
-  const saved: unknown[] = []
-  const accounts = { save: async (...args: unknown[]) => (saved.push(args), { account: 'Ana' }) }
-  let home = ''
-  const spawner = vi.fn((_file: string, args: string[], options: { env: NodeJS.ProcessEnv }) => {
-    home = options.env.HOME!
-    return child(
-      'Open this URL in a browser and approve the login:\n\n    https://fly.io/app/auth/cli/abc123\n\n',
-      async () => {
-        await until(() => signIns.status(started.id).state === 'waiting')
-        await mkdir(join(home, '.fly'), { recursive: true })
-        await writeFile(join(home, '.fly', 'config.yml'), 'access_token: fo1_abc\nlast_login: 2026-11-07T00:00:00Z\n')
-      },
-    )
-  })
-  const signIns = new HostingSignIns(accounts as never, () => '/bin/fly', spawner as never)
-  const started = signIns.start('fly')
-  await until(() => signIns.status(started.id).state === 'waiting')
-  expect(signIns.status(started.id).url).toBe('https://fly.io/app/auth/cli/abc123')
-  await until(() => signIns.status(started.id).state === 'connected')
-  expect(spawner.mock.calls[0]![1]).toEqual(['auth', 'login'])
-  expect(home).not.toBe(process.env.HOME)
-  expect(saved).toEqual([['fly', { token: 'fo1_abc' }, 'cli']])
-})
-
 it('runs eas login --device in a private HOME, sends the number the person picked, and keeps a token, not the session', async () => {
   const saved: unknown[] = []
   const accounts = { save: async (...args: unknown[]) => (saved.push(args), { account: 'ana' }) }
@@ -330,15 +250,6 @@ it('exchanges an Expo session for a token named Ramu and ends the session either
   expect(refused.mock.calls.some(([url]) => String(url).endsWith('/v2/auth/logout'))).toBe(true)
 })
 
-it('reads a quoted flyctl token, and refuses a config without one', async () => {
-  const home = await folder()
-  await mkdir(join(home, '.fly'), { recursive: true })
-  await writeFile(join(home, '.fly', 'config.yml'), 'access_token: "FlyV1 fm2_a,fm2_b"\n')
-  expect(await flyCliToken(home)).toEqual({ token: 'FlyV1 fm2_a,fm2_b' })
-  await writeFile(join(home, '.fly', 'config.yml'), 'send_metrics: true\n')
-  await expect(flyCliToken(home)).rejects.toThrow('without saving')
-})
-
 it('reports a missing CLI and a cancelled sign-in without saving anything', async () => {
   const accounts = { save: vi.fn() }
   expect(() => new HostingSignIns(accounts as never, () => null).start('vercel')).toThrow('Use a token instead')
@@ -396,38 +307,6 @@ it('keeps a checked token in the credential store, shows only the account, and r
   await expect(accounts.auth('vercel')).rejects.toMatchObject({ kind: 'signed-out' })
 })
 
-it('renews a Salesforce session through the person’s own connected app, keeping the org’s address', async () => {
-  const { state, credentials } = store()
-  const calls: { url: string; body: string }[] = []
-  const fetcher = (async (url: string, init: RequestInit) => {
-    calls.push({ url, body: String(init.body) })
-    return new Response(JSON.stringify({ access_token: 'access-2' }))
-  }) as typeof fetch
-  const accounts = new HostingAccounts(
-    (key, fallback) => (state.get(key) ?? fallback) as never,
-    (key, value) => void state.set(key, value),
-    credentials,
-    fetcher,
-    {},
-    () => ({ ...adapter(() => true), kind: 'service' }),
-  )
-  await accounts.save(
-    'salesforce',
-    {
-      token: 'https://acme.my.salesforce.com|access-1',
-      refreshToken: 'refresh-1',
-      expiresAt: Date.now() + 1000,
-      oauthClient: { url: 'https://login.salesforce.com/services/oauth2/token', client: 'consumer-key-1' },
-    },
-    'token',
-  )
-  expect((await accounts.auth('salesforce')).auth.token).toBe('https://acme.my.salesforce.com|access-2')
-  expect(calls[0]?.url).toBe('https://login.salesforce.com/services/oauth2/token')
-  expect(calls[0]?.body).toContain('client_id=consumer-key-1')
-  // Salesforce sends no new refresh token; the first one is kept.
-  expect(calls[0]?.body).toContain('refresh_token=refresh-1')
-})
-
 it('renews an expiring Vercel CLI session with its refresh token, keeping the rotated one', async () => {
   const { state, credentials } = store()
   const bodies: string[] = []
@@ -452,26 +331,4 @@ it('renews an expiring Vercel CLI session with its refresh token, keeping the ro
   // Fresh now: no second renewal.
   expect((await accounts.auth('vercel')).auth.token).toBe('vca_2')
   expect(bodies).toHaveLength(1)
-})
-
-it('renews a Railway CLI session through Railway’s OAuth endpoint with the CLI’s client', async () => {
-  const { state, credentials } = store()
-  const calls: { url: string; body: string }[] = []
-  const fetcher = (async (url: string, init: RequestInit) => {
-    calls.push({ url, body: String(init.body) })
-    return new Response(JSON.stringify({ access_token: 'rw_2', expires_in: 3600 }))
-  }) as typeof fetch
-  const accounts = new HostingAccounts(
-    (key, fallback) => (state.get(key) ?? fallback) as never,
-    (key, value) => void state.set(key, value),
-    credentials,
-    fetcher,
-    { railway: { url: 'http://railway.test/oauth/token', client: 'rlwy_test' } },
-    () => ({ ...adapter(() => true), name: 'Railway', kind: 'hosting' }),
-  )
-  await accounts.save('railway', { token: 'rw_1', refreshToken: 'rr_1', expiresAt: Date.now() + 1000 }, 'cli')
-  expect((await accounts.auth('railway')).auth.token).toBe('rw_2')
-  expect(calls[0]!.url).toBe('http://railway.test/oauth/token')
-  expect(calls[0]!.body).toContain('client_id=rlwy_test')
-  expect(calls[0]!.body).toContain('refresh_token=rr_1')
 })

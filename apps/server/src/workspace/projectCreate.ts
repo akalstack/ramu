@@ -1,9 +1,15 @@
 import { execFile } from 'node:child_process'
-import { isCliPlatform } from '@ramu/shared/types/deploy'
 import { existsSync, readFileSync } from 'node:fs'
 import { rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { PROJECT_NAME, STACKS, commandLine, type StackId } from '@ramu/shared/stacks'
+import {
+  PLUGIN_DEPLOY_TARGETS,
+  PROJECT_NAME,
+  STACKS,
+  commandLine,
+  isPluginDeployTarget,
+  type StackId,
+} from '@ramu/shared/stacks'
 import { git } from './git'
 import type { ProjectConfig } from './projectConfig'
 
@@ -131,8 +137,8 @@ export function projectFactsText(config: ProjectConfig): string | undefined {
     stack.test ? `Test: ${stack.test}` : '',
     stack.deployTarget === 'expo'
       ? 'Deploys to: the App Store and Google Play, released with release_status and release_start'
-      : stack.deployTarget && isCliPlatform(stack.deployTarget)
-        ? `Deploys to: ${stack.deployTarget}, through its own CLI with platform_cli (the person connects the account in Settings)`
+      : isPluginDeployTarget(stack.deployTarget)
+        ? `Deploys to: ${PLUGIN_DEPLOY_TARGETS[stack.deployTarget]}, through its plugin with platform_cli (plugin "${stack.deployTarget}"). If platform_cli does not offer it, ask the person to install the plugin from Settings → Plugins, or call plugin_search and plugin_install`
         : stack.deployTarget
           ? `Deploys to: ${stack.deployTarget}, through the deploy tools (deploy_status first)`
           : '',

@@ -1,0 +1,672 @@
+import { useCallback, useEffect, useState } from 'react'
+import { Download, RefreshCw, Search, Trash2 } from 'lucide-react'
+import {
+  UNUSED_PART_NAMES,
+  type InstalledPlugin,
+  type PluginIndexInfo,
+  type PluginListing,
+  type PluginReview,
+  type PluginScope,
+} from '@ramu/shared/plugins'
+import { ABILITY_LABELS } from '@ramu/shared/providers/abilities'
+import type { Project } from '@ramu/shared/types'
+import { Button } from '@/components/desktop-button'
+import { Checkbox } from '@/components/desktop-checkbox'
+import { Input } from '@/components/desktop-input'
+import { InlineAction } from '@/components/inline-action'
+import { Badge } from '@/components/ui/badge'
+import { Dialog, Dropdown } from '../Menu'
+import { useViewOnly } from '../composer/useViewOnly'
+import { t, useLanguage } from '../i18n'
+import { invoke as onThisComputer } from '../ipc'
+import { errorText } from '../lib/errors'
+import { takePendingPluginSource } from './pluginLinks'
+import { SettingsCard, SettingsCardList, SettingsEmpty, SettingsSectionHead } from './cards'
+import { useSettingsEvents, useSettingsInvoke } from './SettingsScope'
+
+const open = (url: string) => void onThisComputer('app.openExternal', url)
+
+function Problem({ children }: { children: string }) {
+  return (
+    <p role="alert" className="m-0 text-caption text-bad">
+      {children}
+    </p>
+  )
+}
+
+/** Everything a plugin would add, before anything is saved: the same list the agent's install card names. */
+function Review({
+  review,
+  projects,
+  busy,
+  error,
+  onConfirm,
+  onCancel,
+}: {
+  review: PluginReview
+  projects: Project[]
+  busy: boolean
+  error: string | null
+  onConfirm: (options: { scope: PluginScope; includeScripts: boolean }) => void
+  onCancel: () => void
+}) {
+  const { contents, source } = review
+  const [scope, setScope] = useState('')
+  const [scripts, setScripts] = useState(false)
+  const scriptFiles = contents.skills.flatMap((skill) => skill.scripts.map((path) => `${skill.name}/${path}`))
+  return (
+    <Dialog
+      title={
+        review.replaces
+          ? t('Review the update to {name}', { name: contents.name })
+          : t('Install {name}?', { name: contents.name })
+      }
+      confirmLabel={review.replaces ? t('Update') : t('Install')}
+      busy={busy}
+      confirmDisabled={!!review.blocked}
+      error={error ?? review.blocked}
+      onCancel={onCancel}
+      onConfirm={() =>
+        onConfirm({ scope: scope ? { kind: 'project', projectId: scope } : { kind: 'all' }, includeScripts: scripts })
+      }
+    >
+      <div className="flex flex-col gap-2 text-control">
+        {contents.description && <p className="m-0">{contents.description}</p>}
+        <p className="m-0 break-all text-caption text-muted-foreground">
+          {[
+            contents.author ? t('By {author}', { author: contents.author }) : '',
+            contents.version ? `v${contents.version}` : '',
+            contents.license ?? '',
+            `${source.location}${source.path ? ` · ${source.path}` : ''}`,
+            source.commit ? source.commit.slice(0, 12) : t('Folder on this computer'),
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+        <div className="flex flex-wrap gap-1">
+          {review.byRamu && <Badge variant="secondary">{t('By Ramu')}</Badge>}
+          <Badge variant="outline">
+            {source.signedBy ? t('Signed by {name}', { name: source.signedBy }) : t('Unsigned')}
+          </Badge>
+          {review.replaces && review.needsApproval && (
+            <Badge variant="destructive">{t('Asks for approval again')}</Badge>
+          )}
+        </div>
+        {review.changes.length > 0 && (
+          <ul className="m-0 pl-4">
+            {review.changes.map((change) => (
+              <li key={change}>{change}</li>
+            ))}
+          </ul>
+        )}
+        {contents.skills.length > 0 && (
+          <section>
+            <strong>{t('Skills')}</strong>
+            <ul className="m-0 pl-4">
+              {contents.skills.map((skill) => (
+                <li key={skill.name}>
+                  {skill.name} — {skill.description}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {contents.mcpServers.length > 0 && (
+          <section>
+            <strong>{t('MCP servers')}</strong>
+            <ul className="m-0 pl-4">
+              {contents.mcpServers.map((server) => (
+                <li key={server.name} className="break-all">
+                  {server.name}:{' '}
+                  <code>{server.type === 'stdio' ? [server.command, ...server.args].join(' ') : server.url}</code>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {contents.agents.length > 0 && (
+          <p className="m-0">
+            <strong>{t('Custom agents')}:</strong> {contents.agents.map((agent) => agent.name).join(', ')}
+          </p>
+        )}
+        {contents.rule && <p className="m-0">{t('A rule from its AGENTS.md')}</p>}
+        {contents.credentials.length > 0 && (
+          <p className="m-0">
+            <strong>{t('Asks for')}:</strong> {contents.credentials.map((slot) => slot.label).join(', ')}
+          </p>
+        )}
+        {contents.cli && (
+          <p className="m-0">
+            <strong>{t('CLI')}:</strong> <code>{contents.cli.binaries[0]}</code>.{' '}
+            {contents.cli.reads.length
+              ? t('Runs without asking: {commands}. Every other command asks you.', {
+                  commands: contents.cli.reads.join(', '),
+                })
+              : t('Every command asks you.')}
+          </p>
+        )}
+        {contents.abilities.length > 0 && (
+          <p className="m-0">
+            <strong>{t('Abilities')}:</strong>{' '}
+            {contents.abilities.map((entry) => t(ABILITY_LABELS[entry.ability])).join(', ')}
+          </p>
+        )}
+        {contents.dataSources.length > 0 && (
+          <p className="m-0">
+            <strong>{t('Dashboard data')}:</strong> {contents.dataSources.map((entry) => entry.label).join(', ')}
+          </p>
+        )}
+        {contents.unused.length > 0 && (
+          <p className="m-0 text-caption text-muted-foreground">
+            {t('Not used in Ramu: {parts}', {
+              parts: contents.unused.map((part) => t(UNUSED_PART_NAMES[part])).join(', '),
+            })}
+          </p>
+        )}
+        {contents.problems.map((problem) => (
+          <Problem key={`${problem.file}:${problem.message}`}>{`${problem.file}: ${problem.message}`}</Problem>
+        ))}
+        {!review.replaces && (
+          <Dropdown
+            label={t('Applies to')}
+            value={scope}
+            options={[
+              { value: '', label: t('All projects') },
+              ...projects.map((project) => ({ value: project.id, label: project.name })),
+            ]}
+            onChange={setScope}
+          />
+        )}
+        {scriptFiles.length > 0 && (
+          <label className="flex items-start gap-2">
+            <Checkbox checked={scripts} onCheckedChange={(value) => setScripts(value === true)} />
+            <span>
+              {t('Also copy the scripts in its skills. Ramu will not run them.')}
+              <span className="block break-all text-caption text-muted-foreground">{scriptFiles.join(', ')}</span>
+            </span>
+          </label>
+        )}
+      </div>
+    </Dialog>
+  )
+}
+
+/** One credential slot on a plugin's card: paste a token, sign in, or see who it belongs to. */
+function Credential({
+  plugin,
+  slot,
+  viewOnly,
+  onChanged,
+}: {
+  plugin: InstalledPlugin
+  slot: InstalledPlugin['credentials'][number]
+  viewOnly: boolean
+  onChanged: () => void
+}) {
+  const invoke = useSettingsInvoke()
+  const declared = plugin.contents.credentials.find((entry) => entry.id === slot.id)
+  const [token, setToken] = useState('')
+  const [fields, setFields] = useState<Record<string, string>>({})
+  const [sandbox, setSandbox] = useState(false)
+  const [editing, setEditing] = useState(slot.state !== 'saved')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  if (!declared) return null
+  const act = async (run: () => Promise<unknown>) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await run()
+      setToken('')
+      onChanged()
+    } catch (cause) {
+      setError(errorText(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+  if (!editing && slot.state === 'saved')
+    return (
+      <div className="flex items-center gap-2 text-caption">
+        <span className="min-w-0 flex-1 truncate">
+          {declared.label}: {slot.account}
+        </span>
+        <Button size="sm" variant="ghost" disabled={viewOnly} onClick={() => setEditing(true)}>
+          {t('Replace')}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={viewOnly || busy}
+          onClick={() => void act(() => invoke('plugins.removeCredential', plugin.id, slot.id))}
+        >
+          {t('Remove')}
+        </Button>
+      </div>
+    )
+  return (
+    <form
+      className="flex flex-col gap-1.5"
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (declared.kind === 'sign-in')
+          void act(async () => {
+            const { url } = await invoke('plugins.signIn', plugin.id, slot.id, { clientId: token.trim(), sandbox })
+            open(url)
+          })
+        else void act(() => invoke('plugins.setCredential', plugin.id, slot.id, { token, fields }))
+      }}
+    >
+      <p className="m-0 text-caption text-muted-foreground">
+        {declared.kind === 'sign-in'
+          ? t('Sign in with your own client: paste its client id, then finish in the browser.')
+          : t('Paste {label}. It stays in this computer’s credential store.', { label: declared.label })}
+        {declared.scope ? ` ${t('Scope: {scope}', { scope: declared.scope })}` : ''}
+        {declared.page && (
+          <>
+            {' '}
+            <InlineAction onClick={() => open(declared.page!)}>
+              {declared.kind === 'sign-in' ? t('Make a client') : t('Get one')}
+            </InlineAction>
+          </>
+        )}
+      </p>
+      <Input
+        type={declared.kind === 'sign-in' ? 'text' : 'password'}
+        aria-label={declared.kind === 'sign-in' ? t('Client id') : declared.label}
+        placeholder={declared.kind === 'sign-in' ? t('Client id') : declared.label}
+        autoComplete="off"
+        value={token}
+        disabled={viewOnly || busy}
+        onChange={(event) => setToken(event.target.value)}
+      />
+      {declared.kind === 'token' &&
+        declared.fields.map((field) =>
+          field.values ? (
+            <Dropdown
+              key={field.id}
+              label={field.label}
+              value={fields[field.id] ?? ''}
+              options={field.values.map((value) => ({ value, label: value }))}
+              onChange={(value) => setFields({ ...fields, [field.id]: value })}
+            />
+          ) : (
+            <Input
+              key={field.id}
+              type={field.kind === 'secret' ? 'password' : 'text'}
+              aria-label={field.label}
+              placeholder={field.label}
+              value={fields[field.id] ?? ''}
+              disabled={viewOnly || busy}
+              onChange={(event) => setFields({ ...fields, [field.id]: event.target.value })}
+            />
+          ),
+        )}
+      {declared.kind === 'sign-in' && (
+        <label className="flex items-center gap-2 text-caption">
+          <Checkbox checked={sandbox} onCheckedChange={(value) => setSandbox(value === true)} />
+          {t('Sandbox')}
+        </label>
+      )}
+      {error && <Problem>{error}</Problem>}
+      <div className="flex justify-end gap-1.5">
+        {slot.state === 'saved' && (
+          <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+            {t('Cancel')}
+          </Button>
+        )}
+        <Button size="sm" type="submit" disabled={viewOnly || busy || !token.trim()}>
+          {declared.kind === 'sign-in' ? t('Sign in') : busy ? t('Checking…') : t('Save')}
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+/**
+ * Settings › Plugins: what is installed and what it still needs, Browse across the indexes, and Install from a listing,
+ * a Git address or a folder. Every install shows one review first; credentials are pasted here, on the host.
+ */
+export function PluginSettings() {
+  useLanguage()
+  const invoke = useSettingsInvoke()
+  const on = useSettingsEvents()
+  const viewOnly = useViewOnly()
+  const [plugins, setPlugins] = useState<InstalledPlugin[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
+  const [indexes, setIndexes] = useState<PluginIndexInfo[]>([])
+  const [listings, setListings] = useState<PluginListing[] | null>(null)
+  const [query, setQuery] = useState('')
+  const [link] = useState(takePendingPluginSource)
+  const [source, setSource] = useState(link && !link.index ? link.source : '')
+  const [newIndex, setNewIndex] = useState('')
+  const [review, setReview] = useState<PluginReview | null>(null)
+  const [removing, setRemoving] = useState<InstalledPlugin | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const reload = useCallback(() => {
+    void invoke('plugins.list').then(setPlugins, (cause) => setError(errorText(cause)))
+    void invoke('plugins.indexes').then(setIndexes, () => {})
+  }, [invoke])
+  useEffect(() => {
+    reload()
+    void invoke('projects.list').then(setProjects, () => {})
+    const offChanged = on('plugins:changed', reload)
+    const offFailed = on('plugins:signInFailed', ({ message }) => setError(message))
+    return () => {
+      offChanged()
+      offFailed()
+    }
+  }, [invoke, on, reload])
+  const act = async (run: () => Promise<unknown>) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await run()
+    } catch (cause) {
+      setError(errorText(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const browse = (words: string) =>
+    act(async () => setListings(await invoke('plugins.browse', words.trim() || undefined)))
+  // A link from getramu.dev opens the review straight away.
+  useEffect(() => {
+    if (link)
+      void act(async () =>
+        setReview(await invoke('plugins.stage', { source: link.source, ...(link.index ? { index: link.index } : {}) })),
+      )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the link the page opened with
+  }, [link])
+  return (
+    <section className="flex flex-col gap-2" aria-label={t('Plugins')}>
+      <SettingsSectionHead
+        title={t('Plugins')}
+        help={t(
+          'One install adds a service’s skills, MCP servers, credential and safe commands for every provider. Plugins in the Claude Code and Codex layout work here too.',
+        )}
+        action={
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={viewOnly || busy || !plugins.some((plugin) => plugin.source.kind === 'git')}
+            onClick={() => void act(async () => setPlugins(await invoke('plugins.checkUpdates')))}
+          >
+            <RefreshCw size={13} />
+            {t('Check for updates')}
+          </Button>
+        }
+      />
+      {error && !review && <Problem>{error}</Problem>}
+      <SettingsCardList>
+        {!plugins.length && (
+          <SettingsEmpty>
+            {t('No plugins yet. Browse the index below, or install one from a Git address or a folder.')}
+          </SettingsEmpty>
+        )}
+        {plugins.map((plugin) => {
+          const missing = plugin.credentials.filter((slot) => slot.state !== 'saved')
+          return (
+            <SettingsCard
+              key={plugin.id}
+              title={plugin.name}
+              badges={
+                <>
+                  {plugin.byRamu && <Badge variant="secondary">{t('By Ramu')}</Badge>}
+                  {plugin.source.kind === 'development' && <Badge variant="outline">{t('Development')}</Badge>}
+                  {plugin.source.kind === 'git' && (
+                    <Badge variant="outline">
+                      {plugin.source.signedBy ? t('Signed by {name}', { name: plugin.source.signedBy }) : t('Unsigned')}
+                    </Badge>
+                  )}
+                  {!plugin.enabled && <Badge variant="outline">{t('Off')}</Badge>}
+                  {missing.length > 0 && (
+                    <Badge variant="destructive">
+                      {t('Needs {what}', { what: missing.map((slot) => slot.label).join(', ') })}
+                    </Badge>
+                  )}
+                </>
+              }
+              meta={[
+                plugin.contents.description,
+                plugin.scope.kind === 'project'
+                  ? (projects.find((project) => project.id === (plugin.scope as { projectId: string }).projectId)
+                      ?.name ?? t('One project'))
+                  : t('All projects'),
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+              actions={
+                <>
+                  {plugin.update && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={viewOnly || busy}
+                      onClick={() => void act(async () => setReview(await invoke('plugins.updateReview', plugin.id)))}
+                    >
+                      {t('Update')}
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={viewOnly || busy}
+                    onClick={() => void act(() => invoke('plugins.setEnabled', plugin.id, !plugin.enabled))}
+                  >
+                    {plugin.enabled ? t('Turn off') : t('Turn on')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={t('Remove {name}', { name: plugin.name })}
+                    disabled={viewOnly || busy}
+                    onClick={() => setRemoving(plugin)}
+                  >
+                    <Trash2 size={13} />
+                  </Button>
+                </>
+              }
+            >
+              {plugin.update && plugin.update.changes.length > 0 && (
+                <p className="m-0 text-caption text-muted-foreground">
+                  {t('Update: {changes}', { changes: plugin.update.changes.join('; ') })}
+                </p>
+              )}
+              {plugin.contents.unused.length > 0 && (
+                <p className="m-0 text-caption text-muted-foreground">
+                  {t('Not used in Ramu: {parts}', {
+                    parts: plugin.contents.unused.map((part) => t(UNUSED_PART_NAMES[part])).join(', '),
+                  })}
+                </p>
+              )}
+              {plugin.credentials.map((slot) => (
+                <Credential key={slot.id} plugin={plugin} slot={slot} viewOnly={viewOnly} onChanged={reload} />
+              ))}
+            </SettingsCard>
+          )
+        })}
+      </SettingsCardList>
+
+      <SettingsSectionHead
+        title={t('Browse')}
+        help={t('Plugins listed in the indexes below. Each one shows what it adds before anything is installed.')}
+      />
+      <form
+        className="flex items-center gap-2"
+        onSubmit={(event) => {
+          event.preventDefault()
+          void browse(query)
+        }}
+      >
+        <Input
+          aria-label={t('Search plugins')}
+          placeholder={t('Search plugins, such as render or analytics')}
+          value={query}
+          maxLength={200}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <Button type="submit" size="sm" variant="secondary" disabled={busy}>
+          <Search size={13} />
+          {t('Search')}
+        </Button>
+      </form>
+      {listings && !listings.length && <SettingsEmpty>{t('No listed plugin matches.')}</SettingsEmpty>}
+      {listings && listings.length > 0 && (
+        <SettingsCardList>
+          {listings.map((listing) => (
+            <SettingsCard
+              key={`${listing.index}:${listing.name}`}
+              title={listing.name}
+              badges={
+                <>
+                  {listing.byRamu && <Badge variant="secondary">{t('By Ramu')}</Badge>}
+                  <Badge variant="outline">{listing.signed ? t('Signed') : t('Unsigned')}</Badge>
+                </>
+              }
+              meta={[listing.description, listing.indexName].filter(Boolean).join(' · ')}
+              actions={
+                listing.installed ? (
+                  <Badge variant="outline">{t('Installed')}</Badge>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={viewOnly || busy}
+                    onClick={() =>
+                      void act(async () =>
+                        setReview(await invoke('plugins.stage', { source: listing.name, index: listing.index })),
+                      )
+                    }
+                  >
+                    <Download size={13} />
+                    {t('Install')}
+                  </Button>
+                )
+              }
+            />
+          ))}
+        </SettingsCardList>
+      )}
+
+      <SettingsSectionHead
+        title={t('Install from a source')}
+        help={t('A Git address (GitHub, GitLab, or anywhere git can clone) or a folder on this computer.')}
+      />
+      <form
+        className="flex items-center gap-2"
+        onSubmit={(event) => {
+          event.preventDefault()
+          void act(async () => setReview(await invoke('plugins.stage', { source: source.trim() })))
+        }}
+      >
+        <Input
+          aria-label={t('Plugin source')}
+          placeholder="https://github.com/acme/render-plugin"
+          value={source}
+          maxLength={1000}
+          disabled={viewOnly}
+          onChange={(event) => setSource(event.target.value)}
+        />
+        <Button type="submit" size="sm" variant="secondary" disabled={viewOnly || busy || !source.trim()}>
+          {busy ? t('Reading…') : t('Review')}
+        </Button>
+      </form>
+
+      <SettingsSectionHead
+        title={t('Indexes')}
+        help={t('Marketplaces Browse lists. Claude Code marketplaces work too.')}
+      />
+      <SettingsCardList>
+        {indexes.map((index) => (
+          <SettingsCard
+            key={index.url}
+            title={index.name}
+            meta={[index.url, index.error ?? (index.checkedAt ? t('{count} plugins', { count: index.count }) : '')]
+              .filter(Boolean)
+              .join(' · ')}
+            actions={
+              !index.builtIn && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-label={t('Remove {name}', { name: index.name })}
+                  disabled={viewOnly || busy}
+                  onClick={() => void act(async () => setIndexes(await invoke('plugins.removeIndex', index.url)))}
+                >
+                  <Trash2 size={13} />
+                </Button>
+              )
+            }
+          />
+        ))}
+      </SettingsCardList>
+      <form
+        className="flex items-center gap-2"
+        onSubmit={(event) => {
+          event.preventDefault()
+          void act(async () => {
+            setIndexes(await invoke('plugins.addIndex', newIndex.trim()))
+            setNewIndex('')
+          })
+        }}
+      >
+        <Input
+          aria-label={t('Index address')}
+          placeholder="https://github.com/acme/plugins"
+          value={newIndex}
+          maxLength={1000}
+          disabled={viewOnly}
+          onChange={(event) => setNewIndex(event.target.value)}
+        />
+        <Button type="submit" size="sm" variant="secondary" disabled={viewOnly || busy || !newIndex.trim()}>
+          {t('Add index')}
+        </Button>
+      </form>
+
+      {review && (
+        <Review
+          review={review}
+          projects={projects}
+          busy={busy}
+          error={error}
+          onCancel={() => {
+            void invoke('plugins.cancel', review.stageId).catch(() => {})
+            setReview(null)
+            setError(null)
+          }}
+          onConfirm={(options) =>
+            void act(async () => {
+              await invoke('plugins.confirm', review.stageId, options)
+              setReview(null)
+              setSource('')
+              reload()
+            })
+          }
+        />
+      )}
+      {removing && (
+        <Dialog
+          title={t('Remove {name}?', { name: removing.name })}
+          confirmLabel={t('Remove')}
+          danger
+          busy={busy}
+          error={error}
+          onCancel={() => setRemoving(null)}
+          onConfirm={() =>
+            void act(async () => {
+              await invoke('plugins.remove', removing.id)
+              setRemoving(null)
+              reload()
+            })
+          }
+        >
+          {t(
+            'Its skills, MCP servers, custom agents, rule and saved credentials are removed together. Threads already running keep the tools they started with until they restart.',
+          )}
+        </Dialog>
+      )}
+    </section>
+  )
+}

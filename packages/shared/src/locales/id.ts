@@ -5861,10 +5861,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Scope: the team your projects are in, not Full Account': 'Cakupan: tim tempat proyekmu berada, bukan Full Account',
   'Netlify tokens reach every team you belong to, so choose an expiry':
     'Token Netlify menjangkau semua tim yang kamu ikuti, jadi pilih masa berlaku',
-  'Pick the workspace your projects are in, so the token reaches only that workspace':
-    'Pilih workspace tempat proyekmu berada, supaya token hanya menjangkau workspace itu',
-  'Create an organization token for the organization your apps go in, rather than a personal access token':
-    'Buat token organisasi untuk organisasi tempat aplikasimu berada, bukan token akses pribadi',
   '{0} is recommended for this project’s stack.': '{0} disarankan untuk stack proyek ini.',
   'Not connected. Deploys and Publish to the web need an account.':
     'Belum terhubung. Deploy dan Terbitkan ke web butuh akun.',
@@ -5897,12 +5893,8 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Ramu menautkan platform ke repositori, jadi setiap pull request dapat pratinjau dan branch default di-deploy ke produksi.',
   Platform: 'Platform',
   'Connected as {0}': 'Terhubung sebagai {0}',
-  'Not connected. Agents deploy here through its CLI with this account, asking before each change.':
-    'Belum terhubung. Agent men-deploy ke sini lewat CLI-nya dengan akun ini, dan bertanya sebelum tiap perubahan.',
   'Or link Vercel or Netlify, which watch the repository: every pull request gets a preview and the default branch deploys to production.':
     'Atau tautkan Vercel atau Netlify, yang memantau repositori: setiap pull request mendapat preview dan branch default di-deploy ke produksi.',
-  '{0} is recommended for this project’s stack. It deploys through its own CLI. Ask the project’s agent to deploy, and Ramu runs the CLI with your {0} account, asking before each command that changes anything.':
-    '{0} disarankan untuk stack proyek ini. Deploy-nya lewat CLI-nya sendiri. Minta agent proyek untuk deploy, lalu Ramu menjalankan CLI dengan akun {0}-mu dan bertanya sebelum tiap perintah yang mengubah sesuatu.',
   'Connect a repository to this project and publish it to GitHub first.':
     'Hubungkan repositori ke proyek ini dan terbitkan ke GitHub dulu.',
   'Run on this computer': 'Jalankan di komputer ini',
@@ -6026,10 +6018,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   Database: 'Database',
   'Production has its own database. Previews, this host and CI use a separate preview copy (a Neon branch), so they never change production data. Sync below sets {0}.':
     'Produksi punya database sendiri. Preview, host ini, dan CI memakai salinan preview terpisah (branch Neon), sehingga tidak pernah mengubah data produksi. Sinkronisasi di bawah mengatur {0}.',
-  'Create a custom token for the one account your apps go in, with Edit on only what your agent deploys (Workers Scripts, Cloudflare Pages, D1, Workers KV Storage or R2)':
-    'Buat token kustom untuk satu akun tempat aplikasimu berada, dengan Edit hanya pada yang di-deploy agent-mu (Workers Scripts, Cloudflare Pages, D1, Workers KV Storage, atau R2)',
-  'Create an access token with an expiry. Supabase tokens reach every organization you belong to':
-    'Buat access token dengan masa berlaku. Token Supabase menjangkau semua organisasi yang kamu ikuti',
   'Sync below sets {0}.': 'Sinkronisasi di bawah mengatur {0}.',
   'Before each production deploy from Ramu, {0} runs against the production database.':
     'Sebelum setiap deploy produksi dari Ramu, {0} dijalankan pada database produksi.',
@@ -6216,8 +6204,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Runs the project’s own app.config code on this computer to read the configuration it computes':
     'Menjalankan kode app.config proyek di komputer ini untuk membaca konfigurasi yang dihitungnya',
   'Create a fine-grained token on GitHub': 'Buat token fine-grained di GitHub',
-  'Paste tokens on the machine running this host. Vercel, Netlify, Railway and Expo can also be signed in from here: their sign-in runs on the host and keeps the token there.':
-    'Tempel token di mesin yang menjalankan host ini. Vercel, Netlify, Railway, dan Expo juga bisa login dari sini: proses loginnya berjalan di host dan tokennya tetap di sana.',
   'Cloudflare token with DNS edit, used once': 'Token Cloudflare dengan DNS edit, dipakai sekali',
   'DNS at Cloudflare? Create them there…': 'DNS di Cloudflare? Buat di sana…',
   'Next: push {0}, or merge a pull request into it, and the platform builds the first deployment. The project’s latest thread hears how it went.':
@@ -6262,22 +6248,7 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Atau pakai Netlify Database: tambahkan @netlify/database ke aplikasi (netlify database init melakukannya), dan Netlify membuat database pada deploy berikutnya, memberi setiap deploy preview branch sendiri, dan menerapkan migrasi di netlify/database/migrations/.',
   'Also being edited on {0}. Saving keeps both edits where they changed different lines.':
     'Juga sedang disunting di {0}. Menyimpan mempertahankan kedua suntingan jika mengubah baris yang berbeda.',
-  'Create a service account with the Viewer role and a token for it, then paste your Grafana address and the token joined by | (https://acme.grafana.net|glsa_…). Dashboards read it only where you allow it':
-    'Buat service account dengan peran Viewer dan token untuknya, lalu tempel alamat Grafana-mu dan token, digabung dengan | (https://acme.grafana.net|glsa_…). Dashboard hanya membacanya jika kamu izinkan',
-  'Not connected. Dashboards that read it need an account.':
-    'Belum terhubung. Dashboard yang membacanya butuh akun.',
-  'This dashboard reads {0} with the account in Settings → Deploy. Its tables stay empty until you allow it.':
-    'Dashboard ini membaca {0} dengan akun di Pengaturan → Deploy. Tabelnya tetap kosong sampai kamu mengizinkannya.',
   'Stop reading {0}': 'Berhenti membaca {0}',
-  'Copy the project’s API key and secret key from its settings and paste them joined by a colon (key:secret), with eu| before them for an EU project. Dashboards read it only where you allow it':
-    'Salin API key dan secret key proyek dari pengaturannya lalu tempel dengan titik dua di antaranya (key:secret), dengan eu| di depannya untuk proyek EU. Dashboard hanya membacanya jika kamu izinkan',
-  'Reads {services} with your accounts in Settings, read-only: {purpose}':
-    'Membaca {services} dengan akunmu di Pengaturan, hanya baca: {purpose}',
-  'Create a connected app in your org with OAuth on, the api and refresh_token scopes, PKCE required and no secret for the web server flow, and the callback below; then paste its consumer key here':
-    'Buat connected app di org-mu dengan OAuth aktif, scope api dan refresh_token, PKCE wajib dan tanpa secret untuk web server flow, serta callback di bawah; lalu tempel consumer key-nya di sini',
-  'Callback URL': 'URL callback',
-  'Consumer key': 'Consumer key',
-  'A sandbox org': 'Org sandbox',
   'Who may edit its text': 'Siapa yang boleh menyunting teksnya',
   'Link that lets them edit': 'Tautan agar mereka bisa menyunting',
   '{name} can edit': '{name} bisa menyunting',
@@ -6446,7 +6417,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   Deploy: 'Deploy',
   'Deploy accounts': 'Akun deploy',
   Hosting: 'Hosting',
-  'Platforms through their CLI': 'Platform lewat CLI-nya',
   'App stores': 'Toko aplikasi',
   'Dashboard data': 'Data dasbor',
   'Could not read the accounts on this host.': 'Tidak bisa membaca akun di host ini.',
@@ -6485,4 +6455,76 @@ export const indonesian: Readonly<Record<string, string>> = {
   'This host has not reported any models yet.': 'Host ini belum melaporkan model apa pun.',
   'Model set step': 'Langkah set model',
   'Reasoning effort level': 'Level effort penalaran',
+  'Deploys to {0} through its plugin.': 'Deploy ke {0} lewat plugin-nya.',
+  'Ask the project’s agent to deploy, and Ramu asks before each command that changes anything.':
+    'Minta agent proyek untuk men-deploy, dan Ramu bertanya sebelum setiap perintah yang mengubah sesuatu.',
+  'Install it, then ask the project’s agent to deploy.': 'Pasang plugin-nya, lalu minta agent proyek untuk men-deploy.',
+  'Save its token, then ask the project’s agent to deploy.':
+    'Simpan token-nya, lalu minta agent proyek untuk men-deploy.',
+  'Install the {0} plugin': 'Pasang plugin {0}',
+  'Open plugin settings': 'Buka pengaturan plugin',
+  'This dashboard reads {0}, which no installed plugin provides. Its tables stay empty until you install one.':
+    'Dashboard ini membaca {0}, yang tidak disediakan plugin terpasang mana pun. Tabelnya tetap kosong sampai kamu memasangnya.',
+  'This dashboard reads {0} with the credential saved for its plugin in Settings → Plugins. Its tables stay empty until you allow it.':
+    'Dashboard ini membaca {0} dengan kredensial yang disimpan untuk plugin-nya di Pengaturan → Plugin. Tabelnya tetap kosong sampai kamu mengizinkannya.',
+  'Reads {services} with your plugins’ credentials in Settings, read-only: {purpose}':
+    'Membaca {services} dengan kredensial plugin-mu di Pengaturan, hanya baca: {purpose}',
+  'Paste tokens on the machine running this host. Vercel, Netlify and Expo can also be signed in from here: their sign-in runs on the host and keeps the token there.':
+    'Tempel token di mesin yang menjalankan host ini. Vercel, Netlify, dan Expo juga bisa login dari sini: proses loginnya berjalan di host dan tokennya tetap di sana.',
+  "A Git address (GitHub, GitLab, or anywhere git can clone) or a folder on this computer.": "Alamat Git (GitHub, GitLab, atau mana pun yang bisa di-clone git) atau folder di komputer ini.",
+  "A rule from its AGENTS.md": "Aturan dari AGENTS.md-nya",
+  "Add index": "Tambah indeks",
+  "Also copy the scripts in its skills. Ramu will not run them.": "Salin juga skrip di skill-nya. Ramu tidak akan menjalankannya.",
+  "Asks for": "Meminta",
+  "Asks for approval again": "Meminta persetujuan lagi",
+  "Browse": "Jelajahi",
+  "By Ramu": "Dari Ramu",
+  "By {author}": "Oleh {author}",
+  "CLI": "CLI",
+  "Client id": "Client ID",
+  "Every command asks you.": "Setiap perintah meminta izin Anda.",
+  "Folder on this computer": "Folder di komputer ini",
+  "Get one": "Buat satu",
+  "Index address": "Alamat indeks",
+  "Indexes": "Indeks",
+  "Install from a source": "Pasang dari sumber",
+  "Install {name}?": "Pasang {name}?",
+  "Its skills, MCP servers, custom agents, rule and saved credentials are removed together. Threads already running keep the tools they started with until they restart.": "Skill, server MCP, agen kustom, aturan, dan kredensial tersimpannya dihapus bersamaan. Thread yang sedang berjalan tetap memakai alat yang ada saat dimulai sampai dimulai ulang.",
+  "Make a client": "Buat client",
+  "Marketplaces Browse lists. Claude Code marketplaces work too.": "Marketplace yang ditampilkan Jelajahi. Marketplace Claude Code juga bisa.",
+  "Needs {what}": "Perlu {what}",
+  "No listed plugin matches.": "Tidak ada plugin terdaftar yang cocok.",
+  "No plugins yet. Browse the index below, or install one from a Git address or a folder.": "Belum ada plugin. Jelajahi indeks di bawah, atau pasang dari alamat Git atau folder.",
+  "Not used in Ramu: {parts}": "Tidak dipakai di Ramu: {parts}",
+  "One install adds a service’s skills, MCP servers, credential and safe commands for every provider. Plugins in the Claude Code and Codex layout work here too.": "Sekali pasang menambahkan skill, server MCP, kredensial, dan perintah aman sebuah layanan untuk semua provider. Plugin dengan susunan Claude Code dan Codex juga bisa dipakai di sini.",
+  "One project": "Satu proyek",
+  "Paste {label}. It stays in this computer’s credential store.": "Tempel {label}. Disimpan di penyimpanan kredensial komputer ini.",
+  "Plugin source": "Sumber plugin",
+  "Plugins": "Plugin",
+  "Plugins listed in the indexes below. Each one shows what it adds before anything is installed.": "Plugin yang terdaftar di indeks di bawah. Masing-masing menunjukkan apa yang ditambahkannya sebelum dipasang.",
+  "Reading…": "Membaca…",
+  "Remove {name}": "Hapus {name}",
+  "Remove {name}?": "Hapus {name}?",
+  "Review the update to {name}": "Tinjau pembaruan {name}",
+  "Runs without asking: {commands}. Every other command asks you.": "Berjalan tanpa bertanya: {commands}. Perintah lain meminta izin Anda.",
+  "Sandbox": "Sandbox",
+  "Scope: {scope}": "Cakupan: {scope}",
+  "Search plugins": "Cari plugin",
+  "Search plugins, such as render or analytics": "Cari plugin, misalnya render atau analytics",
+  "Sign in with your own client: paste its client id, then finish in the browser.": "Masuk dengan client Anda sendiri: tempel client ID-nya, lalu selesaikan di browser.",
+  "Signed": "Bertanda tangan",
+  "Signed by {name}": "Ditandatangani oleh {name}",
+  "Unsigned": "Tanpa tanda tangan",
+  "Update: {changes}": "Pembaruan: {changes}",
+  "{count} plugins": "{count} plugin",
+  "Installed plugins": "Plugin terpasang",
+  "No plugins yet": "Belum ada plugin",
+  "Install one in Settings → Plugins on the host.": "Pasang di Pengaturan → Plugin di host.",
+  "Plugins are installed and their credentials pasted on the host, which keeps them.": "Plugin dipasang dan kredensialnya ditempel di host, yang menyimpannya.",
+  "Hooks": "Hook",
+  "Slash commands": "Perintah garis miring",
+  "Language servers": "Server bahasa",
+  "Output styles": "Gaya keluaran",
+  "Monitors": "Monitor",
+  "App connectors": "Konektor aplikasi",
 }

@@ -1,10 +1,6 @@
 import { mergeSlideText, mergeText } from '@ramu/shared/textMerge'
 import { deckText, slideWords } from '@ramu/shared/deckText'
-import { NAMED_SERVICE_NAMES, NAMED_SERVICES, type NamedService } from '@ramu/shared/types/deploy'
-import { DASHBOARD_ROWS_MAX } from '@ramu/shared/artifactSource'
-import { amplitude } from '../../interactive/amplitude'
-import { grafana } from '../../interactive/grafana'
-import { salesforce } from '../../interactive/salesforce'
+import { DASHBOARD_ROWS_MAX, DATA_SOURCE_ID, pageServiceQuery } from '@ramu/shared/artifactSource'
 import { EditingPresence } from '../../interactive/editing'
 import { LiveEditing } from '../../interactive/liveEditing'
 import { speak, wavOf } from '../../interactive/narration'
@@ -75,6 +71,7 @@ const field = z.enum([
 const fields = z.record(z.string().max(40), field).refine((value) => Object.keys(value).length <= 40)
 const shape = z.union([fields, z.tuple([fields])]).optional()
 const name = z.string().min(1).max(40)
+const dataSourceId = z.string().regex(DATA_SOURCE_ID)
 const json = z.unknown()
 const query = z
   .object({
@@ -122,39 +119,9 @@ const grants = z
     webhook: z.union([z.object({ token: z.string().max(80) }), z.literal(false)]).optional(),
     folder: z.boolean().optional(),
     ramu: z.union([z.array(z.enum(['activity', 'threads', 'pullRequests'])).max(3), z.literal(false)]).optional(),
-    services: z.union([z.array(z.enum(NAMED_SERVICES)).max(NAMED_SERVICES.length), z.literal(false)]).optional(),
+    services: z.union([z.array(dataSourceId).max(8), z.literal(false)]).optional(),
   })
   .strict()
-
-/** What a page's code asks a named service for: the same fields a dashboard's table gives, and the columns it wants. */
-const columnsOf = z.array(z.string().min(1).max(60)).min(1).max(30)
-const serviceQuery = z.discriminatedUnion('id', [
-  z.object({
-    id: z.literal('grafana'),
-    datasource: z.string().trim().min(1).max(120),
-    query: z.record(z.string().max(60), z.union([z.string().max(2000), z.number(), z.boolean()])),
-    from: z.string().trim().max(40).optional(),
-    to: z.string().trim().max(40).optional(),
-    columns: columnsOf,
-  }),
-  z.object({
-    id: z.literal('amplitude'),
-    event: z.string().trim().min(1).max(200),
-    metric: z.enum(['uniques', 'totals', 'pct_dau', 'average']).optional(),
-    days: z.number().int().min(1).max(365).optional(),
-    interval: z.union([z.literal(1), z.literal(7), z.literal(30)]).optional(),
-    columns: columnsOf,
-  }),
-  z.object({
-    id: z.literal('salesforce'),
-    soql: z
-      .string()
-      .trim()
-      .max(4000)
-      .regex(/^select\s/i, 'A Salesforce query is a SOQL SELECT.'),
-    columns: columnsOf,
-  }),
-])
 
 /** One call from a page's frame: what ramuContent asked for, checked against the page's grants on the host. */
 const frameCall = z.discriminatedUnion('method', [
@@ -181,7 +148,7 @@ const frameCall = z.discriminatedUnion('method', [
   z.object({ method: z.literal('folder.list'), args: z.tuple([z.string().max(400)]).or(z.tuple([])) }),
   z.object({ method: z.literal('folder.read'), args: z.tuple([z.string().min(1).max(400)]) }),
   z.object({ method: z.literal('ramu.read'), args: z.tuple([z.enum(['activity', 'threads', 'pullRequests'])]) }),
-  z.object({ method: z.literal('services.query'), args: z.tuple([serviceQuery]) }),
+  z.object({ method: z.literal('services.query'), args: z.tuple([pageServiceQuery]) }),
 ])
 type FrameCall = z.infer<typeof frameCall>
 
@@ -229,7 +196,7 @@ function runFrameCall(ctx: HandlerContext, artifactId: string, call: FrameCall):
     case 'ramu.read':
       return readRamuData(ctx, artifactId, call.args[0])
     case 'services.query':
-      return queryNamedService(ctx, artifactId, call.args[0])
+      return queryDataSource(ctx, artifactId, call.args[0])
     case 'notify': {
       const page = pages.requireGrant(artifactId, 'notify')
       pages.spend(artifactId, 'notify')
@@ -283,24 +250,17 @@ async function pageImage(ctx: HandlerContext, artifactId: string, prompt: string
 }
 
 /**
- * A named service the page declared and the person allowed, queried with the account in Settings: rows as objects
- * of the columns it asked for, at most 5,000.
+ * A plugin data source the page declared and the person allowed, queried with the credential saved for its plugin:
+ * rows as objects of the columns it asked for, at most 5,000.
  */
-async function queryNamedService(ctx: HandlerContext, artifactId: string, spec: z.infer<typeof serviceQuery>) {
+async function queryDataSource(ctx: HandlerContext, artifactId: string, spec: z.infer<typeof pageServiceQuery>) {
   const page = ctx.pages!.get(artifactId)
-  const name = NAMED_SERVICE_NAMES[spec.id]
-  if (!page.capabilities.services?.services.includes(spec.id)) throw new Error(`This page did not declare ${name}.`)
+  if (!page.capabilities.services?.services.includes(spec.id)) throw new Error(`This page did not declare ${spec.id}.`)
   if (!page.grants.services || !page.grants.services.includes(spec.id))
-    throw new Error(`This page is not allowed to read ${name}. Allow it in Page settings.`)
-  if (!ctx.deploys) throw new Error('Update this host for pages that read services.')
-  const { auth } = await ctx.deploys.accounts.auth(spec.id)
-  const rows =
-    spec.id === 'grafana'
-      ? await grafana.query(auth, spec, spec.columns, DASHBOARD_ROWS_MAX)
-      : spec.id === 'amplitude'
-        ? await amplitude.query(auth, spec, spec.columns, DASHBOARD_ROWS_MAX)
-        : await salesforce.query(auth, spec, spec.columns, DASHBOARD_ROWS_MAX)
-  return rows.map((row) => Object.fromEntries(spec.columns.map((column, index) => [column, row[index] ?? null])))
+    throw new Error(`This page is not allowed to read ${spec.id}. Allow it in Page settings.`)
+  if (!ctx.plugins) throw new Error('Update this host for pages that read data sources.')
+  const { columns, ...query } = spec
+  return ctx.plugins.query(spec.id, query, columns, DASHBOARD_ROWS_MAX)
 }
 
 function readRamuData(ctx: HandlerContext, artifactId: string, source: RamuDataSource) {
@@ -345,7 +305,7 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
   if (ctx.pageAi) ctx.pageAi.track = (label, detail, work, cancel) => ctx.activity.run(label, detail, work, cancel)
   let publisher: PagePublisher | undefined
   const publishing = () =>
-    (publisher ??= new PagePublisher(need().pages, () => ctx.forgeAccounts, ctx.deploys?.accounts))
+    (publisher ??= new PagePublisher(need().pages, () => ctx.forgeAccounts, ctx.deploys?.accounts, ctx.plugins))
   /** A document another host shared, with the title and icon it had there. */
   const importArgs = z.tuple([
     z.object({
@@ -521,14 +481,16 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
     return share as typeof share & { editor: string }
   }
 
-  /** The named services a kept dashboard's tables read, and the ones it is allowed to. */
-  const namedServices = (artifactId: string): { needed: NamedService[]; allowed: NamedService[] } => {
+  /** The data sources a kept dashboard's tables read, by id, and the ones it is allowed to. */
+  const dataSources = (artifactId: string): { needed: string[]; allowed: string[] } => {
     const document = need().pages.document(artifactId)
     const stored = document.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.dashboard)?.content
     const tables = stored
       ? ((JSON.parse(stored) as { datasets?: { service?: { id?: unknown } }[] }).datasets ?? [])
       : []
-    const needed = NAMED_SERVICES.filter((service) => tables.some((table) => table.service?.id === service))
+    const needed = [
+      ...new Set(tables.flatMap((table) => (typeof table.service?.id === 'string' ? [table.service.id] : []))),
+    ]
     return { needed, allowed: ctx.serviceGrants?.allowed(artifactId) ?? [] }
   }
   const need = () => {
@@ -603,15 +565,17 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
     },
     'artifacts.services': {
       args: z.tuple([id]),
-      run: (artifactId: string) => namedServices(artifactId),
+      run: (artifactId: string) => dataSources(artifactId),
     },
     'artifacts.allowService': {
-      args: z.tuple([id, z.enum(NAMED_SERVICES), z.boolean()]),
-      run: (artifactId: string, service: NamedService, allowed: boolean) => {
-        if (!ctx.serviceGrants) throw new Error('Update this host for dashboards that read services.')
+      args: z.tuple([id, dataSourceId, z.boolean()]),
+      run: (artifactId: string, service: string, allowed: boolean) => {
+        if (!ctx.serviceGrants) throw new Error('Update this host for dashboards that read data sources.')
+        if (allowed && !dataSources(artifactId).needed.includes(service))
+          throw new Error(`This dashboard does not read ${service}.`)
         ctx.serviceGrants.set(artifactId, service, allowed)
         ctx.liveDashboards?.forget()
-        return namedServices(artifactId)
+        return dataSources(artifactId)
       },
     },
     'artifacts.editing': {

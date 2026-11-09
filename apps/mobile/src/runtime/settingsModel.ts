@@ -46,6 +46,7 @@ const PHONE_MENU: readonly { id: SettingsSection; group: SettingsGroup; label?: 
   { id: 'workflows', group: 'agents' },
   { id: 'memory', group: 'agents' },
   { id: 'agent-setup', group: 'agents' },
+  { id: 'plugins', group: 'agents' },
   { id: 'git', group: 'workspace' },
   { id: 'deploy', group: 'workspace' },
   { id: 'browser', group: 'workspace' },
@@ -797,6 +798,7 @@ const PHONE_ENTRIES: { section: SettingsSection; title: string; words: string }[
   { section: 'remote', title: 'Paired hosts', words: 'pair connect switch host reconnect revoke forget hosts' },
   { section: 'archived', title: 'Archived threads', words: 'history restore unarchive delete' },
   { section: 'agent-setup', title: 'MCP servers', words: 'shared tools external service connection skills' },
+  { section: 'plugins', title: 'Installed plugins', words: 'plugin marketplace index integration service credential' },
   { section: 'memory', title: 'Memories', words: 'remember forget saved memory archive restore' },
   {
     section: 'providers',
@@ -806,7 +808,7 @@ const PHONE_ENTRIES: { section: SettingsSection; title: string; words: string }[
   {
     section: 'deploy',
     title: 'Deploy accounts',
-    words: 'deploy ship hosting vercel netlify railway cloudflare fly neon supabase expo database app store',
+    words: 'deploy ship hosting vercel netlify neon expo database app store',
   },
 ]
 

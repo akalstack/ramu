@@ -79,6 +79,7 @@ const SETTINGS_DOMAINS = new Set([
   'mcp',
   'providers',
   'rules',
+  'plugins',
   'codex',
   'updates',
   'background',

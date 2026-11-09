@@ -141,12 +141,13 @@ const CSP = [
   "connect-src 'self'",
 ].join('; ')
 
-// `ramu://pair?...` links can arrive before the window exists, so they queue until it can show them.
-const PAIR_LINK = /^ramu:\/\/pair(?:[/?]|$)/i
+// `ramu://pair?...` and `ramu://plugin/install?...` links can arrive before the window exists, so they queue until it
+// can show them.
+const APP_LINK = /^ramu:\/\/(pair|plugin\/install)(?:[/?]|$)/i
 const queuedPairLinks: string[] = []
 let showPairLink: ((link: string) => void) | null = null
 const receivePairLink = (link: string) => {
-  if (link.length > 4096 || !PAIR_LINK.test(link)) return
+  if (link.length > 4096 || !APP_LINK.test(link)) return
   if (showPairLink) showPairLink(link)
   else queuedPairLinks.push(link)
 }
@@ -385,7 +386,7 @@ async function main() {
     if (win.isMinimized()) win.restore()
     win.show()
     win.focus()
-    sendTo(LOCAL, 'pair:link', { link })
+    sendTo(LOCAL, /^ramu:\/\/plugin\//i.test(link) ? 'plugin:link' : 'pair:link', { link })
   }
   // The window may still be loading; the renderer keeps the link until the screen asks for it.
   for (const link of queuedPairLinks.splice(0)) setTimeout(() => showPairLink?.(link), 1500)

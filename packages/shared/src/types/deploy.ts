@@ -6,21 +6,11 @@ import type { DeployTargetId } from '../stacks'
 export const HOSTING_PLATFORMS = ['vercel', 'netlify'] as const
 export type HostingPlatform = (typeof HOSTING_PLATFORMS)[number]
 
-/**
- * Platforms an agent drives through the platform's own CLI with the token saved on this host (`platform_cli`), rather
- * than through an adapter: the agent writes the setup, Ramu keeps the token out of the thread and asks before a
- * command that changes anything.
- */
-export const CLI_PLATFORMS = ['railway', 'fly', 'cloudflare', 'supabase'] as const
-export type CliPlatform = (typeof CLI_PLATFORMS)[number]
-export const isCliPlatform = (value: unknown): value is CliPlatform =>
-  typeof value === 'string' && (CLI_PLATFORMS as readonly string[]).includes(value)
-
 /** Platforms whose own CLI can sign in on the host. */
-export const CLI_SIGN_IN_PLATFORMS = ['vercel', 'netlify', 'railway', 'fly', 'expo', 'neon'] as const
+export const CLI_SIGN_IN_PLATFORMS = ['vercel', 'netlify', 'expo', 'neon'] as const
 export type CliSignInPlatform = (typeof CLI_SIGN_IN_PLATFORMS)[number]
 /** Sign-ins whose link works from any device, so a paired owner device can start them for a remote host. */
-export const REMOTE_SIGN_IN_PLATFORMS: readonly CliSignInPlatform[] = ['vercel', 'netlify', 'railway', 'expo']
+export const REMOTE_SIGN_IN_PLATFORMS: readonly CliSignInPlatform[] = ['vercel', 'netlify', 'expo']
 
 /** Database providers with a resource adapter on the server. */
 export const RESOURCE_PROVIDERS = ['neon'] as const
@@ -29,23 +19,6 @@ export type ResourceProvider = (typeof RESOURCE_PROVIDERS)[number]
 /** Services that build an app and hand it to the app stores. */
 export const STORE_SERVICES = ['expo'] as const
 export type StoreService = (typeof STORE_SERVICES)[number]
-
-/**
- * Every account connected in Settings → Deploy: the hosting platforms, the resource providers, then the
- * store services.
- */
-/** Services a Dashboard artifact reads from, each its own grant on the dashboard. */
-/** The loopback callback a Salesforce connected app registers; the host listens there only during a sign-in. */
-export const SALESFORCE_CALLBACK_PORT = 7417
-export const SALESFORCE_CALLBACK = `http://localhost:${SALESFORCE_CALLBACK_PORT}/salesforce/callback`
-
-export const NAMED_SERVICES = ['grafana', 'amplitude', 'salesforce'] as const
-export type NamedService = (typeof NAMED_SERVICES)[number]
-export const NAMED_SERVICE_NAMES: Record<NamedService, string> = {
-  grafana: 'Grafana',
-  amplitude: 'Amplitude',
-  salesforce: 'Salesforce',
-}
 
 /**
  * Media services an ability can run on with the person's own API key, billed to that account: video, speech, music
@@ -60,12 +33,14 @@ export const MEDIA_SERVICE_NAMES: Record<MediaService, string> = {
 export const isMediaService = (value: unknown): value is MediaService =>
   typeof value === 'string' && (MEDIA_SERVICES as readonly string[]).includes(value)
 
+/**
+ * Every account connected in Settings → Deploy (the hosting platforms, the resource providers, then the store
+ * services) and the media services saved in Settings → Providers.
+ */
 export const ACCOUNT_PLATFORMS = [
   ...HOSTING_PLATFORMS,
-  ...CLI_PLATFORMS,
   ...RESOURCE_PROVIDERS,
   ...STORE_SERVICES,
-  ...NAMED_SERVICES,
   ...MEDIA_SERVICES,
 ] as const
 export type AccountPlatform = (typeof ACCOUNT_PLATFORMS)[number]
@@ -83,8 +58,8 @@ export type DeployFailureKind = 'signed-out' | 'missing-permission' | 'plan-limi
 /** One platform's connection on this host. The token never leaves the host. */
 export interface HostingAccount {
   platform: AccountPlatform
-  /** Whether it deploys apps, runs through its CLI, provides a database, or releases phone apps to the stores. */
-  kind: 'hosting' | 'cli' | ResourceKind | 'store' | 'service' | 'media'
+  /** Whether it deploys apps, provides a database, releases phone apps to the stores, or makes media. */
+  kind: 'hosting' | ResourceKind | 'store' | 'media'
   /** The platform's name, such as "Vercel". */
   name: string
   connected: boolean
@@ -117,10 +92,8 @@ export type ResourceKind = (typeof RESOURCE_KINDS)[number]
 /** How the Deploy settings page groups accounts, in order; titles are English copy keys. */
 export const DEPLOY_ACCOUNT_GROUPS: readonly { kind: Exclude<HostingAccount['kind'], 'media'>; title: string }[] = [
   { kind: 'hosting', title: 'Hosting' },
-  { kind: 'cli', title: 'Platforms through their CLI' },
   { kind: 'database', title: 'Databases' },
   { kind: 'store', title: 'App stores' },
-  { kind: 'service', title: 'Dashboard data' },
 ]
 
 /** A size or tier a provider offers when creating a resource. */
@@ -167,8 +140,7 @@ export interface ProjectResources {
 /** A platform CLI sign-in running on the host: the link and code to show, then the result. */
 export interface HostingSignIn {
   id: string
-  /** A platform's CLI sign-in, or Salesforce's browser sign-in through the person's connected app. */
-  platform: CliSignInPlatform | 'salesforce'
+  platform: CliSignInPlatform
   state: 'starting' | 'waiting' | 'connected' | 'failed'
   url: string | null
   code: string | null

@@ -14,12 +14,9 @@ import fly from '../assets/brands/fly.svg'
 import railway from '../assets/brands/railway.svg'
 import railwayDark from '../assets/brands/railway-dark.svg'
 import neon from '../assets/brands/neon.svg'
-import supabase from '../assets/brands/supabase.svg'
 import postgres from '../assets/brands/postgres.svg'
 import sentry from '../assets/brands/sentry.svg'
 import sentryDark from '../assets/brands/sentry-dark.svg'
-import grafana from '../assets/brands/grafana.svg'
-import salesforce from '../assets/brands/salesforce.svg'
 import expo from '../assets/brands/expo.svg'
 import expoDark from '../assets/brands/expo-dark.svg'
 import appstore from '../assets/brands/appstore.svg'
@@ -40,11 +37,8 @@ const MARKS: Record<BrandId, { light: string; dark?: string }> = {
   fly: { light: fly },
   railway: { light: railway, dark: railwayDark },
   neon: { light: neon },
-  supabase: { light: supabase },
   postgres: { light: postgres },
   sentry: { light: sentry, dark: sentryDark },
-  grafana: { light: grafana },
-  salesforce: { light: salesforce },
   expo: { light: expo, dark: expoDark },
   appstore: { light: appstore },
   googleplay: { light: googleplay },
