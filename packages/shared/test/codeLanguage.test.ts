@@ -35,3 +35,18 @@ describe('code block header', () => {
     expect(dedentCode('a\n  b')).toBe('a\n  b')
   })
 })
+
+describe('code block icons match the explorer', () => {
+  it('gives a fence the same icon the explorer gives a file of that language', async () => {
+    const { fileIconStyle } = await import('../src/workspace/fileIcons')
+    const same = (hint: string, file: string) =>
+      expect(fileIconStyle(codeBlockLabel('x y', hint).icon)).toEqual(fileIconStyle(file))
+    same('sh', 'run.sh')
+    same('console', 'run.sh')
+    same('terminal', 'run.sh')
+    same('ts', 'a.ts')
+    same('python', 'a.py')
+    same('dockerfile', 'Dockerfile')
+    same('makefile', 'Makefile')
+  })
+})

@@ -11,6 +11,11 @@ const extensions: Record<string, string> = {
   bash: 'sh',
   sh: 'sh',
   zsh: 'sh',
+  // Terminal sessions are fenced under these names too; they read and highlight as shell.
+  console: 'sh',
+  terminal: 'sh',
+  shellscript: 'sh',
+  'shell-session': 'sh',
   json: 'json',
   html: 'html',
   xml: 'xml',
@@ -110,6 +115,9 @@ const LANGUAGE_NAMES: Record<string, string> = {
 /** "TypeScript" for `ts`; an unknown extension reads as itself in capitals. */
 export const languageName = (extension: string) => LANGUAGE_NAMES[extension.toLowerCase()] ?? extension.toUpperCase()
 
+/** Languages whose files go by a name, not an extension, so the icon matches the explorer's for that file. */
+const NAMED_FILES: Record<string, string> = { dockerfile: 'Dockerfile', makefile: 'Makefile' }
+
 const PATH = /^(?:~|\.{1,2}|[A-Za-z]:)?[\\/]?(?:[\w.@+~-]+[\\/])+[\w.@+~-]*$/
 
 /**
@@ -125,7 +133,9 @@ export function codeBlockLabel(source: string, hint?: string): { label: string; 
   if (!text.includes('\n') && !/\s/.test(text) && PATH.test(text))
     return { label: 'Path', icon: text.split(/[\\/]/).at(-1) || 'folder' }
   const extension = codeLanguage(source, hint)
-  return { label: languageName(extension), icon: `file.${extension}` }
+  // Files known by name rather than extension take the explorer's icon for that name.
+  const byName = NAMED_FILES[extension]
+  return { label: languageName(extension), icon: byName ?? `file.${extension}` }
 }
 
 /** Drops the indentation every line shares, and blank lines at either end, as a list item's fenced block carries. */
