@@ -1517,7 +1517,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Turn off': 'Matikan',
   'Let agents on that computer start threads here, up to the most access you allow.':
     'Izinkan agen di komputer itu memulai thread di sini, hingga akses tertinggi yang Anda izinkan.',
-  'Needs you': 'Butuh perhatianmu',
+  'Needs you': 'Perlu tindakanmu',
   '{0} earlier runs': '{0} eksekusi sebelumnya',
   '{0} helpers': '{0} helper',
   'Waiting to send': 'Menunggu dikirim',
@@ -1664,7 +1664,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Interrupt agent': 'Hentikan agen',
   'Waiting for your answer': 'Menunggu jawabanmu',
   'Waiting for your input': 'Menunggu masukanmu',
-  'Needs your attention': 'Butuh perhatianmu',
+  'Needs your attention': 'Perlu perhatianmu',
   'Finished, not viewed yet': 'Sudah selesai, belum dilihat',
   'This agent left no transcript.': 'Agen ini belum punya transkrip.',
   'This command left no output.': 'Perintah ini tidak menghasilkan output.',
@@ -3283,7 +3283,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   Learned: 'Dipelajari',
   Completed: 'Selesai',
   Earlier: 'Sebelumnya',
-  'Nothing needs you': 'Tidak ada yang butuh kamu',
+  'Nothing needs you': 'Tidak ada yang perlu kamu tangani',
   'Questions, approvals and recaps that need a decision show up here.':
     'Pertanyaan, persetujuan, dan ringkasan yang butuh keputusan muncul di sini.',
   'No agents running': 'Tidak ada agen yang berjalan',
