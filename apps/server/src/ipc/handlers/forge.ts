@@ -10,6 +10,7 @@ import type {
   IssueLink,
   PublishRepositoryInput,
   PullRequestAction,
+  PullRequestWrite,
   PullRequestFeedbackKind,
   PullRequestHandoff,
   PullRequestInput,
@@ -19,6 +20,7 @@ import type {
 } from '@ramu/shared/types'
 import { reviewRequestPrompt } from '../../workspace/forge/reviewPrompt'
 import type { DraftEdit } from '../../background/pullRequestDrafts'
+import { performWrite, unsupportedWrite } from '../../background/pullRequestWrites'
 import * as forge from '../../workspace/forge'
 import { pullRequestLink } from '../../workspace/forge/githubPulls'
 import { gitlabApi, gitlabSummary } from '../../workspace/forge/gitlab'
@@ -75,7 +77,51 @@ const pullRequestAction = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('close') }),
   z.object({ kind: z.literal('reopen') }),
   z.object({ kind: z.literal('ready') }),
+  z.object({ kind: z.literal('draft') }),
   z.object({ kind: z.literal('update-branch') }),
+  z.object({ kind: z.literal('auto-merge'), method: z.enum(['merge', 'squash', 'rebase']), deleteBranch: z.boolean() }),
+])
+const commentText = z.string().trim().min(1).max(20_000)
+const handles = z.array(z.string().trim().min(1).max(200)).max(30)
+const lineComment = z.object({
+  path: z.string().min(1).max(1000),
+  line: z.number().int().positive().max(10_000_000),
+  startLine: z.number().int().positive().max(10_000_000).optional(),
+  side: z.enum(['new', 'old']).optional(),
+  suggestion: z.string().max(20_000).optional(),
+  body: commentText,
+})
+/** Everything the person can do to a pull request from the page or the phone; agents' cards hold the same shapes. */
+const pullRequestWrite = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('comment'), body: commentText }),
+  z.object({ kind: z.literal('reply'), threadId: z.string().min(1).max(300), body: commentText }),
+  z.object({ kind: z.literal('line-comment'), comment: lineComment }),
+  z.object({
+    kind: z.literal('thread-status'),
+    threadId: z.string().min(1).max(300),
+    status: z.enum(['active', 'resolved', 'wont-fix', 'by-design', 'closed']),
+  }),
+  z.object({ kind: z.literal('edit-comment'), commentId: z.string().min(1).max(300), body: commentText }),
+  z.object({ kind: z.literal('delete-comment'), commentId: z.string().min(1).max(300) }),
+  z.object({
+    kind: z.literal('react'),
+    commentId: z.string().min(1).max(300),
+    reaction: z.enum(['thumbs-up', 'thumbs-down', 'laugh', 'hooray', 'confused', 'heart', 'rocket', 'eyes']),
+    remove: z.boolean(),
+  }),
+  z.object({ kind: z.literal('reviewers'), add: handles, remove: handles }),
+  z.object({ kind: z.literal('withdraw-review') }),
+  z.object({
+    kind: z.literal('update'),
+    update: z.object({
+      title: z.string().trim().min(1).max(500).optional(),
+      body: z.string().max(60_000).optional(),
+      base: z.string().trim().min(1).max(250).optional(),
+      labels: z.object({ add: handles, remove: handles }).optional(),
+      assignees: z.object({ add: handles, remove: handles }).optional(),
+    }),
+  }),
+  z.object({ kind: z.literal('rerun-checks') }),
 ])
 const replyOutcome = z.enum(['fixed', 'no-change', 'question', 'skipped'])
 const sendRepliesInput = z.object({
@@ -504,7 +550,8 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, pullRequestRepo, prUrl, pullRequestAction]),
       run: async (taskId: string, repoId: string, url: string, action: PullRequestAction) => {
         const cwd = await pullRequestCwd(taskId, repoId, url)
-        if (action.kind === 'merge') await guardForge(ctx, taskId, cwd, 'Merging this pull request')
+        if (action.kind === 'merge' || action.kind === 'auto-merge')
+          await guardForge(ctx, taskId, cwd, 'Merging this pull request')
         // The base is read before merging, while the pull request is still listed as open. A repository no project
         // holds has no deployment or thread to follow the merge.
         const base =
@@ -712,6 +759,63 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
     'forge.discardDrafts': {
       args: z.tuple([id]),
       run: (batchId: string) => ctx.pullRequestDrafts?.discard(batchId),
+    },
+    'forge.writeCard': {
+      args: z.tuple([id]),
+      run: (cardId: string) => ctx.pullRequestWrites?.get(cardId) ?? null,
+    },
+    'forge.postWrites': {
+      args: z.tuple([
+        id,
+        z.array(id).max(100).optional(),
+        z
+          .array(z.object({ itemId: id, body: commentText }))
+          .max(100)
+          .optional(),
+      ]),
+      run: async (cardId: string, itemIds?: string[], edits?: { itemId: string; body: string }[]) => {
+        const writes = ctx.pullRequestWrites
+        if (!writes) throw new Error('Pull request cards are unavailable on this host.')
+        const card = await redacted(() => writes.post(cardId, itemIds, edits))
+        ctx.pullRequestIndex?.invalidate(card.repoId)
+        return card
+      },
+    },
+    'forge.undoWrite': {
+      args: z.tuple([id, id]),
+      run: async (cardId: string, itemId: string) => {
+        const writes = ctx.pullRequestWrites
+        if (!writes) throw new Error('Pull request cards are unavailable on this host.')
+        const card = await redacted(() => writes.undo(cardId, itemId))
+        ctx.pullRequestIndex?.invalidate(card.repoId)
+        return card
+      },
+    },
+    'forge.dismissWrites': {
+      args: z.tuple([id, z.array(id).max(100).optional()]),
+      run: (cardId: string, itemIds?: string[]) => {
+        if (!ctx.pullRequestWrites) throw new Error('Pull request cards are unavailable on this host.')
+        return ctx.pullRequestWrites.dismiss(cardId, itemIds)
+      },
+    },
+    'forge.pullRequestWrite': {
+      args: z.tuple([id, pullRequestRepo, prUrl, pullRequestWrite]),
+      run: async (taskId: string, repoId: string, url: string, write: PullRequestWrite) => {
+        const cwd = await pullRequestCwd(taskId, repoId, url)
+        const refusal = unsupportedWrite(await forge.serviceOf(cwd), write)
+        if (refusal) throw new Error(refusal)
+        await guardForge(ctx, taskId, cwd, 'Posting on this pull request')
+        const postedId = await redacted(() => performWrite(cwd, url, write))
+        ctx.pullRequestIndex?.invalidate(repoId)
+        return postedId ?? null
+      },
+    },
+    'forge.pullRequestConversation': {
+      args: z.tuple([id, pullRequestRepo, prUrl]),
+      run: async (taskId: string, repoId: string, url: string) => {
+        const cwd = await pullRequestCwd(taskId, repoId, url)
+        return redacted(() => forge.pullRequestConversation(cwd, url))
+      },
     },
     'forge.issues': {
       args: z.tuple([id, z.string().max(500)]),

@@ -25,7 +25,10 @@ import type {
   PullRequestInfo,
   PullRequestInput,
   PullRequestReviewDecision,
+  PullRequestThreadStatus,
+  PullRequestUpdate,
 } from '@ramu/shared/types'
+import { unsupportedPullRequestText } from '@ramu/shared/pullRequestSupport'
 import { parseGitlabRemote } from '@ramu/shared/forgeHosts'
 import { redactSecrets } from '@ramu/shared/forgeRemote'
 import { currentBranch, git, publishRemote } from '../git'
@@ -664,7 +667,10 @@ export async function mergeOptions(cwd: string, url: string): Promise<MergeOptio
   return bitbucketMergeOptions(pr, { checks, conflicts, permission })
 }
 
-/** Merge, decline or mark ready. A merge whose reply is lost is checked before it fails. */
+const unsupported = (capability: Parameters<typeof unsupportedPullRequestText>[1]) =>
+  new Error(unsupportedPullRequestText('bitbucket', capability))
+
+/** Merge, decline, or mark ready or draft. A merge whose reply is lost is checked before it fails. */
 export async function pullRequestAction(cwd: string, url: string, action: PullRequestAction): Promise<void> {
   const a = await access(cwd)
   const pr = await readPullRequest(a, url)
@@ -691,8 +697,11 @@ export async function pullRequestAction(cwd: string, url: string, action: PullRe
     case 'reopen':
       throw new Error('Bitbucket cannot reopen a declined pull request. Open a new one from the same branch.')
     case 'ready':
-      await repoApi(a, path, { method: 'PUT', body: { title: pr.title, draft: false } })
+    case 'draft':
+      await repoApi(a, path, { method: 'PUT', body: { title: pr.title, draft: action.kind === 'draft' } })
       return
+    case 'auto-merge':
+      throw unsupported('auto-merge')
     case 'update-branch':
       throw new Error(
         'Bitbucket cannot update a pull request’s branch from its base. Merge or rebase the base branch locally and push.',
@@ -983,23 +992,157 @@ export async function requestReviews(cwd: string, url: string, reviewers: string
   })
 }
 
+type LineDraft = Omit<ReviewCommentDraft, 'id'>
+
+/** Where an inline comment goes: `to` a line of the new version, `from` one of the old. Ranges sit on their last line. */
+export const inlineOf = (comment: LineDraft) =>
+  comment.side === 'old' ? { path: comment.path, from: comment.line } : { path: comment.path, to: comment.line }
+
+const postComment = (a: Access, id: number, body: Record<string, unknown>) =>
+  repoApi<{ id: number }>(a, `/pullrequests/${id}/comments`, { method: 'POST', body }).then((posted) =>
+    String(posted.id),
+  )
+
 /** Inline comments, the summary as a comment, then the approval or the request for changes. */
 export async function submitReview(
   cwd: string,
   url: string,
   review: { verdict: ReviewVerdict; body: string; comments: ReviewCommentDraft[] },
 ): Promise<void> {
+  // Refused before anything posts, so a review never goes out without the changes it suggests.
+  if (review.comments.some((comment) => comment.suggestion !== undefined)) throw unsupported('suggestion')
   const a = await access(cwd)
-  const path = `/pullrequests/${idOf(url)}`
+  const id = idOf(url)
+  const path = `/pullrequests/${id}`
   for (const comment of review.comments)
-    await repoApi(a, `${path}/comments`, {
-      method: 'POST',
-      body: { content: { raw: comment.body }, inline: { path: comment.path, to: comment.line } },
-    })
-  if (review.body.trim())
-    await repoApi(a, `${path}/comments`, { method: 'POST', body: { content: { raw: review.body } } })
+    await postComment(a, id, { content: { raw: comment.body }, inline: inlineOf(comment) })
+  if (review.body.trim()) await postComment(a, id, { content: { raw: review.body } })
   if (review.verdict === 'approve') await repoApi(a, `${path}/approve`, { method: 'POST' })
   if (review.verdict === 'request-changes') await repoApi(a, `${path}/request-changes`, { method: 'POST' })
+}
+
+export async function comment(cwd: string, url: string, body: string): Promise<string> {
+  return postComment(await access(cwd), idOf(url), { content: { raw: body } })
+}
+
+export async function lineComment(cwd: string, url: string, draft: LineDraft): Promise<string> {
+  if (draft.suggestion !== undefined) throw unsupported('suggestion')
+  return postComment(await access(cwd), idOf(url), { content: { raw: draft.body }, inline: inlineOf(draft) })
+}
+
+const commentPath = (url: string, commentId: string) => {
+  if (!/^\d+$/.test(commentId)) throw new Error('That is not a Bitbucket comment id.')
+  return `/pullrequests/${idOf(url)}/comments/${commentId}`
+}
+
+export async function editComment(cwd: string, url: string, commentId: string, body: string): Promise<void> {
+  await repoApi(await access(cwd), commentPath(url, commentId), { method: 'PUT', body: { content: { raw: body } } })
+}
+
+export async function deleteComment(cwd: string, url: string, commentId: string): Promise<void> {
+  await repoApi(await access(cwd), commentPath(url, commentId), { method: 'DELETE' })
+}
+
+/** Resolves a thread, or reopens it by taking its resolution away. */
+export async function setThreadStatus(
+  cwd: string,
+  url: string,
+  threadId: string,
+  status: PullRequestThreadStatus,
+): Promise<void> {
+  if (status !== 'active' && status !== 'resolved') throw unsupported('thread-status')
+  await repoApi(await access(cwd), `${commentPath(url, threadId)}/resolve`, {
+    method: status === 'resolved' ? 'POST' : 'DELETE',
+  })
+}
+
+const react = async (): Promise<void> => {
+  throw unsupported('reactions')
+}
+
+/** Removes the named reviewers; a name that is not a reviewer is already off the list. */
+export async function removeReviewers(cwd: string, url: string, reviewers: string[]): Promise<void> {
+  const a = await access(cwd)
+  const pr = await readPullRequest(a, url)
+  const gone = new Set(reviewers.map((name) => name.toLowerCase()))
+  const kept = (pr.reviewers ?? []).filter(
+    (user) =>
+      !!user.uuid &&
+      ![user.username, user.nickname, user.display_name, user.uuid, user.account_id].some(
+        (value) => !!value && gone.has(value.toLowerCase()),
+      ),
+  )
+  await repoApi(a, `/pullrequests/${pr.id}`, {
+    method: 'PUT',
+    body: { title: pr.title, reviewers: kept.map((user) => ({ uuid: user.uuid })) },
+  })
+}
+
+const notFound = (error: unknown) => error instanceof ForgeError && /could not find/.test(error.message)
+
+/** Takes back the account's approval and its request for changes; Bitbucket answers 404 for the one not given. */
+export async function withdrawReview(cwd: string, url: string): Promise<void> {
+  const a = await access(cwd)
+  const path = `/pullrequests/${idOf(url)}`
+  const results = await Promise.all(
+    ['approve', 'request-changes'].map((verdict) =>
+      repoApi(a, `${path}/${verdict}`, { method: 'DELETE' }).then(
+        () => true,
+        (error: unknown) => {
+          if (notFound(error)) return false
+          throw error
+        },
+      ),
+    ),
+  )
+  if (!results.some(Boolean))
+    throw new Error(
+      'This account has not approved or requested changes on this pull request, so there is nothing to take back.',
+    )
+}
+
+/** Title, description and destination branch; Bitbucket has no labels or assignees to change. */
+export async function updatePullRequest(cwd: string, url: string, update: PullRequestUpdate): Promise<void> {
+  if (update.labels) throw unsupported('labels')
+  if (update.assignees) throw unsupported('assignees')
+  const a = await access(cwd)
+  const pr = await readPullRequest(a, url)
+  await repoApi(a, `/pullrequests/${pr.id}`, {
+    method: 'PUT',
+    body: {
+      // Bitbucket wants the title on every update.
+      title: update.title ?? pr.title,
+      ...(update.body !== undefined ? { description: update.body } : {}),
+      ...(update.base !== undefined ? { destination: { branch: { name: update.base } } } : {}),
+    },
+  })
+}
+
+interface RawPipelineRun {
+  uuid: string
+  state?: { name?: string; result?: { name?: string } }
+}
+
+/**
+ * Starts the source branch's pipeline again when its latest run failed. Bitbucket Pipelines reruns a whole pipeline,
+ * not single steps, so this is one run; a fork's pipelines run in the fork, where this account may not reach.
+ */
+export async function rerunChecks(cwd: string, url: string): Promise<number> {
+  const a = await access(cwd)
+  const pr = await readPullRequest(a, url)
+  if (isFork(pr)) throw new Error('This pull request comes from a fork, whose pipelines run in the fork.')
+  const branch = pr.source.branch.name
+  const page = await repoApi<{ values: RawPipelineRun[] }>(
+    a,
+    `/pipelines/?target.branch=${q(branch)}&sort=-created_on&pagelen=1`,
+  )
+  const result = page.values[0]?.state?.result?.name
+  if (result !== 'FAILED' && result !== 'ERROR') return 0
+  await repoApi(a, '/pipelines/', {
+    method: 'POST',
+    body: { target: { type: 'pipeline_ref_target', ref_type: 'branch', ref_name: branch } },
+  })
+  return 1
 }
 
 registerForgeAdapter({
@@ -1021,6 +1164,18 @@ registerForgeAdapter({
   resolveThread,
   requestReviews,
   submitReview,
+  // Every top-level comment, on a file or not, is a thread that `reviewThreads` already returns.
+  conversation: async () => [],
+  comment,
+  lineComment,
+  editComment,
+  deleteComment,
+  setThreadStatus,
+  react,
+  removeReviewers,
+  withdrawReview,
+  updatePullRequest,
+  rerunChecks,
   listIssues,
   issueDetails,
   publishRepository,

@@ -25,13 +25,45 @@ Opening a pull request shows it in full, with these actions:
 - **Review with agent** (someone else's pull request) checks it out in a worktree and asks an agent to review it without changing files. Its drafted review (verdict, summary and line comments) waits for you to edit and **Post review**. Pull requests from forks can be reviewed on GitHub and GitLab, but not pushed to.
 - **Ready for review**, **Close** and **Reopen**. Bitbucket cannot reopen a declined pull request.
 - **Update branch** (when it is behind) merges its base in. GitHub and GitLab do it themselves. For Bitbucket and Azure DevOps, and for any pull request with conflicts (**Resolve conflicts**), Ramu merges the base into the branch in the thread working on it: a clean merge is pushed, and conflicts stay there for [Conflicts](#conflicts).
-- **Merge…** offers the methods the repository allows, the last one you used first, and says what still blocks the merge before it can run. It can delete the branch and mark the thread done.
+- **Merge…** offers the methods the repository allows, the last one you used first, and says what still blocks the merge before it can run. It can delete the branch and mark the thread done. **Merge automatically once required checks pass** sets it to merge itself later (GitHub, GitLab and Azure DevOps).
+- **Comments** lists the comments on the pull request itself and has a box to add one. Your own comments can be edited and deleted, and any comment can get a reaction the service offers.
+- **Resolve thread** and **Reopen thread** on each review thread you can resolve.
+- **More actions** (desktop) and the buttons below the summary (phone): **Reviewers…**, **Labels…** and **Assignees…** as one list each, **Re-run failed checks** when checks fail, and **Back to draft**. Only what the service has is shown; see [What each service can do](#what-each-service-can-do).
 
 ### Review replies
 
 When a thread addresses review comments, the agent records an outcome for each thread: **Fixed** (with the commit), **No change** (why the code stays), **Question** (one specific question for the reviewer) or **Skip**. The pull request's **Review replies** card shows each comment beside its draft. Edit any reply or outcome, then **Push and reply**: it pushes first, posts the replies (a Fixed reply names its commit), and asks the reviewers to review again. **Resolve fixed threads** is off by default. If the push fails, nothing is posted. A reply that fails stays in the card with its error, and a reply that already reached the thread is never posted twice. The reviewer's answer comes back to the same thread as the next round.
 
-Agents never push, post or merge on their own. Only these person actions do.
+### Agents and pull requests
+
+Ask in a thread ("approve #42 and say thanks", "reply to Ana that it's fixed and resolve her thread", "comment with the test results", "ask Bob to look again", "merge it when checks pass") and the agent uses Ramu's pull request tools, the same on all four services: it reads with `pull_request_list`, `pull_request_view` and `pull_request_threads`, and writes with `pull_request_comment`, `_reply`, `_line_comment` (with a suggested change), `_review`, `_resolve`, `_edit_comment`, `_delete_comment`, `_react`, `_reviewers`, `_withdraw_review`, `_update`, `_merge`, `_state` and `_rerun_checks`. Everything it writes is public and in your name, so:
+
+- **A card shows exactly what goes out:** each write appears in a card in the thread with the text as the service will render it, the file and line, and the account it posts as. Writes from one turn share one card with **Post all**; each has **Post**, **Edit** (for text) and **Dismiss**. A write that fails stays in the card with its error, and one that reached the service is never posted twice.
+- **Full access posts conversation writes at once:** comments, replies, line comments, resolving, reactions, reviewers, edits and labels go out when the agent asks, and the card shows them with **Undo** where the service can take them back (deleting the comment, reopening the thread, removing the reaction or reviewer). In the other modes they wait for **Post**.
+- **Decisions always wait for you,** in every mode: approving, requesting changes, withdrawing a review, merging (and merging automatically), closing, deleting a branch and changing the base branch.
+- **The identity check runs before every post:** when the repository's account belongs to another [identity](identities.md), the card posts nothing until you choose.
+- **No posting from the shell:** `gh pr comment`, `gh pr review`, `gh pr merge` and the other `gh pr` and `glab mr` writes stop for your approval even in Full access, naming the tool to use instead.
+
+A service that cannot do something says so in words the agent repeats, such as "Bitbucket has no labels.", and nothing is posted. From a paired phone, the card's buttons follow the device's own access, as the Pull requests page does.
+
+### What each service can do
+
+| Action | GitHub | GitLab | Bitbucket Cloud | Azure DevOps |
+| --- | --- | --- | --- | --- |
+| Comment, reply, line comment | ✓ | ✓ | ✓ | ✓ |
+| Suggested change | ✓ | ✓ | – | ✓ |
+| Approve | ✓ | ✓ | ✓ | ✓ |
+| Request changes | ✓ | – | ✓ | ✓ |
+| Withdraw your own review | ✓ (dismisses it; needs write access) | ✓ | ✓ | ✓ |
+| Resolve and reopen threads | ✓ | ✓ | ✓ | ✓, with won't fix, by design and closed |
+| Edit and delete your comments | ✓ | ✓ | ✓ | ✓ |
+| Reactions | ✓ | ✓ | – | likes only |
+| Reviewers | ✓ | ✓ | ✓ | ✓ |
+| Labels | ✓ | ✓ | – | ✓ (tags) |
+| Assignees | ✓ | ✓ | – | – |
+| Draft and ready | ✓ | ✓ | ✓ | ✓ |
+| Merge when checks pass | ✓ (if the repository allows it) | ✓ | – | ✓ (auto-complete) |
+| Re-run failed checks | ✓ (GitHub Actions) | ✓ (retries the pipeline) | ✓ (starts a new pipeline) | ✓ (re-queues build policies) |
 
 - **Your name on the work:** **Remove agent credits** (Settings → Git, on by default) keeps agents' `Co-authored-by` trailers and "Generated with" lines out of commits and pull requests. Claude Code's attribution is switched off, every other agent is asked to leave them out, and Ramu removes any that remain in the commits and pull requests it makes. Trailers for people and anything inside code blocks stay.
 

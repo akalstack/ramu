@@ -13,7 +13,14 @@ import {
   pullRequestFiles,
   pullRequestTimeline,
   checksFeedback,
+  lineComment,
+  rerunChecks,
+  setThreadStatus,
+  submitReview,
+  updatePullRequest,
+  withdrawReview,
 } from '../src/workspace/forge/bitbucket'
+import { forgeAdapter } from '../src/workspace/forge/adapter'
 import { FILES_PAGE, PATCH_LIMIT } from '../src/workspace/forge/adapter'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -498,5 +505,127 @@ it('reads a pull request’s activity as its timeline, oldest first, with state 
     vi.unstubAllGlobals()
     vi.unstubAllEnvs()
     rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+/** A checkout on bitbucket.org/acme/app and a fake Bitbucket that records every request. */
+function fakeBitbucket(answer: (method: string, path: string) => Response | undefined) {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-bitbucket-write-'))
+  execFileSync('git', ['init', '-q', '-b', 's'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'git@bitbucket.org:acme/app.git'], { cwd: dir })
+  vi.stubEnv('BITBUCKET_ACCESS_TOKEN', 'workspace-token')
+  const calls: [string, string, unknown][] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      const path = url.replace('https://api.bitbucket.org/2.0/repositories/acme/app', '')
+      calls.push([method, path, init?.body ? JSON.parse(String(init.body)) : undefined])
+      return answer(method, path) ?? new Response(JSON.stringify({ id: 1 }))
+    }),
+  )
+  return {
+    dir,
+    calls,
+    done: () => {
+      vi.unstubAllGlobals()
+      vi.unstubAllEnvs()
+      rmSync(dir, { recursive: true, force: true })
+    },
+  }
+}
+
+const prUrl = 'https://bitbucket.org/acme/app/pull-requests/3'
+
+it('takes back whichever verdict the account gave, and says when it gave none', async () => {
+  let approved = true
+  const fake = fakeBitbucket((method, path) => {
+    if (method !== 'DELETE') return undefined
+    if (path === '/pullrequests/3/approve' && approved) return new Response(null, { status: 204 })
+    return new Response('', { status: 404 })
+  })
+  try {
+    await expect(withdrawReview(fake.dir, prUrl)).resolves.toBeUndefined()
+    expect(fake.calls.map((call) => call[1]).sort()).toEqual([
+      '/pullrequests/3/approve',
+      '/pullrequests/3/request-changes',
+    ])
+    approved = false
+    await expect(withdrawReview(fake.dir, prUrl)).rejects.toThrow('nothing to take back')
+  } finally {
+    fake.done()
+  }
+})
+
+it('comments on the old version from its line, reopens by removing the resolution, and refuses what Bitbucket lacks', async () => {
+  const fake = fakeBitbucket((method, path) =>
+    path === '/pullrequests/3' ? new Response(JSON.stringify(listRow)) : undefined,
+  )
+  try {
+    await expect(lineComment(fake.dir, prUrl, { path: 'a.ts', line: 4, side: 'old', body: 'Why?' })).resolves.toBe('1')
+    expect(fake.calls.at(-1)).toEqual([
+      'POST',
+      '/pullrequests/3/comments',
+      { content: { raw: 'Why?' }, inline: { path: 'a.ts', from: 4 } },
+    ])
+    await setThreadStatus(fake.dir, prUrl, '12', 'active')
+    expect(fake.calls.at(-1)).toEqual(['DELETE', '/pullrequests/3/comments/12/resolve', undefined])
+    await pullRequestAction(fake.dir, prUrl, { kind: 'draft' })
+    expect(fake.calls.at(-1)).toEqual(['PUT', '/pullrequests/3', { title: 'Add search', draft: true }])
+    await updatePullRequest(fake.dir, prUrl, { body: 'New', base: 'next' })
+    expect(fake.calls.at(-1)).toEqual([
+      'PUT',
+      '/pullrequests/3',
+      { title: 'Add search', description: 'New', destination: { branch: { name: 'next' } } },
+    ])
+    const before = fake.calls.length
+    const review = {
+      verdict: 'approve' as const,
+      body: '',
+      comments: [{ id: 'c', path: 'a.ts', line: 2, body: 'x', suggestion: 'y' }],
+    }
+    await expect(submitReview(fake.dir, prUrl, review)).rejects.toThrow('Bitbucket has no suggested changes.')
+    await expect(updatePullRequest(fake.dir, prUrl, { labels: { add: ['bug'], remove: [] } })).rejects.toThrow(
+      'Bitbucket has no labels.',
+    )
+    await expect(forgeAdapter('bitbucket').react(fake.dir, prUrl, '1', 'heart', false)).rejects.toThrow(
+      'Bitbucket has no reactions.',
+    )
+    await expect(
+      pullRequestAction(fake.dir, prUrl, { kind: 'auto-merge', method: 'merge', deleteBranch: false }),
+    ).rejects.toThrow('Bitbucket has no merging automatically')
+    await expect(setThreadStatus(fake.dir, prUrl, '12', 'by-design')).rejects.toThrow('thread statuses')
+    // Only the auto-merge read the pull request; nothing was written.
+    expect(fake.calls.slice(before).filter((call) => call[0] !== 'GET')).toEqual([])
+  } finally {
+    fake.done()
+  }
+})
+
+it('starts the source branch’s pipeline again only when its latest run failed', async () => {
+  let result = 'FAILED'
+  const fake = fakeBitbucket((method, path) => {
+    if (path === '/pullrequests/3') return new Response(JSON.stringify(listRow))
+    if (method === 'GET' && path.startsWith('/pipelines/?'))
+      return new Response(
+        JSON.stringify({ values: [{ uuid: '{p}', state: { name: 'COMPLETED', result: { name: result } } }] }),
+      )
+    return undefined
+  })
+  try {
+    await expect(rerunChecks(fake.dir, prUrl)).resolves.toBe(1)
+    expect(fake.calls.find((call) => call[1].startsWith('/pipelines/?'))?.[1]).toBe(
+      '/pipelines/?target.branch=s&sort=-created_on&pagelen=1',
+    )
+    expect(fake.calls.at(-1)).toEqual([
+      'POST',
+      '/pipelines/',
+      { target: { type: 'pipeline_ref_target', ref_type: 'branch', ref_name: 's' } },
+    ])
+    result = 'SUCCESSFUL'
+    await expect(rerunChecks(fake.dir, prUrl)).resolves.toBe(0)
+    expect(fake.calls.at(-1)?.[0]).toBe('GET')
+  } finally {
+    fake.done()
   }
 })

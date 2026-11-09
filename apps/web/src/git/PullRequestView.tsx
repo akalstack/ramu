@@ -16,6 +16,7 @@ import {
   GitMerge,
   MessageSquare,
   MessagesSquare,
+  MoreHorizontal,
   RefreshCw,
   RotateCcw,
   SquareArrowOutUpRight,
@@ -45,7 +46,11 @@ import { PullRequestReadiness } from './PullRequestReadiness'
 import { forgeBrand } from '@ramu/shared/brands'
 import { BrandIcon } from '@/components/brand-icon'
 import { cn } from 'cn'
-import { Dialog, Dropdown } from '../Menu'
+import { Dialog, Dropdown, Menu, type MenuEntry } from '../Menu'
+import { Input } from '@/components/desktop-input'
+import { supportsPullRequest } from '@ramu/shared/pullRequestSupport'
+import type { ForgeService, PullRequestWrite } from '@ramu/shared/types'
+import { PullRequestConversation, ReactionMenu } from './PullRequestConversation'
 import { t, useLanguage } from '../i18n'
 import { ipcQueryKeyOn } from '../dataQueries'
 import { useModelSets } from '../models/ModelSets'
@@ -92,6 +97,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
   const [error, setError] = useState<string | null>(null)
   const [merging, setMerging] = useState(false)
   const [closing, setClosing] = useState(false)
+  const [people, setPeople] = useState<'reviewers' | 'labels' | 'assignees' | null>(null)
   const [tab, setTab] = useState<'overview' | 'files'>('overview')
   const [threadFilter, setThreadFilter] = useState<'open' | 'resolved' | 'all'>('open')
   const [threadOrder, setThreadOrder] = useState<'newest' | 'oldest'>('newest')
@@ -181,6 +187,9 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
 
   const act = (action: PullRequestAction) =>
     run(action.kind, () => invoke('forge.pullRequestAction', taskId, view.repoId, view.url, action))
+  /** The person's own actions go through the call an agent's card posts with. */
+  const write = (label: string, change: PullRequestWrite) =>
+    run(label, () => invoke('forge.pullRequestWrite', taskId, view.repoId, view.url, change))
 
   const openThread = (purpose: 'work' | 'review') =>
     run(purpose, () =>
@@ -398,6 +407,21 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
               </Button>
             )
           )}
+          {open && (
+            <Menu
+              label={t('More actions')}
+              icon={<MoreHorizontal size={14} aria-hidden="true" />}
+              disabled={!!busy}
+              align="end"
+              items={moreActions({
+                service,
+                pr,
+                onDraft: () => void act({ kind: 'draft' }),
+                onRerun: () => void write('rerun-checks', { kind: 'rerun-checks' }),
+                onPeople: setPeople,
+              })}
+            />
+          )}
         </div>
         {outside && open && (
           <p className="m-0 text-caption text-muted-foreground">
@@ -457,6 +481,14 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
 
             <PullRequestTimeline taskId={taskId} repoId={view.repoId} url={view.url} />
 
+            <PullRequestConversation
+              taskId={taskId}
+              repoId={view.repoId}
+              url={view.url}
+              service={service}
+              open={open}
+            />
+
             <section className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="m-0 text-control font-semibold">
@@ -499,10 +531,28 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
               )}
               {shownThreads.map((entry) => (
                 <article key={entry.id} className="flex flex-col gap-2 rounded-(--radius-m) bg-fill p-3">
-                  <div className="font-mono text-caption text-muted-foreground">
-                    {entry.path ? `${entry.path}${entry.line ? `:${entry.line}` : ''}` : t('Conversation')}
-                    {entry.outdated && ` · ${t('Outdated')}`}
-                    {entry.resolved && ` · ${t('Resolved')}`}
+                  <div className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate font-mono text-caption text-muted-foreground">
+                      {entry.path ? `${entry.path}${entry.line ? `:${entry.line}` : ''}` : t('Conversation')}
+                      {entry.outdated && ` · ${t('Outdated')}`}
+                      {entry.resolved && ` · ${t('Resolved')}`}
+                    </span>
+                    {open && entry.resolvable && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={!!busy}
+                        onClick={() =>
+                          void write('thread', {
+                            kind: 'thread-status',
+                            threadId: entry.id,
+                            status: entry.resolved ? 'active' : 'resolved',
+                          })
+                        }
+                      >
+                        {entry.resolved ? t('Reopen thread') : t('Resolve thread')}
+                      </Button>
+                    )}
                   </div>
                   {entry.comments.map((comment) => (
                     <div key={comment.id} className="flex flex-col gap-1 pt-2 first-of-type:pt-0">
@@ -515,6 +565,17 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
                         )}
                         {!comment.trusted && (
                           <span className="text-caption text-warn">{t('From outside the project')}</span>
+                        )}
+                        {supportsPullRequest(service, 'reactions') && (
+                          <span className="ml-auto">
+                            <ReactionMenu
+                              service={service}
+                              disabled={!!busy}
+                              onReact={(reaction) =>
+                                void write('react', { kind: 'react', commentId: comment.id, reaction, remove: false })
+                              }
+                            />
+                          </span>
                         )}
                       </div>
                       <PullRequestMarkdown>{comment.body}</PullRequestMarkdown>
@@ -544,11 +605,29 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
           taskId={taskId}
           repoId={view.repoId}
           url={view.url}
+          service={service}
           threadTaskId={thread?.taskId ?? null}
           onClose={(merged) => {
             setMerging(false)
             if (merged) void refresh()
           }}
+        />
+      )}
+      {people && (
+        <PeopleDialog
+          kind={people}
+          current={people === 'reviewers' ? pr.requestedReviewers : people === 'labels' ? (pr.labels ?? []) : []}
+          busy={busy === people}
+          error={error}
+          onCancel={() => setPeople(null)}
+          onSave={(add, remove) =>
+            void write(
+              people,
+              people === 'reviewers'
+                ? { kind: 'reviewers', add, remove }
+                : { kind: 'update', update: { [people]: { add, remove } } },
+            ).then(() => setPeople(null))
+          }
         />
       )}
       {closing && (
@@ -597,12 +676,14 @@ function MergeDialog({
   taskId,
   repoId,
   url,
+  service,
   threadTaskId,
   onClose,
 }: {
   taskId: string
   repoId: string
   url: string
+  service: ForgeService
   threadTaskId: string | null
   onClose: (merged: boolean) => void
 }) {
@@ -616,6 +697,7 @@ function MergeDialog({
   const [method, setMethod] = useState<MergeMethod | null>(storedMethod(repoId))
   const [deleteBranch, setDeleteBranch] = useState(true)
   const [markDone, setMarkDone] = useState(true)
+  const [whenChecksPass, setWhenChecksPass] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const methods = options.data?.methods ?? []
@@ -628,7 +710,7 @@ function MergeDialog({
     setError(null)
     try {
       await invoke('forge.pullRequestAction', taskId, repoId, url, {
-        kind: 'merge',
+        kind: whenChecksPass ? 'auto-merge' : 'merge',
         method: chosen,
         deleteBranch: deleteBranch && !!options.data?.canDeleteBranch,
       })
@@ -637,7 +719,8 @@ function MergeDialog({
       } catch {
         // Remembering the method is a convenience.
       }
-      if (markDone && threadTaskId) await invoke('tasks.done', threadTaskId, true).catch(() => {})
+      // An automatic merge happens later, so its thread stays open until it does.
+      if (markDone && threadTaskId && !whenChecksPass) await invoke('tasks.done', threadTaskId, true).catch(() => {})
       onClose(true)
     } catch (e) {
       setError(errorText(e))
@@ -648,8 +731,8 @@ function MergeDialog({
   return (
     <Dialog
       title={t('Merge pull request')}
-      confirmLabel={busy ? t('Merging…') : t('Merge')}
-      confirmDisabled={!chosen || !!blockers.length || options.isPending}
+      confirmLabel={busy ? t('Merging…') : whenChecksPass ? t('Merge when checks pass') : t('Merge')}
+      confirmDisabled={!chosen || (!!blockers.length && !whenChecksPass) || options.isPending}
       busy={busy}
       error={error ?? (options.isError ? errorText(options.error) : null)}
       onConfirm={() => void merge()}
@@ -678,13 +761,107 @@ function MergeDialog({
             {t('Delete the branch on the hosting service')}
           </label>
         )}
-        {threadTaskId && (
+        {supportsPullRequest(service, 'auto-merge') && (
+          <label className="flex items-center gap-2 text-control">
+            <Checkbox checked={whenChecksPass} onCheckedChange={(checked) => setWhenChecksPass(checked === true)} />
+            {t('Merge automatically once required checks pass')}
+          </label>
+        )}
+        {threadTaskId && !whenChecksPass && (
           <label className="flex items-center gap-2 text-control">
             <Checkbox checked={markDone} onCheckedChange={(checked) => setMarkDone(checked === true)} />
             {t('Mark its thread done')}
           </label>
         )}
       </div>
+    </Dialog>
+  )
+}
+
+/** The rarer actions, offered only where the service has them. */
+function moreActions({
+  service,
+  pr,
+  onDraft,
+  onRerun,
+  onPeople,
+}: {
+  service: ForgeService
+  pr: PullRequestSummary
+  onDraft: () => void
+  onRerun: () => void
+  onPeople: (kind: 'reviewers' | 'labels' | 'assignees') => void
+}): MenuEntry[] {
+  return [
+    ...(supportsPullRequest(service, 'reviewers')
+      ? [{ key: 'reviewers', label: t('Reviewers…'), onSelect: () => onPeople('reviewers') }]
+      : []),
+    ...(supportsPullRequest(service, 'labels')
+      ? [{ key: 'labels', label: t('Labels…'), onSelect: () => onPeople('labels') }]
+      : []),
+    ...(supportsPullRequest(service, 'assignees')
+      ? [{ key: 'assignees', label: t('Assignees…'), onSelect: () => onPeople('assignees') }]
+      : []),
+    ...(supportsPullRequest(service, 'rerun-checks') && pr.checks === 'failure'
+      ? [{ key: 'rerun', label: t('Re-run failed checks'), onSelect: onRerun }]
+      : []),
+    ...(supportsPullRequest(service, 'draft') && !pr.draft
+      ? [{ key: 'draft', label: t('Back to draft'), onSelect: onDraft }]
+      : []),
+  ]
+}
+
+const PEOPLE_TEXT = {
+  reviewers: { title: 'Reviewers', placeholder: 'Logins, separated by commas' },
+  labels: { title: 'Labels', placeholder: 'Labels, separated by commas' },
+  assignees: { title: 'Assignees', placeholder: 'Logins, separated by commas' },
+} as const
+
+/** Reviewers, labels or assignees as one editable list; saving sends only what changed. */
+function PeopleDialog({
+  kind,
+  current,
+  busy,
+  error,
+  onSave,
+  onCancel,
+}: {
+  kind: 'reviewers' | 'labels' | 'assignees'
+  current: string[]
+  busy: boolean
+  error: string | null
+  onSave: (add: string[], remove: string[]) => void
+  onCancel: () => void
+}) {
+  const [value, setValue] = useState(current.join(', '))
+  const next = [
+    ...new Set(
+      value
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean),
+    ),
+  ]
+  const add = next.filter((entry) => !current.includes(entry))
+  const remove = current.filter((entry) => !next.includes(entry))
+  const text = PEOPLE_TEXT[kind]
+  return (
+    <Dialog
+      title={t(text.title)}
+      confirmLabel={t('Save')}
+      confirmDisabled={!add.length && !remove.length}
+      busy={busy}
+      error={error}
+      onConfirm={() => onSave(add, remove)}
+      onCancel={onCancel}
+    >
+      <Input
+        autoFocus
+        value={value}
+        aria-label={t(text.title)}
+        placeholder={t(text.placeholder)}
+        onChange={(event) => setValue(event.target.value)}
+      />
     </Dialog>
   )
 }

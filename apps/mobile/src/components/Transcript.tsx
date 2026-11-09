@@ -92,6 +92,7 @@ export { RowToggle } from './rowToggle'
 import { messagePreview } from '../runtime/messagePreview'
 import { RowToggle } from './rowToggle'
 import { RamuGlyph } from './AnimatedMark'
+import { PullRequestWritesCard } from './PullRequestWritesCard'
 
 /** Drops the model change waiting for the next send; set by the chat screen that holds it. */
 export const CancelPendingSettings = createContext<() => void>(() => {})
@@ -758,6 +759,8 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       return <AbilityCard call={item.call} chat={chat} />
     case 'threads':
       return <StartedThreadsCard threads={item.threads} chat={chat} />
+    case 'pull-request-writes':
+      return <PullRequestWritesCard computerId={chat.computerId} cardId={item.cardId} />
     case 'continued':
       return <ContinuedCard event={item.event} chat={chat} />
     case 'tool':

@@ -81,6 +81,7 @@ export type TranscriptItem = (
   | { kind: 'theme'; id: string; theme: import('@ramu/shared/theme').RamuTheme }
   /** Threads this thread's agent started; each row opens one. */
   | { kind: 'threads'; id: string; threads: import('@ramu/shared/types').StartedThread[] }
+  | { kind: 'pull-request-writes'; id: string; cardId: string }
   /** This thread continues on another host. */
   | { kind: 'continued'; id: string; event: import('@ramu/shared/continuation').ContinuedEvent }
   | { kind: 'text'; id: string; text: string }

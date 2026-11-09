@@ -146,6 +146,38 @@ function gitDanger(args: string[]): string | null {
   return null
 }
 
+/** The typed tool to use instead of a CLI write on a pull request, which would post with no card and nothing to undo. */
+const FORGE_WRITES: Record<string, Record<string, string>> = {
+  gh: {
+    comment: 'pull_request_comment',
+    review: 'pull_request_review',
+    merge: 'pull_request_merge',
+    close: 'pull_request_state',
+    reopen: 'pull_request_state',
+    ready: 'pull_request_state',
+    edit: 'pull_request_update',
+  },
+  glab: {
+    note: 'pull_request_comment',
+    approve: 'pull_request_review',
+    revoke: 'pull_request_withdraw_review',
+    merge: 'pull_request_merge',
+    close: 'pull_request_state',
+    reopen: 'pull_request_state',
+    update: 'pull_request_update',
+  },
+}
+
+function forgeWrite(name: string, args: string[]): string | null {
+  const tools = FORGE_WRITES[name]
+  const [group, verb = ''] = args.filter((word) => !word.startsWith('-'))
+  if (!tools || group !== (name === 'gh' ? 'pr' : 'mr')) return null
+  const tool = tools[verb]
+  return tool
+    ? `Posts on a pull request in your name with no card (${name} ${group} ${verb}); agents use ${tool}`
+    : null
+}
+
 /**
  * Why a shell command needs a person's approval even under full access, or null when it may run. Reasons are short
  * sentences shown on the approval.
@@ -185,6 +217,9 @@ export function dangerousCommand(command: string, scope: CommandScope): string |
       if (reason) return reason
     } else if (name === 'git') {
       const reason = gitDanger(args)
+      if (reason) return reason
+    } else if (name === 'gh' || name === 'glab') {
+      const reason = forgeWrite(name, args)
       if (reason) return reason
     } else if (DISK.has(name) || /^mkfs\./.test(name)) return `Formats or repartitions a disk (${name})`
     else if (name === 'dd' && args.some((word) => /^of=\/dev\//.test(word))) return 'Writes directly to a disk (dd)'

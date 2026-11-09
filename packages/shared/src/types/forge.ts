@@ -215,7 +215,11 @@ export type PullRequestAction =
   | { kind: 'close' }
   | { kind: 'reopen' }
   | { kind: 'ready' }
+  /** Back to a draft, where the service has drafts. */
+  | { kind: 'draft' }
   | { kind: 'update-branch' }
+  /** Merge with `method` once required checks pass, where the service can. */
+  | { kind: 'auto-merge'; method: MergeMethod; deleteBranch: boolean }
 
 /** One review thread, the same shape on every hosting service. */
 export interface PullRequestThread {
@@ -261,7 +265,59 @@ export interface ReviewCommentDraft {
   line: number
   /** Where a comment on a block of lines starts; GitHub keeps the range, other services place it on `line`. */
   startLine?: number
+  /** The version the line is in: the pull request's (`new`, the default) or the base's (`old`). */
+  side?: PullRequestSide
   body: string
+  /** Replacement text for the lines, posted as the service's suggested change where it has them. */
+  suggestion?: string
+}
+
+export type PullRequestSide = 'new' | 'old'
+
+/** Something the hosting service can or cannot do with a pull request, for tools and for which buttons show. */
+export type PullRequestCapability =
+  | 'comment'
+  | 'reply'
+  | 'line-comment'
+  | 'suggestion'
+  | 'approve'
+  | 'request-changes'
+  | 'withdraw-review'
+  | 'resolve'
+  | 'unresolve'
+  | 'thread-status'
+  | 'edit-comment'
+  | 'delete-comment'
+  | 'reactions'
+  | 'reviewers'
+  | 'remove-reviewers'
+  | 'labels'
+  | 'assignees'
+  | 'draft'
+  | 'auto-merge'
+  | 'rerun-checks'
+  | 'base-branch'
+
+/** Reactions by meaning; each service maps them to its own names, and Azure DevOps has only `thumbs-up` (a like). */
+export type PullRequestReaction =
+  'thumbs-up' | 'thumbs-down' | 'laugh' | 'hooray' | 'confused' | 'heart' | 'rocket' | 'eyes'
+
+/** Azure DevOps's thread statuses beyond resolved and active. */
+export type PullRequestThreadStatus = 'active' | 'resolved' | 'wont-fix' | 'by-design' | 'closed'
+
+/** A change to a pull request's fields; anything left out stays as it is. */
+export interface PullRequestUpdate {
+  title?: string
+  body?: string
+  base?: string
+  labels?: { add: string[]; remove: string[] }
+  assignees?: { add: string[]; remove: string[] }
+}
+
+/** A conversation comment, on no file, with what the account may do to it. */
+export interface PullRequestConversationComment extends PullRequestComment {
+  /** Written by the account in use, so it may edit or delete it. */
+  own: boolean
 }
 
 export type ReviewVerdict = 'comment' | 'approve' | 'request-changes'
@@ -298,6 +354,54 @@ export interface ReviewDraftBatch {
 }
 
 export type PullRequestDraftBatch = ReviewReplyBatch | ReviewDraftBatch
+
+/** One write an agent asked for on a pull request, as its card shows it. */
+export type PullRequestWrite =
+  | { kind: 'comment'; body: string }
+  | { kind: 'reply'; threadId: string; body: string }
+  | { kind: 'line-comment'; comment: Omit<ReviewCommentDraft, 'id'> }
+  | { kind: 'review'; verdict: ReviewVerdict; body: string; comments: ReviewCommentDraft[] }
+  /** `active` reopens a thread; the rest close it, Azure DevOps keeping which status. */
+  | { kind: 'thread-status'; threadId: string; status: PullRequestThreadStatus }
+  | { kind: 'edit-comment'; commentId: string; body: string }
+  | { kind: 'delete-comment'; commentId: string }
+  | { kind: 'react'; commentId: string; reaction: PullRequestReaction; remove: boolean }
+  | { kind: 'reviewers'; add: string[]; remove: string[] }
+  | { kind: 'withdraw-review' }
+  | { kind: 'update'; update: PullRequestUpdate }
+  | { kind: 'action'; action: PullRequestAction }
+  | { kind: 'rerun-checks' }
+
+export type PullRequestWriteState = 'waiting' | 'posted' | 'failed' | 'dismissed' | 'undone'
+
+export interface PullRequestWriteItem {
+  id: string
+  write: PullRequestWrite
+  /** Approvals, merges and the like wait for the person in every mode. */
+  decision: boolean
+  state: PullRequestWriteState
+  /** The id the service gave a posted comment: what Undo deletes, and proof it is never posted twice. */
+  postedId?: string
+  /** Posted, and the service can take it back. */
+  undoable?: boolean
+  error?: string
+  at: number
+}
+
+/** The writes one agent turn asked for on one pull request, waiting for the person or showing what went out. */
+export interface PullRequestWriteCard {
+  id: string
+  sessionId: string
+  repoId: string
+  url: string
+  number: number
+  title: string
+  service: ForgeService
+  /** The account it posts as; null when the service did not say. */
+  account: string | null
+  items: PullRequestWriteItem[]
+  createdAt: number
+}
 
 export interface SendRepliesInput {
   push: boolean

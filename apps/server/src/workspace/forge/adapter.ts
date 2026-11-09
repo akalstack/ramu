@@ -17,6 +17,10 @@ import type {
   ReviewVerdict,
   PullRequestDraft,
   PullRequestInput,
+  PullRequestConversationComment,
+  PullRequestReaction,
+  PullRequestThreadStatus,
+  PullRequestUpdate,
 } from '@ramu/shared/types'
 
 /** The hosting services with an adapter. */
@@ -46,7 +50,7 @@ export interface ForgeAdapter {
   listPullRequests(cwd: string, options: { includeClosed: boolean }): Promise<PullRequestList>
   /** The merge methods the repository allows and what still blocks merging `url`. */
   mergeOptions(cwd: string, url: string): Promise<MergeOptions>
-  /** Merge, close, reopen, mark ready or update the branch of `url`. */
+  /** Merge (now or once checks pass), close, reopen, mark ready or draft, or update the branch of `url`. */
   pullRequestAction(cwd: string, url: string, action: PullRequestAction): Promise<void>
   /** The description of `url`, for the first message of a thread opened on it. */
   pullRequestBody(cwd: string, url: string): Promise<string>
@@ -62,12 +66,30 @@ export interface ForgeAdapter {
   resolveThread(cwd: string, url: string, threadId: string): Promise<void>
   /** Asks these reviewers (logins as the service names them) to review again. */
   requestReviews(cwd: string, url: string, reviewers: string[]): Promise<void>
-  /** Posts one review of someone else's pull request with its inline comments. */
+  /** Posts one review of someone else's pull request with its inline comments and suggested changes. */
   submitReview(
     cwd: string,
     url: string,
     review: { verdict: ReviewVerdict; body: string; comments: ReviewCommentDraft[] },
   ): Promise<void>
+  /** Comments on the pull request itself, on no file, that `reviewThreads` does not already return. */
+  conversation(cwd: string, url: string): Promise<PullRequestConversationComment[]>
+  /** Posts a comment on the pull request itself and returns its id. */
+  comment(cwd: string, url: string, body: string): Promise<string>
+  /** Posts one comment on a line or range outside a review and returns its id. */
+  lineComment(cwd: string, url: string, comment: Omit<ReviewCommentDraft, 'id'>): Promise<string>
+  /** Changes a comment the account wrote; `commentId` is one this adapter returned or listed. */
+  editComment(cwd: string, url: string, commentId: string, body: string): Promise<void>
+  deleteComment(cwd: string, url: string, commentId: string): Promise<void>
+  /** Resolves (`resolved` and Azure DevOps's other closed statuses) or reopens (`active`) a thread. */
+  setThreadStatus(cwd: string, url: string, threadId: string, status: PullRequestThreadStatus): Promise<void>
+  react(cwd: string, url: string, commentId: string, reaction: PullRequestReaction, remove: boolean): Promise<void>
+  removeReviewers(cwd: string, url: string, reviewers: string[]): Promise<void>
+  /** Takes back the account's own approval or change request. */
+  withdrawReview(cwd: string, url: string): Promise<void>
+  updatePullRequest(cwd: string, url: string, update: PullRequestUpdate): Promise<void>
+  /** Runs the failed checks of the head commit again; returns how many runs were started. */
+  rerunChecks(cwd: string, url: string): Promise<number>
   listIssues(cwd: string, search: string): Promise<IssueSummary[]>
   issueDetails(cwd: string, number: number): Promise<{ title: string; url: string; prompt: string }>
   publishRepository(cwd: string, input: PublishRepositoryInput): Promise<void>

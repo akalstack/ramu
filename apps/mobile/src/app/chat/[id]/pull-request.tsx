@@ -43,6 +43,9 @@ import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { Button, Card, Divider, Segmented, Sheet, T, Toggle } from '../../../components/ui'
 import { ChecksLine, PullRequestGlyph, StageText } from '../../../components/PullRequestParts'
 import { ReviewDrafts } from '../../../components/ReviewDrafts'
+import { PeopleSheet, PullRequestComments, ReactionRow } from '../../../components/PullRequestComments'
+import { supportsPullRequest } from '@ramu/shared/pullRequestSupport'
+import type { ForgeService, PullRequestWrite } from '@ramu/shared/types'
 
 const METHOD_LABEL: Record<MergeMethod, string> = {
   squash: 'Squash and merge',
@@ -128,6 +131,8 @@ export default function PullRequestScreen() {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [merging, setMerging] = useState(false)
+  const [people, setPeople] = useState<'reviewers' | 'labels' | 'assignees' | null>(null)
+  const [revision, setRevision] = useState(0)
   const [notice, setNotice] = useState<string | null>(null)
 
   const read = useCallback(
@@ -216,6 +221,7 @@ export default function PullRequestScreen() {
     try {
       await work()
       await read(true)
+      setRevision((value) => value + 1)
     } catch (e) {
       setError(message(e))
     } finally {
@@ -224,6 +230,9 @@ export default function PullRequestScreen() {
   }
   const act = (action: PullRequestAction) =>
     run(action.kind, () => store.invoke(computerId, 'forge.pullRequestAction', taskId, repoId, url, action))
+  /** The person's own actions go through the call an agent's card posts with. */
+  const write = (label: string, change: PullRequestWrite) =>
+    run(label, () => store.invoke(computerId, 'forge.pullRequestWrite', taskId, repoId, url, change))
 
   /** The service updates the branch when it can; otherwise the thread's checkout merges the base in and pushes. */
   const updateBranch = () =>
@@ -466,6 +475,36 @@ export default function PullRequestScreen() {
                     onPress={() => confirmClose(pr.number)}
                     style={{ flexGrow: 1 }}
                   />
+                  {pr.checks === 'failure' && supportsPullRequest(service, 'rerun-checks') ? (
+                    <Button
+                      kind="secondary"
+                      title={busy === 'rerun' ? say('Working…') : say('Re-run failed checks')}
+                      disabled={!!busy}
+                      onPress={() => void write('rerun', { kind: 'rerun-checks' })}
+                      style={{ flexGrow: 1 }}
+                    />
+                  ) : null}
+                  {!pr.draft && supportsPullRequest(service, 'draft') ? (
+                    <Button
+                      kind="ghost"
+                      title={busy === 'draft' ? say('Working…') : say('Back to draft')}
+                      disabled={!!busy}
+                      onPress={() => void act({ kind: 'draft' })}
+                      style={{ flexGrow: 1 }}
+                    />
+                  ) : null}
+                  {(['reviewers', 'labels', 'assignees'] as const)
+                    .filter((kind) => supportsPullRequest(service, kind))
+                    .map((kind) => (
+                      <Button
+                        key={kind}
+                        kind="ghost"
+                        title={say(kind === 'reviewers' ? 'Reviewers…' : kind === 'labels' ? 'Labels…' : 'Assignees…')}
+                        disabled={!!busy}
+                        onPress={() => setPeople(kind)}
+                        style={{ flexGrow: 1 }}
+                      />
+                    ))}
                 </View>
               ) : pr.state === 'closed' && canWrite ? (
                 <Button
@@ -669,6 +708,17 @@ export default function PullRequestScreen() {
                   </View>
                 ) : null}
 
+                <PullRequestComments
+                  computerId={computerId}
+                  taskId={taskId}
+                  repoId={repoId}
+                  url={url}
+                  service={service}
+                  canWrite={canWrite}
+                  open={open}
+                  revision={revision}
+                />
+
                 <View style={{ gap: space.s }}>
                   <T size={font.control} weight="600" tone="muted">
                     {say('Open review threads')}
@@ -714,8 +764,27 @@ export default function PullRequestScreen() {
                             <T size={font.control} tone="soft" copyable={comment.body}>
                               {comment.body}
                             </T>
+                            {canWrite ? (
+                              <ReactionRow
+                                service={service}
+                                disabled={!!busy}
+                                onReact={(reaction) =>
+                                  void write('react', { kind: 'react', commentId: comment.id, reaction, remove: false })
+                                }
+                              />
+                            ) : null}
                           </View>
                         ))}
+                        {canWrite && open && entry.resolvable ? (
+                          <Button
+                            kind="secondary"
+                            title={say('Resolve thread')}
+                            disabled={!!busy}
+                            onPress={() =>
+                              void write('thread', { kind: 'thread-status', threadId: entry.id, status: 'resolved' })
+                            }
+                          />
+                        ) : null}
                       </Card>
                     ))
                   )}
@@ -735,11 +804,29 @@ export default function PullRequestScreen() {
           taskId={taskId}
           repoId={repoId}
           url={url}
+          service={service}
           threadTaskId={thread?.taskId ?? null}
           onClose={(merged) => {
             setMerging(false)
             if (merged) void read(true)
           }}
+        />
+      ) : null}
+      {people && pr ? (
+        <PeopleSheet
+          kind={people}
+          current={people === 'reviewers' ? pr.requestedReviewers : people === 'labels' ? (pr.labels ?? []) : []}
+          busy={busy === people}
+          error={error}
+          onClose={() => setPeople(null)}
+          onSave={(add, remove) =>
+            void write(
+              people,
+              people === 'reviewers'
+                ? { kind: 'reviewers', add, remove }
+                : { kind: 'update', update: { [people]: { add, remove } } },
+            ).then(() => setPeople(null))
+          }
         />
       ) : null}
     </Screen>
@@ -752,6 +839,7 @@ function MergeSheet({
   taskId,
   repoId,
   url,
+  service,
   threadTaskId,
   onClose,
 }: {
@@ -759,6 +847,7 @@ function MergeSheet({
   taskId: string
   repoId: string
   url: string
+  service: ForgeService
   threadTaskId: string | null
   onClose: (merged: boolean) => void
 }) {
@@ -768,6 +857,7 @@ function MergeSheet({
   const [method, setMethod] = useState<MergeMethod | null>(null)
   const [deleteBranch, setDeleteBranch] = useState(true)
   const [markDone, setMarkDone] = useState(true)
+  const [whenChecksPass, setWhenChecksPass] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
@@ -786,11 +876,13 @@ function MergeSheet({
     setError(null)
     try {
       await store.invoke(computerId, 'forge.pullRequestAction', taskId, repoId, url, {
-        kind: 'merge',
+        kind: whenChecksPass ? 'auto-merge' : 'merge',
         method: chosen,
         deleteBranch: deleteBranch && !!options?.canDeleteBranch,
       })
-      if (markDone && threadTaskId) await store.invoke(computerId, 'tasks.done', threadTaskId, true).catch(() => {})
+      // An automatic merge happens later, so its thread stays open until it does.
+      if (markDone && threadTaskId && !whenChecksPass)
+        await store.invoke(computerId, 'tasks.done', threadTaskId, true).catch(() => {})
       onClose(true)
     } catch (e) {
       setError(message(e))
@@ -826,8 +918,20 @@ function MergeSheet({
           ))}
         </SheetGroup>
       ) : null}
-      {options?.canDeleteBranch || threadTaskId ? (
+      {options?.canDeleteBranch || threadTaskId || supportsPullRequest(service, 'auto-merge') ? (
         <SheetGroup>
+          {supportsPullRequest(service, 'auto-merge') ? (
+            <SheetOption
+              title={say('Merge automatically once required checks pass')}
+              trailing={
+                <Toggle
+                  value={whenChecksPass}
+                  onValueChange={setWhenChecksPass}
+                  accessibilityLabel={say('Merge automatically once required checks pass')}
+                />
+              }
+            />
+          ) : null}
           {options?.canDeleteBranch ? (
             <SheetOption
               title={say('Delete the branch on the hosting service')}
@@ -840,7 +944,7 @@ function MergeSheet({
               }
             />
           ) : null}
-          {threadTaskId ? (
+          {threadTaskId && !whenChecksPass ? (
             <SheetOption
               title={say('Mark its thread done')}
               trailing={
@@ -858,8 +962,8 @@ function MergeSheet({
         ) : null}
         <Button
           icon={GitMerge}
-          title={busy ? say('Merging…') : say('Merge')}
-          disabled={busy || !chosen || !!blockers.length}
+          title={busy ? say('Merging…') : whenChecksPass ? say('Merge when checks pass') : say('Merge')}
+          disabled={busy || !chosen || (!!blockers.length && !whenChecksPass)}
           onPress={() => void merge()}
         />
       </View>

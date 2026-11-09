@@ -1,6 +1,7 @@
 // GitLab merge requests, pipelines and issues through the REST API (v4), with a token saved in Settings, the user's
 // own `glab` sign-in or a `GITLAB_TOKEN`. Like github.ts, Git runs with argument arrays only; the token is sent only to the project's origin.
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -29,7 +30,12 @@ import type {
   PullRequestInfo,
   PullRequestInput,
   PullRequestReviewDecision,
+  PullRequestReaction,
+  PullRequestSide,
+  PullRequestThreadStatus,
+  PullRequestUpdate,
 } from '@ramu/shared/types'
+import { unsupportedPullRequestText } from '@ramu/shared/pullRequestSupport'
 import { glabHosts, parseGitlabRemote, type GitlabProject } from '@ramu/shared/forgeHosts'
 import { redactSecrets } from '@ramu/shared/forgeRemote'
 import { currentBranch, git, publishRemote } from '../git'
@@ -794,7 +800,8 @@ function iidOf(url: string): number {
 interface RawOneMergeRequest extends RawListMergeRequest {
   description?: string | null
   force_remove_source_branch?: boolean | null
-  head_pipeline?: { status?: string } | null
+  head_pipeline?: { id?: number; status?: string } | null
+  assignees?: RawUser[]
   user?: { can_merge?: boolean }
   diff_refs?: { base_sha: string; start_sha: string; head_sha: string } | null
 }
@@ -854,7 +861,13 @@ const DRAFT_PREFIX = /^\s*(?:\[draft\]|\(draft\)|draft:|\[wip\]|wip:)\s*/i
 /** GitLab marks a merge request a draft by its title, so marking it ready removes the prefix. */
 export const readyTitle = (title: string) => title.replace(DRAFT_PREFIX, '')
 
-/** Merge, close, reopen, mark ready or rebase. A merge whose reply is lost is checked before it fails. */
+/** GitLab's draft prefix, put on a title that has none. */
+const draftTitle = (title: string) => (DRAFT_PREFIX.test(title) ? title : `Draft: ${title}`)
+
+/**
+ * Merge (now or once the pipeline succeeds), close, reopen, mark ready or draft, or rebase. A merge whose reply is
+ * lost is checked before it fails.
+ */
 export async function pullRequestAction(cwd: string, url: string, action: PullRequestAction): Promise<void> {
   const a = await access(cwd)
   const mr = await readMergeRequest(a, url)
@@ -876,6 +889,19 @@ export async function pullRequestAction(cwd: string, url: string, action: PullRe
         if (after?.state !== 'merged') throw error
       }
       return
+    case 'auto-merge':
+      // `auto_merge` is the current name; servers before GitLab 17 read only `merge_when_pipeline_succeeds`.
+      await projectApi(a, `${path}/merge`, {
+        method: 'PUT',
+        body: {
+          squash: action.method === 'squash',
+          should_remove_source_branch: action.deleteBranch && !isFork(mr),
+          auto_merge: true,
+          merge_when_pipeline_succeeds: true,
+          ...(mr.sha ? { sha: mr.sha } : {}),
+        },
+      })
+      return
     case 'close':
     case 'reopen':
       await projectApi(a, path, { method: 'PUT', body: { state_event: action.kind } })
@@ -883,6 +909,10 @@ export async function pullRequestAction(cwd: string, url: string, action: PullRe
     case 'ready':
       if (DRAFT_PREFIX.test(mr.title))
         await projectApi(a, path, { method: 'PUT', body: { title: readyTitle(mr.title) } })
+      return
+    case 'draft':
+      if (!DRAFT_PREFIX.test(mr.title))
+        await projectApi(a, path, { method: 'PUT', body: { title: draftTitle(mr.title) } })
       return
     case 'update-branch':
       await projectApi(a, `${path}/rebase`, { method: 'PUT' })
@@ -1087,28 +1117,155 @@ export async function resolveThread(cwd: string, url: string, threadId: string):
   await projectApi(a, path, { method: 'PUT', body: { resolved: true } })
 }
 
-/** Adds the named users as reviewers, keeping the ones already there. */
-export async function requestReviews(cwd: string, url: string, reviewers: string[]): Promise<void> {
-  if (!reviewers.length) return
-  const a = await access(cwd)
-  const mr = await readMergeRequest(a, url)
+/** GitLab user ids for names, taking ones the merge request already lists before asking the server. */
+async function userIds(a: Access, names: string[], known: RawUser[]): Promise<number[]> {
   const target = { ...a, origin: a.project.origin }
-  const found = await Promise.all(
-    reviewers.map(async (name) => {
-      const existing = mr.reviewers?.find((reviewer) => reviewer.username.toLowerCase() === name.toLowerCase())
+  return Promise.all(
+    names.map(async (name) => {
+      const existing = known.find((user) => user.username.toLowerCase() === name.toLowerCase())
       if (existing) return existing.id
       const [user] = await gitlabApi<{ id: number }[]>(target, `/users?username=${encode(name)}`)
       if (!user) throw new Error(`GitLab has no user named ${name}.`)
       return user.id
     }),
   )
+}
+
+const without = (users: RawUser[] | undefined, names: string[]) => {
+  const gone = new Set(names.map((name) => name.toLowerCase()))
+  return (users ?? []).filter((user) => !gone.has(user.username.toLowerCase())).map((user) => user.id)
+}
+
+/** Adds the named users as reviewers, keeping the ones already there. */
+export async function requestReviews(cwd: string, url: string, reviewers: string[]): Promise<void> {
+  if (!reviewers.length) return
+  const a = await access(cwd)
+  const mr = await readMergeRequest(a, url)
+  const found = await userIds(a, reviewers, mr.reviewers ?? [])
   const ids = [...new Set([...(mr.reviewers ?? []).map((reviewer) => reviewer.id), ...found])]
   await projectApi(a, `/merge_requests/${mr.iid}`, { method: 'PUT', body: { reviewer_ids: ids } })
 }
 
+/** Removes the named reviewers; a name that is not a reviewer is already off the list. */
+export async function removeReviewers(cwd: string, url: string, reviewers: string[]): Promise<void> {
+  const a = await access(cwd)
+  const mr = await readMergeRequest(a, url)
+  await projectApi(a, `/merge_requests/${mr.iid}`, {
+    method: 'PUT',
+    body: { reviewer_ids: without(mr.reviewers, reviewers) },
+  })
+}
+
+/** Where one diff line sits: its numbers on each side, and the counters GitLab builds its line code from. */
+interface DiffLine {
+  added: boolean
+  oldLine: number | null
+  newLine: number | null
+  oldPosition: number
+  newPosition: number
+}
+
 /**
- * Inline comments as diff discussions on the current version, the summary as a note, then the approval. GitLab's API
- * has no "request changes" verdict, so that review posts its comments and summary without approving.
+ * Finds a line of the new (or old) version in a GitLab diff's hunks. An unchanged line has both numbers, and an added
+ * or removed line carries the other side's counter at that point, as GitLab's own line codes do.
+ */
+export function diffLine(diff: string, line: number, side: PullRequestSide): DiffLine | null {
+  let oldLine = 0
+  let newLine = 0
+  let inHunk = false
+  for (const text of diff.split('\n')) {
+    const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(text)
+    if (hunk) {
+      oldLine = Number(hunk[1])
+      newLine = Number(hunk[2])
+      inHunk = true
+      continue
+    }
+    if (!inHunk || !text || text.startsWith('\\')) continue
+    const at = { oldPosition: oldLine, newPosition: newLine }
+    if (text.startsWith('+')) {
+      if (side === 'new' && newLine === line) return { added: true, oldLine: null, newLine, ...at }
+      newLine++
+    } else if (text.startsWith('-')) {
+      if (side === 'old' && oldLine === line) return { added: false, oldLine, newLine: null, ...at }
+      oldLine++
+    } else {
+      if ((side === 'new' ? newLine : oldLine) === line) return { added: false, oldLine, newLine, ...at }
+      oldLine++
+      newLine++
+    }
+  }
+  return null
+}
+
+type LineDraft = Omit<ReviewCommentDraft, 'id'>
+
+const lineNumbers = (line: Pick<DiffLine, 'oldLine' | 'newLine'>) => ({
+  ...(line.oldLine !== null ? { old_line: line.oldLine } : {}),
+  ...(line.newLine !== null ? { new_line: line.newLine } : {}),
+})
+
+/**
+ * A diff note's position. GitLab needs both numbers on an unchanged line and a line code for each end of a range, so
+ * both come from the file's diff; a file or line the first page of diffs does not show is placed by its number alone.
+ */
+export function notePosition(
+  refs: NonNullable<RawOneMergeRequest['diff_refs']>,
+  comment: LineDraft,
+  diffs: RawDiff[],
+): Record<string, unknown> {
+  const side = comment.side ?? 'new'
+  const file = diffs.find((entry) => entry.new_path === comment.path || entry.old_path === comment.path)
+  const find = (line: number) => (file?.diff ? diffLine(file.diff, line, side) : null)
+  const end = find(comment.line)
+  const start =
+    end && comment.startLine !== undefined && comment.startLine < comment.line ? find(comment.startLine) : null
+  const hash = file ? createHash('sha1').update(file.new_path).digest('hex') : ''
+  const point = (line: DiffLine) => ({
+    line_code: `${hash}_${line.oldPosition}_${line.newPosition}`,
+    type: line.added ? 'new' : 'old',
+    ...lineNumbers(line),
+  })
+  return {
+    position_type: 'text',
+    base_sha: refs.base_sha,
+    start_sha: refs.start_sha,
+    head_sha: refs.head_sha,
+    old_path: file?.old_path ?? comment.path,
+    new_path: file?.new_path ?? comment.path,
+    ...(end ? lineNumbers(end) : side === 'old' ? { old_line: comment.line } : { new_line: comment.line }),
+    ...(end && start ? { line_range: { start: point(start), end: point(end) } } : {}),
+  }
+}
+
+/** The comment's text with its suggested change, which GitLab applies to the lines above the comment's line too. */
+export function noteBody(comment: Pick<LineDraft, 'body' | 'line' | 'startLine' | 'suggestion'>): string {
+  if (comment.suggestion === undefined) return comment.body
+  const above =
+    comment.startLine !== undefined && comment.startLine < comment.line ? comment.line - comment.startLine : 0
+  return `${comment.body}\n\n\`\`\`suggestion:-${above}+0\n${comment.suggestion}\n\`\`\``
+}
+
+/** Posts line comments as diff discussions and returns each one's note id. */
+async function postLineComments(a: Access, mr: RawOneMergeRequest, comments: LineDraft[]): Promise<string[]> {
+  if (!comments.length) return []
+  const refs = mr.diff_refs
+  if (!refs) throw new Error('GitLab has not prepared this merge request’s diff yet.')
+  const diffs = await projectApi<RawDiff[]>(a, `/merge_requests/${mr.iid}/diffs?per_page=${FILES_PAGE}`).catch(() => [])
+  const ids: string[] = []
+  for (const comment of comments) {
+    const discussion = await projectApi<RawDiscussion>(a, `/merge_requests/${mr.iid}/discussions`, {
+      method: 'POST',
+      body: { body: noteBody(comment), position: notePosition(refs, comment, diffs ?? []) },
+    })
+    ids.push(String(discussion.notes[0]?.id ?? discussion.id))
+  }
+  return ids
+}
+
+/**
+ * Inline comments as diff discussions, the summary as a note, then the approval. GitLab's API has no "request
+ * changes" verdict, so that review posts its comments and summary without approving.
  */
 export async function submitReview(
   cwd: string,
@@ -1118,27 +1275,125 @@ export async function submitReview(
   const a = await access(cwd)
   const mr = await readMergeRequest(a, url)
   const path = `/merge_requests/${mr.iid}`
-  const refs = mr.diff_refs
-  if (review.comments.length && !refs) throw new Error('GitLab has not prepared this merge request’s diff yet.')
-  for (const comment of review.comments)
-    await projectApi(a, `${path}/discussions`, {
-      method: 'POST',
-      body: {
-        body: comment.body,
-        position: {
-          position_type: 'text',
-          base_sha: refs!.base_sha,
-          start_sha: refs!.start_sha,
-          head_sha: refs!.head_sha,
-          old_path: comment.path,
-          new_path: comment.path,
-          new_line: comment.line,
-        },
-      },
-    })
+  await postLineComments(a, mr, review.comments)
   if (review.body.trim()) await projectApi(a, `${path}/notes`, { method: 'POST', body: { body: review.body } })
   if (review.verdict === 'approve')
     await projectApi(a, `${path}/approve`, { method: 'POST', body: mr.sha ? { sha: mr.sha } : {} })
+}
+
+export async function comment(cwd: string, url: string, body: string): Promise<string> {
+  const note = await projectApi<{ id: number }>(await access(cwd), `/merge_requests/${iidOf(url)}/notes`, {
+    method: 'POST',
+    body: { body },
+  })
+  return String(note.id)
+}
+
+export async function lineComment(cwd: string, url: string, draft: LineDraft): Promise<string> {
+  const a = await access(cwd)
+  const [id] = await postLineComments(a, await readMergeRequest(a, url), [draft])
+  return id!
+}
+
+const notePath = (url: string, commentId: string) => {
+  if (!/^\d+$/.test(commentId)) throw new Error('That is not a GitLab comment id.')
+  return `/merge_requests/${iidOf(url)}/notes/${commentId}`
+}
+
+export async function editComment(cwd: string, url: string, commentId: string, body: string): Promise<void> {
+  await projectApi(await access(cwd), notePath(url, commentId), { method: 'PUT', body: { body } })
+}
+
+export async function deleteComment(cwd: string, url: string, commentId: string): Promise<void> {
+  await projectApi(await access(cwd), notePath(url, commentId), { method: 'DELETE' })
+}
+
+export async function setThreadStatus(
+  cwd: string,
+  url: string,
+  threadId: string,
+  status: PullRequestThreadStatus,
+): Promise<void> {
+  if (status !== 'active' && status !== 'resolved')
+    throw new Error(unsupportedPullRequestText('gitlab', 'thread-status'))
+  await projectApi(await access(cwd), `/merge_requests/${iidOf(url)}/discussions/${encode(threadId)}`, {
+    method: 'PUT',
+    body: { resolved: status === 'resolved' },
+  })
+}
+
+/** GitLab's award emoji names for each reaction. */
+const AWARD: Record<PullRequestReaction, string> = {
+  'thumbs-up': 'thumbsup',
+  'thumbs-down': 'thumbsdown',
+  laugh: 'laughing',
+  hooray: 'tada',
+  confused: 'confused',
+  heart: 'heart',
+  rocket: 'rocket',
+  eyes: 'eyes',
+}
+
+/** Adds an award emoji to a note, or takes back the account's own; one already gone stays gone. */
+export async function react(
+  cwd: string,
+  url: string,
+  commentId: string,
+  reaction: PullRequestReaction,
+  remove: boolean,
+): Promise<void> {
+  const a = await access(cwd)
+  const path = `${notePath(url, commentId)}/award_emoji`
+  const name = AWARD[reaction]
+  if (!remove) {
+    await projectApi(a, path, { method: 'POST', body: { name } })
+    return
+  }
+  const [viewer, awards] = await Promise.all([
+    viewerOf(a),
+    projectApi<{ id: number; name: string; user?: { id?: number } }[]>(a, `${path}?per_page=100`),
+  ])
+  if (viewer?.id === undefined)
+    throw new Error('GitLab did not say whose token this is, so Ramu cannot find its award.')
+  const own = (awards ?? []).find((award) => award.name === name && award.user?.id === viewer.id)
+  if (own) await projectApi(a, `${path}/${own.id}`, { method: 'DELETE' })
+}
+
+/** Takes back the account's approval. GitLab's API has no change request to take back. */
+export async function withdrawReview(cwd: string, url: string): Promise<void> {
+  const a = await access(cwd)
+  await projectApi(a, `/merge_requests/${iidOf(url)}/unapprove`, { method: 'POST' }).catch((error: unknown) => {
+    // GitLab answers 404 when this account has no approval on the merge request.
+    if (error instanceof ForgeError && /could not find/.test(error.message))
+      throw new Error('This account has not approved this merge request, so there is nothing to take back.')
+    throw error
+  })
+}
+
+/** Changes the fields asked for in one request; a draft keeps its prefix when only its title changes. */
+export async function updatePullRequest(cwd: string, url: string, update: PullRequestUpdate): Promise<void> {
+  const a = await access(cwd)
+  const mr = await readMergeRequest(a, url)
+  const body: Record<string, unknown> = {}
+  if (update.title !== undefined) body.title = DRAFT_PREFIX.test(mr.title) ? draftTitle(update.title) : update.title
+  if (update.body !== undefined) body.description = update.body
+  if (update.base !== undefined) body.target_branch = update.base
+  if (update.labels?.add.length) body.add_labels = update.labels.add.join(',')
+  if (update.labels?.remove.length) body.remove_labels = update.labels.remove.join(',')
+  if (update.assignees) {
+    const added = await userIds(a, update.assignees.add, mr.assignees ?? [])
+    body.assignee_ids = [...new Set([...without(mr.assignees, update.assignees.remove), ...added])]
+  }
+  if (Object.keys(body).length) await projectApi(a, `/merge_requests/${mr.iid}`, { method: 'PUT', body })
+}
+
+/** Retries the failed jobs of the head pipeline; nothing runs when it has not failed. */
+export async function rerunChecks(cwd: string, url: string): Promise<number> {
+  const a = await access(cwd)
+  const pipeline = (await readMergeRequest(a, url)).head_pipeline
+  if (pipeline?.id === undefined || pipeline.status !== 'failed') return 0
+  await projectApi(a, `/pipelines/${pipeline.id}/retry`, { method: 'POST' })
+  return 1
 }
 
 /** GitLab behind the shared adapter boundary, chosen for checkouts whose remote is a GitLab server. */
@@ -1163,6 +1418,18 @@ registerForgeAdapter({
   resolveThread,
   requestReviews,
   submitReview,
+  // Every note on no file is a discussion that `reviewThreads` already returns.
+  conversation: async () => [],
+  comment,
+  lineComment,
+  editComment,
+  deleteComment,
+  setThreadStatus,
+  react,
+  removeReviewers,
+  withdrawReview,
+  updatePullRequest,
+  rerunChecks,
   listIssues,
   issueDetails,
   publishRepository,

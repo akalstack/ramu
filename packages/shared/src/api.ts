@@ -1610,6 +1610,29 @@ export interface RamuMethods extends ArtifactMethods {
     },
   ): void
   'forge.discardDrafts'(batchId: string): void
+  /** A card of pull request writes an agent asked for, or null once it is gone. */
+  'forge.writeCard'(cardId: string): import('./types').PullRequestWriteCard | null
+  /** Posts the card's waiting writes (all when none are named), with the person's edited text. */
+  'forge.postWrites'(
+    cardId: string,
+    itemIds?: string[],
+    edits?: { itemId: string; body: string }[],
+  ): import('./types').PullRequestWriteCard
+  'forge.undoWrite'(cardId: string, itemId: string): import('./types').PullRequestWriteCard
+  'forge.dismissWrites'(cardId: string, itemIds?: string[]): import('./types').PullRequestWriteCard
+  /** One action the person takes on a pull request; returns the new comment's id where it made one. */
+  'forge.pullRequestWrite'(
+    taskId: string,
+    repoId: string,
+    url: string,
+    write: import('./types').PullRequestWrite,
+  ): string | null
+  /** The pull request's conversation comments on no file. */
+  'forge.pullRequestConversation'(
+    taskId: string,
+    repoId: string,
+    url: string,
+  ): import('./types').PullRequestConversationComment[]
   /** Keeps the person's edits to drafted replies or a drafted review on the host, where the agent can read them. */
   'forge.editDrafts'(
     batchId: string,

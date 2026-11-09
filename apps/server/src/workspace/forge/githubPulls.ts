@@ -13,7 +13,12 @@ import type {
   ReviewCommentDraft,
   PullRequestThread,
   ReviewVerdict,
+  PullRequestConversationComment,
+  PullRequestReaction,
+  PullRequestThreadStatus,
+  PullRequestUpdate,
 } from '@ramu/shared/types'
+import { unsupportedPullRequestText } from '@ramu/shared/pullRequestSupport'
 import { ForgeError, forgeRemoteOf, githubAvailability, githubGraphql, githubRest } from './github'
 import { FILES_PAGE, boundedPatch } from './adapter'
 
@@ -365,6 +370,23 @@ export async function pullRequestAction(cwd: string, url: string, action: PullRe
         { id },
       )
       return
+    case 'draft':
+      await githubGraphql(
+        cwd,
+        'mutation($id: ID!) { convertPullRequestToDraft(input: { pullRequestId: $id }) { clientMutationId } }',
+        { id },
+      )
+      return
+    // GitHub deletes the branch after an automatic merge only by the repository's own setting.
+    case 'auto-merge':
+      await githubGraphql(
+        cwd,
+        `mutation($id: ID!, $method: PullRequestMergeMethod!) {
+          enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: $method }) { clientMutationId }
+        }`,
+        { id, method: MERGE_METHOD[action.method] },
+      )
+      return
     case 'update-branch':
       await githubGraphql(
         cwd,
@@ -569,6 +591,24 @@ const REVIEW_EVENT: Record<ReviewVerdict, string> = {
   'request-changes': 'REQUEST_CHANGES',
 }
 
+/** A comment's text with its suggested change in GitHub's fenced form, which the page offers to commit. */
+export const withSuggestion = (body: string, suggestion: string | undefined) =>
+  suggestion === undefined ? body : `${body}\n\n\`\`\`suggestion\n${suggestion}\n\`\`\``
+
+/** Where a comment sits in GitHub's terms: the line, its side and where a block of lines starts. */
+const placement = (comment: Omit<ReviewCommentDraft, 'id'>) => {
+  const side = comment.side === 'old' ? 'LEFT' : 'RIGHT'
+  return {
+    path: comment.path,
+    line: comment.line,
+    side,
+    ...(comment.startLine && comment.startLine < comment.line
+      ? { start_line: comment.startLine, start_side: side }
+      : {}),
+    body: withSuggestion(comment.body, comment.suggestion),
+  }
+}
+
 /** One review with its inline comments, on the pull request's current head. */
 export async function submitReview(
   cwd: string,
@@ -580,17 +620,228 @@ export async function submitReview(
     ...(pr.headRefOid ? { commit_id: pr.headRefOid } : {}),
     body: review.body,
     event: REVIEW_EVENT[review.verdict],
-    comments: review.comments.map((comment) => ({
-      path: comment.path,
-      line: comment.line,
-      side: 'RIGHT',
-      // A comment on a block of lines names where the block starts.
-      ...(comment.startLine && comment.startLine < comment.line
-        ? { start_line: comment.startLine, start_side: 'RIGHT' }
-        : {}),
-      body: comment.body,
-    })),
+    comments: review.comments.map(placement),
   })
+}
+
+interface RawConversation {
+  repository: {
+    pullRequest: {
+      comments: {
+        nodes: {
+          id: string
+          author: RawAuthor | null
+          authorAssociation: string
+          body: string
+          createdAt: string
+          viewerDidAuthor: boolean
+        }[]
+      }
+    } | null
+  }
+}
+
+/** The latest comments on the pull request itself; review summaries are threads already. */
+export async function conversation(cwd: string, url: string): Promise<PullRequestConversationComment[]> {
+  const { owner, repo, number } = await pullRequestTarget(cwd, url)
+  const raw = await githubGraphql<RawConversation>(
+    cwd,
+    `query($owner: String!, $repo: String!, $number: Int!) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $number) {
+          comments(last: 50) { nodes { id author { login __typename } authorAssociation body createdAt viewerDidAuthor } }
+        }
+      }
+    }`,
+    { owner, repo, number },
+  )
+  return (raw.repository.pullRequest?.comments.nodes ?? []).map((node) => ({
+    id: node.id,
+    author: node.author?.login ?? null,
+    bot: node.author?.__typename === 'Bot',
+    trusted: node.author?.__typename === 'Bot' || TRUSTED_ASSOCIATIONS.has(node.authorAssociation),
+    body: node.body.trim(),
+    createdAt: Date.parse(node.createdAt) || 0,
+    own: node.viewerDidAuthor,
+  }))
+}
+
+export async function comment(cwd: string, url: string, body: string): Promise<string> {
+  const { pr } = await readOne(cwd, url)
+  const result = await githubGraphql<{ addComment: { commentEdge: { node: { id: string } } } }>(
+    cwd,
+    'mutation($id: ID!, $body: String!) { addComment(input: { subjectId: $id, body: $body }) { commentEdge { node { id } } } }',
+    { id: pr.id, body },
+  )
+  return result.addComment.commentEdge.node.id
+}
+
+/** A single line comment outside a review, on the head commit; returns its node id so it can be edited or deleted. */
+export async function lineComment(cwd: string, url: string, draft: Omit<ReviewCommentDraft, 'id'>): Promise<string> {
+  const { owner, repo, pr } = await readOne(cwd, url)
+  const created = await githubRest<{ node_id: string }>(
+    cwd,
+    'POST',
+    `/repos/${owner}/${repo}/pulls/${pr.number}/comments`,
+    {
+      ...(pr.headRefOid ? { commit_id: pr.headRefOid } : {}),
+      ...placement(draft),
+    },
+  )
+  return created.node_id
+}
+
+/** GitHub's node ids say what they are: a conversation comment, a line comment or a review. */
+function commentKind(commentId: string): 'issue' | 'line' | 'review' {
+  const id = commentId.replace(/^review:/, '')
+  if (id.startsWith('IC_')) return 'issue'
+  if (id.startsWith('PRRC_')) return 'line'
+  if (id.startsWith('PRR_')) return 'review'
+  throw new Error('That is not a GitHub comment id. Use one from pull_request_threads.')
+}
+
+export async function editComment(cwd: string, _url: string, commentId: string, body: string): Promise<void> {
+  const id = commentId.replace(/^review:/, '')
+  const mutation = {
+    issue: 'updateIssueComment(input: { id: $id, body: $body })',
+    line: 'updatePullRequestReviewComment(input: { pullRequestReviewCommentId: $id, body: $body })',
+    review: 'updatePullRequestReview(input: { pullRequestReviewId: $id, body: $body })',
+  }[commentKind(commentId)]
+  await githubGraphql(cwd, `mutation($id: ID!, $body: String!) { ${mutation} { clientMutationId } }`, { id, body })
+}
+
+export async function deleteComment(cwd: string, _url: string, commentId: string): Promise<void> {
+  const kind = commentKind(commentId)
+  if (kind === 'review') throw new Error('GitHub cannot delete a submitted review; edit its text instead.')
+  const mutation = kind === 'issue' ? 'deleteIssueComment' : 'deletePullRequestReviewComment'
+  await githubGraphql(cwd, `mutation($id: ID!) { ${mutation}(input: { id: $id }) { clientMutationId } }`, {
+    id: commentId,
+  })
+}
+
+export async function setThreadStatus(
+  cwd: string,
+  url: string,
+  threadId: string,
+  status: PullRequestThreadStatus,
+): Promise<void> {
+  if (status !== 'resolved' && status !== 'active')
+    throw new Error(unsupportedPullRequestText('github', 'thread-status'))
+  if (threadId.startsWith('review:')) throw new Error('A review’s summary is not a thread GitHub can resolve.')
+  if (status === 'resolved') return resolveThread(cwd, url, threadId)
+  await githubGraphql(
+    cwd,
+    'mutation($id: ID!) { unresolveReviewThread(input: { threadId: $id }) { clientMutationId } }',
+    {
+      id: threadId,
+    },
+  )
+}
+
+const REACTION: Record<PullRequestReaction, string> = {
+  'thumbs-up': 'THUMBS_UP',
+  'thumbs-down': 'THUMBS_DOWN',
+  laugh: 'LAUGH',
+  hooray: 'HOORAY',
+  confused: 'CONFUSED',
+  heart: 'HEART',
+  rocket: 'ROCKET',
+  eyes: 'EYES',
+}
+
+export async function react(
+  cwd: string,
+  _url: string,
+  commentId: string,
+  reaction: PullRequestReaction,
+  remove: boolean,
+): Promise<void> {
+  const mutation = remove ? 'removeReaction' : 'addReaction'
+  await githubGraphql(
+    cwd,
+    `mutation($id: ID!, $content: ReactionContent!) { ${mutation}(input: { subjectId: $id, content: $content }) { clientMutationId } }`,
+    { id: commentId.replace(/^review:/, ''), content: REACTION[reaction] },
+  )
+}
+
+export async function removeReviewers(cwd: string, url: string, reviewers: string[]): Promise<void> {
+  if (!reviewers.length) return
+  const { owner, repo, number } = await pullRequestTarget(cwd, url)
+  await githubRest(cwd, 'DELETE', `/repos/${owner}/${repo}/pulls/${number}/requested_reviewers`, { reviewers })
+}
+
+/**
+ * GitHub has no "withdraw": a new review does not clear an approval, so the account's own verdict is dismissed, which
+ * needs write access to the repository.
+ */
+export async function withdrawReview(cwd: string, url: string): Promise<void> {
+  const { owner, repo, number } = await pullRequestTarget(cwd, url)
+  const raw = await githubGraphql<{
+    repository: {
+      pullRequest: { reviews: { nodes: { id: string; state: string; viewerDidAuthor: boolean }[] } } | null
+    }
+  }>(
+    cwd,
+    `query($owner: String!, $repo: String!, $number: Int!) {
+      repository(owner: $owner, name: $repo) { pullRequest(number: $number) { reviews(last: 50) { nodes { id state viewerDidAuthor } } } }
+    }`,
+    { owner, repo, number },
+  )
+  const verdicts = (raw.repository.pullRequest?.reviews.nodes ?? []).filter(
+    (review) => review.viewerDidAuthor && (review.state === 'APPROVED' || review.state === 'CHANGES_REQUESTED'),
+  )
+  if (!verdicts.length) throw new Error('This account has no approval or change request on that pull request.')
+  for (const review of verdicts)
+    await githubGraphql(
+      cwd,
+      'mutation($id: ID!, $message: String!) { dismissPullRequestReview(input: { pullRequestReviewId: $id, message: $message }) { clientMutationId } }',
+      { id: review.id, message: 'Withdrawn by the reviewer.' },
+    )
+}
+
+export async function updatePullRequest(cwd: string, url: string, update: PullRequestUpdate): Promise<void> {
+  const { owner, repo, pr } = await readOne(cwd, url)
+  const fields = {
+    ...(update.title !== undefined ? { title: update.title } : {}),
+    ...(update.body !== undefined ? { body: update.body } : {}),
+    ...(update.base !== undefined ? { baseRefName: update.base } : {}),
+  }
+  if (Object.keys(fields).length)
+    await githubGraphql(
+      cwd,
+      `mutation($input: UpdatePullRequestInput!) { updatePullRequest(input: $input) { clientMutationId } }`,
+      { input: { pullRequestId: pr.id, ...fields } },
+    )
+  const issue = `/repos/${owner}/${repo}/issues/${pr.number}`
+  if (update.labels?.add.length) await githubRest(cwd, 'POST', `${issue}/labels`, { labels: update.labels.add })
+  for (const label of update.labels?.remove ?? [])
+    await githubRest(cwd, 'DELETE', `${issue}/labels/${encodeURIComponent(label)}`).catch((error: unknown) => {
+      // A label already gone is the outcome that was asked for.
+      if (!(error instanceof Error && /\b404\b|not found/i.test(error.message))) throw error
+    })
+  if (update.assignees?.add.length)
+    await githubRest(cwd, 'POST', `${issue}/assignees`, { assignees: update.assignees.add })
+  if (update.assignees?.remove.length)
+    await githubRest(cwd, 'DELETE', `${issue}/assignees`, { assignees: update.assignees.remove })
+}
+
+const FAILED_RUN = new Set(['failure', 'timed_out', 'cancelled', 'startup_failure'])
+
+/** Re-runs the failed jobs of each failed Actions run on the head commit. Other services' checks re-run there. */
+export async function rerunChecks(cwd: string, url: string): Promise<number> {
+  const { owner, repo, pr } = await readOne(cwd, url)
+  if (!pr.headRefOid) throw new Error('GitHub did not say which commit this pull request is on.')
+  const runs = await githubRest<{ workflow_runs: { id: number; conclusion: string | null }[] }>(
+    cwd,
+    'GET',
+    `/repos/${owner}/${repo}/actions/runs?head_sha=${pr.headRefOid}&per_page=50`,
+  )
+  const failed = (runs?.workflow_runs ?? []).filter((run) => run.conclusion && FAILED_RUN.has(run.conclusion))
+  if (!failed.length)
+    throw new Error('No GitHub Actions run failed on the latest commit; checks from other services re-run there.')
+  for (const run of failed)
+    await githubRest(cwd, 'POST', `/repos/${owner}/${repo}/actions/runs/${run.id}/rerun-failed-jobs`)
+  return failed.length
 }
 
 const FILE_STATUS: PullRequestFile['status'][] = [

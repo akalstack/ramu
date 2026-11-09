@@ -7,6 +7,14 @@ import { HostCredentialStore } from '../src/credentials/store'
 import { GitlabCredentials, configureGitlabCredentials } from '../src/workspace/forge/gitlabCredentials'
 import { FILES_PAGE, PATCH_LIMIT } from '../src/workspace/forge/adapter'
 import {
+  diffLine,
+  noteBody,
+  notePosition,
+  react,
+  rerunChecks,
+  setThreadStatus,
+  updatePullRequest,
+  withdrawReview,
   gitlabApi,
   gitlabMergeOptions,
   gitlabMergeability,
@@ -606,5 +614,169 @@ it('reads a merge request’s notes as its timeline, oldest first, and skips sys
     vi.unstubAllGlobals()
     vi.unstubAllEnvs()
     rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+const refs = { base_sha: 'b', start_sha: 's', head_sha: 'h' }
+const hunk = ['@@ -10,4 +10,5 @@', ' same', '-gone', '+added', '+more', ' after'].join('\n')
+
+it('places diff notes with both numbers on unchanged lines and line codes on each end of a range', () => {
+  expect(diffLine(hunk, 10, 'new')).toEqual({
+    added: false,
+    oldLine: 10,
+    newLine: 10,
+    oldPosition: 10,
+    newPosition: 10,
+  })
+  expect(diffLine(hunk, 11, 'new')).toMatchObject({ added: true, oldLine: null, newLine: 11, oldPosition: 12 })
+  expect(diffLine(hunk, 11, 'old')).toMatchObject({ added: false, oldLine: 11, newLine: null })
+  expect(diffLine(hunk, 40, 'new')).toBeNull()
+  const diffs = [
+    { old_path: 'a.ts', new_path: 'a.ts', new_file: false, deleted_file: false, renamed_file: false, diff: hunk },
+  ]
+  const range = notePosition(refs, { path: 'a.ts', line: 12, startLine: 10, body: 'x' }, diffs)
+  expect(range).toMatchObject({ position_type: 'text', head_sha: 'h', new_line: 12 })
+  const lineRange = range.line_range as { start: Record<string, unknown>; end: Record<string, unknown> }
+  expect(lineRange.start).toMatchObject({ type: 'old', old_line: 10, new_line: 10 })
+  expect(lineRange.end).toMatchObject({ type: 'new', new_line: 12 })
+  expect(String(lineRange.end.line_code)).toMatch(/^[0-9a-f]{40}_12_12$/)
+  expect(notePosition(refs, { path: 'a.ts', line: 13, body: 'x' }, diffs)).toMatchObject({ old_line: 12, new_line: 13 })
+  expect(notePosition(refs, { path: 'a.ts', line: 11, side: 'old', body: 'x' }, diffs)).toMatchObject({ old_line: 11 })
+  // A file outside the first page of diffs is placed by its number alone.
+  const unseen = notePosition(refs, { path: 'b.ts', line: 4, startLine: 2, body: 'x' }, diffs)
+  expect(unseen).toMatchObject({ old_path: 'b.ts', new_path: 'b.ts', new_line: 4 })
+  expect(unseen).not.toHaveProperty('line_range')
+  expect(noteBody({ body: 'Use this', line: 12, startLine: 10, suggestion: 'one\ntwo' })).toBe(
+    'Use this\n\n```suggestion:-2+0\none\ntwo\n```',
+  )
+  expect(noteBody({ body: 'Plain', line: 3 })).toBe('Plain')
+})
+
+/** A checkout on gitlab.com/a/b and a fake GitLab that records every request. */
+function fakeGitlab(answer: (method: string, path: string) => Response | undefined) {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-gitlab-write-'))
+  execFileSync('git', ['init', '-q', '-b', 'search'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'git@gitlab.com:a/b.git'], { cwd: dir })
+  vi.stubEnv('GLAB_CONFIG_DIR', '/nonexistent')
+  vi.stubEnv('GITLAB_HOST', 'gitlab.com')
+  vi.stubEnv('GITLAB_TOKEN', 'glpat-test')
+  const calls: [string, string, unknown][] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      const path = url.replace('https://gitlab.com/api/v4', '').replace('/projects/a%2Fb', '')
+      calls.push([method, path, init?.body ? JSON.parse(String(init.body)) : undefined])
+      return answer(method, path) ?? new Response('{}')
+    }),
+  )
+  return {
+    dir,
+    calls,
+    done: () => {
+      vi.unstubAllGlobals()
+      vi.unstubAllEnvs()
+      rmSync(dir, { recursive: true, force: true })
+    },
+  }
+}
+
+const mrUrl = 'https://gitlab.com/a/b/-/merge_requests/4'
+const json = (value: unknown) => new Response(JSON.stringify(value))
+
+it('removes only the account’s own award, and names a withdrawal with no approval', async () => {
+  const fake = fakeGitlab((method, path) => {
+    if (path === '/user') return json({ id: 7, username: 'me' })
+    if (method === 'GET' && path.startsWith('/merge_requests/4/notes/9/award_emoji'))
+      return json([
+        { id: 1, name: 'thumbsup', user: { id: 8 } },
+        { id: 2, name: 'thumbsup', user: { id: 7 } },
+        { id: 3, name: 'tada', user: { id: 7 } },
+      ])
+    if (path === '/merge_requests/4/unapprove') return new Response('', { status: 404 })
+    return undefined
+  })
+  try {
+    await react(fake.dir, mrUrl, '9', 'hooray', false)
+    expect(fake.calls.at(-1)).toEqual(['POST', '/merge_requests/4/notes/9/award_emoji', { name: 'tada' }])
+    await react(fake.dir, mrUrl, '9', 'thumbs-up', true)
+    expect(fake.calls.at(-1)).toEqual(['DELETE', '/merge_requests/4/notes/9/award_emoji/2', undefined])
+    await expect(react(fake.dir, mrUrl, '9/1', 'eyes', false)).rejects.toThrow('not a GitLab comment id')
+    await expect(withdrawReview(fake.dir, mrUrl)).rejects.toThrow('has not approved')
+  } finally {
+    fake.done()
+  }
+})
+
+it('resolves and reopens discussions, refusing Azure DevOps’s other statuses', async () => {
+  const fake = fakeGitlab(() => undefined)
+  try {
+    await setThreadStatus(fake.dir, mrUrl, 'abc', 'active')
+    await setThreadStatus(fake.dir, mrUrl, 'abc', 'resolved')
+    expect(fake.calls.map((call) => call[2])).toEqual([{ resolved: false }, { resolved: true }])
+    await expect(setThreadStatus(fake.dir, mrUrl, 'abc', 'wont-fix')).rejects.toThrow(
+      'GitLab has no thread statuses besides resolved.',
+    )
+    expect(fake.calls).toHaveLength(2)
+  } finally {
+    fake.done()
+  }
+})
+
+it('drafts by title, merges when the pipeline succeeds, updates fields and retries only a failed pipeline', async () => {
+  let pipeline = 'failed'
+  const fake = fakeGitlab((method, path) => {
+    if (method === 'GET' && path === '/merge_requests/4')
+      return json({
+        iid: 4,
+        title: 'Draft: Add search',
+        sha: 'abc',
+        source_project_id: 1,
+        target_project_id: 1,
+        assignees: [{ id: 2, username: 'bo' }],
+        head_pipeline: { id: 55, status: pipeline },
+      })
+    if (path === '/users?username=cy') return json([{ id: 3 }])
+    return undefined
+  })
+  try {
+    await pullRequestAction(fake.dir, mrUrl, { kind: 'draft' })
+    expect(fake.calls.filter((call) => call[0] === 'PUT')).toEqual([])
+    await pullRequestAction(fake.dir, mrUrl, { kind: 'auto-merge', method: 'squash', deleteBranch: true })
+    expect(fake.calls.at(-1)).toEqual([
+      'PUT',
+      '/merge_requests/4/merge',
+      {
+        squash: true,
+        should_remove_source_branch: true,
+        auto_merge: true,
+        merge_when_pipeline_succeeds: true,
+        sha: 'abc',
+      },
+    ])
+    await updatePullRequest(fake.dir, mrUrl, {
+      title: 'Search',
+      base: 'next',
+      labels: { add: ['bug', 'ui'], remove: ['wip'] },
+      assignees: { add: ['cy'], remove: ['bo'] },
+    })
+    expect(fake.calls.at(-1)).toEqual([
+      'PUT',
+      '/merge_requests/4',
+      {
+        title: 'Draft: Search',
+        target_branch: 'next',
+        add_labels: 'bug,ui',
+        remove_labels: 'wip',
+        assignee_ids: [3],
+      },
+    ])
+    await expect(rerunChecks(fake.dir, mrUrl)).resolves.toBe(1)
+    expect(fake.calls.at(-1)).toEqual(['POST', '/pipelines/55/retry', undefined])
+    pipeline = 'success'
+    await expect(rerunChecks(fake.dir, mrUrl)).resolves.toBe(0)
+    expect(fake.calls.at(-1)?.[1]).toBe('/merge_requests/4')
+  } finally {
+    fake.done()
   }
 })

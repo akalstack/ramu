@@ -6,7 +6,7 @@ import { NO_PROJECT, type AgentSessionInfo } from '@ramu/shared/types'
 import { resolvedAccountChoice } from '../workspace/forge/github'
 import type { HandlerContext } from './types'
 
-const projectOf = (ctx: HandlerContext, context: string) => {
+const projectOf = (ctx: Pick<HandlerContext, 'workspace'>, context: string) => {
   try {
     const projectId = ctx.workspace.projectIdOf(context)
     return projectId === NO_PROJECT ? null : projectId
@@ -16,7 +16,12 @@ const projectOf = (ctx: HandlerContext, context: string) => {
 }
 
 /** Before a push, pull request or merge from a checkout: its GitHub account, and the thread's provider login. */
-export async function guardForge(ctx: HandlerContext, context: string, cwd: string, action: string) {
+export async function guardForge(
+  ctx: Pick<HandlerContext, 'identities' | 'workspace' | 'agents'>,
+  context: string,
+  cwd: string,
+  action: string,
+) {
   const identities = ctx.identities
   if (!identities || identities.settings().identities.length < 2) return
   const projectId = projectOf(ctx, context)

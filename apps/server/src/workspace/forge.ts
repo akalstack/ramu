@@ -14,6 +14,9 @@ import type {
   ReviewVerdict,
   PullRequestFeedbackKind,
   PullRequestInput,
+  PullRequestReaction,
+  PullRequestThreadStatus,
+  PullRequestUpdate,
 } from '@ramu/shared/types'
 import { forgeAdapter } from './forge/adapter'
 import { adapterFor, adapterForOrigin } from './forge/route'
@@ -85,6 +88,31 @@ export const submitReview = async (
   url: string,
   review: { verdict: ReviewVerdict; body: string; comments: ReviewCommentDraft[] },
 ) => (await adapterFor(cwd)).submitReview(cwd, url, review)
+export const pullRequestConversation = async (cwd: string, url: string) =>
+  (await adapterFor(cwd)).conversation(cwd, url)
+export const commentOnPullRequest = async (cwd: string, url: string, body: string) =>
+  (await adapterFor(cwd)).comment(cwd, url, body)
+export const lineComment = async (cwd: string, url: string, comment: Omit<ReviewCommentDraft, 'id'>) =>
+  (await adapterFor(cwd)).lineComment(cwd, url, comment)
+export const editComment = async (cwd: string, url: string, commentId: string, body: string) =>
+  (await adapterFor(cwd)).editComment(cwd, url, commentId, body)
+export const deleteComment = async (cwd: string, url: string, commentId: string) =>
+  (await adapterFor(cwd)).deleteComment(cwd, url, commentId)
+export const setThreadStatus = async (cwd: string, url: string, threadId: string, status: PullRequestThreadStatus) =>
+  (await adapterFor(cwd)).setThreadStatus(cwd, url, threadId, status)
+export const reactToComment = async (
+  cwd: string,
+  url: string,
+  commentId: string,
+  reaction: PullRequestReaction,
+  remove: boolean,
+) => (await adapterFor(cwd)).react(cwd, url, commentId, reaction, remove)
+export const removeReviewers = async (cwd: string, url: string, reviewers: string[]) =>
+  (await adapterFor(cwd)).removeReviewers(cwd, url, reviewers)
+export const withdrawReview = async (cwd: string, url: string) => (await adapterFor(cwd)).withdrawReview(cwd, url)
+export const updatePullRequest = async (cwd: string, url: string, update: PullRequestUpdate) =>
+  (await adapterFor(cwd)).updatePullRequest(cwd, url, update)
+export const rerunChecks = async (cwd: string, url: string) => (await adapterFor(cwd)).rerunChecks(cwd, url)
 /** The service a checkout's remote is on, so callers can word things for it. */
 export const serviceOf = async (cwd: string) => (await adapterFor(cwd)).id
 export const listIssues = async (cwd: string, search: string) => (await adapterFor(cwd)).listIssues(cwd, search)

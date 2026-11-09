@@ -27,7 +27,11 @@ import type {
   PullRequestInfo,
   PullRequestInput,
   PullRequestReviewDecision,
+  PullRequestReaction,
+  PullRequestThreadStatus,
+  PullRequestUpdate,
 } from '@ramu/shared/types'
+import { unsupportedPullRequestText } from '@ramu/shared/pullRequestSupport'
 import { redactSecrets } from '@ramu/shared/forgeRemote'
 import { currentBranch, git, publishRemote } from '../git'
 import { FILES_PAGE, TIMELINE_LENGTH, opening, registerForgeAdapter } from './adapter'
@@ -39,6 +43,8 @@ import { FAILED_STEPS, failedStepLog } from './buildLogs'
 
 const API = 'https://dev.azure.com'
 const VERSION = 'api-version=7.1'
+/** Policy evaluations, pull request labels and comment likes are still preview resources in 7.1. */
+const PREVIEW = 'api-version=7.1-preview.1'
 /** Build validation is a branch policy; its type id is the same in every organization. */
 const BUILD_POLICY = '0609b952-1397-4640-95ec-e00a01b2c241'
 
@@ -105,13 +111,12 @@ export async function azureRepositoryOf(cwd: string): Promise<AzureRepository | 
 
 type Target = AzureCredential & { fetch?: typeof fetch }
 
+type Init = { method?: string; body?: unknown; text?: boolean; preview?: boolean }
+
 /** One API request below `https://dev.azure.com/`. Bounded in time and size; errors never echo the token or body. */
-export async function azureApi<T>(
-  target: Target,
-  path: string,
-  init: { method?: string; body?: unknown; text?: boolean } = {},
-): Promise<T> {
-  const response = await (target.fetch ?? fetch)(`${API}${path}${path.includes('?') ? '&' : '?'}${VERSION}`, {
+export async function azureApi<T>(target: Target, path: string, init: Init = {}): Promise<T> {
+  const version = init.preview ? PREVIEW : VERSION
+  const response = await (target.fetch ?? fetch)(`${API}${path}${path.includes('?') ? '&' : '?'}${version}`, {
     method: init.method ?? 'GET',
     headers: {
       Authorization: `Basic ${Buffer.from(`:${target.token}`).toString('base64')}`,
@@ -158,9 +163,9 @@ async function access(cwd: string): Promise<Access> {
 
 const q = (value: string) => encodeURIComponent(value)
 const projectPath = (repo: AzureRepository) => `/${q(repo.organization)}/${q(repo.project)}`
-const projectApi = <T>(a: Access, path: string, init?: { method?: string; body?: unknown; text?: boolean }) =>
+const projectApi = <T>(a: Access, path: string, init?: Init) =>
   azureApi<T>(a.credential, `${projectPath(a.repo)}/_apis${path}`, init)
-const repoApi = <T>(a: Access, path = '', init?: { method?: string; body?: unknown }) =>
+const repoApi = <T>(a: Access, path = '', init?: Init) =>
   projectApi<T>(a, `/git/repositories/${q(a.repo.repo)}${path}`, init)
 /** The address a person opens, which the API does not return for pull requests. */
 const webBase = (repo: AzureRepository) => `${API}${projectPath(repo)}/_git/${q(repo.repo)}`
@@ -187,6 +192,7 @@ interface RawStatus {
 }
 
 interface RawEvaluation {
+  evaluationId?: string
   status: 'queued' | 'running' | 'approved' | 'rejected' | 'notApplicable' | 'broken'
   configuration: {
     type: { id: string; displayName?: string }
@@ -290,6 +296,7 @@ async function checksOf(
     ? await projectApi<{ value: RawEvaluation[] }>(
         a,
         `/policy/evaluations?artifactId=${q(`vstfs:///CodeReview/CodeReviewId/${projectId}/${raw.pullRequestId}`)}`,
+        { preview: true },
       )
         .then((page) => page.value)
         .catch(() => [])
@@ -795,7 +802,20 @@ export async function mergeOptions(cwd: string, url: string): Promise<MergeOptio
   return azureMergeOptions(pr, checks, evaluations)
 }
 
-/** Complete, abandon, reactivate or publish. A completion whose reply is lost is checked before it fails. */
+const unsupported = (capability: Parameters<typeof unsupportedPullRequestText>[1]) =>
+  new Error(unsupportedPullRequestText('azure', capability))
+
+/** The account's identity id, which votes and auto-complete name. */
+async function viewerId(a: Access): Promise<string> {
+  const id = (await viewerOf(a))?.id
+  if (!id) throw new Error('Azure DevOps did not say whose token this is, so Ramu cannot act as it.')
+  return id
+}
+
+/**
+ * Complete (now, or automatically once policies pass), abandon, reactivate, publish or turn back into a draft. A
+ * completion whose reply is lost is checked before it fails.
+ */
 export async function pullRequestAction(cwd: string, url: string, action: PullRequestAction): Promise<void> {
   const a = await access(cwd)
   const pr = await readPullRequest(a, url)
@@ -825,8 +845,21 @@ export async function pullRequestAction(cwd: string, url: string, action: PullRe
     case 'reopen':
       await repoApi(a, path, { method: 'PATCH', body: { status: 'active' } })
       return
+    case 'auto-merge':
+      await repoApi(a, path, {
+        method: 'PATCH',
+        body: {
+          autoCompleteSetBy: { id: await viewerId(a) },
+          completionOptions: {
+            mergeStrategy: STRATEGY[action.method],
+            deleteSourceBranch: action.deleteBranch && pr.forkSource == null,
+          },
+        },
+      })
+      return
     case 'ready':
-      await repoApi(a, path, { method: 'PATCH', body: { isDraft: false } })
+    case 'draft':
+      await repoApi(a, path, { method: 'PATCH', body: { isDraft: action.kind === 'draft' } })
       return
     case 'update-branch':
       throw new Error(
@@ -894,6 +927,19 @@ export async function pullRequestFiles(cwd: string, url: string): Promise<{ file
   return { files, more: (page.nextTop ?? 0) > 0 }
 }
 
+interface FilePosition {
+  line?: number
+  offset?: number
+}
+
+interface ThreadContext {
+  filePath?: string
+  rightFileStart?: FilePosition
+  rightFileEnd?: FilePosition
+  leftFileStart?: FilePosition
+  leftFileEnd?: FilePosition
+}
+
 interface RawThread {
   id: number
   status?: 'active' | 'pending' | 'fixed' | 'wontFix' | 'closed' | 'byDesign' | 'unknown'
@@ -903,11 +949,7 @@ interface RawThread {
   properties?: Record<string, { $value?: string | number } | undefined>
   /** The people a system thread's properties name, keyed by the index they use. */
   identities?: Record<string, RawIdentity | undefined>
-  threadContext?: {
-    filePath?: string
-    rightFileStart?: { line?: number }
-    leftFileStart?: { line?: number }
-  } | null
+  threadContext?: ThreadContext | null
   comments?: {
     id: number
     content?: string
@@ -1070,33 +1112,163 @@ export async function requestReviews(cwd: string, url: string, reviewers: string
 /** Votes: 10 approves, -5 waits for the author. A plain comment review leaves the vote alone. */
 const VOTE: Record<ReviewVerdict, number | null> = { comment: null, approve: 10, 'request-changes': -5 }
 
-/** Inline comments as threads on the right-hand side, the summary as a general thread, then the vote. */
+type LineDraft = Omit<ReviewCommentDraft, 'id'>
+
+/** Where a line comment sits: the right-hand (new) side, or the left for `old`, from its first line to its last. */
+export function threadContext(comment: LineDraft): ThreadContext {
+  const start = {
+    line: comment.startLine !== undefined && comment.startLine < comment.line ? comment.startLine : comment.line,
+    offset: 1,
+  }
+  const end = { line: comment.line, offset: 1 }
+  return comment.side === 'old'
+    ? { filePath: `/${comment.path}`, leftFileStart: start, leftFileEnd: end }
+    : { filePath: `/${comment.path}`, rightFileStart: start, rightFileEnd: end }
+}
+
+/** The comment's text with its suggested change in the block Azure DevOps offers to apply. */
+export const threadBody = (comment: Pick<LineDraft, 'body' | 'suggestion'>) =>
+  comment.suggestion === undefined ? comment.body : `${comment.body}\n\n\`\`\`suggestion\n${comment.suggestion}\n\`\`\``
+
+/** Opens a thread and returns its first comment's id as `threadId/commentId`. */
+async function openThread(a: Access, id: number, content: string, extra: Record<string, unknown>): Promise<string> {
+  const thread = await repoApi<{ id: number; comments?: { id: number }[] }>(a, `/pullrequests/${id}/threads`, {
+    method: 'POST',
+    body: { comments: [{ parentCommentId: 0, content, commentType: 1 }], ...extra },
+  })
+  return `${thread.id}/${thread.comments?.[0]?.id ?? 1}`
+}
+
+/** Inline comments as threads on their lines, the summary as a general thread, then the vote. */
 export async function submitReview(
   cwd: string,
   url: string,
   review: { verdict: ReviewVerdict; body: string; comments: ReviewCommentDraft[] },
 ): Promise<void> {
   const a = await access(cwd)
-  const path = `/pullrequests/${idOf(url)}`
+  const id = idOf(url)
   const vote = VOTE[review.verdict]
-  const viewer = vote === null ? null : await viewerOf(a)
-  if (vote !== null && !viewer?.id) throw new Error('Azure DevOps did not say whose token this is, so it cannot vote.')
-  const thread = (content: string, extra: Record<string, unknown>) =>
-    repoApi(a, `${path}/threads`, {
-      method: 'POST',
-      body: { comments: [{ parentCommentId: 0, content, commentType: 1 }], ...extra },
-    })
-  for (const comment of review.comments) {
-    const position = { line: comment.line, offset: 1 }
-    await thread(comment.body, {
-      status: 'active',
-      threadContext: { filePath: `/${comment.path}`, rightFileStart: position, rightFileEnd: position },
-    })
-  }
+  const viewer = vote === null ? null : await viewerId(a)
+  for (const comment of review.comments)
+    await openThread(a, id, threadBody(comment), { status: 'active', threadContext: threadContext(comment) })
   // An approval's summary is closed so it does not trip a "resolve every comment" policy on its own.
-  if (review.body.trim()) await thread(review.body, { status: review.verdict === 'approve' ? 'closed' : 'active' })
-  if (vote !== null && viewer?.id)
-    await repoApi(a, `${path}/reviewers/${q(viewer.id)}`, { method: 'PUT', body: { vote } })
+  if (review.body.trim())
+    await openThread(a, id, review.body, { status: review.verdict === 'approve' ? 'closed' : 'active' })
+  if (vote !== null && viewer)
+    await repoApi(a, `/pullrequests/${id}/reviewers/${q(viewer)}`, { method: 'PUT', body: { vote } })
+}
+
+/** A comment on no file: a thread with no context. */
+export async function comment(cwd: string, url: string, body: string): Promise<string> {
+  return openThread(await access(cwd), idOf(url), body, { status: 'active' })
+}
+
+export async function lineComment(cwd: string, url: string, draft: LineDraft): Promise<string> {
+  return openThread(await access(cwd), idOf(url), threadBody(draft), {
+    status: 'active',
+    threadContext: threadContext(draft),
+  })
+}
+
+/** The API path of a comment from its `threadId/commentId`, the id this adapter gives every comment. */
+const commentPath = (url: string, commentId: string) => {
+  const match = /^(\d+)\/(\d+)$/.exec(commentId)
+  if (!match) throw new Error('That is not an Azure DevOps comment id.')
+  return `/pullrequests/${idOf(url)}/threads/${match[1]}/comments/${match[2]}`
+}
+
+export async function editComment(cwd: string, url: string, commentId: string, body: string): Promise<void> {
+  await repoApi(await access(cwd), commentPath(url, commentId), { method: 'PATCH', body: { content: body } })
+}
+
+export async function deleteComment(cwd: string, url: string, commentId: string): Promise<void> {
+  await repoApi(await access(cwd), commentPath(url, commentId), { method: 'DELETE' })
+}
+
+const THREAD_STATUS: Record<PullRequestThreadStatus, NonNullable<RawThread['status']>> = {
+  active: 'active',
+  resolved: 'fixed',
+  'wont-fix': 'wontFix',
+  'by-design': 'byDesign',
+  closed: 'closed',
+}
+
+export async function setThreadStatus(
+  cwd: string,
+  url: string,
+  threadId: string,
+  status: PullRequestThreadStatus,
+): Promise<void> {
+  await repoApi(await access(cwd), `/pullrequests/${idOf(url)}/threads/${q(threadId)}`, {
+    method: 'PATCH',
+    body: { status: THREAD_STATUS[status] },
+  })
+}
+
+/** Likes a comment or takes the like back; a like is the only reaction Azure DevOps has. */
+export async function react(
+  cwd: string,
+  url: string,
+  commentId: string,
+  reaction: PullRequestReaction,
+  remove: boolean,
+): Promise<void> {
+  if (reaction !== 'thumbs-up') throw new Error('Azure DevOps has only likes, which Ramu shows as a thumbs-up.')
+  await repoApi(await access(cwd), `${commentPath(url, commentId)}/likes`, {
+    method: remove ? 'DELETE' : 'POST',
+    preview: true,
+  })
+}
+
+/** Removes the named reviewers; a name that is not a reviewer is already off the list. */
+export async function removeReviewers(cwd: string, url: string, reviewers: string[]): Promise<void> {
+  const a = await access(cwd)
+  const pr = await readPullRequest(a, url)
+  const gone = new Set(reviewers.map((name) => name.toLowerCase()))
+  for (const reviewer of pr.reviewers ?? [])
+    if (
+      reviewer.id &&
+      [reviewer.displayName, reviewer.uniqueName].some((value) => !!value && gone.has(value.toLowerCase()))
+    )
+      await repoApi(a, `/pullrequests/${pr.pullRequestId}/reviewers/${q(reviewer.id)}`, { method: 'DELETE' })
+}
+
+/** Resets the account's vote, which takes back an approval and a rejection alike. */
+export async function withdrawReview(cwd: string, url: string): Promise<void> {
+  const a = await access(cwd)
+  await repoApi(a, `/pullrequests/${idOf(url)}/reviewers/${q(await viewerId(a))}`, { method: 'PUT', body: { vote: 0 } })
+}
+
+/** Title, description and target branch in one request, then each label (Azure DevOps's tags) added or removed. */
+export async function updatePullRequest(cwd: string, url: string, update: PullRequestUpdate): Promise<void> {
+  if (update.assignees) throw unsupported('assignees')
+  const a = await access(cwd)
+  const path = `/pullrequests/${idOf(url)}`
+  const body = {
+    ...(update.title !== undefined ? { title: update.title } : {}),
+    ...(update.body !== undefined ? { description: update.body } : {}),
+    ...(update.base !== undefined ? { targetRefName: `refs/heads/${update.base}` } : {}),
+  }
+  if (Object.keys(body).length) await repoApi(a, path, { method: 'PATCH', body })
+  for (const name of update.labels?.add ?? [])
+    await repoApi(a, `${path}/labels`, { method: 'POST', body: { name }, preview: true })
+  for (const name of update.labels?.remove ?? [])
+    await repoApi(a, `${path}/labels/${q(name)}`, { method: 'DELETE', preview: true })
+}
+
+/** Queues every failed build validation again; each one starts its own build. */
+export async function rerunChecks(cwd: string, url: string): Promise<number> {
+  const a = await access(cwd)
+  const { evaluations } = await checksOf(a, await readPullRequest(a, url))
+  const failed = evaluations.filter(
+    (evaluation) =>
+      evaluation.configuration.type.id === BUILD_POLICY &&
+      (evaluation.status === 'rejected' || evaluation.status === 'broken') &&
+      evaluation.evaluationId,
+  )
+  for (const evaluation of failed)
+    await projectApi(a, `/policy/evaluations/${q(evaluation.evaluationId!)}`, { method: 'PATCH', preview: true })
+  return failed.length
 }
 
 registerForgeAdapter({
@@ -1118,6 +1290,18 @@ registerForgeAdapter({
   resolveThread,
   requestReviews,
   submitReview,
+  // Threads on no file are among those `reviewThreads` already returns.
+  conversation: async () => [],
+  comment,
+  lineComment,
+  editComment,
+  deleteComment,
+  setThreadStatus,
+  react,
+  removeReviewers,
+  withdrawReview,
+  updatePullRequest,
+  rerunChecks,
   listIssues,
   issueDetails,
   publishRepository,

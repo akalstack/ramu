@@ -406,6 +406,11 @@ export class AgentService {
     this.record(sessionId, { kind: 'schedule', schedule })
   }
 
+  /** A card of pull request writes, shown where the agent asked for them. */
+  pullRequestWritesShown(sessionId: string, cardId: string): void {
+    this.record(sessionId, { kind: 'pull-request-writes', cardId })
+  }
+
   /** Threads this thread's agent started appear in it as one card that opens each of them. */
   threadsStarted(sessionId: string, threads: StartedThread[]): void {
     this.record(sessionId, { kind: 'threads-started', threads })

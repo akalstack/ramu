@@ -17,6 +17,14 @@ import {
   pullRequestFiles,
   pullRequestTimeline,
   reviewDecision,
+  comment,
+  editComment,
+  lineComment,
+  react,
+  rerunChecks,
+  setThreadStatus,
+  updatePullRequest,
+  withdrawReview,
 } from '../src/workspace/forge/azure'
 import { FILES_PAGE } from '../src/workspace/forge/adapter'
 import { AzureCredentials, azureCredential } from '../src/workspace/forge/azureCredentials'
@@ -507,5 +515,148 @@ it('reads a pull request’s threads as its timeline: comments, votes, reviewers
   } finally {
     vi.unstubAllGlobals()
     vi.unstubAllEnvs()
+  }
+})
+
+/** A checkout on the Web App project's `site` repository and a fake Azure DevOps that records every request. */
+function fakeAzure(answer: (method: string, path: string) => Response | undefined) {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-azure-write-'))
+  dirs.push(dir)
+  execFileSync('git', ['init', '-q', '-b', 'fix/login'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'https://dev.azure.com/acme/Web%20App/_git/site'], { cwd: dir })
+  vi.stubEnv('AZURE_DEVOPS_EXT_PAT', 'pat')
+  const calls: [string, string, unknown][] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      const path = url.replace('https://dev.azure.com/acme', '').replace('/Web%20App/_apis', '')
+      calls.push([method, path, init?.body ? JSON.parse(String(init.body)) : undefined])
+      return (
+        answer(method, path.replace(/[?&]api-version=[^&]*$/, '')) ??
+        new Response(method === 'GET' ? '{"value":[]}' : '{}')
+      )
+    }),
+  )
+  return {
+    dir,
+    calls,
+    done: () => {
+      vi.unstubAllGlobals()
+      vi.unstubAllEnvs()
+    },
+  }
+}
+
+const prUrl = 'https://dev.azure.com/acme/Web%20App/_git/site/pullrequest/7'
+const pr = '/git/repositories/site/pullrequests/7'
+const json = (value: unknown) => new Response(JSON.stringify(value))
+
+it('maps every thread status onto Azure DevOps’s own, and keeps comment ids as thread/comment', async () => {
+  const fake = fakeAzure((method, path) =>
+    method === 'POST' && path === `${pr}/threads` ? json({ id: 31, comments: [{ id: 1 }] }) : undefined,
+  )
+  try {
+    for (const status of ['active', 'resolved', 'wont-fix', 'by-design', 'closed'] as const)
+      await setThreadStatus(fake.dir, prUrl, '5', status)
+    expect(fake.calls.map((call) => call[2])).toEqual([
+      { status: 'active' },
+      { status: 'fixed' },
+      { status: 'wontFix' },
+      { status: 'byDesign' },
+      { status: 'closed' },
+    ])
+    await expect(comment(fake.dir, prUrl, 'Tests pass')).resolves.toBe('31/1')
+    expect(fake.calls.at(-1)?.[2]).toEqual({
+      comments: [{ parentCommentId: 0, content: 'Tests pass', commentType: 1 }],
+      status: 'active',
+    })
+    await lineComment(fake.dir, prUrl, { path: 'src/a.ts', line: 9, startLine: 7, body: 'Use', suggestion: 'x()' })
+    expect(fake.calls.at(-1)?.[2]).toMatchObject({
+      comments: [{ content: 'Use\n\n```suggestion\nx()\n```' }],
+      threadContext: {
+        filePath: '/src/a.ts',
+        rightFileStart: { line: 7, offset: 1 },
+        rightFileEnd: { line: 9, offset: 1 },
+      },
+    })
+    await lineComment(fake.dir, prUrl, { path: 'src/a.ts', line: 3, side: 'old', body: 'Gone' })
+    expect(fake.calls.at(-1)?.[2]).toMatchObject({
+      threadContext: { leftFileStart: { line: 3 }, leftFileEnd: { line: 3 } },
+    })
+    await editComment(fake.dir, prUrl, '31/2', 'Edited')
+    expect(fake.calls.at(-1)).toEqual(['PATCH', `${pr}/threads/31/comments/2?api-version=7.1`, { content: 'Edited' }])
+    await expect(editComment(fake.dir, prUrl, '31', 'x')).rejects.toThrow('not an Azure DevOps comment id')
+  } finally {
+    fake.done()
+  }
+})
+
+it('likes through the preview endpoint, refuses other reactions and assignees, and resets the vote to withdraw', async () => {
+  const fake = fakeAzure((method, path) => {
+    if (path === '/_apis/connectionData') return json({ authenticatedUser: { id: 'u-me' } })
+    return undefined
+  })
+  try {
+    await react(fake.dir, prUrl, '31/2', 'thumbs-up', true)
+    expect(fake.calls.at(-1)).toEqual([
+      'DELETE',
+      `${pr}/threads/31/comments/2/likes?api-version=7.1-preview.1`,
+      undefined,
+    ])
+    await expect(react(fake.dir, prUrl, '31/2', 'heart', false)).rejects.toThrow('only likes')
+    await expect(updatePullRequest(fake.dir, prUrl, { assignees: { add: ['bo'], remove: [] } })).rejects.toThrow(
+      'Azure DevOps has no assignees.',
+    )
+    await withdrawReview(fake.dir, prUrl)
+    expect(fake.calls.at(-1)).toEqual(['PUT', `${pr}/reviewers/u-me?api-version=7.1`, { vote: 0 }])
+    await updatePullRequest(fake.dir, prUrl, {
+      title: 'T',
+      base: 'next',
+      labels: { add: ['bug'], remove: ['old one'] },
+    })
+    expect(fake.calls.slice(-3)).toEqual([
+      ['PATCH', `${pr}?api-version=7.1`, { title: 'T', targetRefName: 'refs/heads/next' }],
+      ['POST', `${pr}/labels?api-version=7.1-preview.1`, { name: 'bug' }],
+      ['DELETE', `${pr}/labels/old%20one?api-version=7.1-preview.1`, undefined],
+    ])
+  } finally {
+    fake.done()
+  }
+})
+
+it('sets auto-complete as the viewer and queues only failed build validations again', async () => {
+  const build = '0609b952-1397-4640-95ec-e00a01b2c241'
+  const fake = fakeAzure((method, path) => {
+    if (path === '/_apis/connectionData') return json({ authenticatedUser: { id: 'u-me' } })
+    if (method === 'GET' && path === pr) return json({ ...listRow, repository: { project: { id: 'p1' } } })
+    if (path.startsWith('/policy/evaluations?'))
+      return json({
+        value: [
+          { evaluationId: 'e1', status: 'rejected', configuration: { type: { id: build } } },
+          { evaluationId: 'e2', status: 'approved', configuration: { type: { id: build } } },
+          { evaluationId: 'e3', status: 'broken', configuration: { type: { id: build } } },
+          { evaluationId: 'e4', status: 'rejected', configuration: { type: { id: 'other' } } },
+        ],
+      })
+    return undefined
+  })
+  try {
+    await pullRequestAction(fake.dir, prUrl, { kind: 'auto-merge', method: 'squash', deleteBranch: true })
+    expect(fake.calls.at(-1)).toEqual([
+      'PATCH',
+      `${pr}?api-version=7.1`,
+      {
+        autoCompleteSetBy: { id: 'u-me' },
+        completionOptions: { mergeStrategy: 'squash', deleteSourceBranch: true },
+      },
+    ])
+    await expect(rerunChecks(fake.dir, prUrl)).resolves.toBe(2)
+    expect(fake.calls.slice(-2)).toEqual([
+      ['PATCH', '/policy/evaluations/e1?api-version=7.1-preview.1', undefined],
+      ['PATCH', '/policy/evaluations/e3?api-version=7.1-preview.1', undefined],
+    ])
+  } finally {
+    fake.done()
   }
 })

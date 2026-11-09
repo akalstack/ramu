@@ -65,3 +65,11 @@ it('asks before losing Git work, rewriting remote history, touching disks or the
   expect(check('sudo shutdown -h now')).toMatch(/administrator/)
   expect(check('reboot')).toMatch(/restarts/)
 })
+
+it('stops pull request writes from a CLI, naming the tool that posts them through a card', () => {
+  expect(check('gh pr merge 12 --squash')).toMatch(/pull_request_merge/)
+  expect(check('gh pr comment 12 --body "done"')).toMatch(/pull_request_comment/)
+  expect(check('glab mr approve 3')).toMatch(/pull_request_review/)
+  for (const command of ['gh pr view 12', 'gh pr checks', 'gh pr diff 12', 'glab mr view 3', 'gh issue comment 4'])
+    expect(check(command), command).toBeNull()
+})

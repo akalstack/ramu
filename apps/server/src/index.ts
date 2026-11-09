@@ -161,6 +161,9 @@ import { WEBHOOK_PATH, WebhookReceiver, readWebhookBody } from './background/web
 import { PullRequestWatchService } from './background/pullRequestWatches'
 import { PullRequestIndex } from './background/pullRequestIndex'
 import { PullRequestDrafts } from './background/pullRequestDrafts'
+import { PullRequestWrites } from './background/pullRequestWrites'
+import { registerPullRequestTools } from './background/pullRequestTools'
+import { guardForge } from './ipc/identityGuard'
 import { AgentThreadService, hostThreadRequest } from './background/agentThreads'
 import { describeValidationError } from './validation'
 import { RemoteThreads } from './background/remoteThreads'
@@ -644,6 +647,12 @@ const pullRequestDrafts = new PullRequestDrafts(
   agents,
   () => send('workspace:changed', {}),
   (repoId) => pullRequestIndex.viewer(repoId),
+)
+const pullRequestWrites = new PullRequestWrites(
+  workspace,
+  agents,
+  () => send('workspace:changed', {}),
+  (taskId, cwd, action) => guardForge({ identities, workspace, agents }, taskId, cwd, action),
 )
 pullRequestIndex.drafts = () => pullRequestDrafts.list()
 pullRequestWatches.drafts = pullRequestDrafts
@@ -1320,6 +1329,7 @@ const dispatcher = createDispatcher(
     localApps,
     pullRequestIndex,
     pullRequestDrafts,
+    pullRequestWrites,
     recaps,
     reviews,
     memory,
@@ -1741,6 +1751,7 @@ const mcpHttp = createServer(async (req, res) => {
   if (!review) registerTestDeviceTools(server, source, () => agents.get(source.id))
   if (!review) externalSkills.register(server, agents, source.id)
   if (!review) pullRequestWatches.register(server, source.id)
+  if (!review) registerPullRequestTools(server, source.id, pullRequestWrites, agents, workspace)
   if (!review) agentThreads.register(server, source.id)
   const deployProject = workspace.getTask(source.taskId).projectId
   if (!review && deployProject && deployProject !== NO_PROJECT)
