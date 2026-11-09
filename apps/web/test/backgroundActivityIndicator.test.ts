@@ -26,6 +26,7 @@ vi.mock('../src/workspace/computers', () => ({
 vi.mock('../src/chat/notificationCenter', () => ({
   useNotices: () => state.missed,
   notices: { clear: state.clear, remove: vi.fn() },
+  useStatusPanel: () => () => {},
 }))
 vi.mock('../src/components/desktop-button', () => ({
   Button: (props: (typeof state.buttons)[number]) => {
