@@ -1436,12 +1436,6 @@ export interface RamuMethods extends ArtifactMethods {
   'forge.allPullRequests'(includeClosed: boolean, force: boolean): import('./types').RepositoryPullRequests[]
   /** The pull request's description as Markdown, for its full view. */
   'forge.pullRequestDescription'(taskId: string, repoId: string, url: string): string
-  /** The files the pull request changes with their diffs; null where the service is not supported yet. */
-  'forge.pullRequestFiles'(
-    taskId: string,
-    repoId: string,
-    url: string,
-  ): { files: import('./types').PullRequestFile[]; more: boolean } | null
   'forge.mergeOptions'(taskId: string, repoId: string, url: string): import('./types').MergeOptions
   /** Merge, close, reopen, mark ready or update the branch. Never available to agents. */
   'forge.pullRequestAction'(
