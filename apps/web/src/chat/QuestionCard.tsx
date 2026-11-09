@@ -54,7 +54,7 @@ export function QuestionDock({
         variant="ghost"
         size="icon-xs"
         className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)"
-        aria-label={t('Previous question request')}
+        aria-label={t('Previous question')}
         disabled={index === 0}
         onClick={() => setCurrentId(requests[index - 1]!.requestId)}
       >
@@ -67,7 +67,7 @@ export function QuestionDock({
         variant="ghost"
         size="icon-xs"
         className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center small-icon p-0 size-(--action-compact)"
-        aria-label={t('Next question request')}
+        aria-label={t('Next question')}
         disabled={index === requests.length - 1}
         onClick={() => setCurrentId(requests[index + 1]!.requestId)}
       >
@@ -247,7 +247,7 @@ function QuestionForm({
         {questions.length > 1 && (
           <p className="muted text-muted-foreground small text-caption question-dock-note m-0">
             {together
-              ? t('These questions are related; send their answers together.')
+              ? t('These questions are related. Send their answers together.')
               : t('Each answer can be sent separately.')}
           </p>
         )}

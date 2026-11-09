@@ -602,7 +602,7 @@ function WorkspaceSearch({ taskId }: { taskId: string }) {
       </div>
       {replaceOpen && result.limited && (
         <p className="text-caption text-muted-foreground mb-2">
-          {t('Search shows the first 500 matches. Replace all applies to every match, including those not displayed.')}
+          {t('Search shows the first 500 matches. Replace all changes every match, including hidden ones.')}
         </p>
       )}
       {replaceError && !replaceConfirmation && (

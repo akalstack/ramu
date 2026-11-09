@@ -347,7 +347,7 @@ export class BrowserRuntime {
             () =>
               reject(
                 new Error(
-                  'The new browser page did not finish loading. Its tab was closed; inspect the website before trying again.',
+                  'The new browser page did not finish loading, so its tab was closed. Check the website before trying again.',
                 ),
               ),
             15000,
@@ -592,7 +592,7 @@ export class BrowserRuntime {
         if (partition === tab.partition) this.temporaryPartitions.delete(key)
       const failed = () => {
         this.cleanupWarning =
-          'Temporary browser data cleanup failed. Its closed context will not be reused; restart Ramu to release it.'
+          'Could not clean up temporary browser data. It will not be reused. Restart Ramu to release it.'
         this.changed()
       }
       try {

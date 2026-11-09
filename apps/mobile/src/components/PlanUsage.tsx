@@ -48,7 +48,7 @@ export function PlanUsageReading({
       ? r.source === 'notice'
         ? language === 'id'
           ? 'Batas dilaporkan; penggunaan tidak tersedia'
-          : 'Limit reported; usage unavailable'
+          : 'Limit reported, usage unavailable'
         : language === 'id'
           ? 'Tidak dilaporkan'
           : 'Not reported'

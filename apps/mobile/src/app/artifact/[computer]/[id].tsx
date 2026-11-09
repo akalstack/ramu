@@ -144,6 +144,9 @@ export default function PageScreen() {
   const viewer = store.computers.find((x) => x.id === computerId)?.access === 'viewer'
   const [page, setPage] = useState<ArtifactInfo | null>(null)
   const [shared, setShared] = useState<Shared | null>(null)
+  // The editing share link's token: a string, so live editing restarts only when the link changes, not whenever the
+  // page reloads and makes a new share object.
+  const shareEditor = shared?.editor ? shared.token : null
   const [document, setDocument] = useState<InteractiveDocument | null>(() =>
     pageCopy(contentStorage, computerId, artifactId),
   )
@@ -196,7 +199,7 @@ export default function PageScreen() {
     let live = true
     partNow.current = null
     seenText.current = null
-    const token = shared?.editor ? shared.token : null
+    const token = shareEditor
     const mark = () => {
       const current = editingNowRef.current
       if (current) {
@@ -227,7 +230,7 @@ export default function PageScreen() {
       ).catch(() => {})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- marks once per opened editor; the store object changes on every update
-  }, [editingAny, computerId, artifactId, shared])
+  }, [editingAny, computerId, artifactId, shareEditor])
   // Live typing: the text is synced with the host's shared copy about once a second, so others' words appear as
   // they type them; the host saves a version once nobody types for a minute, or Save does.
   const editingNow = useRef(editing)
@@ -237,7 +240,7 @@ export default function PageScreen() {
     let stopped = false
     let editor: LiveTextEditor | null = null
     let busy = false
-    const token = shared?.editor ? shared.token : null
+    const token = shareEditor
     const textOf = (value: NonNullable<typeof editing>) =>
       value.blocks ? withDocBlocks(value.text, value.blocks) : value.text
     const opened = editingNow.current ? textOf(editingNow.current) : ''
@@ -296,7 +299,7 @@ export default function PageScreen() {
       clearInterval(timer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- syncs once per opened editor; the store object changes on every update
-  }, [editingText, computerId, artifactId, shared])
+  }, [editingText, computerId, artifactId, shareEditor])
   const field = {
     color: c.text,
     fontSize: font.control,
@@ -326,7 +329,7 @@ export default function PageScreen() {
     const inOrder = (current: NonNullable<typeof editingSlides>) =>
       current.slides.every((slide, index) => slide.from === index)
     const opened = slidesNow.current ? deckText(slidesNow.current.slides) : ''
-    const token = shared?.editor ? shared.token : null
+    const token = shareEditor
     void (
       token
         ? store.invoke(computerId, 'artifacts.shareLiveJoin', token)
@@ -373,7 +376,7 @@ export default function PageScreen() {
       clearInterval(timer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- syncs once per opened editor; the store object changes on every update
-  }, [editingDeck, computerId, artifactId, shared])
+  }, [editingDeck, computerId, artifactId, shareEditor])
   // A design's frame words while the person edits them, one list per frame, and the version they started from.
   const [editingDesign, setEditingDesign] = useState<{
     base: number

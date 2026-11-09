@@ -54,7 +54,7 @@ export function LocalAppSection({ projectId, repoId }: { projectId: string; repo
       <strong>{t('Run on this computer')}</strong>
       <p className="m-0 text-caption text-muted-foreground">
         {t(
-          'For demos and home use: the app runs in a Docker container here and gets a public address of its own, which reaches only the app. It is offline while this computer sleeps or Ramu is not running.',
+          'For demos and home use. The app runs in a Docker container here and gets its own public address, which reaches only the app. It goes offline while this computer sleeps or Ramu is not running.',
         )}
       </p>
       {on && (

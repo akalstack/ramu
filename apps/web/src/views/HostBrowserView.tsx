@@ -521,7 +521,7 @@ export function HostBrowserView({
               value={uploadPath}
               maxLength={4000}
               onChange={(event) => setUploadPath(event.target.value)}
-              placeholder={t('Relative workspace file (maximum 8 MiB)')}
+              placeholder={t('Workspace file path (up to 8 MiB)')}
             />
             <Button size="sm" disabled={busy || !uploadPath || !uploadRef}>
               {t('Upload')}

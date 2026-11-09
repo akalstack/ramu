@@ -31,7 +31,7 @@ export function ContinueChatDialog({
       <p>
         {worktree
           ? translate(
-              'Start a new thread on a new branch in its own worktree, with the current conversation and a copy of the uncommitted changes, new files included. This checkout keeps its changes.',
+              'Start a new thread on a new branch in its own worktree. It gets this conversation and a copy of the uncommitted changes, new files included. This checkout keeps its changes.',
             )
           : translate('Start a new thread in this checkout using the current conversation as context.')}
       </p>

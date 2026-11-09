@@ -51,7 +51,7 @@ export function SummarySettings({ value, onChange, hasChanges }: Props) {
         <SettingsLabel
           title={t('Summary')}
           help={t(
-            'A short, read-only account of the memories and skills Ramu saved, merged or archived on its own, so you do not have to read them one by one. Uses model tokens only when something changed.',
+            'A short, read-only summary of the memories and skills Ramu saved, merged or archived on its own. Uses model tokens only when something changed.',
           )}
         />
         <Dropdown
@@ -145,7 +145,7 @@ export function SummarySettings({ value, onChange, hasChanges }: Props) {
       {paged.more}
       {snapshot && !snapshot.summaries.length && (
         <p className="muted text-muted-foreground small text-caption py-3">
-          {t('No summaries yet. The first one appears after a period with something new to report.')}
+          {t('No summaries yet. The first appears once there is something new to report.')}
         </p>
       )}
     </div>

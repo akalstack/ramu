@@ -59,7 +59,7 @@ export function UsageSection({ projectId }: { projectId: string }) {
           ))}
           {report.figures.length > 0 && report.figures.every((figure) => !figure.limit) && (
             <span className="text-muted-foreground">
-              {t('{0}’s API reports no plan limits; Open billing shows them.', { 0: report.name })}
+              {t('{0}’s API does not report plan limits. Open billing to see them.', { 0: report.name })}
             </span>
           )}
           {report.unavailable && <span className="text-muted-foreground">{report.unavailable}</span>}

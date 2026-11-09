@@ -130,12 +130,12 @@ export function ContinueOnHostSheet({
           : null}
         {pack?.problem === 'several-repositories'
           ? line(
-              say('A multi-repository workspace must already exist on that host, and this one cannot be matched yet.'),
+              say('A multi-repository workspace must already exist on that host. This one has no match there yet.'),
               'bad',
             )
           : null}
         {pack?.problem === 'no-agent' ? line(say('This thread has no conversation to continue yet.'), 'bad') : null}
-        {pack?.running ? line(say('Stop this thread first. A running agent never moves.'), 'bad') : null}
+        {pack?.running ? line(say('Stop this thread first. A running agent cannot move.'), 'bad') : null}
         {repo
           ? line(
               repo.pushed

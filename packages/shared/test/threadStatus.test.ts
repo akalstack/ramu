@@ -27,7 +27,7 @@ describe('threadStatus', () => {
         task({ inputSummary: { count: 1, approvals: 1, requests: [] } as never, status: 'needs-input' }),
         false,
       )?.next,
-    ).toBe('Allow or deny it to let the agent go on.')
+    ).toBe('Allow or deny to let the agent continue.')
     expect(threadStatus(task({ status: 'running' }), false)?.next).toBeUndefined()
     expect(threadStatus(task(), true)?.next).toBeUndefined()
   })

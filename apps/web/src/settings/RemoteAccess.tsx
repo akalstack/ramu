@@ -125,7 +125,7 @@ export function RemoteAccessSettings() {
         title={t('Let other devices use this host')}
         help={
           here?.local === false
-            ? t('You are looking at {0}. Who can connect to a host is set on that host.', { 0: here.name })
+            ? t('You are looking at {0}. Who can connect is set on that host.', { 0: here.name })
             : t(
                 'Phones and your other computers connect once paired: on your network, over a VPN, or from anywhere through your own tunnel.',
               )
@@ -147,13 +147,12 @@ const REACH_LABEL: Record<ReachMode, string> = {
   manual: 'My own tunnel address',
 }
 const REACH_HELP: Record<ReachMode, string> = {
-  off: 'Devices reach this host on your network or VPN. Choose a tunnel to reach it from anywhere else too.',
+  off: 'Devices reach this host on your network or VPN. Choose a tunnel to reach it from anywhere.',
   quick:
-    'Ramu starts Cloudflare’s quick tunnel: no account needed. Its address changes each time Ramu starts, so it suits trying things out. Cloudflare can read what passes through it.',
+    'Ramu starts a Cloudflare quick tunnel. No account needed. The address changes each time Ramu starts, so it suits trying things out. Cloudflare can read the traffic.',
   tailscale:
-    'Ramu turns on Tailscale Funnel for this machine, with an address that stays the same. Funnel must be allowed for it in your Tailscale settings. Tailscale can read what passes through it.',
-  ngrok:
-    'Ramu runs ngrok with your account: run ngrok config add-authtoken once. ngrok can read what passes through it.',
+    'Ramu turns on Tailscale Funnel for this machine, with an address that stays the same. Allow Funnel for it in your Tailscale settings. Tailscale can read the traffic.',
+  ngrok: 'Ramu runs ngrok with your account. Run ngrok config add-authtoken once first. ngrok can read the traffic.',
   manual:
     'For a tunnel you run yourself, such as a named Cloudflare Tunnel, pointed at port {0} on this computer. Paste its https:// address.',
 }
@@ -207,7 +206,7 @@ function TunnelState({ status, mode, staged }: { status: NetworkStatus; mode: Re
   if (tunnel.state === 'failed')
     return (
       <p className={`${line} text-warn`} role="status">
-        {t('The tunnel stopped: {0}. Ramu tries again shortly.', { 0: tunnel.error ?? tool })}
+        {t('The tunnel stopped: {0}. Ramu will try again shortly.', { 0: tunnel.error ?? tool })}
       </p>
     )
   return (
@@ -351,7 +350,7 @@ function ThisComputer() {
           {listening
             ? t('Listening on {0}', { 0: listening.replace(/^https?:\/\//, '') })
             : status.error
-              ? t('Cannot listen on {0}:{1} ({2}). Local use is unaffected; Ramu keeps retrying.', {
+              ? t('Cannot listen on {0}:{1} ({2}). Local use still works, and Ramu keeps retrying.', {
                   0: status.host,
                   1: status.port,
                   2: status.error,
@@ -367,7 +366,7 @@ function ThisComputer() {
               <SettingsLabel
                 title={t('Network')}
                 help={t(
-                  'Devices nearby or on your VPN connect on this network. Choose your VPN to keep Ramu off other networks.',
+                  'Nearby devices or devices on your VPN connect on this network. Choose your VPN to keep Ramu off other networks.',
                 )}
               />
               <Dropdown
@@ -540,7 +539,7 @@ function ThisComputer() {
               <SettingsLabel
                 title={t('Keep devices paired')}
                 help={t(
-                  'A device that is not used for this long must be paired again. Using it renews the time. Changes apply the next time each device connects.',
+                  'A device unused for this long must be paired again. Each use resets the timer. Changes apply when each device next connects.',
                 )}
               />
               <Dropdown
@@ -583,7 +582,7 @@ function ThisComputer() {
             setRevoking(null)
           }}
         >
-          <p>{t('It stops working right away and has to be paired again to reconnect.')}</p>
+          <p>{t('It stops working right away and must be paired again to reconnect.')}</p>
         </ConfirmDialog>
       )}
       {pairing && (
@@ -701,7 +700,7 @@ function PairDialog({ onClose }: { onClose: () => void }) {
           {!joined && (
             <DialogDescription>
               {t(
-                'On the other device open Ramu and choose this host under Nearby hosts; you will be asked to allow it when both show the same number. Or enter one of these addresses and the code.',
+                'On the other device, open Ramu and choose this host under Nearby hosts. You are asked to allow it when both show the same number. Or enter one of these addresses and the code.',
               )}
             </DialogDescription>
           )}
@@ -727,7 +726,7 @@ function PairDialog({ onClose }: { onClose: () => void }) {
             <p className="muted text-muted-foreground">
               {t(joined.role === 'viewer' ? 'View threads and answer requests' : 'Full access')}
               {' · '}
-              {t('It can now use this host. You can revoke it any time from Devices that can use this host.')}
+              {t('It can now use this host. You can revoke it any time under Devices that can use this host.')}
             </p>
           ) : (
             offer && (
@@ -1044,7 +1043,7 @@ function Computers({ state }: { state: ComputerList }) {
               {computer.grantedUnreachable && (
                 <p role="status" className="m-[6px_0_0] text-caption text-muted-foreground">
                   {t(
-                    'Paired, but this host has not answered yet. Ramu keeps the access and connects when it is reachable; you do not need the code again.',
+                    'Paired, but this host has not answered yet. Ramu keeps the access and connects when the host is reachable. You do not need the code again.',
                   )}
                 </p>
               )}
@@ -1172,7 +1171,7 @@ function InviteBackDialog({ computer, from, onClose }: { computer: Computer; fro
                   { 0: computer.name },
                 )
               : t(
-                  '{0} will be able to open this computer’s threads, files and terminals, with full access. Ramu asks on {0} first; nothing connects until its owner accepts.',
+                  '{0} will be able to open this computer’s threads, files and terminals, with full access. Ramu asks on {0} first, and nothing connects until its owner accepts.',
                   { 0: computer.name },
                 )}
           </DialogDescription>
@@ -1396,7 +1395,7 @@ function AddHostDialog({ link, repair, onClose }: { link?: string; repair?: Comp
               <p className="m-0 text-caption text-muted-foreground">
                 {ssh
                   ? t(
-                      'Connects through SSH with your keys and ~/.ssh/config. Ramu must already be installed on that host; it is started there if it is not running, and no port is opened to the network.',
+                      'Connects over SSH with your keys and ~/.ssh/config. Ramu must already be installed on that host. Ramu starts it there if needed, and no port is opened to the network.',
                     )
                   : t(
                       'On that host, open Remote access and choose Pair a device. Paste its link, or type its address and code.',
@@ -1566,7 +1565,7 @@ function ComputerSettings({ computer, onClose }: { computer: Computer; onClose: 
                 <strong className="text-body font-medium">{t('Keep connected')}</strong>
                 <span className="block mt-1 text-caption text-muted-foreground">
                   {t(
-                    'Turn off to pause this connection without forgetting it. No retries or announcements are used while paused.',
+                    'Turn off to pause this connection without forgetting it. Ramu stops retrying and listening for announcements while paused.',
                   )}
                 </span>
               </span>
@@ -1588,15 +1587,15 @@ function ComputerSettings({ computer, onClose }: { computer: Computer; onClose: 
             <p className="m-0 text-caption text-muted-foreground">
               {retryMode === 'events'
                 ? t(
-                    'Waits for a network change, waking from sleep, a signed host announcement, or Retry. No periodic connection checks.',
+                    'Waits for a network change, wake from sleep, a signed host announcement, or Retry. No periodic checks.',
                   )
                 : t(
-                    'Uses the same wake-up signals and a quiet five-minute check if an announcement cannot reach this device.',
+                    'Uses the same signals, plus a quiet check every five minutes in case announcements cannot reach this device.',
                   )}
             </p>
             <p className="m-0 text-caption text-muted-foreground">
               {t(
-                'Host announcements need a reachable LAN or VPN path. If your network blocks them, use Retry or enable five-minute checks.',
+                'Host announcements need a LAN or VPN path. If your network blocks them, use Retry or turn on five-minute checks.',
               )}
             </p>
             {computer.status === 'connected' && (
@@ -1735,7 +1734,7 @@ function PairedDeviceRow({
           <div className={SETTINGS_CARD_LINE}>
             <SettingsLabel
               title={t('Most access for its threads')}
-              help={t('Threads this host’s agents start here never get more, whatever they ask for.')}
+              help={t('Threads this host’s agents start here never get more access, whatever they ask for.')}
             />
             <HostCeiling deviceId={device.id} value={device.maxAccess ?? 'edits'} invoke={invoke} />
           </div>

@@ -493,7 +493,7 @@ export default function PullRequestScreen() {
               {pr.fork && !mine && open ? (
                 <T size={font.caption} tone="muted">
                   {say(
-                    'This pull request comes from a fork: an agent can review it here, but pushing to it needs its author.',
+                    'This pull request comes from a fork. An agent can review it here, but only its author can push to it.',
                   )}
                 </T>
               ) : null}

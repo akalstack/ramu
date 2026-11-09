@@ -115,7 +115,7 @@ export function registerBackgroundTerminalTools(
         throw new Error(
           'No verified process handle is available. Inspect saved output and verify the command on its host; it cannot be stopped through this record.',
         )
-      if (force && command.state === 'running') throw new Error('Request graceful stop before force stop.')
+      if (force && command.state === 'running') throw new Error('Try a normal stop before force stop.')
       if (force && !command.capabilities.forceStop) throw new Error('Force stop is unavailable on this host.')
       return result(terminals.stopBackground(session.taskId, id, force))
     },

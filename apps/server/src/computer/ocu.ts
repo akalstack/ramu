@@ -34,7 +34,7 @@ export function explained(message: string): string {
     return 'Another app on this Mac is using Open Computer Use behind the lock screen (for example another agent tool). Quit it or remove its Open Computer Use server, then unlock the Mac once.'
   // Its own words for the login window (Fast User Switching, or the lock screen's account list) on the screen.
   if (/no completed gui session|cannot operate a login, switched-user/i.test(message))
-    return 'This Mac is showing its login window, so its apps cannot be used from Ramu: macOS lets only system software, such as Screen Sharing, sign in there. Sign in at the Mac or with Screen Sharing, then try again.'
+    return 'This Mac is showing its login window, so its apps cannot be used from Ramu. macOS lets only system software, such as Screen Sharing, sign in there. Sign in at the Mac or with Screen Sharing, then try again.'
   if (/locked use (is unavailable|stopped)|no active locked use lease/i.test(message))
     return 'Unlock this Mac once. Working behind the lock screen can only begin after a normal unlock, and it ended when Open Computer Use restarted. It continues through later locks.'
   return message

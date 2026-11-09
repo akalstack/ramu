@@ -690,7 +690,7 @@ export function ComputerActivity({ state }: { state: ComputerActivityState }) {
                     {
                       key: 'stop-agent',
                       label: t('Stop the agent'),
-                      title: t('Stops the agent’s work in this thread; access to the computer stays.'),
+                      title: t('Stops the agent’s work in this thread. Access to the computer stays.'),
                       onSelect: () => void run(() => invoke('computer.stop', taskId)),
                     },
                     {
@@ -794,7 +794,7 @@ export function ComputerGrantDialog({ state }: { state: ComputerActivityState })
           <DialogTitle>{t('Computer')}</DialogTitle>
           <DialogDescription>
             {t(
-              'Allow this thread to see and control your main display. Revoke it any time. Ramu cannot tell when you use your own mouse or keyboard, so choose Take control before you do.',
+              'Allow this thread to see and control your main display. You can revoke it any time. Ramu cannot tell when you use your own mouse or keyboard, so choose Take control first.',
             )}
           </DialogDescription>
         </DialogHeader>
@@ -826,7 +826,7 @@ export function ComputerGrantDialog({ state }: { state: ComputerActivityState })
                 {locked && (
                   <p className="m-0 basis-full text-caption text-muted-foreground" role="status">
                     {t(
-                      'This Mac is locked, so its main display cannot be used. Allow one app: with “Keep working while the screen is locked” on, the agent works in it behind the lock screen.',
+                      'This Mac is locked, so its main display cannot be used. Allow one app instead. With “Keep working while the screen is locked” on, the agent works in it behind the lock screen.',
                     )}
                   </p>
                 )}

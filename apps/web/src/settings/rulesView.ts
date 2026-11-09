@@ -27,8 +27,8 @@ export function scopeCostLine(cost: RuleScopeCost, scopeName: string): string {
 export function duplicateNote(duplicate: RuleDuplicate, rules: Pick<Rule, 'id' | 'name'>[]): string {
   const names = duplicate.others.map((id) => rules.find((rule) => rule.id === id)?.name ?? id).join(', ')
   return duplicate.kind === 'text'
-    ? t('Same text as {0}. Both apply; turn one off or delete it.', { '0': names })
-    : t('Same name as {0}. Both apply; rename one or turn it off.', { '0': names })
+    ? t('Same text as {0}. Both apply, so turn one off or delete it.', { '0': names })
+    : t('Same name as {0}. Both apply, so rename one or turn it off.', { '0': names })
 }
 
 /** A rule's activation as short text for its card and the filter. */

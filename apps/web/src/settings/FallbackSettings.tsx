@@ -569,14 +569,14 @@ export function AdvisorSettings({
     <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0 advisor-settings mt-8">
       <SettingsGroupTitle>{t('Advisor')}</SettingsGroupTitle>
       <p className="muted text-muted-foreground small text-caption">
-        {t('Consult a second model before key decisions or when the agent is stuck.')}
+        {t('Ask a second model before key decisions or when the agent is stuck.')}
       </p>
       <SettingsRow setting="advisor.enabled" className="settings-toggle">
         <span>
           <SettingsTitle>{t('Advisor')}</SettingsTitle>
           <span className="muted text-muted-foreground block block small text-caption">
             {t(
-              'Send the thread transcript to the advisor model. Uses model tokens. Applies when a thread starts or restarts.',
+              'Sends the thread transcript to the advisor model and uses model tokens. Applies when a thread starts or restarts.',
             )}
           </span>
         </span>
@@ -603,7 +603,7 @@ export function AdvisorSettings({
         <span>
           <SettingsTitle>{t('Always wait for advice')}</SettingsTitle>
           <span className="muted text-muted-foreground block block small text-caption">
-            {t('Pause until advice arrives. When off, the agent can continue independent work.')}
+            {t('Pause until advice arrives. When off, the agent keeps working on other things.')}
           </span>
         </span>
         <Switch

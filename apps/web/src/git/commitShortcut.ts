@@ -23,7 +23,7 @@ export interface CommitTarget {
 }
 
 const SEVERAL = () =>
-  t('Several repositories have changes. Click into one in Source Control, then press the shortcut again.')
+  t('Several repositories have changes. Click one in Source Control, then press the shortcut again.')
 const NOTHING = () => t('There is nothing to commit.')
 
 /** Staged changes win; with nothing staged anywhere, any repository with changes counts. Focus picks between several. */
@@ -105,7 +105,7 @@ export async function commitAndPush(
   if (!plan) return
   const branchOptions = plan.branch
   if ((branchOptions.newBranch || branchOptions.autoBranch) && Object.values(ws.dirty).some(Boolean))
-    return showScm(t('Save or close unsaved editor buffers before changing files or branches.'))
+    return showScm(t('Save or close unsaved files before changing files or branches.'))
   let pushedTo = status.branch!
   const run = async () => {
     await applyCommitScope(ctx, binding.repoId, status, plan.paths, hostInvoke)

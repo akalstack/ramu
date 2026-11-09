@@ -29,7 +29,7 @@ export function AgentHosts() {
       <SettingsSectionHead
         title={t('Hosts added for agents')}
         help={t(
-          'Agents here may start threads on these hosts. They were added with ramu hosts add, so they have no row above.',
+          'Agents here can start threads on these hosts. They were added with ramu hosts add, so they have no row above.',
         )}
       />
       <SettingsCardList>

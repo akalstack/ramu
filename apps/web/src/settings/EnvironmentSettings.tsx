@@ -175,7 +175,7 @@ export function EnvironmentSettings({
       {environment.readOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
       <p className="muted text-muted-foreground small text-caption">
         {t(
-          'Added to the agent processes Ramu starts on this host, over your shell environment. Values are kept in the host’s credential store. New threads use changes; running threads keep theirs.',
+          'Added to agent processes Ramu starts on this host, overriding your shell environment. Values are kept in the host’s credential store. New threads get changes, and running threads keep theirs.',
         )}
       </p>
       {error && (

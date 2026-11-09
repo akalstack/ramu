@@ -185,7 +185,7 @@ export function AgentContentView({
                 {t('Terminal')} {item.terminalId}
               </span>
               <pre className="m-0 whitespace-pre-wrap break-words font-mono">
-                {item.output ?? t('The provider supplied a terminal reference without output.')}
+                {item.output ?? t('The provider sent a terminal reference with no output.')}
               </pre>
             </div>
           ) : item.type === 'resource' ? (

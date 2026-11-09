@@ -66,7 +66,7 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
         {...toggleProps}
         setting="agentThreads"
         title="Let agents start threads"
-        description="Agents can start threads in this project, other projects and hosts added for agents, and a paired host's agents can start threads here. Sub-agents are not affected. Turn off to start threads only yourself."
+        description="Agents can start threads in this project, other projects and hosts added for agents. A paired host's agents can also start threads here. Sub-agents are not affected. Turn off so only you start threads."
       />
       <ToggleRow
         {...toggleProps}
@@ -78,7 +78,7 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
         {...toggleProps}
         setting="liveViewDesktop"
         title="Float on desktop"
-        description="Browser, Computer and test device trays get Float: a small live view in a corner, or a window above other apps, with Stop always in reach."
+        description="Browser, Computer and test device trays can float as a small live view in a corner or a window above other apps. Stop stays in reach."
       />
       <ToggleRow
         {...toggleProps}

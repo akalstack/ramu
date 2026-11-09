@@ -125,7 +125,7 @@ export function SlideToolbar({
         variant="ghost"
         className={GHOST_TEXT_BUTTON_CLASS}
         disabled={disabled}
-        title={t('Show one slide at a time on the whole screen. Escape stops.')}
+        title={t('Show one slide at a time, full screen. Press Escape to stop.')}
         onClick={present}
       >
         <Presentation size={13} /> {t('Present')}

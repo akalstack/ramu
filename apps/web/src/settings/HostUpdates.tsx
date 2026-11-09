@@ -181,7 +181,7 @@ export function UpdateAllHosts({ computers }: { computers: Computer[] }) {
           <p className="m-0 text-caption text-muted-foreground">
             {[
               t(
-                'Provider CLIs update on each host, then Ramu installs where a newer release exists and restarts there.',
+                'Provider CLIs update on each host. Ramu then updates on hosts with a newer release and restarts there.',
               ),
               running
                 ? t(

@@ -50,11 +50,11 @@ export function parseScreenState(registry: string, uid: number): ScreenState {
 // macOS keeps screen capture and posted input away from the lock screen, so the whole display waits for an unlock.
 // Open Computer Use's Locked Use reaches one app behind it, which is what an app grant uses.
 export const LOCKED_MESSAGE =
-  'This Mac is locked, so its main display cannot be seen or controlled. Unlock it, or allow one app instead: with “Keep working while the screen is locked” on, work in an app continues behind the lock screen.'
+  'This Mac is locked, so its main display cannot be seen or controlled. Unlock it, or allow one app instead. With “Keep working while the screen is locked” on, work in that app continues behind the lock screen.'
 
 // The login window belongs to macOS itself; only system software such as Screen Sharing can type into it.
 export const AWAY_MESSAGE =
-  'This Mac is showing its login window, so its main display cannot be seen or controlled from Ramu: macOS lets only system software, such as Screen Sharing, type there. Sign in at the Mac or with Screen Sharing, then open the display again.'
+  'This Mac is showing its login window, so its main display cannot be seen or controlled from Ramu. macOS lets only system software, such as Screen Sharing, type there. Sign in at the Mac or with Screen Sharing, then open the display again.'
 
 /** The main display. App- and window-scoped confinement needs a driver that can enforce it, so it is not claimed. */
 export const MAIN_DISPLAY: ComputerTarget = { id: 'display:main', kind: 'display', name: 'Main display' }

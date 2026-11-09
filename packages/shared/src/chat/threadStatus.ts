@@ -47,9 +47,14 @@ export function threadStatus(
           kind: 'approval',
           short: 'Approval',
           full: 'Approval needed',
-          next: 'Allow or deny it to let the agent go on.',
+          next: 'Allow or deny to let the agent continue.',
         }
-      : { kind: 'input', short: 'Needs input', full: 'Waiting for your input', next: 'Answer to let the agent go on.' }
+      : {
+          kind: 'input',
+          short: 'Needs input',
+          full: 'Waiting for your input',
+          next: 'Answer to let the agent continue.',
+        }
   // Independent helper work keeps the thread working after its parent goes idle, even before the stored status catches up.
   if (task.status === 'running' || (task.helperSummary?.active && task.status !== 'needs-input')) {
     if (goalHold(unfinished) === 'provider-limit') return limit
@@ -64,7 +69,7 @@ export function threadStatus(
       kind: 'input',
       short: 'Needs input',
       full: 'Waiting for your input',
-      next: 'Answer to let the agent go on.',
+      next: 'Answer to let the agent continue.',
     }
   if (task.waitingUntil || goalHold(unfinished) === 'provider-limit') return limit
   if (task.status === 'failed')

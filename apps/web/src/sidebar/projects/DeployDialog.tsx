@@ -184,7 +184,7 @@ export function DeployDialog({
           {cliAccount && (
             <p role="status" className="m-0 mb-3 text-caption">
               {t(
-                '{0} is recommended for this project’s stack. It deploys through its own CLI: ask the project’s agent to deploy it, and Ramu runs the CLI with your {0} account and asks before each command that changes anything.',
+                '{0} is recommended for this project’s stack. It deploys through its own CLI. Ask the project’s agent to deploy, and Ramu runs the CLI with your {0} account, asking before each command that changes anything.',
                 { 0: cliAccount.name },
               )}{' '}
               {cliAccount.connected && t('Connected as {0}', { 0: cliAccount.account ?? cliAccount.name })}

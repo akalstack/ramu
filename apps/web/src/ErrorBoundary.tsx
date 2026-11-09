@@ -66,7 +66,7 @@ function CrashScreen({ error, app, onRetry }: { error: Error; app: boolean; onRe
           <EmptyDescription className="text-control">
             {app
               ? t('Ramu hit an unexpected error. Your threads and files are safe.')
-              : t('This view hit an unexpected error. The rest of Ramu still works.')}
+              : t('Something went wrong in this view. The rest of Ramu still works.')}
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>

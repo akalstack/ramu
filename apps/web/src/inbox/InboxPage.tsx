@@ -163,7 +163,7 @@ function CurrentHostInbox() {
                 <Nothing
                   icon={<Loader />}
                   title={t('No agents running')}
-                  detail={t('Threads and sub-agents that are working, or waiting for a usage limit, show up here.')}
+                  detail={t('Threads and sub-agents that are working or waiting on a usage limit appear here.')}
                 />
               ))}
           </TabsContent>
@@ -228,7 +228,7 @@ function CurrentHostInbox() {
                     title={t('No recaps yet')}
                     detail={
                       recaps.enabled
-                        ? t('A daily recap summarizes what your threads did and what is left.')
+                        ? t('A daily recap shows what your threads did and what is left.')
                         : t('Daily recaps are off. Turn them on in Settings → Background & Recaps.')
                     }
                   />
@@ -264,7 +264,7 @@ function CurrentHostInbox() {
                 {completed.length > 0 ? (
                   <p className="m-0 text-caption text-muted-foreground">
                     {t(
-                      'Showing threads finished in the last 7 days. Older threads stay in the sidebar, and Search finds all of them.',
+                      'Threads finished in the last 7 days. Older ones stay in the sidebar, and Search finds them all.',
                     )}
                   </p>
                 ) : (

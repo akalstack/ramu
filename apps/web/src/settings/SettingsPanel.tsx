@@ -292,7 +292,7 @@ export function SettingsPanel({
                   {...draftProps}
                   setting="modelCatalogLookups"
                   title="Look up model dates online"
-                  description="This host reads public model lists (models.dev and LiteLLM) once a day to tag new models and ones their provider is retiring or calls deprecated. Nothing about you is sent. Off, Ramu tags older versions as legacy on its own."
+                  description="Once a day, this host reads public model lists (models.dev and LiteLLM) to tag new models and ones their provider is retiring or has deprecated. Nothing about you is sent. When off, Ramu tags older versions as legacy itself."
                 />
               )}
               {page === 'models' && (
@@ -300,7 +300,7 @@ export function SettingsPanel({
                   {...draftProps}
                   setting="newModelNotices"
                   title="Tell me about new models"
-                  description="When a provider starts offering a model you have not had before, every device shows it once, and the model list tags it New."
+                  description="When a provider adds a model you have not had before, each device shows it once and the model list tags it New."
                 />
               )}
               {pageKeys && (

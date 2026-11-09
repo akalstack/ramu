@@ -1547,7 +1547,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           <p>
             {page.capabilities.records || page.capabilities.ai
               ? t(
-                  'This page keeps records or uses a model on this host, so it cannot go on the web as it is. A project can have its own database and server.',
+                  'This page keeps records or uses a model on this host, so it cannot go on the web as is. A project can have its own database and server.',
                 )
               : t('A project can have a backend, more files, sign-in and its own domain.')}
           </p>

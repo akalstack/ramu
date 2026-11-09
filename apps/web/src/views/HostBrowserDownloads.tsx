@@ -68,7 +68,7 @@ export function HostBrowserDownloads({
     >
       <p className="text-muted-foreground">
         {t(
-          'Downloads stay on the execution host. Save into a new relative workspace file; existing files are never overwritten.',
+          'Downloads stay on the execution host. Save to a new file path in the workspace. Existing files are never overwritten.',
         )}
       </p>
       <Button

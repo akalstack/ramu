@@ -49,7 +49,7 @@ export function LimitTrayRow({
   const tooltip = [
     `${title} · ${detail}`,
     wait.reason,
-    t('You can keep writing: messages you send now are queued and the wait stays. Stop clears the wait.'),
+    t('You can keep writing. Messages you send now are queued and the wait continues. Stop clears the wait.'),
   ]
     .filter(Boolean)
     .join('\n')
@@ -121,7 +121,7 @@ export function ProviderWaitNote({
 export function HostWaitNote({ name }: { name: string }) {
   useLanguage()
   const detail = t(
-    '{0} is not reachable. You can keep writing: messages wait on this device and are sent in order once it reconnects. They never interrupt a running turn.',
+    '{0} is not reachable. Keep writing: messages wait on this device and send in order when it reconnects. They never interrupt a running turn.',
     { '0': name },
   )
   return (

@@ -514,7 +514,7 @@ function describeWait(
             { label: 'Exit code', value: exit },
           ])
     case 'quiet':
-      return reply('Background command went quiet', running, 'terminal', subject, facts)
+      return reply('Background command stopped printing', running, 'terminal', subject, facts)
     case 'timeout':
       return reply('Stopped waiting', running, 'terminal', subject, facts)
     default:

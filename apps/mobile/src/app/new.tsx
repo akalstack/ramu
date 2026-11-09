@@ -545,7 +545,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
           <View style={{ flex: 1 }}>
             <T weight="500">{translate(store.language, 'Auto')}</T>
             <T size={font.caption} tone="muted">
-              {translate(store.language, 'Pick the project from your first message')}
+              {translate(store.language, 'Ramu picks the project from your first message')}
             </T>
           </View>
           {auto && projectId === null ? <Check size={16} color={c.accent} /> : null}

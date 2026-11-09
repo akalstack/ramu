@@ -118,7 +118,7 @@ export function NearbyHosts({
             ? t('Stopped searching after a while. Search again, enter an address or use SSH.')
             : !hosts.length
               ? t(
-                  'No hosts found. That does not mean none exist: a host appears here only when it has Discoverable on this network turned on, and some networks block discovery. Enter an address or use SSH instead.',
+                  'No hosts found. A host shows here only when Discoverable on this network is on, and some networks block discovery. Enter an address or use SSH instead.',
                 )
               : null
 
@@ -126,7 +126,7 @@ export function NearbyHosts({
     <div className="flex flex-col gap-3">
       <p className="m-0 text-caption text-muted-foreground">
         {t(
-          'Hosts on this network that chose to be found. Choose one to ask it to pair, then allow it on that host when both show the same number.',
+          'Hosts on this network that are discoverable. Choose one to pair, then allow it on that host when both show the same number.',
         )}
       </p>
       <p role="status" aria-live="polite" className="m-0 text-caption text-muted-foreground">
