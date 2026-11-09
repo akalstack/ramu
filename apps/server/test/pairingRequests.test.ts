@@ -123,3 +123,46 @@ it('shows a request at the host only after one reveal that matches the commitmen
   expect((await post(PAIR_REVEAL_PATH, { requestId: begun.body.requestId, key: keys.publicKey })).status).toBe(404)
   expect(pairing.list()).toEqual([])
 })
+
+it('a request the account relayed gets the host’s addresses sealed to that device', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-pair-relay-'))
+  try {
+    const devices = new DeviceStore(join(dir, 'devices.json'))
+    const pairing = new PairingRequests({
+      devices,
+      hostId: 'host-1',
+      accepting: (peer) => peer.startsWith('account:'),
+      addresses: () => ['https://home.example.ts.net', 'http://192.168.1.20:7788'],
+    })
+    const seen: unknown[] = []
+    const peer = 'account:device-a'
+    const answer = async (path: string, body: unknown) => {
+      seen.push(body)
+      if (path === PAIR_REQUEST_PATH) return { status: 200, body: pairing.begin(peer, body) }
+      if (path === PAIR_REVEAL_PATH) {
+        pairing.reveal(peer, body)
+        setTimeout(() => pairing.approve(pairing.list()[0]!.id, 'owner'), 10)
+        return { status: 200, body: { ok: true } }
+      }
+      const waited = await pairing.wait(peer, body)
+      seen.push(waited)
+      return { status: 200, body: waited }
+    }
+    const result = await requestPairing({
+      post: answer,
+      name: 'Phone',
+      random: (bytes) => new Uint8Array(randomBytes(bytes)),
+      onCode: () => {},
+      signal: new AbortController().signal,
+    })
+    expect(result.addresses).toEqual(['https://home.example.ts.net', 'http://192.168.1.20:7788'])
+    // What crossed the relay never names an address in the clear.
+    expect(JSON.stringify(seen)).not.toMatch(/ts\.net|192\.168/)
+    // A nearby device is not let in by the account's door.
+    expect(() =>
+      pairing.begin('192.168.1.50', { commit: pairCommit(pairKeys((n) => new Uint8Array(randomBytes(n))).publicKey) }),
+    ).toThrow(/not discoverable/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

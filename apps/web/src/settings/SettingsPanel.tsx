@@ -46,6 +46,7 @@ import { ToggleRow } from './ToggleRow'
 import { AgentSetup } from './AgentSetup'
 import { PluginSettings } from './Plugins'
 import { IdentitySettings } from './Identities'
+import { AccountSettings } from './AccountSettings'
 import { SettingsTransfer } from './SettingsTransfer'
 
 export function SettingsPanel({
@@ -233,6 +234,7 @@ export function SettingsPanel({
               {page === 'agent-setup' && <AgentSetup />}
               {page === 'plugins' && <PluginSettings />}
               {page === 'identities' && <IdentitySettings />}
+              {page === 'account' && <AccountSettings />}
               {page === 'system' && <SystemSettings {...draftProps} />}
               {page === 'appearance' && (
                 <AppearanceSettings {...draftProps} sizesReset={sizesReset} onResetSizes={() => setReset('sizes')} />

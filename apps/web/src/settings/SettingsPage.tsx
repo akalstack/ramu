@@ -24,6 +24,7 @@ import {
   Rocket,
   Target,
   Puzzle,
+  CircleUserRound,
   UsersRound,
   Variable,
   X,
@@ -56,6 +57,7 @@ const SECTION_ICONS: Record<SettingsMenuId, LucideIcon> = {
   'agent-setup': Plug,
   plugins: Puzzle,
   identities: UsersRound,
+  account: CircleUserRound,
   access: ShieldCheck,
   workflows: Target,
   memory: Brain,
@@ -109,6 +111,11 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
       'install marketplace index extension service integration railway fly cloudflare supabase grafana amplitude salesforce',
   },
   { section: 'plugins', title: 'Install from a source', words: 'git folder plugin.json claude code codex' },
+  {
+    section: 'account',
+    title: 'Ramu account',
+    words: 'sign in backup restore recovery code github gist your hosts pair',
+  },
   {
     section: 'identities',
     title: 'Identities',

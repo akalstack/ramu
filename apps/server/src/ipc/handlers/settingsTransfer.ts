@@ -15,10 +15,25 @@ import type { HandlerContext, RegisterHandlers } from '../types'
 
 const groups = z.array(z.enum(TRANSFER_GROUP_IDS as [TransferGroup, ...TransferGroup[]])).max(TRANSFER_GROUP_IDS.length)
 
-const models = (ctx: HandlerContext) => ctx.workspace.getAppState<ModelPreferences | null>('model-preferences', null)
+/** What an export reads: the IPC context, or the same pieces the host's account service holds. */
+export type TransferSources = Pick<
+  HandlerContext,
+  | 'loadPreferences'
+  | 'workspace'
+  | 'rules'
+  | 'identities'
+  | 'memory'
+  | 'deploys'
+  | 'getSharedMcp'
+  | 'plugins'
+  | 'hostBrowser'
+>
+
+const models = (ctx: Pick<HandlerContext, 'workspace'>) =>
+  ctx.workspace.getAppState<ModelPreferences | null>('model-preferences', null)
 
 /** This host's portable settings, in the groups asked for. */
-async function exportSettings(ctx: HandlerContext, chosen: TransferGroup[]): Promise<SettingsExport> {
+export async function exportSettings(ctx: TransferSources, chosen: TransferGroup[]): Promise<SettingsExport> {
   const file: SettingsExport = {
     format: 'ramu-settings',
     version: 1,

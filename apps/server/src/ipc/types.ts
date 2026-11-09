@@ -40,6 +40,8 @@ export interface Services {
   plugins?: import('../plugins/service').PluginService
   /** Work, personal and client identities, and which one each project acts as. */
   identities?: import('../identities/service').IdentityService
+  /** The optional Ramu account: sign-in, sealed settings backups and Your hosts. */
+  account?: import('../account/service').AccountService
   threadTitles?: import('../agent/threadTitles').ThreadTitles
   interactive?: import('../interactive/store').InteractiveStore
   pages?: import('../interactive/pages').PageStore

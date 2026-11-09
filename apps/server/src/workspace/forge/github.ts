@@ -169,6 +169,23 @@ export async function repositoryToken(cwd: string): Promise<string> {
   })
 }
 
+/** The github.com token for host-owned work outside any checkout, such as a settings backup gist; null when signed out. */
+export async function githubToken(): Promise<string | null> {
+  const executable = ghExecutable()
+  const account = executable ? await accountEnvironmentFor('github.com', executable).catch(() => ({})) : {}
+  const given = (account as Record<string, string>).GH_TOKEN
+  if (given) return given
+  if (!executable) return null
+  return new Promise((resolve) =>
+    execFile(
+      executable,
+      ['auth', 'token', '--hostname', 'github.com'],
+      { encoding: 'utf8', timeout: 15_000, env: { ...process.env, GH_PROMPT_DISABLED: '1', NO_COLOR: '1' } },
+      (error, stdout) => resolve(error || !stdout.trim() ? null : stdout.trim()),
+    ),
+  )
+}
+
 export async function gh(cwd: string, args: string[]): Promise<string> {
   const executable = ghExecutable()
   if (!executable) throw new ForgeError('Install the GitHub CLI (gh) to use pull requests and issues.', 'no-cli')

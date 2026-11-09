@@ -31,6 +31,7 @@ export const SETTINGS_MENU = [
   { id: 'memory', label: 'Memory & skills', group: 'Agents', phone: true },
   { id: 'system', label: 'Background & updates', group: 'System', phone: true },
   { id: 'remote', label: 'Remote access', group: 'System', phone: true },
+  { id: 'account', label: 'Account', group: 'System', phone: true },
 ] as const satisfies readonly { id: string; label: string; group: SettingsMenuGroup; phone: boolean }[]
 
 export type SettingsMenuId = (typeof SETTINGS_MENU)[number]['id']

@@ -27,6 +27,7 @@ export const HOST_PUSH_CHANNELS = [
   'plugins:changed',
   'identities:changed',
   'identities:mismatch',
+  'account:changed',
   'plugins:signInFailed',
   'usage:changed',
   'models:news',

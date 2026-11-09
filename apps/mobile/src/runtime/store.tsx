@@ -1,4 +1,5 @@
 import { attemptStatus, failureStatus, mayConnect, restoredStatus } from './hostConnection'
+import { relay as relayToHost } from './account'
 import { appForeground } from './chatViewport'
 import { PairRequestUnsupported, requestPairing } from '@ramu/shared/pairRequest'
 import { secureRandom } from './secureRandom'
@@ -154,6 +155,13 @@ interface Store extends State {
    * Asks a nearby host to pair this phone; `onCode` shows the number the host must match. Rejects with
    * `PairRequestUnsupported` when the host or this build cannot, so the person types a code instead.
    */
+  /** Asks a host listed in this person's Ramu account to pair, with no code to type; `onCode` shows the number. */
+  pairThroughAccount(
+    name: string,
+    listedId: string,
+    onCode: (code: string) => void,
+    signal: AbortSignal,
+  ): Promise<string>
   pairByRequest(
     name: string,
     address: string,
@@ -1581,6 +1589,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       } finally {
         clearTimeout(timer)
       }
+    },
+    pairThroughAccount: async (name, listedId, onCode, signal) => {
+      const random = await secureRandom()
+      if (!random) throw new PairRequestUnsupported()
+      const result = await requestPairing({
+        post: (path, body, aborted) => relayToHost(listedId, path, body, aborted),
+        name: Device.deviceName || Device.modelName || 'Ramu phone',
+        random,
+        onCode,
+        signal,
+      })
+      const addresses = result.addresses ?? []
+      if (!addresses.length) throw new Error('The host paired but sent no address. Turn on network access there.')
+      // The first address that answers; the host's identity is checked on every address as after any pairing.
+      let url = addresses[0]!
+      for (const address of addresses) {
+        const answers = await expoFetch(`${address.replace(/\/$/, '')}/health`)
+          .then(() => true)
+          .catch(() => false)
+        if (answers) {
+          url = address.replace(/\/$/, '')
+          break
+        }
+      }
+      return savePairing(name, url, result)
     },
     pairByRequest: async (name, address, allowHttp, onCode, signal) => {
       const url = normalizeAddress(address, allowHttp)

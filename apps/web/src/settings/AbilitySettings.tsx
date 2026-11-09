@@ -241,9 +241,7 @@ export function AbilitySettings({
               ? t('Video, speech, music and sound effects can also run on your {0} API key.', {
                   '0': media.map((service) => MEDIA_SERVICE_NAMES[service]).join(', '),
                 })
-              : t(
-                  'Save an API key for Google Gemini or ElevenLabs to make video, speech, music or sound effects.',
-                )}
+              : t('Save an API key for Google Gemini or ElevenLabs to make video, speech, music or sound effects.')}
           </span>
         </span>
         <Button variant="secondary" size="sm" onClick={onOpenMedia}>

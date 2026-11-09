@@ -51,7 +51,9 @@ describe('resolving conflicts by side', () => {
     expect(await conflicted()).toContain('a.txt')
     await expect(resolveConflict(dir, 'a.txt', 'current', { hunk: 0, hash: file.hash! })).rejects.toThrow('changed')
     expect(await resolveConflict(dir, 'a.txt', 'both', { hunk: 0 })).toEqual({ resolved: true })
-    expect(readFileSync(join(dir, 'a.txt'), 'utf8')).toBe('one\nTWO feature\nthree\nfour\nx1\nx2\nx3\nx4\nfive main\nFIVE feature\n')
+    expect(readFileSync(join(dir, 'a.txt'), 'utf8')).toBe(
+      'one\nTWO feature\nthree\nfour\nx1\nx2\nx3\nx4\nfive main\nFIVE feature\n',
+    )
     expect(await conflicted()).not.toContain('a.txt')
   })
 

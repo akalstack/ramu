@@ -391,6 +391,47 @@ export class ComputerRegistry {
     return this.savePaired(url, label, result)
   }
 
+  /**
+   * Asks a host listed in this person's Ramu account to pair, with no code to copy: the same exchange as a nearby
+   * request, carried by the account through this computer's own host. The host's addresses come back sealed to this
+   * exchange; the first that answers is used, and its identity is checked as after any pairing.
+   */
+  async pairThroughAccount(
+    listedId: string,
+    label: string | undefined,
+    onCode: (code: string) => void,
+    signal: AbortSignal,
+  ): Promise<Computer> {
+    const [{ requestPairing }, { randomBytes }] = await Promise.all([
+      import('@ramu/shared/pairRequest'),
+      import('node:crypto'),
+    ])
+    const result = await requestPairing({
+      post: async (path, body) =>
+        (await this.deps.invoke(this.deps.local, 'account.relay', [listedId, path, body])) as {
+          status: number
+          body: unknown
+        },
+      name: this.deps.deviceName,
+      random: (bytes) => new Uint8Array(randomBytes(bytes)),
+      onCode,
+      signal,
+    })
+    const addresses = result.addresses ?? []
+    if (!addresses.length) throw new Error('The host paired but sent no address. Turn on network access there.')
+    let url = addresses[0]!
+    for (const address of addresses) {
+      const reachable = await fetch(new URL('/health', address), { signal: AbortSignal.timeout(4000) })
+        .then(() => true)
+        .catch(() => false)
+      if (reachable) {
+        url = address
+        break
+      }
+    }
+    return this.savePaired(url, label, result)
+  }
+
   private async savePaired(
     url: string,
     label: string | undefined,

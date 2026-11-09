@@ -10,6 +10,7 @@ For people using Ramu.
 - [Browser, computer use and test devices](guide/browser-and-computer.md): what agents can drive, and Float.
 - [Goals](guide/goals.md) and [Background work](guide/background-work.md): work that keeps going.
 - [Memory and learning](guide/memory-and-learning.md): what carries over between threads.
+- [Ramu account and settings backup](guide/account.md): optional sign-in, backups only your devices can open, and Your hosts.
 - [Identities and moving settings](guide/identities.md): work and personal accounts picked per project, and settings copied between hosts.
 - [Plugins](guide/plugins.md): add a service's skills, MCP servers, credential and CLI in one install, or build one.
 - [Shipping an app](guide/shipping.md): from one sentence to a live app with CI, previews and uptime, then [Deploying an app](guide/deploy.md) for each step.

@@ -40,8 +40,11 @@
       "entry": ["plugins/*.cjs", "src/runtime/isomorphicWebcrypto.ts"]
     },
     "apps/server": {
-      "ignoreBinaries": ["osascript"],
+      "ignoreBinaries": ["osascript", "ssh-keygen"],
       "ignoreDependencies": ["@dagrejs/dagre", "chart.js", "react", "react-dom"]
+    },
+    "apps/account": {
+      "entry": ["src/worker.ts"]
     }
   },
   "ignoreIssues": {

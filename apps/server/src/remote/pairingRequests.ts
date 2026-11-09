@@ -8,6 +8,7 @@ import {
   pairCommit,
   pairKeys,
   pairResultMac,
+  sealAddresses,
   pairSecrets,
   type PairRequestAnswer,
   type PairWaitAnswer,
@@ -64,6 +65,8 @@ export class PairingRequests {
       hostId: string
       /** Whether a device at `peer` may ask now. Defaults to while a pairing offer is open. */
       accepting?: (peer: string) => boolean
+      /** The addresses to seal into an approval for a request the account service relayed (`account:` peers). */
+      addresses?: () => string[]
       changed?: () => void
       now?: () => number
       random?: (bytes: number) => Uint8Array
@@ -182,7 +185,21 @@ export class PairingRequests {
       expiresAt: device.expiresAt,
     }
     request.state = 'approved'
-    request.result = { state: 'approved', ...fields, mac: pairResultMac(request.macKey!, fields) }
+    const relayed = request.peer.startsWith('account:') && this.options.addresses
+    request.result = {
+      state: 'approved',
+      ...fields,
+      mac: pairResultMac(request.macKey!, fields),
+      ...(relayed
+        ? {
+            addresses: sealAddresses(
+              request.macKey!,
+              this.options.addresses!(),
+              this.options.random ?? ((bytes) => new Uint8Array(randomBytes(bytes))),
+            ),
+          }
+        : {}),
+    }
     request.token = undefined
     request.waiter?.(request.result)
     request.waiter = undefined

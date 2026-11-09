@@ -737,6 +737,35 @@ export interface RamuMethods extends ArtifactMethods {
     groups: import('./settingsTransfer').TransferGroup[],
     expected: number,
   ): { changed: number; connectHere: string[] }
+  'account.status'(): import('./account').AccountStatus
+  /** Starts signing in with a code confirmed in the browser; the host waits for it and says so on `account:changed`. */
+  'account.signIn'(): import('./account').AccountSignIn
+  'account.cancelSignIn'(): void
+  'account.signOut'(): void
+  /** Deletes the account and every backup in it. */
+  'account.delete'(): void
+  /** Turns backup destinations on or off; the first time, returns the recovery code to keep. */
+  'account.setBackup'(destinations: { account?: boolean; github?: boolean }): { recoveryCode: string | null }
+  'account.backupNow'(): void
+  'account.newRecoveryCode'(): string
+  'account.deleteBackups'(destination: 'account' | 'github'): void
+  'account.restoreChoices'(): import('./account').RestoreChoice[]
+  'account.restoreFile'(choice: {
+    source: 'account' | 'github'
+    slot: string
+    version: string
+  }): import('./settingsTransfer').SettingsExport
+  'account.useRecoveryCode'(code: string, source: 'account' | 'github'): void
+  /** Asks the person's other devices for the backup key; the number to compare comes in `account.keyRequestState`. */
+  'account.requestKey'(): { id: string }
+  'account.keyRequestState'(): { code: string | null; done: boolean; error: string | null } | null
+  'account.keyRequests'(): { id: string; name: string; code: string | null; expiresAt: number }[]
+  'account.answerKeyRequest'(id: string): void
+  'account.approveKeyRequest'(id: string): void
+  'account.denyKeyRequest'(id: string): void
+  'account.setListed'(listed: boolean): void
+  'account.hosts'(): import('./account').ListedHostInfo[]
+  'account.relay'(hostId: string, path: string, body: unknown): { status: number; body: unknown }
   'identities.get'(): import('./identities').IdentitySnapshot
   'identities.add'(input: {
     name: string
@@ -967,6 +996,8 @@ export interface RamuMethods extends ArtifactMethods {
   'computers.pair'(url: string, code: string, name?: string): Computers
   /** Asks a nearby host to pair; a person there allows it when both show the number sent as `computers:pairCode`. */
   'computers.pairByRequest'(url: string, name?: string): Computers
+  /** Asks a host listed in this person's Ramu account to pair; the number to match arrives as `computers:pairCode`. */
+  'computers.pairThroughAccount'(listedId: string, name?: string): Computers
   'computers.cancelPairRequest'(): null
   'computers.sshHosts'(): string[]
   /** Nearby hosts heard on this computer's networks. Browsing runs here, never on a selected host, and lists only. */
@@ -1851,6 +1882,7 @@ export type PushEvents = {
   'rules:changed': Record<string, never>
   'plugins:changed': null
   'identities:changed': null
+  'account:changed': null
   /** The guardrail stopped an action that would act as another identity than the project's. */
   'identities:mismatch': import('./identities').IdentityMismatch
   'plugins:signInFailed': { pluginId: string; slot: string; message: string }

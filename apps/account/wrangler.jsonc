@@ -1,0 +1,11 @@
+{
+  // The account service at account.akalstack.com. Secrets (BETTER_AUTH_SECRET, GITHUB_CLIENT_SECRET,
+  // GOOGLE_CLIENT_SECRET) are set with `wrangler secret put`; the database is a Hyperdrive config over Postgres.
+  "name": "ramu-account",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "routes": [{ "pattern": "account.akalstack.com", "custom_domain": true }],
+  "vars": { "ACCOUNT_URL": "https://account.akalstack.com", "PASSKEY_DOMAIN": "akalstack.com" },
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "REPLACE_WITH_HYPERDRIVE_ID" }],
+}

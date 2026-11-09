@@ -3,6 +3,7 @@
 // before it sees the host's, so someone relaying between them cannot choose keys that make the codes agree (a relay
 // matches with probability one in a million per attempt, and every attempt needs the person to approve). Both sides
 // derive the device token from the exchange, so the token never crosses the network.
+import { xchacha20poly1305 } from '@noble/ciphers/chacha.js'
 import { x25519 } from '@noble/curves/ed25519'
 import { hkdf } from '@noble/hashes/hkdf'
 import { hmac } from '@noble/hashes/hmac'
@@ -29,6 +30,11 @@ export type PairWaitAnswer =
       hostId: string
       expiresAt: number | null
       mac: string
+      /**
+       * The host's addresses, sealed under a key only this exchange's two sides hold, when the request came through the
+       * account service: the device has no address yet, and the service must not learn one.
+       */
+      addresses?: string
     }
 
 /** How long a request waits for the person at the host. */
@@ -108,6 +114,26 @@ export interface PairByRequestResult {
   hostId: string
   role: 'owner' | 'viewer'
   expiresAt: number | null
+  /** The host's addresses, when it sent them sealed (a request relayed by the account service). */
+  addresses?: string[]
+}
+
+const addressKey = (macKey: Uint8Array) => hkdf(sha256, macKey, undefined, utf8ToBytes('ramu-pair-addresses:1'), 32)
+
+/** The host's side: its addresses sealed for the device that ran this exchange. */
+export function sealAddresses(macKey: Uint8Array, addresses: string[], random: (bytes: number) => Uint8Array): string {
+  const nonce = random(24)
+  const sealed = xchacha20poly1305(addressKey(macKey), nonce).encrypt(
+    utf8ToBytes(JSON.stringify(addresses.slice(0, 20))),
+  )
+  return bytesToHex(new Uint8Array([...nonce, ...sealed]))
+}
+
+function openAddresses(macKey: Uint8Array, sealed: string): string[] {
+  const bytes = hexToBytes(sealed)
+  const plain = xchacha20poly1305(addressKey(macKey), bytes.slice(0, 24)).decrypt(bytes.slice(24))
+  const list = JSON.parse(new TextDecoder().decode(plain)) as unknown
+  return Array.isArray(list) ? list.filter((entry): entry is string => typeof entry === 'string').slice(0, 20) : []
 }
 
 /** One JSON POST to the host; returns the status and parsed body (null when there is none). */
@@ -176,7 +202,14 @@ export async function requestPairing(input: {
       // Only the host that ran this exchange can produce the check; a tampered answer is refused.
       if (result.hostId !== answer.hostId || result.mac !== pairResultMac(secrets.macKey, fields))
         throw new Error('The host’s answer did not match this pairing.')
-      return { ...fields, token: secrets.token }
+      let addresses: string[] | undefined
+      if (typeof result.addresses === 'string')
+        try {
+          addresses = openAddresses(secrets.macKey, result.addresses)
+        } catch {
+          throw new Error('The host’s answer did not match this pairing.')
+        }
+      return { ...fields, token: secrets.token, ...(addresses ? { addresses } : {}) }
     }
     if (result?.state === 'denied') throw new Error('The host declined this device.')
     // The host decides expiry; this device's clock may differ from the host's.

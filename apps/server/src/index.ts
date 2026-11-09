@@ -124,7 +124,7 @@ import {
   permissionRefusal,
   type PermissionDuration,
 } from '@ramu/shared/devicePermissions'
-import { PairingRequests } from './remote/pairingRequests'
+import { PairingError, PairingRequests } from './remote/pairingRequests'
 import { createPairingNotice } from './remote/pairingNotice'
 import { clientAddress } from './remote/clientAddress'
 import { parseTunnelChoice, TunnelManager } from './remote/tunnel'
@@ -172,6 +172,11 @@ import { MemoryService, registerMemoryTools } from './memory/memory'
 import { RuleStore } from './rules/rules'
 import { RuleFiles } from './rules/ruleFiles'
 import { PluginService } from './plugins/service'
+import { AccountService } from './account/service'
+import { exportSettings } from './ipc/handlers/settingsTransfer'
+import { TRANSFER_GROUP_IDS } from '@ramu/shared/settingsTransfer'
+import { PAIR_REQUEST_PATH, PAIR_REVEAL_PATH } from '@ramu/shared/pairRequest'
+import { githubToken } from './workspace/forge/github'
 import { IdentityService } from './identities/service'
 import { ProjectPlaces } from './identities/places'
 import { setFolderEnvironment } from './userEnvironment'
@@ -193,8 +198,14 @@ const hostId = readDiscoveryHostId(join(userData, 'discovery.json'))
 const pairingRequests = new PairingRequests({
   devices,
   hostId,
-  // Nearby devices may ask while this host lets itself be found, or while Pair a device is open.
-  accepting: () => network.discoverable || devices.offers().length > 0,
+  // Nearby devices may ask while this host lets itself be found, or while Pair a device is open. A request the Ramu
+  // account relayed comes from the same person's signed-in device, to a host they listed; it still needs approval here.
+  accepting: (peer) => peer.startsWith('account:') || network.discoverable || devices.offers().length > 0,
+  addresses: () =>
+    [
+      ...publicCandidates(),
+      ...(network.enabled ? candidateUrls(network.host, network.port, Boolean(config.tls)) : []),
+    ].map((candidate) => candidate.url),
   changed: () => pairingNotice(pairingRequests.list()),
 })
 // Only the desktop apps on this machine answer permission requests, like pairing; paired devices never see them.
@@ -1091,6 +1102,47 @@ const plugins = new PluginService({
   identityAllows: (pluginId, projectId) => identities.allowed(projectId, accountKey('plugin', pluginId)),
 })
 plugins.start()
+const account = new AccountService({
+  getState: (key, fallback) => workspace.getAppState(key, fallback),
+  setState: (key, value) => workspace.setAppState(key, value),
+  hostName: () => hostname(),
+  hostId,
+  // A backup carries every portable group but the notes, which stay where they were written.
+  exportSettings: () =>
+    exportSettings(
+      {
+        loadPreferences: abilityPreferences,
+        workspace,
+        rules,
+        identities,
+        memory,
+        deploys,
+        getSharedMcp,
+        plugins,
+        hostBrowser,
+      },
+      TRANSFER_GROUP_IDS.filter((group) => group !== 'memories'),
+    ),
+  githubToken,
+  pairing: async (peer, path, body) => {
+    try {
+      if (path === PAIR_REQUEST_PATH) return { status: 200, body: pairingRequests.begin(peer, body) }
+      if (path === PAIR_REVEAL_PATH) {
+        pairingRequests.reveal(peer, body)
+        return { status: 200, body: { ok: true } }
+      }
+      return { status: 200, body: await pairingRequests.wait(peer, body) }
+    } catch (error) {
+      return {
+        status: error instanceof PairingError ? error.status : 400,
+        body: { error: error instanceof Error ? error.message : 'Invalid pairing request' },
+      }
+    }
+  },
+  changed: () => send('account:changed', null),
+})
+account.start()
+workspace.settingsStore?.subscribe(() => account.settingsChanged())
 const externalTools = new ExternalSessionTools(getSharedMcp, (sessionId, title, detail, signal) =>
   agents.requestPermission(sessionId, title, detail, signal),
 )
@@ -1223,6 +1275,7 @@ const dispatcher = createDispatcher(
     getSharedMcp,
     plugins,
     identities,
+    account,
     browser: browserBroker,
     hostBrowser,
     computer,

@@ -1,15 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Linking, Pressable, View } from 'react-native'
 import { useRouter } from 'expo-router'
-import {
-  Eye,
-  ChevronDown,
-  ChevronRight,
-  Globe,
-  MessageSquare,
-  PanelRight,
-  Wrench,
-} from 'lucide-react-native'
+import { Eye, ChevronDown, ChevronRight, Globe, MessageSquare, PanelRight, Wrench } from 'lucide-react-native'
 import { previewLine } from '@ramu/shared/deployText'
 import type { Deployment } from '@ramu/shared/types/deploy'
 import type {

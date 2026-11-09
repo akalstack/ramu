@@ -284,7 +284,7 @@ test('the phone menu has every desktop section a phone can use, arranged for a p
   for (const hidden of ['editor', 'shortcuts', 'environment']) assert.equal(sectionById(hidden), undefined)
   // This phone first, then a host's agents before its workspace, and history and About last.
   const byGroup = (group) => SETTINGS_SECTIONS.filter((section) => section.group === group).map((section) => section.id)
-  assert.deepEqual(byGroup('phone'), ['appearance', 'notifications', 'remote'])
+  assert.deepEqual(byGroup('phone'), ['appearance', 'notifications', 'remote', 'account'])
   assert.deepEqual(byGroup('agents'), [
     'chats',
     'access',

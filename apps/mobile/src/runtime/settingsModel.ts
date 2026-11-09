@@ -32,13 +32,21 @@ export const SETTINGS_GROUPS: { id: SettingsGroup; label: Text }[] = [
 ]
 
 /** Pages about this phone rather than the selected host: no host picker on them. */
-const PHONE_PAGES: readonly SettingsSection[] = ['appearance', 'archived', 'remote', 'notifications', 'about']
+const PHONE_PAGES: readonly SettingsSection[] = [
+  'appearance',
+  'archived',
+  'remote',
+  'account',
+  'notifications',
+  'about',
+]
 
 /** Every section the phone shows, in its order. Paired hosts are what Remote access holds on a phone. */
 const PHONE_MENU: readonly { id: SettingsSection; group: SettingsGroup; label?: Text }[] = [
   { id: 'appearance', group: 'phone' },
   { id: 'notifications', group: 'phone', label: text('Notifications') },
   { id: 'remote', group: 'phone', label: text('Paired computers') },
+  { id: 'account', group: 'phone', label: text('Ramu account') },
   { id: 'chats', group: 'agents' },
   { id: 'access', group: 'agents' },
   { id: 'models', group: 'agents' },

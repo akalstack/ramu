@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { PluginSettings } from '../../components/PluginSettings'
+import { AccountSettings } from '../../components/AccountSettings'
 import { IdentitySettings } from '../../components/IdentitySettings'
 import { AbilitySummary } from '../../components/AbilitySummary'
 import { HostAddressSheet } from '../../components/HostAddressSheet'
@@ -472,6 +473,7 @@ export default function SettingsSectionPage() {
         {id === 'remote' ? <Computers /> : null}
         {id === 'archived' ? <ArchivedThreads /> : null}
         {id === 'about' ? <About /> : null}
+        {id === 'account' ? <AccountSettings /> : null}
         {id === 'providers' ? (
           <ProviderCompatibility key={`ProviderCompatibility:${selected}`} hostId={selected} locked={locked} />
         ) : null}

@@ -17,7 +17,9 @@ const rule = identitySchema.shape.rules.element
 const author = identitySchema.shape.gitAuthor
 
 /** Every account connected on this host that an identity can hold. Names only; never a credential. */
-export async function identityAccounts(ctx: HandlerContext): Promise<IdentityAccountOption[]> {
+export async function identityAccounts(
+  ctx: Pick<HandlerContext, 'loadPreferences' | 'deploys' | 'getSharedMcp' | 'plugins' | 'hostBrowser'>,
+): Promise<IdentityAccountOption[]> {
   const options: IdentityAccountOption[] = []
   const binaries = ctx.loadPreferences().providerBinaries
   for (const provider of AGENT_PROVIDERS) {

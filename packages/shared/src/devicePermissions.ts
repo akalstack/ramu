@@ -82,6 +82,7 @@ const SETTINGS_DOMAINS = new Set([
   'plugins',
   'identities',
   'settingsTransfer',
+  'account',
   'codex',
   'updates',
   'background',

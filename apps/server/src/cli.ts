@@ -62,6 +62,8 @@ Usage:
                                  Reach this host from anywhere through a tunnel Ramu runs: Cloudflare's quick tunnel (no
                                  account), Tailscale Funnel, or ngrok (with your static domain). Turns on access for this
                                  computer only if it is off. ramu tunnel alone shows its state and address.
+  ramu account login|status|logout
+                                 Sign this host in to the optional Ramu account with a code confirmed in any browser
   ramu plugin new <name> [--mcp] [--cli]
                                  Write a working plugin folder (manifest, a skill, a README) to build on
   ramu plugin check [folder] [--json]
@@ -567,6 +569,38 @@ if (command === 'start') {
       `${{ quick: 'cloudflared', tailscale: 'tailscale', ngrok: 'ngrok' }[tunnel.choice.kind]} is not installed. Install it, then run this again.`,
     )
   else console.log(`Tunnel ${tunnel.state}${tunnel.error ? `: ${tunnel.error}` : ''}`)
+} else if (command === 'account') {
+  const action = positional[1] ?? 'status'
+  if (action === 'login') {
+    const started = await call<{ userCode: string; verificationUri: string; expiresAt: number }>('account.signIn')
+    console.log(`Open ${started.verificationUri} on any device, sign in, and check the code ${started.userCode}.`)
+    for (;;) {
+      await sleep(3000)
+      const status = await call<{ signedIn: boolean; user: { email: string } | null; pendingSignIn: unknown }>(
+        'account.status',
+      )
+      if (status.signedIn) {
+        console.log(`Signed in as ${status.user?.email}.`)
+        break
+      }
+      if (!status.pendingSignIn) fail('The sign-in expired or was denied. Run ramu account login again.')
+    }
+  } else if (action === 'logout') {
+    await call('account.signOut')
+    console.log('Signed out. This host’s copy of the backup key is gone; your other devices keep theirs.')
+  } else if (action === 'status') {
+    const status = await call<{
+      signedIn: boolean
+      user: { email: string } | null
+      backup: { account: boolean; github: boolean; lastBackupAt: number | null; error: string | null }
+      listed: boolean
+    }>('account.status')
+    console.log(status.signedIn ? `Signed in as ${status.user?.email}` : 'Not signed in (ramu account login)')
+    console.log(
+      `Backup: ${[status.backup.account ? 'Ramu account' : null, status.backup.github ? 'your GitHub' : null].filter(Boolean).join(' and ') || 'off'}${status.backup.lastBackupAt ? `, last ${new Date(status.backup.lastBackupAt).toLocaleString()}` : ''}${status.backup.error ? ` (${status.backup.error})` : ''}`,
+    )
+    console.log(`Listed in Your hosts: ${status.listed ? 'yes' : 'no'}`)
+  } else fail('Use ramu account login, ramu account status or ramu account logout.')
 } else if (command === 'plugin') {
   const [, action, target] = positional
   if (action === 'new') {

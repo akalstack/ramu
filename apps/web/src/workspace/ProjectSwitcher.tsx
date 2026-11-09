@@ -53,8 +53,7 @@ export function ProjectSwitcher() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [active, project?.id, workspace] by design; the values it reads beyond these are current as of that run
   }, [active, project?.id, workspace])
-  if (isGlobalPage(ws.ui.sidebar) || !project)
-    return null
+  if (isGlobalPage(ws.ui.sidebar) || !project) return null
   const valid = (context: string | undefined, projectId: string) =>
     context && ws.projectOf(context)?.id === projectId && (!ws.task(context) || ws.task(context)?.status !== 'archived')
   const switchProject = (projectId: string) => {

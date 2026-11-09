@@ -1,0 +1,28 @@
+{
+  "name": "@ramu/account",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "description": "The optional Ramu account service: sign-in, encrypted settings backups it cannot read, and Your hosts.",
+  "type": "module",
+  "scripts": {
+    "dev": "node --experimental-strip-types src/node.ts",
+    "migrate": "node --experimental-strip-types src/migrate.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@better-auth/passkey": "1.7.18",
+    "@hono/node-server": "^1.19.0",
+    "@ramu/shared": "workspace:*",
+    "better-auth": "1.7.18",
+    "hono": "4.13.17",
+    "pg": "8.23.1",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/pg": "^8.15.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

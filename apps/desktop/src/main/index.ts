@@ -1242,6 +1242,28 @@ async function main() {
       for (const server of previous) if (!computers.exists(server.id)) await closeComputer(server.id)
       return computers.list(self)
     }
+    // A host listed in the person's Ramu account, asked through the account instead of over the network.
+    if (method === 'computers.pairThroughAccount') {
+      const [listedId, label] = args
+      if (typeof listedId !== 'string' || (label !== undefined && typeof label !== 'string'))
+        throw new Error('Choose a host')
+      pairRequest?.abort()
+      const controller = new AbortController()
+      pairRequest = controller
+      const previous = servers.list()
+      try {
+        await computers.pairThroughAccount(
+          listedId,
+          label,
+          (code) => send('computers:pairCode', { address: listedId, code }),
+          controller.signal,
+        )
+      } finally {
+        if (pairRequest === controller) pairRequest = null
+      }
+      for (const server of previous) if (!computers.exists(server.id)) await closeComputer(server.id)
+      return computers.list(self)
+    }
     if (method === 'computers.cancelPairRequest') {
       pairRequest?.abort()
       pairRequest = null
