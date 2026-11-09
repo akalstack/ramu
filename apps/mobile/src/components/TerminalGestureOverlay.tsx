@@ -1,30 +1,23 @@
 import { useEffect } from 'react'
 import { View } from 'react-native'
 import Reanimated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
-import {
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-} from 'lucide-react-native'
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react-native'
 import { Glass } from './Glass'
 import { useTheme } from '../theme'
 import { gestureOverlayPosition, type Direction, type TerminalGestureState } from '../runtime/terminalGesture'
 
 export type GestureDisplay = Pick<TerminalGestureState, 'active' | 'direction' | 'speed' | 'x' | 'y'>
 const SIZE = 112
-const BLUE = '#0a84ff'
-const positions = {
-  up: { left: 40, top: 6 },
-  down: { left: 40, top: 70 },
-  left: { left: 8, top: 38 },
-  right: { left: 72, top: 38 },
-} as const
-const arrows = { up: ArrowUp, down: ArrowDown, left: ArrowLeft, right: ArrowRight }
+/** One arrow key of the pad; four sit around the centre like a keyboard's arrow cluster. */
+const KEY = 30
+const GAP = 4
+const CENTER = (SIZE - KEY) / 2
+const keys: Record<Direction, { left: number; top: number }> = {
+  up: { left: CENTER, top: CENTER - KEY - GAP },
+  down: { left: CENTER, top: CENTER + KEY + GAP },
+  left: { left: CENTER - KEY - GAP, top: CENTER },
+  right: { left: CENTER + KEY + GAP, top: CENTER },
+}
 const chevrons = { up: ChevronUp, down: ChevronDown, left: ChevronLeft, right: ChevronRight }
 
 export function readGesture(value: Record<string, unknown>): GestureDisplay | null {
@@ -43,6 +36,11 @@ export function readGesture(value: Record<string, unknown>): GestureDisplay | nu
   }
 }
 
+/**
+ * The cursor pad shown while a held finger moves the terminal's cursor: four keycaps around a centre dot, fixed on the
+ * right edge. The key being sent lights in the accent and stacks more chevrons as the cursor speeds up, so how far the
+ * finger has travelled reads at a glance without following it.
+ */
 export function TerminalGestureOverlay({
   state,
   width,
@@ -56,30 +54,31 @@ export function TerminalGestureOverlay({
   const strength = useSharedValue(0)
   const speed = state?.direction ? state.speed : 0
   useEffect(() => {
-    // Retarget from the current presentation value: dragging back drains the blue
-    // immediately, rather than waiting for the next key-repeat cycle to finish.
+    // Retarget from the current presentation value: easing off drains the key at once rather than after a key repeat.
     strength.value = withTiming(speed, { duration: 80, easing: Easing.out(Easing.quad) })
   }, [speed, strength])
-  const along = state?.direction === 'up' || state?.direction === 'down' ? 'height' : 'width'
-  // On the UI thread: a drag keeps JavaScript busy sending keys, which made the fill lag behind the finger.
-  const fill = useAnimatedStyle(() => ({ [along]: interpolate(strength.value, [0, 1], [9, 32]) }))
+  // On the UI thread: a drag keeps JavaScript busy sending keys, which made the key lag behind the finger.
+  const lit = useAnimatedStyle(() => ({
+    opacity: interpolate(strength.value, [0, 1], [0.6, 1]),
+    transform: [{ scale: interpolate(strength.value, [0, 1], [1, 1.12]) }],
+  }))
   if (!state?.active) return null
   const level = state.speed < 0.34 ? 1 : state.speed < 0.67 ? 2 : 3
-  const glyph = (direction: Direction, color: string, multiple: boolean) => {
-    const I = multiple ? chevrons[direction] : arrows[direction]
-    const count = multiple ? level : 1
+  const glyphs = (direction: Direction, color: string, count: number) => {
+    const I = chevrons[direction]
+    const vertical = direction === 'up' || direction === 'down'
     return Array.from({ length: count }, (_, i) => {
-      const offset = (i - (count - 1) / 2) * 6
+      const offset = (i - (count - 1) / 2) * 5
       return (
         <I
           key={i}
-          size={22}
-          strokeWidth={2}
+          size={18}
+          strokeWidth={2.4}
           color={color}
           style={{
             position: 'absolute',
-            left: 5 + (direction === 'left' || direction === 'right' ? offset : 0),
-            top: 5 + (direction === 'up' || direction === 'down' ? offset : 0),
+            left: (KEY - 18) / 2 + (vertical ? 0 : offset),
+            top: (KEY - 18) / 2 + (vertical ? offset : 0),
           }}
         />
       )
@@ -97,54 +96,50 @@ export function TerminalGestureOverlay({
         height: SIZE,
       }}
     >
-      <Glass radius={24} style={{ width: SIZE, height: SIZE, borderWidth: 0.5, borderColor: c.lineStrong }}>
+      <Glass radius={30} style={{ width: SIZE, height: SIZE, borderWidth: 0.5, borderColor: c.lineStrong }}>
         <View
           style={{
             position: 'absolute',
-            left: 54,
-            top: 52,
-            width: 4,
-            height: 4,
-            borderRadius: 2,
-            backgroundColor: state.direction ? BLUE : c.lineStrong,
+            left: SIZE / 2 - 3,
+            top: SIZE / 2 - 3,
+            width: 6,
+            height: 6,
+            borderRadius: 3,
+            backgroundColor: state.direction ? c.accent : c.lineStrong,
           }}
         />
-        {(Object.keys(positions) as Direction[]).map((direction) => {
+        {(Object.keys(keys) as Direction[]).map((direction) => {
           const selected = direction === state.direction
-          const vertical = direction === 'up' || direction === 'down'
-          return (
-            <View key={direction} style={{ position: 'absolute', ...positions[direction], width: 32, height: 32 }}>
-              {glyph(direction, selected ? c.text : c.muted, selected && level > 1)}
-              {selected ? (
-                // Fill follows the selected arrow's axis, growing outward from its tail.
-                <Reanimated.View
-                  style={[
-                    {
-                      position: 'absolute',
-                      overflow: 'hidden',
-                      ...(vertical
-                        ? { left: 0, width: 32, ...(direction === 'up' ? { bottom: 0 } : { top: 0 }) }
-                        : { top: 0, height: 32, ...(direction === 'left' ? { right: 0 } : { left: 0 }) }),
-                    },
-                    fill,
-                  ]}
-                >
-                  <View
-                    style={{
-                      position: 'absolute',
-                      width: 32,
-                      height: 32,
-                      ...(direction === 'up'
-                        ? { bottom: 0 }
-                        : direction === 'left'
-                          ? { right: 0 }
-                          : { top: 0, left: 0 }),
-                    }}
-                  >
-                    {glyph(direction, BLUE, level > 1)}
-                  </View>
-                </Reanimated.View>
-              ) : null}
+          return selected ? (
+            <Reanimated.View
+              key={direction}
+              style={[
+                {
+                  position: 'absolute',
+                  ...keys[direction],
+                  width: KEY,
+                  height: KEY,
+                  borderRadius: 9,
+                  backgroundColor: c.accent,
+                },
+                lit,
+              ]}
+            >
+              {glyphs(direction, '#ffffff', level)}
+            </Reanimated.View>
+          ) : (
+            <View
+              key={direction}
+              style={{
+                position: 'absolute',
+                ...keys[direction],
+                width: KEY,
+                height: KEY,
+                borderRadius: 9,
+                backgroundColor: c.fill,
+              }}
+            >
+              {glyphs(direction, c.muted, 1)}
             </View>
           )
         })}

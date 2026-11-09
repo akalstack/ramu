@@ -195,10 +195,13 @@ test('touch scrolling is prevented only after the hold has activated', () => {
   assert.equal(view.event('touchmove'), false)
 })
 
-test('cursor overlay stays beside the hold and inside small or edge-adjacent viewports', () => {
-  assert.deepEqual(gestureOverlayPosition(100, 300, 390, 600), { left: 124, top: 164 })
-  assert.deepEqual(gestureOverlayPosition(370, 300, 390, 600), { left: 234, top: 164 })
-  assert.deepEqual(gestureOverlayPosition(10, 20, 390, 600), { left: 34, top: 44 })
+test('cursor pad sits fixed on the right edge, moving off the finger only when it holds over the pad', () => {
+  // Wherever the hold starts away from it, the pad is in the same place: right edge, centred.
+  assert.deepEqual(gestureOverlayPosition(100, 300, 390, 600), { left: 266, top: 244 })
+  assert.deepEqual(gestureOverlayPosition(10, 20, 390, 600), { left: 266, top: 244 })
+  // A finger on the pad pushes it above the finger, or below when there is no room above.
+  assert.deepEqual(gestureOverlayPosition(330, 300, 390, 600), { left: 266, top: 164 })
+  assert.deepEqual(gestureOverlayPosition(330, 130, 390, 260), { left: 266, top: 136 })
   for (const [width, height] of [
     [390, 600],
     [180, 160],

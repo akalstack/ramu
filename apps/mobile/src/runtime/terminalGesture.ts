@@ -107,15 +107,20 @@ export function arrowSequence(direction: Direction, applicationCursorKeys = fals
   return '\x1b' + (applicationCursorKeys ? 'O' : '[') + suffix
 }
 
-/** Stay beside the hold origin, away from the finger, without chasing each move. */
+/**
+ * Where the cursor pad sits: at a fixed place on the right edge, centred on the terminal, so the eye always finds it in
+ * the same spot. Only when the finger holds over that spot does it move above the finger (or below it, without room).
+ */
 export function gestureOverlayPosition(x: number, y: number, width: number, height: number, size = 112) {
   const margin = 12,
     gap = 24
-  const left = x + gap + size <= width - margin ? x + gap : x - gap - size
-  const top = y - gap - size >= margin ? y - gap - size : y + gap
   const clamp = (value: number, available: number) =>
-    Math.max(0, Math.min(Math.max(margin, value), Math.max(0, available - size - margin)))
-  return { left: clamp(left, width), top: clamp(top, height) }
+    Math.max(0, Math.min(value, Math.max(0, available - size - margin)))
+  const left = clamp(width - size - margin, width)
+  let top = clamp((height - size) / 2, height)
+  const underFinger = x >= left - gap && y >= top - gap && y <= top + size + gap
+  if (underFinger) top = y - gap - size >= margin ? y - gap - size : clamp(y + gap, height)
+  return { left, top: Math.max(0, top) }
 }
 
 /** The phone terminal's text sizes; pinching moves between them and the phone remembers the choice. */
