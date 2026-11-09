@@ -263,6 +263,14 @@
   }
 }
 
+/* Following a working agent, each step to its new output glides instead of jumping, as on the phone. Only while the
+   scroller follows (TranscriptFollowState): a reader who scrolled up gets position restores, which must stay instant. */
+@media (prefers-reduced-motion: no-preference) {
+  .transcript [data-slot='message-scroller-viewport'][data-working][data-following] {
+    scroll-behavior: smooth;
+  }
+}
+
 /* Automatic following must not flash the native thumb between streamed updates.
    Keep its gutter stable, and reveal it consistently when the reader interacts. */
 .transcript [data-slot='message-scroller-viewport'] {

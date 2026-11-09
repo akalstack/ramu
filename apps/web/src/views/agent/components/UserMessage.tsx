@@ -30,6 +30,7 @@ export { UserBubble } from '../../../chat/UserBubble'
 import { Message, MessageContent, MessageHeader } from '@/components/ui/message'
 import { chatMarkdownComponents } from '../../../chat/ChatMarkdown'
 import { MessageActions } from './MessageActions'
+import { useSentRise } from '../../../chat/ChatMotion'
 import { CARET_CLASS, ICON_BUTTON_CLASS, MSG_CLASS } from '../styles'
 
 /** Soft line breaks stay as typed; the spacing around blocks comes from Markdown instead of the bubble's pre-wrap. */
@@ -101,9 +102,11 @@ function UserShell({
   children,
   ...props
 }: React.ComponentProps<typeof Message> & { header?: React.ReactNode; attachments?: Attachment[] }) {
+  // The host's copy of a message sent from here finishes the rise its pending copy began.
+  const rise = useSentRise<HTMLDivElement>(false)
   return (
     <Message align="end" className="mt-3.5" {...props}>
-      <MessageContent className="max-w-[86%] items-end gap-2">
+      <MessageContent ref={rise} className="max-w-[86%] origin-bottom-right items-end gap-2">
         {header && <MessageHeader className="gap-1 px-0">{header}</MessageHeader>}
         {attachments?.length ? <Attachments files={attachments} names className="justify-end" /> : null}
         {children}

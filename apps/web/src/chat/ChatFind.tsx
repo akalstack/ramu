@@ -3,6 +3,7 @@ import { Button } from '@/components/desktop-button'
 import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { SearchInput } from '../SearchInput'
+import { scrollMotion } from '../workspace/panelMotion'
 
 declare global {
   // The CSS Custom Highlight API is in Electron's Chromium but not yet in the TypeScript DOM types.
@@ -92,7 +93,7 @@ export function ChatFind({
     const range = ranges.current[current]
     if (highlights && window.Highlight)
       highlights.set('chat-find-current', range ? new window.Highlight(range) : new window.Highlight())
-    range?.startContainer.parentElement?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    range?.startContainer.parentElement?.scrollIntoView({ block: 'center', behavior: scrollMotion() })
   }, [current, count, query])
   useEffect(
     () => () => {

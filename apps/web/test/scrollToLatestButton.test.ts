@@ -4,7 +4,10 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { ScrollToLatestButton } from '../src/views/agent/components/ScrollToLatestButton'
 const state = vi.hoisted(() => ({ reduced: false, props: {} as Record<string, unknown> }))
 vi.mock('../src/i18n', () => ({ useLanguage: () => {}, t: (text: string) => text }))
-vi.mock('../src/workspace/panelMotion', () => ({ reducedMotion: () => state.reduced }))
+vi.mock('../src/workspace/panelMotion', () => ({
+  reducedMotion: () => state.reduced,
+  scrollMotion: () => (state.reduced ? 'auto' : 'smooth'),
+}))
 vi.mock('@/components/ui/message-scroller', () => ({
   MessageScrollerButton: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => {
     state.props = props

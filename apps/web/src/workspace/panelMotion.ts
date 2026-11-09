@@ -17,6 +17,11 @@ export function animatePanelChange(
 /** A divider takes ownership of layout; nothing is in flight any more, so there is nothing to finish. */
 export function cancelPanelMotion() {}
 
+/** How a scroll made on the reader's behalf moves: it glides, unless motion is reduced. */
+export function scrollMotion(): ScrollBehavior {
+  return reducedMotion() ? 'auto' : 'smooth'
+}
+
 /** App preference adds to the OS preference; it never overrides accessibility settings. */
 export function reducedMotion(): boolean {
   return (

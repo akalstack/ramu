@@ -3,6 +3,7 @@ import { highlightSource } from '@ramu/shared/workspace/sourceNavigation'
 import type { AgentEvent } from '@ramu/shared/types'
 import type { ChatBlock as Block } from '@ramu/shared/chat/chatFolding'
 import { useWorkspaceActions } from '../../../workspace/workspace'
+import { scrollMotion } from '../../../workspace/panelMotion'
 import { TURN_PAGE } from '../constants'
 import { turnsToKeep } from '../lib/paging'
 import { sourceEvent } from '../lib/sourceEvent'
@@ -59,7 +60,14 @@ export function useTurnPaging({
       handledSource.current = request
       if (source?.kind === 'question') onOpenQuestion(source.requestId)
       stick.current = false
-      node.scrollIntoView({ block: 'center' })
+      // A nearby message glides into view, as on the phone; a far one jumps, since a long glide over turns not laid out
+      // yet lands on estimated heights.
+      const viewport = scroller.current
+      const distance = viewport ? Math.abs(node.getBoundingClientRect().top - viewport.getBoundingClientRect().top) : 0
+      node.scrollIntoView({
+        block: 'center',
+        behavior: viewport && distance <= viewport.clientHeight * 3 ? scrollMotion() : 'auto',
+      })
       return highlightSource(node, () => {
         if (taskId) ws.consumeSourceNavigation(taskId, view.id, view.sourceRequestId)
       })

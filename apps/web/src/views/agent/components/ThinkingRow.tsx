@@ -6,7 +6,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { chatMarkdownComponents } from '../../../chat/ChatMarkdown'
-import { reducedMotion } from '../../../workspace/panelMotion'
+import { scrollMotion } from '../../../workspace/panelMotion'
 import { useScrollFade } from '../hooks/useScrollFade'
 import { formatDuration } from '../lib/format'
 import { noteArrival, rehypeStreamWords, streamClock } from '../lib/streamWords'
@@ -47,7 +47,7 @@ export function ThinkingRow({
   // Follow the newest line while thinking streams.
   useLayoutEffect(() => {
     const el = body.current
-    if (active && el) el.scrollTo({ top: el.scrollHeight, behavior: reducedMotion() ? 'auto' : 'smooth' })
+    if (active && el) el.scrollTo({ top: el.scrollHeight, behavior: scrollMotion() })
   }, [text, active, body])
   return (
     <Collapsible

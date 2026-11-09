@@ -15,7 +15,9 @@ export function PlanCard({ entries }: { entries: Extract<AgentEvent, { kind: 'pl
         {entries.map((entry, i) => (
           <li key={i} className={entry.status === 'completed' ? 'text-muted-foreground line-through' : 'text-soft'}>
             <span>{entry.content}</span>
-            <span className="ml-2 text-caption text-muted-foreground">
+            <span
+              className={`ml-2 text-caption text-muted-foreground ${entry.status === 'in_progress' ? 'motion-safe:[animation:pulse_1.4s_ease-in-out_infinite]' : ''}`}
+            >
               {translate(
                 entry.status === 'in_progress' ? 'In progress' : entry.status === 'completed' ? 'Completed' : 'Pending',
               )}

@@ -23,7 +23,7 @@ export const TOOL_SUMMARY_CLASS =
 
 /** Collapsible panel that animates to its content height. */
 export const TOOL_DISCLOSURE_PANEL_CLASS =
-  'tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 h-[var(--collapsible-panel-height)] overflow-hidden motion-safe:[transition:height_200ms_var(--ease)]'
+  'tool-disclosure-panel [&[data-starting-style]]:h-0 [&[data-ending-style]]:h-0 [&[data-starting-style]]:opacity-0 [&[data-ending-style]]:opacity-0 h-[var(--collapsible-panel-height)] overflow-hidden motion-safe:[transition:height_200ms_var(--ease),opacity_160ms_var(--ease)]'
 
 /** Bordered card holding a tool call body. */
 export const TOOL_CARD_CLASS =

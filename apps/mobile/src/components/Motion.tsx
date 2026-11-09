@@ -1,4 +1,4 @@
-import { CHAT_MOTION, TOOL_MOTION } from '@ramu/shared/chat/presentation'
+import { CHAT_MOTION, SENT_MOTION, TOOL_MOTION } from '@ramu/shared/chat/presentation'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AccessibilityInfo, LayoutAnimation, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native'
 import Reanimated, {
@@ -214,9 +214,7 @@ export function Arrive({ animate, identity, children }: { animate: boolean; iden
   return <Reanimated.View style={style}>{children}</Reanimated.View>
 }
 
-/** How far below its place a sent message starts: about where the message box is, so it reads as rising out of it. */
-const SENT_RISE = 56
-const SENT_MS = 340
+const SENT_MS = SENT_MOTION.durationMs
 /** When each sent message began rising, so the host's copy that replaces it mid-way carries on instead of restarting. */
 const sentStarts = new Map<string, number>()
 
@@ -238,7 +236,7 @@ export function SentArrive({ identity, start, children }: { identity: string; st
   const progress = useSharedValue(from)
   useEffect(() => {
     if (from >= 1) return
-    progress.value = withTiming(1, { duration: SENT_MS * (1 - from), easing: ReEasing.bezier(0.2, 0.9, 0.3, 1.08) })
+    progress.value = withTiming(1, { duration: SENT_MS * (1 - from), easing: ReEasing.bezier(...SENT_MOTION.easing) })
     const forget = setTimeout(() => sentStarts.delete(identity), SENT_MS * 3)
     return () => {
       cancelAnimation(progress)
@@ -246,11 +244,11 @@ export function SentArrive({ identity, start, children }: { identity: string; st
     }
   }, [from, identity, progress])
   const style = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 0.3], [0, 1], Extrapolation.CLAMP),
+    opacity: interpolate(progress.value, [0, SENT_MOTION.opaqueAt], [0, 1], Extrapolation.CLAMP),
     transformOrigin: 'right bottom',
     transform: [
-      { translateY: (1 - progress.value) * SENT_RISE },
-      { scale: interpolate(progress.value, [0, 1], [0.92, 1], Extrapolation.CLAMP) },
+      { translateY: (1 - progress.value) * SENT_MOTION.rise },
+      { scale: interpolate(progress.value, [0, 1], [SENT_MOTION.scale, 1], Extrapolation.CLAMP) },
     ],
   }))
   return <Reanimated.View style={style}>{children}</Reanimated.View>

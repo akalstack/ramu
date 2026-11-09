@@ -3,6 +3,7 @@ import { Button } from '@/components/desktop-button'
 import type { AgentEvent } from '@ramu/shared/types'
 import type { QuestionState } from '@ramu/shared/chat/questions'
 import { GHOST_TEXT_BUTTON_CLASS } from '../styles'
+import { scrollMotion } from '../../../workspace/panelMotion'
 
 type PendingQuestion = Extract<AgentEvent, { kind: 'question' | 'elicitation' | 'secret-request' }>
 
@@ -35,7 +36,7 @@ export function PendingQuestionsBar({
             const card = [...(scroller.current?.querySelectorAll<HTMLElement>('[data-question-request]') ?? [])].find(
               (node) => node.dataset.questionRequest === question.requestId,
             )
-            card?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+            card?.scrollIntoView({ block: 'center', behavior: scrollMotion() })
             card?.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus({ preventScroll: true })
           }}
         >
