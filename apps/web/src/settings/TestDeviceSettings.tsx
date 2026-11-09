@@ -56,7 +56,7 @@ function Readiness({
   )
 }
 
-/** Settings › Computer use › Test devices: off by default, with each platform's readiness and what fixes it. */
+/** Settings › Computer & devices › Test devices: off by default, with each platform's readiness and what fixes it. */
 export function TestDeviceSettings({ hostId, readOnly }: { hostId: string; readOnly: boolean }) {
   useLanguage()
   const [status, setStatus] = useState<TestDeviceStatus | null>(null)

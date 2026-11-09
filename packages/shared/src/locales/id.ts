@@ -6782,4 +6782,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Comes with a plugin: it updates, turns off and is removed with it.": "Datang bersama plugin: ikut diperbarui, dimatikan, dan dihapus bersamanya.",
   "Manage in Plugins": "Kelola di Plugin",
   "{0} skills from turned-off plugins are hidden.": "{0} skill dari plugin yang dimatikan disembunyikan.",
+  "Learned by Ramu": "Dipelajari oleh Ramu",
+  "Learned from finished threads or written by you, for every provider. Each says where it applies.": "Dipelajari dari thread yang selesai atau ditulis oleh Anda, untuk semua penyedia. Masing-masing menyebut di mana berlakunya.",
+  "Ramu’s skills": "Skill Ramu",
+  "Where agents can load it": "Tempat agen dapat memuatnya",
+  "Written by you": "Ditulis oleh Anda",
+  "Memory & learning": "Memori & pembelajaran",
+  "Computer & devices": "Komputer & perangkat",
 }

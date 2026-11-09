@@ -15,7 +15,13 @@ import { errorText } from '../lib/errors'
 import { takeLibraryFocus } from '../summaries/libraryFocus'
 import { SettingsCard, SettingsCardList } from './cards'
 import { ModelChoice } from './ModelChoice'
-import { type IntelligencePreferences, type LearningSnapshot, type ManagedSkill } from '@ramu/shared/types'
+import {
+  type IntelligencePreferences,
+  type LearningSnapshot,
+  type ManagedSkill,
+  type Project,
+} from '@ramu/shared/types'
+import { providerName } from '@ramu/shared/providers/providers'
 import { SKILL_ACTION_LABELS, skillActions } from '@ramu/shared/skillControls'
 import { readableJobError } from '@ramu/shared/jobErrors'
 
@@ -385,9 +391,16 @@ export function ManagedSkills() {
     return () => window.clearTimeout(timer)
   }, [focusId, snapshot])
   const { paged } = view
+  const [projects, setProjects] = useState<Project[]>([])
+  useEffect(() => {
+    void invoke('projects.list').then(setProjects, () => {})
+  }, [invoke])
   return (
     <div className="settings-form flex flex-col gap-2 mt-6">
-      <SettingsGroupTitle className="mb-1">{t('Managed skills')}</SettingsGroupTitle>
+      <SettingsGroupTitle className="mb-1">{t('Ramu’s skills')}</SettingsGroupTitle>
+      <p className="m-0 mb-1 text-caption text-muted-foreground">
+        {t('Learned from finished threads or written by you, for every provider. Each says where it applies.')}
+      </p>
       {viewOnly && <p role="status">{t(VIEW_ONLY_WRITE_NOTICE)}</p>}
       <ListToolbar
         view={view}
@@ -420,11 +433,27 @@ export function ManagedSkills() {
             title={skill.name}
             badges={
               <>
+                <Badge variant="outline" title={t('Where agents can load it')}>
+                  {skill.projectId
+                    ? (projects.find((project) => project.id === skill.projectId)?.name ?? t('One project'))
+                    : t('All projects')}
+                </Badge>
+                {skill.providers?.length ? (
+                  <Badge variant="outline">
+                    {skill.providers.map((provider) => providerName(provider)).join(', ')}
+                  </Badge>
+                ) : null}
                 {skill.status !== 'active' && <Badge variant="secondary">{t(skill.status)}</Badge>}
                 {skill.pinned && <Badge variant="outline">{t('Pinned')}</Badge>}
               </>
             }
-            meta={`${skill.description} · ${t('Read {0} times', { 0: skill.useCount })}`}
+            meta={[
+              skill.description,
+              skill.changedBy === 'user' && !skill.sourceSessionId ? t('Written by you') : t('Learned by Ramu'),
+              t('Read {0} times', { 0: skill.useCount }),
+            ]
+              .filter(Boolean)
+              .join(' · ')}
             actions={
               <>
                 {skillActions(skill).map((action) => (

@@ -359,7 +359,7 @@ function LockedUseRow({ hostId, visible, canWrite }: { hostId: string; visible: 
   )
 }
 
-/** Settings → Computer use: the selected host's computer access, kept apart from the browser settings. */
+/** Settings → Computer & devices: the selected host's computer access, kept apart from the browser settings. */
 export function ComputerUseSettings(props: DraftProps) {
   useLanguage()
   const scope = useContext(SettingsScopeContext)

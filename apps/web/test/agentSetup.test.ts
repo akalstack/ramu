@@ -25,6 +25,7 @@ vi.mock('../src/workspace/workspace', () => ({ useWorkspace: () => ({ composing:
 vi.mock('../src/Menu', () => ({ Dialog: () => null, Dropdown: () => null }))
 vi.mock('../src/ipc', () => ({ ramu: { invoke: vi.fn(async () => undefined) } }))
 vi.mock('../src/settings/McpSettings', () => ({ McpSettings: () => null }))
+vi.mock('../src/settings/IntelligenceSettings', () => ({ ManagedSkills: () => null }))
 
 const server = (overrides: Partial<ProjectMcpServer>): ProjectMcpServer => ({
   key: overrides.name ?? 'k',

@@ -16,7 +16,7 @@ export class SessionSearch {
   ) {}
 
   private checkEnabled() {
-    if (!this.enabled()) throw new Error('Recall past conversations is turned off in Settings → Memory & skills.')
+    if (!this.enabled()) throw new Error('Recall past conversations is turned off in Settings → Memory & learning.')
   }
 
   private source(sessionId: string, topLevelOnly = false): Source | undefined {

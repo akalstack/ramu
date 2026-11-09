@@ -20,7 +20,7 @@ type Props = { value: IntelligencePreferences; onChange: (value: IntelligencePre
 
 const formatDate = (at: number) => DateTime.fromMillis(at).toLocaleString(DateTime.DATE_MED)
 
-/** Settings → Memory & skills → What Ramu learned: how often, what to include, Run now, and the history. */
+/** Settings → Memory & learning → What Ramu learned: how often, what to include, Run now, and the history. */
 export function SummarySettings({ value, onChange, hasChanges }: Props) {
   const invoke = useSettingsInvoke()
   const scope = useContext(SettingsScopeContext)

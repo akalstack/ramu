@@ -816,6 +816,7 @@ const PHONE_ENTRIES: { section: SettingsSection; title: string; words: string }[
   { section: 'archived', title: 'Archived threads', words: 'history restore unarchive delete' },
   { section: 'agent-setup', title: 'MCP servers', words: 'shared tools external service connection skills' },
   { section: 'plugins', title: 'Installed plugins', words: 'plugin marketplace index integration service credential' },
+  { section: 'agent-setup', title: 'Skills', words: 'installed skills your own skill archive restore' },
   { section: 'memory', title: 'Memories', words: 'remember forget saved memory archive restore' },
   {
     section: 'providers',

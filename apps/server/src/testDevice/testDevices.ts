@@ -177,7 +177,7 @@ export class TestDevices {
   /** Boots the device for this thread, waiting until it is ready. One thread holds a device at a time. */
   async open(id: string, taskId: string): Promise<{ id: string; name: string }> {
     if (!this.enabled())
-      throw new Error('Test devices are turned off on this host. Turn them on in Settings → Computer use.')
+      throw new Error('Test devices are turned off on this host. Turn them on in Settings → Computer & devices.')
     const existing = this.running.get(id)
     if (existing) {
       if (existing.heldBy !== taskId) throw new Error('Another thread is using that test device.')
@@ -459,7 +459,7 @@ export class TestDevices {
         const companion = idbCompanion()
         if (!path || !companion)
           throw new ComputerNotRun(
-            'Tapping an iOS Simulator needs idb. Install it in Settings › Computer use › Test devices.',
+            'Tapping an iOS Simulator needs idb. Install it in Settings › Computer & devices › Test devices.',
           )
         const ui = (...args: string[]) =>
           run(path, ['--companion-path', companion, 'ui', ...args, '--udid', entry.handle], OPTIONS)

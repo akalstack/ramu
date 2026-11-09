@@ -1,6 +1,6 @@
 import { SettingsScopeContext, useSettingsScope } from './SettingsScope'
 import { sameValue, settingValue } from '@ramu/shared/settingsCompatibility'
-import { LearningSettings, MaintenanceModelSettings, ManagedSkills } from './IntelligenceSettings'
+import { LearningSettings, MaintenanceModelSettings } from './IntelligenceSettings'
 import { SettingsGroupTitle } from '@/components/settings-row'
 import { t, useLanguage } from '../i18n'
 import { ProviderSettings } from './ProviderSettings'
@@ -261,7 +261,6 @@ export function SettingsPanel({
                     hasChanges={hasChanges}
                   />
                   {appDraft.memory.enabled && <MemoryBrowser />}
-                  <ManagedSkills />
                 </>
               )}
               {page === 'workflows' && (

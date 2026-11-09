@@ -494,6 +494,9 @@ export default function SettingsSectionPage() {
         {id === 'deploy' ? <DeployStatus key={`DeployStatus:${selected}`} hostId={selected} /> : null}
         {id === 'agent-setup' ? <AgentSetupSettings key={`AgentSetupSettings:${selected}`} hostId={selected} /> : null}
         {id === 'agent-setup' ? <RulesSettings key={`RulesSettings:${selected}`} hostId={selected} /> : null}
+        {id === 'agent-setup' ? (
+          <ManagedSkills key={`ManagedSkills:${selected}`} hostId={selected} locked={locked} />
+        ) : null}
         {id === 'plugins' ? <PluginSettings key={`PluginSettings:${selected}`} hostId={selected} /> : null}
         {id === 'identities' ? (
           <IdentitySettings key={`IdentitySettings:${selected}`} hostId={selected} locked={locked} />
@@ -505,7 +508,6 @@ export default function SettingsSectionPage() {
         {id === 'memory' ? (
           <LearningReviews key={`LearningReviews:${selected}`} hostId={selected} locked={locked} />
         ) : null}
-        {id === 'memory' ? <ManagedSkills key={`ManagedSkills:${selected}`} hostId={selected} locked={locked} /> : null}
         {id === 'memory' ? <MemoryList key={`MemoryList:${selected}`} hostId={selected} /> : null}
         {id === 'browser' ? (
           <BrowserDefaultProfile key={`BrowserDefaultProfile:${selected}`} host={host} locked={locked} />

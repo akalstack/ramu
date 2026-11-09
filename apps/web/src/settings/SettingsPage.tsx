@@ -110,6 +110,7 @@ const SETTINGS_INDEX: { section: SettingsSection; title: string; words?: string 
     words:
       'install marketplace index extension service integration railway fly cloudflare supabase grafana amplitude salesforce',
   },
+  { section: 'agent-setup', title: 'Skills', words: 'installed skills your own skill install preview copy archive' },
   { section: 'plugins', title: 'Install from a source', words: 'git folder plugin.json claude code codex' },
   {
     section: 'account',

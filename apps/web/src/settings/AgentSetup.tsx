@@ -1,3 +1,5 @@
+import { ManagedSkills } from './IntelligenceSettings'
+import { libraryFocusWaiting } from '../summaries/libraryFocus'
 import { InlineAction, InlineLink } from '@/components/inline-action'
 import { useStaging } from './stagedChanges'
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
@@ -294,7 +296,7 @@ export function AgentSetup({ initialView = 'mcp' }: { initialView?: SetupView })
     enabled: ready,
   })
   const status = useQuery({ queryKey: ['mcp-settings', hostKey], queryFn: () => invoke('mcp.status'), enabled: ready })
-  const [view, setView] = useState<SetupView>(initialView)
+  const [view, setView] = useState<SetupView>(() => (libraryFocusWaiting('skill') ? 'skills' : initialView))
   const [picked, setPicked] = useState<string>()
   const [pending, setPending] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -581,6 +583,9 @@ export function AgentSetup({ initialView = 'mcp' }: { initialView?: SetupView })
             {skillList('project')}
           </Group>
         )}
+        {/* Ramu's own skills (installed, learned or written here) sit with the provider's skill files: all of them
+            are instructions agents load. */}
+        <ManagedSkills />
       </TabsContent>
     </Tabs>
   )
