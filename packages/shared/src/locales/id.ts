@@ -6804,4 +6804,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Projects groups threads under their project. Recent threads lists every thread by latest activity.": "Proyek mengelompokkan thread di bawah proyeknya. Thread terbaru menampilkan semua thread menurut aktivitas terakhir.",
   "Show branches in projects": "Tampilkan branch di proyek",
   "Threads under a project get a second line with the branch their work lands on. Recent threads always show it.": "Thread di bawah proyek mendapat baris kedua berisi branch tempat pekerjaannya masuk. Thread terbaru selalu menampilkannya.",
+  "Choose a browser": "Pilih browser",
+  "Copy sign-ins from a browser on this computer into a new profile, once. Nothing is read until you choose, and that browser is never changed.": "Salin login dari browser di komputer ini ke profil baru, sekali saja. Tidak ada yang dibaca sampai Anda memilih, dan browser itu tidak pernah diubah.",
+  "Looking…": "Mencari…",
+  "Needs Full Disk Access to read its sign-ins": "Perlu Akses Disk Penuh untuk membaca loginnya",
+  "No browser found": "Tidak ada browser ditemukan",
+  "Not found on this computer: {0}": "Tidak ada di komputer ini: {0}",
+  "Sign in to the websites in a Ramu profile instead.": "Masuk ke situs di profil Ramu saja.",
 }

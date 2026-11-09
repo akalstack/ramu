@@ -119,6 +119,7 @@ export function BrowserProfilesSettings({
         <div className="flex items-center gap-2">
           <Input
             aria-label={t('New profile name')}
+            placeholder={t('New profile, such as Work or Testing')}
             value={name}
             maxLength={80}
             disabled={busy}
