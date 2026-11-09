@@ -1,4 +1,5 @@
 import type {
+  PullRequestTimelineEvent,
   PullRequestFile,
   ForgeAccessReport,
   ForgeCheck,
@@ -49,6 +50,8 @@ export interface ForgeAdapter {
   pullRequestAction(cwd: string, url: string, action: PullRequestAction): Promise<void>
   /** The description of `url`, for the first message of a thread opened on it. */
   pullRequestBody(cwd: string, url: string): Promise<string>
+  /** The latest history of `url`, oldest first, for its full view; absent where not supported yet. */
+  pullRequestTimeline?(cwd: string, url: string): Promise<PullRequestTimelineEvent[]>
   /** The files `url` changes with their diffs, for its full view; absent where not supported yet. */
   pullRequestFiles?(cwd: string, url: string): Promise<{ files: PullRequestFile[]; more: boolean }>
   /** Every review thread of `url`, resolved ones included, in one shape across services. */

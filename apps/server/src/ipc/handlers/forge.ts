@@ -415,6 +415,11 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
       run: (taskId: string, repoId: string, url: string) =>
         redacted(() => forge.pullRequestBody(gitCwdOf(taskId, repoId), url)),
     },
+    'forge.pullRequestTimeline': {
+      args: z.tuple([id, id, prUrl]),
+      run: (taskId: string, repoId: string, url: string) =>
+        redacted(() => forge.pullRequestTimeline(gitCwdOf(taskId, repoId), url)),
+    },
     'forge.pullRequestFiles': {
       args: z.tuple([id, id, prUrl]),
       run: (taskId: string, repoId: string, url: string) =>

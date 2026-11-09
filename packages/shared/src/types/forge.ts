@@ -147,6 +147,20 @@ export interface PullRequestFile {
   truncated?: boolean
 }
 
+/** One step in a pull request's history, oldest first in its timeline. */
+export interface PullRequestTimelineEvent {
+  kind:
+    'commit' | 'review' | 'comment' | 'review-requested' | 'force-pushed' | 'ready' | 'merged' | 'closed' | 'reopened'
+  /** Who did it, where the service names them. */
+  actor: string | null
+  at: number
+  /** A commit's first line, a review's verdict, a comment's opening, or whom a review was asked of. */
+  text?: string
+  /** A review's verdict, for its colour. */
+  verdict?: 'approved' | 'changes-requested' | 'commented' | 'dismissed'
+  url?: string
+}
+
 /** What opening a pull request in a thread needs: the thread already on it, or how to start one. */
 export interface PullRequestHandoff {
   existing: { taskId: string; title: string } | null

@@ -1,5 +1,6 @@
 // GitHub pull requests and issues through the `gh` CLI, which brings the user's own sign-in.
 // Like git.ts, every call uses an argument array (never a shell string) and an explicit working directory.
+import { pullRequestTimeline } from './githubTimeline'
 import { existsSync } from 'node:fs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
@@ -1176,6 +1177,7 @@ registerForgeAdapter({
   pullRequestAction: pulls.pullRequestAction,
   pullRequestBody: pulls.pullRequestBody,
   pullRequestFiles: pulls.pullRequestFiles,
+  pullRequestTimeline,
   reviewThreads: pulls.reviewThreads,
   replyToThread: pulls.replyToThread,
   resolveThread: pulls.resolveThread,

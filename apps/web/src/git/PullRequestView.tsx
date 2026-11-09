@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { PullRequestTimeline } from './PullRequestTimeline'
 import { PullRequestFiles } from './PullRequestFiles'
 import { previewRehypePlugins } from '@ramu/shared/workspace/markdownRendering'
 import Markdown from 'react-markdown'
@@ -359,6 +360,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
         )}
 
         <PullRequestFiles taskId={taskId} repoId={view.repoId} url={view.url} />
+        <PullRequestTimeline taskId={taskId} repoId={view.repoId} url={view.url} />
 
         <section className="flex flex-col gap-2">
           <h3 className="m-0 text-control font-semibold">

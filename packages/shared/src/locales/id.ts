@@ -6391,4 +6391,17 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Showing the first {0} files. Open it on the hosting service for the rest.':
     'Menampilkan {0} berkas pertama. Buka di layanan hosting untuk sisanya.',
   'The rest of this diff is too long to show here.': 'Sisa diff ini terlalu panjang untuk ditampilkan di sini.',
+  Timeline: 'Linimasa',
+  committed: 'membuat commit',
+  reviewed: 'mereview',
+  commented: 'berkomentar',
+  'asked for a review from {0}': 'meminta review dari {0}',
+  'force-pushed the branch': 'melakukan force-push ke branch',
+  'marked it ready for review': 'menandainya siap direview',
+  'merged it': 'me-merge-nya',
+  'closed it': 'menutupnya',
+  'reopened it': 'membukanya kembali',
+  approved: 'menyetujui',
+  'requested changes': 'meminta perubahan',
+  'had a review dismissed': 'review-nya dibatalkan',
 }

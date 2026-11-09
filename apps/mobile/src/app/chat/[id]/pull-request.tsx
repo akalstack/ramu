@@ -20,6 +20,7 @@ import {
   type PullRequestAction,
   type PullRequestDraftBatch,
   type PullRequestFile,
+  type PullRequestTimelineEvent,
   type PullRequestList,
   type PullRequestSummary,
   type PullRequestThread,
@@ -29,7 +30,7 @@ import { font, space, useTheme } from '../../../theme'
 import { useChat, useStore } from '../../../runtime/store'
 import { canWriteHost } from '../../../runtime/viewerAccess'
 import { openPullRequestThread } from '../../../runtime/pullRequestThread'
-import { useSay } from '../../../i18n'
+import { ago, useSay } from '../../../i18n'
 import { Header, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { Button, Card, Divider, Sheet, T, Toggle } from '../../../components/ui'
@@ -40,6 +41,25 @@ const METHOD_LABEL: Record<MergeMethod, string> = {
   squash: 'Squash and merge',
   merge: 'Create a merge commit',
   rebase: 'Rebase and merge',
+}
+
+/** What each timeline event says after its actor, the same English copy keys as the desktop. */
+const TIMELINE_SAID: Record<PullRequestTimelineEvent['kind'], string> = {
+  commit: 'committed',
+  review: 'reviewed',
+  comment: 'commented',
+  'review-requested': 'asked for a review from {0}',
+  'force-pushed': 'force-pushed the branch',
+  ready: 'marked it ready for review',
+  merged: 'merged it',
+  closed: 'closed it',
+  reopened: 'reopened it',
+}
+const TIMELINE_VERDICT: Record<NonNullable<PullRequestTimelineEvent['verdict']>, string> = {
+  approved: 'approved',
+  'changes-requested': 'requested changes',
+  commented: 'reviewed',
+  dismissed: 'had a review dismissed',
 }
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
@@ -77,6 +97,8 @@ export default function PullRequestScreen() {
   const [description, setDescription] = useState<string | null>(null)
   const [files, setFiles] = useState<{ files: PullRequestFile[]; more: boolean } | null>(null)
   const [filesOpen, setFilesOpen] = useState(false)
+  const [timeline, setTimeline] = useState<PullRequestTimelineEvent[] | null>(null)
+  const [timelineOpen, setTimelineOpen] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
@@ -121,6 +143,10 @@ export default function PullRequestScreen() {
           void store
             .invoke(computerId, 'forge.pullRequestDescription', taskId, repoId, url)
             .then(setDescription, () => setDescription(null))
+        if (found)
+          void store
+            .invoke(computerId, 'forge.pullRequestTimeline', taskId, repoId, url)
+            .then(setTimeline, () => setTimeline(null))
         if (found)
           void store
             .invoke(computerId, 'forge.pullRequestFiles', taskId, repoId, url)
@@ -475,6 +501,54 @@ export default function PullRequestScreen() {
                         </T>
                         <T size={font.caption} tone="ok">{`+${file.additions}`}</T>
                         <T size={font.caption} tone="bad">{`−${file.deletions}`}</T>
+                      </View>
+                    ))
+                  : null}
+              </View>
+            ) : null}
+
+            {timeline?.length ? (
+              <View style={{ gap: space.xs }}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: timelineOpen }}
+                  onPress={() => setTimelineOpen((value) => !value)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: 32 }}
+                >
+                  <Disclosure open={timelineOpen} size={14} color={c.muted} />
+                  <T size={font.control} weight="600" tone="muted">
+                    {say('Timeline')}{' '}
+                    <T size={font.control} tone="placeholder">
+                      {`${timeline.length} · ${ago(timeline.at(-1)!.at)}`}
+                    </T>
+                  </T>
+                </Pressable>
+                {timelineOpen
+                  ? timeline.map((event, index) => (
+                      <View key={`${event.kind}:${event.at}:${index}`} style={{ gap: 1 }}>
+                        <T size={font.caption}>
+                          {`${event.actor ?? say('Someone')} `}
+                          <T
+                            size={font.caption}
+                            tone={
+                              event.verdict === 'approved'
+                                ? 'ok'
+                                : event.verdict === 'changes-requested'
+                                  ? 'warn'
+                                  : 'muted'
+                            }
+                          >
+                            {event.kind === 'review' && event.verdict
+                              ? say(TIMELINE_VERDICT[event.verdict])
+                              : say(TIMELINE_SAID[event.kind], { 0: event.text ?? '' })}
+                          </T>
+                          <T size={font.caption} tone="placeholder">{` · ${ago(event.at)}`}</T>
+                        </T>
+                        {event.text && event.kind !== 'review-requested' ? (
+                          <T size={font.caption} tone="soft" numberOfLines={2}>
+                            {event.text}
+                          </T>
+                        ) : null}
                       </View>
                     ))
                   : null}
