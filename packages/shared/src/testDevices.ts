@@ -7,61 +7,8 @@ export interface PlatformReadiness {
   ready: boolean
   /** Why this host cannot run the platform at all (iOS off a Mac), said once instead of as a failed check. */
   unsupported?: string
-  /** Each missing item and its fix, in the order to do them; `item` is Simlock's id, `name` the copy key shown. */
-  missing: { item: string; name: string; fix: string }[]
-}
-
-const ITEM_NAMES: Record<string, string> = {
-  simlock: 'Simlock',
-  xcode: 'Xcode',
-  'xcode-license': 'Xcode license',
-  'xcode-first-launch': 'Xcode first launch',
-  'android-sdk': 'Android SDK',
-  'android-emulator': 'Android Emulator package',
-  'android-platform-tools': 'Android platform tools',
-  'android-cmdline-tools': 'Android command-line tools',
-  'android-jdk': 'Java for the Android tools',
-}
-
-/** A missing item's name as the checklist shows it; one Ramu does not know yet keeps Simlock's own id. */
-export const testDeviceItemName = (item: string) => ITEM_NAMES[item] ?? item
-
-/** What a checklist row's button does: open a page to get the tool, or copy a command that needs an administrator. */
-export type TestDeviceFix =
-  { kind: 'link'; label: string; url: string } | { kind: 'command'; label: string; command: string }
-
-const GET_XCODE: TestDeviceFix = {
-  kind: 'link',
-  label: 'Get Xcode',
-  url: 'macappstore://apps.apple.com/app/id497799835',
-}
-const GET_ANDROID_STUDIO: TestDeviceFix = {
-  kind: 'link',
-  label: 'Get Android Studio',
-  url: 'https://developer.android.com/studio',
-}
-
-/**
- * The button for a missing item `simlock doctor` names, where one helps: a page to install from, or the command for
- * a step that needs an administrator, which Ramu never runs itself.
- */
-export function testDeviceFix(item: string): TestDeviceFix | null {
-  switch (item) {
-    case 'xcode':
-      return GET_XCODE
-    case 'xcode-license':
-      return { kind: 'command', label: 'Copy command', command: 'sudo xcodebuild -license accept' }
-    case 'xcode-first-launch':
-      return { kind: 'command', label: 'Copy command', command: 'sudo xcodebuild -runFirstLaunch' }
-    case 'android-sdk':
-    case 'android-emulator':
-    case 'android-platform-tools':
-    case 'android-cmdline-tools':
-    case 'android-jdk':
-      return GET_ANDROID_STUDIO
-    default:
-      return null
-  }
+  /** Each missing item and its fix, in the order to do them. */
+  missing: { item: string; fix: string }[]
 }
 
 /** A device a thread holds now. Simlock made it for that thread and deletes it once the thread lets go. */
@@ -79,10 +26,6 @@ export interface TestDeviceWaiting {
   platform: TestPlatform
   position: number | null
 }
-
-/** Where one thread's device stands, for its card in the thread: in line, held, or given back. */
-export type TestDevicePlace =
-  { state: 'waiting'; position: number | null } | { state: 'held'; name: string } | { state: 'none' }
 
 /** A model this host can lease, with the systems it pairs with, newest first. */
 export interface TestDeviceModel {
@@ -108,10 +51,6 @@ export interface TestDeviceStatus {
   defaults: Record<TestPlatform, string | null>
   /** A spare device of the kind last used stays booted, so the next thread starts sooner; it costs memory. */
   keepWarm: boolean
-  /** How many devices may run at once; null leaves it to the host's memory. */
-  maxRunning: number | null
-  /** iOS Simulators boot slim: quicker and lighter. */
-  slim: boolean
 }
 
 /** One part of the Test devices status line: an English copy key and its values, translated where it is drawn. */
@@ -133,7 +72,7 @@ export function testDeviceSummary(status: TestDeviceStatus): {
   const platforms = [status.ios, status.android]
   const ios = status.ios.ready,
     android = status.android.ready
-  const missing = platforms.filter((entry) => !entry.unsupported).flatMap((entry) => entry.missing.map((m) => m.name))
+  const missing = platforms.filter((entry) => !entry.unsupported).flatMap((entry) => entry.missing.map((m) => m.item))
   const parts: SummaryPart[] = []
   if (ios || android)
     parts.push({ text: ios && android ? 'Ready on iOS and Android' : ios ? 'Ready on iOS' : 'Ready on Android' })

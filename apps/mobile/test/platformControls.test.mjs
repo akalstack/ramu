@@ -774,8 +774,8 @@ test('native chat toolbar actions receive taps and keep their supplied symbols',
   )
   assert.equal(options.headerStyle.backgroundColor, 'window')
   assert.equal(options.scrollEdgeEffects.top, 'soft')
-  // On a 400pt phone the title gets what the back button and the two-button capsule leave: 400 − 32 − 56 − 100.
-  assert.ok(nodes(tree).some((node) => node.props?.style?.width === 212))
+  // On a 400pt phone the title gets what the back button and both actions leave: 400 − 64 − 56 − 2 × 52.
+  assert.ok(nodes(tree).some((node) => node.props?.style?.width === 176))
 })
 
 test('computer video does not evaluate WebRTC exports when its native module is absent', () => {
@@ -5136,9 +5136,9 @@ test('compact thread titles use the available width, wrap, and reveal the comple
     }),
   })
   const leading = nodes(tree).find((node) => node.type === 'Pressable' && node.props.accessibilityLabel === title)
-  // Back button (56) and the two-action capsule (2 × 44 + 12) plus the window margins keep their room beside the title.
-  assert.ok(leading.props.style.width >= 200, 'a 400-point screen leaves at least 200 points for the title')
-  assert.ok(leading.props.style.width <= 400 - 32 - 56 - 100, 'the title never pushes a trailing action off the bar')
+  // Back button (56) and both trailing actions (2 × 52) plus the window margins keep their room beside the title.
+  assert.ok(leading.props.style.width >= 170, 'a 400-point screen leaves at least 170 points for the title')
+  assert.ok(leading.props.style.width <= 400 - 64 - 56 - 2 * 52, 'the title never folds the trailing actions')
   assert.equal(nodes(tree).find((node) => node.props?.children === title).props.numberOfLines, 2)
   leading.props.onPress()
   assert.deepEqual(opened, [title])
@@ -8937,17 +8937,12 @@ for (const access of ['full', 'viewer']) {
             installed: true,
             setupCommand: 'npm install',
             ios: { ready: true, missing: [] },
-            android: {
-              ready: false,
-              missing: [{ item: 'android-sdk', name: 'Android SDK', fix: 'Install Android Studio' }],
-            },
+            android: { ready: false, missing: [{ item: 'Android SDK', fix: 'Install Android Studio' }] },
             inUse: [{ taskId: 'thread-a', platform: 'ios', name: 'iPhone 17 · iOS 27.0', since: 0 }],
             waiting: [],
             models: { ios: [{ name: 'iPhone 17', kind: 'phone', systems: ['27.0'] }], android: [] },
             defaults: { ios: 'iPhone 17', android: null },
             keepWarm: false,
-            maxRunning: null,
-            slim: false,
           }),
         },
         calls,
@@ -8982,7 +8977,7 @@ for (const access of ['full', 'viewer']) {
     assert.deepEqual(
       nodes(tree)
         .filter((node) => node.props?.title === 'Android emulator')
-        .map((node) => node.props.value.missing[0].name),
+        .map((node) => node.props.value.missing[0].item),
       ['Android SDK'],
     )
     if (access === 'viewer') {

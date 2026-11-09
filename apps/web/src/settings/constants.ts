@@ -13,7 +13,6 @@ export const SECONDARY_BUTTON_CLASS = 'bg-fill hover:bg-fill-hover'
 
 // Preferences each section's "Reset to defaults" restores.
 export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[]>> = {
-  devices: ['testDevices'],
   system: [
     'appUpdateChecks',
     'appAutoUpdate',

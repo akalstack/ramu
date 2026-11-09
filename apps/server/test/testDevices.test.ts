@@ -2,9 +2,9 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, expect, it, vi } from 'vitest'
-import { processFor, TestDevices } from '../src/testDevice/testDevices'
+import { TestDevices } from '../src/testDevice/testDevices'
 import { elementsText, parseSnapshot, type AgentDeviceSession } from '../src/testDevice/agentDevice'
-import { chosenConfig, parseDoctor, type SimlockHost } from '../src/testDevice/simlock'
+import { parseDoctor, type SimlockHost } from '../src/testDevice/simlock'
 import { avccUnits, FrameReader, parameterSets } from '../src/testDevice/deviceVideo'
 
 vi.mock('../src/testDevice/simlock', async (original) => ({
@@ -168,11 +168,9 @@ it('shows a waiting thread its place in Simlock’s queue', async () => {
   const opening = testDevices.open('thread-a', { platform: 'ios' })
   await vi.waitFor(() => expect(session.open).toHaveBeenCalled())
   expect(await testDevices.waiting()).toEqual([{ taskId: 'thread-a', platform: 'ios', position: 2 }])
-  expect(await testDevices.placeOf('thread-a')).toEqual({ state: 'waiting', position: 2 })
   release()
   await opening
   expect(await testDevices.waiting()).toEqual([])
-  expect(await testDevices.placeOf('thread-a')).toEqual({ state: 'held', name: 'iPhone 17' })
 })
 
 it('turns Simlock’s stream frames into access units a WebRTC viewer can start from', () => {
@@ -203,51 +201,4 @@ it('turns Simlock’s stream frames into access units a WebRTC viewer can start 
   const frames = [...reader.push(stream.subarray(0, 7)), ...reader.push(stream.subarray(7))]
   expect(frames.map((entry) => entry.tag)).toEqual([5, 1, 2])
   expect(avccUnits(frames[2]!.payload)).toEqual([slice])
-})
-
-it('shows a thread it is waiting only when its device does not come at once', async () => {
-  vi.useFakeTimers()
-  try {
-    const waiting = vi.fn()
-    let release: () => void = () => {}
-    vi.mocked(session.open).mockImplementationOnce(
-      () => new Promise((done) => (release = () => done({ device_udid: 'UDID-1' }))),
-    )
-    const opening = devices({ waiting }).open('thread-a', { platform: 'ios' })
-    await vi.advanceTimersByTimeAsync(3100)
-    expect(waiting).toHaveBeenCalledWith('thread-a', 'ios')
-    release()
-    await opening
-    // A device that comes at once shows no waiting card.
-    await devices({ waiting }).open('thread-b', { platform: 'ios' })
-    await vi.advanceTimersByTimeAsync(3100)
-    expect(waiting).toHaveBeenCalledTimes(1)
-  } finally {
-    vi.useRealTimers()
-  }
-})
-
-it('turns the person’s choices into Simlock’s settings, putting Simlock’s own cap back for Automatic', () => {
-  expect(chosenConfig({ keepWarm: false, maxRunning: null, slim: false })).toEqual({
-    'warmPool.enabled': 'false',
-    'capacity.config.limits.maxRunning': '7',
-    'ios.defaultMode': 'full',
-  })
-  expect(chosenConfig({ keepWarm: true, maxRunning: 2, slim: true })).toEqual({
-    'warmPool.enabled': 'true',
-    'capacity.config.limits.maxRunning': '2',
-    'ios.defaultMode': 'slim',
-  })
-})
-
-it('finds a device’s own process for Resources: launchd_sim by UDID, qemu by its port', () => {
-  const table = [
-    '  101 /usr/sbin/notifyd',
-    '  202 launchd_sim /Users/me/.ramu/simlock/devices/ios/UDID-1/data/var/run/launchd_bootstrap.plist',
-    '  303 /sdk/emulator/qemu/darwin-aarch64/qemu-system-aarch64 -avd simlock_x -port 5588 -no-snapshot-save',
-    '  404 /sdk/emulator/qemu/darwin-aarch64/qemu-system-aarch64 -avd other -port 5554',
-  ].join('\n')
-  expect(processFor(table, 'ios', 'UDID-1')).toBe(202)
-  expect(processFor(table, 'android', 'emulator-5588')).toBe(303)
-  expect(processFor(table, 'ios', 'UDID-2')).toBeNull()
 })

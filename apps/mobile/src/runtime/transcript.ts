@@ -198,7 +198,6 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
     else if (e.kind === 'ability') items.push({ kind: 'ability', id, call: e.call })
     else if (e.kind === 'threads-started') items.push({ kind: 'threads', id, threads: e.threads })
     else if (e.kind === 'pull-request-writes') items.push({ kind: 'pull-request-writes', id, cardId: e.cardId })
-    else if (e.kind === 'test-device-wait') items.push({ kind: 'test-device-wait', id, platform: e.platform })
     else if (e.kind === 'settings-change') items.push({ kind: 'settings-change', id, cardId: e.cardId })
     else if (e.kind === 'continued') items.push({ kind: 'continued', id, event: e })
     // A block can open empty as a reply starts; an empty row would blink in and out at the end of the chat.

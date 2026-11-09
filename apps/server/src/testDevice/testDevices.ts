@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto'
-import { execFile } from 'node:child_process'
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve } from 'node:path'
@@ -12,12 +11,10 @@ import {
 } from '@ramu/shared/computerBridge'
 import {
   pngSize,
-  testDeviceItemName,
   type PlatformReadiness,
   type TestDeviceLease,
   type TestDeviceModel,
   type TestDeviceOrientation,
-  type TestDevicePlace,
   type TestDeviceStatus,
   type TestDeviceWaiting,
   type TestPlatform,
@@ -34,7 +31,6 @@ import {
   SimlockHost,
   simlockInstalled,
   simlockUrl,
-  chosenConfig,
   simlockToolDir,
   SIMLOCK_VERSION,
   type SimlockCatalog,
@@ -68,37 +64,11 @@ interface Held {
   input: DeviceInput | null
   /** The live picture, shared by everyone watching this thread. */
   video: DeviceVideoFeed | null
-  /** The device's own process, for Resources: a simulator's launchd_sim or an emulator's qemu. */
-  pid: number | null
   /** The first snapshot starts agent-device's runner; it runs right after opening so the agent's first look is quick. */
   warm: Promise<void>
   /** When an agent or a viewer last used it; a device left alone is given back. */
   lastUse: number
 }
-
-const processTable = () =>
-  new Promise<string>((resolve, reject) =>
-    execFile('ps', ['-axo', 'pid=,command='], { maxBuffer: 16 * 1024 * 1024 }, (error, stdout) =>
-      error ? reject(error) : resolve(stdout),
-    ),
-  )
-
-/** The device's own process in `ps` output: launchd_sim with the simulator's UDID, or qemu on the emulator's port. */
-export function processFor(table: string, platform: TestPlatform, address: string): number | null {
-  const port = /^emulator-(\d+)$/.exec(address)?.[1]
-  for (const line of table.split('\n')) {
-    const match = /^\s*(\d+)\s+(.*)$/.exec(line)
-    if (!match) continue
-    const command = match[2]!
-    if (platform === 'ios' && command.includes('launchd_sim') && command.includes(address)) return Number(match[1])
-    if (platform === 'android' && port && /qemu-system/.test(command) && command.includes(`-port ${port}`))
-      return Number(match[1])
-  }
-  return null
-}
-
-/** How long an open may take before the thread shows that it is waiting in line. */
-const WAITING_NOTE_MS = 3000
 
 /** A device nobody has used or watched for this long goes back to Simlock, which deletes it. */
 export const TEST_DEVICE_IDLE_MS = 30 * 60_000
@@ -139,41 +109,28 @@ export class TestDevices {
       host?: SimlockHost
       /** The model a thread gets when it names none, as the person chose it. */
       defaults?: () => Partial<Record<TestPlatform, string>>
-      /** The person's choices for Simlock: a spare device kept ready, how many may run, slim simulators. */
-      choices?: () => { keepWarm: boolean; maxRunning: number | null; slim: boolean }
-      /** An open is still waiting after a moment: the thread shows its place in line. */
-      waiting?: (taskId: string, platform: TestPlatform) => void
+      /** Whether Simlock keeps a spare device of the kind last used booted and ready. */
+      keepWarm?: () => boolean
       /** Tells a thread what happened to its device (a restart, a lost lease) as a system note. */
       notify?: (taskId: string, text: string) => void
       run?: CommandRun
       bytes?: (args: string[]) => Promise<Buffer>
       newSession?: (name: string, token: string) => AgentDeviceSession
-      /** `ps` output of pid and command line, for finding a device's own process. */
-      processTable?: () => Promise<string>
       platform?: NodeJS.Platform
       arch?: string
     } = {},
   ) {}
 
   private get host() {
-    this.options.host ??= new SimlockHost(() => chosenConfig(this.choices()))
+    this.options.host ??= new SimlockHost(() => ({
+      'warmPool.enabled': String(this.options.keepWarm?.() ?? false),
+    }))
     return this.options.host
   }
 
-  private choices() {
-    return this.options.choices?.() ?? { keepWarm: false, maxRunning: null, slim: false }
-  }
-
-  private applied: string | null = null
-
-  /** Applies the person's choices when they changed since Simlock was last configured, wherever they were changed. */
-  private async syncChoices() {
-    const wanted = JSON.stringify(chosenConfig(this.choices()))
-    if (this.applied === null) this.applied = wanted
-    else if (wanted !== this.applied && simlockInstalled()) {
-      this.applied = wanted
-      await this.host.reconfigure()
-    }
+  /** The person turned keeping a spare device ready on or off. */
+  async setKeepWarm() {
+    if (simlockInstalled()) await this.host.reconfigure()
   }
   private get platform() {
     return this.options.platform ?? process.platform
@@ -193,21 +150,6 @@ export class TestDevices {
         if (Date.now() - device.lastUse > TEST_DEVICE_IDLE_MS) void this.releaseThread(device.taskId)
     }, 60_000)
     this.timer.unref?.()
-  }
-
-  /** Devices threads hold, as process roots for Resources, so each shows its memory and CPU under its thread. */
-  processes(): { pid: number; taskId: string; id: string; name: string }[] {
-    return [...this.held.values()].flatMap((device) =>
-      device.pid
-        ? [{ pid: device.pid, taskId: device.taskId, id: `test-device:${device.taskId}`, name: device.name }]
-        : [],
-    )
-  }
-
-  /** Simlock does not report process ids: a simulator's launchd_sim names its UDID, an emulator's qemu its port. */
-  private async findProcess(device: Held) {
-    const table = await (this.options.processTable ?? processTable)().catch(() => '')
-    device.pid = processFor(table, device.platform, device.address)
   }
 
   /** Viewers keep a device in use; reading a frame counts. */
@@ -249,12 +191,8 @@ export class TestDevices {
       const missing = simlockInstalled()
         ? findings
             .filter((finding) => finding.platform === platform || finding.platform === null)
-            .map((finding) => ({
-              item: finding.item,
-              name: testDeviceItemName(finding.item),
-              fix: finding.remedy ?? finding.message,
-            }))
-        : [{ item: 'simlock', name: testDeviceItemName('simlock'), fix: 'Press Set up test devices.' }]
+            .map((finding) => ({ item: finding.item, fix: finding.remedy ?? finding.message }))
+        : [{ item: 'Simlock', fix: 'Press Set up test devices.' }]
       return { ready: !missing.length, missing }
     }
     return { ios: readiness('ios'), android: readiness('android') }
@@ -292,7 +230,6 @@ export class TestDevices {
   }
 
   async status(): Promise<TestDeviceStatus> {
-    await this.syncChoices().catch(() => {})
     const installed = simlockInstalled()
     const [ready, { models, phones }, waiting] = await Promise.all([this.readiness(), this.catalog(), this.waiting()])
     const chosen = this.options.defaults?.() ?? {}
@@ -318,9 +255,7 @@ export class TestDevices {
       waiting,
       models,
       defaults: { ios: fallback('ios'), android: fallback('android') },
-      keepWarm: this.choices().keepWarm,
-      maxRunning: this.choices().maxRunning,
-      slim: this.choices().slim,
+      keepWarm: this.options.keepWarm?.() ?? false,
     }
   }
 
@@ -354,13 +289,10 @@ export class TestDevices {
     return result
   }
 
-  /** Where a thread's device stands, for its card in the thread. */
-  async placeOf(taskId: string): Promise<TestDevicePlace> {
-    const held = this.held.get(taskId)
-    if (held) return { state: 'held', name: held.name }
-    if (!this.opening.has(taskId)) return { state: 'none' }
-    const entry = (await this.waiting()).find((candidate) => candidate.taskId === taskId)
-    return { state: 'waiting', position: entry?.position ?? null }
+  /** A thread's place while it waits, for its device pill; null once it has a device or is not waiting. */
+  async placeOf(taskId: string): Promise<TestDeviceWaiting | null> {
+    if (!this.opening.has(taskId)) return null
+    return (await this.waiting()).find((entry) => entry.taskId === taskId) ?? null
   }
 
   /**
@@ -379,7 +311,6 @@ export class TestDevices {
     if (existing) await this.releaseThread(taskId)
     if (this.opening.has(taskId)) throw new Error('This thread is already waiting for a device.')
     await this.host.ready()
-    await this.syncChoices()
     this.opening.set(taskId, { taskId, platform: request.platform, startedAt: Date.now() })
     const token = await this.host.createToken('agent', `ramu ${taskId}`)
     const session = (this.options.newSession ?? ((name, secret) => new AgentDeviceSession(name, secret)))(
@@ -388,10 +319,6 @@ export class TestDevices {
     )
     const opening = this.opening.get(taskId)
     if (opening) opening.session = session
-    // A device that comes at once needs no card; one that keeps the thread waiting shows its place.
-    const waitingNote = setTimeout(() => {
-      if (this.opening.has(taskId)) this.options.waiting?.(taskId, request.platform)
-    }, WAITING_NOTE_MS)
     try {
       await session.connect()
       const model = request.model ?? (await this.status()).defaults[request.platform] ?? undefined
@@ -423,7 +350,6 @@ export class TestDevices {
         points: null,
         pointsHigh: null,
         input: null,
-        pid: null,
         video: null,
         warm: Promise.resolve(),
       }
@@ -437,7 +363,6 @@ export class TestDevices {
       )
       this.held.set(taskId, held)
       this.leaseDevice.set(lease.id, lease.deviceId)
-      void this.findProcess(held)
       this.follow()
       return { name, platform: request.platform }
     } catch (error) {
@@ -445,7 +370,6 @@ export class TestDevices {
       await this.host.revokeToken(token.id)
       throw error
     } finally {
-      clearTimeout(waitingNote)
       this.opening.delete(taskId)
     }
   }
