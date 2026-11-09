@@ -15,6 +15,7 @@ export function readReviewDraft(text: string | undefined): PendingComment[] {
             typeof entry.id === 'string' &&
             typeof entry.path === 'string' &&
             Number.isInteger(entry.line) &&
+            (entry.startLine === undefined || Number.isInteger(entry.startLine)) &&
             typeof entry.body === 'string',
         )
       : []

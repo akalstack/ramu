@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
+import { PullRequestTimeline } from '../../../components/PullRequestTimeline'
 import { PullRequestFilesList } from '../../../components/PullRequestFilesList'
-import { Disclosure } from '../../../components/Motion'
 import { PullRequestMarkdown } from '../../../components/PullRequestMarkdown'
-import { ActivityIndicator, Alert, Linking, Pressable, RefreshControl, View } from 'react-native'
+import { ActivityIndicator, Alert, Linking, RefreshControl, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Bot,
@@ -44,10 +44,10 @@ import { font, radius, space, useTheme } from '../../../theme'
 import { useChat, useStore } from '../../../runtime/store'
 import { canWriteHost } from '../../../runtime/viewerAccess'
 import { openPullRequestThread } from '../../../runtime/pullRequestThread'
-import { ago, useSay } from '../../../i18n'
+import { useSay } from '../../../i18n'
 import { Header, HeaderButton, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
-import { Button, Card, Chip, Divider, Segmented, Sheet, T, Toggle } from '../../../components/ui'
+import { Button, Card, Chip, ConnectionDot, Divider, Segmented, Sheet, T, Toggle } from '../../../components/ui'
 import {
   PullRequestActionBar,
   PullRequestIdentity,
@@ -61,31 +61,13 @@ import { ReviewDrafts } from '../../../components/ReviewDrafts'
 import { PeopleSheet, PullRequestComments, ReactionRow } from '../../../components/PullRequestComments'
 import { supportsPullRequest } from '@ramu/shared/pullRequestSupport'
 import type { ForgeService, PullRequestWrite, ReviewVerdict } from '@ramu/shared/types'
+import { pullRequestHostChoices } from '../../../runtime/pullRequestHosts'
 import { pullRequestCopy } from '../../../runtime/pullRequestCopy'
 
 const METHOD_LABEL: Record<MergeMethod, string> = {
   squash: 'Squash and merge',
   merge: 'Create a merge commit',
   rebase: 'Rebase and merge',
-}
-
-/** What each timeline event says after its actor, the same English copy keys as the desktop. */
-const TIMELINE_SAID: Record<PullRequestTimelineEvent['kind'], string> = {
-  commit: 'committed',
-  review: 'reviewed',
-  comment: 'commented',
-  'review-requested': 'asked for a review from {0}',
-  'force-pushed': 'force-pushed the branch',
-  ready: 'marked it ready for review',
-  merged: 'merged it',
-  closed: 'closed it',
-  reopened: 'reopened it',
-}
-const TIMELINE_VERDICT: Record<NonNullable<PullRequestTimelineEvent['verdict']>, string> = {
-  approved: 'approved',
-  'changes-requested': 'requested changes',
-  commented: 'reviewed',
-  dismissed: 'had a review dismissed',
 }
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
@@ -124,6 +106,18 @@ export default function PullRequestScreen() {
     store.setDraft(draftKey, writeReviewDraft(change(readReviewDraft(store.drafts[draftKey]))))
   const computer = store.computers.find((pc) => pc.id === computerId)
   const online = store.isOnline(computerId)
+  // The other hosts whose checkout lists this pull request, from what this phone kept of each host's list.
+  const hostChoices = pullRequestHostChoices(
+    store.computers.flatMap((pc) =>
+      [false, true].map((closed) => ({
+        host: pc.id,
+        repositories: pullRequestCopy.read(pc.id, 'forge.allPullRequests', closed, false) ?? [],
+      })),
+    ),
+    url,
+    computerId,
+    (host) => store.isOnline(host),
+  )
   // Offline, the screen reads from what this phone kept, and nothing is sent until the host is back.
   const canWrite = canWriteHost(computer) && online
   // What this phone last read of this pull request, so the screen opens on it and then reads again.
@@ -154,7 +148,6 @@ export default function PullRequestScreen() {
   const [files, setFiles] = useState<{ files: PullRequestFile[]; more: boolean } | null>(kept?.files ?? null)
   const [tab, setTab] = useState<'overview' | 'files'>('overview')
   const [timeline, setTimeline] = useState<PullRequestTimelineEvent[] | null>(kept?.timeline ?? null)
-  const [timelineOpen, setTimelineOpen] = useState(false)
   // Kept data shows at once; only a pull request this phone never read waits on the spinner.
   const [loaded, setLoaded] = useState(!!kept)
   const [refreshing, setRefreshing] = useState(false)
@@ -168,8 +161,15 @@ export default function PullRequestScreen() {
   const [threadFilter, setThreadFilter] = useState<ReviewThreadFilter>('open')
   const [threadOrder, setThreadOrder] = useState<'newest' | 'oldest'>('newest')
   // The line being commented on (or the pending comment being edited), and the Finish review sheet.
-  const [commenting, setCommenting] = useState<{ path: string; line: number; id?: string; body?: string } | null>(null)
+  const [commenting, setCommenting] = useState<{
+    path: string
+    line: number
+    startLine?: number
+    id?: string
+    body?: string
+  } | null>(null)
   const [finishing, setFinishing] = useState(false)
+  const [choosingHost, setChoosingHost] = useState(false)
   const [reviewError, setReviewError] = useState<string | null>(null)
 
   const read = useCallback(
@@ -393,7 +393,12 @@ export default function PullRequestScreen() {
       await store.invoke(computerId, 'forge.submitReview', taskId, repoId, url, {
         verdict,
         body,
-        comments: pending.map(({ path, line, body: text }) => ({ path, line, body: text })),
+        comments: pending.map(({ path, line, startLine, body: text }) => ({
+          path,
+          line,
+          ...(startLine ? { startLine } : {}),
+          body: text,
+        })),
       })
       setPending(() => [])
       setFinishing(false)
@@ -458,6 +463,20 @@ export default function PullRequestScreen() {
         {pr && stage ? (
           <>
             <PullRequestIdentity pr={pr} service={service} stage={stage} />
+            {store.computers.length > 1 ? (
+              // Which host it is read from and worked on; with its repository on several, it moves to another one.
+              <View style={{ flexDirection: 'row' }}>
+                <Chip
+                  small
+                  status={computer?.status}
+                  label={say('On {0}', { 0: computer?.name ?? computerId })}
+                  accessibilityLabel={say('Host for this pull request')}
+                  accessibilityHint={say('Its thread and checkout are on this host')}
+                  chevron={hostChoices.length > 1}
+                  onPress={() => hostChoices.length > 1 && setChoosingHost(true)}
+                />
+              </View>
+            ) : null}
             {!online ? (
               <PullRequestNote>
                 {say('Offline · showing what this phone last read. Reconnect to the host to act on it.')}
@@ -628,53 +647,7 @@ export default function PullRequestScreen() {
                   </View>
                 ) : null}
 
-                {timeline?.length ? (
-                  <View style={{ gap: space.xs }}>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityState={{ expanded: timelineOpen }}
-                      onPress={() => setTimelineOpen((value) => !value)}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: 32 }}
-                    >
-                      <Disclosure open={timelineOpen} size={14} color={c.muted} />
-                      <T size={font.control} weight="600" tone="muted">
-                        {say('Timeline')}{' '}
-                        <T size={font.control} tone="placeholder">
-                          {`${timeline.length} · ${ago(timeline.at(-1)!.at)}`}
-                        </T>
-                      </T>
-                    </Pressable>
-                    {timelineOpen
-                      ? timeline.map((event, index) => (
-                          <View key={`${event.kind}:${event.at}:${index}`} style={{ gap: 1 }}>
-                            <T size={font.caption}>
-                              {`${event.actor ?? say('Someone')} `}
-                              <T
-                                size={font.caption}
-                                tone={
-                                  event.verdict === 'approved'
-                                    ? 'ok'
-                                    : event.verdict === 'changes-requested'
-                                      ? 'warn'
-                                      : 'muted'
-                                }
-                              >
-                                {event.kind === 'review' && event.verdict
-                                  ? say(TIMELINE_VERDICT[event.verdict])
-                                  : say(TIMELINE_SAID[event.kind], { 0: event.text ?? '' })}
-                              </T>
-                              <T size={font.caption} tone="placeholder">{` · ${ago(event.at)}`}</T>
-                            </T>
-                            {event.text && event.kind !== 'review-requested' ? (
-                              <T size={font.caption} tone="soft" numberOfLines={2}>
-                                {event.text}
-                              </T>
-                            ) : null}
-                          </View>
-                        ))
-                      : null}
-                  </View>
-                ) : null}
+                {timeline?.length ? <PullRequestTimeline timeline={timeline} /> : null}
 
                 <PullRequestComments
                   computerId={computerId}
@@ -795,7 +768,9 @@ export default function PullRequestScreen() {
                   more={files.more}
                   threads={threads ?? []}
                   pending={pending}
-                  onComment={canReview ? (path, line) => setCommenting({ path, line }) : undefined}
+                  onComment={
+                    canReview ? (path, line, startLine) => setCommenting({ path, line, startLine }) : undefined
+                  }
                   onEditPending={canReview ? (comment) => setCommenting(comment) : undefined}
                 />
               </View>
@@ -832,14 +807,18 @@ export default function PullRequestScreen() {
         <LineCommentSheet
           path={commenting.path}
           line={commenting.line}
+          startLine={commenting.startLine}
           initial={commenting.body}
           onClose={() => setCommenting(null)}
           onAdd={(body) => {
-            const { id, path, line } = commenting
+            const { id, path, line, startLine } = commenting
             setPending((current) =>
               id
                 ? current.map((comment) => (comment.id === id ? { ...comment, body } : comment))
-                : [...current, { id: `${path}:${line}:${Date.now()}`, path, line, body }],
+                : [
+                    ...current,
+                    { id: `${path}:${line}:${Date.now()}`, path, line, ...(startLine ? { startLine } : {}), body },
+                  ],
             )
           }}
           onRemove={
@@ -860,6 +839,31 @@ export default function PullRequestScreen() {
           onSubmit={(verdict, body) => void submitReview(verdict, body)}
           onClose={() => setFinishing(false)}
         />
+      ) : null}
+      {choosingHost ? (
+        <Sheet open onClose={() => setChoosingHost(false)} title={say('Host for this pull request')}>
+          <SheetGroup footer={say('Its thread and checkout are on this host')}>
+            {hostChoices.map((choice) => {
+              const pc = store.computers.find((entry) => entry.id === choice.host)
+              return (
+                <SheetOption
+                  key={choice.host}
+                  title={say('On {0}', { 0: pc?.name ?? choice.host })}
+                  trailing={pc ? <ConnectionDot status={pc.status} /> : undefined}
+                  selected={choice.host === computerId}
+                  onPress={() => {
+                    setChoosingHost(false)
+                    if (choice.host === computerId) return
+                    router.replace({
+                      pathname: '/pull-request',
+                      params: { computer: choice.host, project: choice.projectId, repoId: choice.repoId, url },
+                    })
+                  }}
+                />
+              )
+            })}
+          </SheetGroup>
+        </Sheet>
       ) : null}
       {merging && pr ? (
         <MergeSheet

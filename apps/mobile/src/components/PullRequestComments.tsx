@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Pressable, TextInput, View } from 'react-native'
-import { Pencil, Trash2 } from 'lucide-react-native'
+import { Pencil, SmilePlus, Trash2 } from 'lucide-react-native'
 import type { ForgeService, PullRequestConversationComment, PullRequestWrite } from '@ramu/shared/types'
 import { PULL_REQUEST_REACTIONS, supportsPullRequest } from '@ramu/shared/pullRequestSupport'
 import { REACTION_EMOJI } from '@ramu/shared/pullRequestWriteText'
@@ -69,7 +69,10 @@ export function usePullRequestWrite(computerId: string, taskId: string, repoId: 
   return { write, busy, error }
 }
 
-/** One row of the reactions a service offers, for a comment. */
+/**
+ * A comment's reaction picker, as the desktop's "Add a reaction": one button that opens the reactions the service
+ * offers; a service with a single reaction (Azure DevOps's like) shows just that one.
+ */
 export function ReactionRow({
   service,
   disabled,
@@ -81,29 +84,45 @@ export function ReactionRow({
 }) {
   const say = useSay()
   const { c } = useTheme()
+  const [open, setOpen] = useState(false)
   if (!supportsPullRequest(service, 'reactions')) return null
+  const reactions = PULL_REQUEST_REACTIONS[service]
+  if (!reactions.length) return null
+  const chip = (reaction: (typeof reactions)[number]) => (
+    <Pressable
+      key={reaction}
+      accessibilityRole="button"
+      accessibilityLabel={say('React {0}', { '0': REACTION_EMOJI[reaction] })}
+      disabled={disabled}
+      onPress={() => {
+        setOpen(false)
+        onReact(reaction)
+      }}
+      style={({ pressed }) => ({
+        minWidth: 36,
+        minHeight: 32,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: radius.full,
+        backgroundColor: pressed ? c.pressed : c.fill,
+        opacity: disabled ? 0.45 : 1,
+      })}
+    >
+      <T size={font.control}>{REACTION_EMOJI[reaction]}</T>
+    </Pressable>
+  )
+  if (reactions.length === 1) return <View style={{ flexDirection: 'row' }}>{chip(reactions[0]!)}</View>
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
-      {PULL_REQUEST_REACTIONS[service].map((reaction) => (
-        <Pressable
-          key={reaction}
-          accessibilityRole="button"
-          accessibilityLabel={say('React {0}', { '0': REACTION_EMOJI[reaction] })}
-          disabled={disabled}
-          onPress={() => onReact(reaction)}
-          style={({ pressed }) => ({
-            minWidth: 36,
-            minHeight: 32,
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: radius.full,
-            backgroundColor: pressed ? c.pressed : c.fill,
-            opacity: disabled ? 0.45 : 1,
-          })}
-        >
-          <T size={font.control}>{REACTION_EMOJI[reaction]}</T>
-        </Pressable>
-      ))}
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.xs }}>
+      <IconButton
+        icon={SmilePlus}
+        label={say('Add a reaction')}
+        tone={open ? 'accent' : 'muted'}
+        size={32}
+        disabled={disabled}
+        onPress={() => setOpen((value) => !value)}
+      />
+      {open ? reactions.map(chip) : null}
     </View>
   )
 }

@@ -17,6 +17,13 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import type { PullRequestTimelineEvent } from '@ramu/shared/types'
+import {
+  TIMELINE_RECENT as RECENT,
+  TIMELINE_SAID as SAID,
+  TIMELINE_VERDICT as VERDICT,
+  timelineEntries as entries,
+  type TimelineEntry as Entry,
+} from '@ramu/shared/pullRequestTimeline'
 import { cn } from 'cn'
 import { t } from '../i18n'
 import { timeAgo } from '../Menu'
@@ -24,26 +31,6 @@ import { ipcQueryKeyOn } from '../dataQueries'
 import { useHost } from '../workspace/HostProvider'
 import { invoke as openOnThisComputer } from '../ipc'
 import { queryInvokerFor } from './hostQuery'
-
-/** What each event says after its actor, as English copy keys. */
-const SAID: Record<PullRequestTimelineEvent['kind'], string> = {
-  commit: 'committed',
-  review: 'reviewed',
-  comment: 'commented',
-  'review-requested': 'asked for a review from {0}',
-  'force-pushed': 'force-pushed the branch',
-  ready: 'marked it ready for review',
-  merged: 'merged it',
-  closed: 'closed it',
-  reopened: 'reopened it',
-}
-
-const VERDICT: Record<NonNullable<PullRequestTimelineEvent['verdict']>, string> = {
-  approved: 'approved',
-  'changes-requested': 'requested changes',
-  commented: 'reviewed',
-  dismissed: 'had a review dismissed',
-}
 
 function EventIcon({ event }: { event: PullRequestTimelineEvent }) {
   const props = { size: 13, className: 'mt-0.5 flex-none', 'aria-hidden': true }
@@ -74,25 +61,6 @@ function EventIcon({ event }: { event: PullRequestTimelineEvent }) {
       )}
     />
   )
-}
-
-/** Rows shown before the older history is asked for; the newest are what changed since the last look. */
-const RECENT = 8
-
-type Entry =
-  | { kind: 'event'; event: PullRequestTimelineEvent }
-  | { kind: 'commits'; actor: PullRequestTimelineEvent['actor']; events: PullRequestTimelineEvent[] }
-
-/** Consecutive commits by one person read as one push, as the services show them. */
-function entries(events: PullRequestTimelineEvent[]): Entry[] {
-  const result: Entry[] = []
-  for (const event of events) {
-    const last = result.at(-1)
-    if (event.kind === 'commit' && last?.kind === 'commits' && last.actor === event.actor) last.events.push(event)
-    else if (event.kind === 'commit') result.push({ kind: 'commits', actor: event.actor, events: [event] })
-    else result.push({ kind: 'event', event })
-  }
-  return result
 }
 
 function When({ event }: { event: PullRequestTimelineEvent }) {

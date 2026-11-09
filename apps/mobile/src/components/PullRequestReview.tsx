@@ -13,8 +13,19 @@ export interface PendingComment {
   id: string
   path: string
   line: number
+  /** Where a comment on a block of lines starts. */
+  startLine?: number
   body: string
 }
+
+/** The lines a comment covers, as the desktop labels them: "Line 4" or "Lines 12–18". */
+export const commentLines = (
+  say: (text: string, values?: Record<string, string | number>) => string,
+  { line, startLine }: { line: number; startLine?: number },
+) =>
+  startLine !== undefined && startLine !== line
+    ? say('Lines {0}', { 0: `${startLine}–${line}` })
+    : say('Line {0}', { 0: line })
 
 /** The services' longest comment, which the host also enforces. */
 const MAX_COMMENT = 20_000
@@ -71,6 +82,7 @@ function CommentInput({
 export function LineCommentSheet({
   path,
   line,
+  startLine,
   initial,
   onAdd,
   onRemove,
@@ -78,6 +90,7 @@ export function LineCommentSheet({
 }: {
   path: string
   line: number
+  startLine?: number
   initial?: string
   onAdd: (body: string) => void
   onRemove?: () => void
@@ -89,7 +102,7 @@ export function LineCommentSheet({
     <Sheet
       open
       onClose={onClose}
-      title={initial === undefined ? say('Comment on line {0}', { 0: line }) : say('Edit comment')}
+      title={initial === undefined ? commentLines(say, { line, startLine }) : say('Edit comment')}
     >
       <View style={{ paddingHorizontal: space.l, paddingBottom: space.l, gap: space.m }}>
         <T size={font.caption} tone="muted" mono numberOfLines={2}>
@@ -170,7 +183,7 @@ export function FinishReviewSheet({
           {pending.map((comment) => (
             <SheetOption
               key={comment.id}
-              title={`${comment.path}:${comment.line}`}
+              title={`${comment.path} · ${commentLines(say, comment)}`}
               help={comment.body}
               trailing={
                 <IconButton

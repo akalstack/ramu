@@ -6862,6 +6862,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Waiting for you': 'Menunggu Anda',
   'Posted': 'Terkirim',
   'This pull request card is gone.': 'Kartu pull request ini sudah tidak ada.',
+  'From line {0}: tap the last line to comment on': 'Dari baris {0}: ketuk baris terakhir yang ingin dikomentari',
+  'Long press to comment on several lines': 'Tekan lama untuk mengomentari beberapa baris',
   'Pull request actions': 'Tindakan pull request',
   'Copy branch {0}': 'Salin cabang {0}',
   'updated {0}': 'diperbarui {0}',
