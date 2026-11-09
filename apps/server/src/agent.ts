@@ -255,6 +255,7 @@ export class AgentService {
       questionStatus: (...a) => parts.requests.questionStatus(...a),
       queuePaused: (...a) => parts.store.queuePaused(...a),
       queued: (...a) => parts.store.queued(...a),
+      threadDone: (...a) => parts.store.threadDone(...a),
       record: (...a) => parts.recorder.record(...a),
       refreshAccountUsage: () => this.refreshAccountUsage,
       apiKeyLogins: () => this.apiKeyLogins?.() ?? new Set<string>(),

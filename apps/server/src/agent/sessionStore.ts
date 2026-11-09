@@ -285,6 +285,14 @@ export class SessionStore {
     return !!this.latestEvent(id, 'queue')?.paused
   }
 
+  /** Whether the session's thread is marked done, which holds every turn the person did not start. */
+  threadDone(id: string): boolean {
+    const row = this.db
+      .prepare('SELECT t.done_at AS doneAt FROM agent_sessions s JOIN tasks t ON t.id = s.task_id WHERE s.id = ?')
+      .get(id) as { doneAt: number | null } | undefined
+    return !!row?.doneAt
+  }
+
   /** The latest recorded state of one sub-agent. */
   task(id: string, agentId: string): AgentTask | null {
     const row = this.db

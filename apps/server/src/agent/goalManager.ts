@@ -37,7 +37,7 @@ export interface GoalManagerHost
     Pick<UserRequests, 'hasBlockingQuestions'>,
     Pick<FallbackRouter, 'policyOf'>,
     Pick<SessionStarter, 'send'>,
-    Pick<SessionStore, 'get' | 'hasRunningTasks' | 'isRecoveryPending' | 'queuePaused' | 'queued'> {
+    Pick<SessionStore, 'get' | 'hasRunningTasks' | 'isRecoveryPending' | 'queuePaused' | 'queued' | 'threadDone'> {
   catalog(refresh?: boolean): Promise<ProviderCatalog[]>
   goalProbes(): GoalProbes
   preferences(): AppPreferences | undefined
@@ -342,6 +342,8 @@ export class GoalManager {
   private async continueGoal(id: string): Promise<void> {
     let goal = this.getGoal(id)
     if (this.host.shutdown() || this.host.providerWait(id) || !goal || !goalContinues(goal)) return
+    // Reopening a done thread does not resume its goal by itself; the person resumes it.
+    if (this.host.threadDone(id)) return
     if (this.goalDispatching.has(id)) return
     const session = this.host.get(id)
     if (WRITING_STATES.includes(session.state)) return // The next terminal state re-arms the goal.

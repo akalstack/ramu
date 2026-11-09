@@ -23,7 +23,7 @@ export interface MessageDispatcherHost
     Pick<SessionRecorder, 'activeTools' | 'record'>,
     Pick<SessionRegistry, 'activeWriter' | 'live' | 'runners' | 'transitioning'>,
     Pick<SessionStarter, 'send'>,
-    Pick<SessionStore, 'get' | 'queuePaused' | 'queued'> {
+    Pick<SessionStore, 'get' | 'queuePaused' | 'queued' | 'threadDone'> {
   shutdown(): AgentService['shutdown']
 }
 
@@ -185,7 +185,9 @@ export class MessageDispatcher {
   /** Durable background input; preserve a user's paused queue and never steer a running turn. */
   enqueueBackground(id: string, text: string, checkout: NonNullable<QueuedMessage['checkout']>): void {
     this.host.get(id)
-    this.updateQueue(id, [...this.host.queued(id), { id: randomUUID(), text, mode: 'queue', checkout }])
+    const message: QueuedMessage = { id: randomUUID(), text, mode: 'queue', checkout }
+    if (this.host.threadDone(id)) return this.updateQueue(id, [...this.host.queued(id), message], true)
+    this.updateQueue(id, [...this.host.queued(id), message])
     this.workspaceQueue.add(id)
     this.wakeWorkspaceQueue()
   }
@@ -230,6 +232,24 @@ export class MessageDispatcher {
     if (!text.trim() && !attachments.length) throw new Error('Enter a message or attach a file first.')
     if (this.host.transitioning.has(id)) throw new Error('Provider switch in progress. Try again in a moment.')
     const session = this.host.get(id)
+    // A done thread takes no turn the person did not start; other agents' messages wait in a paused queue.
+    if (!fromUser && !reviewId && this.host.threadDone(id)) {
+      this.updateQueue(
+        id,
+        [
+          ...this.host.queued(id),
+          {
+            id: randomUUID(),
+            text,
+            mode: 'queue',
+            ...(attachments.length ? { attachments } : {}),
+            ...(from ? { from } : {}),
+          },
+        ],
+        true,
+      )
+      return
+    }
     if (!this.canSteer(session, fromUser)) mode = 'queue'
     if (!WRITING_STATES.includes(session.state)) {
       if (this.workspaceBusy(session.covers, id) || this.host.queued(id).length || this.startingSends.has(id)) {
@@ -243,7 +263,6 @@ export class MessageDispatcher {
               mode: 'queue',
               ...(attachments.length ? { attachments } : {}),
               ...(reviewId ? { reviewId } : {}),
-              ...(from ? { from } : {}),
               ...(from ? { from } : {}),
             },
           ],

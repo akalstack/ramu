@@ -17,7 +17,8 @@ import { revealFound, revealQuote } from '../lib/revealFound'
 import { quoteRange } from '../lib/quoteRange'
 import { ChatMentions } from '../chat/ChatReferences'
 import { ThreadAgents } from './agent/lib/threadAgents'
-import { Archive } from 'lucide-react'
+import { Archive, CheckCircle2, RotateCcw } from 'lucide-react'
+import { timeAgo } from '../Menu'
 import { t as translate, useLanguage } from '../i18n'
 import { ScrollToLatestButton } from './agent/components/ScrollToLatestButton'
 import { isCompacting } from '@ramu/shared/chat/compaction'
@@ -431,7 +432,9 @@ export const AgentView = memo(function AgentView({
   }, [working])
   const ws = useWorkspaceActions()
   // Read from the live store, so unarchiving brings the composer back at once.
-  const threadArchived = useWorkspace().task(session?.taskId ?? '')?.status === 'archived'
+  const thread = useWorkspace().task(session?.taskId ?? '')
+  const threadArchived = thread?.status === 'archived'
+  const threadDoneAt = thread?.doneAt ?? null
   const { offline: hostOffline, name: hostName } = useHostConnection()
   const pending = useOutbox(view.sessionId, host.id)
   const supportsSteering = !!session
@@ -1044,115 +1047,140 @@ export const AgentView = memo(function AgentView({
                   </Button>
                 </div>
               ) : (
-                <Composer
-                  attachments={attachments}
-                  onAttachmentsChange={setAttachments}
-                  stop={{
-                    active: live && busyAgent,
-                    onStop: () => {
-                      setInterrupted(true)
-                      void act(() => invoke('agent.interrupt', view.sessionId))
-                    },
-                  }}
-                  resume={{
-                    ...limitResume(limitView),
-                    active: !busyAgent && !!session && (stopped || limitResume(limitView).active),
-                    onResume: () => {
-                      if (limitResume(limitView).active) {
+                <>
+                  {threadDoneAt && !viewOnly && (
+                    // A done thread holds automatic turns; sending a message or Reopen continues it.
+                    <div className="mx-auto mb-2 flex w-full max-w-(--chat-column-width) items-center gap-2 px-1 text-control text-soft">
+                      <CheckCircle2 size={14} className="flex-none text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate">
+                        {translate('This thread is done.')}{' '}
+                        <span className="text-muted-foreground">{timeAgo(threadDoneAt)}</span>
+                        {queued.length > 0 && (
+                          <>
+                            {' · '}
+                            {translate('{count} queued messages held', { count: queued.length })}
+                          </>
+                        )}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => void act(() => invoke('tasks.done', session!.taskId, false))}
+                      >
+                        <RotateCcw size={14} /> {translate('Reopen')}
+                      </Button>
+                    </div>
+                  )}
+                  <Composer
+                    attachments={attachments}
+                    onAttachmentsChange={setAttachments}
+                    stop={{
+                      active: live && busyAgent,
+                      onStop: () => {
+                        setInterrupted(true)
+                        void act(() => invoke('agent.interrupt', view.sessionId))
+                      },
+                    }}
+                    resume={{
+                      ...limitResume(limitView),
+                      active: !busyAgent && !!session && (stopped || limitResume(limitView).active),
+                      onResume: () => {
+                        if (limitResume(limitView).active) {
+                          stick.current = true
+                          limitRetry.tryNow()
+                          return
+                        }
+                        setInterrupted(false)
                         stick.current = true
-                        limitRetry.tryNow()
-                        return
-                      }
-                      setInterrupted(false)
-                      stick.current = true
-                      void act(() => invoke('agent.submit', view.sessionId, RESUME_PROMPT, 'steer', [], []))
-                    },
-                  }}
-                  value={draft}
-                  allowEmpty={attached.length > 0}
-                  chips={
-                    <>
-                      {!viewOnly && (
-                        <RecipientChip teammates={teammates} recipient={recipient} onChange={setRecipientId} />
-                      )}
-                      {session && (
-                        <ProviderRouteChip
-                          sessionId={view.sessionId}
-                          settings={pendingSettings ?? session.settings}
-                          limited={!!providerWait}
-                          readOnly={viewOnly}
-                          autoResume={autoResume}
-                          onSession={setSession}
-                        />
-                      )}
-                      {contentAttachments.map((attachment) => (
-                        <InteractiveAttachmentChip
-                          key={`${attachment.id}:${attachment.version}`}
-                          attachment={attachment}
-                          onRemove={() =>
-                            setContentAttachments((current) => current.filter((item) => item !== attachment))
-                          }
-                        />
-                      ))}
-                      {attached.length > 0 && (
-                        <CommentsChip
-                          groups={attached}
-                          onRemove={() =>
-                            void act(async () => {
-                              for (const group of attached)
-                                await invoke('reviews.select', group.review.id, group.ids, false)
-                            })
-                          }
-                        />
-                      )}
-                    </>
-                  }
-                  disabled={configuring || !session}
-                  controls={
-                    session &&
-                    (joining ? (
-                      <TeammateJoinControls joining={joining} disabled={viewOnly} />
-                    ) : (
+                        void act(() => invoke('agent.submit', view.sessionId, RESUME_PROMPT, 'steer', [], []))
+                      },
+                    }}
+                    value={draft}
+                    allowEmpty={attached.length > 0}
+                    chips={
                       <>
-                        <AgentControls
-                          settings={pendingSettings ?? session.settings}
-                          current={session.settings}
-                          onChange={changeSettings}
-                          disabled={viewOnly}
-                          running={working}
-                          trailing={<ContextMeter sessionId={view.sessionId} />}
-                        />
+                        {!viewOnly && (
+                          <RecipientChip teammates={teammates} recipient={recipient} onChange={setRecipientId} />
+                        )}
+                        {session && (
+                          <ProviderRouteChip
+                            sessionId={view.sessionId}
+                            settings={pendingSettings ?? session.settings}
+                            limited={!!providerWait}
+                            readOnly={viewOnly}
+                            autoResume={autoResume}
+                            onSession={setSession}
+                          />
+                        )}
+                        {contentAttachments.map((attachment) => (
+                          <InteractiveAttachmentChip
+                            key={`${attachment.id}:${attachment.version}`}
+                            attachment={attachment}
+                            onRemove={() =>
+                              setContentAttachments((current) => current.filter((item) => item !== attachment))
+                            }
+                          />
+                        ))}
+                        {attached.length > 0 && (
+                          <CommentsChip
+                            groups={attached}
+                            onRemove={() =>
+                              void act(async () => {
+                                for (const group of attached)
+                                  await invoke('reviews.select', group.review.id, group.ids, false)
+                              })
+                            }
+                          />
+                        )}
                       </>
-                    ))
-                  }
-                  onChange={setDraft}
-                  onShowQuote={showQuote}
-                  onArrowUpEmpty={editing || viewOnly ? undefined : editLast}
-                  chat
-                  teammate={composerTeammate}
-                  onSubmit={(context) => send(action, context)}
-                  onAlternateSubmit={
-                    busyAgent && supportsSteering && !hostOffline ? (context) => send(opposite, context) : undefined
-                  }
-                  alternateDisabled={configuring || !session}
-                  alternateLabel={opposite === 'queue' ? 'Queue' : 'Steer'}
-                  placeholder={
-                    hostOffline
-                      ? translate('Message · sends when {0} is back', { 0: hostName })
-                      : limitView
-                        ? limitPlaceholder(limitView, autoResume.effective.value)
-                        : joining
-                          ? translate('Tell {0} what to do', { 0: joining.name })
-                          : recipient
-                            ? translate('Message {0}', { 0: recipient.name })
-                            : live || busyAgent
-                              ? translate('Reply to the agent')
-                              : translate('Message the agent')
-                  }
-                  submitLabel={
-                    hostOffline || limitView ? 'Queue' : busyAgent ? (action === 'queue' ? 'Queue' : 'Steer') : 'Send'
-                  }
-                />
+                    }
+                    disabled={configuring || !session}
+                    controls={
+                      session &&
+                      (joining ? (
+                        <TeammateJoinControls joining={joining} disabled={viewOnly} />
+                      ) : (
+                        <>
+                          <AgentControls
+                            settings={pendingSettings ?? session.settings}
+                            current={session.settings}
+                            onChange={changeSettings}
+                            disabled={viewOnly}
+                            running={working}
+                            trailing={<ContextMeter sessionId={view.sessionId} />}
+                          />
+                        </>
+                      ))
+                    }
+                    onChange={setDraft}
+                    onShowQuote={showQuote}
+                    onArrowUpEmpty={editing || viewOnly ? undefined : editLast}
+                    chat
+                    teammate={composerTeammate}
+                    onSubmit={(context) => send(action, context)}
+                    onAlternateSubmit={
+                      busyAgent && supportsSteering && !hostOffline ? (context) => send(opposite, context) : undefined
+                    }
+                    alternateDisabled={configuring || !session}
+                    alternateLabel={opposite === 'queue' ? 'Queue' : 'Steer'}
+                    placeholder={
+                      hostOffline
+                        ? translate('Message · sends when {0} is back', { 0: hostName })
+                        : limitView
+                          ? limitPlaceholder(limitView, autoResume.effective.value)
+                          : joining
+                            ? translate('Tell {0} what to do', { 0: joining.name })
+                            : recipient
+                              ? translate('Message {0}', { 0: recipient.name })
+                              : live || busyAgent
+                                ? translate('Reply to the agent')
+                                : translate('Message the agent')
+                    }
+                    submitLabel={
+                      hostOffline || limitView ? 'Queue' : busyAgent ? (action === 'queue' ? 'Queue' : 'Steer') : 'Send'
+                    }
+                  />
+                </>
               )}
             </ComposerStack>
           </div>

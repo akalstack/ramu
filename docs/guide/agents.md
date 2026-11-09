@@ -88,7 +88,7 @@ From a host's row in **Settings → Remote access**, request **Agents** to let t
 
 In the sidebar, Cmd/Ctrl-click adds a thread to the selection and Shift-click selects a range, starting from the open thread when nothing is selected yet. The bar above the list pins, finishes, archives or deletes them together; **Delete** or **Backspace** deletes them, and **Esc** clears the selection. Archive and done can be undone; delete still reviews each thread so a running command is never lost. **Archived** at the foot of the thread list (also **Show archived threads** in the command menu, or "archived" in Settings search) lists archived threads with search, each row's own actions and **Delete all archived threads**. On the phone, the Threads list's **Archived** filter does the same.
 
-A thread marked done leaves its project and moves to **Done** at the bottom of the list, on the desktop and the phone alike, newest first; sending it a message brings it back.
+A thread marked done leaves its project and moves to **Done** at the bottom of the list, on the desktop and the phone alike, newest first. A done thread takes no turn you did not start: its goal and queue pause, and messages from other threads, helpers, pull request watches and deploy checks wait in its paused queue. Its transcript says it is done and how many messages are held, with **Reopen** beside it. Sending it a message, resuming its goal or queue, or **Reopen** brings it back.
 
 On the phone, long-press a thread and choose **Select**, then tap more threads; the header marks them done, archives or deletes them, and **×** cancels. Deleting several at once keeps any thread with a background command for its own review.
 

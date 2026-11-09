@@ -1873,6 +1873,21 @@ describe('busy agent messages', () => {
     await service.stopAndWait(second.id)
   })
 
+  it('holds messages from other agents on a done thread until the person continues it', async () => {
+    const { service, session, send, complete } = setup()
+    complete()
+    await until(() => service.get(session.id).state === 'idle')
+    db.prepare('UPDATE tasks SET done_at = ? WHERE id = ?').run(Date.now(), session.taskId)
+    await service.submit(session.id, 'report from a helper', 'queue')
+    expect(send).not.toHaveBeenCalled()
+    expect(service.queuePaused(session.id)).toBe(true)
+    expect(service.queued(session.id).map((m) => m.text)).toEqual(['report from a helper'])
+    db.prepare('UPDATE tasks SET done_at = NULL WHERE id = ?').run(session.taskId)
+    service.resumeQueue(session.id)
+    await until(() => send.mock.calls.length === 1)
+    service.stopAll()
+  })
+
   it('pauses queued review feedback if its checkout changed before execution', async () => {
     const { service, session, send, complete } = setup()
     const validateFeedback = vi.fn(async (): Promise<void> => {

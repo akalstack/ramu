@@ -41,7 +41,11 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
     'agent.markAdviceRead': { args: z.tuple([id]), run: (s: string) => agents.markAdviceRead(s) },
     'agent.goal.control': {
       args: z.tuple([id, z.enum(['pause', 'resume', 'clear'])]),
-      run: (s: string, action: 'pause' | 'resume' | 'clear') => agents.controlGoal(s, action),
+      run: (s: string, action: 'pause' | 'resume' | 'clear') => {
+        // Resuming is the person continuing the thread, so a done thread reopens.
+        if (action === 'resume') workspace.setDone(agents.get(s).taskId, false)
+        return agents.controlGoal(s, action)
+      },
     },
     // Only a person sets a verification command: Ramu runs it itself, so no agent tool reaches this.
     'agent.goal.verify': {
@@ -251,7 +255,13 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
         return lockSession(ctx, s, () => agents.send(s, t))
       },
     },
-    'agent.resumeQueue': { args: z.tuple([id]), run: (s: string) => agents.resumeQueue(s) },
+    'agent.resumeQueue': {
+      args: z.tuple([id]),
+      run: (s: string) => {
+        workspace.setDone(agents.get(s).taskId, false)
+        return agents.resumeQueue(s)
+      },
+    },
     'agent.sendQueuedNow': {
       args: z.tuple([id, id, z.boolean().optional()]),
       run: (s: string, messageId: string, interrupt?: boolean) => {
