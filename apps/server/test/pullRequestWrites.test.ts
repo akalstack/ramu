@@ -149,3 +149,12 @@ it('treats approvals, merges, closing and base changes as decisions, and knows h
   })
   expect(undoOf({ ...item, write: { kind: 'action', action: { kind: 'ready' } } })).toBeNull()
 })
+
+it('refuses a suggested change on the old version of a line', () => {
+  expect(
+    unsupportedWrite('github', {
+      kind: 'line-comment',
+      comment: { path: 'a.ts', line: 3, side: 'old', body: 'x', suggestion: 'y' },
+    }),
+  ).toMatch(/new version/)
+})

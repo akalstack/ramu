@@ -77,6 +77,10 @@ export function capabilityOf(write: PullRequestWrite): PullRequestCapability[] {
 
 /** The service's refusal for a write it cannot do, in words the agent repeats; null when it can. */
 export function unsupportedWrite(service: ForgeService, write: PullRequestWrite): string | null {
+  // A suggested change replaces lines of the pull request's own version; the base's lines cannot take one.
+  const comments = write.kind === 'line-comment' ? [write.comment] : write.kind === 'review' ? write.comments : []
+  if (comments.some((comment) => comment.suggestion !== undefined && comment.side === 'old'))
+    return 'A suggested change goes on the new version of a line, not the old one.'
   const missing = capabilityOf(write).find((capability) => !supportsPullRequest(service, capability))
   if (missing) return unsupportedPullRequestText(service, missing)
   if (write.kind === 'react' && !PULL_REQUEST_REACTIONS[service].includes(write.reaction))
