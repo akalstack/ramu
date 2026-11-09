@@ -1804,13 +1804,21 @@ function ContextChip({
       {remove ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Remove ${label}`}
+          accessibilityLabel={say('Remove {0}', { '0': label })}
           hitSlop={8}
           onPress={() => {
             tap()
             remove()
           }}
-          style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}
+          // A round target inside the round chip, so the press shade follows the pill's shape.
+          style={({ pressed }) => ({
+            width: 22,
+            height: 22,
+            borderRadius: radius.full,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: pressed ? c.pressed : 'transparent',
+          })}
         >
           <X size={12} color={c.muted} />
         </Pressable>

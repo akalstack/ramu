@@ -121,21 +121,26 @@ function RuleEditor({
         <ul className="m-0 flex flex-wrap gap-1 p-0" aria-label={t('Rules')}>
           {rules.map((entry) => (
             <li key={ruleText(entry)} className="list-none">
-              <Badge variant="outline" className="h-6 gap-1 pr-0.5 font-mono text-caption">
-                {entry.kind === 'folder' ? <Folder size={11} aria-hidden /> : <GitBranch size={11} aria-hidden />}
+              <span className="inline-flex h-6 items-center gap-1.5 rounded-full border border-line bg-fill pr-0.5 pl-2 font-mono text-caption text-foreground">
+                {entry.kind === 'folder' ? (
+                  <Folder size={11} aria-hidden className="text-muted-foreground" />
+                ) : (
+                  <GitBranch size={11} aria-hidden className="text-muted-foreground" />
+                )}
                 {ruleText(entry)}
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  className="size-4 min-h-4 rounded-full"
+                  className="size-5 min-h-5 rounded-full border-0 bg-transparent! text-muted-foreground shadow-none hover:bg-hover! hover:text-foreground"
                   aria-label={t('Remove {name}', { name: ruleText(entry) })}
+                  title={t('Remove {name}', { name: ruleText(entry) })}
                   disabled={disabled}
                   onClick={() => onChange(rules.filter((other) => other !== entry))}
                 >
-                  <X size={10} />
+                  <X size={11} />
                 </Button>
-              </Badge>
+              </span>
             </li>
           ))}
         </ul>
