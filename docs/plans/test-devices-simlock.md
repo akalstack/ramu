@@ -44,13 +44,22 @@ Ramu does this differently:
 - **Leases:** `TestDevices` talks to the daemon through `simlock/client` with principal `ramu:<thread id>`, so a thread holds one lease and a helper agent shares its parent's. `test_device_list` reads the catalog (models and OS versions that can be leased) instead of `simctl list`; `test_device_open` takes a platform and an optional model and OS. Ramu renews every third of the TTL and releases when the thread ends, stops or is archived. If the Ramu server dies, the lease ends one TTL later, so there is no ledger.
 - **Queue:** while a lease waits, the thread's device pill shows **Waiting for a device · 2nd in line** with **Stop waiting**; the tool returns once the device is ready. `TEST_DEVICE_LIMIT` and the "already running" error go away: capacity is Simlock's, from the machine's RAM.
 - **Commands:** install, launch, open URL and logs run through `client.exec` with `simctl` or `adb`, which refuses verbs that would break a lease. Workspace path checks stay as they are.
-- **Captures and input:** `computer_observe` captures with `simctl io <udid> screenshot` (or `adb exec-out screencap`, plus the uiautomator tree) through `client.exec`. Taps, swipes, scrolls and keys go over the lease's input socket in serve-sim's format; text goes through the socket's HID keys, and text it cannot type goes in through the device's clipboard and a paste. idb and `idb.ts` are deleted.
+- **Captures and input:** `computer_observe` captures with `simctl io <udid> screenshot` (or `adb exec-out screencap`) through `client.exec`, with the element tree from part 2b. Taps, swipes, scrolls and keys go over the lease's input socket in serve-sim's format; text goes through the socket's HID keys, and text it cannot type goes in through the device's clipboard and a paste. idb and `idb.ts` are deleted.
 - **Crashes:** `onLeaseLost` and Simlock's reboot notice reach the thread as a system note ("The simulator restarted; launch the app again"), so the agent relaunches instead of failing.
 
 ### 2. Live screens
 
 - The desktop viewer, Float and the phone's full-screen viewer decode the lease stream (`/v1/leases/<id>/stream`) through the server, which adds the token so clients never hold it. The desktop decodes with WebCodecs; the phone uses the same canvas in its WebView. Take control sends touches over the input socket.
 - Screenshots stay as the fallback where decoding is unavailable, and as the agent's observation.
+
+### 2b. The element tree on iOS and Android
+
+Today an agent on Android reads uiautomator's tree and taps "Sign up" by name, while on iOS it gets only a screenshot and guesses coordinates, so iOS taps miss and cost retries. Simlock's worker supervises an agent-device daemon (0.21.28 or later) and fronts it at `/v1/agent-device`; a session opened there takes its own Simlock lease, with a lease id the caller chooses. That gives the same accessibility snapshot on both platforms.
+
+- **Setup:** **Set up test devices** installs a pinned `agent-device` beside Simlock in `~/.ramu/tools` and points the daemon at it; `simlock doctor`'s agent-device finding is one more checklist row.
+- **Leases:** a thread's device is opened through the front with session `ramu-<thread id>` and lease id `ramu-<thread id>`, so each thread still gets its own device, and the stream, input socket and `client.exec` find it by that id. Ramu's server calls the front's RPC over loopback with its token; agents never see agent-device or a shell.
+- **Observe:** `computer_observe` returns the snapshot's elements (role, label, value, frame, a short ref) with the screenshot on both platforms; uiautomator's own parse goes.
+- **Act:** `computer_act` takes an element ref as well as coordinates; Ramu taps the element's centre, and fills a text field through agent-device's `fill` when the field is named.
 
 ### 3. Starting points
 
@@ -130,6 +139,7 @@ In Settings, a row an agent changed shows the dot from part 4 with "Changed by a
 - On the phone and on the desktop, the viewer shows the screen live while the agent taps; Take control works.
 - A starting point saved from one thread opens signed in on the next.
 - An Android emulator on a Linux host runs the same checks.
+- On an iPhone simulator, "tap Sign up" with the button below the fold: `computer_observe` lists the button by its label, and the agent scrolls and taps it by ref without a coordinate guess.
 - Searching Settings for "simulator", "emulator", "environment", "fallback" or "archived" opens the right page or view in one step, on the desktop and the phone.
 - Someone new to Ramu, asked to "let the agent test on an iPhone", finds **Test devices** from the menu without search and reaches a ready device with one button.
 - "Make the default iPhone a 16 Pro and stop warning before I change model" in an Ask-mode thread: one card with both rows, **Apply** saves them, Settings shows both as changed by that thread, and **Undo** restores them.
@@ -142,4 +152,3 @@ Representative task: "check the sign-up screen on iPhone and Android" while a se
 
 - **A device fleet:** a Simlock gateway (a Mac mini serving a team), added as a host type with a URL and a token, as T3 Code does.
 - **Physical phones** enrolled in Simlock, leased the same way.
-- **iOS element tree:** when agent-device can drive a lease Ramu took, add its snapshot to `computer_observe` on iOS as uiautomator's tree is on Android.
