@@ -106,16 +106,19 @@ function RepoChoiceDialog() {
 function CloneFromGitHub({
   host,
   parent,
+  search = '',
   onCloned,
   onBack,
 }: {
   host: string
   parent: string
+  /** The repository asked for, searched for at once. */
+  search?: string
   onCloned: (path: string) => void
   onBack: () => void
 }) {
   useLanguage()
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(search)
   const [url, setUrl] = useState('')
   const [results, setResults] = useState<ForgeRepositorySummary[] | null>(null)
   const [searching, setSearching] = useState(false)
@@ -259,7 +262,8 @@ function HostFolderDialog() {
       onFolderPick((next) => {
         setRequest(next)
         setListing(null)
-        setCloning(false)
+        // A repository asked for by name opens on its clone search once a folder is listed.
+        setCloning(!!next.clone)
         setNaming(null)
         setError('')
         // The folders are on the host the project is added to, which may not be the one on screen.
@@ -310,11 +314,12 @@ function HostFolderDialog() {
         <CloneFromGitHub
           host={request.host}
           parent={listing.path}
+          search={request.clone}
           onCloned={(path) => close(path)}
           onBack={() => setCloning(false)}
         />
       ) : null}
-      <div hidden={cloning}>
+      <div hidden={cloning && !!listing}>
         {/* Where you are, one click per step back up; Locations returns to the host's starting places. */}
         <nav aria-label={t('Folder path')} className="mb-2 flex min-w-0 flex-wrap items-center gap-0.5 text-caption">
           {roots.length > 1 || !listing ? (

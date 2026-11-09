@@ -10,10 +10,10 @@ import type {
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { NO_PROJECT } from '@ramu/shared/types'
-import { pullRequestStage } from '@ramu/shared/pullRequests'
+import { outsideRepoId, outsideRepository, pullRequestStage } from '@ramu/shared/pullRequests'
 import type { Workspace } from '../workspace/workspace'
 import type { AgentService } from '../agent'
-import { listInvolvedPullRequests, listPullRequests } from '../workspace/forge'
+import { listInvolvedPullRequests, listPullRequests, listRepositoryPullRequests } from '../workspace/forge'
 import { currentBranch } from '../workspace/git'
 
 const LINKS_KEY = 'pull-request-links'
@@ -204,6 +204,23 @@ export class PullRequestIndex {
 
   /** The last search for pull requests involving each GitHub account, by the checkout it signed in through. */
   private involved = new Map<string, { at: number; rows: Awaited<ReturnType<typeof listInvolvedPullRequests>> }>()
+  /**
+   * The checkout whose account found each repository in no project, by lowercase `owner/repo`. Kept after the search
+   * stops listing it, so a pull request open in full still reads once it is merged.
+   */
+  private outsideRoots = new Map<string, string>()
+
+  /**
+   * Where calls for a repository no project holds run: the checkout whose GitHub account found pull requests in it,
+   * so they are read and acted on as that account. Null when no search here has listed it.
+   */
+  async outsideRoot(repository: string): Promise<string | null> {
+    const key = repository.toLowerCase()
+    if (!this.outsideRoots.has(key))
+      // A restarted host has not searched yet; the page's list came from before.
+      await this.overview({ includeClosed: false, force: false }).catch(() => [])
+    return this.outsideRoots.get(key) ?? null
+  }
 
   /**
    * Open pull requests that involve the person in repositories no project holds, one search per GitHub account (read
@@ -229,6 +246,7 @@ export class PullRequestIndex {
         if (root) roots.set(entry.viewer, root)
       }
     const byRepository = new Map<string, RepositoryPullRequests>()
+    const found = new Map<string, string>()
     for (const root of roots.values()) {
       let cached = this.involved.get(root)
       if (force || !cached || Date.now() - cached.at >= STALE) {
@@ -241,12 +259,14 @@ export class PullRequestIndex {
         }
       }
       for (const { viewer, repository, pr } of cached.rows) {
+        // The first account to find a repository is the one its rows were listed as.
+        if (!found.has(repository.toLowerCase())) found.set(repository.toLowerCase(), root)
         if (seen.has(pr.url)) continue
         seen.add(pr.url)
         const entry = byRepository.get(repository) ?? {
           projectId: '',
           projectName: repository,
-          repoId: `outside:${repository}`,
+          repoId: outsideRepoId(repository),
           repoName: repository,
           availability: 'ready' as const,
           service: 'github' as const,
@@ -260,6 +280,8 @@ export class PullRequestIndex {
         byRepository.set(repository, entry)
       }
     }
+    if (this.outsideRoots.size > 500) this.outsideRoots.clear()
+    for (const [repository, root] of found) this.outsideRoots.set(repository, root)
     return [...byRepository.values()]
   }
 
@@ -269,6 +291,8 @@ export class PullRequestIndex {
     repoId: string,
     options: { includeClosed: boolean; force: boolean; maxAge?: number },
   ): Promise<PullRequestList> {
+    const outside = outsideRepository(repoId)
+    if (outside) return this.readOutside(repoId, outside, cwd, options)
     if (options.includeClosed) {
       const list = await listPullRequests(cwd, { includeClosed: true })
       this.absorb(repoId, list, null)
@@ -277,6 +301,23 @@ export class PullRequestIndex {
     const entry = this.entries.get(repoId)
     if (!options.force && entry?.list && Date.now() - entry.at < (options.maxAge ?? 15_000)) return entry.list
     return (await this.read(repoId, cwd)) ?? { availability: 'ready', viewer: null, pullRequests: [] }
+  }
+
+  /**
+   * A repository in no project, read through `cwd`'s account with its merged and closed pull requests. No thread or
+   * database branch belongs to it, so nothing is linked from the list.
+   */
+  private async readOutside(
+    repoId: string,
+    repository: string,
+    cwd: string,
+    options: { force: boolean; maxAge?: number },
+  ): Promise<PullRequestList> {
+    const entry = this.entries.get(repoId)
+    if (!options.force && entry?.list && Date.now() - entry.at < (options.maxAge ?? 15_000)) return entry.list
+    const list = await listRepositoryPullRequests(cwd, repository)
+    this.entries.set(repoId, { at: Date.now(), list, checkedOut: null })
+    return list
   }
 
   /** The viewer the last list of this repository was read as; null before a read. */

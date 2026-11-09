@@ -40,6 +40,7 @@ import {
   PanelRight,
   SquareTerminal,
   Globe,
+  LayoutGrid,
   Monitor,
   Search,
 } from 'lucide-react'
@@ -49,7 +50,7 @@ import { Palette } from './palette/Palette'
 import type { PaletteMode } from './palette/sources'
 import { copyText, invoke, ramu } from './ipc'
 import { useHeldShells, useUnseenTerminalOutput } from './workspace/terminalActivity'
-import { useContextMenu } from './Menu'
+import { Menu, useContextMenu } from './Menu'
 import { RepositoryPicker } from './git/RepositoryPicker'
 import { syncRepositories } from './git/syncRepositories'
 import { ProtectedSyncDialog } from './git/ProtectedSyncDialog'
@@ -543,38 +544,49 @@ function Shell() {
           />
         )}
       </Button>
-      {typeof window.ramu?.invoke === 'function' && activeHost === ownHostId() && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center"
-          aria-label={t('Browser')}
-          aria-pressed={browserShown}
-          title={browserShown ? t('Hide browser') : t('Show browser')}
-          disabled={!ui.activeTaskId}
-          onClick={() => {
-            const id = ui.activeTaskId
-            if (!id) return
-            if (browserShown) ws.hideWorkspace(id)
-            else openBrowser(ws, id)
-          }}
-        >
-          <Globe data-icon="inline-start" />
-        </Button>
-      )}
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center"
-        aria-label={t('Computer')}
-        title={`${t('Open computer')} (${formatKeys('mod+alt+m')})`}
+      {/* Agents open the browser and the computer themselves, and the chat's activity tray shows them while they run,
+          so opening one by hand is rare: one menu instead of two always-present icons. */}
+      <Menu
+        label={t('Open browser or computer')}
+        icon={<LayoutGrid size={16} aria-hidden />}
+        align="end"
         disabled={!ui.activeTaskId}
-        onClick={() => {
-          if (ui.activeTaskId) void openComputer(hostInvoke as never, ui.activeTaskId)
-        }}
-      >
-        <Monitor data-icon="inline-start" />
-      </Button>
+        className={`ghost bg-transparent border-transparent hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center ${browserShown ? 'text-brand bg-brand-wash' : 'text-muted-foreground'}`}
+        items={[
+          ...(typeof window.ramu?.invoke === 'function' && activeHost === ownHostId()
+            ? [
+                {
+                  key: 'browser',
+                  label: (
+                    <span className="inline-flex items-center gap-2">
+                      <Globe size={14} aria-hidden />
+                      {browserShown ? t('Hide browser') : t('Show browser')}
+                    </span>
+                  ),
+                  onSelect: () => {
+                    const id = ui.activeTaskId
+                    if (!id) return
+                    if (browserShown) ws.hideWorkspace(id)
+                    else openBrowser(ws, id)
+                  },
+                },
+              ]
+            : []),
+          {
+            key: 'computer',
+            label: (
+              <span className="inline-flex items-center gap-2">
+                <Monitor size={14} aria-hidden />
+                {t('Open computer')}
+                <span className="ml-auto pl-4 text-caption text-muted-foreground">{formatKeys('mod+alt+m')}</span>
+              </span>
+            ),
+            onSelect: () => {
+              if (ui.activeTaskId) void openComputer(hostInvoke as never, ui.activeTaskId)
+            },
+          },
+        ]}
+      />
       <Button
         variant="ghost"
         size="icon-sm"

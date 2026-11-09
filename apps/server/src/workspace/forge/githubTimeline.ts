@@ -1,6 +1,6 @@
 import type { PullRequestTimelineEvent } from '@ramu/shared/types'
-import { ForgeError, forgeRemoteOf, githubGraphql } from './github'
-import { pullNumber } from './githubPulls'
+import { githubGraphql } from './github'
+import { pullRequestTarget } from './githubPulls'
 import { TIMELINE_LENGTH, opening } from './adapter'
 
 const TIMELINE_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $last: Int!) {
@@ -104,11 +104,10 @@ export function timelineEvent(node: Node): PullRequestTimelineEvent | null {
 
 /** The latest history of `url`, oldest first: commits, reviews, comments, review requests and state changes. */
 export async function pullRequestTimeline(cwd: string, url: string): Promise<PullRequestTimelineEvent[]> {
-  const remote = await forgeRemoteOf(cwd)
-  if (!remote) throw new ForgeError('This checkout has no GitHub remote.', 'no-remote')
+  const { owner, repo, number } = await pullRequestTarget(cwd, url)
   const data = await githubGraphql<{
     repository: { pullRequest: { timelineItems: { nodes: Node[] } } | null } | null
-  }>(cwd, TIMELINE_QUERY, { owner: remote.owner, repo: remote.repo, number: pullNumber(url), last: TIMELINE_LENGTH })
+  }>(cwd, TIMELINE_QUERY, { owner, repo, number, last: TIMELINE_LENGTH })
   const nodes = data.repository?.pullRequest?.timelineItems.nodes ?? []
   return nodes.flatMap((node) => {
     const event = timelineEvent(node)

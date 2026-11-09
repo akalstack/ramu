@@ -3,7 +3,6 @@ import { useQueries } from '@tanstack/react-query'
 import {
   ArrowLeft,
   CircleCheck,
-  ExternalLink,
   CircleDot,
   CircleX,
   GitPullRequest,
@@ -38,7 +37,7 @@ import {
 } from '@ramu/shared/pullRequests'
 import { cn } from 'cn'
 import { t, useLanguage } from '../i18n'
-import { Dropdown, timeAgo } from '../Menu'
+import { Combobox, Dropdown, timeAgo } from '../Menu'
 import { ipcQueryKeyOn } from '../dataQueries'
 import { HostContent } from '../workspace/HostContent'
 import { useHostSelection } from '../workspace/HostSelection'
@@ -49,7 +48,6 @@ import { DeviceIcon } from '@/components/device-icon'
 import { RepositoryAccessNotices } from './RepositoryAccessNotices'
 import { queryInvokerFor } from './hostQuery'
 import { errorText } from '../lib/errors'
-import { invoke as openOnThisComputer } from '../ipc'
 import { PullRequestIcon, StageChip } from './PullRequestIcon'
 import { PullRequestView } from './PullRequestView'
 
@@ -246,14 +244,12 @@ export function PullRequestsPage() {
         stacked
         className="py-1.5"
         aria-selected={active}
-        title={entry.outside ? `${pr.title} (${t('Opens on {0}', { '0': FORGE_NAMES[entry.service] })})` : pr.title}
-        // Ramu has no checkout of a repository outside every project, so its pull request opens on the service.
-        onClick={() => (entry.outside ? void openOnThisComputer('app.openExternal', pr.url) : setSelected(entry))}
+        title={pr.title}
+        onClick={() => setSelected(entry)}
       >
         <span className="flex w-full min-w-0 items-center gap-2">
           <PullRequestIcon pr={pr} stage={entry.stage} />
           <span className="min-w-0 flex-1 truncate text-foreground">{pr.title}</span>
-          {entry.outside && <ExternalLink size={11} className="flex-none text-muted-foreground" aria-hidden="true" />}
           {pr.additions !== undefined && pr.deletions !== undefined && (
             <span
               className="flex-none text-caption tabular-nums"
@@ -320,12 +316,11 @@ export function PullRequestsPage() {
   /** Up and down move through the list, opening each pull request as a mail list does. */
   const move = (event: React.KeyboardEvent) => {
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
-    const openable = rows.filter((entry) => !entry.outside)
-    if (!openable.length) return
+    if (!rows.length) return
     event.preventDefault()
-    const at = openable.findIndex((entry) => entry.pr.url === selected?.pr.url)
+    const at = rows.findIndex((entry) => entry.pr.url === selected?.pr.url)
     const step = event.key === 'ArrowDown' ? 1 : -1
-    const next = openable[at < 0 ? 0 : Math.min(openable.length - 1, Math.max(0, at + step))]!
+    const next = rows[at < 0 ? 0 : Math.min(rows.length - 1, Math.max(0, at + step))]!
     setSelected(next)
     listRef.current?.querySelector<HTMLElement>(`[data-pr-url="${CSS.escape(next.pr.url)}"]`)?.focus()
   }
@@ -404,8 +399,9 @@ export function PullRequestsPage() {
               className="flex-1"
             />
             {uniqueRepos.length > 1 && (
-              <Dropdown
+              <Combobox
                 label={t('Repository')}
+                searchPlaceholder={t('Search repositories')}
                 value={repoKey}
                 options={repoOptions}
                 onChange={(value) => {

@@ -74,12 +74,12 @@ export function useIdentityView(hostId: string) {
           </>
         ) : (
           <>
-            <span className="flex -space-x-0.5" aria-hidden>
+            <span className="flex -space-x-1" aria-hidden>
               {identities.slice(0, 4).map((identity) => (
                 <IdentityDot
                   key={identity.id}
                   color={identity.color}
-                  className="ring-1 ring-(--sidebar-bg,var(--bg))"
+                  className="size-2.5 ring-[1.5px] ring-(--sidebar)"
                 />
               ))}
             </span>

@@ -128,7 +128,8 @@ export interface RepositoryPullRequests extends PullRequestList {
   local: Record<string, { draftsReady?: boolean; agentWorking?: boolean }>
   /**
    * A repository in no project, listed for the pull requests that involve the person there (theirs, or a review asked of
-   * them). Ramu has no checkout of it, so its rows open on the hosting service.
+   * them). Ramu has no checkout of it, so its pull requests are read and acted on through the service alone, as the
+   * account that found them.
    */
   outside?: boolean
 }

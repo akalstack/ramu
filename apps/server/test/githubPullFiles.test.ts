@@ -10,7 +10,7 @@ vi.mock('../src/workspace/forge/github', async (load) => ({
 }))
 
 beforeEach(() => {
-  vi.mocked(forgeRemoteOf).mockResolvedValue({ host: 'github.com', owner: 'o', repo: 'r' } as never)
+  vi.mocked(forgeRemoteOf).mockResolvedValue({ origin: 'github.com', protocol: 'https', owner: 'o', repo: 'r' })
 })
 
 it("lists a pull request's files with their patches, cutting a huge one and naming renames", async () => {
@@ -59,4 +59,11 @@ it('sends a comment on a block of lines with where the block starts, and a singl
   const payload = vi.mocked(githubRest).mock.calls.at(-1)![3] as { comments: Record<string, unknown>[] }
   expect(payload.comments[0]).toMatchObject({ line: 12, start_line: 9, start_side: 'RIGHT', side: 'RIGHT' })
   expect(payload.comments[1]).not.toHaveProperty('start_line')
+})
+
+it('reads the repository the link names through the checkout, and refuses a link on another server', async () => {
+  vi.mocked(githubRest).mockResolvedValue([])
+  await pullRequestFiles('/repo', 'https://github.com/upstream/site/pull/3')
+  expect(githubRest).toHaveBeenCalledWith('/repo', 'GET', '/repos/upstream/site/pulls/3/files?per_page=100')
+  await expect(pullRequestFiles('/repo', 'https://ghe.example.com/o/r/pull/7')).rejects.toThrow('not on github.com')
 })

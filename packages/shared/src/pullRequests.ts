@@ -123,6 +123,18 @@ export const PULL_REQUEST_FILTER_LABEL: Record<PullRequestFilter, string> = {
   closed: 'Closed',
 }
 
+const OUTSIDE_REPO = /^outside:([A-Za-z0-9][A-Za-z0-9_-]{0,38})\/([A-Za-z0-9._-]{1,100})$/
+
+/** The repository id of a GitHub repository no project holds, listed for the pull requests that involve the person. */
+export const outsideRepoId = (repository: string) => `outside:${repository}`
+
+/** The `owner/repo` an `outside:` repository id names; null for a project's repository or a malformed id. */
+export function outsideRepository(repoId: string): string | null {
+  const match = OUTSIDE_REPO.exec(repoId)
+  if (!match || match[2] === '.' || match[2] === '..') return null
+  return `${match[1]}/${match[2]}`
+}
+
 /** One row of the Pull requests page: a pull request with the repository it came from and where it stands. */
 export interface PullRequestRow {
   pr: PullRequestSummary
@@ -132,7 +144,7 @@ export interface PullRequestRow {
   repoId: string
   repoName: string
   threads: { taskId: string; title: string }[]
-  /** From a repository in no project: it opens on the hosting service, since Ramu has no checkout of it. */
+  /** From a repository in no project: Ramu reads and acts on it through the service alone, with no checkout. */
   outside: boolean
   /** The hosting service it lives on. */
   service: ForgeService

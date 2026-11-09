@@ -5,10 +5,14 @@ import { openDb, type Db } from '../src/db'
 import { Workspace } from '../src/workspace/workspace'
 import type { AgentService } from '../src/agent'
 import { PullRequestIndex } from '../src/background/pullRequestIndex'
-import { listInvolvedPullRequests, listPullRequests } from '../src/workspace/forge'
+import { listInvolvedPullRequests, listPullRequests, listRepositoryPullRequests } from '../src/workspace/forge'
 import { currentBranch } from '../src/workspace/git'
 
-vi.mock('../src/workspace/forge', () => ({ listPullRequests: vi.fn(), listInvolvedPullRequests: vi.fn() }))
+vi.mock('../src/workspace/forge', () => ({
+  listPullRequests: vi.fn(),
+  listInvolvedPullRequests: vi.fn(),
+  listRepositoryPullRequests: vi.fn(),
+}))
 vi.mock('../src/workspace/git', () => ({ currentBranch: vi.fn() }))
 
 let db: Db, ws: Workspace, index: PullRequestIndex, changed: () => void
@@ -193,6 +197,30 @@ describe('pull requests elsewhere', () => {
     vi.mocked(listInvolvedPullRequests).mockClear()
     await index.overview({ includeClosed: true, force: false })
     expect(listInvolvedPullRequests).not.toHaveBeenCalled()
+  })
+
+  it('reads a repository in no project through the checkout whose account found it', async () => {
+    const elsewhere = pr({ number: 7, url: 'https://github.com/friend/site/pull/7', group: 'review' })
+    vi.mocked(listInvolvedPullRequests).mockResolvedValue([{ viewer: 'me', repository: 'friend/site', pr: elsewhere }])
+    vi.mocked(listRepositoryPullRequests).mockResolvedValue({
+      availability: 'ready',
+      viewer: 'me',
+      pullRequests: [elsewhere],
+    })
+    // A host that has not listed the page yet searches before answering.
+    expect(await index.outsideRoot('Friend/Site')).toBe(CHECKOUT)
+    expect(await index.outsideRoot('someone/else')).toBeNull()
+    vi.mocked(listPullRequests).mockClear()
+    const list = await index.list(CHECKOUT, 'outside:friend/site', { includeClosed: false, force: false })
+    expect(list.pullRequests.map((entry) => entry.url)).toEqual([elsewhere.url])
+    expect(listRepositoryPullRequests).toHaveBeenCalledWith(CHECKOUT, 'friend/site')
+    expect(listPullRequests).not.toHaveBeenCalled()
+    // Served from the cache until forced, and still found after the search stops listing it, as once it is merged.
+    await index.list(CHECKOUT, 'outside:friend/site', { includeClosed: true, force: false })
+    expect(listRepositoryPullRequests).toHaveBeenCalledTimes(1)
+    vi.mocked(listInvolvedPullRequests).mockResolvedValue([])
+    await index.overview({ includeClosed: false, force: true })
+    expect(await index.outsideRoot('friend/site')).toBe(CHECKOUT)
   })
 
   it('keeps the page when the search elsewhere fails', async () => {

@@ -3,7 +3,7 @@ import {
   mergeOptionsOf,
   parseListPullRequest,
   parseReviewThreads,
-  pullNumber,
+  pullRequestLink,
   type RawListPullRequest,
 } from '../src/workspace/forge/githubPulls'
 
@@ -58,9 +58,22 @@ describe('GitHub pull request lists', () => {
     expect('additions' in bare || 'labels' in bare).toBe(false)
   })
 
-  it('reads the number from a pull request link and refuses anything else', () => {
-    expect(pullNumber('https://github.com/o/r/pull/12/files')).toBe(12)
-    expect(() => pullNumber('https://github.com/o/r/issues/12')).toThrow()
+  it('reads the server, repository and number from a pull request link and refuses anything else', () => {
+    expect(pullRequestLink('https://github.com/o/r/pull/12/files')).toEqual({
+      origin: 'github.com',
+      owner: 'o',
+      repo: 'r',
+      number: 12,
+    })
+    expect(pullRequestLink('https://GHE.example.com:8443/code/team/site/pull/3')).toEqual({
+      origin: 'ghe.example.com:8443',
+      owner: 'team',
+      repo: 'site',
+      number: 3,
+    })
+    expect(() => pullRequestLink('https://github.com/o/r/issues/12')).toThrow()
+    expect(() => pullRequestLink('file:///o/r/pull/12')).toThrow()
+    expect(() => pullRequestLink('not a link')).toThrow()
   })
 })
 

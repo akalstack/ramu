@@ -6,6 +6,8 @@ import {
   matchesPullRequest,
   matchesPullRequestRow,
   mergedPullRequestRows,
+  outsideRepoId,
+  outsideRepository,
   pullRequestGlyph,
   pullRequestRows,
   pullRequestRef,
@@ -275,5 +277,17 @@ describe('the next step on a pull request', () => {
     expect(step({}, false)).toBe('review')
     expect(step({}, true)).toBe('wait-review')
     expect(step({ state: 'merged' }, true)).toBe('none')
+  })
+})
+
+describe('repositories in no project', () => {
+  it('names a GitHub repository by its owner and name, and refuses anything else', () => {
+    expect(outsideRepository(outsideRepoId('friend/site.io'))).toBe('friend/site.io')
+    expect(outsideRepository(`outside:${'a'.repeat(39)}/${'b'.repeat(100)}`)).toBe(
+      `${'a'.repeat(39)}/${'b'.repeat(100)}`,
+    )
+    for (const bad of ['repo-1', 'outside:friend', 'outside:friend/site/extra', 'outside:../site', 'outside:friend/..'])
+      expect(outsideRepository(bad)).toBeNull()
+    expect(outsideRepository(`outside:${'a'.repeat(40)}/site`)).toBeNull()
   })
 })

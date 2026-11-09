@@ -2,7 +2,7 @@
 // direct API client in `forge/githubApi.ts`, `forge/gitlab.ts`, `forge/bitbucket.ts`, `forge/azure.ts`);
 // `forge/route.ts` picks one from a checkout's remote.
 // The operations below dispatch through it; GitHub's account and connection helpers are exported as they are.
-import { listInvolvedPullRequests as githubInvolved } from './forge/githubPulls'
+import { listInvolvedPullRequests as githubInvolved, listPullRequests as githubPullRequests } from './forge/githubPulls'
 import type {
   ForgeCheck,
   ForgeRepositorySummary,
@@ -70,6 +70,9 @@ export const pullRequestFiles = async (cwd: string, url: string) => {
 /** Open pull requests involving the signed-in account across the service; GitHub only, empty elsewhere. */
 export const listInvolvedPullRequests = async (cwd: string) =>
   (await adapterFor(cwd)).id === 'github' ? githubInvolved(cwd) : []
+/** Pull requests of `repository` (`owner/repo`), a GitHub repository with no checkout, read as `cwd`'s account. */
+export const listRepositoryPullRequests = (cwd: string, repository: string) =>
+  githubPullRequests(cwd, { includeClosed: true }, repository)
 export const reviewThreads = async (cwd: string, url: string) => (await adapterFor(cwd)).reviewThreads(cwd, url)
 export const replyToThread = async (cwd: string, url: string, threadId: string, body: string) =>
   (await adapterFor(cwd)).replyToThread(cwd, url, threadId, body)

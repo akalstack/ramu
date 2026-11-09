@@ -13,6 +13,7 @@ import {
   CircleDot,
   CircleX,
   ExternalLink,
+  FolderDown,
   LayoutList,
   FileDiff,
   GitMerge,
@@ -37,6 +38,7 @@ import type {
 } from '@ramu/shared/types'
 import {
   FORGE_NAMES,
+  outsideRepository,
   pullRequestNextStep,
   pullRequestRef,
   pullRequestStage,
@@ -57,6 +59,7 @@ import { queryInvokerFor } from './hostQuery'
 import { PullRequestIcon, StageChip } from './PullRequestIcon'
 import { ReviewDraftsCard } from './ReviewDraftsCard'
 import { openPullRequestThread } from './pullRequestThreads'
+import { useAddProject } from '../workspace/addProject'
 
 type View = Extract<ViewDescriptor, { kind: 'pull-request' }>
 
@@ -96,6 +99,9 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
   const [threadFilter, setThreadFilter] = useState<'open' | 'resolved' | 'all'>('open')
   const [threadOrder, setThreadOrder] = useState<'newest' | 'oldest'>('newest')
   const fileCount = usePullRequestFiles(taskId, view.repoId, view.url)
+  // A repository no project holds is read and acted on through the service; work in a thread needs it cloned first.
+  const outside = outsideRepository(view.repoId)
+  const addProject = useAddProject(host.id)
 
   const list = useQuery({
     queryKey: ipcQueryKeyOn(host.id, 'forge.pullRequests', taskId, view.repoId, false),
@@ -236,7 +242,16 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
   const open = pr.state === 'open'
   const mine = pr.group === 'mine'
   const openThreads = (threads.data ?? []).filter((thread) => !thread.resolved)
-  const step = pullRequestNextStep(pr, stage, mine)
+  const suggested = pullRequestNextStep(pr, stage, mine)
+  // Without a checkout there is no thread to fix, resolve or review in; the clone button above is the next step.
+  const step =
+    outside &&
+    (suggested === 'review' ||
+      suggested === 'fix-checks' ||
+      suggested === 'address-comments' ||
+      suggested === 'resolve-conflicts')
+      ? 'none'
+      : suggested
   const takeStep = (next: PullRequestNextStep) => {
     if (next === 'merge') setMerging(true)
     else if (next === 'resolve-conflicts' || next === 'update-branch') void updateBranch()
@@ -303,7 +318,17 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
         </header>
 
         <div className="flex flex-wrap gap-1.5">
-          {thread ? (
+          {outside ? (
+            <Button
+              size="sm"
+              disabled={addProject.busy}
+              title={t('Clone it into a folder on the host and add it as a project')}
+              onClick={() => void addProject.cloneProject(outside)}
+            >
+              <FolderDown size={13} />
+              {t('Clone {0} as a project', { '0': outside })}
+            </Button>
+          ) : thread ? (
             <Button size="sm" onClick={() => ws.openTask(thread.taskId)}>
               <SquareArrowOutUpRight size={13} />
               {t('Open thread')}
@@ -316,7 +341,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
               </Button>
             )
           )}
-          {open && !mine && !thread && (
+          {open && !mine && !thread && !outside && (
             <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => void openThread('review')}>
               <Bot size={13} />
               {busy === 'review' ? t('Starting…') : t('Review with agent')}
@@ -338,7 +363,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
               {t('Ready for review')}
             </Button>
           )}
-          {open && (pr.mergeable === 'behind' || pr.mergeable === 'conflicts') && (
+          {open && (pr.mergeable === 'behind' || (pr.mergeable === 'conflicts' && !outside)) && (
             <Button
               variant="secondary"
               size="sm"
@@ -377,9 +402,17 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
             )
           )}
         </div>
+        {outside && open && (
+          <p className="m-0 text-caption text-muted-foreground">
+            {t(
+              '{0} is in no project on this host. Review, comment and merge here; clone it as a project to work on it in a thread or have an agent review it.',
+              { '0': outside },
+            )}
+          </p>
+        )}
         {error && <p className="m-0 whitespace-pre-wrap text-caption text-bad">{error}</p>}
         {notice && <p className="m-0 text-caption text-warn">{notice}</p>}
-        {pr.fork && !mine && open && (
+        {pr.fork && !mine && open && !outside && (
           <p className="m-0 text-caption text-muted-foreground">
             {t('This pull request comes from a fork. An agent can review it here, but only its author can push to it.')}
           </p>

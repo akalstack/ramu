@@ -192,12 +192,19 @@ async function repository(cwd: string) {
   return remote
 }
 
-/** Open pull requests (and, when asked, the latest closed and merged ones) of the checkout's repository. */
-export async function listPullRequests(cwd: string, options: { includeClosed: boolean }): Promise<PullRequestList> {
+/**
+ * Open pull requests (and, when asked, the latest closed and merged ones) of the checkout's repository, or of
+ * `elsewhere` (`owner/repo` on the same server) read as the checkout's account.
+ */
+export async function listPullRequests(
+  cwd: string,
+  options: { includeClosed: boolean },
+  elsewhere?: string,
+): Promise<PullRequestList> {
   const availability = await githubAvailability(cwd)
   if (availability !== 'ready') return { availability, viewer: null, pullRequests: [] }
-  const { owner, repo } = await repository(cwd)
-  const scope = `repo:${owner}/${repo} is:pr`
+  const named = elsewhere ?? (await repository(cwd).then((remote) => `${remote.owner}/${remote.repo}`))
+  const scope = `repo:${named} is:pr`
   let raw: RawList
   try {
     raw = await githubGraphql<RawList>(cwd, LIST_QUERY, {
@@ -221,10 +228,30 @@ export async function listPullRequests(cwd: string, options: { includeClosed: bo
   return { availability, viewer, pullRequests }
 }
 
-export function pullNumber(url: string): number {
-  const match = /\/pull\/(\d+)(?:[/?#]|$)/.exec(url)
-  if (!match) throw new Error('That is not a GitHub pull request link.')
-  return Number(match[1])
+/** The server, repository and number a GitHub pull request link names; anything else is refused. */
+export function pullRequestLink(url: string): { origin: string; owner: string; repo: string; number: number } {
+  let parsed: URL | null = null
+  try {
+    parsed = new URL(url)
+  } catch {
+    // Reported below with every other link that is not a pull request's.
+  }
+  // A server on a sub-path adds segments in front; the two before `/pull/` always name the repository.
+  const match = parsed && /\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/.*)?$/.exec(parsed.pathname)
+  if (!parsed || !match || !['https:', 'http:'].includes(parsed.protocol))
+    throw new Error('That is not a GitHub pull request link.')
+  return { origin: parsed.host.toLowerCase(), owner: match[1]!, repo: match[2]!, number: Number(match[3]) }
+}
+
+/**
+ * The repository a pull request link names, read through the checkout's server and account. The link decides the
+ * repository, so a pull request of a fork's upstream or of a repository in no project reads as itself.
+ */
+export async function pullRequestTarget(cwd: string, url: string) {
+  const remote = await repository(cwd)
+  const link = pullRequestLink(url)
+  if (link.origin !== remote.origin) throw new Error(`That pull request is not on ${remote.origin}.`)
+  return link
 }
 
 interface RawOne {
@@ -247,8 +274,7 @@ const ONE_QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
 ${PR_FRAGMENT}`
 
 async function readOne(cwd: string, url: string) {
-  const { owner, repo } = await repository(cwd)
-  const number = pullNumber(url)
+  const { owner, repo, number } = await pullRequestTarget(cwd, url)
   const raw = await githubGraphql<RawOne>(cwd, ONE_QUERY, { owner, repo, number })
   const pr = raw.repository.pullRequest
   if (!pr) throw new Error(`Pull request #${number} was not found with this account.`)
@@ -477,8 +503,7 @@ export function parseReviewThreads(raw: NonNullable<RawThreads['repository']['pu
 }
 
 async function readThreads(cwd: string, url: string) {
-  const { owner, repo } = await repository(cwd)
-  const number = pullNumber(url)
+  const { owner, repo, number } = await pullRequestTarget(cwd, url)
   const raw = await githubGraphql<RawThreads>(cwd, THREADS_QUERY, { owner, repo, number })
   const pr = raw.repository.pullRequest
   if (!pr) throw new Error(`Pull request #${number} was not found with this account.`)
@@ -532,8 +557,8 @@ export async function resolveThread(cwd: string, _url: string, threadId: string)
 
 export async function requestReviews(cwd: string, url: string, reviewers: string[]): Promise<void> {
   if (!reviewers.length) return
-  const { owner, repo } = await repository(cwd)
-  await githubRest(cwd, 'POST', `/repos/${owner}/${repo}/pulls/${pullNumber(url)}/requested_reviewers`, {
+  const { owner, repo, number } = await pullRequestTarget(cwd, url)
+  await githubRest(cwd, 'POST', `/repos/${owner}/${repo}/pulls/${number}/requested_reviewers`, {
     reviewers,
   })
 }
@@ -580,7 +605,7 @@ const FILE_STATUS: PullRequestFile['status'][] = [
 
 /** The first page of files `url` changes, with their patches cut at Ramu's limit. */
 export async function pullRequestFiles(cwd: string, url: string): Promise<{ files: PullRequestFile[]; more: boolean }> {
-  const { owner, repo } = await repository(cwd)
+  const { owner, repo, number } = await pullRequestTarget(cwd, url)
   const raw = await githubRest<
     {
       filename: string
@@ -590,7 +615,7 @@ export async function pullRequestFiles(cwd: string, url: string): Promise<{ file
       deletions: number
       patch?: string
     }[]
-  >(cwd, 'GET', `/repos/${owner}/${repo}/pulls/${pullNumber(url)}/files?per_page=${FILES_PAGE}`)
+  >(cwd, 'GET', `/repos/${owner}/${repo}/pulls/${number}/files?per_page=${FILES_PAGE}`)
   const files = (raw ?? []).map((file): PullRequestFile => ({
     path: file.filename,
     ...(file.previous_filename ? { previousPath: file.previous_filename } : {}),

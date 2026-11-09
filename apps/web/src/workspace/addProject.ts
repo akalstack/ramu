@@ -22,7 +22,8 @@ const chooseRepos = (name: string, repos: string[]) =>
     choiceListeners.forEach((listener) => listener({ name, repos, resolve }))
   })
 
-export type FolderPick = { host: string; resolve: (dir: string | null) => void }
+/** `clone` names a GitHub repository (`owner/repo`) to clone into the chosen folder, with its search filled in. */
+export type FolderPick = { host: string; clone?: string; resolve: (dir: string | null) => void }
 const pickListeners = new Set<(pick: FolderPick) => void>()
 /** The host folder browser subscribes here; it answers with the chosen folder on the host, or null when cancelled. */
 export function onFolderPick(listener: (pick: FolderPick) => void) {
@@ -31,10 +32,10 @@ export function onFolderPick(listener: (pick: FolderPick) => void) {
     pickListeners.delete(listener)
   }
 }
-export const pickHostFolder = (host: string) =>
+export const pickHostFolder = (host: string, clone?: string) =>
   new Promise<string | null>((resolve) => {
     if (!pickListeners.size) return resolve(null)
-    pickListeners.forEach((listener) => listener({ host, resolve }))
+    pickListeners.forEach((listener) => listener({ host, ...(clone ? { clone } : {}), resolve }))
   })
 
 /**
@@ -110,5 +111,12 @@ export function useAddProject(host?: string) {
       }
       await open(files.map((file) => ramu.pathForFile(file)).filter(Boolean))
     })
-  return { add, addDropped, busy }
+  /** A GitHub repository (`owner/repo`) cloned into a folder on the host and added as a project. */
+  const cloneProject = (repository: string) =>
+    guarded(async () => {
+      // Cloning happens on the host, so even this computer's folders are browsed in-app.
+      const dir = await pickHostFolder(target, repository)
+      if (dir) await open([dir])
+    })
+  return { add, addDropped, cloneProject, busy }
 }

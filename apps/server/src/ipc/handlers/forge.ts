@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
+import { outsideRepository } from '@ramu/shared/pullRequests'
 import type {
   ForgeSaveConnectionInput,
   IssueLink,
@@ -19,6 +20,7 @@ import type {
 import { reviewRequestPrompt } from '../../workspace/forge/reviewPrompt'
 import type { DraftEdit } from '../../background/pullRequestDrafts'
 import * as forge from '../../workspace/forge'
+import { pullRequestLink } from '../../workspace/forge/githubPulls'
 import { gitlabApi, gitlabSummary } from '../../workspace/forge/gitlab'
 import { bitbucketApi, bitbucketSummary } from '../../workspace/forge/bitbucket'
 import { azureSummary, verifyAzureToken } from '../../workspace/forge/azure'
@@ -57,6 +59,17 @@ const saveInput = z.object({
 const issueKey = (taskId: string) => `issue:${taskId}`
 
 const prUrl = z.string().url().max(2000)
+/**
+ * A project's repository id, or `outside:<owner>/<repo>` for a GitHub repository no project holds (longer than `id`
+ * allows, and only in that exact shape).
+ */
+const pullRequestRepo = z
+  .string()
+  .min(1)
+  .max(150)
+  .refine((value) => (value.startsWith('outside:') ? outsideRepository(value) !== null : value.length <= 100), {
+    message: 'Unknown repository.',
+  })
 const pullRequestAction = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('merge'), method: z.enum(['merge', 'squash', 'rebase']), deleteBranch: z.boolean() }),
   z.object({ kind: z.literal('close') }),
@@ -140,6 +153,22 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
     }
   }
   const repoRoot = (repoId: string) => workspace.getRepository(repoId).root
+  /**
+   * Where a pull request's calls run: the thread's checkout, or for a repository no project holds, the checkout whose
+   * GitHub account found it, and then only for that repository's pull requests.
+   */
+  const pullRequestCwd = async (taskId: string, repoId: string, url?: string): Promise<string> => {
+    const repository = outsideRepository(repoId)
+    if (!repository) return gitCwdOf(taskId, repoId)
+    if (url !== undefined) {
+      const link = pullRequestLink(url)
+      if (`${link.owner}/${link.repo}`.toLowerCase() !== repository.toLowerCase())
+        throw new Error(`That pull request is not in ${repository}.`)
+    }
+    const root = await ctx.pullRequestIndex?.outsideRoot(repository)
+    if (!root) throw new Error(`No GitHub account here lists ${repository}. Refresh the pull requests and try again.`)
+    return root
+  }
 
   return {
     'forge.pullRequest': {
@@ -394,9 +423,9 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
         forge.pullRequestFeedback(gitCwdOf(taskId, repoId), kind),
     },
     'forge.pullRequests': {
-      args: z.tuple([id, id, z.boolean(), z.boolean()]),
+      args: z.tuple([id, pullRequestRepo, z.boolean(), z.boolean()]),
       run: async (taskId: string, repoId: string, includeClosed: boolean, force: boolean) => {
-        const cwd = gitCwdOf(taskId, repoId)
+        const cwd = await pullRequestCwd(taskId, repoId)
         const list = ctx.pullRequestIndex
           ? await ctx.pullRequestIndex.list(cwd, repoId, { includeClosed, force })
           : await forge.listPullRequests(cwd, { includeClosed })
@@ -414,12 +443,14 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
       },
     },
     'forge.pullRequestDescription': {
-      args: z.tuple([id, id, prUrl]),
-      run: (taskId: string, repoId: string, url: string) =>
-        redacted(() => forge.pullRequestBody(gitCwdOf(taskId, repoId), url)),
+      args: z.tuple([id, pullRequestRepo, prUrl]),
+      run: async (taskId: string, repoId: string, url: string) => {
+        const cwd = await pullRequestCwd(taskId, repoId, url)
+        return redacted(() => forge.pullRequestBody(cwd, url))
+      },
     },
     'forge.submitReview': {
-      args: z.tuple([id, id, prUrl, reviewInput]),
+      args: z.tuple([id, pullRequestRepo, prUrl, reviewInput]),
       run: async (
         taskId: string,
         repoId: string,
@@ -431,8 +462,9 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
         },
       ) => {
         // The person's own review, written in the pull request's full view; agents never reach this method.
+        const cwd = await pullRequestCwd(taskId, repoId, url)
         await redacted(() =>
-          forge.submitReview(gitCwdOf(taskId, repoId), url, {
+          forge.submitReview(cwd, url, {
             ...review,
             comments: review.comments.map((comment, index) => ({ id: String(index), ...comment })),
           }),
@@ -441,14 +473,18 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
       },
     },
     'forge.pullRequestTimeline': {
-      args: z.tuple([id, id, prUrl]),
-      run: (taskId: string, repoId: string, url: string) =>
-        redacted(() => forge.pullRequestTimeline(gitCwdOf(taskId, repoId), url)),
+      args: z.tuple([id, pullRequestRepo, prUrl]),
+      run: async (taskId: string, repoId: string, url: string) => {
+        const cwd = await pullRequestCwd(taskId, repoId, url)
+        return redacted(() => forge.pullRequestTimeline(cwd, url))
+      },
     },
     'forge.pullRequestFiles': {
-      args: z.tuple([id, id, prUrl]),
-      run: (taskId: string, repoId: string, url: string) =>
-        redacted(() => forge.pullRequestFiles(gitCwdOf(taskId, repoId), url)),
+      args: z.tuple([id, pullRequestRepo, prUrl]),
+      run: async (taskId: string, repoId: string, url: string) => {
+        const cwd = await pullRequestCwd(taskId, repoId, url)
+        return redacted(() => forge.pullRequestFiles(cwd, url))
+      },
     },
     'forge.allPullRequests': {
       args: z.tuple([z.boolean(), z.boolean()]),
@@ -458,18 +494,24 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
       },
     },
     'forge.mergeOptions': {
-      args: z.tuple([id, id, prUrl]),
-      run: (taskId: string, repoId: string, url: string) =>
-        redacted(() => forge.mergeOptions(gitCwdOf(taskId, repoId), url)),
+      args: z.tuple([id, pullRequestRepo, prUrl]),
+      run: async (taskId: string, repoId: string, url: string) => {
+        const cwd = await pullRequestCwd(taskId, repoId, url)
+        return redacted(() => forge.mergeOptions(cwd, url))
+      },
     },
     'forge.pullRequestAction': {
-      args: z.tuple([id, id, prUrl, pullRequestAction]),
+      args: z.tuple([id, pullRequestRepo, prUrl, pullRequestAction]),
       run: async (taskId: string, repoId: string, url: string, action: PullRequestAction) => {
-        const cwd = gitCwdOf(taskId, repoId)
+        const cwd = await pullRequestCwd(taskId, repoId, url)
         if (action.kind === 'merge') await guardForge(ctx, taskId, cwd, 'Merging this pull request')
-        // The base is read before merging, while the pull request is still listed as open.
+        // The base is read before merging, while the pull request is still listed as open. A repository no project
+        // holds has no deployment or thread to follow the merge.
         const base =
-          action.kind === 'merge' && (ctx.deploys || ctx.pullRequestWatches) && ctx.pullRequestIndex
+          action.kind === 'merge' &&
+          !outsideRepository(repoId) &&
+          (ctx.deploys || ctx.pullRequestWatches) &&
+          ctx.pullRequestIndex
             ? (
                 await ctx.pullRequestIndex.list(cwd, repoId, { includeClosed: false, force: false }).catch(() => null)
               )?.pullRequests.find((pr) => pr.url === url)?.baseBranch
@@ -499,9 +541,9 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
       },
     },
     'forge.updateBranch': {
-      args: z.tuple([id, id, prUrl]),
+      args: z.tuple([id, pullRequestRepo, prUrl]),
       run: async (taskId: string, repoId: string, url: string) => {
-        const cwd = gitCwdOf(taskId, repoId)
+        const cwd = await pullRequestCwd(taskId, repoId, url)
         const list = ctx.pullRequestIndex
           ? await ctx.pullRequestIndex.list(cwd, repoId, { includeClosed: false, force: true })
           : await forge.listPullRequests(cwd, { includeClosed: false })
@@ -515,6 +557,8 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
           return { where: 'service' as const, taskId: null, conflicts: 0, pushed: false }
         }
         if (pr.fork) throw new Error('This pull request comes from a fork. Its author has to update it.')
+        if (outsideRepository(repoId))
+          throw new Error('Clone this repository as a project to resolve the conflicts in a thread.')
         // A checkout that has the branch: the linked thread's first, then the one this view belongs to.
         const candidates = [
           ...(ctx.pullRequestIndex?.threadsFor(url) ?? []).reverse(),
@@ -539,9 +583,11 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
       },
     },
     'forge.reviewThreads': {
-      args: z.tuple([id, id, prUrl]),
-      run: (taskId: string, repoId: string, url: string) =>
-        redacted(() => forge.reviewThreads(gitCwdOf(taskId, repoId), url)),
+      args: z.tuple([id, pullRequestRepo, prUrl]),
+      run: async (taskId: string, repoId: string, url: string) => {
+        const cwd = await pullRequestCwd(taskId, repoId, url)
+        return redacted(() => forge.reviewThreads(cwd, url))
+      },
     },
     'forge.pullRequestHandoff': {
       args: z.tuple([id, id, prUrl, z.enum(['work', 'review'])]),
