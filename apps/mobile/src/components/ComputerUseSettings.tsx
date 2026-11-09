@@ -1,13 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, View } from 'react-native'
 import type { RamuMethods } from '@ramu/shared/api'
-import { testDeviceSummary, type PlatformReadiness, type TestDeviceStatus } from '@ramu/shared/testDevices'
+import {
+  queuePlace,
+  testDeviceSummary,
+  type PlatformReadiness,
+  type TestDeviceStatus,
+  type TestPlatform,
+} from '@ramu/shared/testDevices'
 import { appControlHelp, runtimeHelp } from '@ramu/shared/computerStatus'
 import { space } from '../theme'
 import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
 import { Hint, ToggleRow } from './SettingRows'
-import { Button, Card, Divider, SectionLabel, T } from './ui'
+import { Button, Card, Divider, SectionLabel, Sheet, T } from './ui'
+import { SheetGroup, SheetOption } from './SheetOptions'
 
 type Status = ReturnType<RamuMethods['computer.status']>
 
@@ -140,19 +147,50 @@ function Readiness({ title, value }: { title: string; value: PlatformReadiness }
           {entry.item}: {entry.fix}
         </T>
       ))}
-      {value.note ? (
-        <T size={12} tone="muted" style={{ lineHeight: 18 }}>
-          {say(value.note)}
-        </T>
-      ) : null}
     </View>
   )
 }
 
+/** A thread with a device, or one waiting for it, with Stop. */
+function DeviceRow({
+  title,
+  detail,
+  waiting,
+  disabled,
+  onStop,
+}: {
+  title: string
+  detail: string
+  waiting: boolean
+  disabled: boolean
+  onStop: () => void
+}) {
+  const say = useSay()
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, padding: space.l }}>
+      <View style={{ flex: 1, gap: 2 }}>
+        <T numberOfLines={1}>{title}</T>
+        <T size={12} tone="muted" numberOfLines={1}>
+          {detail}
+        </T>
+      </View>
+      <Button
+        kind="secondary"
+        title={waiting ? say('Stop waiting') : say('Stop')}
+        accessibilityLabel={say('Stop {0}', { 0: title })}
+        disabled={disabled}
+        onPress={onStop}
+      />
+    </View>
+  )
+}
+
+const PLATFORM_TITLE: Record<TestPlatform, string> = { ios: 'iOS Simulator', android: 'Android emulator' }
+
 /**
- * Settings → Test devices on the selected computer, in the desktop page's order: the switch with its status line, what
- * each platform still needs, and the devices in use with Stop. Installing Xcode, the Android SDK or the tap helper
- * happens at that computer.
+ * Settings → Test devices on the selected computer, in the desktop page's order: the switch with its status line,
+ * Set up (which runs on that computer), what each platform still needs, the threads holding or waiting for a device
+ * with Stop, and the model a thread gets by default.
  */
 export function TestDeviceSettings({ hostId }: { hostId: string }) {
   const say = useSay()
@@ -162,6 +200,7 @@ export function TestDeviceSettings({ hostId }: { hostId: string }) {
   const [status, setStatus] = useState<TestDeviceStatus | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [choosing, setChoosing] = useState<TestPlatform | null>(null)
   const live = useRef(true)
   useEffect(() => {
     live.current = true
@@ -182,7 +221,11 @@ export function TestDeviceSettings({ hostId }: { hostId: string }) {
   }, [hostId, store.invoke])
   useEffect(() => {
     setStatus(null)
-    if (online) void load()
+    if (!online) return
+    void load()
+    // Threads take and give back devices while the page is open.
+    const timer = setInterval(() => void load(), 10_000)
+    return () => clearInterval(timer)
   }, [load, online])
   const act = async (work: () => Promise<unknown>) => {
     if (busy || readOnly) return
@@ -197,7 +240,10 @@ export function TestDeviceSettings({ hostId }: { hostId: string }) {
   }
   if (!online) return <Hint>{say('Connect to this host to see its test devices.')}</Hint>
   if (!status) return error ? <Hint>{error}</Hint> : null
-  const running = status.devices.filter((device) => device.running)
+  const platforms = (['ios', 'android'] as const).filter(
+    (platform) => status[platform].ready && status.models[platform].length,
+  )
+  const stop = (taskId: string) => void act(() => store.invoke(hostId, 'testDevices.stop', taskId))
   return (
     <>
       <Card style={{ marginHorizontal: space.l }}>
@@ -210,34 +256,124 @@ export function TestDeviceSettings({ hostId }: { hostId: string }) {
           disabled={busy || readOnly}
           onChange={(enabled) => void act(() => store.invoke(hostId, 'testDevices.setEnabled', enabled))}
         />
+        {!status.installed ? (
+          <>
+            <Divider inset={space.l} />
+            <View style={{ padding: space.l, gap: space.s }}>
+              <T size={12} tone="muted" style={{ lineHeight: 18 }}>
+                {say('Installs Simlock and agent-device in Ramu’s tools folder. No Homebrew, nothing system-wide.')}
+              </T>
+              <Button
+                title={busy ? say('Setting up…') : say('Set up test devices')}
+                disabled={busy || readOnly}
+                onPress={() => void act(() => store.invoke(hostId, 'testDevices.setUp'))}
+              />
+            </View>
+          </>
+        ) : null}
       </Card>
-      <SectionLabel>{say('Setup')}</SectionLabel>
-      <Card style={{ marginHorizontal: space.l }}>
-        <Readiness title="iOS" value={status.ios} />
-        <Divider inset={space.l} />
-        <Readiness title="Android" value={status.android} />
-      </Card>
-      {running.length ? (
+      {status.installed ? (
+        <>
+          <SectionLabel>{say('Setup')}</SectionLabel>
+          <Card style={{ marginHorizontal: space.l }}>
+            <Readiness title={say(PLATFORM_TITLE.ios)} value={status.ios} />
+            <Divider inset={space.l} />
+            <Readiness title={say(PLATFORM_TITLE.android)} value={status.android} />
+          </Card>
+        </>
+      ) : null}
+      {status.inUse.length || status.waiting.length ? (
         <>
           <SectionLabel>{say('In use')}</SectionLabel>
           <Card style={{ marginHorizontal: space.l }}>
-            {running.map((device, index) => (
-              <View key={device.id}>
+            {status.inUse.map((entry, index) => (
+              <View key={entry.taskId}>
                 {index ? <Divider inset={space.l} /> : null}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, padding: space.l }}>
-                  <T style={{ flex: 1 }} numberOfLines={1}>
-                    {device.name}
-                  </T>
-                  <Button
-                    kind="secondary"
-                    title={say('Stop')}
-                    accessibilityLabel={say('Stop {0}', { 0: device.name })}
-                    disabled={busy || readOnly}
-                    onPress={() => void act(() => store.invoke(hostId, 'testDevices.stop', device.id))}
-                  />
-                </View>
+                <DeviceRow
+                  title={entry.name}
+                  detail={
+                    store.chats.find((chat) => chat.computerId === hostId && chat.taskId === entry.taskId)?.title ??
+                    say('Held by a thread')
+                  }
+                  waiting={false}
+                  disabled={busy || readOnly}
+                  onStop={() => stop(entry.taskId)}
+                />
               </View>
             ))}
+            {status.waiting.map((entry, index) => {
+              const place = queuePlace(entry.position)
+              return (
+                <View key={entry.taskId}>
+                  {index || status.inUse.length ? <Divider inset={space.l} /> : null}
+                  <DeviceRow
+                    title={say(PLATFORM_TITLE[entry.platform])}
+                    detail={say(place.text, place.values)}
+                    waiting
+                    disabled={busy || readOnly}
+                    onStop={() => stop(entry.taskId)}
+                  />
+                </View>
+              )
+            })}
+          </Card>
+        </>
+      ) : null}
+      {platforms.length ? (
+        <>
+          <SectionLabel>{say('Defaults')}</SectionLabel>
+          <Card style={{ marginHorizontal: space.l }}>
+            {platforms.map((platform, index) => (
+              <View key={platform}>
+                {index ? <Divider inset={space.l} /> : null}
+                <SheetOption
+                  title={say(platform === 'ios' ? 'iPhone or iPad' : 'Android device')}
+                  trailing={
+                    <T size={12} tone="muted">
+                      {status.defaults[platform] ?? ''}
+                    </T>
+                  }
+                  onPress={() => setChoosing(platform)}
+                />
+              </View>
+            ))}
+          </Card>
+          <Hint>{say('What a thread gets when it names no model.')}</Hint>
+        </>
+      ) : null}
+      {choosing ? (
+        <Sheet open onClose={() => setChoosing(null)} title={say(PLATFORM_TITLE[choosing])}>
+          <SheetGroup>
+            {[...status.models[choosing]]
+              .sort((a, b) => Number(b.kind === 'phone') - Number(a.kind === 'phone'))
+              .map((model) => (
+                <SheetOption
+                  key={model.name}
+                  title={model.name}
+                  selected={model.name === status.defaults[choosing]}
+                  onPress={() => {
+                    const platform = choosing
+                    setChoosing(null)
+                    void act(() => store.invoke(hostId, 'testDevices.setDefault', platform, model.name))
+                  }}
+                />
+              ))}
+          </SheetGroup>
+        </Sheet>
+      ) : null}
+      {status.installed ? (
+        <>
+          <SectionLabel>{say('Advanced')}</SectionLabel>
+          <Card style={{ marginHorizontal: space.l }}>
+            <ToggleRow
+              title={say('Keep a spare device ready')}
+              help={say(
+                'The next thread gets its device in about half the time, but a spare simulator or emulator stays booted and holds memory.',
+              )}
+              value={status.keepWarm}
+              disabled={busy || readOnly}
+              onChange={(keep) => void act(() => store.invoke(hostId, 'testDevices.setKeepWarm', keep))}
+            />
           </Card>
         </>
       ) : null}

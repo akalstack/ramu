@@ -1,14 +1,19 @@
 import { useCallback, useContext, useEffect, useState } from 'react'
-import { Check, CircleCheck, Copy, Smartphone, TriangleAlert } from 'lucide-react'
+import { Check, ChevronDown, CircleCheck, Copy, Hourglass, Smartphone, TriangleAlert } from 'lucide-react'
 import {
+  queuePlace,
   testDeviceSummary,
   type PlatformReadiness,
-  type TestDevice,
+  type TestDeviceLease,
   type TestDeviceStatus,
+  type TestDeviceWaiting,
+  type TestPlatform,
 } from '@ramu/shared/testDevices'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Switch } from '@/components/ui/switch'
+import { Dropdown } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { ownHostId } from '../hosts'
 import { invokeOn } from '../ipc'
@@ -19,6 +24,8 @@ import { useComputers } from '../workspace/computers'
 import { useWorkspace } from '../workspace/workspace'
 import { SettingsScopeContext } from './SettingsScope'
 import { SETTINGS_FORM_CLASS } from './constants'
+
+const PLATFORM_TITLE: Record<TestPlatform, string> = { ios: 'iOS Simulator', android: 'Android emulator' }
 
 function Status({ ready }: { ready: boolean }) {
   return (
@@ -53,64 +60,49 @@ function CopyCommand({ command }: { command: string }) {
 }
 
 /** One platform's part of the checklist: one line when the host cannot run it, Ready, or each missing item with its fix. */
-function Checklist({
-  title,
-  value,
-  installing,
-  canInstall,
-  onInstall,
-}: {
-  title: string
-  value: PlatformReadiness
-  installing: boolean
-  canInstall: boolean
-  onInstall: () => void
-}) {
+function Checklist({ platform, value }: { platform: TestPlatform; value: PlatformReadiness }) {
+  const title = t(PLATFORM_TITLE[platform])
   if (value.unsupported)
     return (
       <SettingsRow>
         <SettingsLabel title={title} help={t(value.unsupported)} />
       </SettingsRow>
     )
+  if (!value.missing.length)
+    return (
+      <SettingsRow>
+        <SettingsLabel title={title} />
+        <Status ready />
+      </SettingsRow>
+    )
   return (
     <>
-      {value.missing.length === 0 && (
-        <SettingsRow>
-          <SettingsLabel title={title} />
-          <Status ready />
-        </SettingsRow>
-      )}
       {value.missing.map((entry) => (
         <SettingsRow key={entry.item}>
           <SettingsLabel title={`${title} · ${entry.item}`} help={entry.fix} />
           <Status ready={false} />
         </SettingsRow>
       ))}
-      {value.install && (
-        <SettingsRow>
-          <SettingsLabel title={t('Taps and typing')} help={value.note ? t(value.note) : undefined} />
-          <span className="flex flex-none items-center gap-1">
-            <CopyCommand command={value.install} />
-            <Button size="xs" disabled={!canInstall || installing} onClick={onInstall}>
-              {installing ? t('Installing…') : t('Install idb')}
-            </Button>
-          </span>
-        </SettingsRow>
-      )}
     </>
   )
 }
 
-/** A running device: what it is, the thread holding it (opens it), and Watch and Stop. */
+/** A thread with a device, or waiting for one: what it is, the thread (opens it), and Watch and Stop. */
 function InUse({
   hostId,
-  device,
+  taskId,
+  title,
+  detail,
+  waiting,
   readOnly,
   onLeave,
   onStop,
 }: {
   hostId: string
-  device: TestDevice
+  taskId: string
+  title: string
+  detail: string
+  waiting: boolean
   readOnly: boolean
   /** Closes Settings to show the thread; absent while Settings has unsaved changes. */
   onLeave?: () => void
@@ -119,9 +111,8 @@ function InUse({
   const ws = useWorkspace()
   const { select } = useHostSelection()
   const computers = useComputers()
-  const thread = device.heldBy
   // Only the window's own host has its threads loaded here; another host's thread is named generically.
-  const title = thread && hostId === computers?.current ? ws.task(thread)?.title : undefined
+  const thread = hostId === computers?.current ? ws.task(taskId)?.title : undefined
   const leave = (then: () => void) => {
     then()
     onLeave?.()
@@ -129,46 +120,54 @@ function InUse({
   return (
     <SettingsRow className="gap-3!">
       <span className="flex min-w-0 flex-1 items-center gap-2">
-        <Smartphone size={14} className="flex-none text-muted-foreground" aria-hidden="true" />
+        {waiting ? (
+          <Hourglass size={14} className="flex-none text-muted-foreground" aria-hidden="true" />
+        ) : (
+          <Smartphone size={14} className="flex-none text-muted-foreground" aria-hidden="true" />
+        )}
         <span className="flex min-w-0 flex-col">
-          <span className="truncate text-control">{device.name}</span>
-          {thread &&
-            (onLeave ? (
+          <span className="truncate text-control">{title}</span>
+          <span className="truncate text-caption text-muted-foreground">
+            {onLeave ? (
               <Button
                 variant="link"
                 size="xs"
-                className="h-auto justify-start p-0 text-caption text-muted-foreground"
-                onClick={() => leave(() => select(hostId, { kind: 'task', taskId: thread }))}
+                className="h-auto p-0 text-caption text-muted-foreground"
+                onClick={() => leave(() => select(hostId, { kind: 'task', taskId }))}
               >
-                {title ?? t('Open thread')}
+                {thread ?? t('Open thread')}
               </Button>
             ) : (
-              <span className="truncate text-caption text-muted-foreground">{title ?? t('Held by a thread')}</span>
-            ))}
+              (thread ?? t('Held by a thread'))
+            )}
+            {` · ${detail}`}
+          </span>
         </span>
       </span>
       <span className="flex flex-none items-center gap-1">
-        {thread && onLeave && (
+        {!waiting && onLeave && (
           <Button
             variant="ghost"
             size="xs"
-            onClick={() => leave(() => floatLiveView(hostId, thread, { kind: 'computer' }))}
+            onClick={() => leave(() => floatLiveView(hostId, taskId, { kind: 'computer' }))}
           >
             {t('Watch')}
           </Button>
         )}
         <Button variant="ghost" size="xs" disabled={readOnly} onClick={onStop}>
-          {t('Stop')}
+          {waiting ? t('Stop waiting') : t('Stop')}
         </Button>
       </span>
     </SettingsRow>
   )
 }
 
+const minutes = (since: number) => Math.max(1, Math.round((Date.now() - since) / 60_000))
+
 /**
- * Settings → Test devices on one host: the switch and a status line first, then what each platform needs as a
- * checklist, then the devices running now. The page checks again whenever Ramu regains focus, so installing Xcode or
- * the Android SDK elsewhere shows up without a refresh.
+ * Settings → Test devices on one host: the switch and a status line first, setup as a checklist, the threads holding
+ * or waiting for a device, the model a thread gets by default, and Advanced folded. The page checks again whenever
+ * Ramu regains focus, so installing Xcode or the Android SDK elsewhere shows up without a refresh.
  */
 function TestDeviceSettings({
   hostId,
@@ -182,6 +181,7 @@ function TestDeviceSettings({
   useLanguage()
   const [status, setStatus] = useState<TestDeviceStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [settingUp, setSettingUp] = useState(false)
   const load = useCallback(
     () =>
       invokeOn(hostId, 'testDevices.status').then(
@@ -197,20 +197,54 @@ function TestDeviceSettings({
     void load()
     const again = () => void load()
     window.addEventListener('focus', again)
-    return () => window.removeEventListener('focus', again)
+    // Threads take and give back devices while the page is open.
+    const timer = window.setInterval(again, 10_000)
+    return () => {
+      window.removeEventListener('focus', again)
+      window.clearInterval(timer)
+    }
   }, [load])
-  const [installing, setInstalling] = useState(false)
-  const installHelper = () => {
-    setInstalling(true)
+  const call = (work: Promise<unknown>) => void work.then(load, (cause) => setError(t(errorText(cause))))
+  const setUp = () => {
+    setSettingUp(true)
     setError(null)
-    invokeOn(hostId, 'testDevices.installHelper')
+    invokeOn(hostId, 'testDevices.setUp')
       .then(load, (cause) => setError(t(errorText(cause))))
-      .finally(() => setInstalling(false))
+      .finally(() => setSettingUp(false))
   }
   const summary = status ? testDeviceSummary(status) : null
-  const running = status?.devices.filter((device) => device.running) ?? []
-  const checklist = (title: string, value: PlatformReadiness) => (
-    <Checklist title={title} value={value} installing={installing} canInstall={!readOnly} onInstall={installHelper} />
+  const stop = (taskId: string) => call(invokeOn(hostId, 'testDevices.stop', taskId))
+  const lease = (entry: TestDeviceLease) => (
+    <InUse
+      key={entry.taskId}
+      hostId={hostId}
+      taskId={entry.taskId}
+      title={entry.name}
+      detail={t('{0} min', { 0: minutes(entry.since) })}
+      waiting={false}
+      readOnly={readOnly}
+      onLeave={onLeave}
+      onStop={() => stop(entry.taskId)}
+    />
+  )
+  const waiting = (entry: TestDeviceWaiting) => {
+    const place = queuePlace(entry.position)
+    return (
+      <InUse
+        key={entry.taskId}
+        hostId={hostId}
+        taskId={entry.taskId}
+        title={t(PLATFORM_TITLE[entry.platform])}
+        detail={t(place.text, place.values)}
+        waiting
+        readOnly={readOnly}
+        onLeave={onLeave}
+        onStop={() => stop(entry.taskId)}
+      />
+    )
+  }
+  const platforms = (['ios', 'android'] as const).filter(
+    (platform) => status?.[platform].ready && status.models[platform].length,
   )
   return (
     <div className={SETTINGS_FORM_CLASS}>
@@ -221,46 +255,96 @@ function TestDeviceSettings({
           help={
             summary
               ? summary.parts.map((part) => t(part.text, part.values)).join(' · ')
-              : t('Agents boot iOS Simulators and Android emulators on this host and check the app they built.')
+              : t('Each thread gets a fresh iOS Simulator or Android emulator of its own to check the app it built.')
           }
         />
         <Switch
           checked={!!status?.enabled}
           disabled={readOnly || !status}
           aria-label={t('Let agents use test devices')}
-          onCheckedChange={(checked) =>
-            void invokeOn(hostId, 'testDevices.setEnabled', checked).then(load, (cause) => setError(errorText(cause)))
-          }
+          onCheckedChange={(checked) => call(invokeOn(hostId, 'testDevices.setEnabled', checked))}
         />
       </SettingsRow>
+      {status && !status.installed && (
+        <SettingsRow>
+          <SettingsLabel
+            title={t('Set up test devices')}
+            help={t('Installs Simlock and agent-device in Ramu’s tools folder. No Homebrew, nothing system-wide.')}
+          />
+          <span className="flex flex-none items-center gap-1">
+            <CopyCommand command={status.setupCommand} />
+            <Button size="xs" disabled={readOnly || settingUp} onClick={setUp}>
+              {settingUp ? t('Setting up…') : t('Set up')}
+            </Button>
+          </span>
+        </SettingsRow>
+      )}
       {error && (
         <p role="alert" className="m-0 mb-4 text-caption text-bad">
           {error}
         </p>
       )}
-      {status && (
+      {status?.installed && (
         <section aria-label={t('Setup')}>
           <SettingsGroupTitle>{t('Setup')}</SettingsGroupTitle>
-          {checklist(t('iOS Simulator'), status.ios)}
-          {checklist(t('Android emulator'), status.android)}
+          <Checklist platform="ios" value={status.ios} />
+          <Checklist platform="android" value={status.android} />
         </section>
       )}
-      {running.length > 0 && (
+      {status && (status.inUse.length > 0 || status.waiting.length > 0) && (
         <section aria-label={t('In use')}>
           <SettingsGroupTitle>{t('In use')}</SettingsGroupTitle>
-          {running.map((device) => (
-            <InUse
-              key={device.id}
-              hostId={hostId}
-              device={device}
-              readOnly={readOnly}
-              onLeave={onLeave}
-              onStop={() =>
-                void invokeOn(hostId, 'testDevices.stop', device.id).then(load, (cause) => setError(errorText(cause)))
-              }
-            />
+          {status.inUse.map(lease)}
+          {status.waiting.map(waiting)}
+        </section>
+      )}
+      {status && platforms.length > 0 && (
+        <section aria-label={t('Defaults')}>
+          <SettingsGroupTitle>{t('Defaults')}</SettingsGroupTitle>
+          {platforms.map((platform) => (
+            <SettingsRow key={platform}>
+              <SettingsLabel
+                title={t(platform === 'ios' ? 'iPhone or iPad' : 'Android device')}
+                help={t('What a thread gets when it names no model.')}
+              />
+              <Dropdown
+                label={t(PLATFORM_TITLE[platform])}
+                value={status.defaults[platform] ?? ''}
+                disabled={readOnly}
+                options={[...status.models[platform]]
+                  .sort((a, b) => Number(b.kind === 'phone') - Number(a.kind === 'phone'))
+                  .map((model) => ({ value: model.name, label: model.name }))}
+                onChange={(model) => call(invokeOn(hostId, 'testDevices.setDefault', platform, model))}
+              />
+            </SettingsRow>
           ))}
         </section>
+      )}
+      {status?.installed && (
+        <Collapsible className="mt-3">
+          <CollapsibleTrigger
+            render={<Button variant="ghost" size="sm" className="group/options text-caption text-muted-foreground" />}
+          >
+            {t('Advanced')}
+            <ChevronDown size={14} className="transition-transform group-data-[panel-open]/options:rotate-180" />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-2">
+            <SettingsRow className="settings-toggle">
+              <SettingsLabel
+                title={t('Keep a spare device ready')}
+                help={t(
+                  'The next thread gets its device in about half the time, but a spare simulator or emulator stays booted and holds memory.',
+                )}
+              />
+              <Switch
+                checked={status.keepWarm}
+                disabled={readOnly}
+                aria-label={t('Keep a spare device ready')}
+                onCheckedChange={(checked) => call(invokeOn(hostId, 'testDevices.setKeepWarm', checked))}
+              />
+            </SettingsRow>
+          </CollapsibleContent>
+        </Collapsible>
       )}
     </div>
   )

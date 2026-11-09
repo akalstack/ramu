@@ -3,7 +3,6 @@ import { MAX_COMPUTER_TEXT, type ComputerAction } from '@ramu/shared/computerBri
 import { MAIN_DISPLAY } from '../../computer/macos'
 import { ComputerRouter } from '../../computer/router'
 import { installOcu, ocuUpdateStatus, ocuPermissions, setupOcu } from '../../computer/ocu'
-import { installIdb } from '../../testDevice/idb'
 import { LockedUse } from '../../computer/lockedUse'
 import { id } from '../schemas'
 import type { RegisterHandlers } from '../types'
@@ -53,7 +52,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
   agents,
 }) => {
   let installingApps = false
-  let installingIdb = false
+  let settingUp = false
   const ready = () => {
     if (!computer) throw new Error('Update this host for computer use.')
     return computer
@@ -120,21 +119,38 @@ export const registerComputerHandlers: RegisterHandlers = ({
         if (!enabled) await testDevices?.stopAll()
       },
     },
+    /** Gives a thread's device back; its agent is told on its next call that the device is gone. */
     'testDevices.stop': {
       args: z.tuple([z.string().min(1).max(200)]),
-      run: (deviceId: string) => testDevices?.stop(deviceId),
+      run: (taskId: string) => testDevices?.releaseThread(taskId),
     },
-    // Runs Homebrew and pip on the host, so only its owner can start it.
-    'testDevices.installHelper': {
+    'testDevices.setDefault': {
+      args: z.tuple([z.enum(['ios', 'android']), z.string().min(1).max(120).nullable()]),
+      run: (platform: 'ios' | 'android', model: string | null) => {
+        const current = workspace.getAppState<Partial<Record<'ios' | 'android', string>>>('test-devices:defaults', {})
+        const { [platform]: _previous, ...rest } = current
+        workspace.setAppState('test-devices:defaults', model ? { ...rest, [platform]: model } : rest)
+      },
+    },
+    'testDevices.setKeepWarm': {
+      args: z.tuple([z.boolean()]),
+      run: async (keep: boolean) => {
+        workspace.setAppState('test-devices:keep-warm', keep)
+        await testDevices?.setKeepWarm()
+      },
+    },
+    // Runs npm on the host and starts a daemon there; viewers cannot call it, and a full-access device such as a paired
+    // phone can, as it can open a terminal there.
+    'testDevices.setUp': {
       args: z.tuple([]),
       run: async () => {
-        if (!host.canAdministerIntegrations?.()) throw new Error('Install idb on the owning host.')
-        if (installingIdb) throw new Error('idb installation is already running.')
-        installingIdb = true
+        if (!testDevices) throw new Error('Test devices are unavailable on this host.')
+        if (settingUp) throw new Error('Setup is already running.')
+        settingUp = true
         try {
-          await installIdb()
+          await testDevices.setUp()
         } finally {
-          installingIdb = false
+          settingUp = false
         }
       },
     },

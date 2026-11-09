@@ -8889,44 +8889,56 @@ for (const access of ['full', 'viewer']) {
         {
           'testDevices.status': () => ({
             enabled: false,
+            installed: true,
+            setupCommand: 'npm install',
             ios: { ready: true, missing: [] },
             android: { ready: false, missing: [{ item: 'Android SDK', fix: 'Install Android Studio' }] },
-            devices: [
-              { id: 'sim-1', platform: 'ios', name: 'iPhone 17 · iOS 26', running: true },
-              { id: 'avd:Pixel', platform: 'android', name: 'Pixel 9', running: false },
-            ],
+            inUse: [{ taskId: 'thread-a', platform: 'ios', name: 'iPhone 17 · iOS 27.0', since: 0 }],
+            waiting: [],
+            models: { ios: [{ name: 'iPhone 17', kind: 'phone', systems: ['27.0'] }], android: [] },
+            defaults: { ios: 'iPhone 17', android: null },
+            keepWarm: false,
           }),
         },
         calls,
       ),
       computers: [{ id: 'host', access }],
+      chats: [{ computerId: 'host', taskId: 'thread-a', title: 'Check sign-up' }],
     }
-    const { TestDeviceSettings } = load('components/ComputerUseSettings.tsx', 'ios', {
-      react: hooks.react,
-      '../runtime/store': { useStore: () => store },
-      './SettingRows': { ToggleRow: 'ToggleRow', Hint: 'Hint' },
-      './ui': proxyUi(),
-      '@ramu/shared/testDevices': await import('../../../packages/shared/src/testDevices.ts'),
-    })
+    const { TestDeviceSettings } = load(
+      'components/ComputerUseSettings.tsx',
+      'ios',
+      {
+        react: hooks.react,
+        '../runtime/store': { useStore: () => store },
+        './SettingRows': { ToggleRow: 'ToggleRow', Hint: 'Hint' },
+        './SheetOptions': { SheetGroup: 'SheetGroup', SheetOption: 'SheetOption' },
+        './ui': proxyUi(),
+        '@ramu/shared/testDevices': await import('../../../packages/shared/src/testDevices.ts'),
+      },
+      // The page reads the host again every few seconds while it is open; the test only needs its first read.
+      { setInterval: () => 0, clearInterval: () => {} },
+    )
     const render = () => hooks.render(() => TestDeviceSettings({ hostId: 'host' }))
     render()
     await settle()
     const tree = render()
     const toggle = find(tree, 'ToggleRow')
-    const stops = nodes(tree).filter((node) => node.type === 'Button' && node.props.title === 'Stop')
+    const stops = nodes(tree).filter((node) => node.props?.onStop && !node.props.waiting)
     assert.equal(toggle.props.title, 'Let agents use test devices')
     assert.equal(toggle.props.help, 'Off')
-    // Only the running device offers Stop, and each platform says what it still needs.
+    // The thread holding a device offers Stop, and each platform says what it still needs.
     assert.equal(stops.length, 1)
     assert.deepEqual(
       nodes(tree)
-        .filter((node) => node.props?.title === 'Android')
+        .filter((node) => node.props?.title === 'Android emulator')
         .map((node) => node.props.value.missing[0].item),
       ['Android SDK'],
     )
     if (access === 'viewer') {
       assert.equal(toggle.props.disabled, true)
       assert.equal(stops[0].props.disabled, true)
+      assert.equal(stops[0].props.detail, 'Check sign-up')
       hooks.dispose()
       return
     }
@@ -8934,9 +8946,11 @@ for (const access of ['full', 'viewer']) {
     await settle()
     assert.deepEqual(calls.slice(1), [['testDevices.setEnabled', true], ['testDevices.status']])
     calls.length = 0
-    find(render(), 'Button').props.onPress()
+    nodes(render())
+      .find((node) => node.props?.onStop)
+      .props.onStop()
     await settle()
-    assert.deepEqual(calls, [['testDevices.stop', 'sim-1'], ['testDevices.status']])
+    assert.deepEqual(calls, [['testDevices.stop', 'thread-a'], ['testDevices.status']])
     hooks.dispose()
   })
 }

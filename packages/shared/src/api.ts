@@ -438,9 +438,14 @@ export interface RamuMethods extends ArtifactMethods {
   /** Test devices on this host: whether they are on, each platform's readiness and the devices. */
   'testDevices.status'(): import('./testDevices').TestDeviceStatus
   'testDevices.setEnabled'(enabled: boolean): void
-  'testDevices.stop'(id: string): void
-  /** Installs the optional helper that lets agents tap and type on iOS Simulators. */
-  'testDevices.installHelper'(): void
+  /** Gives the device a thread holds back to Simlock, which deletes it. */
+  'testDevices.stop'(taskId: string): void
+  /** The model a thread gets when it names none; null goes back to the platform's own default. */
+  'testDevices.setDefault'(platform: import('./testDevices').TestPlatform, model: string | null): void
+  /** Keeps a spare device of the kind last used booted, so the next thread starts sooner at the cost of memory. */
+  'testDevices.setKeepWarm'(keep: boolean): void
+  /** Installs the pinned Simlock and agent-device and starts the daemon on the host; any full-access device may. */
+  'testDevices.setUp'(): void
   'computer.status'(): {
     enabled: boolean
     runtime: import('./computerBridge').ComputerRuntimeStatus

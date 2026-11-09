@@ -9,6 +9,8 @@ import { NO_PROJECT_GUIDE, projectFactsText } from './workspace/projectCreate'
 import { HELPER_ROLES } from '@ramu/shared/chat/helperRoles'
 import { CustomAgentStore } from './agent/customAgents'
 import { TEST_DEVICE_GUIDE, TestDevices } from './testDevice/testDevices'
+import { currentBranch } from './workspace/git'
+import { TEST_DEVICE_ORIENTATIONS, type TestPlatform } from '@ramu/shared/testDevices'
 import { customAgentList } from '@ramu/shared/customAgents'
 import { ResourceService } from './background/resources'
 import { ServerService } from './background/servers'
@@ -503,6 +505,12 @@ const agents = new AgentService(
         computer.endRun(agents.get(sessionId).taskId, sessionId)
       } catch {}
     }
+    // A thread keeps its test device across turns; stopping it gives the device back.
+    if (event.kind === 'state' && ['failed', 'stopped'].includes(event.state))
+      try {
+        const session = agents.get(sessionId)
+        if (!session.parentId) void testDevices.releaseThread(session.taskId)
+      } catch {}
     threadTitles?.observe(sessionId, event)
     shellPushes?.observe(sessionId, event)
     queueMicrotask(() => {
@@ -553,7 +561,17 @@ const terminals = new TerminalService(
 )
 setAcpTerminalService(terminals)
 const customAgents = new CustomAgentStore(workspace)
-const testDevices = new TestDevices(() => workspace.getAppState<boolean>('test-devices:enabled', false) === true)
+const testDevices = new TestDevices(() => workspace.getAppState<boolean>('test-devices:enabled', false) === true, {
+  defaults: () => workspace.getAppState<Partial<Record<TestPlatform, string>>>('test-devices:defaults', {}),
+  keepWarm: () => workspace.getAppState<boolean>('test-devices:keep-warm', false) === true,
+  // A restarted or lost device reaches the thread's lead through its durable queue, so the agent relaunches the app.
+  notify: (taskId, text) =>
+    void (async () => {
+      const session = agents.list(taskId).findLast((entry) => !entry.parentId && entry.state !== 'stopped')
+      const branch = session ? await currentBranch(session.cwd).catch(() => null) : null
+      if (session && branch) agents.enqueueBackground(session.id, text, { cwd: session.cwd, branch })
+    })(),
+})
 testDevices.start()
 const refreshTestPlatforms = () =>
   void testDevices.readyPlatforms().then(
@@ -568,9 +586,6 @@ const threadRoots = (): ProcessRoot[] => {
   const sessions = new Map(agents.all().map((session) => [session.id, session]))
   return [
     ...terminals.processes().map(({ pid, taskId, id, kind, name }) => ({ pid, taskId, item: { kind, id, name } })),
-    ...testDevices
-      .processes()
-      .map(({ pid, taskId, id, name }) => ({ pid, taskId, item: { kind: 'device' as const, id, name } })),
     ...[...processRoots()].flatMap(([pid, sessionId]) => {
       const session = sessions.get(sessionId)
       return session
@@ -2638,90 +2653,128 @@ function registerTestDeviceTools(server: McpServer, source: AgentSessionInfo, cu
     return session
   }
   const guard = (work: () => Promise<unknown>) => work().then(result, refuse)
-  const id = z.string().min(1).max(200)
+  const platform = z.enum(['ios', 'android'])
   server.registerTool(
     'test_device_list',
     {
       description:
-        'List iOS Simulators and Android emulators on this host, which are running, and which platforms are ready.',
+        'Which platforms this host can run, the models and systems a device can be opened with (each model lists the systems it pairs with), the model a thread gets when it names none, and whether this thread holds a device.',
       inputSchema: {},
     },
-    () => guard(() => testDevices.status()),
+    () =>
+      guard(async () => {
+        const status = await testDevices.status()
+        const taskId = live().taskId
+        return {
+          ios: { ready: status.ios.ready, unsupported: status.ios.unsupported, models: status.models.ios },
+          android: {
+            ready: status.android.ready,
+            unsupported: status.android.unsupported,
+            models: status.models.android,
+          },
+          defaults: status.defaults,
+          held: status.inUse.find((entry) => entry.taskId === taskId) ?? null,
+        }
+      }),
   )
   server.registerTool(
     'test_device_open',
     {
       description:
-        "Boot a test device for this thread and make it the thread's computer, so computer_observe and the action tools work on it. The first opening may ask the person.",
-      inputSchema: { id, reason: z.string().max(1000).optional() },
+        "Give this thread a fresh test device of its own and make it the thread's computer, so computer_observe and the action tools work on it. Waits in line while the host is full. Name a model and system from test_device_list only when one matters. The first opening may ask the person.",
+      inputSchema: {
+        platform,
+        model: z.string().min(1).max(120).optional(),
+        os: z.string().min(1).max(40).optional(),
+        reason: z.string().max(1000).optional(),
+      },
     },
-    ({ id: deviceId, reason }) =>
+    ({ platform: chosen, model, os, reason }) =>
       guard(async () => {
         const session = live()
         const automatic = !session.parentId && workspace.getAppState<boolean>('test-devices:enabled', false) === true
+        const what = model ?? (chosen === 'ios' ? 'an iPhone' : 'an Android phone')
         if (
           !automatic &&
           !(await agents.requestPermission(
             source.id,
             'Test device',
-            `Allow this thread to boot and control the test device ${deviceId}?${reason ? `\n\n${reason}` : ''}`,
+            `Allow this thread to start and control ${what} as a test device?${reason ? `\n\n${reason}` : ''}`,
           ))
         )
           throw new Error('Test device access was denied for this run. Respect that decision.')
-        const opened = await testDevices.open(deviceId, session.taskId)
+        const opened = await testDevices.open(session.taskId, {
+          platform: chosen,
+          ...(model ? { model } : {}),
+          ...(os ? { os } : {}),
+        })
         computer.grant(
           session.taskId,
-          { target: testDevices.target(deviceId), observe: true, input: true },
-          { id: `test-device:${deviceId}`, name: opened.name, backend: testDevices.backend(deviceId) },
+          { target: testDevices.target(session.taskId), observe: true, input: true },
+          {
+            id: `test-device:${session.taskId}`,
+            name: opened.name,
+            backend: testDevices.backend(session.taskId),
+          },
         )
         computer.rememberAccessRun(session.taskId, session.id)
-        return { opened: true, ...opened, next: 'Call computer_observe to see the screen.' }
+        return { opened: true, ...opened, next: 'Call computer_observe to see the screen and its elements.' }
       }),
   )
   server.registerTool(
     'test_device_install',
     {
       description:
-        'Install a built app on the opened test device. path is relative to the workspace: a .app bundle for iOS, an .apk for Android.',
-      inputSchema: { id, path: z.string().min(1).max(1000) },
+        "Install a built app on this thread's test device. path is relative to the workspace: a .app bundle for iOS, an .apk for Android.",
+      inputSchema: { path: z.string().min(1).max(1000) },
     },
-    ({ id: deviceId, path }) =>
-      guard(() => testDevices.install(deviceId, live().taskId, workspace.agentScope(live().taskId).cwd, path)),
+    ({ path }) => guard(() => testDevices.install(live().taskId, workspace.agentScope(live().taskId).cwd, path)),
   )
   server.registerTool(
     'test_device_launch',
     {
       description:
-        'Start an installed app on the opened test device by bundle identifier (iOS) or package name (Android).',
-      inputSchema: { id, app: z.string().min(1).max(200) },
+        "Start an installed app on this thread's test device by bundle identifier (iOS) or package name (Android), relaunching it when it runs.",
+      inputSchema: { app: z.string().min(1).max(200) },
     },
-    ({ id: deviceId, app }) => guard(() => testDevices.launch(deviceId, live().taskId, app)),
+    ({ app }) => guard(() => testDevices.launch(live().taskId, app)),
   )
   server.registerTool(
     'test_device_open_link',
     {
-      description: 'Open a deep link or web address on the opened test device.',
-      inputSchema: { id, url: z.string().min(3).max(2000) },
+      description: "Open a deep link or web address on this thread's test device.",
+      inputSchema: { url: z.string().min(3).max(2000) },
     },
-    ({ id: deviceId, url }) => guard(() => testDevices.openUrl(deviceId, live().taskId, url)),
+    ({ url }) => guard(() => testDevices.openUrl(live().taskId, url)),
   )
   server.registerTool(
     'test_device_logs',
     {
       description: "Read the launched app's recent log lines, filtered to that app, with known secrets removed.",
-      inputSchema: { id, app: z.string().min(1).max(200), lines: z.number().int().min(1).max(500).optional() },
+      inputSchema: { app: z.string().min(1).max(200), lines: z.number().int().min(1).max(500).optional() },
     },
-    ({ id: deviceId, app, lines }) => guard(() => testDevices.logs(deviceId, live().taskId, app, lines)),
+    ({ app, lines }) => guard(() => testDevices.logs(live().taskId, app, lines)),
+  )
+  server.registerTool(
+    'test_device_rotate',
+    {
+      description: "Turn this thread's iOS Simulator. An Android emulator does not turn.",
+      inputSchema: { orientation: z.enum(TEST_DEVICE_ORIENTATIONS) },
+    },
+    ({ orientation }) => guard(() => testDevices.rotate(live().taskId, orientation)),
   )
   server.registerTool(
     'test_device_stop',
-    { description: 'Shut down a test device this thread opened.', inputSchema: { id } },
-    ({ id: deviceId }) =>
+    {
+      description: "Give this thread's test device back. It is deleted, and the next one is fresh.",
+      inputSchema: {},
+    },
+    () =>
       guard(async () => {
         const session = live()
         await testDevices.releaseThread(session.taskId)
         computer.revoke(session.taskId)
-        return { stopped: deviceId }
+        return { stopped: true }
       }),
   )
 }

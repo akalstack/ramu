@@ -196,11 +196,16 @@ export function registerComputerTools(
   server.registerTool(
     'computer_click',
     {
-      description: 'Click at pixel coordinates from the latest observation. Consumes the observation.',
+      description:
+        "Click at pixel coordinates from the latest observation. On a test device, also pass the element's ref from the observation (such as e10) to tap that element wherever it is now. Consumes the observation.",
       inputSchema: {
         observationId,
         x: coord,
         y: coord,
+        ref: z
+          .string()
+          .regex(/^@?e\d{1,6}$/)
+          .optional(),
         button: z.enum(['left', 'right', 'middle']).optional(),
         clickCount: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
       },

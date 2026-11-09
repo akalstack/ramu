@@ -38,17 +38,9 @@ Ramu does this differently:
 
 ## Delivery
 
-### 1. Simlock as the engine
+Simlock is the engine on every host, as [Test devices](../guide/browser-and-computer.md#test-devices) describes: setup, a lease per thread through Simlock's agent-device front (with a token of its own per thread and an operator token held in memory), the queue, the element tree and taps by element, rotation, defaults, crash notes, and the Test devices page on the desktop and the phone. What remains:
 
-- **Setup:** **Settings → Test devices** replaces **Install idb** with one **Set up test devices** button: it installs the pinned `simlock` into `~/.ramu/tools/simlock-<version>` with Ramu's Node, runs `simlock doctor`, and shows each finding in the existing missing-item rows with its fix. **Copy command** keeps the same install for a terminal. Ramu writes the daemon's settings it relies on (HTTP on loopback, `capabilities.input.enabled`, `capabilities.stream`) with `simlock config set`, and creates one agent token for its server with `simlock/admin`, kept in `credentials/`.
-- **Simlock's home** sits on a short path (`~/.ramu/simlock`): its daemon socket must fit macOS's 103-byte limit. The Android SDK's tools need Java; Android Studio's bundled runtime is used as `JAVA_HOME` when no other is installed.
-- **Leases:** `TestDevices` talks to the daemon through `simlock/client` with principal `ramu:<thread id>` (over HTTP the requester is always the token, and Simlock allows one lease per requester), so a thread holds one lease and a helper agent shares its parent's. `test_device_list` reads the catalog (models and OS versions that can be leased) instead of `simctl list`; `test_device_open` takes a platform and an optional model and OS. Ramu renews every third of the TTL and releases when the thread ends, stops or is archived. If the Ramu server dies, the lease ends one TTL later, so there is no ledger.
-- **Queue:** while a lease waits, the thread's device pill shows **Waiting for a device · 2nd in line** with **Stop waiting**; the tool returns once the device is ready. `TEST_DEVICE_LIMIT` and the "already running" error go away: capacity is Simlock's, from the machine's RAM.
-- **Commands:** install, launch, open URL and logs run through agent-device on the thread's session, with `client.exec` (`simctl` or `adb`, which refuses verbs that would break a lease) where agent-device has no command. Workspace path checks stay as they are.
-- **Captures and input:** everything an agent does on a device goes through agent-device under Simlock (part 2b): observing (elements and a screenshot), tapping by element or point, filling and typing, swiping, scrolling, Back and Home. The device stays a `ComputerBackend`, so agents keep `computer_observe` and the action tools they use on a Mac. The lease's input socket carries only the person's **Take control** from the viewer. idb and `idb.ts` are deleted.
-- **Crashes:** `onLeaseLost` and Simlock's reboot notice reach the thread as a system note ("The simulator restarted; launch the app again"), so the agent relaunches instead of failing.
-
-### 2. Live screens
+### 1. Live screens
 
 Measured on an M-series Mac (macOS 27, Xcode 27.2, iOS 27 and Android 36) with Simlock 0.6.0 and agent-device 0.21.36, against a page animating the whole screen:
 
@@ -58,52 +50,31 @@ Measured on an M-series Mac (macOS 27, Xcode 27.2, iOS 27 and Android 36) with S
 | Size, bitrate | 734×1600, 2.3 Mbps | 712×1600, 2.3 Mbps | a full PNG every 500 ms |
 | Change to frame | under 0.2 s | under 0.2 s | up to 0.5 s |
 
-idb's `video-stream` reached 30 fps (p95 66 ms) at full size, and Simlock's defaults (720 px, a 30 fps cap) only 24 fps, so setup writes `capabilities.stream.maxDimension` 1600, `fps` 60 and `bitrateKbps` 4000.
+idb's `video-stream` reached 30 fps (p95 66 ms) at full size, and Simlock's defaults (720 px, a 30 fps cap) only 24 fps, so Ramu writes `capabilities.stream.maxDimension` 1600, `fps` 60 and `bitrateKbps` 4000.
 
-
-- The desktop viewer, Float and the phone's full-screen viewer decode the lease stream (`/v1/leases/<id>/stream`) through the server, which adds an operator token (only a lease's holder or an operator may watch it) so clients never hold it. The desktop decodes with WebCodecs; the phone uses the same canvas in its WebView. Take control sends touches over the input socket.
+- The desktop viewer, Float and the phone's full-screen viewer decode the lease stream through the server: `TestDevices.stream(taskId)` already returns Simlock's response (frames of a 4-byte length, a tag and the payload: description, keyframe, delta, alive, ended) read with the operator token, so clients never hold it. The desktop decodes with WebCodecs; the phone uses the same canvas in its WebView. Take control sends touches over the lease's input socket (`/v1/leases/<id>/input`, serve-sim's format), as the holder.
 - Screenshots stay as the fallback where decoding is unavailable, and as the agent's observation.
 
-### 2b. The element tree on iOS and Android
+### 2. The thread while it waits
 
-Today an agent on Android reads uiautomator's tree and taps "Sign up" by name, while on iOS it gets only a screenshot and guesses coordinates, so iOS taps miss and cost retries. Simlock's worker supervises an agent-device daemon (0.21.28 or later) and fronts it at `/v1/agent-device`; a session opened there takes its own Simlock lease, with a lease id the caller chooses. That gives the same accessibility snapshot on both platforms.
+- The thread's device pill shows **Waiting for a device · number 2 in line** (`TestDevices.placeOf`) with **Stop waiting**, as the Test devices page already does.
 
-- **Setup:** **Set up test devices** installs a pinned `agent-device` beside Simlock in `~/.ramu/tools` and points the daemon at it; `simlock doctor`'s agent-device finding is one more checklist row.
-- **Leases:** a thread's device is opened through the front with session `ramu-<thread id>` and lease id `ramu-<thread id>`, so each thread still gets its own device, and the stream, input socket and `client.exec` find it by that id. Ramu's server calls the front's RPC over loopback with its token; agents never see agent-device or a shell.
-- **Warm start:** agent-device's first snapshot on a fresh device starts its test runner (71 s on iOS, 13 s on Android); later ones take 0.44 s and 1.3 s, and a tap by element 0.86 s. Ramu starts the runner as soon as a device is opened, so the agent's first look does not wait. A fresh emulator's Chrome opens on its first-run screen, so Ramu skips it (Chrome's command-line file) before opening a page.
-- **Observe:** `computer_observe` returns the snapshot's elements (role, label, value, frame, a short ref) with the screenshot on both platforms; uiautomator's own parse goes.
-- **Act:** `computer_act` takes an element ref as well as coordinates; Ramu taps the element's centre, and fills a text field through agent-device's `fill` when the field is named.
+### 3. The rest of the Test devices page
 
-### 3. Starting points
+- **Defaults** become portable settings with entries in `packages/shared/src/settingsCatalog.ts`, so "make the default iPhone a 16 Pro" works through `settings_change`; today they are host state.
+- **Setup checklist** items get their own fix button where Ramu can act (**Open Xcode**, **Install iOS 27 · 8 GB** through `simlock component install`), not only the fix in words.
+- **Advanced** adds how many devices may run (automatic from this host's memory, or a number) and slim simulators, beside **Keep a spare device ready**.
+- **Resources** shows each Simlock device's memory and CPU under the thread holding it, as emulators Ramu started did before.
 
-- **Save as starting point** on a thread's device makes a Simlock baseline (an app signed in, test data loaded). `test_device_open` takes an optional starting point, and the project remembers the last one used, so the next thread starts signed in without the person repeating the setup.
-- **Use my own simulator** stays possible: setting `drivers.ios.deviceSet` to `default` puts Simlock's simulators in Xcode's own list, so Xcode builds can target them by UDID. Ramu never leases the person's own devices; a baseline is how their state reaches an agent.
-
-### 4. Settings: page conventions and the rest of the Test devices page
-
-Settings has its four groups (Personal, Agents, Agent tools, Access & host), **Test devices** is its own page (`devices`) with a status row, a setup checklist and an **In use** list built from today's idb and simctl readiness, and **Archived** is a sidebar view. What remains:
+### 4. Settings conventions
 
 - **Defaults show as defaults.** A changed row shows the same small dot as a row an agent changed (`AgentChangeMark`) and its own **Reset**; each page keeps one **Reset defaults** at the foot.
-- **Advanced stays folded.** Rows few people change (capacity, slim simulators, idle shutdown, a custom tool path) sit under a closed **Advanced** disclosure.
-
-On the **Test devices** page, with Simlock:
-
-1. **Status row:** **Set up test devices** while anything is missing, and the summary counts waiting requests ("2 in use · 1 waiting").
-2. **Setup checklist:** Simlock, Xcode, an iOS runtime, the Android SDK and a system image, each from `simlock doctor` with its own fix button (**Set up**, **Open Xcode**, **Install iOS 18.4 · 8 GB**).
-3. **In use:** one row per lease and per waiting request, with how long it has been held or its place in line.
-4. **Defaults:** the iPhone and Android model and OS a thread gets when it names none, chosen from Simlock's catalog with installed ones first. Each is a portable setting with an entry in `packages/shared/src/settingsCatalog.ts`, so "make the default iPhone a 16 Pro" works through `settings_change`.
-5. **Starting points:** each saved baseline with its platform, size and the projects that use it, with **Rename** and **Delete**. Empty, it says how to make one from a thread's device.
-6. **Advanced:** how many devices may run (automatic from this host's memory, or a number), slim simulators, and the keep-warm choice.
-
-On the phone the page is the same list; **Set up** runs on the host and the checklist updates as it goes.
+- **Advanced stays folded** on every page: rows few people change sit under a closed **Advanced** disclosure.
 
 ## Services to extend
 
-- `apps/server/src/testDevice/testDevices.ts`: the `ComputerBackend` and the agent tools stay; lifecycle, capture and input move onto `simlock/client` and the input socket.
-- `packages/shared/src/testDevices.ts`: readiness, the device shape (a lease instead of a UDID, a queue position) and the guide text.
-- `apps/web/src/settings/TestDeviceSettings.tsx` and `apps/mobile/src/components/ComputerUseSettings.tsx`: setup and doctor rows.
-- The computer viewer and Float (web and mobile) for the stream; `apps/server/src/background/resources.ts` for the Resources figures of Simlock's devices.
-- `docs/guide/browser-and-computer.md` **Test devices** once it ships, and every guide that names a Settings path that moves.
+- `apps/server/src/testDevice/testDevices.ts` (`stream`, `placeOf`), the computer viewer and Float on the web and the phone, and the thread's device pill.
+- `packages/shared/src/settingsCatalog.ts` for the defaults; `apps/server/src/background/resources.ts` for Simlock's devices.
 
 ## Acceptance
 
@@ -112,7 +83,6 @@ On the phone the page is the same list; **Set up** runs on the host and the chec
 - Quitting Ramu mid-lease, then reopening it: the old lease is gone within one TTL and no simulator is left booted.
 - A fresh Mac with Xcode reaches a tapping agent with one setup button and no Homebrew.
 - On the phone and on the desktop, the viewer shows the screen live while the agent taps; Take control works.
-- A starting point saved from one thread opens signed in on the next.
 - An Android emulator on a Linux host runs the same checks.
 - On an iPhone simulator, "tap Sign up" with the button below the fold: `computer_observe` lists the button by its label, and the agent scrolls and taps it by ref without a coordinate guess.
 - Searching Settings for "simulator", "emulator", "environment", "fallback" or "archived" opens the right page or view in one step, on the desktop and the phone.

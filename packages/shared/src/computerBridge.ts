@@ -25,7 +25,8 @@ export interface ComputerGrant {
 export type ComputerButton = 'left' | 'right' | 'middle'
 export type ComputerModifier = 'Alt' | 'Control' | 'Meta' | 'Shift'
 export type ComputerAction =
-  | { kind: 'click'; x: number; y: number; button?: ComputerButton; clickCount?: 1 | 2 | 3 }
+  /** `ref` names an element from the latest observation on a test device, tapped wherever it is now; x and y stand in elsewhere. */
+  | { kind: 'click'; x: number; y: number; button?: ComputerButton; clickCount?: 1 | 2 | 3; ref?: string }
   | { kind: 'type'; text: string }
   | { kind: 'key'; key: string; modifiers?: ComputerModifier[] }
   | { kind: 'scroll'; x: number; y: number; dx: number; dy: number }

@@ -82,6 +82,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
   learning,
   agentThreads,
   pullRequestIndex,
+  testDevices,
 }) => {
   const continuations = () => {
     if (!agentThreads) throw new Error('Continuing threads is unavailable on this host.')
@@ -494,8 +495,11 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       args: z.tuple([id, z.boolean()]),
       run: (t: string, archived: boolean) => {
         workspace.setArchived(t, archived)
-        // Archived tasks stop watching; opening them again leases their checkouts anew.
-        if (archived) watchers.release(t)
+        // Archived tasks stop watching and give their test device back; opening them again leases anew.
+        if (archived) {
+          watchers.release(t)
+          void testDevices?.releaseThread(t)
+        }
       },
     },
     'tasks.delete': {
