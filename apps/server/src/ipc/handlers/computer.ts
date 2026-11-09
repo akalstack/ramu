@@ -355,6 +355,12 @@ export const registerComputerHandlers: RegisterHandlers = ({
       run: async (threadId: string, offer: string) => {
         if (!video) throw new Error('Update this host for video.')
         const session = viewer(threadId)
+        // A test device streams its own screen from Simlock; the thread's device is the one it holds.
+        if (session.runtime.id.startsWith('test-device:') && testDevices) {
+          const answer = await video.answer(threadId, device(), offer, testDevices.video(threadId))
+          testDevices.useVideoScale(threadId, answer.scale)
+          return answer
+        }
         if (session.runtime.id !== 'local') throw new Error('Video is available for this computer. Use image frames.')
         if (session.target.kind === 'display') {
           const answer = await video.answer(threadId, device(), offer)

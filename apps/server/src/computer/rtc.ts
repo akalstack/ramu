@@ -1,6 +1,13 @@
 import { randomUUID, randomBytes } from 'node:crypto'
 import { MediaStreamTrack, RTCPeerConnection, RTCRtpCodecParameters } from 'werift'
-import { packetizeH264, VideoFeed, type PacketizerState, type VideoInfo, type VideoSource } from './video'
+import {
+  packetizeH264,
+  VideoFeed,
+  type LiveFeed,
+  type PacketizerState,
+  type VideoInfo,
+  type VideoSource,
+} from './video'
 
 const MAX_PEERS_PER_THREAD = 4
 const GATHER_TIMEOUT_MS = 4000
@@ -18,7 +25,7 @@ interface Peer {
   threadId: string
   deviceId: string
   pc: RTCPeerConnection
-  feed: VideoFeed
+  feed: LiveFeed
   unsubscribe(): void
 }
 
@@ -41,7 +48,9 @@ export class RtcViewers {
       new VideoFeed(source),
   ) {}
 
-  private feedFor(source: VideoSource): VideoFeed {
+  private feedFor(source: VideoSource | LiveFeed): LiveFeed {
+    // A test device brings its own stream.
+    if ('subscribe' in source) return source
     if (source.kind === 'display') return this.feed
     const key = `${source.app}\n${source.width}x${source.height}`
     let feed = this.windows.get(key)
@@ -60,7 +69,7 @@ export class RtcViewers {
     threadId: string,
     deviceId: string,
     offer: string,
-    source: VideoSource = { kind: 'display' },
+    source: VideoSource | LiveFeed = { kind: 'display' },
   ): Promise<{ id: string; sdp: string } & VideoInfo> {
     if (this.count(threadId) >= MAX_PEERS_PER_THREAD) throw new Error('Too many viewers are watching this computer.')
     const feed = this.feedFor(source)

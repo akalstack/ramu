@@ -6230,6 +6230,7 @@ for (const os of ['ios', 'android']) {
         '../runtime/store': { useStore: () => store },
         '@ramu/shared/computerControl': control,
         '@ramu/shared/computerBridge': { COMPUTER_FRAME_STALE_MS: 5000 },
+        '@ramu/shared/computerStatus': await import('../../../packages/shared/src/computerStatus.ts'),
         './useComputerVideo': { useComputerVideo: () => ({ status: 'idle' }), webrtc: () => null },
         'react-native': {
           AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) },

@@ -45,7 +45,11 @@ export function useComputerVideo(taskId: string, eligible: boolean): ComputerVid
     pc.ontrack = (event) => {
       if (!active) return
       const stream = event.streams[0] ?? new MediaStream([event.track])
-      setState((previous) => ({ ...previous, status: 'live', stream }))
+      // A remote track stays muted until its first frame arrives; until then the screenshots keep showing, so a still
+      // screen (a test device sends video only when its picture changes) is never replaced by a blank one.
+      const live = () => active && setState((previous) => ({ ...previous, status: 'live', stream }))
+      if (event.track.muted) event.track.addEventListener('unmute', live, { once: true })
+      else live()
     }
     pc.onconnectionstatechange = () => {
       if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) fail()

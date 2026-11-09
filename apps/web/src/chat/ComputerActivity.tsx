@@ -28,6 +28,7 @@ import { ComputerSharing } from './ComputerSharing'
 import { ComposerTraySection } from '../composer/ComposerTraySection'
 import { PermissionNeeded } from '../settings/DevicePermissions'
 import { refusedPermission, type DevicePermission } from '@ramu/shared/devicePermissions'
+import { streamsVideo } from '@ramu/shared/computerStatus'
 
 const VIEW_ONLY_COMPUTER_NOTICE =
   'This device can watch screens the host owner has shared with this thread. Control requires full access.'
@@ -120,7 +121,7 @@ function Viewer({
   const [error, setError] = useState('')
   const [focused, setFocused] = useState(false)
   // The main display and an app's window both stream from this computer; an app falls back to snapshots when locked.
-  const video = useComputerVideo(taskId, session.runtime.id === 'local')
+  const video = useComputerVideo(taskId, streamsVideo(session.runtime.id))
   const live = video.status === 'live'
   const [liveSession, setLiveSession] = useState(session)
   const current = live ? liveSession : session

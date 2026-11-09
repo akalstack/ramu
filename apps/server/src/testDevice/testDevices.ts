@@ -21,6 +21,8 @@ import {
 } from '@ramu/shared/testDevices'
 import { redactSecrets } from '../memory/secrets'
 import { AgentDeviceSession, elementsText, type DeviceElement } from './agentDevice'
+import { DeviceVideoFeed } from './deviceVideo'
+import { DeviceInput } from './deviceInput'
 import {
   AGENT_DEVICE_VERSION,
   installSimlock,
@@ -28,6 +30,7 @@ import {
   simlockBytes,
   SimlockHost,
   simlockInstalled,
+  simlockUrl,
   simlockToolDir,
   SIMLOCK_VERSION,
   type SimlockCatalog,
@@ -50,8 +53,17 @@ interface Held {
   address: string
   name: string
   since: number
-  /** Screenshot pixels per element point, learned from the first capture. */
+  /** Screenshot pixels per element point, learned from the first capture: the agent's clicks are in these. */
   scale: number
+  /** Video pixels per point while someone watches live video: the person's taps are in these. */
+  viewerScale: number | null
+  /** The screen's size in points, from the first element snapshot. */
+  points: number | null
+  pointsHigh: number | null
+  /** The person's own input over the lease's input socket, opened when they first touch the screen. */
+  input: DeviceInput | null
+  /** The live picture, shared by everyone watching this thread. */
+  video: DeviceVideoFeed | null
   /** The first snapshot starts agent-device's runner; it runs right after opening so the agent's first look is quick. */
   warm: Promise<void>
   /** When an agent or a viewer last used it; a device left alone is given back. */
@@ -334,11 +346,21 @@ export class TestDevices {
         since: Date.now(),
         lastUse: Date.now(),
         scale: request.platform === 'ios' ? 3 : 1,
-        warm: session.snapshot().then(
-          () => {},
-          () => {},
-        ),
+        viewerScale: null,
+        points: null,
+        pointsHigh: null,
+        input: null,
+        video: null,
+        warm: Promise.resolve(),
       }
+      held.warm = session.snapshot().then(
+        (elements) => {
+          const root = elements.find((element) => element.depth === 0)
+          held.points = root?.rect.width ?? null
+          held.pointsHigh = root?.rect.height ?? null
+        },
+        () => {},
+      )
       this.held.set(taskId, held)
       this.leaseDevice.set(lease.id, lease.deviceId)
       this.follow()
@@ -368,6 +390,8 @@ export class TestDevices {
     if (!device) return
     this.held.delete(taskId)
     this.leaseDevice.delete(device.leaseId)
+    device.video?.stop()
+    device.input?.close()
     await device.session.close()
     await this.host.revokeToken(device.tokenId)
   }
@@ -538,10 +562,20 @@ export class TestDevices {
     return { orientation }
   }
 
-  /** The lease's live picture, as Simlock serves it, for the server to pass on to a viewer. */
-  async stream(taskId: string): Promise<Response> {
+  /** The thread's screen as live video for Ramu's WebRTC viewers, read from Simlock with the operator token. */
+  video(taskId: string): DeviceVideoFeed {
     const device = this.heldBy(taskId)
-    return this.host.request(`/v1/leases/${encodeURIComponent(device.leaseId)}/stream`)
+    device.video ??= new DeviceVideoFeed(
+      (signal) => this.host.request(`/v1/leases/${encodeURIComponent(device.leaseId)}/stream`, { signal }),
+      () => device.points,
+    )
+    return device.video
+  }
+
+  /** A viewer started live video: the person's taps arrive in the video's pixels, at this many per point. */
+  useVideoScale(taskId: string, scale: number) {
+    const device = this.held.get(taskId)
+    if (device) device.viewerScale = scale
   }
 
   /** A full-size screenshot through Simlock: quicker and sharper than agent-device's own. */
@@ -566,9 +600,9 @@ export class TestDevices {
       entry.lastUse = Date.now()
       return entry
     }
-    const point = (entry: Held, x: number, y: number) => ({
-      x: Math.round(x / entry.scale),
-      y: Math.round(y / entry.scale),
+    const point = (x: number, y: number, scale: number) => ({
+      x: Math.round(x / scale),
+      y: Math.round(y / scale),
     })
     return {
       status: () => ({ available: true, computer: { id: `test-device:${taskId}`, name: this.target(taskId).name } }),
@@ -580,7 +614,11 @@ export class TestDevices {
         const bytes = await this.screenshot(entry)
         const size = pngSize(bytes) ?? { width: 0, height: 0 }
         const root = elements.find((element) => element.depth === 0)
-        if (root?.rect.width && size.width) entry.scale = size.width / root.rect.width
+        if (root?.rect.width && size.width) {
+          entry.points = root.rect.width
+          entry.pointsHigh = root.rect.height
+          entry.scale = size.width / root.rect.width
+        }
         const text = elements.length ? elementsText(elements, entry.scale) : ''
         return {
           mimeType: 'image/png',
@@ -590,14 +628,23 @@ export class TestDevices {
           ...(text ? { text } : {}),
         }
       },
-      perform: async (_target: ComputerTarget, action: ComputerAction) => {
+      perform: async (_target: ComputerTarget, action: ComputerAction, options) => {
         const entry = device()
         // A touch screen has no pointer to follow.
         if (action.kind === 'move') return
-        if (action.kind === 'click')
-          await entry.session.press(
-            action.ref ? { ref: action.ref.replace(/^@/, '') } : point(entry, action.x, action.y),
+        // The person taps on the picture they see: live video when it plays, otherwise the screenshot.
+        const scale = options?.byPerson && entry.viewerScale ? entry.viewerScale : entry.scale
+        const at = (x: number, y: number) => point(x, y, scale)
+        // The person's touches go straight to the device's input socket; an agent's go through agent-device.
+        if (options?.byPerson && entry.points && entry.pointsHigh) {
+          const handled = await this.personInput(entry, action, scale).then(
+            () => true,
+            () => false,
           )
+          if (handled) return
+        }
+        if (action.kind === 'click')
+          await entry.session.press(action.ref ? { ref: action.ref.replace(/^@/, '') } : at(action.x, action.y))
         else if (action.kind === 'type') await entry.session.type(action.text)
         else if (action.kind === 'key') {
           if (action.key === 'Enter' || action.key === 'Return') await entry.session.command(['keyboard', 'enter'])
@@ -605,15 +652,31 @@ export class TestDevices {
           else if (action.key === 'Home') await entry.session.home()
           else throw new ComputerNotRun(`A test device takes Enter, Back and Home, not ${action.key}.`)
         } else if (action.kind === 'scroll')
-          await entry.session.swipe(
-            point(entry, action.x, action.y),
-            point(entry, action.x - action.dx, action.y - action.dy),
-          )
-        else await entry.session.swipe(point(entry, action.fromX, action.fromY), point(entry, action.toX, action.toY))
+          await entry.session.swipe(at(action.x, action.y), at(action.x - action.dx, action.y - action.dy))
+        else await entry.session.swipe(at(action.fromX, action.fromY), at(action.toX, action.toY))
       },
       releaseInput: () => {},
       frameInterval: () => 500,
     }
+  }
+
+  /** Sends the person's action over the input socket, as fractions of the screen. */
+  private async personInput(entry: Held, action: ComputerAction, scale: number) {
+    const width = entry.points! * scale
+    const height = entry.pointsHigh! * scale
+    const at = (x: number, y: number) => ({ x: x / width, y: y / height })
+    entry.input ??= new DeviceInput(
+      `${simlockUrl().replace(/^http/, 'ws')}/v1/leases/${encodeURIComponent(entry.leaseId)}/input`,
+      entry.token,
+    )
+    const input = entry.input
+    if (action.kind === 'click' && !action.ref) return input.tap(at(action.x, action.y))
+    if (action.kind === 'drag') return input.drag(at(action.fromX, action.fromY), at(action.toX, action.toY))
+    if (action.kind === 'scroll') return input.scroll(at(action.x, action.y), action.dx / width, action.dy / height)
+    if (action.kind === 'key' && action.key === 'Home') return input.button('home')
+    if (action.kind === 'key' && (action.key === 'Escape' || action.key === 'Back')) return input.button('back')
+    if (action.kind === 'key' && (action.key === 'Enter' || action.key === 'Return')) return input.enter()
+    throw new Error('Typed text goes through agent-device.')
   }
 
   /** The target shown in the viewer and the live view: the device's own name. */

@@ -78,6 +78,14 @@ export interface VideoInfo {
   scale: number
 }
 
+/** A shared stream of H.264 access units that WebRTC viewers subscribe to: a screen, a window or a test device. */
+export interface LiveFeed {
+  /** Subscribes to access units. Resolves with the picture size once the stream is up. */
+  subscribe(listener: (unit: VideoUnit) => void): Promise<{ info: VideoInfo; unsubscribe(): void }>
+  requestKeyFrame(): void
+  stop(): void
+}
+
 /** What a feed shows: the main display, or one app's window at an exact size (that of the app's snapshots). */
 export type VideoSource = { kind: 'display' } | { kind: 'window'; app: string; width: number; height: number }
 
@@ -96,7 +104,7 @@ const helperArgs = (source: VideoSource) => [
  * One hardware H.264 stream of the main display or one app window, shared by every viewer of it. It starts with the first viewer, asks the helper
  * for a key frame when another joins, and stops a few seconds after the last one leaves.
  */
-export class VideoFeed {
+export class VideoFeed implements LiveFeed {
   private child: ChildProcess | null = null
   private info: VideoInfo | null = null
   private readonly listeners = new Set<(unit: VideoUnit) => void>()

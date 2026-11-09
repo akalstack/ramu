@@ -40,20 +40,11 @@ Ramu does this differently:
 
 Simlock is the engine on every host, as [Test devices](../guide/browser-and-computer.md#test-devices) describes: setup, a lease per thread through Simlock's agent-device front (with a token of its own per thread and an operator token held in memory), the queue, the element tree and taps by element, rotation, defaults, crash notes, and the Test devices page on the desktop and the phone. What remains:
 
-### 1. Live screens
+### 1. Live screens on the phone through a tunnel
 
-Measured on an M-series Mac (macOS 27, Xcode 27.2, iOS 27 and Android 36) with Simlock 0.6.0 and agent-device 0.21.36, against a page animating the whole screen:
+Live video and **Take control** ship: Simlock's H.264 stream feeds Ramu's WebRTC viewers on the desktop, in Float and on the phone, and the person's touches go over the lease's input socket (about 0.1 s to the screen, against about 1 s through agent-device). What remains:
 
-| | iOS (serve-sim capture) | Android (scrcpy) | Polling today |
-| --- | --- | --- | --- |
-| Frames per second | 41 (median gap 20 ms, p95 36 ms) | 29 (median 25 ms, p95 107 ms; the emulator's own rendering) | about 2 |
-| Size, bitrate | 734×1600, 2.3 Mbps | 712×1600, 2.3 Mbps | a full PNG every 500 ms |
-| Change to frame | under 0.2 s | under 0.2 s | up to 0.5 s |
-
-idb's `video-stream` reached 30 fps (p95 66 ms) at full size, and Simlock's defaults (720 px, a 30 fps cap) only 24 fps, so Ramu writes `capabilities.stream.maxDimension` 1600, `fps` 60 and `bitrateKbps` 4000.
-
-- The desktop viewer, Float and the phone's full-screen viewer decode the lease stream through the server: `TestDevices.stream(taskId)` already returns Simlock's response (frames of a 4-byte length, a tag and the payload: description, keyframe, delta, alive, ended) read with the operator token, so clients never hold it. The desktop decodes with WebCodecs; the phone uses the same canvas in its WebView. Take control sends touches over the lease's input socket (`/v1/leases/<id>/input`, serve-sim's format), as the holder.
-- Screenshots stay as the fallback where decoding is unavailable, and as the agent's observation.
+- **A fallback when WebRTC cannot connect**, such as a phone reaching the host through a tunnel that blocks UDP: the phone plays Simlock's stream through Ramu's own connection, decoded with WebCodecs in a WebView, as Simlock's console does, instead of dropping to screenshots.
 
 ### 2. The thread while it waits
 
@@ -73,7 +64,7 @@ idb's `video-stream` reached 30 fps (p95 66 ms) at full size, and Simlock's defa
 
 ## Services to extend
 
-- `apps/server/src/testDevice/testDevices.ts` (`stream`, `placeOf`), the computer viewer and Float on the web and the phone, and the thread's device pill.
+- `apps/server/src/testDevice/testDevices.ts` (`video`, `placeOf`), the phone's computer viewer (`apps/mobile/src/components/useComputerVideo.ts`), and the thread's device pill.
 - `packages/shared/src/settingsCatalog.ts` for the defaults; `apps/server/src/background/resources.ts` for Simlock's devices.
 
 ## Acceptance

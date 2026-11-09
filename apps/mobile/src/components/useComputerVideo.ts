@@ -85,6 +85,17 @@ export function useComputerVideo(
       const stream = event.streams?.[0] ?? new native.MediaStream([event.track])
       connected = true
       if (mounted) setState((previous) => ({ ...previous, status: 'live', streamURL: stream.toURL() }))
+      // The native side mutes a track that stops receiving frames: the screenshots show again until frames return, so a
+      // still screen (a test device sends video only when its picture changes) is never a blank one.
+      const track = event.track as unknown as { addEventListener(type: 'mute' | 'unmute', listener: () => void): void }
+      track.addEventListener('mute', () => {
+        if (mounted)
+          setState((previous) => (previous.status === 'live' ? { ...previous, status: 'connecting' } : previous))
+      })
+      track.addEventListener('unmute', () => {
+        if (mounted)
+          setState((previous) => (previous.status === 'connecting' ? { ...previous, status: 'live' } : previous))
+      })
     })
     events.addEventListener('connectionstatechange', () => {
       if (['failed', 'disconnected', 'closed'].includes(events.connectionState)) fail()

@@ -5,6 +5,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { TestDevices } from '../src/testDevice/testDevices'
 import { elementsText, parseSnapshot, type AgentDeviceSession } from '../src/testDevice/agentDevice'
 import { parseDoctor, type SimlockHost } from '../src/testDevice/simlock'
+import { avccUnits, FrameReader, parameterSets } from '../src/testDevice/deviceVideo'
 
 vi.mock('../src/testDevice/simlock', async (original) => ({
   ...(await original<typeof import('../src/testDevice/simlock')>()),
@@ -170,4 +171,34 @@ it('shows a waiting thread its place in Simlock’s queue', async () => {
   release()
   await opening
   expect(await testDevices.waiting()).toEqual([])
+})
+
+it('turns Simlock’s stream frames into access units a WebRTC viewer can start from', () => {
+  const sps = Buffer.from([0x67, 0x64, 0x00, 0x1f, 0xac])
+  const pps = Buffer.from([0x68, 0xee, 0x3c])
+  const avcc = Buffer.concat([
+    Buffer.from([1, 0x64, 0x00, 0x1f, 0xff, 0xe1, 0, sps.length]),
+    sps,
+    Buffer.from([1, 0, pps.length]),
+    pps,
+  ])
+  expect(parameterSets(avcc)).toEqual([sps, pps])
+  const slice = Buffer.from([0x65, 1, 2, 3])
+  const frame = (tag: number, payload: Buffer) => {
+    const header = Buffer.alloc(5)
+    header.writeUInt32BE(payload.length + 1)
+    header[4] = tag
+    return Buffer.concat([header, payload])
+  }
+  const lengthPrefixed = Buffer.concat([Buffer.from([0, 0, 0, slice.length]), slice])
+  const stream = Buffer.concat([
+    frame(5, Buffer.from('{"width":734,"height":1600}')),
+    frame(1, avcc),
+    frame(2, lengthPrefixed),
+  ])
+  const reader = new FrameReader()
+  // Frames split across chunks still come out whole.
+  const frames = [...reader.push(stream.subarray(0, 7)), ...reader.push(stream.subarray(7))]
+  expect(frames.map((entry) => entry.tag)).toEqual([5, 1, 2])
+  expect(avccUnits(frames[2]!.payload)).toEqual([slice])
 })

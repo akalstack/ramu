@@ -32,3 +32,6 @@ export function appControlHelp(status: Status | null): string {
   }
   return `Permissions granted.${version} Choose an app from a thread’s Computer menu to let the agent work in it.`
 }
+
+/** Whether a computer's screen plays as live video: this Mac's own, or a test device's from Simlock. */
+export const streamsVideo = (runtimeId: string) => runtimeId === 'local' || runtimeId.startsWith('test-device:')

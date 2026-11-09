@@ -40,6 +40,7 @@ import {
   type ViewerMenuItem,
 } from './ViewerChrome'
 import { useComputerVideo, webrtc } from './useComputerVideo'
+import { streamsVideo } from '@ramu/shared/computerStatus'
 
 type Frame = { uri: string; width: number; height: number; capturedAt: number; generation: number }
 
@@ -99,7 +100,7 @@ function ComputerViewer({
   const [current, setCurrent] = useState(session)
   const taskId = chat.taskId!
   // The main display and an app's window both stream from the host; an app falls back to snapshots when it is locked.
-  const video = useComputerVideo(chat.computerId, taskId, session.runtime.id === 'local', active)
+  const video = useComputerVideo(chat.computerId, taskId, streamsVideo(session.runtime.id), active)
   const live = video.status === 'live'
   const human = !viewOnly && current.controller.kind === 'human' && current.controlledHere !== false && !current.paused
   useEffect(() => {
