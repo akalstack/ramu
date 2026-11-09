@@ -28,7 +28,7 @@ The same accounts publish artifacts with **Publish to the web** ([Artifacts](art
 
 ## Deploy a project
 
-**Deploy…** in a project's menu opens the deploy sheet. When a thread's [goal](goals.md) is met in a project with a repository, the same **Deploy…** sits under it in the thread.
+**Deploy…** in a project's menu opens the deploy sheet, for a project on this computer or on a paired host, which runs it there. When a thread's [goal](goals.md) is met in a project with a repository, the same **Deploy…** sits under it in the thread.
 
 - **Link repository:** pick the platform (the one the project's stack names in `ramu.json` is recommended, see [Configuration](configuration.md)) and, with several, the repository. The repository must be on GitHub; one with no remote yet gets **Publish to GitHub…** in the sheet, which creates the repository (private by default) and pushes it. Ramu links them through the platform's Git integration: every pull request gets a preview deployment, shown on the pull request's card in Source Control and on the phone ([The Pull requests page](git-hosting.md#the-pull-requests-page)), and pushes to the default branch deploy to production, with no deploy token in CI.
   - **Vercel** creates the project (named after the Ramu project) or links an existing one of that name. Vercel's GitHub app must be installed for the repository; the sheet says so when it is not.
@@ -77,7 +77,7 @@ Pushes made outside Ramu, such as from a terminal or GitHub's website, are not f
 
 ## Store releases
 
-For an Expo app (an `app.json` or `app.config.*` at the repository root, as the Expo stack creates), the deploy sheet shows **Store releases**. A project whose stack names Expo shows only this, not the hosting platforms.
+For an Expo app (an `app.json` or `app.config.*` at the repository root, as the Expo stack creates), the deploy sheet shows **Store releases**. A project whose stack names Expo, or with no stack in `ramu.json` and an app that depends on `expo`, shows only this, not the hosting platforms. **Connect Expo** opens Settings → Deploy at Expo when the host has no Expo account yet.
 
 - **What the stores need**, checked from `app.json` and `eas.json`: an `eas.json` with a `production` build profile, the EAS project the app is linked to (`extra.eas.projectId`, which an agent sets with `eas init`), the iOS bundle identifier and Android package, the icon file, the version, build numbers that EAS raises on every build (`autoIncrement` or `appVersionSource: "remote"`; numbers set by hand are a warning), the App Store Connect app (`submit.production.ios.ascAppId`), Android submissions to the internal track only, and the iOS permission texts the app's Expo libraries need (such as `NSCameraUsageDescription` for `expo-camera`), set in `ios.infoPlist` or in the library's plugin options. An app that computes its configuration in `app.config.*` is checked from `app.json` until you press **Read it by running expo config**, which runs the project's own `expo config` on this computer (so its code runs, only then) and checks the configuration it prints, until that file changes.
 - **Add eas.json in a pull request** opens a pull request with an `eas.json` whose `production` build profile raises build numbers and whose `production` submit profile sends Android to the internal track, made in a temporary worktree as [Set up CI](git-hosting.md#set-up-ci) does.

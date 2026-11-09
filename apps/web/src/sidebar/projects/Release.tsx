@@ -25,7 +25,14 @@ const CHECK_MARK = { ok: '✓', warning: '!', missing: '✗' } as const
  * Release, which builds on EAS and uploads to TestFlight and Play's internal track. Pressing Release and confirming is
  * the person's approval; submitting for review stays on the stores.
  */
-export function ReleaseSection({ projectId }: { projectId: string }) {
+export function ReleaseSection({
+  projectId,
+  onConnect,
+}: {
+  projectId: string
+  /** Opens the Expo sign-in when the host has no Expo account yet. */
+  onConnect: (name: string) => void
+}) {
   useLanguage()
   const host = useHost()
   const [status, setStatus] = useState<StoreRelease | null>(null)
@@ -79,6 +86,13 @@ export function ReleaseSection({ projectId }: { projectId: string }) {
             )
           : t('Connect Expo in Settings → Deploy to build and upload the app.')}
       </p>
+      {!status.connected && (
+        <span>
+          <Button size="sm" variant="secondary" onClick={() => onConnect('Expo')}>
+            {t('Connect {0}', { 0: 'Expo' })}
+          </Button>
+        </span>
+      )}
       <ul className="m-0 flex list-none flex-col gap-1 p-0 text-caption" aria-label={t('What the stores need')}>
         {status.checks.map((check) => (
           <li

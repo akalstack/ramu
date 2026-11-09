@@ -166,10 +166,13 @@ export class ComputerRegistry {
           live.waiting = payload.waiting
           live.retryAt = payload.retryAt
           if (payload.connected) {
-            void this.deps.follow(endpoint, this.followed.get(id) ?? []).catch(() => {})
+            // The token rotates after the first connection. A call with the token captured above would open a socket
+            // for that old credential, replacing the live one, whose next connection would land here again.
+            const current = this.deps.servers.endpoint(id) ?? endpoint
+            void this.deps.follow(current, this.followed.get(id) ?? []).catch(() => {})
             const os = this.deps.thisDevice?.()
             // An older host without the method refuses it; it then shows this computer without an OS.
-            if (os) void this.deps.invoke(endpoint, 'device.describe', [os]).catch(() => {})
+            if (os) void this.deps.invoke(current, 'device.describe', [os]).catch(() => {})
             this.routeWork('learn', id, 3_600_000, (host) => this.learnRoutes(host))
             this.countSoon(id)
             void this.renewIfDue(id)

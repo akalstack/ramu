@@ -14,6 +14,9 @@ import {
   Plus,
   type LucideIcon,
   LoaderCircle,
+  Rocket,
+  CircleCheck,
+  SquarePen,
 } from 'lucide-react'
 import { NO_PROJECT, type Computer, type Project, type Task } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
@@ -27,6 +30,10 @@ import { t, useLanguage } from '../i18n'
 import { FadeText } from '../FadeText'
 import { ProjectsPanel } from './ProjectsPanel'
 import { TaskRow } from './projects/TaskRow'
+import { DeployDialog } from './projects/DeployDialog'
+import { CiSetupDialog } from './projects/CiSetup'
+import { useContextMenu, type MenuEntry } from '../Menu'
+import { useHostWriteAccess } from '../composer/useHostWriteAccess'
 import { SectionHead } from './projects/SectionHead'
 import { Collapse } from './projects/Collapse'
 import { ICON_BUTTON_CLASS, ROW_ACTIONS_CLASS, pinnedFirst, STICKY_PROJECT_CLASS } from './projects/constants'
@@ -325,8 +332,52 @@ function OtherHostProject({
   const open = tree.isExpanded(key)
   const preview = useThreadPreview(host, all, project.id, limit)
   const openProject = () => select(host, { kind: 'project', projectId: project.id })
+  // Shipping from this row needs no switch to that host: Deploy and Set up CI run there, as on its own projects.
+  const repos = useWorkspaceOf(host)?.repos[project.id] ?? []
+  const { viewOnly, canWrite } = useHostWriteAccess()
+  const [deploying, setDeploying] = useState(false)
+  const [settingUpCi, setSettingUpCi] = useState(false)
+  const items: MenuEntry[] = [
+    {
+      key: 'new',
+      label: (
+        <>
+          <SquarePen size={14} /> {t(' New thread')}
+        </>
+      ),
+      onSelect: () => select(host, { kind: 'new', projectId: project.id }),
+    },
+    ...(available && !viewOnly
+      ? [
+          {
+            key: 'deploy',
+            label: (
+              <>
+                <Rocket size={14} /> {t(' Deploy…')}
+              </>
+            ),
+            onSelect: () => {
+              if (canWrite()) setDeploying(true)
+            },
+          },
+          {
+            key: 'ci',
+            label: (
+              <>
+                <CircleCheck size={14} /> {t(' Set up CI…')}
+              </>
+            ),
+            onSelect: () => {
+              if (canWrite()) setSettingUpCi(true)
+            },
+          },
+        ]
+      : []),
+  ]
+  const contextMenu = useContextMenu(`${project.name} actions`, items)
   return (
     <section className="project-group mb-0 [&:has(.task-list)]:mb-2.5 relative">
+      {contextMenu.menu}
       <div className={STICKY_PROJECT_CLASS}>
         <div
           role="button"
@@ -341,7 +392,9 @@ function OtherHostProject({
               openProject()
             }
           }}
+          onContextMenu={contextMenu.onContextMenu}
           onKeyDown={(event) => {
+            contextMenu.onKeyDown(event)
             if (event.key === 'Enter' && available) openProject()
           }}
         >
@@ -388,6 +441,8 @@ function OtherHostProject({
         </div>
       </div>
       {open && <ThreadPreviewList preview={preview} />}
+      {deploying && <DeployDialog project={project} repos={repos} onClose={() => setDeploying(false)} />}
+      {settingUpCi && <CiSetupDialog project={project} repos={repos} onClose={() => setSettingUpCi(false)} />}
     </section>
   )
 }

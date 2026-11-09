@@ -114,7 +114,9 @@ export function createDeploys(
     {
       getState,
       setState,
-      stackTarget: (projectId) => stack(projectId)?.deployTarget ?? stack(projectId)?.id ?? null,
+      // A project added from an existing folder names no stack; an Expo app there still ships through the stores.
+      stackTarget: (projectId) =>
+        stack(projectId)?.deployTarget ?? stack(projectId)?.id ?? (releases.storeApp(projectId) ? 'expo' : null),
       async beforeProduction(projectId, binding) {
         const root = binding.repository ? await checkoutOf(projectId, binding.repository) : null
         if (root) return resources.migrateProduction(projectId, root, binding.productionBranch)

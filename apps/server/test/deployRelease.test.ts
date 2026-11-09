@@ -285,6 +285,17 @@ describe('Release', () => {
     await expect(service.start('p1', 'all')).rejects.toThrow('Check the builds on expo.dev')
   })
 
+  it('treats an app.json as a store app only when the app depends on Expo', () => {
+    const root = mkdtempSync(join(tmpdir(), 'ramu-release-'))
+    dirs.push(root)
+    // A Heroku-style app.json alone is not an Expo app.
+    writeFileSync(join(root, 'app.json'), JSON.stringify({ name: 'api', stack: 'heroku-22' }))
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ dependencies: { express: '5.0.0' } }))
+    expect(releases(root).service.storeApp('p1')).toBe(false)
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ dependencies: { expo: '54.0.0' } }))
+    expect(releases(root).service.storeApp('p1')).toBe(true)
+  })
+
   it('reports no app for a project without one', async () => {
     const root = mkdtempSync(join(tmpdir(), 'ramu-release-'))
     dirs.push(root)

@@ -403,7 +403,7 @@ export function DeployDialog({
           )}
         </>
       )}
-      <ReleaseSection projectId={project.id} />
+      <ReleaseSection projectId={project.id} onConnect={connect} />
       <DatabaseSection
         projectId={project.id}
         repoId={repoId}

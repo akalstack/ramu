@@ -387,6 +387,26 @@ it('rotates a host token after connecting, once a month, and keeps the old one w
   await flush()
   expect(deps.renew).toHaveBeenCalledTimes(1)
 
+  // The next connection follows threads and describes this device with the new token, not the one captured before
+  // rotating: a call with the old one would replace the live socket and land here again, so the host never settles.
+  const follow = vi.fn(async () => {})
+  const rotated = setup()
+  rotated.deps.follow = follow
+  rotated.deps.thisDevice = () => ({ os: 'macos', form: 'computer' })
+  rotated.servers.add('10.0.0.4:7788', 'Laptop', 'first')
+  vi.mocked(rotated.deps.renew).mockResolvedValue({ token: 'r'.repeat(64) })
+  const registry3 = new ComputerRegistry(rotated.deps)
+  registry3.start()
+  rotated.streams.get('http://10.0.0.4:7788')!('background:connection', { connected: true })
+  await flush()
+  rotated.streams.get('http://10.0.0.4:7788')!('background:connection', { connected: true })
+  await flush()
+  const tokens = (calls: unknown[][]) => calls.map(([target]) => (target as { token: string }).token)
+  expect(tokens(follow.mock.calls)).toEqual(['first', 'r'.repeat(64)])
+  const describes = vi.mocked(rotated.deps.invoke).mock.calls.filter(([, method]) => method === 'device.describe')
+  expect(tokens(describes).at(-1)).toBe('r'.repeat(64))
+  registry3.stop()
+
   const declined = setup()
   const second = declined.servers.add('10.0.0.3:7788', 'Server', 'keep')
   vi.mocked(declined.deps.renew).mockResolvedValueOnce(null)

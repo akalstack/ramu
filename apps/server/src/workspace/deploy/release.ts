@@ -4,7 +4,7 @@
 // everything else is read through Expo's API. A submission for review is never made here: that is the person's
 // action on each store.
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { lstat, readdir, readFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import {
@@ -171,6 +171,21 @@ export class StoreReleases {
   /** The first repository of the project with an Expo app at its root. */
   root(projectId: string): string | null {
     return this.host.roots(projectId).find(isExpoApp) ?? null
+  }
+
+  /** Whether that app also depends on Expo, so it ships through the stores; an app.json alone also names Heroku apps. */
+  storeApp(projectId: string): boolean {
+    const root = this.root(projectId)
+    if (!root) return false
+    try {
+      const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+        dependencies?: Record<string, string>
+        devDependencies?: Record<string, string>
+      }
+      return !!(pkg.dependencies?.expo ?? pkg.devDependencies?.expo)
+    } catch {
+      return false
+    }
   }
 
   private async facts(root: string): Promise<StoreFacts> {
