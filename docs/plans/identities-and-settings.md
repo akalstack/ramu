@@ -30,6 +30,8 @@ Theme, layout, keybindings, models, abilities and every other setting stay host-
 
 **One identity is no change.** With a single identity nothing new appears. **Settings → Identities** shows up once a second login, forge connection or hosting account exists, with **Add identity** prefilled from it.
 
+**As many as you need.** Work and Personal are only the first two: a freelancer adds one per client (Acme, Globex), someone else adds Open source. Each has a name and a color for its chip. **Add identity** starts from the accounts not yet in one, **Duplicate** copies an identity to change one account, and **Remove** asks which identity its projects move to. One identity is the default for projects no rule matches. When two rules match, the more specific one wins (a remote owner over a folder, a deeper folder over a shallower one), and the identity's rules list shows which projects each rule catches. A host holds up to 20 identities.
+
 ### 2. Copy settings between hosts
 
 Settings already edits several hosts at once (`SettingsScope` with `commonSettings` and `portableSettings` in `packages/shared/src/settingsCompatibility.ts`). Add **Copy settings from…** to a host's row in **Settings → Remote access** and to the first-run setup of a new host when another host is paired:
@@ -58,6 +60,7 @@ Optional, off until chosen: **Back up to GitHub** in **Settings → Remote acces
 - Representative task: a person with a work and a personal Claude login, a company GitHub organization and their own account adds `~/work/api` and `~/code/blog`. Without choosing anything, a thread in each uses the right login, commits with the right email, opens pull requests and deploys with the right account. Before, they had to switch the login per thread, set Git config per repository and check the forge selection.
 - A thread in a work project with its login changed by hand to the personal one is stopped at its next push with both accounts named; **Use Work** pushes as Work.
 - A memory note saved in a work project is not recalled in a personal one.
+- A third identity for a client, matched by `github.com/globex/*`, takes a Globex project out of Work without touching Work's folder rule; removing it moves that project to the identity chosen in **Remove**.
 - On a second Mac paired with the first, **Copy settings from…** brings over appearance, models and identities with one review, and lists the logins still to connect there; no credential appears on the second host.
 - An exported file contains no paths, tokens or account secrets, and importing it on a fresh host gives the same review.
 - A GitHub backup restores on a third host signed in to the same account.
