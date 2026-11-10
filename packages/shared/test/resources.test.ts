@@ -6,7 +6,7 @@ import {
   gigabytes,
   isLowMemory,
   parseMeminfo,
-  parseMemoryPressure,
+  parseVmStat,
   parseProcessTable,
   stopItemCall,
   threadActivity,
@@ -27,11 +27,20 @@ it('reads host memory and refuses to guess', () => {
     availableBytes: 400 * KB,
   })
   expect(parseMeminfo('MemTotal: 1000 kB\n')).toBeNull()
-  expect(parseMemoryPressure('System-wide memory free percentage: 35%', 1000)).toEqual({
-    totalBytes: 1000,
-    availableBytes: 350,
-  })
-  expect(parseMemoryPressure('nothing', 1000)).toBeNull()
+  // Activity Monitor's Memory Used: app memory (anonymous less purgeable), wired and compressed; the rest is available.
+  const vm = [
+    'Mach Virtual Memory Statistics: (page size of 16384 bytes)',
+    'Pages free:                                    23854.',
+    'Pages wired down:                             206045.',
+    'Pages purgeable:                                 292.',
+    'File-backed pages:                            153986.',
+    'Anonymous pages:                              223084.',
+    'Pages occupied by compressor:                 410412.',
+  ].join('\n')
+  const total = 16 * 1024 ** 3
+  const used = (223084 - 292 + 206045 + 410412) * 16384
+  expect(parseVmStat(vm, total)).toEqual({ totalBytes: total, availableBytes: total - used })
+  expect(parseVmStat('nothing', total)).toBeNull()
 })
 
 it('counts each process once, and leaves unowned descendants with Ramu', () => {

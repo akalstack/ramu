@@ -29,6 +29,10 @@ export interface ResourceSnapshot {
   ramuBytes: number
   /** Logical cores, so CPU reads as a share of the whole host. */
   cores?: number
+  /** Every process's CPU added up, in `ps` percent (100 per busy core): the whole host, not only Ramu. */
+  hostCpu?: number
+  /** The service's own processes' CPU, outside any thread. */
+  ramuCpu?: number
 }
 
 /** What the Brief needs from a host that is low on memory; the idle figures are read only while it is low. */
@@ -87,11 +91,24 @@ export function parseMeminfo(text: string): HostMemory | null {
   return totalBytes && availableBytes ? { totalBytes, availableBytes } : null
 }
 
-/** macOS: `memory_pressure -Q` reports the free percentage, which counts reclaimable memory that `os.freemem` leaves out. */
-export function parseMemoryPressure(text: string, totalBytes: number): HostMemory | null {
-  const percent = /free percentage:\s*(\d+)%/i.exec(text)?.[1]
-  if (percent === undefined || !totalBytes) return null
-  return { totalBytes, availableBytes: Math.round((totalBytes * Number(percent)) / 100) }
+/**
+ * macOS memory as Activity Monitor counts it: used is app memory (anonymous pages less purgeable ones), wired memory and
+ * what the compressor occupies; cached files and free pages are available. `memory_pressure`'s free percentage is a
+ * pressure gauge, not this, and read gigabytes lower than Activity Monitor shows.
+ */
+export function parseVmStat(text: string, totalBytes: number): HostMemory | null {
+  const pageSize = Number(/page size of (\d+) bytes/.exec(text)?.[1])
+  const pages = (label: string) => {
+    const value = new RegExp(`^${label}:\\s+(\\d+)`, 'm').exec(text)?.[1]
+    return value === undefined ? null : Number(value)
+  }
+  const anonymous = pages('Anonymous pages')
+  const purgeable = pages('Pages purgeable') ?? 0
+  const wired = pages('Pages wired down')
+  const compressed = pages('Pages occupied by compressor') ?? 0
+  if (!pageSize || !totalBytes || anonymous === null || wired === null) return null
+  const used = (Math.max(0, anonymous - purgeable) + wired + compressed) * pageSize
+  return { totalBytes, availableBytes: Math.max(0, totalBytes - Math.min(used, totalBytes)) }
 }
 
 const GB = 1024 ** 3
@@ -130,7 +147,9 @@ export function attributeProcesses(rows: ProcessRow[], servicePid: number, roots
   )
   const ramuBytes = rows.reduce((sum, row) => sum + (service.has(row.pid) ? row.rssBytes : 0), 0)
   for (const thread of threads.values()) thread.items.sort((a, b) => b.rssBytes - a.rssBytes)
-  return { threads: [...threads.values()].sort((a, b) => b.rssBytes - a.rssBytes), ramuBytes }
+  const ramuCpu = rows.reduce((sum, row) => sum + (service.has(row.pid) ? row.cpu : 0), 0)
+  const hostCpu = rows.reduce((sum, row) => sum + row.cpu, 0)
+  return { threads: [...threads.values()].sort((a, b) => b.rssBytes - a.rssBytes), ramuBytes, ramuCpu, hostCpu }
 }
 
 /** A thread above one full core reads as busy; instant percentages under that are mostly noise. */

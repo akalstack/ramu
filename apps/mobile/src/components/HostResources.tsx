@@ -93,7 +93,11 @@ function HostMeter({ data }: { data: ResourceSnapshot }) {
             1: gigabytes(memory.totalBytes),
           }),
           low ? say('Low memory') : '',
-          say('CPU {0}%', { 0: Math.round(cpuShare(cpu, data.cores) * 100) }),
+          // The whole host's CPU, with Ramu's part of it, as Activity Monitor would add it up.
+          say('CPU {0}% (Ramu {1}%)', {
+            0: Math.round(cpuShare(Math.max(data.hostCpu ?? 0, cpu), data.cores) * 100),
+            1: Math.round(cpuShare(cpu + (data.ramuCpu ?? 0), data.cores) * 100),
+          }),
         ]
           .filter(Boolean)
           .join(' · ')}

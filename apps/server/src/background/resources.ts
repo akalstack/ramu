@@ -6,7 +6,7 @@ import {
   attributeProcesses,
   isLowMemory,
   parseMeminfo,
-  parseMemoryPressure,
+  parseVmStat,
   parseProcessTable,
   type HostMemory,
   type HostResources,
@@ -23,8 +23,8 @@ export async function readHostMemory(platform = process.platform): Promise<HostM
   try {
     if (platform === 'linux') return parseMeminfo(await readFile('/proc/meminfo', 'utf8'))
     if (platform === 'darwin') {
-      const { stdout } = await run('/usr/bin/memory_pressure', ['-Q'], { timeout: 2000 })
-      return parseMemoryPressure(stdout, totalmem())
+      const { stdout } = await run('/usr/bin/vm_stat', [], { timeout: 2000 })
+      return parseVmStat(stdout, totalmem())
     }
   } catch {
     // A failed reading hides the figures; it must never read as zero.
