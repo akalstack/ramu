@@ -24,7 +24,7 @@ The Brief lists what needs you, most urgent first, without a model call:
 
 The usual next step is one tap: **Allow once** for an approval, an option for a single-choice question, **Retry** or **Mark done** for a failure, **Stop idle** for a host low on memory. Other questions expand in place. Opening an approval or question on desktop goes to the session that asked, a helper's own included, scrolled to the request. Five rows show, then **See all**. Viewer devices see rows without buttons. A thread's hover card says what lets it continue when that is up to you, such as resuming a goal at its turn limit.
 
-Deployed apps reach you as notifications instead of Brief rows: a usage notice at 80% or 100% of a plan's limit opens the project's most recent thread ([Usage](deploy.md#usage)), and a live address that stops answering opens a **Down:** thread in the project and notifies your phone ([Uptime](deploy.md#uptime)).
+Deployed apps reach you as notifications instead of Brief rows: a live address that stops answering opens a **Down:** thread in the project and notifies your phone ([Live address and uptime](deploy.md#live-address-and-uptime)).
 
 ### Running and Resources
 

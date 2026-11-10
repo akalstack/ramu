@@ -23,7 +23,7 @@ const steps = (target: (typeof TARGETS)[number]): Step[] => [
   { kind: 'tool', label: 'Run', detail: 'npx create-next-app barbershop' },
   { kind: 'tool', label: 'Run', detail: 'pnpm build  ·  pnpm test  12 passed' },
   { kind: 'agent', text: 'The booking page works in the preview. Ready to put it online?' },
-  { kind: 'tool', label: 'Deploy', detail: `${target.name} · your account · database provisioned` },
+  { kind: 'tool', label: 'Deploy', detail: `${target.name} · your account · migrations ran first` },
   { kind: 'live' },
 ]
 

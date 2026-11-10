@@ -58,15 +58,13 @@ const PATH = [
 ]
 
 const SAFELY = [
-  'A preview address for every pull request, and CI that GitHub or GitLab requires before merging',
-  'Migrations held until a production build goes live, and roll back from the desktop or your phone',
+  'Previews deploy without asking, and CI that GitHub or GitLab requires before merging',
+  'Production always asks you first, and runs your migrations before it goes out',
+  'The thread hears how its push went, from the checks your Git host lists',
   'Uptime watched on the live address, with an incident thread when it goes down',
-  'The first production deploy, domains and DNS always ask you first',
 ]
 
-const PLATFORMS = ['Vercel', 'Netlify', 'Expo for the app stores']
-const CLI_PLATFORMS = ['Railway', 'Fly.io', 'Cloudflare', 'Supabase']
-const DATA = ['Neon']
+const PLATFORMS = ['Vercel', 'Netlify', 'Railway', 'Fly.io', 'Cloudflare', 'Supabase']
 
 const WORK = [
   {
@@ -222,9 +220,7 @@ const WORK = [
         </ul>
         <div class="section-head">
           <ul class="checks">
-            <li>Hosting: {PLATFORMS.join(', ')}</li>
-            <li>Through their own CLI, with your account kept on your computer: {CLI_PLATFORMS.join(', ')}</li>
-            <li>Data: {DATA.join(', ')}</li>
+            <li>Through their own CLI, with your account kept on your computer: {PLATFORMS.join(', ')}</li>
           </ul>
         </div>
       </section>

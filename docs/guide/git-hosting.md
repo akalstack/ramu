@@ -86,7 +86,7 @@ Azure Repos remotes (`dev.azure.com`, `*.visualstudio.com` and their SSH forms) 
 
 ## Set up CI
 
-**Set up CI…** in a project's menu, or **Set up CI** under **Checks** in the [deploy sheet](deploy.md#deploy-a-project), adds a CI workflow to a GitHub or GitLab repository: `.github/workflows/ci.yml` (GitHub Actions) or `.gitlab-ci.yml` (GitLab CI). The sheet first says what it will do, read from the default branch:
+**Set up CI…** in a project's menu, or **Set up CI** under **Checks** in the [Deploy sheet](deploy.md#set-up-a-platform), adds a CI workflow to a GitHub or GitLab repository: `.github/workflows/ci.yml` (GitHub Actions) or `.gitlab-ci.yml` (GitLab CI). The sheet first says what it will do, read from the default branch:
 
 - **Install** with the package manager the lockfile names (npm, pnpm, Yarn, Bun, uv, pip, Bundler or Go modules), cached between runs.
 - **Then** the lint, typecheck, test and build steps the project has: its `package.json` scripts, the Python tools it declares (Ruff, mypy, pytest, or Django's tests), RuboCop and Rails or RSpec tests, or `go vet`, `go test` and `go build`. The build and test commands in `ramu.json` ([Configuration](configuration.md)) take the place of the detected ones.
@@ -98,7 +98,7 @@ The file arrives as a pull request from a new `ramu/set-up-ci` branch, made from
 
 **Keeping the default branch green:** when a thread's checkout pushes the default branch (**Push** or **Sync** in Source Control, or a `git push` its agent runs in the thread's folder), Ramu follows CI on the pushed commit for up to three hours. **Merge…** on a pull request into the default branch does the same for the commit the merge made, for the thread working on that pull request. If a check fails, the failing jobs and the end of their logs go to that thread's queue, asking for a fix committed on a new branch; the thread wakes like a [watched pull request](#github). A sync that only pulls follows nothing. This works on GitHub and GitLab.
 
-A step that needs a secret reads it from the repository's GitHub Actions secrets; **Sync** under **Environment variables** in the [deploy sheet](deploy.md#deploy-a-project) writes the ones this host has.
+A step that needs a secret reads it from the repository's GitHub Actions secrets, which you add on GitHub.
 
 Agents use `ci_setup`: it writes the same file into the thread's checkout (or returns the one already there) for the agent to adjust (monorepo filters, a database service for tests) before it commits on a branch and opens a pull request.
 

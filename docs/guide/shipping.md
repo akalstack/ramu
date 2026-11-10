@@ -22,38 +22,32 @@ Deploys and CI work from a GitHub repository. **Publish to GitHub** in Source Co
 
 ## 4. Deploy
 
-Connect an account once in **Settings → Deploy**, or with **Connect** in the deploy sheet, which opens it at that platform; use the platform's own sign-in where its CLI is installed, or a token through a guided page ([Connect an account](deploy.md#connect-an-account)). Then **Deploy…** in the project's menu opens the deploy sheet, which recommends the platform the stack names when Ramu can deploy to it.
+**Deploy…** in the project's menu opens the Deploy sheet. **Set up deploy** names the platform the stack suits (Vercel, Netlify, Railway, Fly.io or Cloudflare) and its plugin, and opens the install review or the plugin's card until it is installed with its token ([Set up a platform](deploy.md#set-up-a-platform)). Then ask the project's agent to deploy: it writes the platform's config and runs the platform's CLI with your token through `platform_cli` ([Deploying](deploy.md#deploying)).
 
-| Target | What Ramu sets up | Details |
-| --- | --- | --- |
-| Vercel or Netlify | Links the platform to the repository: a preview for every pull request, and production from every push to the default branch | [Deploy a project](deploy.md#deploy-a-project) |
-| Railway, Fly.io, Cloudflare or Supabase | Install the platform's plugin; the agent writes the platform's config and runs its own CLI with your token; each command that changes anything asks you first | [Railway, Fly.io, Cloudflare and Supabase](deploy.md#railway-flyio-cloudflare-and-supabase) |
-| App Store and Google Play | For an Expo app: the store checks, an `eas.json` pull request, and **Release** to TestFlight and Play's internal track | [Store releases](deploy.md#store-releases) |
-
-**Deploy to production**, **Roll back**, adding a domain, creating DNS records and **Release** are always yours: in the sheet you confirm them, and an agent asking for one shows an approval card in every access mode. Ramu never submits an app for store review.
+- **Previews** run without asking.
+- **Production** always asks you with a card, in every access mode: **Allow once**, or allow production deploys for the rest of the thread. The project's migrations run first against the production database address saved in the sheet, and a failed migration stops the deploy ([Migrations first](deploy.md#migrations-first)).
+- An Expo app ships through the app stores with EAS, which the agent runs like any other CLI; Ramu never submits an app for store review.
 
 ## 5. What the app needs
 
 The same sheet covers the rest:
 
-- **Environment variables:** the variables the app reads, next to where each is set (this host, GitHub Actions and the platform's preview and production). **Sync** copies the values this host has to the places that lack them ([Deploy a project](deploy.md#deploy-a-project)).
-- **Database:** for a stack or code that stores data, **Provision** creates a Neon Postgres database on your account, with a separate branch for previews and development. Migrations named in `ramu.json` run before each production deploy from Ramu ([Databases](deploy.md#databases)).
-- **Domains:** **Add domain** shows each DNS record in plain words, **Create records** makes them when the platform hosts your DNS, and the project's thread hears when the domain is live over HTTPS.
+- **Live address:** where people use the app, which the host watches ([Live address and uptime](deploy.md#live-address-and-uptime)).
+- **Production database:** the address migrations run against, saved on the host and never shown again ([Migrations first](deploy.md#migrations-first)).
 - **Checks:** **Set up CI** opens a pull request with a workflow made from the project's own scripts, and can require CI to pass before merging on GitHub ([Set up CI](git-hosting.md#set-up-ci)).
 
 ## 6. Every later change
 
-The agent works on a branch and opens a pull request. Its card in Source Control and on the phone shows the checks and, on Vercel or Netlify, the preview address ([The Pull requests page](git-hosting.md#the-pull-requests-page)). Merging deploys it.
+The agent works on a branch and opens a pull request. Its card in Source Control and on the phone shows the checks, where a platform connected to the repository reports its preview ([The Pull requests page](git-hosting.md#the-pull-requests-page)). Merging deploys it.
 
-- **When a deployment finishes**, Ramu wakes the thread that deployed, pushed or merged, with the live address or the end of the build log ([When a deployment finishes](deploy.md#when-a-deployment-finishes)). For pushes from outside Ramu, a **Deployment failed** webhook schedule starts a thread instead ([When a request arrives](background-work.md#when-a-request-arrives)).
-- **When CI breaks the default branch** after a push from a thread, the failing jobs go back to that thread ([Set up CI](git-hosting.md#set-up-ci)).
+- **After a push or merge from a thread**, Ramu follows the checks on that commit, CI and platform deploys alike, and wakes the thread once: a short note with the links when they pass, the failing checks with their logs when one fails ([After a push](deploy.md#after-a-push)).
+- **Latest deploy** in the Deploy sheet shows the checks on the default branch's newest commit, as the Git host reports them ([The latest deploy](deploy.md#the-latest-deploy)).
 
 ## 7. Keep it running
 
-- **Uptime:** the host checks the live address every five minutes. Two failed checks open a **Down:** thread with the status, the last deployment and its build log, and notify your phone; its agent can offer **Roll back**, and recovery posts a recap ([Uptime](deploy.md#uptime)).
-- **Usage:** the sheet shows what the platform and database report for the billing period beside the plan's limits. A figure at 80% and at 100% raises a notice that opens the project's thread, where the agent can propose a fix ([Usage](deploy.md#usage)).
-- **On the phone:** **Deployments** in a project's menu shows the live address, the latest deployments, the uptime watch and usage, with **Roll back** ([On the phone](deploy.md#on-the-phone)).
+- **Uptime:** the host checks the live address every five minutes. Two failed checks open a **Down:** thread and notify your phone; its agent finds the latest deploy and can offer a rollback through the platform's plugin, which asks you, and recovery posts a recap ([Live address and uptime](deploy.md#live-address-and-uptime)).
+- **On the phone:** **Deploy** in a project's menu shows the latest deploy's checks, the uptime watch with its switch, and the production database's state ([On the phone](deploy.md#on-the-phone)).
 
 ## Coming from an existing project
 
-Every step works on its own: **Deploy…** on any project with a GitHub repository, or **Set up CI…** alone. Agents in the project use the same steps through their deploy tools ([Deploys](working-with-agents.md#deploys)).
+Every step works on its own: **Deploy…** on any project, or **Set up CI…** alone. Agents in any project deploy through the platform's plugin with `platform_cli` ([Deploying](deploy.md#deploying)).

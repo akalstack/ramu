@@ -33,11 +33,10 @@ Only checks that still need a physical phone, an account or a live provider. Tes
 - [ ] Approvals, questions, attachments, folders, Git and undo, and schedules act on the correct host.
 - [ ] Interactive cards: rendering, reload after a renderer failure, saved scenarios, sharing, offline use and memory with three live WebViews.
 
-## Deployments
+## Deploy
 
-- [ ] With a project linked to Vercel and one linked to Netlify: **Deployments** in the project menu lists the latest deployments with their state and **Open**, the live address, the uptime watch (including an open incident) and usage figures; **Roll back** on an earlier production deployment asks with the address, and the live site changes; a viewer pairing does not offer **Deployments**. The branch's pull request card shows **Preview building…**, then **Preview at …**, which opens the preview.
-- [ ] The uptime switch turns the watch off and on, and custom domains show where each is with **Open** once live.
-- [ ] For an Expo project: the store builds show with their upload state; **Release** asks which stores, confirms, and the build appears in the list.
+- [ ] With a project deployed through a platform plugin and its repository connected to the platform: **Deploy** in the project menu shows the platform the stack names, the latest deploy's checks on the default branch with **Open**, the live address watch (including an open incident) and whether a production database address is saved; a viewer pairing does not offer **Deploy**.
+- [ ] The uptime switch turns the watch off and on.
 
 ## Push, Live Activities and limits
 
