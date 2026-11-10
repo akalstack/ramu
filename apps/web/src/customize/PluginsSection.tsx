@@ -32,6 +32,12 @@ const matches = (plugin: InstalledPlugin, query: string) =>
     .filter(Boolean)
     .every((word) => `${plugin.name} ${plugin.contents.description}`.toLowerCase().includes(word))
 
+/** What the other plugin of a pair adds, by which side it is on. */
+const companionText = (companion: { index: string }) =>
+  companion.index === CLAUDE_PLUGIN_INDEX
+    ? t('The service’s own plugin: its skills teach agents the service in full, often with its MCP server.')
+    : t('Ramu’s plugin for it: runs its CLI with your saved sign-in, or reads its data into dashboards.')
+
 /** Cards Claude's directory shows before Show all. */
 const CLAUDE_PAGE = 24
 
@@ -67,6 +73,8 @@ export function PluginsSection({
   const [review, setReview] = useState<PluginReview | null>(null)
   // The listing a review came from, so the same plugin in another index can be reviewed instead.
   const [reviewing, setReviewing] = useState<PluginListing | null>(null)
+  // Plugins installed earlier in a pair whose next step (a key, choosing MCP tools) waits until the companion's review closes.
+  const [installedPair, setInstalledPair] = useState<InstalledPlugin[]>([])
   const [openId, setOpenId] = useState<string | null>(null)
   const [adding, setAdding] = useState<'source' | 'index' | null>(null)
   useEffect(() => {
@@ -94,6 +102,23 @@ export function PluginsSection({
   }
   const stage = (key: string, input: Parameters<typeof invoke<'plugins.stage'>>[1]) =>
     act(key, async () => setReview(await invoke('plugins.stage', input)))
+  /**
+   * After installing: a key one of them asks for first, else choosing what the first MCP server's tools may do, since a
+   * server is useful only once it is on and some of its tools should ask before they run.
+   */
+  const nextStep = (plugins: InstalledPlugin[]) => {
+    setInstalledPair([])
+    const needsKey = plugins.find((plugin) => plugin.credentials.some((slot) => slot.state !== 'saved'))
+    const server = plugins.flatMap((plugin) => plugin.mcpConnections)[0]
+    if (needsKey) setOpenId(needsKey.id)
+    else if (server) openCustomize('mcp', server.id)
+  }
+  /** The plugin a review's plugin pairs with, unless it is installed already. */
+  const companionFor = (staged: PluginReview) => {
+    const listing = listings?.find((entry) => entry.name === staged.contents.name)
+    const companion = listing?.companion
+    return companion && !installed?.some((plugin) => plugin.name === companion.name) ? companion : null
+  }
   const openListing = (listing: PluginListing) => {
     setReviewing(listing)
     void stage(`listing:${listing.name}`, { source: listing.name, index: listing.index })
@@ -304,19 +329,23 @@ export function PluginsSection({
           }}
           projects={projects}
           busy={busy === 'confirm'}
+          companion={companionFor(review)}
           onCancel={() => {
             void invoke('plugins.cancel', review.stageId).catch(() => {})
             setReview(null)
+            nextStep(installedPair)
           }}
-          onConfirm={(options) =>
+          onConfirm={(options, withCompanion) =>
             void act('confirm', async () => {
               const plugin = await invoke('plugins.confirm', review.stageId, options)
               setReview(null)
               load()
-              // The next step opens on its own: a key the plugin asks for first, else choosing what its MCP tools may do,
-              // since a server is useful only once it is on and some of its tools should ask before they run.
-              if (plugin.credentials.some((slot) => slot.state !== 'saved')) setOpenId(plugin.id)
-              else if (plugin.mcpConnections[0]) openCustomize('mcp', plugin.mcpConnections[0].id)
+              const companion = companionFor(review)
+              if (withCompanion && companion) {
+                // The pair installs in one go: the companion's own review next, then the first step either needs.
+                setInstalledPair([...installedPair, plugin])
+                void stage(`listing:${companion.name}`, { source: companion.name, index: companion.index })
+              } else nextStep([...installedPair, plugin])
             })
           }
         />
@@ -338,6 +367,10 @@ export function PluginsSection({
             })
           }
           onShare={() => act('share', () => invoke('plugins.share', open.id))}
+          onCompanion={(companion) => {
+            setOpenId(null)
+            void stage(`listing:${companion.name}`, { source: companion.name, index: companion.index })
+          }}
         />
       )}
       {adding && (
@@ -365,6 +398,7 @@ function InstallReview({
   review,
   alternatives,
   onAlternative,
+  companion,
   projects,
   busy,
   onConfirm,
@@ -374,20 +408,25 @@ function InstallReview({
   /** The same plugin listed in other indexes. */
   alternatives: { index: string; indexName: string; source: string }[]
   onAlternative: (entry: { index: string; indexName: string; source: string }) => void
+  /** The plugin this one pairs with, offered for review straight after. */
+  companion: { index: string; name: string } | null
   projects: Project[]
   busy: boolean
-  onConfirm: (options: { scope: PluginScope; includeScripts: boolean }) => void
+  onConfirm: (options: { scope: PluginScope; includeScripts: boolean }, withCompanion: boolean) => void
   onCancel: () => void
 }) {
   useLanguage()
   const { contents, source } = review
   const [scope, setScope] = useState('')
   const [scripts, setScripts] = useState(false)
+  const [withCompanion, setWithCompanion] = useState(true)
   const scriptFiles = contents.skills.flatMap((skill) => skill.scripts.map((path) => `${skill.name}/${path}`))
   return (
     <Dialog
       title={
-        review.replaces ? t('Update {name}', { name: contents.name }) : t('Install {name}', { name: contents.name })
+        review.replaces
+          ? t('Update {name}', { name: displayName(contents.name) })
+          : t('Install {name}', { name: displayName(contents.name) })
       }
       confirmLabel={review.replaces ? t('Update') : t('Install')}
       busy={busy}
@@ -395,7 +434,10 @@ function InstallReview({
       error={review.blocked}
       onCancel={onCancel}
       onConfirm={() =>
-        onConfirm({ scope: scope ? { kind: 'project', projectId: scope } : { kind: 'all' }, includeScripts: scripts })
+        onConfirm(
+          { scope: scope ? { kind: 'project', projectId: scope } : { kind: 'all' }, includeScripts: scripts },
+          withCompanion,
+        )
       }
     >
       <div className="flex min-w-0 flex-col gap-3">
@@ -413,6 +455,17 @@ function InstallReview({
           </div>
         )}
         <PluginParts contents={contents} />
+        {companion && (
+          <label className="flex items-start gap-2 rounded-(--radius-s) bg-fill px-3 py-2 text-caption">
+            <Checkbox checked={withCompanion} onCheckedChange={(value) => setWithCompanion(value === true)} />
+            <span className="flex flex-col gap-0.5">
+              <span className="text-control text-foreground">
+                {t('Also review {0} next', { '0': displayName(companion.name) })}
+              </span>
+              <span className="text-muted-foreground">{companionText(companion)}</span>
+            </span>
+          </label>
+        )}
         {alternatives.map((entry) => (
           <div
             key={entry.index}
@@ -474,6 +527,7 @@ function PluginDetail({
   onToggle,
   onRemove,
   onShare,
+  onCompanion,
 }: {
   plugin: InstalledPlugin
   projects: Project[]
@@ -484,6 +538,7 @@ function PluginDetail({
   onToggle: (enabled: boolean) => void
   onRemove: () => void
   onShare: () => Promise<unknown>
+  onCompanion: (companion: { index: string; name: string }) => void
 }) {
   useLanguage()
   const [confirmRemove, setConfirmRemove] = useState(false)
@@ -495,7 +550,7 @@ function PluginDetail({
   if (confirmRemove)
     return (
       <Dialog
-        title={t('Remove {name}?', { name: plugin.name })}
+        title={t('Remove {name}?', { name: displayName(plugin.name) })}
         confirmLabel={t('Remove')}
         danger
         busy={busy === 'remove'}
@@ -543,6 +598,28 @@ function PluginDetail({
             <Button size="sm" variant="secondary" disabled={busy !== null} onClick={onUpdate}>
               {t('Review update')}
             </Button>
+          </div>
+        )}
+        {plugin.companion && (
+          <div className="flex items-center justify-between gap-3 rounded-(--radius-s) bg-fill px-3 py-2 text-caption">
+            <span className="flex min-w-0 flex-col">
+              <span className="text-control text-foreground">
+                {t('Pairs with {0}', { '0': displayName(plugin.companion.name) })}
+              </span>
+              <span className="text-muted-foreground">{companionText(plugin.companion)}</span>
+            </span>
+            {plugin.companion.installed ? (
+              <Check size={15} className="flex-none text-muted-foreground" aria-label={t('Installed')} />
+            ) : (
+              <Button
+                size="sm"
+                variant="secondary"
+                className="flex-none"
+                onClick={() => onCompanion(plugin.companion!)}
+              >
+                {t('Review')}
+              </Button>
+            )}
           </div>
         )}
         {plugin.mcpConnections.length > 0 && (

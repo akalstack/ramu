@@ -1,4 +1,5 @@
 import { interactiveExport } from '@ramu/shared/interactiveExport'
+import { DEPLOY_TARGET_PLUGINS } from '@ramu/shared/stacks'
 import type { ArtifactInfo } from '@ramu/shared/artifacts'
 import type { ForgeAccountStore } from '../workspace/forgeAccounts'
 import type { HostingAccounts } from '../workspace/deploy/accounts'
@@ -29,7 +30,7 @@ export class PagePublisher {
         target === 'github-pages'
           ? !!this.forge()?.choiceId('https://github.com')
           : target === 'cloudflare-pages'
-            ? !!this.plugins?.hasCredential('cloudflare', 'token')
+            ? !!this.plugins?.hasCredential(DEPLOY_TARGET_PLUGINS.cloudflare, 'token')
             : !!this.hosting?.connected(target),
     }))
   }
@@ -41,8 +42,8 @@ export class PagePublisher {
       return account.token
     }
     if (target === 'cloudflare-pages') {
-      const saved = await this.plugins?.credentialOf('cloudflare', 'token')
-      if (!saved) throw new Error('Install the Cloudflare plugin and save its token in Customize → Plugins first.')
+      const saved = await this.plugins?.credentialOf(DEPLOY_TARGET_PLUGINS.cloudflare, 'token')
+      if (!saved) throw new Error('Install the Cloudflare CLI plugin and save its token in Customize → Plugins first.')
       // A token limited to Pages often cannot list accounts, so the account ID saved with it goes beside it; without
       // one, the first account the token reaches is used.
       const account = saved.fields.account?.trim()

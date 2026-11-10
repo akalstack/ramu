@@ -531,7 +531,7 @@ it('publishes a page without records or AI to the web and updates the same site 
   const hosting = { connected: (target: string) => target === 'vercel' }
   // Cloudflare Pages uses the token saved for the Cloudflare plugin.
   const plugins = {
-    hasCredential: (name: string, slot: string) => name === 'cloudflare' && slot === 'token',
+    hasCredential: (name: string, slot: string) => name === 'cloudflare-cli' && slot === 'token',
     credentialOf: async () => null,
   }
   const publisher = new PagePublisher(pages, () => forge as never, hosting as never, plugins, fetcher)
@@ -569,7 +569,7 @@ it('publishes to Cloudflare Pages with the Cloudflare plugin’s token and the a
   const plain = interactive.publish('s', (await interactive.preview('s', { ...input, html: '<p>Trip</p>' })).id, 'p1')
   const trip = pages.keep('s', plain.id, { title: 'Trip costs' })
   const live = await publisher.publish(trip.id, 'cloudflare-pages')
-  expect(plugins.credentialOf).toHaveBeenCalledWith('cloudflare', 'token')
+  expect(plugins.credentialOf).toHaveBeenCalledWith('cloudflare-cli', 'token')
   expect(live.published).toMatchObject({ target: 'cloudflare-pages', url: 'https://trip-costs.pages.dev' })
   expect(requests[0]).toEqual({
     url: 'https://api.cloudflare.com/client/v4/accounts/acc_1/pages/projects',
@@ -580,7 +580,7 @@ it('publishes to Cloudflare Pages with the Cloudflare plugin’s token and the a
     credentialOf: async () => null,
   })
   expect(missing.targets().find((target) => target.target === 'cloudflare-pages')?.connected).toBe(false)
-  await expect(missing.publish(trip.id, 'cloudflare-pages')).rejects.toThrow('Install the Cloudflare plugin')
+  await expect(missing.publish(trip.id, 'cloudflare-pages')).rejects.toThrow('Install the Cloudflare CLI plugin')
 })
 
 it('reads Ramu data only for the sources declared and allowed, scoped to the page project', async () => {

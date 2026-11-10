@@ -276,6 +276,11 @@ const ramuExtension = z
     /** Services the plugin suits, as words people search for ("deploy", "render", "analytics"). */
     keywords: z.array(text(40)).max(20).default([]),
     requires: z.strictObject({ ramu: z.string().regex(/^\d+\.\d+\.\d+(-[\w.]+)?$/) }).optional(),
+    /**
+     * The service's own plugin in Claude's directory, which teaches agents the service while this one connects it to
+     * Ramu (sign-in, safe commands, dashboard data). Installing either offers the other.
+     */
+    companion: z.string().regex(PLUGIN_NAME).optional(),
   })
   .superRefine((value, context) => {
     for (const name of Object.keys(value.abilities))
@@ -535,6 +540,8 @@ export const indexEntry = z.object({
           signingKey: z.string().max(20_000).optional(),
           byRamu: z.boolean().optional(),
           stacks: z.array(z.enum(STACK_IDS)).optional(),
+          /** The service's own plugin in Claude's directory that this one pairs with. */
+          companion: z.string().regex(PLUGIN_NAME).optional(),
           adds: z
             .object({
               skills: z.number().int().min(0).optional(),
@@ -706,6 +713,11 @@ export interface InstalledPlugin {
   /** What an update would change, when the daily check found one. */
   update: PluginUpdate | null
   byRamu: boolean
+  /**
+   * The plugin it pairs with, and whether that is installed: for Ramu's own, the service's plugin in Claude's directory;
+   * for that one, Ramu's that connects it.
+   */
+  companion: { index: string; name: string; installed: boolean } | null
 }
 
 export interface PluginUpdate {
@@ -747,6 +759,11 @@ export interface PluginListing {
   installed: boolean
   /** The same plugin name in other indexes; the card shows the first listing and offers these instead. */
   alternatives: { index: string; indexName: string; source: string }[]
+  /**
+   * The plugin it pairs with: for Ramu's own, the service's plugin in Claude's directory that teaches agents the
+   * service; for that one, Ramu's that connects it (sign-in, safe commands, dashboard data).
+   */
+  companion: { index: string; name: string } | null
 }
 
 /** Whether a listing matches what the person typed: every word appears in its name, description, keywords or stacks. */

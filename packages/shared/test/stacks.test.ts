@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import {
+  DEPLOY_TARGET_PLUGINS,
   PLUGIN_DEPLOY_TARGETS,
   STACKS,
   chooseStack,
@@ -33,6 +34,8 @@ it('names the deploy targets a plugin provides, and no others', () => {
   const targets = new Set(Object.values(STACKS).map((stack) => stack.deployTarget))
   expect([...targets].filter(isPluginDeployTarget).sort()).toEqual(['fly', 'railway'])
   expect(PLUGIN_DEPLOY_TARGETS.cloudflare).toBe('Cloudflare')
+  // Ramu's CLI plugin is named apart from the platform's own plugin in Claude's directory, so both install.
+  expect(DEPLOY_TARGET_PLUGINS.railway).toBe('railway-cli')
   expect(isPluginDeployTarget('vercel')).toBe(false)
   expect(isPluginDeployTarget('toString')).toBe(false)
   expect(isPluginDeployTarget(null)).toBe(false)

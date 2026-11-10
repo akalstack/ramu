@@ -246,6 +246,7 @@ export class PluginService {
       }),
       update: plugin.update,
       byRamu: plugin.byRamu,
+      companion: this.companionOf(plugin.name, plugin.extension.companion),
     }
   }
 
@@ -1134,6 +1135,19 @@ export class PluginService {
     timer.unref?.()
   }
 
+  /**
+   * The plugin one pairs with: a Ramu plugin's companion in Claude's directory, or for a plugin there, the Ramu plugin
+   * that names it (read from Ramu's index as last fetched).
+   */
+  private companionOf(name: string, declared: string | undefined) {
+    const installed = new Set(this.state().plugins.map((plugin) => plugin.name))
+    if (declared) return { index: CLAUDE_PLUGIN_INDEX, name: declared, installed: installed.has(declared) }
+    const ramu = this.listings
+      .get(DEFAULT_PLUGIN_INDEX)
+      ?.entries.find((entry) => entry.extensions?.[RAMU_EXTENSION]?.companion === name)
+    return ramu ? { index: DEFAULT_PLUGIN_INDEX, name: ramu.name, installed: installed.has(ramu.name) } : null
+  }
+
   /** Hand-added MCP servers at the same address as one of these, which installing them would duplicate. */
   private replacedServers(servers: Record<string, PluginMcpServer>) {
     const owned = new Set(this.state().plugins.flatMap((plugin) => Object.values(plugin.parts.mcp)))
@@ -1403,6 +1417,10 @@ export class PluginService {
           category: entry.category ?? null,
           installed: installed.has(entry.name),
           alternatives: [],
+          companion: (() => {
+            const found = this.companionOf(entry.name, ramu?.companion)
+            return found ? { index: found.index, name: found.name } : null
+          })(),
         })
       }
     }

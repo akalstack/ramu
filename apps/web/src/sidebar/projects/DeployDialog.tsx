@@ -10,7 +10,7 @@ import type {
   Repository,
 } from '@ramu/shared/types'
 import { isHostingPlatform } from '@ramu/shared/types/deploy'
-import { PLUGIN_DEPLOY_TARGETS, isPluginDeployTarget } from '@ramu/shared/stacks'
+import { DEPLOY_TARGET_PLUGINS, PLUGIN_DEPLOY_TARGETS, isPluginDeployTarget } from '@ramu/shared/stacks'
 import { BrandIcon } from '@/components/brand-icon'
 import { Button } from '@/components/desktop-button'
 import { Checkbox } from '@/components/desktop-checkbox'
@@ -82,7 +82,7 @@ export function DeployDialog({
         setAccounts(hosting)
         const target = next.recommended
         const plugin = isPluginDeployTarget(target)
-          ? plugins.find((entry) => entry.name === target && entry.enabled)
+          ? plugins.find((entry) => entry.name === DEPLOY_TARGET_PLUGINS[target] && entry.enabled)
           : undefined
         setPluginTarget(
           isPluginDeployTarget(target)

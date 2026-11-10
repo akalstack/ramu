@@ -44,7 +44,7 @@ For a service no index lists ("connect Rodin for 3D models"), the agent offers `
 
 Ramu hosts no plugins. A plugin is its author's Git repository or a folder. An **index** lists plugins with their source and pinned commit in `.claude-plugin/marketplace.json`, the same file Claude Code reads as a marketplace.
 
-- [akalstack/ramu-plugins](https://github.com/akalstack/ramu-plugins) is listed by default. Plugins Akalstack maintains are marked **By Ramu**: Railway, Fly.io, Cloudflare and Supabase (their CLIs, with a skill each), Grafana, Amplitude and Salesforce (dashboard data), Meshy and Tripo (3D models) and Godot. Every commit in that index is signed with Akalstack's key, which ships in Ramu; a clone it did not sign is refused before anything in it is read.
+- [akalstack/ramu-plugins](https://github.com/akalstack/ramu-plugins) is listed by default. Plugins Akalstack maintains are marked **By Ramu**: `railway-cli`, `fly-cli`, `cloudflare-cli` and `supabase-cli` (their CLIs with your saved sign-in), `grafana-data`, `amplitude-data` and `salesforce-data` (dashboard data), Meshy and Tripo (3D models) and Godot. They hold only what Ramu adds; where the service has its own plugin in Claude's directory, Ramu's names it as its `companion`, the service's skills teach agents the service, and Ramu's short skill says how to run it here. Installing either one offers the other's review next (**Also review … next**, on by default), and each card shows **Pairs with** and whether the other is installed. Every commit in that index is signed with Akalstack's key, which ships in Ramu; a clone it did not sign is refused before anything in it is read.
 - [anthropics/claude-plugins-official](https://github.com/anthropics/claude-plugins-official), Claude's plugin directory, is listed by default too. Its plugins are their authors' (Atlassian, Notion, Figma, Stripe, Vercel, Unity and hundreds more), pinned to a commit in the directory, and reviewed like any other before they install. A listing Ramu cannot fetch (one installed by running a command) is left out rather than hiding the rest of the index.
 - **Indexes** under **Customize → Plugins** adds any other marketplace repository, such as a company's own list. Claude Code marketplaces work as indexes too.
 - An index entry can name its author's signing key (an SSH public key or an armored GPG key). Ramu then installs only a pinned commit signed by that key, checked against that key alone, and an update signed by another key asks for approval again and says so.
@@ -145,7 +145,7 @@ The agent runs it with `platform_cli` and the plugin's name. Reads run straight 
 
 Ramu bounds the answer's size and time, and a dashboard reads a source only after its **Allow**.
 
-**Stacks** (`nextjs`, `django`, `fastapi`, `go`, ...) let the deploy sheet and **New project** suggest the plugin, `keywords` help Browse find it, and `requires.ramu` names the oldest Ramu version it works with.
+**Stacks** (`nextjs`, `django`, `fastapi`, `go`, ...) let the deploy sheet and **New project** suggest the plugin, `keywords` help Browse find it, and `requires.ramu` names the oldest Ramu version it works with. `companion` names the service's own plugin in Claude's directory when yours only connects it to Ramu, so installing yours offers that one too.
 
 ### Getting listed
 

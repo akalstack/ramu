@@ -266,6 +266,7 @@ describe('listingMatches', () => {
     category: null,
     installed: false,
     alternatives: [],
+    companion: null,
   }
   it('matches every typed word anywhere in what the listing says about itself', () => {
     expect(listingMatches(listing, '')).toBe(true)

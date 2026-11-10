@@ -11,7 +11,10 @@ export function brandOf(name: string): BrandId | null {
   const key = name.toLowerCase().replace(/[^a-z0-9-]/g, '')
   const aliases: Record<string, BrandId> = { flyio: 'fly', godotengine: 'godot', githubcopilot: 'github' }
   if (aliases[key]) return aliases[key]
-  return (BRAND_IDS as readonly string[]).includes(key) ? (key as BrandId) : null
+  if ((BRAND_IDS as readonly string[]).includes(key)) return key as BrandId
+  // "railway-cli" or "grafana-mcp" is still Railway's or Grafana's.
+  const first = key.split('-')[0]!
+  return (BRAND_IDS as readonly string[]).includes(first) ? (first as BrandId) : (aliases[first] ?? null)
 }
 
 /**
@@ -39,7 +42,16 @@ export function ExtensionIcon({ name, icon, size = 36 }: { name: string; icon?: 
 }
 
 /** A name as people read it: a plugin's lowercase id gets a capital first letter. */
-export const displayName = (name: string) => name.charAt(0).toUpperCase() + name.slice(1)
+const ACRONYMS = new Set(['cli', 'mcp', 'lsp', 'api', 'sdk', 'ai', 'aws', 'gcp', 'sql', 'ui', 'pr', 'md'])
+/** A plugin, skill or server's name as words: "railway-cli" reads "Railway CLI". */
+export const displayName = (name: string) =>
+  name
+    .split('-')
+    .filter(Boolean)
+    .map((word, index) =>
+      ACRONYMS.has(word) ? word.toUpperCase() : index ? word : word.charAt(0).toUpperCase() + word.slice(1),
+    )
+    .join(' ')
 
 /** Two columns of items once the page is wide enough, one on a narrow window. */
 export function ExtensionGrid({ children, label }: { children: ReactNode; label: string }) {

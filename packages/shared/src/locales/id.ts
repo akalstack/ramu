@@ -7148,4 +7148,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0} also lists a plugin with this name.': '{0} juga mencantumkan plugin dengan nama ini.',
   '{0} changed': '{0} diubah',
   '{0} removed': '{0} dihapus',
+  'Also review {0} next': 'Tinjau juga {0} setelahnya',
+  'Pairs with {0}': 'Berpasangan dengan {0}',
+  'Ramu’s plugin for it: runs its CLI with your saved sign-in, or reads its data into dashboards.': 'Plugin Ramu untuknya: menjalankan CLI-nya dengan login yang kamu simpan, atau membaca datanya ke dasbor.',
+  'The service’s own plugin: its skills teach agents the service in full, often with its MCP server.': 'Plugin milik layanan itu sendiri: skill-nya mengajarkan layanan itu secara lengkap ke agen, sering kali dengan server MCP-nya.',
 }

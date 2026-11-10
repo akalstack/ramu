@@ -23,14 +23,23 @@ export const PROJECT_NAME = /^[A-Za-z0-9][\w.-]{0,99}$/
 export type DeployTargetId = 'vercel' | 'netlify' | 'expo' | 'railway' | 'fly' | 'cloudflare'
 
 /**
- * Deploy targets an agent reaches through the plugin of the same name, with `platform_cli`, rather than through an
- * adapter; each with the platform's own name.
+ * Deploy targets an agent reaches through a plugin's CLI, with `platform_cli`, rather than through an adapter; each with
+ * the platform's own name.
  */
 export const PLUGIN_DEPLOY_TARGETS = {
   railway: 'Railway',
   fly: 'Fly.io',
   cloudflare: 'Cloudflare',
 } as const satisfies Partial<Record<DeployTargetId, string>>
+/**
+ * The plugin in Ramu's index that runs each target's CLI, and the `platform` `platform_cli` takes for it. It is named
+ * apart from the platform's own plugin in Claude's directory, which teaches agents the platform and installs beside it.
+ */
+export const DEPLOY_TARGET_PLUGINS = {
+  railway: 'railway-cli',
+  fly: 'fly-cli',
+  cloudflare: 'cloudflare-cli',
+} as const satisfies Record<keyof typeof PLUGIN_DEPLOY_TARGETS, string>
 export const isPluginDeployTarget = (value: unknown): value is keyof typeof PLUGIN_DEPLOY_TARGETS =>
   typeof value === 'string' && Object.hasOwn(PLUGIN_DEPLOY_TARGETS, value)
 
