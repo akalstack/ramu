@@ -3,6 +3,7 @@ const MermaidBlock = lazy(() => import('./MermaidBlock').then((m) => ({ default:
 import { useEffect, useState, type ComponentProps } from 'react'
 import type { Components, ExtraProps } from 'react-markdown'
 import { Check, Copy } from 'lucide-react'
+import { cn } from 'cn'
 import { Button } from '@/components/desktop-button'
 import {
   CodeBlock,
@@ -29,7 +30,9 @@ export function ChatCodeBlock({ source, hint }: { source: string; hint?: string 
   }, [copied, source])
   useEffect(() => setCopied(false), [source])
   const header = codeBlockLabel(source, hint)
-  const lines = useColorizedLines(source, hint)
+  // A diff is drawn as added and removed rows, its code colored as the language it changes; the rest by its language.
+  const diff = /^(diff|patch)$/i.test(hint ?? '')
+  const lines = useColorizedLines(diff ? '' : source, hint)
   const colored = lines ? lines.join('<br/>') : null
   const copy = async () => {
     try {
@@ -64,13 +67,79 @@ export function ChatCodeBlock({ source, hint }: { source: string; hint?: string 
         </CodeBlockActions>
       </CodeBlockHeader>
       <CodeBlockContent className="px-3.5 py-3 text-[length:0.88em] leading-[1.6] text-(--text-body)">
-        {colored === null ? (
+        {diff ? (
+          <DiffLines source={source} />
+        ) : colored === null ? (
           source
         ) : (
           <span className="monaco-colorized" dangerouslySetInnerHTML={{ __html: colored }} />
         )}
       </CodeBlockContent>
     </CodeBlock>
+  )
+}
+
+type DiffKind = 'add' | 'del' | 'context' | 'hunk' | 'file'
+
+/**
+ * A unified diff in a comment (a review bot's suggestion, a patch someone pasted): each added and removed line on the
+ * same tint as a pull request's own diff, with its sign in a gutter, and the code colored as the language it is in.
+ */
+function DiffLines({ source }: { source: string }) {
+  const rows = source
+    .replace(/\n$/, '')
+    .split('\n')
+    .map((line) => {
+      const kind: DiffKind = /^(\+\+\+|---)( |$)|^diff --git /.test(line)
+        ? 'file'
+        : line.startsWith('@@')
+          ? 'hunk'
+          : line.startsWith('+')
+            ? 'add'
+            : line.startsWith('-')
+              ? 'del'
+              : 'context'
+      const code =
+        kind === 'add' || kind === 'del' || (kind === 'context' && line.startsWith(' ')) ? line.slice(1) : line
+      return { kind, code }
+    })
+  const code = rows.map((row) => (row.kind === 'hunk' || row.kind === 'file' ? '' : row.code)).join('\n')
+  const colored = useColorizedLines(code)
+  return (
+    <span className="-mx-3.5 grid min-w-max" role="table" aria-label={t('Diff')}>
+      {rows.map((row, index) => (
+        <span
+          key={index}
+          role="row"
+          className={cn(
+            'flex whitespace-pre',
+            row.kind === 'add' && 'bg-[color-mix(in_srgb,var(--ok)_14%,transparent)]',
+            row.kind === 'del' && 'bg-[color-mix(in_srgb,var(--bad)_14%,transparent)]',
+            row.kind === 'hunk' && 'bg-[color-mix(in_srgb,var(--brand)_9%,transparent)] text-muted-foreground',
+            row.kind === 'file' && 'text-muted-foreground',
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              'w-7 flex-none text-center select-none',
+              row.kind === 'add' ? 'text-ok' : row.kind === 'del' ? 'text-bad' : 'text-muted-foreground/60',
+            )}
+          >
+            {row.kind === 'add' ? '+' : row.kind === 'del' ? '−' : ''}
+          </span>
+          {(row.kind === 'add' || row.kind === 'del' || row.kind === 'context') && colored?.[index] !== undefined ? (
+            <span
+              className="monaco-colorized pr-3.5"
+              // Monaco's colorizer escapes the source and returns only its own token spans.
+              dangerouslySetInnerHTML={{ __html: colored[index] || ' ' }}
+            />
+          ) : (
+            <span className="pr-3.5">{row.code || ' '}</span>
+          )}
+        </span>
+      ))}
+    </span>
   )
 }
 

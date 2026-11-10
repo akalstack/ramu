@@ -145,7 +145,11 @@ export function MermaidBlock({ source }: { source: string }) {
   return (
     <CodeBlock className="mt-1 mb-3 border-transparent bg-(--code-bg) dark:bg-(--code-bg)">
       <CodeBlockHeader className="border-b border-line px-3.5 py-1.5 pt-1.5">
-        <CodeBlockTitle className="font-normal text-caption text-muted-foreground">.mermaid</CodeBlockTitle>
+        {/* Named like every other code block: its kind's icon and name, not the fence's raw language tag. */}
+        <CodeBlockTitle className="flex min-w-0 items-center gap-1.5 font-normal text-caption text-muted-foreground">
+          <Workflow size={14} className="flex-none text-brand" aria-hidden />
+          <span className="truncate">{t('Mermaid diagram')}</span>
+        </CodeBlockTitle>
         <CodeBlockActions>
           {!failed && (
             <Button
