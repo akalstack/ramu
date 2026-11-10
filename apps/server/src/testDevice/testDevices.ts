@@ -100,6 +100,27 @@ export function processFor(table: string, platform: TestPlatform, address: strin
 /** How long an open may take before the thread shows that it is waiting in line. */
 const WAITING_NOTE_MS = 3000
 
+/** What this host can lease: models with an installed system, each platform's own phone, and whether Simlock answered. */
+interface HostCatalog {
+  models: Record<TestPlatform, TestDeviceModel[]>
+  phones: Record<TestPlatform, string | null>
+  read: boolean
+}
+
+/** The checklist row for a platform whose tools are in place but have no system for a device to run. */
+const NO_SYSTEM: Record<TestPlatform, PlatformReadiness['missing'][number]> = {
+  ios: {
+    item: 'ios-runtime',
+    name: testDeviceItemName('ios-runtime'),
+    fix: 'Xcode has no iOS Simulator runtime. Download the iOS platform in Xcode → Settings → Components, or run xcodebuild -downloadPlatform iOS.',
+  },
+  android: {
+    item: 'android-system-image',
+    name: testDeviceItemName('android-system-image'),
+    fix: 'The Android SDK has no system image. Install one in Android Studio → SDK Manager → SDK Platforms.',
+  },
+}
+
 /** A device nobody has used or watched for this long goes back to Simlock, which deletes it. */
 export const TEST_DEVICE_IDLE_MS = 30 * 60_000
 
@@ -241,33 +262,40 @@ export class TestDevices {
     return undefined
   }
 
-  async readiness(): Promise<Record<TestPlatform, PlatformReadiness>> {
-    const findings = simlockInstalled() ? await this.host.doctor().catch(() => []) : []
+  async readiness(catalog: Promise<HostCatalog> = this.catalog()): Promise<Record<TestPlatform, PlatformReadiness>> {
+    const [findings, { models, read }] = await Promise.all([
+      simlockInstalled() ? this.host.doctor().catch(() => []) : [],
+      catalog,
+    ])
     const readiness = (platform: TestPlatform): PlatformReadiness => {
       const unsupported = this.unsupported(platform)
       if (unsupported) return { ready: false, unsupported, missing: [] }
-      const missing = simlockInstalled()
-        ? findings
-            .filter((finding) => finding.platform === platform || finding.platform === null)
-            .map((finding) => ({
-              item: finding.item,
-              name: testDeviceItemName(finding.item),
-              fix: finding.remedy ?? finding.message,
-            }))
-        : [{ item: 'simlock', name: testDeviceItemName('simlock'), fix: 'Press Set up test devices.' }]
+      if (!simlockInstalled())
+        return {
+          ready: false,
+          missing: [{ item: 'simlock', name: testDeviceItemName('simlock'), fix: 'Press Set up test devices.' }],
+        }
+      const missing = findings
+        .filter((finding) => finding.platform === platform || finding.platform === null)
+        .map((finding) => ({
+          item: finding.item,
+          name: testDeviceItemName(finding.item),
+          fix: finding.remedy ?? finding.message,
+        }))
+      // Simlock's doctor passes Xcode without its iOS platform, and an SDK without a system image, though no device
+      // can then start; only said when nothing else is missing, since a missing tool also empties the catalog.
+      if (!missing.length && read && !models[platform].length) missing.push(NO_SYSTEM[platform])
       return { ready: !missing.length, missing }
     }
     return { ios: readiness('ios'), android: readiness('android') }
   }
 
   /** Models with an installed system to run on, and the phone each platform picks by itself. */
-  private async catalog(): Promise<{
-    models: Record<TestPlatform, TestDeviceModel[]>
-    phones: Record<TestPlatform, string | null>
-  }> {
-    const empty = { models: { ios: [], android: [] }, phones: { ios: null, android: null } }
+  private async catalog(): Promise<HostCatalog> {
+    const empty = { models: { ios: [], android: [] }, phones: { ios: null, android: null }, read: false }
     if (!simlockInstalled()) return empty
-    const catalog = await this.host.catalog().catch((): SimlockCatalog => ({}))
+    const catalog = await this.host.catalog().catch((): SimlockCatalog | null => null)
+    if (!catalog) return empty
     const entry = (platform: TestPlatform) => catalog.platforms?.find((candidate) => candidate.platform === platform)
     const models = (platform: TestPlatform): TestDeviceModel[] => {
       const found = entry(platform)
@@ -288,13 +316,15 @@ export class TestDevices {
         ios: entry('ios')?.classDefaults?.phone ?? null,
         android: entry('android')?.classDefaults?.phone ?? null,
       },
+      read: true,
     }
   }
 
   async status(): Promise<TestDeviceStatus> {
     await this.syncChoices().catch(() => {})
     const installed = simlockInstalled()
-    const [ready, { models, phones }, waiting] = await Promise.all([this.readiness(), this.catalog(), this.waiting()])
+    const catalog = this.catalog()
+    const [ready, { models, phones }, waiting] = await Promise.all([this.readiness(catalog), catalog, this.waiting()])
     const chosen = this.options.defaults?.() ?? {}
     // A chosen model that cannot run here any more falls back to the platform's own phone.
     const runnable = (which: TestPlatform, name: string | null | undefined) =>

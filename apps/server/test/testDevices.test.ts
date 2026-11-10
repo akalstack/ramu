@@ -141,6 +141,21 @@ it('refuses what this host cannot run, before taking anything', async () => {
   )
 })
 
+it('says a platform needs a system to run when its tools pass but no model has one', async () => {
+  vi.mocked(host.catalog).mockResolvedValue({
+    platforms: [{ platform: 'ios', models: ['iPhone 17'], runtimes: [], modelRuntimes: { 'iPhone 17': [] } }],
+  })
+  vi.mocked(host.doctor).mockResolvedValue([
+    { platform: 'android', item: 'android-cmdline-tools', message: 'No sdkmanager.', remedy: 'Install them.' },
+  ])
+  const { ios, android } = await devices().readiness()
+  expect(ios).toEqual({ ready: false, missing: [expect.objectContaining({ item: 'ios-runtime' })] })
+  expect(android.missing.map((entry) => entry.item)).toEqual(['android-cmdline-tools'])
+
+  vi.mocked(host.catalog).mockRejectedValue(new Error('Simlock is restarting'))
+  expect((await devices().readiness()).ios.ready).toBe(true)
+})
+
 it('gives back what it took when the device never arrives, and keeps app files inside the workspace', async () => {
   vi.mocked(session.open).mockRejectedValueOnce(new Error('No capacity'))
   const testDevices = devices()

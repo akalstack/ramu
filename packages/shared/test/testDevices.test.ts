@@ -71,5 +71,10 @@ it('offers a page to install from, or the administrator command to copy, for wha
     command: 'sudo xcodebuild -license accept',
   })
   expect(testDeviceFix('android-emulator')).toMatchObject({ kind: 'link', url: 'https://developer.android.com/studio' })
+  expect(testDeviceFix('ios-runtime')).toEqual({
+    kind: 'command',
+    label: 'Copy command',
+    command: 'xcodebuild -downloadPlatform iOS',
+  })
   expect(testDeviceFix('something-new')).toBeNull()
 })

@@ -16,11 +16,13 @@ const ITEM_NAMES: Record<string, string> = {
   xcode: 'Xcode',
   'xcode-license': 'Xcode license',
   'xcode-first-launch': 'Xcode first launch',
+  'ios-runtime': 'iOS Simulator runtime',
   'android-sdk': 'Android SDK',
   'android-emulator': 'Android Emulator package',
   'android-platform-tools': 'Android platform tools',
   'android-cmdline-tools': 'Android command-line tools',
   'android-jdk': 'Java for the Android tools',
+  'android-system-image': 'Android system image',
 }
 
 /** A missing item's name as the checklist shows it; one Ramu does not know yet keeps Simlock's own id. */
@@ -53,11 +55,14 @@ export function testDeviceFix(item: string): TestDeviceFix | null {
       return { kind: 'command', label: 'Copy command', command: 'sudo xcodebuild -license accept' }
     case 'xcode-first-launch':
       return { kind: 'command', label: 'Copy command', command: 'sudo xcodebuild -runFirstLaunch' }
+    case 'ios-runtime':
+      return { kind: 'command', label: 'Copy command', command: 'xcodebuild -downloadPlatform iOS' }
     case 'android-sdk':
     case 'android-emulator':
     case 'android-platform-tools':
     case 'android-cmdline-tools':
     case 'android-jdk':
+    case 'android-system-image':
       return GET_ANDROID_STUDIO
     default:
       return null
