@@ -16,6 +16,7 @@ import { CommentForm } from '../changes/CommentForm'
 import { ICON_BUTTON_CLASS, NOTE_CLASS, WHERE_CLASS } from '../changes/styles'
 import { commentLabel } from './ReviewChip'
 import { LargeDiffBanner } from '../changes/LargeDiffBanner'
+import { useColorizedLines } from '../editor/colorize'
 import { isLargeDiff } from '@ramu/shared/largeDiff'
 import { ReviewFileTree } from '../changes/ReviewFileTree'
 import { useNearViewport } from '../lib/useNearViewport'
@@ -136,6 +137,19 @@ function FileDiff({
   onRemove: (id: string) => void
 }) {
   const rows = useMemo(() => (file.patch ? patchRows(file.patch) : []), [file.patch])
+  // Code lines are colored together, in order, so a string or comment spanning lines keeps its colors; hunk headers and
+  // notes stay plain.
+  const code = useMemo(() => {
+    const at = new Map<number, number>()
+    const text: string[] = []
+    rows.forEach((row, index) => {
+      if (row.kind === 'hunk' || row.kind === 'note') return
+      at.set(index, text.length)
+      text.push(row.text)
+    })
+    return { at, source: text.join('\n') }
+  }, [rows])
+  const colored = useColorizedLines(code.source, file.path.includes('.') ? file.path.split('.').pop() : undefined)
   // Each number column fits the file's largest line number (about 7.5px a digit in the 12px mono face) and its padding.
   const numberWidth = useMemo(() => {
     const largest = rows.reduce((most, row) => Math.max(most, row.old ?? 0, row.new ?? 0), 0)
@@ -353,7 +367,17 @@ function FileDiff({
                     <span className="mr-2 inline-block w-2 text-muted-foreground select-none">
                       {row.kind === 'add' ? '+' : row.kind === 'del' ? '−' : ''}
                     </span>
-                    {row.kind === 'note' ? <span className="text-muted-foreground">{row.text}</span> : row.text || ' '}
+                    {row.kind === 'note' ? (
+                      <span className="text-muted-foreground">{row.text}</span>
+                    ) : colored?.[code.at.get(index) ?? -1] !== undefined && row.text ? (
+                      <span
+                        className="monaco-colorized"
+                        // Monaco's colorizer escapes the source and returns only its own token spans.
+                        dangerouslySetInnerHTML={{ __html: colored[code.at.get(index)!]! }}
+                      />
+                    ) : (
+                      row.text || ' '
+                    )}
                   </td>
                 </tr>
                 {after(row.new)}
@@ -462,7 +486,11 @@ export function PullRequestFiles({
     if (oneAtATime) {
       setActivePath(path)
       setVisited((current) => new Set(current).add(path))
-      banner.current?.scrollIntoView({ block: 'start' })
+      // The bar above stays pinned, so scrolling to it would not move; the new file opens at its own top instead,
+      // just under the pinned bars, once it is shown.
+      requestAnimationFrame(() =>
+        document.getElementById(`pull-request-file-${encodeURIComponent(path)}`)?.scrollIntoView({ block: 'start' }),
+      )
     } else
       document
         .getElementById(`pull-request-file-${encodeURIComponent(path)}`)

@@ -301,7 +301,7 @@ export function ChangeReviewTab({
                     oneAtATime={oneAtATime}
                     activeIndex={activeIndex}
                     count={files.length}
-                    onStep={(delta) => setActiveFileId(files[activeIndex + delta]!.id)}
+                    onStep={(delta) => pickFile(files[activeIndex + delta]!.id)}
                     onToggleAll={() => setShowAll(!showAll)}
                   />
                 </div>
