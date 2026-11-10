@@ -2,8 +2,12 @@
 // that account: Google Gemini (video with Omni Flash, speech, music with Lyria) and ElevenLabs (speech, music, sound
 // effects). Each request sends only the caller's prompt or text; the file comes back as bytes.
 import type { Ability } from '@ramu/shared/providers/abilities'
-import type { MediaService } from '@ramu/shared/types/deploy'
-import type { HostingAuth, HostingIdentity } from '../workspace/deploy/adapter'
+import type { MediaService } from '@ramu/shared/types/media'
+
+/** The key a call runs with. */
+export interface MediaAuth {
+  token: string
+}
 
 /** What an ability asks a media service for. `seconds` and `aspect` apply to video, music and sound effects. */
 export interface MediaRequest {
@@ -25,9 +29,9 @@ export interface MediaConnector {
   readonly id: MediaService
   readonly name: string
   readonly tokenPage: string
-  readonly kind: 'media'
-  account(auth: HostingAuth): Promise<HostingIdentity>
-  make(auth: HostingAuth, request: MediaRequest, signal: AbortSignal): Promise<MediaFile>
+  /** Checks the key, answering the name Settings shows for it. */
+  account(auth: MediaAuth): Promise<{ name: string }>
+  make(auth: MediaAuth, request: MediaRequest, signal: AbortSignal): Promise<MediaFile>
 }
 
 /** A refusal in the person's words: a bad key says where to replace it; anything else says what the service said. */
@@ -87,8 +91,8 @@ function interactionPart(reply: unknown, type: 'audio' | 'video'): { data?: stri
 export function geminiMedia(options: { api?: string; fetch?: Fetch } = {}): MediaConnector {
   const api = options.api ?? 'https://generativelanguage.googleapis.com/v1beta'
   const fetcher = options.fetch ?? fetch
-  const headers = (auth: HostingAuth) => ({ 'x-goog-api-key': auth.token, 'Content-Type': 'application/json' })
-  const interact = async (auth: HostingAuth, body: Record<string, unknown>, what: string, signal: AbortSignal) =>
+  const headers = (auth: MediaAuth) => ({ 'x-goog-api-key': auth.token, 'Content-Type': 'application/json' })
+  const interact = async (auth: MediaAuth, body: Record<string, unknown>, what: string, signal: AbortSignal) =>
     (await (
       await send(
         fetcher,
@@ -103,10 +107,9 @@ export function geminiMedia(options: { api?: string; fetch?: Fetch } = {}): Medi
     id: 'gemini',
     name: 'Google Gemini',
     tokenPage: 'https://aistudio.google.com/apikey',
-    kind: 'media',
     async account(auth) {
       await send(fetcher, 'Google Gemini', `${api}/models?pageSize=1`, { headers: headers(auth) }, 'checking the key')
-      return { id: 'gemini', name: 'Gemini API key', defaultScope: null, broadScope: null, expiresAt: null }
+      return { name: 'Gemini API key' }
     },
     async make(auth, request, signal) {
       if (request.ability === 'speech') {
@@ -187,9 +190,9 @@ const ELEVENLABS_VOICE = 'JBFqnCBsd6RMkjVDRZzb'
 export function elevenLabsMedia(options: { api?: string; fetch?: Fetch } = {}): MediaConnector {
   const api = options.api ?? 'https://api.elevenlabs.io/v1'
   const fetcher = options.fetch ?? fetch
-  const headers = (auth: HostingAuth) => ({ 'xi-api-key': auth.token, 'Content-Type': 'application/json' })
+  const headers = (auth: MediaAuth) => ({ 'xi-api-key': auth.token, 'Content-Type': 'application/json' })
   const audio = async (
-    auth: HostingAuth,
+    auth: MediaAuth,
     path: string,
     body: Record<string, unknown>,
     what: string,
@@ -209,10 +212,9 @@ export function elevenLabsMedia(options: { api?: string; fetch?: Fetch } = {}): 
     id: 'elevenlabs',
     name: 'ElevenLabs',
     tokenPage: 'https://elevenlabs.io/app/settings/api-keys',
-    kind: 'media',
     async account(auth) {
       await send(fetcher, 'ElevenLabs', `${api}/models`, { headers: headers(auth) }, 'checking the key')
-      return { id: 'elevenlabs', name: 'ElevenLabs API key', defaultScope: null, broadScope: null, expiresAt: null }
+      return { name: 'ElevenLabs API key' }
     },
     async make(auth, request, signal) {
       if (request.ability === 'speech') {

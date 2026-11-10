@@ -12,7 +12,7 @@ import {
   type AppPreferences,
 } from '@ramu/shared/types'
 import type { AbilityPreferences } from '@ramu/shared/providers/abilities'
-import type { MediaService } from '@ramu/shared/types/deploy'
+import type { MediaService } from '@ramu/shared/types/media'
 import type { MediaRequest } from '../src/media/mediaServices'
 
 const made: { service: MediaService; request: MediaRequest; token: string }[] = []

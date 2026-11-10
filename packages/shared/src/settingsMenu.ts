@@ -25,7 +25,6 @@ export const SETTINGS_MENU = [
   { id: 'computer', label: 'Computer', group: 'Agent tools', phone: true },
   { id: 'devices', label: 'Test devices', group: 'Agent tools', phone: true },
   { id: 'git', label: 'Git', group: 'Agent tools', phone: true },
-  { id: 'deploy', label: 'Deploy', group: 'Agent tools', phone: true },
   { id: 'access', label: 'Permissions', group: 'Access & host', phone: true },
   { id: 'identities', label: 'Identities', group: 'Access & host', phone: true },
   { id: 'remote', label: 'Remote access', group: 'Access & host', phone: true },

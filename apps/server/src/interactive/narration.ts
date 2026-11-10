@@ -6,7 +6,7 @@ import { execFile } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { platformCli } from '../workspace/deploy/signIn'
+import { platformCli } from '../plugins/cliPath'
 
 /** A mono 16-bit track: its samples and their rate. */
 export interface NarrationTrack {

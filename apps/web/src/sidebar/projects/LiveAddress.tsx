@@ -1,22 +1,24 @@
 import { useEffect, useState } from 'react'
-import { deployText } from '@ramu/shared/deployText'
+import { uptimeCheckText } from '@ramu/shared/deployText'
 import type { UptimeStatus } from '@ramu/shared/types'
+import { Button } from '@/components/desktop-button'
 import { Checkbox } from '@/components/desktop-checkbox'
+import { Input } from '@/components/desktop-input'
 import { t, useLanguage } from '../../i18n'
 import { errorText } from '../../lib/errors'
 import { useHost } from '../../workspace/HostProvider'
 
 const time = (at: number) => new Date(at).toLocaleString()
-const words = () => deployText(t, time)
 
 /**
- * The Deploy sheet's live address watch: on by default, checked from this host every five minutes, with the last
- * result, any span the host was asleep, and the open incident.
+ * The Deploy sheet's live address: where people use the app, which this host checks every five minutes while the
+ * watch is on (the default), with the last result, any span the host was asleep, and the open incident.
  */
-export function UptimeSection({ projectId }: { projectId: string }) {
+export function LiveAddressSection({ projectId }: { projectId: string }) {
   useLanguage()
   const host = useHost()
   const [status, setStatus] = useState<UptimeStatus | null>(null)
+  const [address, setAddress] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
@@ -29,11 +31,12 @@ export function UptimeSection({ projectId }: { projectId: string }) {
       current = false
     }
   }, [host, projectId])
-  const toggle = async (enabled: boolean) => {
+  const run = async (work: () => Promise<UptimeStatus>) => {
     setBusy(true)
     setError(null)
     try {
-      setStatus(await host.invoke('deploy.setUptime', projectId, enabled))
+      setStatus(await work())
+      setAddress(null)
     } catch (reason) {
       setError(errorText(reason))
     } finally {
@@ -41,13 +44,41 @@ export function UptimeSection({ projectId }: { projectId: string }) {
     }
   }
   if (!status && !error) return null
+  // The field shows the saved address until the person edits it.
+  const shown = address ?? status?.address ?? ''
+  const changed = shown.trim() !== (status?.address ?? '')
   return (
-    <section aria-label={t('Uptime')} className="mt-3 flex flex-col gap-2 border-t border-(--line) pt-3">
+    <section aria-label={t('Live address')} className="mt-3 flex flex-col gap-2 border-t border-(--line) pt-3">
+      <strong>{t('Live address')}</strong>
+      <form
+        className="flex items-center gap-2"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (!changed) return
+          void run(() => host.invoke('deploy.setLiveAddress', projectId, shown.trim() || null))
+        }}
+      >
+        <Input
+          aria-label={t('Live address')}
+          className="flex-1"
+          type="url"
+          inputMode="url"
+          autoCapitalize="none"
+          spellCheck={false}
+          placeholder="https://"
+          disabled={busy || !status}
+          value={shown}
+          onChange={(event) => setAddress(event.target.value)}
+        />
+        <Button type="submit" size="sm" variant="secondary" disabled={busy || !changed}>
+          {shown.trim() ? t('Save') : t('Forget')}
+        </Button>
+      </form>
       <label className="flex items-center gap-2">
         <Checkbox
           checked={status?.enabled ?? false}
           disabled={busy || !status}
-          onCheckedChange={(checked) => void toggle(checked === true)}
+          onCheckedChange={(checked) => void run(() => host.invoke('deploy.setUptime', projectId, checked === true))}
         />
         <strong>{t('Watch the live address')}</strong>
       </label>
@@ -59,11 +90,11 @@ export function UptimeSection({ projectId }: { projectId: string }) {
                   'This computer checks {0} every five minutes. Two failed checks in a row open a thread here and notify your phone.',
                   { 0: status.url },
                 )
-              : t('Checks start once the app has a live production deployment.')}
+              : t('Checks start once you save the address people use the app at.')}
           </span>
           {status.last && (
             <span className={status.last.result === 'down' ? 'text-destructive' : undefined}>
-              {words().uptimeCheck(status.last)}
+              {uptimeCheckText(t, time, status.last)}
             </span>
           )}
           {status.downSince !== null && (

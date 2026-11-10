@@ -1,29 +1,6 @@
-// Secrets sync: which environment variables an app reads, and where each one is set. Pure, so the scan is tested
-// without a repository; values never appear here, only names.
+// Which environment variables an app reads, so an app run on this computer gets only those of the saved values. Pure,
+// so the scan is tested without a repository; values never appear here, only names.
 import { parseDotEnv } from './providers/environment'
-
-/** Where a variable can be set: this host for development, CI, and a hosting platform's preview and production. */
-export type EnvEnvironment = 'development' | 'ci' | 'preview' | 'production'
-
-/** One place a variable can be set, with the names already set there (null when it could not be read). */
-export interface EnvColumn {
-  /** `host`, `github` or a hosting platform id. */
-  target: string
-  /** The target's own name, such as "GitHub Actions" or "Vercel". */
-  name: string
-  environment: EnvEnvironment
-  names: string[] | null
-  error: string | null
-}
-
-export interface EnvSyncStatus {
-  /** The variables the app reads, sorted. */
-  variables: string[]
-  /** This host first, then CI and the hosting platform. */
-  columns: EnvColumn[]
-  /** App variables this host has no value for, so Sync cannot copy them anywhere. */
-  missingOnHost: string[]
-}
 
 /** Example files whose names list the variables an app expects. */
 export const ENV_EXAMPLE_FILES = ['.env.example', '.env.sample', '.env.template', '.env.local.example']
@@ -50,7 +27,7 @@ const PATTERNS = [
   new RegExp(`os\\.(?:Getenv|LookupEnv)\\(\\s*"${NAME}"`, 'g'),
 ]
 
-/** Variables the runtime or the platform sets itself, which nobody syncs. */
+/** Variables the runtime or the platform sets itself. */
 const PROVIDED = new Set([
   'NODE_ENV',
   'PORT',

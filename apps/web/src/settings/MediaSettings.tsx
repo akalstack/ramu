@@ -1,10 +1,10 @@
 import { ABILITY_LABELS, MEDIA_ABILITIES } from '@ramu/shared/providers/abilities'
-import { MEDIA_SERVICE_NAMES, MEDIA_SERVICES } from '@ramu/shared/types/deploy'
+import { MEDIA_SERVICE_NAMES, MEDIA_SERVICES } from '@ramu/shared/types/media'
 import { Button } from '@/components/desktop-button'
 import { t, useLanguage } from '../i18n'
 import { SettingsGroupTitle } from '@/components/settings-row'
 import { SETTINGS_FORM_CLASS } from './constants'
-import { DeployAccounts } from './DeployAccounts'
+import { MediaKeys } from './MediaKeys'
 
 /** Settings › Providers › Media: API keys for the services that make video, speech, music and sound effects. */
 export function MediaSettings({ onOpenAbilities }: { onOpenAbilities: () => void }) {
@@ -21,7 +21,7 @@ export function MediaSettings({ onOpenAbilities }: { onOpenAbilities: () => void
             `${MEDIA_SERVICE_NAMES[service]}: ${MEDIA_ABILITIES[service].map((ability) => t(ABILITY_LABELS[ability]).toLowerCase()).join(', ')}`,
         ).join(' · ')}
       </p>
-      <DeployAccounts only="media" />
+      <MediaKeys />
       <span>
         <Button variant="ghost" size="sm" onClick={onOpenAbilities}>
           {t('Choose which service each ability uses')}

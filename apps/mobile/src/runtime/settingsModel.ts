@@ -831,11 +831,6 @@ const PHONE_ENTRIES: { section: SettingsSection; title: string; words: string }[
     title: 'Media',
     words: 'api key video speech voice narration music sound effects gemini elevenlabs',
   },
-  {
-    section: 'deploy',
-    title: 'Deploy accounts',
-    words: 'deploy ship hosting vercel netlify neon expo database app store',
-  },
 ]
 
 const offered = (row: SettingRow, known: ReadonlySet<string>) => known.has(row.path)

@@ -21,7 +21,7 @@ const author = identitySchema.shape.gitAuthor
 
 /** Every account connected on this host that an identity can hold. Names only; never a credential. */
 export async function identityAccounts(
-  ctx: Pick<HandlerContext, 'loadPreferences' | 'deploys' | 'getSharedMcp' | 'plugins' | 'hostBrowser'>,
+  ctx: Pick<HandlerContext, 'loadPreferences' | 'mediaAccounts' | 'getSharedMcp' | 'plugins' | 'hostBrowser'>,
 ): Promise<IdentityAccountOption[]> {
   const options: IdentityAccountOption[] = []
   const binaries = ctx.loadPreferences().providerBinaries
@@ -58,13 +58,13 @@ export async function identityAccounts(
       label: `${account.host} · ${account.login} (gh)`,
       email: null,
     })
-  for (const account of (await ctx.deploys?.accounts.list(false, () => false).catch(() => [])) ?? [])
+  for (const account of (await ctx.mediaAccounts?.list(false).catch(() => [])) ?? [])
     if (account.connected)
       options.push({
-        key: accountKey(account.kind === 'media' ? 'media' : 'hosting', account.platform),
-        kind: account.kind === 'media' ? 'media' : 'hosting',
+        key: accountKey('media', account.service),
+        kind: 'media',
         label: `${account.name} · ${account.account ?? ''}`.replace(/ · $/, ''),
-        email: account.account?.includes('@') ? account.account : null,
+        email: null,
       })
   if (ctx.getSharedMcp)
     for (const connection of ctx.getSharedMcp().policy.snapshot().connections)

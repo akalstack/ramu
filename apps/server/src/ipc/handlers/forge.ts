@@ -554,12 +554,9 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
         if (action.kind === 'merge' || action.kind === 'auto-merge')
           await guardForge(ctx, taskId, cwd, 'Merging this pull request')
         // The base is read before merging, while the pull request is still listed as open. A repository no project
-        // holds has no deployment or thread to follow the merge.
+        // holds has no thread to follow the merge.
         const base =
-          action.kind === 'merge' &&
-          !outsideRepository(repoId) &&
-          (ctx.deploys || ctx.pullRequestWatches) &&
-          ctx.pullRequestIndex
+          action.kind === 'merge' && !outsideRepository(repoId) && ctx.pullRequestWatches && ctx.pullRequestIndex
             ? (
                 await ctx.pullRequestIndex.list(cwd, repoId, { includeClosed: false, force: false }).catch(() => null)
               )?.pullRequests.find((pr) => pr.url === url)?.baseBranch
@@ -567,13 +564,9 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
         await redacted(() => forge.pullRequestAction(cwd, url, action))
         ctx.pullRequestIndex?.invalidate(repoId)
         void ctx.pullRequestIndex?.tick()
-        // A merge into the production branch deploys it, and CI runs on the merge commit: the thread working on the
-        // pull request hears how both went.
+        // CI and the platform's production deploy run on the merge commit: the thread working on the pull request
+        // hears how they went.
         const thread = ctx.pullRequestIndex?.threadsFor(url).at(-1) ?? null
-        if (base)
-          void ctx.deploys
-            ?.pushed(repoId, base, null, thread)
-            .catch((error: unknown) => console.error('Could not follow the deployment of the merge:', error))
         if (base && thread) {
           let checkout: string | null = null
           try {

@@ -38,7 +38,7 @@ import { RAMU_EXTENSION, UNUSED_PART_NAMES, pluginPicture } from '@ramu/shared/p
 import { HostCredentialStore } from '../credentials/store'
 import { skillMetadata } from '../memory/skillFiles'
 import { SavedCredential } from '../workspace/forge/savedCredential'
-import { platformCli } from '../workspace/deploy/signIn'
+import { platformCli } from './cliPath'
 import { gh } from '../workspace/forge/github'
 import { git } from '../workspace/git'
 import type { AbilityMcpTool } from '@ramu/shared/providers/abilities'

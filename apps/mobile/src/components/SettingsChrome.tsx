@@ -7,7 +7,6 @@ import {
   Cpu,
   Globe,
   GitBranch,
-  Rocket,
   Info,
   Layers,
   MessageSquare,
@@ -32,7 +31,6 @@ import type { SettingsSection } from '../runtime/settingsModel'
 const icons: Record<SettingsSection, LucideIcon> = {
   appearance: Palette,
   git: GitBranch,
-  deploy: Rocket,
   browser: Globe,
   computer: MonitorCog,
   devices: Smartphone,

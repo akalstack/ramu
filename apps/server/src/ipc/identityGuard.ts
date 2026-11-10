@@ -1,4 +1,4 @@
-// The guardrail before Ramu commits, pushes, opens or merges a pull request, deploys or releases: the account it is
+// The guardrail before Ramu commits, pushes, or opens or merges a pull request: the account it is
 // about to use must belong to the project's identity or to every identity. A refusal names both identities; the card
 // then offers Use ‹project identity› or Continue as ‹the other› (identities.useIdentity, identities.continueAs).
 import { accountKey, forgeAccountKey } from '@ramu/shared/identities'
@@ -43,13 +43,4 @@ export async function guardForge(
       accountKey('provider', session.settings.provider, session.settings.accountId ?? 'default'),
       action,
     )
-}
-
-/** Before a deploy, database change or store release with a hosting account. */
-export function guardHosting(ctx: HandlerContext, projectId: string, platform: string, action: string) {
-  const identities = ctx.identities
-  if (!identities || identities.settings().identities.length < 2) return
-  // The project's identity's own account of the platform is used when it has one, so it can never act as another.
-  if (ctx.deploys?.accounts.ownFor(platform as never, projectId)) return
-  identities.guard(projectId === NO_PROJECT ? null : projectId, accountKey('hosting', platform), action)
 }

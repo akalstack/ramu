@@ -42,9 +42,8 @@ import type {
   ProviderCatalog,
 } from '@ramu/shared/types'
 import type { JsonValue } from '@ramu/shared/interactive'
-import { MEDIA_SERVICE_NAMES, type MediaService } from '@ramu/shared/types/deploy'
-import type { HostingAuth } from '../workspace/deploy/adapter'
-import { mediaConnector } from '../media/mediaServices'
+import { MEDIA_SERVICE_NAMES, type MediaService } from '@ramu/shared/types/media'
+import { mediaConnector, type MediaAuth } from '../media/mediaServices'
 import { AbilityChecks, type AbilityLogin, type AbilityProbe } from '../providers/abilityChecks'
 import type { AbilityDeclaration } from '../providers/adapter'
 import { providerAdapter } from '../providers/adapters'
@@ -79,7 +78,7 @@ export interface AbilityHost {
   mcpTools?(): AbilityMcpToolOption[]
   /** Media services with a saved API key, and the key a call runs with. */
   /** Media keys; `taskId` picks the key of the thread's identity when it has its own. */
-  media?: { connected(): MediaService[]; auth(service: MediaService, taskId?: string): Promise<HostingAuth> }
+  media?: { connected(): MediaService[]; auth(service: MediaService): Promise<MediaAuth> }
   /** Checks' kept results. */
   readChecks(): unknown
   writeChecks(checks: unknown[]): void
@@ -1390,7 +1389,7 @@ export class AbilityService {
     const timer = setTimeout(abort, TIMEOUT_MS[base.tool])
     try {
       const file = await connector.make(
-        await this.host.media.auth(service, session.taskId),
+        await this.host.media.auth(service),
         {
           ability: base.ability,
           prompt,

@@ -1,4 +1,4 @@
-import { MEDIA_SERVICE_NAMES } from '@ramu/shared/types/deploy'
+import { MEDIA_SERVICE_NAMES } from '@ramu/shared/types/media'
 import { useState } from 'react'
 import { BookOpen, Box, ImageIcon, Search, Sparkles } from 'lucide-react'
 import { ABILITY_DONE, ABILITY_LABELS, isMediaAbility, type AbilityCall } from '@ramu/shared/providers/abilities'

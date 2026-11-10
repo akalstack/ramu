@@ -38,7 +38,7 @@ import { VIEW_ONLY_WRITE_NOTICE } from '../runtime/viewerAccess'
 import { useT } from '../i18n'
 import { Button, Sheet, T, type Icon } from './ui'
 import { ProjectCommandSettings } from './ProjectCommandSettings'
-import { ProjectDeployments } from './ProjectDeployments'
+import { ProjectDeploy } from './ProjectDeploy'
 import { ProjectRoutingSettings } from './ProjectRoutingSettings'
 import { useBulkThreadActions } from './BulkThreadActions'
 
@@ -447,7 +447,7 @@ export function ProjectActionsSheet({
   const router = useRouter()
   const [managingActions, setManagingActions] = useState(false)
   const [routing, setRouting] = useState(false)
-  const [deployments, setDeployments] = useState(false)
+  const [deploying, setDeploying] = useState(false)
   const bulk = useBulkThreadActions()
   // As on the desktop: the project's open threads, leaving pinned and done ones where they are. Undo is on the toast.
   const archivable = store.chats.filter(
@@ -464,7 +464,7 @@ export function ProjectActionsSheet({
     if (open) {
       setManagingActions(false)
       setRouting(false)
-      setDeployments(false)
+      setDeploying(false)
       setRenaming(false)
       setName(project.name)
     }
@@ -548,12 +548,12 @@ export function ProjectActionsSheet({
         }))
       : []),
     {
-      key: 'deployments',
+      key: 'deploy',
       group: 'work',
       icon: Rocket,
-      label: say('Deployments'),
+      label: say('Deploy'),
       onPress: () => {
-        if (writable()) setDeployments(true)
+        if (writable()) setDeploying(true)
       },
     },
     // The chip's picker: pin the project to another identity; its next thread uses that identity's accounts.
@@ -651,9 +651,9 @@ export function ProjectActionsSheet({
   ]
   if (routing)
     return <ProjectRoutingSettings key={`${project.computerId}:${raw}`} project={project} onClose={onClose} />
-  if (deployments)
+  if (deploying)
     return (
-      <ProjectDeployments
+      <ProjectDeploy
         key={`${project.computerId}:${raw}`}
         hostId={project.computerId}
         projectId={raw}

@@ -10,7 +10,7 @@ import {
   type AbilityChoice,
 } from '@ramu/shared/providers/abilities'
 import { providerName } from '@ramu/shared/providers/providers'
-import { MEDIA_SERVICE_NAMES, type MediaService } from '@ramu/shared/types/deploy'
+import { MEDIA_SERVICE_NAMES, type MediaService } from '@ramu/shared/types/media'
 import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
 import { font, space } from '../theme'

@@ -46,15 +46,6 @@ const KNOWN = new Set([
   'skill_move',
   'watch_pull_request',
   'unwatch_pull_request',
-  'deploy_status',
-  'deploy_logs',
-  'deploy_preview',
-  'deploy_production',
-  'deploy_rollback',
-  'deploy_domains',
-  'deploy_domain_add',
-  'deploy_domain_records',
-  'deploy_usage',
   'ci_setup',
   'skill_update',
   'skill_archive',
@@ -256,24 +247,6 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
       return reply('Watching pull request', 'Starting pull request watch', 'review', text(data.url) ?? text(args.url))
     case 'unwatch_pull_request':
       return reply('Stopped pull request watches', 'Stopping pull request watches', 'review')
-    case 'deploy_status':
-      return reply('Checked deployments', 'Checking deployments', 'search', text(data.productionUrl))
-    case 'deploy_logs':
-      return reply('Read the build log', 'Reading the build log', 'book')
-    case 'deploy_preview':
-      return reply('Started a preview deployment', 'Starting a preview deployment', 'wrench', text(data.url))
-    case 'deploy_production':
-      return reply('Deployed to production', 'Deploying to production', 'wrench', text(data.url))
-    case 'deploy_rollback':
-      return reply('Rolled back production', 'Rolling back production', 'wrench', text(data.url))
-    case 'deploy_domains':
-      return reply('Checked domains', 'Checking domains', 'search')
-    case 'deploy_domain_add':
-      return reply('Added a domain', 'Adding a domain', 'wrench', text(args.domain))
-    case 'deploy_domain_records':
-      return reply('Created DNS records', 'Creating DNS records', 'wrench', text(args.domain))
-    case 'deploy_usage':
-      return reply('Checked usage', 'Checking usage', 'search')
     case 'ci_setup':
       return reply(
         data.written === false ? 'Read the CI workflow' : 'Wrote the CI workflow',

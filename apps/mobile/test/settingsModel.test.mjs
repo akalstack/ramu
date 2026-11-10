@@ -302,7 +302,7 @@ test('the phone menu has every desktop section a phone can use, arranged for a p
   assert.deepEqual(byGroup('phone'), ['appearance', 'notifications', 'remote', 'account', 'about'])
   assert.deepEqual(byGroup('Personal'), ['chats'])
   assert.deepEqual(byGroup('Agents'), ['providers', 'models', 'agent-setup', 'plugins', 'workflows', 'memory'])
-  assert.deepEqual(byGroup('Agent tools'), ['browser', 'computer', 'devices', 'git', 'deploy'])
+  assert.deepEqual(byGroup('Agent tools'), ['browser', 'computer', 'devices', 'git'])
   assert.deepEqual(byGroup('Access & host'), ['access', 'identities', 'system'])
   // Host pages keep the desktop's names, so a section reads the same on both.
   for (const section of SETTINGS_SECTIONS.filter((entry) => entry.scope === 'host'))

@@ -54,7 +54,6 @@ export function accountSection(accountKey: string): string {
     provider: 'providers',
     media: 'providers',
     forge: 'git',
-    hosting: 'deploy',
     mcp: 'agent-setup',
     plugin: 'plugins',
     browser: 'browser',

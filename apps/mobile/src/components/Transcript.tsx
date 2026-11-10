@@ -1,4 +1,4 @@
-import { MEDIA_SERVICE_NAMES } from '@ramu/shared/types/deploy'
+import { MEDIA_SERVICE_NAMES } from '@ramu/shared/types/media'
 import { MessageSelectionMenuContext, TextMarkContext, nativeMarkdown } from './NativeMarkdown'
 import { markSource } from '../runtime/textMark'
 import { ContinuedCard } from './ContinueOnHost'

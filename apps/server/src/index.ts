@@ -1,4 +1,4 @@
-import { MEDIA_SERVICES } from '@ramu/shared/types/deploy'
+import { MEDIA_SERVICES } from '@ramu/shared/types/media'
 import { ServiceGrants } from './interactive/serviceGrants'
 import { DASHBOARD_ROWS_MAX } from '@ramu/shared/artifactSource'
 import { LastingAddresses } from './workspace/deploy/namedTunnel'
@@ -10,7 +10,7 @@ import { HELPER_ROLES } from '@ramu/shared/chat/helperRoles'
 import { CustomAgentStore } from './agent/customAgents'
 import { TEST_DEVICE_GUIDE, TestDevices } from './testDevice/testDevices'
 import { currentBranch } from './workspace/git'
-import { TEST_DEVICE_ORIENTATIONS, type TestPlatform } from '@ramu/shared/testDevices'
+import { TEST_DEVICE_ORIENTATIONS } from '@ramu/shared/testDevices'
 import { customAgentList } from '@ramu/shared/customAgents'
 import { ResourceService } from './background/resources'
 import { ServerService } from './background/servers'
@@ -36,6 +36,7 @@ import {
   DEFAULT_AGENT_SETTINGS,
   DEFAULT_APP_PREFERENCES,
   DEFAULT_FALLBACK_PREFERENCES,
+  type AgentSettings,
   type AppPreferences,
   type ModelPreferences,
 } from '@ramu/shared/types'
@@ -64,13 +65,14 @@ import { SettingsChanges } from './settings/settingsChanges'
 import { registerSettingsTools } from './settings/settingsTools'
 import type { SettingsSnapshot } from '@ramu/shared/settingsCompatibility'
 import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
-import { createDeploys } from './workspace/deploy/deploys'
+import { UptimeWatches } from './workspace/deploy/uptime'
+import { ProjectWake } from './workspace/deploy/wake'
+import { MediaAccounts } from './media/mediaAccounts'
 import { LocalApps, type SavedApp } from './workspace/deploy/localApp'
 import { LiveDashboards, dataSourceTable, watchDashboards } from './interactive/liveDashboard'
 import { tableFromFile } from './interactive/dashboardFile'
 import { readText } from './workspace/files'
 import { appliedDesignSystem, designTokensOf } from '@ramu/shared/artifacts'
-import { registerDeployTools, registerReleaseTools } from './workspace/deploy/tools'
 import { ProductionMigrations } from './workspace/deploy/migrations'
 import { registerPluginCliTools } from './plugins/cli'
 import { registerPluginTools } from './plugins/tools'
@@ -535,7 +537,7 @@ const shellPushes = new ShellPushes((sessionId) => {
   const session = agents.get(sessionId)
   for (const binding of workspace.listBindings(session.taskId))
     if (!binding.folderOnly && binding.cwd === session.cwd)
-      followPush({ pullRequestWatches, deploys }, session.taskId, binding.cwd, binding.repoId)
+      followPush(pullRequestWatches, session.taskId, binding.cwd, binding.repoId)
 })
 const threadTitles = new ThreadTitles(
   db,
@@ -663,25 +665,46 @@ schedules.webhookBases = () =>
     ...(network.enabled ? candidateUrls(network.host, network.port, Boolean(config.tls)) : []),
   ].map((candidate) => ({ url: candidate.url, via: candidate.interface }))
 const pullRequestWatches = new PullRequestWatchService(db, workspace, agents, changed)
-const deploys = createDeploys(workspace, db, agents, {
-  incidentOpened(thread) {
-    send('workspace:changed', {})
-    void mobilePush.deliverIncident(thread).catch(() => {})
+const projectWake = new ProjectWake(db, workspace, agents)
+const uptime = new UptimeWatches(
+  {
+    getState: (key, fallback) => workspace.getAppState(key, fallback),
+    setState: (key, value) => workspace.setAppState(key, value),
+    projectIds: () => workspace.listProjects().map((project) => project.id),
+    healthPath: (projectId) => workspace.projectConfiguration(projectId).config.stack?.healthPath ?? null,
+    async openThread(projectId, title, brief, requestId) {
+      const task = await workspace.createTask({ projectId, title, mode: 'current', requestId })
+      // The project's latest thread's model, with no more than Auto access: nobody asked for this thread, and its
+      // one consequential action, a rollback, asks the person whatever the access.
+      const latest = projectWake.latestThread(projectId)
+      const settings: AgentSettings = latest ? agents.get(latest).settings : DEFAULT_AGENT_SETTINGS
+      const session = await agents.startReviewed(task.id, workspace.agentScope(task.id), brief, {
+        ...settings,
+        access: settings.access === 'full' ? 'auto' : settings.access,
+      })
+      return { taskId: task.id, sessionId: session.id }
+    },
+    notify(thread) {
+      send('workspace:changed', {})
+      void mobilePush.deliverIncident(thread).catch(() => {})
+    },
+    // The uptime watch follows an app published from this computer at its lasting address.
+    localAddress: (projectId) => localApps.lastingUrl(projectId),
+    // Any answer, even a refusal, shows this host reaches the internet.
+    online: () =>
+      fetch('https://github.com', { method: 'HEAD', signal: AbortSignal.timeout(5000) }).then(
+        () => true,
+        () => false,
+      ),
   },
-  notice: (notice) => inbox.raise(notice),
-  // The uptime watch follows an app published from this computer at its lasting address.
-  localAddress: (projectId) => localApps.lastingUrl(projectId),
-})
-// A deploy, database, release or media call uses the project's identity's own account of a platform when it has one.
-deploys.accounts.identityOf = (projectId) =>
-  identities.settings().identities.length >= 2 && projectId ? (identities.forProject(projectId)?.id ?? null) : null
+  projectWake,
+)
+const mediaAccounts = new MediaAccounts(
+  (key, fallback) => workspace.getAppState(key, fallback),
+  (key, value) => workspace.setAppState(key, value),
+)
 // Thread rows show their pull request, so a change there refreshes the thread lists.
 const pullRequestIndex = new PullRequestIndex(workspace, agents, () => send('workspace:changed', {}))
-// Each open pull request of a linked repository with a branchable database gets a database branch of its own.
-pullRequestIndex.onList = (repoId, list) =>
-  void deploys.pullRequests(repoId, list.pullRequests).catch((error: unknown) => {
-    console.error('Database branches for pull requests:', error)
-  })
 const pullRequestDrafts = new PullRequestDrafts(
   workspace,
   agents,
@@ -927,9 +950,8 @@ const abilities = new AbilityService(
       })
     },
     media: {
-      connected: () => MEDIA_SERVICES.filter((service) => deploys.accounts.connected(service)),
-      auth: async (service, taskId) =>
-        (await deploys.accounts.auth(service, taskId ? identityProject(taskId) : null)).auth,
+      connected: () => MEDIA_SERVICES.filter((service) => mediaAccounts.connected(service)),
+      auth: (service) => mediaAccounts.auth(service),
     },
     readChecks: () => workspace.getAppState<unknown>('ability-checks', []),
     writeChecks: (checks) => workspace.setAppState('ability-checks', checks),
@@ -985,8 +1007,8 @@ const publicPages = new PublicPages(
   (artifactId) => send('artifacts:changed', { artifactId }),
 )
 void publicPages.restore(publicPageTunnel())
-// A dashboard's live tables, read from its own project: its deploys in each source's fixed column order, or a file in
-// its folder, read only.
+// A dashboard's live tables, read from its own project: its live address checks or threads in each source's fixed
+// column order, or a file in its folder, read only.
 const isoTime = (at: number) => new Date(at).toISOString()
 const serviceGrants = new ServiceGrants(
   (key, fallback) => workspace.getAppState(key, fallback),
@@ -1056,27 +1078,7 @@ const liveDashboards = new LiveDashboards(
       if (!root) return []
       return tableFromFile(file, (await readText(root, file)).content, columns)
     }
-    if (source === 'deployments')
-      return (await deploys.service.project(projectId)).deployments.map((deployment) => [
-        isoTime(deployment.createdAt),
-        deployment.state,
-        deployment.production ? 'production' : 'preview',
-        deployment.ref,
-        deployment.message,
-        deployment.url,
-      ])
-    if (source === 'usage')
-      return (await deploys.usage(projectId)).flatMap((report) =>
-        report.figures.map((figure) => [
-          report.platform,
-          figure.metric,
-          figure.service,
-          figure.used,
-          figure.limit,
-          figure.unit,
-        ]),
-      )
-    const last = deploys.uptime.status(projectId).last
+    const last = uptime.status(projectId).last
     return last ? [[isoTime(last.at), last.result, last.status, last.ms]] : []
   },
 )
@@ -1197,7 +1199,7 @@ const account = new AccountService({
         rules,
         identities,
         memory,
-        deploys,
+        mediaAccounts,
         getSharedMcp,
         plugins,
         hostBrowser,
@@ -1387,7 +1389,8 @@ const dispatcher = createDispatcher(
     artifactWebhookBases: () => schedules.webhookBases?.().map((base) => base.url.replace(/\/$/, '')) ?? [],
     schedules,
     pullRequestWatches,
-    deploys,
+    uptime,
+    mediaAccounts,
     localApps,
     migrations: productionMigrations,
     pullRequestIndex,
@@ -1418,12 +1421,8 @@ async function stop(intentional = false, exitCode = 0) {
   publicPages.close()
   await schedules.stop()
   await pullRequestWatches.stop()
-  await deploys.domains.stop()
   localApps.close()
-  await deploys.deployWatch.stop()
-  await deploys.uptime.stop()
-  await deploys.usageNotices.stop()
-  await deploys.tokenExpiry.stop()
+  await uptime.stop()
   await pullRequestIndex.stop()
   secretFiles.stop()
   abilities.stop()
@@ -1819,22 +1818,6 @@ const mcpHttp = createServer(async (req, res) => {
   if (!review) registerPullRequestTools(server, source.id, pullRequestWrites, agents, workspace)
   if (!review) agentThreads.register(server, source.id)
   const deployProject = workspace.getTask(source.taskId).projectId
-  if (!review && deployProject && deployProject !== NO_PROJECT)
-    registerDeployTools(
-      server,
-      deploys.service,
-      { domains: deploys.domains, deploys: deploys.deployWatch },
-      deploys.usage,
-      source,
-      deployProject,
-      () => agents.get(source.id),
-      () => workspace.listProjects().find((project) => project.id === deployProject)?.name ?? 'this project',
-      (detail, signal) => agents.requestPermission(source.id, 'Deploy', detail, signal),
-    )
-  if (!review && deployProject && deployProject !== NO_PROJECT && deploys.releases.root(deployProject))
-    registerReleaseTools(server, deploys.releases, deploys.deployWatch, source, deployProject, (detail, signal) =>
-      agents.requestPermission(source.id, 'Release', detail, signal),
-    )
   if (!review) {
     const pluginProject = deployProject && deployProject !== NO_PROJECT ? deployProject : null
     registerPluginCliTools(
@@ -2644,12 +2627,7 @@ const tick = setInterval(() => {
   void agents.resumeInterruptedChats().catch(console.error)
   void schedules.tick().catch(console.error)
   void pullRequestWatches.tick().catch(console.error)
-  void deploys.domains.tick().catch(console.error)
-  void deploys.deployWatch.tick().catch(console.error)
-  void deploys.deployWatch.scan().catch(console.error)
-  void deploys.uptime.tick().catch(console.error)
-  void deploys.usageNotices.tick().catch(console.error)
-  void deploys.tokenExpiry.tick().catch(console.error)
+  void uptime.tick().catch(console.error)
   void pullRequestIndex.tick().catch(console.error)
   void agentThreads.tick().catch(console.error)
   void recaps.tick().catch(console.error)

@@ -81,11 +81,11 @@ it('writes CSV a spreadsheet cannot run as a formula', () => {
 it('takes a live table’s columns from its source and needs columns otherwise', () => {
   const live = parseArtifactSource({
     kind: 'dashboard',
-    datasets: [{ id: 'deploys', source: 'deployments' }],
-    figures: [{ label: 'Deploys', dataset: 'deploys', column: 'state', aggregate: 'count' }],
+    datasets: [{ id: 'threads', source: 'threads' }],
+    figures: [{ label: 'Threads', dataset: 'threads', column: 'status', aggregate: 'count' }],
   })
   if (live.kind !== 'dashboard') throw new Error('not a dashboard')
-  expect(live.datasets[0]!.columns).toEqual(['created', 'state', 'production', 'branch', 'message', 'url'])
+  expect(live.datasets[0]!.columns).toEqual(['title', 'status', 'done', 'lastActive'])
   expect(() => parseArtifactSource({ kind: 'dashboard', datasets: [{ id: 'x', rows: [] }], figures: [] })).toThrow(
     'Give x its columns, or a source.',
   )
@@ -94,8 +94,8 @@ it('takes a live table’s columns from its source and needs columns otherwise',
 it('reads live tables again when opened, at most every five minutes, and only with a project', async () => {
   const source = parseArtifactSource({
     kind: 'dashboard',
-    datasets: [{ id: 'usage', source: 'usage' }],
-    figures: [{ label: 'Used', dataset: 'usage', column: 'used' }],
+    datasets: [{ id: 'usage', source: 'uptime' }],
+    figures: [{ label: 'Used', dataset: 'usage', column: 'ms' }],
   })
   if (source.kind !== 'dashboard') throw new Error('not a dashboard')
   const published = renderDashboard(source, 'Costs')
@@ -106,7 +106,7 @@ it('reads live tables again when opened, at most every five minutes, and only wi
   } as unknown as InteractiveDocument
   let now = Date.parse('2026-11-07T10:00:00Z')
   let used = 40
-  const read = vi.fn<ReadDashboardSource>(async () => [['vercel', 'transfer', null, used, 100, 'bytes']])
+  const read = vi.fn<ReadDashboardSource>(async () => [['2026-11-06T10:00:00Z', 'up', 200, used]])
   const live = new LiveDashboards(read, () => now)
   expect(await live.serve(document, null)).toBe(document)
   const first = await live.serve(document, 'p1')
@@ -163,7 +163,7 @@ it('reads an App’s records as a live table, also for a dashboard in no project
     kind: 'dashboard',
     datasets: [
       { id: 'spend', records: { artifact: app, collection: 'expenses' }, columns: ['category', 'amount'] },
-      { id: 'deploys', source: 'deployments' },
+      { id: 'threads', source: 'threads' },
     ],
     figures: [{ label: 'Spent', dataset: 'spend', column: 'amount' }],
   })
@@ -279,7 +279,7 @@ it('cuts dated tables to the dashboard’s range when drawn, leaving undated one
         ],
       },
       { id: 'plans', columns: ['plan', 'count'], rows: [['free', 9]] },
-      { id: 'deploys', source: 'deployments' },
+      { id: 'threads', source: 'threads' },
     ],
     figures: [
       { label: 'Signups', dataset: 'daily', column: 'signups' },
@@ -298,10 +298,10 @@ it('cuts dated tables to the dashboard’s range when drawn, leaving undated one
 it('tells the person’s devices when a watched figure changes, remembering values between rounds', async () => {
   const source = parseArtifactSource({
     kind: 'dashboard',
-    datasets: [{ id: 'usage', source: 'usage' }],
+    datasets: [{ id: 'usage', source: 'uptime' }],
     figures: [
-      { label: 'Used', dataset: 'usage', column: 'used', notify: true, unit: ' GB' },
-      { label: 'Rows', dataset: 'usage', column: 'used', aggregate: 'count' },
+      { label: 'Used', dataset: 'usage', column: 'ms', notify: true, unit: ' GB' },
+      { label: 'Rows', dataset: 'usage', column: 'ms', aggregate: 'count' },
     ],
   })
   if (source.kind !== 'dashboard') throw new Error('not a dashboard')
@@ -312,7 +312,7 @@ it('tells the person’s devices when a watched figure changes, remembering valu
     files: drawn.files,
   } as unknown as InteractiveDocument
   let used = 40
-  const live = new LiveDashboards(async () => [['vercel', 'transfer', null, used, 100, 'GB']])
+  const live = new LiveDashboards(async () => [['2026-11-06T10:00:00Z', 'up', 200, used]])
   let memory = {}
   let now = 0
   const notify = vi.fn()
@@ -337,8 +337,8 @@ it('tells the person’s devices when a watched figure changes, remembering valu
 it('reads a dashboard again only as often as its refresh rule says', async () => {
   const source = parseArtifactSource({
     kind: 'dashboard',
-    datasets: [{ id: 'usage', source: 'usage' }],
-    figures: [{ label: 'Used', dataset: 'usage', column: 'used', notify: true }],
+    datasets: [{ id: 'usage', source: 'uptime' }],
+    figures: [{ label: 'Used', dataset: 'usage', column: 'ms', notify: true }],
     refreshMinutes: 60,
   })
   if (source.kind !== 'dashboard') throw new Error('not a dashboard')
@@ -349,7 +349,7 @@ it('reads a dashboard again only as often as its refresh rule says', async () =>
     files: drawn.files,
   } as unknown as InteractiveDocument
   expect(refreshMs(document)).toBe(60 * 60_000)
-  const read = vi.fn<ReadDashboardSource>(async () => [['vercel', 'transfer', null, 1, 100, 'GB']])
+  const read = vi.fn<ReadDashboardSource>(async () => [['2026-11-06T10:00:00Z', 'up', 200, 1]])
   const live = new LiveDashboards(read)
   let memory = {}
   let now = 0

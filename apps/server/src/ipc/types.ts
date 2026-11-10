@@ -50,8 +50,10 @@ export interface Services {
   serviceGrants?: import('../interactive/serviceGrants').ServiceGrants
   /** PDF, PowerPoint and slide images made from a version and kept with it. */
   artifactExports?: import('../interactive/exports').ArtifactExports
-  /** Hosting accounts, project deploy bindings and CLI sign-ins. */
-  deploys?: import('../workspace/deploy/deploys').Deploys
+  /** Each project's live address watch. */
+  uptime?: import('../workspace/deploy/uptime').UptimeWatches
+  /** The person's own API keys for media services. */
+  mediaAccounts?: import('../media/mediaAccounts').MediaAccounts
   localApps?: import('../workspace/deploy/localApp').LocalApps
   /** Each project's production database address, which a production deploy's migrations run against. */
   migrations?: import('../workspace/deploy/migrations').ProductionMigrations

@@ -2,7 +2,7 @@
 // The list is data so the desktop, the phone and the host show the same thing; adapters declare which they provide and a
 // live check on the host decides which are offered.
 import type { AgentProvider, Attachment } from '../types'
-import type { MediaService } from '../types/deploy'
+import type { MediaService } from '../types/media'
 
 export const ABILITIES = [
   'image_generation',

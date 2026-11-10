@@ -25,30 +25,11 @@ import type {
   AbilityMcpCheck,
   AbilityMcpToolOption,
 } from './providers/abilities'
-import type {
-  HostingAccount,
-  HostingAccountsSummary,
-  HostingPlatform,
-  HostingSignIn,
-  CliSignInPlatform,
-  ProjectDeployment,
-  Deployment,
-  DeployLinkResult,
-  DomainStatus,
-  AccountPlatform,
-  ProjectResources,
-  ResourceProvider,
-  StoreBuild,
-  StoreRelease,
-  StoreTarget,
-  UptimeStatus,
-  LocalAppStatus,
-  UsageReport,
-} from './types/deploy'
+import type { DeployStatus, UptimeStatus, LocalAppStatus } from './types/deploy'
+import type { MediaAccount, MediaAccountsSummary, MediaService } from './types/media'
 import type { LimitRetryResult } from './chat/providerWait'
 import type { ModelViewerLabels } from './interactive'
 import type { CiPreview, CiSetupResult } from './ciWorkflow'
-import type { EnvSyncStatus } from './envSync'
 import type { VoiceBridge } from './voice/bridge'
 import type {
   SharedMcpConnection,
@@ -420,17 +401,19 @@ interface ArtifactMethods {
     state: import('./artifacts').ArtifactState
   }
   'artifacts.shareCall'(token: string, method: string, args: unknown[]): unknown
-  /** Static hosting platforms an artifact can be published to, and whether this host has their login. */
+  /**
+   * Where an artifact can be published, and whether this host can publish there: GitHub Pages through the saved GitHub
+   * account, Cloudflare Pages through the Cloudflare CLI plugin's saved token.
+   */
   'artifacts.publishTargets'(): {
-    target: 'github-pages' | 'netlify' | 'vercel' | 'cloudflare-pages'
+    target: 'github-pages' | 'cloudflare-pages'
     name: string
     connected: boolean
   }[]
-  /** `account` is the Cloudflare account ID, for a token limited to Pages that cannot list accounts. */
   /** Deploys the artifact's current version as a static site on the person's own account; updates the same site later. */
   'artifacts.publish'(
     artifactId: string,
-    target: 'github-pages' | 'netlify' | 'vercel' | 'cloudflare-pages',
+    target: 'github-pages' | 'cloudflare-pages',
   ): import('./artifacts').ArtifactInfo
   /** Whether an artifact is open to people without Ramu, and its address. */
   'artifacts.publicStatus'(artifactId: string): import('./artifacts').PublicArtifactStatus
@@ -1298,11 +1281,17 @@ export interface RamuMethods extends ArtifactMethods {
   'abilities.checks'(): {
     checks: AbilityCheck[]
     mcpChecks: AbilityMcpCheck[]
-    media: import('./types/deploy').MediaService[]
+    media: import('./types/media').MediaService[]
     running: boolean
   }
   /** Runs one provider's ability checks again (one small request per ability). */
   'abilities.check'(provider: ProviderStatus['provider']): Promise<AbilityCheck[]>
+  /** Each media service's API key on this host; `check` asks each service whether its saved key still works. */
+  'abilities.mediaAccounts'(check: boolean): MediaAccountsSummary
+  /** Checks a pasted media API key with its service and keeps it in the host's credential store. Host only. */
+  'abilities.saveMediaKey'(service: MediaService, key: string): MediaAccount
+  /** Forgets a media service's saved key. Host only. */
+  'abilities.removeMediaKey'(service: MediaService): MediaAccountsSummary
   /** The model `@images`, `@search` and `@long` bring in as a teammate, for each handle a provider here can serve. */
   'abilities.teammateModels'(): Promise<Partial<Record<AbilityHandle, import('./types').AgentModel>>>
   /** Shared MCP tools approved on this host that an ability can be mapped to. */
@@ -1463,57 +1452,11 @@ export interface RamuMethods extends ArtifactMethods {
   'forge.saveGitlab'(input: { origin: string; token: string }): import('./types').GitlabSummary
   'forge.removeGitlab'(): import('./types').GitlabSummary
   /** Bitbucket Cloud's credential on this host; `check` asks Bitbucket whose it is. */
-  /** Hosting accounts for deploys on this host; `check` asks each platform who the saved sign-in is. */
-  'deploy.accounts'(check: boolean): HostingAccountsSummary
-  /** Starts the platform CLI's browser sign-in on the host. Host only. */
-  'deploy.signIn'(platform: CliSignInPlatform): HostingSignIn
-  'deploy.signInStatus'(id: string): HostingSignIn
-  /** Sends the number the platform's sign-in page shows, for a sign-in that asks for one. */
-  'deploy.signInMatch'(id: string, number: string): HostingSignIn
-  'deploy.cancelSignIn'(id: string): void
-  /** Checks a token pasted on the guided token page and keeps it in the host's credential store. Host only. */
-  /** With `identityId`, keeps the token as that identity's own account of the platform. */
-  'deploy.saveToken'(platform: AccountPlatform, token: string, identityId?: string): HostingAccount
-  'deploy.disconnect'(platform: AccountPlatform, identityId?: string): HostingAccountsSummary
-  /** Where a project deploys, its live address and its latest deployments. */
-  'deploy.project'(projectId: string): ProjectDeployment
   /**
-   * Links a repository of the project to a new or existing project on the platform, through its Git integration. Fly.io
-   * has none: the app is created, its deploy token goes to the repository's Actions secrets, and a pull request adds the
-   * deploy job.
+   * The project's Deploy sheet: the platform its stack names, and the checks the Git host lists on each repository's
+   * newest default-branch commit, where a connected platform reports each deploy.
    */
-  'deploy.link'(projectId: string, platform: HostingPlatform, repoId: string): DeployLinkResult
-  /** Deploys the production branch; pressing Deploy in the sheet is the person's approval. */
-  'deploy.production'(projectId: string): Deployment
-  /** The end of one deployment's build log. */
-  'deploy.logs'(projectId: string, deploymentId: string): string
-  /** Makes an earlier production deployment live again. */
-  'deploy.rollback'(projectId: string, deploymentId: string): void
-  /**
-   * The newest preview deployment the project's platform lists for a branch of this checkout's repository, or null
-   * when the project is not linked to that repository.
-   */
-  'deploy.preview'(taskId: string, repoId: string, branch: string): Deployment | null
-  /** The app's environment variables (names only) next to where each is set: this host, CI and the platform. */
-  'deploy.environment'(projectId: string, repoId: string): EnvSyncStatus
-  /** Copies the variables this host has values for to every place that lacks them. Values never come back. */
-  'deploy.syncEnvironment'(projectId: string, repoId: string): EnvSyncStatus
-  /** The project's custom domains: the DNS records each needs and whether it serves HTTPS yet. */
-  'deploy.domains'(projectId: string): DomainStatus[]
-  /** Adds a custom domain and watches it until it serves HTTPS, then wakes the project's latest thread. */
-  'deploy.addDomain'(projectId: string, domain: string): DomainStatus
-  /** Holds production builds until Ramu has run the project's migrations and made them live, or stops holding them. */
-  'deploy.holdForMigrations'(projectId: string, on: boolean): ProjectDeployment
-  /** Creates the domain's records in the platform's own DNS; confirming in the sheet is the person's approval. */
-  'deploy.createRecords'(projectId: string, domain: string): DomainStatus
-  /** Adds a domain's records at Cloudflare DNS with a token pasted for this action, which is not kept; host only. */
-  'deploy.createCloudflareRecords'(projectId: string, domain: string, token: string): DomainStatus
-  /** Whether the project needs a database, the providers that can make one, and the ones it has. */
-  'deploy.resources'(projectId: string, repoId: string): ProjectResources
-  /** Creates the project's database on the connected account; its variables join secrets sync. */
-  'deploy.provision'(projectId: string, repoId: string, provider: ResourceProvider, plan: string): ProjectResources
-  /** What the project's platforms report for the current billing period, beside the plan's limits they report. */
-  'deploy.usage'(projectId: string): UsageReport[]
+  'deploy.status'(projectId: string): DeployStatus
   /** The app published from this computer, if any: its state and its own public address. */
   'deploy.localStatus'(projectId: string): LocalAppStatus
   /**
@@ -1531,21 +1474,8 @@ export interface RamuMethods extends ArtifactMethods {
   'deploy.uptime'(projectId: string): UptimeStatus
   /** Turns the live address watch on or off; off forgets its checks and closes an open incident without a recap. */
   'deploy.setUptime'(projectId: string, enabled: boolean): UptimeStatus
-  /** The project's Expo app: what the stores need, checked from app.json and eas.json, and its latest store builds. */
-  'deploy.release'(projectId: string): StoreRelease
-  /** Reads the app's resolved configuration by running its own `expo config` (its app.config code); host only. */
-  'deploy.resolveExpoConfig'(projectId: string): StoreRelease
-  /**
-   * Builds the app on EAS and submits each build to TestFlight or Play's internal track, never for review; pressing
-   * Release in the sheet is the person's approval. The project's latest thread hears how it finished.
-   */
-  'deploy.startRelease'(projectId: string, target: StoreTarget): StoreBuild[]
-  /** The end of a store build's log, or of its submission's. */
-  'deploy.releaseLogs'(projectId: string, buildId: string, of: 'build' | 'submission'): string
-  /** Opens a pull request that adds the eas.json a release needs. */
-  'deploy.proposeEasJson'(projectId: string): { url: string | null }
-  /** Keeps the Expo token in the repository's Actions secrets and opens a pull request with the EAS Update preview job. */
-  'deploy.proposeUpdatePreviews'(projectId: string): { url: string | null }
+  /** Saves the project's live address, which the uptime watch checks; null forgets it. */
+  'deploy.setLiveAddress'(projectId: string, address: string | null): UptimeStatus
   /** What Set up CI would add to a repository of the project, from its last fetched default branch. */
   'ci.preview'(projectId: string, repoId: string): CiPreview
   /**

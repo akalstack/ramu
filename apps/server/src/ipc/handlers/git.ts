@@ -35,7 +35,8 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
   /** Pull and Sync follow the saved preference, so every entry point integrates the same way. */
   const savedPullMode = (): PullMode => storedPreferences().pullMode ?? DEFAULT_APP_PREFERENCES.pullMode
 
-  const followPush = (taskId: string, cwd: string, repoId: string) => followThreadPush(ctx, taskId, cwd, repoId)
+  const followPush = (taskId: string, cwd: string, repoId: string) =>
+    followThreadPush(ctx.pullRequestWatches, taskId, cwd, repoId)
 
   const autoPull = (t: string, r: string) =>
     gitExclusive(ctx, t, r, async (cwd) => {

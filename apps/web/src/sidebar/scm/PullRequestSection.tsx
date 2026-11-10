@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CircleCheck, CircleDot, CircleX, GitPullRequest, Globe, MessageSquare, PanelRight, Wrench } from 'lucide-react'
+import { CircleCheck, CircleDot, CircleX, GitPullRequest, MessageSquare, PanelRight, Wrench } from 'lucide-react'
 import type {
   AgentSettings,
   ForgeCheck,
@@ -25,7 +25,6 @@ import { queryInvokerFor } from '../../git/hostQuery'
 import { BrandIcon } from '@/components/brand-icon'
 import { forgeBrand } from '@ramu/shared/brands'
 import { FORGE_NAMES } from '@ramu/shared/pullRequests'
-import { previewLine } from '@ramu/shared/deployText'
 
 const STATE_LABEL: Record<PullRequestInfo['state'], string> = { open: 'Open', closed: 'Closed', merged: 'Merged' }
 
@@ -45,31 +44,6 @@ function ChecksIcon({ checks }: { checks: ForgeCheck[] }) {
   if (checks.some((check) => check.state === 'failure')) return <CircleX size={12} className="text-bad flex-none" />
   if (checks.some((check) => check.state === 'pending')) return <CircleDot size={12} className="text-warn flex-none" />
   return <CircleCheck size={12} className="text-ok flex-none" />
-}
-
-/** The preview deployment the platform made for the pull request's branch: a link once ready, its state before. */
-function PreviewLink({ line }: { line: ReturnType<typeof previewLine> }) {
-  if (!line) return null
-  const tone = line.tone === 'bad' ? 'text-bad' : line.tone === 'pending' ? 'text-warn' : 'text-ok'
-  if (!line.url)
-    return (
-      <div className="flex items-center gap-1.5 min-w-0 text-caption text-muted-foreground" role="status">
-        <Globe size={12} className={cn('flex-none', tone)} />
-        <span className="truncate">{line.text}</span>
-      </div>
-    )
-  return (
-    <a
-      href={line.url}
-      target="_blank"
-      rel="noreferrer"
-      className="flex items-center gap-1.5 min-w-0 text-caption text-muted-foreground hover:text-foreground hover:underline"
-      title={line.url}
-    >
-      <Globe size={12} className={cn('flex-none', tone)} />
-      <span className="truncate">{line.text}</span>
-    </a>
-  )
 }
 
 /**
@@ -123,15 +97,6 @@ export function PullRequestSection({
     enabled: pr?.state === 'open',
   })
   const { refetch: refreshDrafts } = drafts
-  // The platform builds a preview per pull request; while it builds, the line is read again.
-  const preview = useQuery({
-    queryKey: ipcQueryKeyOn(host.id, 'deploy.preview', taskId, binding.repoId, pr?.headBranch ?? '', pr?.headCommit),
-    queryFn: () => call('deploy.preview', taskId, binding.repoId, pr!.headBranch),
-    enabled: pr?.state === 'open',
-    retry: false,
-    refetchInterval: (current) =>
-      current.state.data?.state === 'queued' || current.state.data?.state === 'building' ? 30_000 : false,
-  })
   useEffect(() => {
     if (pr?.state !== 'open') return
     return on('workspace:changed', () => {
@@ -336,7 +301,6 @@ export function PullRequestSection({
               <span className="flex-none text-warn">· {t('Changes requested')}</span>
             )}
           </div>
-          <PreviewLink line={previewLine(preview.data ?? null, t)} />
           <div className="flex flex-wrap gap-1.5 [&_button]:flex-1 [&_button]:justify-center [&_button]:whitespace-nowrap">
             {failing && (
               <Button

@@ -20,33 +20,6 @@ describe('Ramu tool calls', () => {
     expect(ramuTool(use('mcp__ramu__made_up'))).toBeNull()
   })
 
-  it('reads each deploy tool as a row naming the live address', () => {
-    for (const name of [
-      'deploy_status',
-      'deploy_logs',
-      'deploy_preview',
-      'deploy_production',
-      'deploy_rollback',
-      'deploy_domains',
-      'deploy_domain_add',
-      'deploy_domain_records',
-      'deploy_usage',
-    ]) {
-      const call = ramuTool(use(`mcp__ramu__${name}`, {}))
-      expect(call?.name, name).toBe(name)
-      expect(describeRamuTool(call!).done, name).not.toBe('Used')
-    }
-    const production = describeRamuTool(
-      ramuTool(use('mcp__ramu__deploy_production', {}))!,
-      JSON.stringify({ url: 'https://shop.vercel.app' }),
-    )
-    expect(production.done).toBe('Deployed to production')
-    expect(production.subject).toBe('https://shop.vercel.app')
-    expect(describeRamuTool(ramuTool(use('mcp__ramu__deploy_domain_add', { domain: 'www.shop.id' }))!).subject).toBe(
-      'www.shop.id',
-    )
-  })
-
   it('reads ci_setup as writing the workflow, or reading it when it existed', () => {
     const call = ramuTool(use('mcp__ramu__ci_setup', {}))!
     const wrote = describeRamuTool(call, JSON.stringify({ path: '.github/workflows/ci.yml', written: true }))

@@ -19,29 +19,31 @@ export type StackId = (typeof STACK_IDS)[number]
 /** A new project's folder name: letters, digits, dots, dashes and underscores, starting with a letter or digit. */
 export const PROJECT_NAME = /^[A-Za-z0-9][\w.-]{0,99}$/
 
-/** Where a stack deploys by default: a hosting platform with an adapter, Expo, or a platform a plugin provides. */
-export type DeployTargetId = 'vercel' | 'netlify' | 'expo' | 'railway' | 'fly' | 'cloudflare'
-
 /**
- * Deploy targets an agent reaches through a plugin's CLI, with `platform_cli`, rather than through an adapter; each with
- * the platform's own name.
+ * Platforms a stack deploys to by default, each with its own name. Agents reach them through a plugin's CLI with
+ * `platform_cli`, so Ramu has no code of its own for any of them.
  */
-export const PLUGIN_DEPLOY_TARGETS = {
+export const DEPLOY_TARGETS = {
+  vercel: 'Vercel',
+  netlify: 'Netlify',
   railway: 'Railway',
   fly: 'Fly.io',
   cloudflare: 'Cloudflare',
-} as const satisfies Partial<Record<DeployTargetId, string>>
+} as const
+export type DeployTargetId = keyof typeof DEPLOY_TARGETS
 /**
  * The plugin in Ramu's index that runs each target's CLI, and the `platform` `platform_cli` takes for it. It is named
  * apart from the platform's own plugin in Claude's directory, which teaches agents the platform and installs beside it.
  */
 export const DEPLOY_TARGET_PLUGINS = {
+  vercel: 'vercel-cli',
+  netlify: 'netlify-cli',
   railway: 'railway-cli',
   fly: 'fly-cli',
   cloudflare: 'cloudflare-cli',
-} as const satisfies Record<keyof typeof PLUGIN_DEPLOY_TARGETS, string>
-export const isPluginDeployTarget = (value: unknown): value is keyof typeof PLUGIN_DEPLOY_TARGETS =>
-  typeof value === 'string' && Object.hasOwn(PLUGIN_DEPLOY_TARGETS, value)
+} as const satisfies Record<DeployTargetId, string>
+export const isDeployTarget = (value: unknown): value is DeployTargetId =>
+  typeof value === 'string' && Object.hasOwn(DEPLOY_TARGETS, value)
 
 export interface Stack {
   id: StackId
@@ -55,10 +57,11 @@ export interface Stack {
   test: string[] | null
   /** Text the dev server prints once it serves, so the browser can open on it. */
   readyText: string | null
-  deployTarget: DeployTargetId
-  /** Stores data in a Postgres database, which the deploy sheet offers to provision. */
+  /** Null for a phone app, which ships through the app stores rather than a hosting platform. */
+  deployTarget: DeployTargetId | null
+  /** Stores data in a Postgres database. */
   database: boolean
-  /** Applies database migrations, run before each production deploy from Ramu. */
+  /** Applies database migrations, run before each production deploy through a plugin. */
   migrate: string[] | null
   /** Lines added to `.gitignore` when the generator does not write one. */
   ignore: string[]
@@ -157,7 +160,7 @@ export const STACKS: Record<StackId, Stack> = {
   expo: {
     id: 'expo',
     name: 'Expo',
-    summary: 'An Expo app for iPhone and Android, released through EAS',
+    summary: 'An Expo app for iPhone and Android',
     generator: [
       ['npx', '--yes', 'create-expo-app@latest', '.', '--yes', '--no-install'],
       ['npm', 'install'],
@@ -166,7 +169,7 @@ export const STACKS: Record<StackId, Stack> = {
     build: ['npx', 'expo', 'export'],
     test: ['npx', 'tsc', '--noEmit'],
     readyText: 'Metro waiting on',
-    deployTarget: 'expo',
+    deployTarget: null,
     database: false,
     migrate: null,
     ignore: [...NODE_IGNORE, '.expo/'],

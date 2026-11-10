@@ -208,8 +208,6 @@ export const pageServiceQuery = dataSourceQuery
  * when the dashboard is opened, at most every few minutes.
  */
 export const DASHBOARD_SOURCES = {
-  deployments: ['created', 'state', 'production', 'branch', 'message', 'url'],
-  usage: ['platform', 'metric', 'service', 'used', 'limit', 'unit'],
   uptime: ['checked', 'result', 'status', 'ms'],
   threads: ['title', 'status', 'done', 'lastActive'],
   pullRequests: ['thread', 'number', 'title', 'state', 'stage', 'url'],
@@ -231,7 +229,7 @@ export const dashboardDatasetSchema = z
       .enum(Object.keys(DASHBOARD_SOURCES) as [DashboardSourceKind, ...DashboardSourceKind[]])
       .optional()
       .describe(
-        "A live table from the dashboard's project, read again when it is opened: deployments (created, state, production, branch, message, url), usage (platform, metric, service, used, limit, unit), uptime (checked, result, status, ms), threads (title, status, done as 1 or 0, lastActive), pullRequests (thread, number, title, state, stage, url) or activity (day, provider, turns, cost in USD, tokens: the agents' work on this host over 30 days). Leave columns and rows out.",
+        "A live table from the dashboard's project, read again when it is opened: uptime (checks of the live address: checked, result, status, ms), threads (title, status, done as 1 or 0, lastActive), pullRequests (thread, number, title, state, stage, url) or activity (day, provider, turns, cost in USD, tokens: the agents' work on this host over 30 days). Leave columns and rows out.",
       ),
     file: z
       .string()
@@ -290,7 +288,6 @@ export const dashboardDatasetSchema = z
 export const DASHBOARD_RANGE_MAX = 3650
 /** The live tables whose rows carry a time, by the column that holds it. */
 const SOURCE_TIME: Partial<Record<DashboardSourceKind, string>> = {
-  deployments: 'created',
   uptime: 'checked',
   threads: 'lastActive',
   activity: 'day',

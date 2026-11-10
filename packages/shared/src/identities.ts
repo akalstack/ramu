@@ -41,7 +41,7 @@ export interface IdentitySettings {
 export const EMPTY_IDENTITY_SETTINGS: IdentitySettings = { identities: [], accounts: {}, pins: {} }
 
 /** The kinds of account an identity can hold. Each key names one connected account on this host. */
-export type IdentityAccountKind = 'provider' | 'forge' | 'hosting' | 'media' | 'mcp' | 'plugin' | 'browser'
+export type IdentityAccountKind = 'provider' | 'forge' | 'media' | 'mcp' | 'plugin' | 'browser'
 
 export const accountKey = (kind: IdentityAccountKind, ...parts: string[]) => [kind, ...parts].join(':')
 /** Every account of one kind shares the key up to its last part: `provider:claude-code` for all Claude logins. */

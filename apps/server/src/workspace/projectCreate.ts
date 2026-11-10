@@ -4,11 +4,11 @@ import { rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   DEPLOY_TARGET_PLUGINS,
-  PLUGIN_DEPLOY_TARGETS,
+  DEPLOY_TARGETS,
   PROJECT_NAME,
   STACKS,
   commandLine,
-  isPluginDeployTarget,
+  isDeployTarget,
   type StackId,
 } from '@ramu/shared/stacks'
 import { git } from './git'
@@ -99,7 +99,7 @@ function projectFile(path: string, name: string, stack: (typeof STACKS)[StackId]
             ...(stack.dev ? { dev: commandLine(stack.dev) } : {}),
             ...(stack.build ? { build: commandLine(stack.build) } : {}),
             ...(stack.test ? { test: commandLine(stack.test) } : {}),
-            deployTarget: stack.deployTarget,
+            ...(stack.deployTarget ? { deployTarget: stack.deployTarget } : {}),
             ...(stack.database ? { database: true } : {}),
             ...(stack.migrate ? { migrate: stack.migrate } : {}),
           },
@@ -136,13 +136,9 @@ export function projectFactsText(config: ProjectConfig): string | undefined {
     stack.dev ? `Run it: ${stack.dev}` : '',
     stack.build ? `Build: ${stack.build}` : '',
     stack.test ? `Test: ${stack.test}` : '',
-    stack.deployTarget === 'expo'
-      ? 'Deploys to: the App Store and Google Play, released with release_status and release_start'
-      : isPluginDeployTarget(stack.deployTarget)
-        ? `Deploys to: ${PLUGIN_DEPLOY_TARGETS[stack.deployTarget]}, through its plugin with platform_cli (platform "${DEPLOY_TARGET_PLUGINS[stack.deployTarget]}"). If platform_cli does not offer it, ask the person to install the plugin from Customize → Plugins, or call plugin_search and plugin_install`
-        : stack.deployTarget
-          ? `Deploys to: ${stack.deployTarget}, through the deploy tools (deploy_status first)`
-          : '',
+    isDeployTarget(stack.deployTarget)
+      ? `Deploys to: ${DEPLOY_TARGETS[stack.deployTarget]}, through its plugin with platform_cli (platform "${DEPLOY_TARGET_PLUGINS[stack.deployTarget]}"). A preview deploy runs without asking; production asks the person and runs the migrations first. If platform_cli does not offer it, ask the person to install the plugin from Customize → Plugins, or call plugin_search and plugin_install`
+      : '',
     stack.database ? 'Stores data in Postgres: read DATABASE_URL (DATABASE_URL_UNPOOLED for migrations).' : '',
     stack.migrate ? `Migrate (runs before each production deploy): ${commandLine(stack.migrate)}` : '',
   ].filter(Boolean)

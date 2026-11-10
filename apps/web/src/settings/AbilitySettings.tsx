@@ -20,7 +20,7 @@ import {
 } from '@ramu/shared/providers/abilities'
 import { providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
 import type { AppPreferences } from '@ramu/shared/types'
-import { MEDIA_SERVICE_NAMES, MEDIA_SERVICES, type MediaService } from '@ramu/shared/types/deploy'
+import { MEDIA_SERVICE_NAMES, MEDIA_SERVICES, type MediaService } from '@ramu/shared/types/media'
 import { SettingsGroupTitle, SettingsRow, SettingsTitle } from '@/components/settings-row'
 import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'

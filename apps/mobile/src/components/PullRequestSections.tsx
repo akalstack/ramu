@@ -1,18 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Linking, Pressable, View } from 'react-native'
+import { Pressable, View } from 'react-native'
 import { useRouter } from 'expo-router'
-import {
-  Eye,
-  ChevronDown,
-  ChevronRight,
-  GitPullRequest,
-  Globe,
-  MessageSquare,
-  PanelRight,
-  Wrench,
-} from 'lucide-react-native'
-import { previewLine } from '@ramu/shared/deployText'
-import type { Deployment } from '@ramu/shared/types/deploy'
+import { Eye, ChevronDown, ChevronRight, GitPullRequest, MessageSquare, PanelRight, Wrench } from 'lucide-react-native'
 import type {
   ForgeStatus,
   PullRequestFeedbackKind,
@@ -52,36 +41,6 @@ function openPullRequest(router: ReturnType<typeof useRouter>, chatId: string, r
   router.push({ pathname: '/chat/[id]/pull-request', params: { id: chatId, repoId, url } })
 }
 
-/** The preview deployment the platform made for the pull request's branch: its address once ready, its state before. */
-function PreviewRow({ line }: { line: ReturnType<typeof previewLine> }) {
-  const { c } = useTheme()
-  if (!line) return null
-  const color = line.tone === 'bad' ? c.bad : line.tone === 'pending' ? c.warn : c.ok
-  const url = line.url
-  const body = (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: url ? 44 : undefined }}>
-      <Globe size={14} color={color} />
-      <T size={font.caption} tone={url ? 'accent' : 'muted'} numberOfLines={1} style={{ flex: 1 }}>
-        {line.text}
-      </T>
-    </View>
-  )
-  if (!url) return <View accessibilityLiveRegion="polite">{body}</View>
-  return (
-    <Pressable
-      accessibilityRole="link"
-      accessibilityLabel={line.text}
-      onPress={() => {
-        tap()
-        void Linking.openURL(url).catch(() => {})
-      }}
-      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-    >
-      {body}
-    </Pressable>
-  )
-}
-
 /**
  * The checked-out branch's pull request: where it stands, and handing failing checks or review comments to the agent,
  * as the desktop's Source Control does. Nothing shows when the branch has none or the repository has no hosting service.
@@ -118,7 +77,6 @@ export function CurrentPullRequest({
   const [watch, setWatch] = useState<PullRequestWatchStatus | null>(null)
   const [picking, setPicking] = useState(false)
   const [watching, setWatching] = useState(false)
-  const [preview, setPreview] = useState<Deployment | null>(null)
   const [creating, setCreating] = useState(false)
   const { computerId, taskId } = chat
   const read = useCallback(async () => {
@@ -128,23 +86,19 @@ export function CurrentPullRequest({
     const pr = next.pullRequest
     if (pr?.state === 'open') {
       // The branch's own read has no mergeability; the repository's list does, so conflicts show here too.
-      const [batch, list, watched, deployed] = await Promise.all([
+      const [batch, list, watched] = await Promise.all([
         store.invoke(computerId, 'forge.drafts', pr.url).catch(() => null),
         store.invoke(computerId, 'forge.pullRequests', taskId, repoId, false, false).catch(() => null),
         store.invoke(computerId, 'forge.watchStatus', taskId, repoId, pr.url).catch(() => null),
-        // A project with no platform, or a viewer pairing, simply shows no preview.
-        store.invoke(computerId, 'deploy.preview', taskId, repoId, pr.headBranch).catch(() => null),
       ])
       setDraftsReady(!!batch)
       if (list) pullRequestCopy.keep(computerId, 'forge.pullRequests', list, taskId, repoId, false, false)
       setSummary(list?.pullRequests.find((entry) => entry.url === pr.url) ?? null)
       setWatch(watched)
-      setPreview(deployed)
     } else {
       setDraftsReady(false)
       setSummary(null)
       setWatch(null)
-      setPreview(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the store's invoke is stable for a host
   }, [computerId, taskId, repoId])
@@ -307,7 +261,6 @@ export function CurrentPullRequest({
           ) : null}
         </View>
       </Pressable>
-      <PreviewRow line={previewLine(preview, say)} />
       {/* The card's title opens the pull request; a button only calls out replies waiting there. */}
       {draftsReady ? (
         <Button

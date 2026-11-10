@@ -146,13 +146,6 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
   },
   { section: 'git', title: 'Branch prefix', path: 'worktreeBranchPrefix', words: 'worktree branch namespace naming' },
   { section: 'git', title: 'Hosting accounts', words: 'github accounts tokens sign in gh connection credentials' },
-  {
-    section: 'deploy',
-    title: 'Hosting',
-    words: 'deploy ship publish vercel netlify hosting account sign in token production preview',
-  },
-  { section: 'deploy', title: 'Databases', words: 'deploy database postgres neon provision' },
-  { section: 'deploy', title: 'App stores', words: 'expo eas ios android release store build phone app' },
   { section: 'git', title: 'GitHub', words: 'github gh account pull requests issues hosting' },
   { section: 'git', title: 'GitLab', words: 'gitlab merge requests pipelines glab hosting' },
   { section: 'git', title: 'Bitbucket Cloud', words: 'bitbucket pull requests builds issues api token hosting' },

@@ -62,7 +62,7 @@ interface Target {
   needsPermission?: boolean
 }
 
-/** These pages configure one machine (binaries, login, service, network, its deploy accounts), so "all environments" has no meaning. */
+/** These pages configure one machine (binaries, login, service, network), so "all environments" has no meaning. */
 const SINGLE_ENVIRONMENT_SECTIONS: readonly string[] = [
   'providers',
   'agent-setup',
@@ -71,7 +71,6 @@ const SINGLE_ENVIRONMENT_SECTIONS: readonly string[] = [
   'account',
   'system',
   'remote',
-  'deploy',
 ]
 /** Remote access describes the current environment; it is not selectable. */
 const CURRENT_ENVIRONMENT_SECTIONS: readonly string[] = ['remote']

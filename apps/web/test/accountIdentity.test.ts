@@ -45,7 +45,7 @@ const snapshot = (identities: Identity[], accounts: Record<string, string[]> = {
   gitUser: { name: null, email: null },
 })
 const picker = () =>
-  renderToStaticMarkup(createElement(AccountIdentityPicker, { accountKey: 'hosting:vercel', name: 'Vercel' }))
+  renderToStaticMarkup(createElement(AccountIdentityPicker, { accountKey: 'media:elevenlabs', name: 'ElevenLabs' }))
 
 it('shows nothing about identities while the host has fewer than two', () => {
   state.snapshot = snapshot([identity('personal', 'Personal')])
@@ -56,10 +56,10 @@ it('shows nothing about identities while the host has fewer than two', () => {
 
 it('names the identity an account is in, offering All identities and each identity', () => {
   state.snapshot = snapshot([identity('personal', 'Personal'), identity('work', 'Work')], {
-    'hosting:vercel': ['work'],
+    'media:elevenlabs': ['work'],
   })
   const html = picker()
-  expect(html).toContain('aria-label="Identity for Vercel · Work"')
+  expect(html).toContain('aria-label="Identity for ElevenLabs · Work"')
   expect(html).toContain('bg-blue-500')
   expect(html).toContain('All identities')
   expect(html).toContain('Personal')
@@ -67,13 +67,13 @@ it('names the identity an account is in, offering All identities and each identi
 
 it('reads an account with no identity as for all identities', () => {
   state.snapshot = snapshot([identity('personal', 'Personal'), identity('work', 'Work')])
-  expect(picker()).toContain('aria-label="Identity for Vercel · All identities"')
+  expect(picker()).toContain('aria-label="Identity for ElevenLabs · All identities"')
 })
 
 it('sends a guardrail card to the page where that kind of account is connected', () => {
   expect(accountSection('provider:claude-code:default')).toBe('providers')
   expect(accountSection('forge:github:cli-octocat')).toBe('git')
-  expect(accountSection('hosting:vercel')).toBe('deploy')
+  expect(accountSection('plugin:vercel-cli')).toBe('plugins')
   expect(accountSection('media:gemini')).toBe('providers')
   expect(accountSection('mcp:linear')).toBe('agent-setup')
   expect(accountSection('browser:default')).toBe('browser')

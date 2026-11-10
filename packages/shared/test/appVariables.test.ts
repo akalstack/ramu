@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appVariables } from '../src/envSync'
+import { appVariables } from '../src/appVariables'
 
 describe('appVariables', () => {
   it('reads names from example files and from code in each language, without the runtime’s own', () => {

@@ -12,7 +12,7 @@ describe('settings menu', () => {
     }
     expect(pages('Personal')).toEqual(['appearance', 'chats', 'editor', 'shortcuts'])
     expect(pages('Agents')).toEqual(['providers', 'models', 'agent-setup', 'plugins', 'workflows', 'memory'])
-    expect(pages('Agent tools')).toEqual(['browser', 'computer', 'devices', 'git', 'deploy'])
+    expect(pages('Agent tools')).toEqual(['browser', 'computer', 'devices', 'git'])
     expect(pages('Access & host')).toEqual(['access', 'identities', 'remote', 'account', 'system'])
   })
 

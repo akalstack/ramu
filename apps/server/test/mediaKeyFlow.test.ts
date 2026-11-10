@@ -11,7 +11,7 @@ import {
   type AgentEvent,
   type AgentSessionInfo,
 } from '@ramu/shared/types'
-import { MEDIA_SERVICES } from '@ramu/shared/types/deploy'
+import { MEDIA_SERVICES } from '@ramu/shared/types/media'
 
 const GOOD_KEY = 'el-good-key-123'
 const requests: { url: string; key: string | null; body?: string }[] = []
@@ -26,7 +26,7 @@ vi.stubGlobal('fetch', async (input: string | URL, init: RequestInit = {}) => {
 })
 
 const { HostCredentialStore } = await import('../src/credentials/store')
-const { HostingAccounts } = await import('../src/workspace/deploy/accounts')
+const { MediaAccounts } = await import('../src/media/mediaAccounts')
 const { AbilityService } = await import('../src/agent/abilities')
 const { AttachmentStore } = await import('../src/attachments')
 type Host = ConstructorParameters<typeof AbilityService>[0]
@@ -55,7 +55,7 @@ function setup() {
   }))
   credentials.verify = async () => {}
   const state = new Map<string, unknown>()
-  const accounts = new HostingAccounts(
+  const accounts = new MediaAccounts(
     (key, fallback) => (state.get(key) ?? fallback) as never,
     (key, value) => void state.set(key, value),
     credentials,
@@ -82,7 +82,7 @@ function setup() {
     // Wired as the host wires it (apps/server/src/index.ts).
     media: {
       connected: () => MEDIA_SERVICES.filter((service) => accounts.connected(service)),
-      auth: async (service) => (await accounts.auth(service)).auth,
+      auth: (service) => accounts.auth(service),
     },
   }
   const abilities = new AbilityService(
@@ -99,11 +99,11 @@ it('a saved key makes speech on that service, and Disconnect sends the person ba
   const { accounts, abilities, secrets, state } = setup()
 
   // A refused key is not kept, and the error says where to replace it.
-  await expect(accounts.save('elevenlabs', { token: 'wrong-key-000' }, 'token')).rejects.toThrow('Settings → Providers')
+  await expect(accounts.save('elevenlabs', 'wrong-key-000')).rejects.toThrow('Settings → Providers')
   expect(accounts.connected('elevenlabs')).toBe(false)
 
-  const shown = await accounts.save('elevenlabs', { token: GOOD_KEY }, 'token')
-  expect(shown).toMatchObject({ platform: 'elevenlabs', kind: 'media', connected: true })
+  const shown = await accounts.save('elevenlabs', GOOD_KEY)
+  expect(shown).toMatchObject({ service: 'elevenlabs', connected: true, account: 'ElevenLabs API key' })
   expect([...secrets.values()].join()).toContain(GOOD_KEY)
   expect(JSON.stringify([...state.values()])).not.toContain(GOOD_KEY)
   expect(abilities.status().media).toEqual(['elevenlabs'])

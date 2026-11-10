@@ -8,7 +8,6 @@ import { apexOf } from '@ramu/shared/domains'
 import { HostCredentialStore } from '../../credentials/store'
 import { findExecutable } from '../../providers/providerBinaries'
 import { SavedCredential } from '../forge/savedCredential'
-import { platformCall } from './adapter'
 
 const HOSTNAME = /^(?!-)[a-z0-9-]{1,63}(?:\.(?!-)[a-z0-9-]{1,63})+$/
 
@@ -64,14 +63,29 @@ export class LastingAddresses {
     )
   }
 
-  private call<T>(token: string, path: string, what: string, init: RequestInit = {}) {
-    return platformCall<{ result: T }>(
-      'Cloudflare',
-      this.deps.fetch ?? fetch,
-      `${this.deps.api ?? 'https://api.cloudflare.com/client/v4'}${path}`,
-      { ...init, token },
-      what,
-    ).then((reply) => reply.result)
+  /**
+   * One Cloudflare API call. A refusal's body is never shown, since APIs can echo request details back; its status
+   * says what to fix.
+   */
+  private async call<T>(token: string, path: string, what: string, init: RequestInit = {}): Promise<T> {
+    let response: Response
+    try {
+      response = await (this.deps.fetch ?? fetch)(`${this.deps.api ?? 'https://api.cloudflare.com/client/v4'}${path}`, {
+        ...init,
+        redirect: 'error',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(typeof init.body === 'string' ? { 'Content-Type': 'application/json' } : {}),
+        },
+      })
+    } catch (error) {
+      throw new Error(`Cloudflare did not answer while ${what}.`, { cause: error })
+    }
+    if (response.status === 401 || response.status === 403)
+      throw new Error(`Cloudflare refused the token while ${what}. Check that it can edit Tunnels and DNS.`)
+    if (!response.ok) throw new Error(`Cloudflare answered ${response.status} while ${what}.`)
+    const text = await response.text()
+    return ((text ? JSON.parse(text) : {}) as { result: T }).result
   }
 
   /** The project's lasting hostname, without reading any secret. */

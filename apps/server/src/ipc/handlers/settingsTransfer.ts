@@ -23,7 +23,7 @@ export type TransferSources = Pick<
   | 'rules'
   | 'identities'
   | 'memory'
-  | 'deploys'
+  | 'mediaAccounts'
   | 'getSharedMcp'
   | 'plugins'
   | 'hostBrowser'

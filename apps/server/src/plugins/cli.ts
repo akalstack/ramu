@@ -12,7 +12,7 @@ import { z } from 'zod'
 import type { PluginCli, PluginCredential } from '@ramu/shared/plugins'
 import { commandLine } from '@ramu/shared/stacks'
 import type { AgentSessionInfo } from '@ramu/shared/types'
-import { cliEnvironment, platformCli } from '../workspace/deploy/signIn'
+import { cliEnvironment, platformCli } from './cliPath'
 import type { PluginSecret } from './service'
 
 export interface PluginCliTarget {

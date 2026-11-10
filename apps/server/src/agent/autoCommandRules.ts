@@ -264,9 +264,8 @@ const CLOUD = new Set([
   'terragrunt',
   'ansible',
   'ansible-playbook',
-  // Hosting and store CLIs always ask: agents deploy and release through Ramu's deploy, release and platform CLI tools
-  // (`deploy_status`, `release_status`, `platform_cli`), which use the person's connected accounts and ask with a card
-  // that names the address, app or command that changes.
+  // Hosting and store CLIs always ask: agents deploy through `platform_cli`, which runs a plugin's CLI with the token
+  // saved for it and asks with a card that names the command that changes anything.
   'vercel',
   'netlify',
   'eas',

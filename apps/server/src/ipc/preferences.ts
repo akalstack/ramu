@@ -1,4 +1,4 @@
-import { isMediaService, MEDIA_SERVICES } from '@ramu/shared/types/deploy'
+import { isMediaService, MEDIA_SERVICES } from '@ramu/shared/types/media'
 import { z } from 'zod'
 import { validBranchPrefix } from '@ramu/shared/workspaceDefaults'
 import { intelligenceSchema } from '../intelligence'

@@ -6,6 +6,7 @@ import { providerBinaries } from '../preferences'
 import { agentSettings, relPath } from '../schemas'
 import type { RegisterHandlers } from '../types'
 import { MAX_API_KEY_LENGTH } from '@ramu/shared/providers/apiKeys'
+import { MEDIA_SERVICES, type MediaService } from '@ramu/shared/types/media'
 import {
   ANTIGRAVITY_SIGN_IN_METHODS,
   ENVIRONMENT_SCOPES,
@@ -43,6 +44,7 @@ export const registerProviderHandlers: RegisterHandlers = ({
   accountUsage,
   abilities,
   activity,
+  mediaAccounts,
 }) => {
   if (abilities) {
     abilities.track = (label, detail, work, cancel) => activity.run(label, detail, work, cancel)
@@ -52,11 +54,38 @@ export const registerProviderHandlers: RegisterHandlers = ({
     if (!abilities) throw new Error('Abilities are not available on this host.')
     return abilities
   }
+  const media = () => {
+    if (!mediaAccounts) throw new Error('Update this host for media keys.')
+    return mediaAccounts
+  }
+  const administrator = () => host.canAdministerIntegrations?.() === true
+  const administrate = () => {
+    if (!administrator()) throw new Error('Save media keys on the host running Ramu.')
+  }
   return {
     'abilities.checks': { args: z.tuple([]), run: () => ability().status() },
     'abilities.check': {
       args: z.tuple([agentSettings.shape.provider]),
       run: (provider: ProviderStatus['provider']) => ability().recheck(provider),
+    },
+    'abilities.mediaAccounts': {
+      args: z.tuple([z.boolean()]),
+      run: async (check: boolean) => ({ accounts: await media().list(check), canAdminister: administrator() }),
+    },
+    'abilities.saveMediaKey': {
+      args: z.tuple([z.enum(MEDIA_SERVICES), z.string().trim().min(8).max(4000).regex(/^\S+$/, 'Paste the key alone')]),
+      run: (service: MediaService, key: string) => {
+        administrate()
+        return media().save(service, key)
+      },
+    },
+    'abilities.removeMediaKey': {
+      args: z.tuple([z.enum(MEDIA_SERVICES)]),
+      run: async (service: MediaService) => {
+        administrate()
+        await media().disconnect(service)
+        return { accounts: await media().list(false), canAdminister: administrator() }
+      },
     },
     'abilities.teammateModels': { args: z.tuple([]), run: () => ability().teammateModels() },
     'abilities.mcpTools': { args: z.tuple([]), run: () => ability().mcpTools() },

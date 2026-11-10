@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { PLUGIN_NAME, PLUGIN_SCHEMA_URL, RAMU_EXTENSION, type PluginProblem } from '@ramu/shared/plugins'
-import { platformCli } from '../workspace/deploy/signIn'
+import { platformCli } from './cliPath'
 import { git } from '../workspace/git'
 import { PluginReadError, readPluginFolder } from './folder'
 
