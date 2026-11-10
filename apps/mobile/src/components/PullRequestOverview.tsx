@@ -26,8 +26,10 @@ import {
 import type { PullRequestNextStep } from '@ramu/shared/pullRequests'
 import { font, radius, space, useTheme } from '../theme'
 import { ago, useSay } from '../i18n'
-import { Button, Card, Divider, IconButton, T, tap } from './ui'
+import { Card, Divider, T, tap } from './ui'
 import { PullRequestGlyph, StageText } from './PullRequestParts'
+import { Glass } from './Glass'
+import { GlassButton } from './Screen'
 
 const STATE_LABEL = { open: 'Open', draft: 'Draft', merged: 'Merged', closed: 'Closed' } as const
 const STATE_TONE = { open: 'ok', draft: 'muted', merged: 'accent', closed: 'bad' } as const
@@ -289,9 +291,12 @@ export function PullRequestNote({ icon: Icon = WifiOff, children }: { icon?: Luc
   )
 }
 
+/** How tall the floating action bar is above the safe area, for the page to scroll its last content clear of it. */
+export const ACTION_BAR_SPACE = 48 + space.s * 2
+
 /**
- * The bar at the bottom of the screen, as GitHub's phone keeps its merge button in reach: the one thing to do next, and
- * every other action behind ⋯. Either can be absent; with neither the bar is not drawn.
+ * The pull request's next step and its other actions, floating in glass over the page as the composer does, so the
+ * content scrolls beneath it.
  */
 export function PullRequestActionBar({
   primary,
@@ -308,32 +313,48 @@ export function PullRequestActionBar({
   if (!primary && !onMore) return null
   return (
     <View
+      pointerEvents="box-none"
       style={{
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
         flexDirection: 'row',
         alignItems: 'center',
         gap: space.s,
         paddingHorizontal: space.l,
         paddingTop: space.s,
         paddingBottom: Math.max(insets.bottom, space.s),
-        backgroundColor: c.canvas,
-        borderTopWidth: 0.5,
-        borderTopColor: c.lineStrong,
       }}
     >
       {primary ? (
-        <Button
+        <GlassButton
+          primary
           title={busy ? say('Working…') : primary.title}
           disabled={busy || primary.disabled}
           onPress={primary.onPress}
           style={{ flex: 1 }}
         />
       ) : (
-        <View style={{ flex: 1 }} />
+        <View style={{ flex: 1 }} pointerEvents="none" />
       )}
       {onMore ? (
-        <View style={{ borderRadius: radius.m, backgroundColor: c.fill }}>
-          <IconButton icon={Ellipsis} label={say('More actions')} size={44} onPress={onMore} />
-        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={say('More actions')}
+          onPress={() => {
+            tap()
+            onMore()
+          }}
+        >
+          <Glass
+            radius={radius.full}
+            interactive
+            style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Ellipsis size={20} color={c.text} strokeWidth={2} />
+          </Glass>
+        </Pressable>
       ) : null}
     </View>
   )

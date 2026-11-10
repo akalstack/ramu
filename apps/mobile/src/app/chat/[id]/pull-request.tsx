@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PullRequestTimeline } from '../../../components/PullRequestTimeline'
 import { PullRequestFilesList } from '../../../components/PullRequestFilesList'
 import { PullRequestMarkdown } from '../../../components/PullRequestMarkdown'
@@ -49,6 +50,7 @@ import { Header, HeaderButton, Screen, PageScrollView as ScrollView } from '../.
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { Button, Card, Chip, ConnectionDot, Divider, Segmented, Sheet, T, Toggle } from '../../../components/ui'
 import {
+  ACTION_BAR_SPACE,
   PullRequestActionBar,
   PullRequestIdentity,
   PullRequestNote,
@@ -79,6 +81,7 @@ const rawId = (id: string) => id.slice(id.indexOf(':') + 1)
  */
 export default function PullRequestScreen() {
   const say = useSay()
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const { c } = useTheme()
   // Opened from a thread (`id`), or from the Pull requests page with the host and project it was listed under.
@@ -448,7 +451,13 @@ export default function PullRequestScreen() {
       />
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l, paddingBottom: space.xl }}
+        contentContainerStyle={{
+          padding: space.l,
+          paddingTop: space.s,
+          gap: space.l,
+          // The floating action bar sits over the page; the last content scrolls clear of it.
+          paddingBottom: space.xl + ACTION_BAR_SPACE + insets.bottom,
+        }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => void pullToRefresh()} tintColor={c.muted} />
         }
