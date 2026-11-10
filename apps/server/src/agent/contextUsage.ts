@@ -26,6 +26,8 @@ export class ContextUsageTracker {
 
   private readonly contexts = new Map<string, { value: ContextUsage; selection: string }>()
   /** The latest main Claude request per thread, so the composer can tell when its prompt cache has expired. */
+  /** Threads whose kept reading was already looked up on disk, so a thread without one is not read again. */
+  private readonly loaded = new Set<string>()
   private readonly requests = new Map<string, { lastRequestAt: number; cacheTtlMs?: number }>()
 
   private selection(settings: Pick<AgentSettings, 'provider' | 'accountId' | 'model'>): string {
@@ -39,9 +41,28 @@ export class ContextUsageTracker {
     providerBinaries: () => this.host.preferences()?.providerBinaries,
   })
 
+  /**
+   * The thread's latest reading. It is kept on disk too, so after the host restarts the composer still knows how large
+   * an idle thread is and when its prompt cache ran out, before the thread's next turn reads it again.
+   */
   context(id: string): ContextUsage | null {
-    const saved = this.contexts.get(id)
+    const saved = this.contexts.get(id) ?? this.stored(id)
     return saved?.selection === this.selection(this.host.get(id).settings) ? saved.value : null
+  }
+
+  private stored(id: string): { value: ContextUsage; selection: string } | undefined {
+    if (this.loaded.has(id)) return this.contexts.get(id)
+    this.loaded.add(id)
+    const row = this.db.prepare('SELECT selection, data FROM session_context WHERE session_id = ?').get(id) as
+      { selection: string; data: string } | undefined
+    if (!row) return undefined
+    try {
+      const saved = { value: JSON.parse(row.data) as ContextUsage, selection: row.selection }
+      this.contexts.set(id, saved)
+      return saved
+    } catch {
+      return undefined
+    }
   }
 
   setContext(id: string, used: number, max: number): void {
@@ -53,9 +74,16 @@ export class ContextUsageTracker {
       max,
       percent: Math.min(100, Math.round((used / max) * 100)),
       at: Date.now(),
-      ...this.requests.get(id),
+      ...this.lastRequest(id),
     }
-    this.contexts.set(id, { value: context, selection: this.selection(settings) })
+    const selection = this.selection(settings)
+    this.contexts.set(id, { value: context, selection })
+    this.db
+      .prepare(
+        `INSERT INTO session_context (session_id, selection, data) VALUES (?, ?, ?)
+      ON CONFLICT(session_id) DO UPDATE SET selection = excluded.selection, data = excluded.data`,
+      )
+      .run(id, selection, JSON.stringify(context))
     this.host.onContext()?.(id, context)
   }
 
@@ -79,6 +107,17 @@ export class ContextUsageTracker {
   clearContext(id: string): void {
     this.contexts.delete(id)
     this.requests.delete(id)
+    this.db.prepare('DELETE FROM session_context WHERE session_id = ?').run(id)
+  }
+
+  /** The latest request this process saw, or the one kept with the last reading from before a restart. */
+  private lastRequest(id: string): { lastRequestAt: number; cacheTtlMs?: number } | undefined {
+    const seen = this.requests.get(id)
+    if (seen) return seen
+    const kept = (this.contexts.get(id) ?? this.stored(id))?.value
+    return kept?.lastRequestAt
+      ? { lastRequestAt: kept.lastRequestAt, ...(kept.cacheTtlMs ? { cacheTtlMs: kept.cacheTtlMs } : {}) }
+      : undefined
   }
 
   /**
@@ -86,7 +125,7 @@ export class ContextUsageTracker {
    * but refreshed the existing one, which keeps the lifetime reported last. The next context reading carries both.
    */
   noteRequest(id: string, cacheCreation: Parameters<typeof promptCacheTtlMs>[0], at = Date.now()): void {
-    const cacheTtlMs = promptCacheTtlMs(cacheCreation) ?? this.requests.get(id)?.cacheTtlMs
+    const cacheTtlMs = promptCacheTtlMs(cacheCreation) ?? this.lastRequest(id)?.cacheTtlMs
     this.requests.set(id, { lastRequestAt: at, ...(cacheTtlMs ? { cacheTtlMs } : {}) })
   }
 

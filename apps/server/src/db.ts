@@ -46,6 +46,9 @@ CREATE TABLE IF NOT EXISTS interactive_exports (
     id TEXT NOT NULL, version INTEGER NOT NULL, format TEXT NOT NULL, digest TEXT NOT NULL, name TEXT NOT NULL,
     mime TEXT NOT NULL, data BLOB NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(id,version,format)
   );
+CREATE TABLE IF NOT EXISTS session_context (
+    session_id TEXT PRIMARY KEY REFERENCES agent_sessions(id) ON DELETE CASCADE, selection TEXT NOT NULL, data TEXT NOT NULL
+  );
 CREATE INDEX IF NOT EXISTS artifact_records_by_artifact ON artifact_records(artifact_id, collection, created_at);
 CREATE INDEX IF NOT EXISTS artifact_runs_by_artifact ON artifact_runs(artifact_id, created_at);
 `

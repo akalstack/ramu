@@ -825,7 +825,12 @@ describe('AgentService', () => {
     await until(() => svc.context(chat.id)?.cacheTtlMs !== undefined)
     expect(svc.context(chat.id)).toMatchObject({ used: 240_000, cacheTtlMs: 5 * 60_000 })
     expect(svc.context(chat.id)!.lastRequestAt).toBeGreaterThanOrEqual(before)
+    const reading = svc.context(chat.id)
     svc.stopAll()
+    // After a host restart the idle thread still has its reading, so the composer can offer Compact before a new turn.
+    const restarted = new AgentService(db, () => {}, query)
+    expect(restarted.context(chat.id)).toEqual(reading)
+    restarted.stopAll()
   })
 
   it('launches in the binding cwd, routes permission requests and records the transcript', async () => {
