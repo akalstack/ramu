@@ -3,6 +3,7 @@ import type { PluginCli, PluginCredential } from '@ramu/shared/plugins'
 import {
   cliCommand,
   cliCommandReads,
+  cliDeployKind,
   cliOutput,
   credentialEnvironment,
   registerPluginCliTools,
@@ -20,6 +21,15 @@ const slot: PluginCredential = {
   fields: [{ id: 'account', label: 'Account ID', env: 'CLOUDFLARE_ACCOUNT_ID', kind: 'text' }],
 }
 const cli: PluginCli = { binaries: ['wrangler'], npx: 'wrangler@4', reads: [['whoami'], ['d1', 'list']] }
+const vercel: PluginCliTarget = {
+  plugin: 'vercel-cli',
+  pluginId: 'p3',
+  cli: {
+    binaries: ['vercel'],
+    reads: [['ls']],
+    deploys: { commands: [['deploy']], productionFlag: '--prod', production: [['rollback'], ['promote']] },
+  },
+}
 const target: PluginCliTarget = { plugin: 'cloudflare', pluginId: 'p1', cli, slot }
 const secret: PluginSecret = { token: 'tok_secret', fields: { account: 'acc_1' }, account: 'Ana' }
 
@@ -27,6 +37,8 @@ function setup(approve: boolean, saved: PluginSecret | null = secret, entry: Plu
   const tools = new Map<string, Handler>()
   const server = { registerTool: (name: string, _def: unknown, handler: Handler) => void tools.set(name, handler) }
   const asked: string[] = []
+  const offered: unknown[] = []
+  const beforeProduction = vi.fn(async () => 'Ran npm run migrate against production first.')
   const source = { id: 's1', parentId: null, cwd: '/tmp/shop', settings: { access: 'full' } }
   const run = vi.fn(async () => ({ exitCode: 0, output: 'ok', timedOut: false }))
   const secretOf = vi.fn(async () => saved)
@@ -35,13 +47,15 @@ function setup(approve: boolean, saved: PluginSecret | null = secret, entry: Plu
     { clis: () => [entry], secret: secretOf },
     source as never,
     () => source as never,
-    async (detail) => {
+    async (detail, _signal, options) => {
       asked.push(detail)
+      offered.push(options)
       return approve
     },
+    beforeProduction,
     run,
   )
-  return { tool: tools.get('platform_cli')!, run, asked, secretOf }
+  return { tool: tools.get('platform_cli')!, run, asked, offered, secretOf, beforeProduction }
 }
 
 describe('platform_cli', () => {
@@ -54,6 +68,7 @@ describe('platform_cli', () => {
       {} as never,
       () => ({}) as never,
       async () => true,
+      async () => '',
     )
     expect(tools.size).toBe(0)
   })
@@ -105,6 +120,25 @@ describe('platform_cli', () => {
     expect(secretOf).not.toHaveBeenCalled()
   })
 
+  it('runs a preview without asking, and asks before production with Allow in this thread, migrating first', async () => {
+    const { tool, run, asked, offered, beforeProduction } = setup(true, secret, vercel)
+    await tool({ platform: 'vercel-cli', args: ['deploy'] }, {})
+    expect(asked).toEqual([])
+    expect(beforeProduction).not.toHaveBeenCalled()
+    await tool({ platform: 'vercel-cli', args: ['deploy', '--prod'] }, {})
+    expect(asked[0]).toContain('This deploys to production')
+    expect(offered[0]).toEqual({ thread: { key: 'deploy:vercel-cli', label: 'production deploys with vercel-cli' } })
+    expect(beforeProduction).toHaveBeenCalledWith('/tmp/shop')
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+
+  it('deploys nothing when the migrations fail', async () => {
+    const { tool, run, beforeProduction } = setup(true, secret, vercel)
+    beforeProduction.mockRejectedValueOnce(new Error('The migration (npm run migrate) failed'))
+    await expect(tool({ platform: 'vercel-cli', args: ['rollback'] }, {})).rejects.toThrow('Nothing was deployed')
+    expect(run).not.toHaveBeenCalled()
+  })
+
   it('reports a failed command as an error result', async () => {
     const { tool, run } = setup(true)
     run.mockResolvedValueOnce({ exitCode: 1, output: 'Error: no project', timedOut: false })
@@ -113,6 +147,15 @@ describe('platform_cli', () => {
 })
 
 describe('plugin CLIs', () => {
+  it('tells a preview from production by the deploy prefixes and the production flag', () => {
+    expect(cliDeployKind(vercel.cli, ['deploy'])).toBe('preview')
+    expect(cliDeployKind(vercel.cli, ['deploy', '--prod'])).toBe('production')
+    expect(cliDeployKind(vercel.cli, ['promote', 'dpl_1'])).toBe('production')
+    expect(cliDeployKind(vercel.cli, ['ls'])).toBeNull()
+    expect(cliDeployKind({ deploys: { commands: [['up']], production: [] } }, ['up', '--detach'])).toBe('production')
+    expect(cliDeployKind(cli, ['deploy'])).toBeNull()
+  })
+
   it('treats only the listed prefixes as reads', () => {
     expect(cliCommandReads(cli, ['d1', 'list', '--json'])).toBe(true)
     expect(cliCommandReads(cli, ['d1'])).toBe(false)

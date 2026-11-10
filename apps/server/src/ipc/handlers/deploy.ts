@@ -110,7 +110,21 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
     if (repository.projectId !== project(projectId)) throw new Error('Choose a repository of this project.')
     return repository
   }
+  const migrations = () => {
+    if (!ctx.migrations) throw new Error('Update this host to run migrations before deploys.')
+    return ctx.migrations
+  }
   return {
+    'deploy.migrations': {
+      args: z.tuple([id]),
+      run: (projectId: string) => migrations().plan(project(projectId)),
+    },
+    /** Saves (or with null forgets) the production database address; write-only, never read back. */
+    'deploy.setProductionDatabase': {
+      args: z.tuple([id, z.string().trim().url().max(2000).nullable()]),
+      run: (projectId: string, address: string | null) =>
+        address ? migrations().save(project(projectId), address) : migrations().remove(project(projectId)),
+    },
     'deploy.accounts': { args: z.tuple([z.boolean()]), run: (check: boolean) => summary(check) },
     'deploy.signIn': {
       args: z.tuple([cliPlatform]),

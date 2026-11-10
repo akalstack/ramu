@@ -1927,10 +1927,14 @@ export interface RamuMethods extends ArtifactMethods {
     requestId: string,
     allow: boolean,
     message?: string,
-    scope?: 'once' | 'project' | 'user',
+    scope?: import('./types').PermissionScope,
     pattern?: string,
   ): void
   'agent.forgetPermission'(sessionId: string, requestId: string, scope: 'project' | 'user'): void
+  /** The migrate command a production deploy runs first, and whether the production database address is saved. */
+  'deploy.migrations'(projectId: string): { command: string | null; addressSaved: boolean }
+  /** Saves the production database address for migrations, or forgets it with null. */
+  'deploy.setProductionDatabase'(projectId: string, address: string | null): void
   'agent.replyQuestion'(sessionId: string, requestId: string, answers: Record<string, string>): void
   'agent.replyElicitation'(
     sessionId: string,

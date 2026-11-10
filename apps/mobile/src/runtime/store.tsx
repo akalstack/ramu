@@ -216,12 +216,15 @@ interface Store extends State {
   cancelOutbox(id: string): string | undefined
   stop(id: string): void
   answer(id: string, request: string, answers: Record<string, string>): void
-  /** Answers an approval; `project` or `user` also saves it, for this exact request or the chosen `pattern`. */
+  /**
+   * Answers an approval; `project` or `user` also saves it, for this exact request or the chosen `pattern`, and `thread`
+   * allows that kind of request until the thread ends.
+   */
   decide(
     id: string,
     request: string,
     decision: 'allow' | 'deny',
-    scope?: 'once' | 'project' | 'user',
+    scope?: 'once' | 'thread' | 'project' | 'user',
     pattern?: string,
   ): void
   /** Removes a saved approval, so the same request asks again. */

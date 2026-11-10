@@ -71,6 +71,7 @@ import { tableFromFile } from './interactive/dashboardFile'
 import { readText } from './workspace/files'
 import { appliedDesignSystem, designTokensOf } from '@ramu/shared/artifacts'
 import { registerDeployTools, registerReleaseTools } from './workspace/deploy/tools'
+import { ProductionMigrations } from './workspace/deploy/migrations'
 import { registerPluginCliTools } from './plugins/cli'
 import { registerPluginTools } from './plugins/tools'
 import { registerCiTools } from './workspace/ci/tools'
@@ -1223,8 +1224,14 @@ const account = new AccountService({
 })
 account.start()
 workspace.settingsStore?.subscribe(() => account.settingsChanged())
-const externalTools = new ExternalSessionTools(getSharedMcp, (sessionId, title, detail, signal, always) =>
-  agents.requestPermission(sessionId, title, detail, signal, always),
+/** Migrations a production deploy through a plugin runs first, against the database address saved for the project. */
+const productionMigrations = new ProductionMigrations({
+  getState: (key, fallback) => workspace.getAppState(key, fallback),
+  setState: (key, value) => workspace.setAppState(key, value),
+  migrate: (projectId) => workspace.projectConfiguration(projectId).config.stack?.migrate ?? null,
+})
+const externalTools = new ExternalSessionTools(getSharedMcp, (sessionId, title, detail, signal, options) =>
+  agents.requestPermission(sessionId, title, detail, signal, options),
 )
 const externalSource = (session: AgentSessionInfo): ExternalSessionSource => {
   const project = projectOf(session)
@@ -1382,6 +1389,7 @@ const dispatcher = createDispatcher(
     pullRequestWatches,
     deploys,
     localApps,
+    migrations: productionMigrations,
     pullRequestIndex,
     pullRequestDrafts,
     pullRequestWrites,
@@ -1834,7 +1842,8 @@ const mcpHttp = createServer(async (req, res) => {
       { clis: () => plugins.clis(pluginProject), secret: (id, slot) => plugins.secret(id, slot, pluginProject) },
       source,
       () => agents.get(source.id),
-      (detail, signal) => agents.requestPermission(source.id, 'Platform CLI', detail, signal),
+      (detail, signal, options) => agents.requestPermission(source.id, 'Platform CLI', detail, signal, options),
+      (cwd) => productionMigrations.beforeProduction(pluginProject, cwd),
     )
     registerPluginTools(
       server,

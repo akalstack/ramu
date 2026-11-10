@@ -48,6 +48,14 @@ export interface UserRequestsHost
 }
 
 /** Requests that wait for the user: questions, permission prompts and elicitations, including those a sub-agent raises in its parent's chat. */
+/** What Ramu's own approval card offers beside Allow once. */
+export interface PermissionOptions {
+  /** Always allow: runs this instead of saving an approval rule, such as switching an MCP tool to Allow. */
+  always?: () => void
+  /** Allow in this thread: later requests with the same key pass without a card until the thread ends. */
+  thread?: { key: string; label: string }
+}
+
 export class UserRequests {
   constructor(
     private readonly host: UserRequestsHost,
@@ -63,8 +71,10 @@ export class UserRequests {
   secretFiles: SecretFiles | undefined
   private appPermissions = new Map<
     string,
-    { sessionId: string; finish: (allow: boolean, cancelled?: boolean) => void; always?: () => void }
+    { sessionId: string; finish: (allow: boolean, cancelled?: boolean) => void; options: PermissionOptions }
   >()
+  /** What each thread allowed for itself with Allow in this thread; kept in memory, so a restart asks again. */
+  private allowedInThread = new Map<string, Set<string>>()
 
   /** App-owned capabilities use the same durable approval UI for every provider, without borrowing its runner. */
   requestPermission(
@@ -72,11 +82,11 @@ export class UserRequests {
     toolName: string,
     detail: string,
     signal?: AbortSignal,
-    /** Offers Always allow, which runs this instead of saving an approval rule. */
-    always?: () => void,
+    options: PermissionOptions = {},
   ): Promise<boolean> {
     if (signal?.aborted || this.host.shutdown() || !['starting', 'running'].includes(this.host.get(id).state))
       return Promise.reject(new Error('This permission request is no longer active.'))
+    if (options.thread && this.allowedInThread.get(id)?.has(options.thread.key)) return Promise.resolve(true)
     const requestId = randomUUID()
     return new Promise((resolve, reject) => {
       const abort = () => finish(false, true)
@@ -98,7 +108,7 @@ export class UserRequests {
         if (cancelled) reject(new Error('Permission request was cancelled.'))
         else resolve(allow)
       }
-      this.appPermissions.set(requestId, { sessionId: id, finish, ...(always ? { always } : {}) })
+      this.appPermissions.set(requestId, { sessionId: id, finish, options })
       this.host.record(id, {
         kind: 'permission-request',
         requestId,
@@ -106,7 +116,8 @@ export class UserRequests {
         title: `Allow ${toolName}?`,
         detail,
         approvalOnceOnly: true,
-        ...(always ? { approvalAlways: toolName } : {}),
+        ...(options.always ? { approvalAlways: toolName } : {}),
+        ...(options.thread ? { approvalThread: options.thread.label } : {}),
       })
       this.host.setState(id, 'needs-input')
       signal?.addEventListener('abort', abort, { once: true })
@@ -368,17 +379,28 @@ export class UserRequests {
       return this.replyPermission(request.approvalSessionId, requestId, allow, message, scope, pattern)
     if (requestOutcomes(this.host.events(id)).get(requestId))
       throw new Error('This permission request is already closed.')
-    if (scope !== 'once' && (!allow || (!request.approvalKey && !request.approvalAlways)))
+    if (
+      scope !== 'once' &&
+      (!allow ||
+        (scope === 'thread'
+          ? !request.approvalThread
+          : !request.approvalKey && !(scope === 'user' && request.approvalAlways)))
+    )
       throw new Error('This request can only be approved once.')
     if (pattern && (scope === 'once' || !matchesCommand(pattern, request.approvalCommand)))
       throw new Error('Choose an offered command pattern.')
     const appPermission = this.appPermissions.get(requestId)
     if (appPermission) {
       if (appPermission.sessionId !== id) throw new Error('This approval belongs to another thread.')
-      if (allow && scope !== 'once') appPermission.always?.()
+      if (allow && scope === 'thread' && appPermission.options.thread) {
+        const allowed = this.allowedInThread.get(id) ?? new Set<string>()
+        allowed.add(appPermission.options.thread.key)
+        this.allowedInThread.set(id, allowed)
+      } else if (allow && scope === 'user') appPermission.options.always?.()
       appPermission.finish(allow)
       return
     }
+    if (scope === 'thread') throw new Error('This request can only be approved once.')
     const session = this.host.get(id)
     const approvals = new PermissionApprovals(this.db)
     const project = approvals.project(session.taskId)

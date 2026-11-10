@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import type { PermissionOptions } from '../agent/userRequests'
 import { connectionApplies } from './policy'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
@@ -97,7 +98,7 @@ export class ExternalSessionTools {
       title: string,
       detail: string,
       signal: AbortSignal,
-      always: () => void,
+      options: PermissionOptions,
     ) => Promise<boolean>,
   ) {}
 
@@ -153,7 +154,7 @@ export class ExternalSessionTools {
             `Arguments: ${redactSecrets(JSON.stringify(args)).slice(0, 2000)}`,
           ].join('\n'),
           signal,
-          () => service.allowTool(call.connectionId, call.toolName),
+          { always: () => service.allowTool(call.connectionId, call.toolName) },
         ),
     )
     this.gateways.set(key, { gateway, timer: this.expire(key) })

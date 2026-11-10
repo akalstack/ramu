@@ -7152,4 +7152,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Pairs with {0}': 'Berpasangan dengan {0}',
   'Ramu’s plugin for it: runs its CLI with your saved sign-in, or reads its data into dashboards.': 'Plugin Ramu untuknya: menjalankan CLI-nya dengan login yang kamu simpan, atau membaca datanya ke dasbor.',
   'The service’s own plugin: its skills teach agents the service in full, often with its MCP server.': 'Plugin milik layanan itu sendiri: skill-nya mengajarkan layanan itu secara lengkap ke agen, sering kali dengan server MCP-nya.',
+  'Allow {0} in this thread': 'Izinkan {0} di thread ini',
+  'Allow in this thread lasts until the thread ends or Ramu restarts; other threads still ask.': 'Izinkan di thread ini berlaku sampai thread selesai atau Ramu dimulai ulang; thread lain tetap bertanya.',
 }

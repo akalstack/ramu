@@ -2,6 +2,7 @@
 // agent cannot do for itself: the credential stays on the host (passed to the CLI in its environment, never in the
 // arguments or the transcript), commands that only read run straight away, and every other command asks the person
 // with a card naming it.
+import type { PermissionOptions } from '../agent/userRequests'
 import { spawn } from 'node:child_process'
 import { mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -23,8 +24,25 @@ export interface PluginCliTarget {
 }
 
 /** Whether a command only reads: its arguments start with one of the plugin's read prefixes. */
+const startsWith = (args: readonly string[], prefix: readonly string[]) =>
+  prefix.length <= args.length && prefix.every((part, index) => args[index] === part)
+
 export function cliCommandReads(cli: Pick<PluginCli, 'reads'>, args: readonly string[]): boolean {
-  return cli.reads.some((prefix) => prefix.length <= args.length && prefix.every((part, index) => args[index] === part))
+  return cli.reads.some((prefix) => startsWith(args, prefix))
+}
+
+/** Whether a command deploys, and where to: a preview, production, or neither. */
+export function cliDeployKind(
+  cli: Pick<PluginCli, 'deploys'>,
+  args: readonly string[],
+): 'preview' | 'production' | null {
+  const deploys = cli.deploys
+  if (!deploys) return null
+  if (deploys.production.some((prefix) => startsWith(args, prefix))) return 'production'
+  if (!deploys.commands.some((prefix) => startsWith(args, prefix))) return null
+  if (!deploys.productionFlag) return 'production'
+  const flag = deploys.productionFlag
+  return args.some((arg) => arg === flag || arg.startsWith(`${flag}=`)) ? 'production' : 'preview'
 }
 
 /** The CLI to run and the arguments before the agent's: the installed one, else its package through npx. */
@@ -137,7 +155,9 @@ export function registerPluginCliTools(
   source: AgentSessionInfo,
   current: () => AgentSessionInfo,
   /** Asks the person through the thread's approval card. Resolves false when refused. */
-  requestApproval: (detail: string, signal?: AbortSignal) => Promise<boolean>,
+  requestApproval: (detail: string, signal: AbortSignal | undefined, options: PermissionOptions) => Promise<boolean>,
+  /** Runs the project's migrations before a production deploy; throws to stop it. Returns what it did. */
+  beforeProduction: (cwd: string) => Promise<string>,
   run: typeof runPluginCli = runPluginCli,
 ) {
   const targets = plugins.clis()
@@ -166,19 +186,41 @@ export function registerPluginCliTools(
       if (session.id !== source.id || session.cwd !== source.cwd)
         throw new Error('The thread’s checkout changed. Reconnect before trying again.')
       const shown = `${target.cli.binaries[0]} ${commandLine(args)}`
+      const deploy = cliDeployKind(target.cli, args)
+      const where = target.slot
+        ? `Run ${shown} with your ${target.plugin} account, in ${session.cwd}.`
+        : `Run ${shown} in ${session.cwd}.`
+      // A preview never touches what people use, so it runs like a read. Production asks each time unless the person
+      // allowed production deploys for this thread; there is no lasting allow for it.
       if (
         !cliCommandReads(target.cli, args) &&
+        deploy !== 'preview' &&
         !(await requestApproval(
-          target.slot
-            ? `Run ${shown} with your ${target.plugin} account, in ${session.cwd}.`
-            : `Run ${shown} in ${session.cwd}.`,
+          deploy === 'production' ? `${where}\nThis deploys to production; the project's migrations run first.` : where,
           extra.signal,
+          deploy === 'production'
+            ? { thread: { key: `deploy:${target.plugin}`, label: `production deploys with ${target.plugin}` } }
+            : {},
         ))
       )
         throw new Error('The person declined this command. Do not retry it without a new request.')
+      let migrated: string | null = null
+      if (deploy === 'production')
+        try {
+          migrated = await beforeProduction(session.cwd)
+        } catch (error) {
+          throw new Error(`${(error as Error).message}\nNothing was deployed. Fix the cause, then deploy again.`, {
+            cause: error,
+          })
+        }
       const ran = await run(target, args, session.cwd, secret, extra.signal)
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify({ command: shown, ...ran }) }],
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify({ command: shown, ...(migrated ? { migrations: migrated } : {}), ...ran }),
+          },
+        ],
         ...(ran.exitCode === 0 ? {} : { isError: true }),
       }
     },

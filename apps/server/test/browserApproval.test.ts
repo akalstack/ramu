@@ -57,13 +57,35 @@ it('resolves denial and cancels the approval on run stop or transport abort', as
 it('offers Always allow for an MCP tool that asks, which switches the tool to Allow instead of saving a rule', async () => {
   const s = setup()
   const always = vi.fn()
-  const once = s.requests.requestPermission('session', 'linear: create_issue', 'Arguments: {}', undefined, always)
+  const once = s.requests.requestPermission('session', 'linear: create_issue', 'Arguments: {}', undefined, { always })
   expect(s.events[0]).toMatchObject({ approvalOnceOnly: true, approvalAlways: 'linear: create_issue' })
   s.requests.replyPermission('session', s.requestId(), true)
   expect(await once).toBe(true)
   expect(always).not.toHaveBeenCalled()
-  const remembered = s.requests.requestPermission('session', 'linear: create_issue', 'Arguments: {}', undefined, always)
+  const remembered = s.requests.requestPermission('session', 'linear: create_issue', 'Arguments: {}', undefined, {
+    always,
+  })
   s.requests.replyPermission('session', s.requestId(), true, undefined, 'user')
   expect(await remembered).toBe(true)
   expect(always).toHaveBeenCalledOnce()
+})
+it('lets a thread allow a kind of request for itself, asking again in another thread', async () => {
+  const s = setup()
+  const thread = { key: 'deploy:vercel-cli', label: 'production deploys with vercel-cli' }
+  const first = s.requests.requestPermission('session', 'Platform CLI', 'Run vercel deploy --prod', undefined, {
+    thread,
+  })
+  expect(s.events.at(-1)).toMatchObject({ approvalThread: 'production deploys with vercel-cli' })
+  s.requests.replyPermission('session', s.requestId(), true, undefined, 'thread')
+  expect(await first).toBe(true)
+  const asked = s.events.length
+  expect(
+    await s.requests.requestPermission('session', 'Platform CLI', 'Run vercel deploy --prod', undefined, { thread }),
+  ).toBe(true)
+  expect(s.events.length).toBe(asked)
+  // Without the option, a thread scope is refused like any once-only request.
+  void s.requests.requestPermission('session', 'Browser', 'Read a page')
+  expect(() => s.requests.replyPermission('session', s.requestId(), true, undefined, 'thread')).toThrow(
+    'only be approved once',
+  )
 })

@@ -136,6 +136,8 @@ export type TranscriptItem = (
       reviewRule?: string
       /** An MCP tool set to Ask: Always allow switches it to Allow. */
       always?: boolean
+      /** What Allow in this thread covers, such as production deploys with one plugin. */
+      thread?: string
     }
   | { kind: 'elicitation'; id: string; request: import('@ramu/shared/types').AgentElicitation; outcome?: string }
   | {

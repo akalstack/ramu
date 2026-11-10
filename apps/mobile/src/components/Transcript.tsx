@@ -1971,6 +1971,13 @@ function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind
             onPress={() => decide(chatId, item.id, 'allow', 'user', pattern)}
           />
         ) : null}
+        {item.thread ? (
+          <Button
+            kind="secondary"
+            title={say('Allow {0} in this thread', { 0: item.thread })}
+            onPress={() => decide(chatId, item.id, 'allow', 'thread')}
+          />
+        ) : null}
         {item.always ? (
           <Button
             kind="secondary"
@@ -1986,7 +1993,9 @@ function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind
             ? 'Saved approvals apply to the selected rule. Allow once applies only to this request.'
             : item.always
               ? 'Always allow lets this tool run without asking. Change it back in Customize → MCP servers.'
-              : 'Applies to this request only.',
+              : item.thread
+                ? 'Allow in this thread lasts until the thread ends or Ramu restarts; other threads still ask.'
+                : 'Applies to this request only.',
         )}
       </T>
     </Card>

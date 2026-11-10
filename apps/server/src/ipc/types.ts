@@ -53,6 +53,8 @@ export interface Services {
   /** Hosting accounts, project deploy bindings and CLI sign-ins. */
   deploys?: import('../workspace/deploy/deploys').Deploys
   localApps?: import('../workspace/deploy/localApp').LocalApps
+  /** Each project's production database address, which a production deploy's migrations run against. */
+  migrations?: import('../workspace/deploy/migrations').ProductionMigrations
   pageAi?: import('../interactive/pageAi').PageAi
   /** Abilities: live checks per provider and calls routed to a provider that has one. */
   abilities?: import('../agent/abilities').AbilityService

@@ -181,6 +181,29 @@ const cli = z.strictObject({
     .default([]),
   /** Environment set from a slot's field rather than its token, such as `CLOUDFLARE_ACCOUNT_ID`. */
   credential: z.string().regex(SLOT_ID).optional(),
+  /**
+   * Which commands deploy. A preview runs without asking; a production deploy asks every time unless the person allows
+   * production deploys for the thread, and the project's migrations run before it.
+   */
+  deploys: z
+    .strictObject({
+      /** Argument prefixes that deploy, such as `["up"]` or `["deploy"]`. */
+      commands: z
+        .array(z.array(z.string().min(1).max(60)).min(1).max(6))
+        .min(1)
+        .max(10),
+      /** The flag that makes a deploy command production (`--prod`); without one, every deploy is production. */
+      productionFlag: z
+        .string()
+        .regex(/^--?[A-Za-z0-9-]{1,40}$/)
+        .optional(),
+      /** Prefixes that change production without a new deploy, such as a rollback or a promotion. */
+      production: z
+        .array(z.array(z.string().min(1).max(60)).min(1).max(6))
+        .max(10)
+        .default([]),
+    })
+    .optional(),
 })
 
 /**

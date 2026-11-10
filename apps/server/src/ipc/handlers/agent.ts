@@ -394,7 +394,7 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
         id,
         z.boolean(),
         z.string().max(10_000).nullish(),
-        z.enum(['once', 'project', 'user']).optional(),
+        z.enum(['once', 'thread', 'project', 'user']).optional(),
         z.string().max(300).optional(),
       ]),
       run: (s: string, r: string, allow: boolean, message?: string | null, scope?: PermissionScope, pattern?: string) =>

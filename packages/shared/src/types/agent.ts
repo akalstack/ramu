@@ -142,7 +142,8 @@ export interface ProviderWaitFields {
   reason?: string
 }
 
-export type PermissionScope = 'once' | 'project' | 'user'
+/** How far an approval reaches: this request, the thread (for Ramu's own asks that offer it), a project or the user. */
+export type PermissionScope = 'once' | 'thread' | 'project' | 'user'
 export interface SavedPermissionRule {
   id: string
   provider: AgentProvider
@@ -468,6 +469,8 @@ type AgentEventBody =
       approvalReviewRule?: string
       /** An MCP tool set to Ask: Always allow switches it to Allow in its server's settings, where it can be changed back. */
       approvalAlways?: string
+      /** What Allow in this thread covers, such as "production deploys with railway-cli"; it ends with the thread. */
+      approvalThread?: string
       approvalOnceOnly?: boolean
       approvalKey?: string
       approvalCommand?: string
