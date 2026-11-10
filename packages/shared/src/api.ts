@@ -1301,6 +1301,13 @@ export interface RamuMethods extends ArtifactMethods {
   'providers.pickBinary'(): string | null
   'settings.app.snapshot'(): SettingsSnapshot
   'settings.app.patch'(edits: SettingEdit[]): SettingsSnapshot
+  /** A card of settings an agent asked to change, or null once it is gone. */
+  'settings.changeCard.get'(cardId: string): import('./settingsChanges').SettingsChangeCard | null
+  /** Saves the card's changes; refused for a row that changed since the agent asked. */
+  'settings.changeCard.apply'(cardId: string): import('./settingsChanges').SettingsChangeCard
+  /** Puts back the values from before the card applied; refused for a row the person changed since. */
+  'settings.changeCard.undo'(cardId: string): import('./settingsChanges').SettingsChangeCard
+  'settings.changeCard.dismiss'(cardId: string): import('./settingsChanges').SettingsChangeCard
   'settings.permissions.clear'(removal?: import('./types').PermissionRemoval): void
   'settings.permissions.list'(): import('./types').SavedPermissionRule[]
   'settings.permissions.remove'(id: string): void
@@ -1310,13 +1317,6 @@ export interface RamuMethods extends ArtifactMethods {
   /** Sets or clears (no `value`) one shared mobile field; the host refuses any other field or value. */
   'preferences.layers.set'(edit: {
     id: import('./sharedFields').SharedMobileField
-  /** A card of settings an agent asked to change, or null once it is gone. */
-  'settings.changeCard.get'(cardId: string): import('./settingsChanges').SettingsChangeCard | null
-  /** Saves the card's changes; refused for a row that changed since the agent asked. */
-  'settings.changeCard.apply'(cardId: string): import('./settingsChanges').SettingsChangeCard
-  /** Puts back the values from before the card applied; refused for a row the person changed since. */
-  'settings.changeCard.undo'(cardId: string): import('./settingsChanges').SettingsChangeCard
-  'settings.changeCard.dismiss'(cardId: string): import('./settingsChanges').SettingsChangeCard
     value?: string | boolean
     at: number
     by: string
@@ -1793,6 +1793,10 @@ export interface RamuMethods extends ArtifactMethods {
   'agent.removeQueued'(sessionId: string, messageId: string): void
   'agent.reorderQueued'(sessionId: string, order: string[]): void
   'agent.resumeQueue'(sessionId: string): void
+  /** Holds a queued message while the person edits it, or releases it unchanged. */
+  'agent.holdQueued'(sessionId: string, messageId: string, held: boolean): void
+  /** Replaces a queued message's text and releases its hold, so it goes out at its usual moment. */
+  'agent.editQueued'(sessionId: string, messageId: string, text: string): void
   /** `interrupt` stops a running turn first and sends the message as the next one. */
   'agent.sendQueuedNow'(sessionId: string, messageId: string, interrupt?: boolean): void
   'agent.interrupt'(sessionId: string): void
@@ -1803,10 +1807,6 @@ export interface RamuMethods extends ArtifactMethods {
    */
   'agent.retryLimitNow'(sessionId: string): LimitRetryResult
   /**
-  /** Holds a queued message while the person edits it, or releases it unchanged. */
-  'agent.holdQueued'(sessionId: string, messageId: string, held: boolean): void
-  /** Replaces a queued message's text and releases its hold, so it goes out at its usual moment. */
-  'agent.editQueued'(sessionId: string, messageId: string, text: string): void
    * Sets this thread's own auto-resume choice (true or false), or clears it with null to follow the global
    * `fallback.autoResume`. Takes effect at once: it clears or re-arms the thread's limit timer. Does not touch the provider.
    */

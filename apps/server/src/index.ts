@@ -60,13 +60,13 @@ import { openHeadlessPage } from './interactive/pageHeadless'
 import type { ArtifactInfo } from '@ramu/shared/artifacts'
 import type { TunnelChoice } from '@ramu/shared/types'
 import { registerThemeTools } from './themeTools'
+import { SettingsChanges } from './settings/settingsChanges'
+import { registerSettingsTools } from './settings/settingsTools'
+import type { SettingsSnapshot } from '@ramu/shared/settingsCompatibility'
 import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
 import { createDeploys } from './workspace/deploy/deploys'
 import { LocalApps, type SavedApp } from './workspace/deploy/localApp'
 import { LiveDashboards, dataSourceTable, watchDashboards } from './interactive/liveDashboard'
-import { SettingsChanges } from './settings/settingsChanges'
-import { registerSettingsTools } from './settings/settingsTools'
-import type { SettingsSnapshot } from '@ramu/shared/settingsCompatibility'
 import { tableFromFile } from './interactive/dashboardFile'
 import { readText } from './workspace/files'
 import { appliedDesignSystem, designTokensOf } from '@ramu/shared/artifacts'
@@ -693,6 +693,20 @@ const pullRequestWrites = new PullRequestWrites(
   () => send('workspace:changed', {}),
   (taskId, cwd, action) => guardForge({ identities, workspace, agents }, taskId, cwd, action),
 )
+const settingsChanges = new SettingsChanges(
+  workspace,
+  agents,
+  {
+    snapshot: () =>
+      origin.run({ network: false }, () => dispatcher.invoke('settings.app.snapshot', [])) as Promise<SettingsSnapshot>,
+    patch: (edits) =>
+      origin.run({ network: false }, () =>
+        dispatcher.invoke('settings.app.patch', [edits]),
+      ) as Promise<SettingsSnapshot>,
+  },
+  (taskId) => workspace.getTask(taskId).title,
+  () => send('workspace:changed', {}),
+)
 pullRequestIndex.drafts = () => pullRequestDrafts.list()
 pullRequestWatches.drafts = pullRequestDrafts
 pullRequestWatches.index = pullRequestIndex
@@ -713,20 +727,6 @@ agents.reviewHooks = {
 }
 const recaps = new RecapService(db, workspace, agents, changed, () => void mobilePush.deliverDigest().catch(() => {}))
 const memory = new MemoryService(db, workspace, agents, () => send('memory:changed', {}), join(userData, 'memory'))
-const settingsChanges = new SettingsChanges(
-  workspace,
-  agents,
-  {
-    snapshot: () =>
-      origin.run({ network: false }, () => dispatcher.invoke('settings.app.snapshot', [])) as Promise<SettingsSnapshot>,
-    patch: (edits) =>
-      origin.run({ network: false }, () =>
-        dispatcher.invoke('settings.app.patch', [edits]),
-      ) as Promise<SettingsSnapshot>,
-  },
-  (taskId) => workspace.getTask(taskId).title,
-  () => send('workspace:changed', {}),
-)
 // Once a second identity exists, notes also have an identity level between a project and everywhere.
 memory.identityOf = (projectId) =>
   identities.settings().identities.length >= 2 ? (identities.forProject(projectId)?.id ?? null) : null
@@ -1385,6 +1385,7 @@ const dispatcher = createDispatcher(
     pullRequestIndex,
     pullRequestDrafts,
     pullRequestWrites,
+    settingsChanges,
     recaps,
     reviews,
     memory,
@@ -1406,7 +1407,6 @@ async function stop(intentional = false, exitCode = 0) {
   stopping = true
   clearInterval(tick)
   tunnels.stop()
-    settingsChanges,
   publicPages.close()
   await schedules.stop()
   await pullRequestWatches.stop()
@@ -1771,6 +1771,7 @@ const mcpHttp = createServer(async (req, res) => {
       (detail, signal) => agents.requestPermission(source.id, 'Background command', detail, signal),
     )
   if (!review) registerThemeTools(server, (theme) => agents.themeProposed(source.id, theme))
+  if (!review) registerSettingsTools(server, source.id, settingsChanges)
   if (!review) registerAbilityTools(server, abilities, source)
   if (!review)
     registerBrowserTools(
@@ -1792,7 +1793,6 @@ const mcpHttp = createServer(async (req, res) => {
       () => browserTokens.get(source.id) === token,
       {
         enabled: () => workspace.getAppState<boolean>('computer:enabled', false) === true,
-  if (!review) registerSettingsTools(server, source.id, settingsChanges)
         request: (detail, signal) => agents.requestPermission(source.id, 'Computer use', detail, signal),
         grant: async (app) => {
           await origin.run({ network: false }, () => dispatcher.invoke('computer.setEnabled', [true]))

@@ -764,11 +764,6 @@ export class AgentService {
     return this.parts.dispatcher.removeQueued(...args)
   }
 
-  reorderQueued(...args: Parameters<MessageDispatcher['reorderQueued']>) {
-    return this.parts.dispatcher.reorderQueued(...args)
-  }
-
-  sendQueuedNow(...args: Parameters<MessageDispatcher['sendQueuedNow']>) {
   holdQueued(...args: Parameters<MessageDispatcher['holdQueued']>) {
     return this.parts.dispatcher.holdQueued(...args)
   }
@@ -777,6 +772,11 @@ export class AgentService {
     return this.parts.dispatcher.editQueued(...args)
   }
 
+  reorderQueued(...args: Parameters<MessageDispatcher['reorderQueued']>) {
+    return this.parts.dispatcher.reorderQueued(...args)
+  }
+
+  sendQueuedNow(...args: Parameters<MessageDispatcher['sendQueuedNow']>) {
     return this.parts.dispatcher.sendQueuedNow(...args)
   }
 
