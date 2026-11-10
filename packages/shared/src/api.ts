@@ -1628,6 +1628,8 @@ export interface RamuMethods extends ArtifactMethods {
     action: import('./types').PullRequestAction,
   ): void
   'forge.reviewThreads'(taskId: string, repoId: string, url: string): import('./types').PullRequestThread[]
+  /** A comment author's picture as a data URL, fetched by the host from a known avatar host; null otherwise. */
+  'forge.avatar'(url: string): string | null
   /**
    * Brings the pull request up to date with its base: on the hosting service when it can, otherwise by merging the base
    * in the thread's checkout of the branch and pushing. Conflicts stay in that checkout to resolve.

@@ -538,6 +538,7 @@ interface RawUser {
   display_name?: string
   /** `app_user` for apps and bots. */
   type?: string
+  links?: { avatar?: { href?: string } }
 }
 
 const userName = (user: RawUser | null | undefined) => user?.username ?? user?.nickname ?? user?.display_name ?? null
@@ -922,6 +923,7 @@ export function parseComments(
           trusted: bot || (!!comment.user?.uuid && trustedIds.has(comment.user.uuid)),
           body: (comment.content?.raw ?? '').trim(),
           createdAt: comment.created_on ? Date.parse(comment.created_on) || 0 : 0,
+          ...(comment.user?.links?.avatar?.href ? { avatarUrl: comment.user.links.avatar.href } : {}),
         }
       }),
     }))

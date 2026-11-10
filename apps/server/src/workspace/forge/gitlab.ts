@@ -672,6 +672,7 @@ interface RawUser {
   id: number
   username: string
   bot?: boolean
+  avatar_url?: string | null
 }
 
 interface RawListMergeRequest extends RawMergeRequest {
@@ -1072,6 +1073,7 @@ export function parseDiscussions(
               (note.author !== undefined && developers.has(note.author.id)),
             body: note.body.trim(),
             createdAt: note.created_at ? Date.parse(note.created_at) || 0 : 0,
+            ...(note.author?.avatar_url ? { avatarUrl: note.author.avatar_url } : {}),
           }
         }),
       },

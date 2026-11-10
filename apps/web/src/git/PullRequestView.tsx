@@ -62,7 +62,7 @@ import { queryInvokerFor } from './hostQuery'
 import { PullRequestIcon, StageChip } from './PullRequestIcon'
 import { ReviewDraftsCard } from './ReviewDraftsCard'
 import { openPullRequestThread } from './pullRequestThreads'
-import { ThreadReply } from './ThreadReply'
+import { ReviewThread } from './ReviewThread'
 import { useAddProject } from '../workspace/addProject'
 
 type View = Extract<ViewDescriptor, { kind: 'pull-request' }>
@@ -540,56 +540,24 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
                 </p>
               )}
               {shownThreads.map((entry) => (
-                <article key={entry.id} className="flex flex-col gap-2 rounded-(--radius-m) bg-fill p-3">
-                  <div className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate font-mono text-caption text-muted-foreground">
-                      {entry.path ? `${entry.path}${entry.line ? `:${entry.line}` : ''}` : t('Conversation')}
-                      {entry.outdated && ` · ${t('Outdated')}`}
-                      {entry.resolved && ` · ${t('Resolved')}`}
-                    </span>
-                  </div>
-                  {entry.comments.map((comment) => (
-                    <div key={comment.id} className="flex flex-col gap-1 pt-2 first-of-type:pt-0">
-                      <div className="flex items-center gap-1.5 text-control">
-                        <span className="font-medium">{comment.author ?? t('Someone')}</span>
-                        {comment.bot && (
-                          <span className="rounded-full bg-fill px-1.5 text-caption text-muted-foreground">
-                            {t('bot')}
-                          </span>
-                        )}
-                        {!comment.trusted && (
-                          <span className="text-caption text-warn">{t('From outside the project')}</span>
-                        )}
-                        {supportsPullRequest(service, 'reactions') && (
-                          <span className="ml-auto">
-                            <ReactionMenu
-                              service={service}
-                              disabled={!!busy}
-                              onReact={(reaction) =>
-                                void write('react', { kind: 'react', commentId: comment.id, reaction, remove: false })
-                              }
-                            />
-                          </span>
-                        )}
-                      </div>
-                      <PullRequestMarkdown>{comment.body}</PullRequestMarkdown>
-                    </div>
-                  ))}
-                  {open && (
-                    <ThreadReply
-                      resolved={entry.resolved}
-                      resolvable={entry.resolvable}
-                      onReply={(body) => write('reply', { kind: 'reply', threadId: entry.id, body })}
-                      onStatus={(resolve) =>
-                        write('thread', {
-                          kind: 'thread-status',
-                          threadId: entry.id,
-                          status: resolve ? 'resolved' : 'active',
-                        })
-                      }
-                    />
-                  )}
-                </article>
+                <ReviewThread
+                  key={entry.id}
+                  thread={entry}
+                  onWrite={open ? (change) => write(change.kind, change) : undefined}
+                  commentActions={
+                    supportsPullRequest(service, 'reactions')
+                      ? (comment) => (
+                          <ReactionMenu
+                            service={service}
+                            disabled={!!busy}
+                            onReact={(reaction) =>
+                              void write('react', { kind: 'react', commentId: comment.id, reaction, remove: false })
+                            }
+                          />
+                        )
+                      : undefined
+                  }
+                />
               ))}
             </section>
           </TabsContent>

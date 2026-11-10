@@ -7110,4 +7110,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'No thread is running anything': 'Tidak ada thread yang menjalankan apa pun',
   'The service, the app and its browser': 'Layanan, aplikasi, dan browsernya',
   'CPU': 'CPU',
+  'Write a reply…': 'Tulis balasan…',
+  Unresolve: 'Buka lagi',
+  'Comment on this file': 'Komentar pada file ini',
+  'Review comment': 'Komentar tinjauan',
+  '1 comment': '1 komentar',
 }

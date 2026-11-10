@@ -3,6 +3,7 @@ import { guardForge } from '../identityGuard'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { avatarDataUrl } from '../../workspace/forge/avatars'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 import { outsideRepository } from '@ramu/shared/pullRequests'
 import type {
@@ -628,6 +629,10 @@ export const registerForgeHandlers: RegisterHandlers = (ctx) => {
         }
         throw new Error('Open this pull request in a thread first, so its branch is checked out to update.')
       },
+    },
+    'forge.avatar': {
+      args: z.tuple([z.string().url().max(2000)]),
+      run: (url: string) => avatarDataUrl(url),
     },
     'forge.reviewThreads': {
       args: z.tuple([id, pullRequestRepo, prUrl]),

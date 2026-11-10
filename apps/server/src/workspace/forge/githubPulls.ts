@@ -409,6 +409,7 @@ export async function pullRequestBody(cwd: string, url: string): Promise<string>
 interface RawAuthor {
   login: string
   __typename: string
+  avatarUrl?: string
 }
 
 interface RawThreads {
@@ -425,6 +426,7 @@ interface RawThreads {
           path: string
           line: number | null
           viewerCanResolve: boolean
+          viewerCanUnresolve?: boolean
           comments: {
             nodes: {
               id: string
@@ -458,11 +460,11 @@ const THREADS_QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
       reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } } } }
       reviewThreads(first: 100) {
         nodes {
-          id isResolved isOutdated path line viewerCanResolve
-          comments(first: 50) { nodes { id author { login __typename } authorAssociation body createdAt } }
+          id isResolved isOutdated path line viewerCanResolve viewerCanUnresolve
+          comments(first: 50) { nodes { id author { login __typename avatarUrl(size: 64) } authorAssociation body createdAt } }
         }
       }
-      reviews(last: 30) { nodes { id state body author { login __typename } authorAssociation createdAt } }
+      reviews(last: 30) { nodes { id state body author { login __typename avatarUrl(size: 64) } authorAssociation createdAt } }
     }
   }
 }`
@@ -497,6 +499,7 @@ export function parseReviewThreads(raw: NonNullable<RawThreads['repository']['pu
         (!!login && (login.toLowerCase() === author || requested.has(login.toLowerCase()))),
       body: node.body.trim(),
       createdAt: Date.parse(node.createdAt) || 0,
+      ...(node.author?.avatarUrl ? { avatarUrl: node.author.avatarUrl } : {}),
     }
   }
   const inline: PullRequestThread[] = raw.reviewThreads.nodes
@@ -507,7 +510,8 @@ export function parseReviewThreads(raw: NonNullable<RawThreads['repository']['pu
       line: thread.line,
       outdated: thread.isOutdated,
       resolved: thread.isResolved,
-      resolvable: thread.viewerCanResolve,
+      // GitHub answers whether the viewer can take the next step, so a resolved thread asks about unresolving.
+      resolvable: thread.isResolved ? thread.viewerCanUnresolve === true : thread.viewerCanResolve,
       comments: thread.comments.nodes.map(comment),
     }))
   const summaries: PullRequestThread[] = raw.reviews.nodes

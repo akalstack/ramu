@@ -112,6 +112,26 @@ describe('GitHub review threads', () => {
       reviewThreads: {
         nodes: [
           {
+            id: 'T2',
+            isResolved: true,
+            isOutdated: false,
+            path: 'src/b.ts',
+            line: 9,
+            viewerCanResolve: false,
+            viewerCanUnresolve: true,
+            comments: {
+              nodes: [
+                {
+                  id: 'c9',
+                  author: author('ana'),
+                  authorAssociation: 'MEMBER',
+                  body: 'Done',
+                  createdAt: '2026-11-01T00:00:00Z',
+                },
+              ],
+            },
+          },
+          {
             id: 'T1',
             isResolved: false,
             isOutdated: true,
@@ -167,14 +187,16 @@ describe('GitHub review threads', () => {
         ],
       },
     })
-    expect(threads.map((thread) => thread.id)).toEqual(['review:R1', 'T1'])
+    expect(threads.map((thread) => thread.id)).toEqual(['review:R1', 'T2', 'T1'])
     expect(threads[0]).toMatchObject({ path: null, resolvable: false, comments: [{ author: 'bo', trusted: true }] })
-    expect(threads[1]!.comments.map((comment) => [comment.author, comment.trusted, comment.bot])).toEqual([
+    expect(threads[2]!.comments.map((comment) => [comment.author, comment.trusted, comment.bot])).toEqual([
       ['ana', true, false],
       ['stranger', false, false],
       ['lint', true, true],
     ])
-    expect(threads[1]).toMatchObject({ outdated: true, resolvable: true })
-    expect(threads[1]!.comments[0]!.body).toBe('Rename')
+    expect(threads[2]).toMatchObject({ outdated: true, resolvable: true })
+    expect(threads[2]!.comments[0]!.body).toBe('Rename')
+    // A resolved thread can still be reopened by someone GitHub lets unresolve it.
+    expect(threads[1]).toMatchObject({ resolved: true, resolvable: true })
   })
 })

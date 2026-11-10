@@ -36,15 +36,21 @@ export function ThreadReply({
   }
   if (!open)
     return (
-      <div className="flex flex-wrap items-center gap-1">
-        <Button size="sm" variant="ghost" onClick={() => setOpen(true)}>
-          <CornerDownRight size={13} />
-          {t('Reply')}
+      <div className="flex items-center gap-2">
+        {/* Reads as the field it opens, so answering is one click on the obvious place. */}
+        <Button
+          variant="ghost"
+          className="h-8 min-w-0 flex-1 justify-start gap-2 rounded-(--radius-s) border border-line bg-field px-3 font-normal text-muted-foreground hover:bg-field hover:text-soft"
+          onClick={() => setOpen(true)}
+        >
+          <CornerDownRight size={13} className="flex-none" />
+          <span className="truncate">{t('Write a reply…')}</span>
         </Button>
         {resolvable && onStatus && (
           <Button
             size="sm"
-            variant="ghost"
+            variant="secondary"
+            className="flex-none"
             disabled={busy !== null}
             onClick={() => {
               setBusy('status')
@@ -52,7 +58,7 @@ export function ThreadReply({
             }}
           >
             {resolved ? <RotateCcw size={13} /> : <CheckCircle2 size={13} />}
-            {resolved ? t('Reopen') : t('Resolve')}
+            {resolved ? t('Unresolve') : t('Resolve')}
           </Button>
         )}
       </div>

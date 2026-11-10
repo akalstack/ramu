@@ -242,6 +242,8 @@ export interface PullRequestComment {
   trusted: boolean
   body: string
   createdAt: number
+  /** The author's picture on the service, shown through the host (`forge.avatar`); absent where it needs a sign-in. */
+  avatarUrl?: string
 }
 
 /** What the agent decided about one thread. `skipped` posts nothing. */

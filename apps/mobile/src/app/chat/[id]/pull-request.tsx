@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ThreadReply } from '../../../components/ThreadReply'
+import { CommentAvatar } from '../../../components/CommentAvatar'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PullRequestTimeline } from '../../../components/PullRequestTimeline'
 import { PullRequestFilesList } from '../../../components/PullRequestFilesList'
@@ -795,29 +796,57 @@ export default function PullRequestScreen() {
                       </T>
                     ) : (
                       shownThreads.map((entry) => (
-                        <Card key={entry.id} style={{ padding: space.m, gap: space.s }}>
-                          <T size={font.caption} tone="muted" mono numberOfLines={2}>
-                            {(entry.path ? `${entry.path}${entry.line ? `:${entry.line}` : ''}` : say('Conversation')) +
-                              (entry.outdated ? ` · ${say('Outdated')}` : '') +
-                              (entry.resolved ? ` · ${say('Resolved')}` : '')}
-                          </T>
+                        <Card key={entry.id} style={{ padding: space.m, gap: space.m }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+                            <T size={font.caption} tone="muted" mono numberOfLines={1} style={{ flex: 1 }}>
+                              {entry.path
+                                ? `${entry.path}${entry.line ? `:${entry.line}` : ''}`
+                                : say('Review comment')}
+                            </T>
+                            {entry.outdated ? <Pill text={say('Outdated')} /> : null}
+                            {entry.resolved ? <Pill text={say('Resolved')} /> : null}
+                          </View>
                           {entry.comments.map((comment, index) => (
-                            <View key={comment.id} style={{ gap: space.xs }}>
-                              {index ? <Divider /> : null}
+                            // Replies hang from a line under the first comment, as one conversation.
+                            <View
+                              key={comment.id}
+                              style={
+                                index
+                                  ? {
+                                      gap: space.xs,
+                                      marginLeft: 12,
+                                      paddingLeft: space.m,
+                                      borderLeftWidth: 1,
+                                      borderLeftColor: c.line,
+                                    }
+                                  : { gap: space.xs }
+                              }
+                            >
                               <View
                                 style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.s }}
                               >
+                                <CommentAvatar
+                                  computerId={computerId}
+                                  name={comment.author}
+                                  url={comment.avatarUrl}
+                                  bot={comment.bot}
+                                  size={index ? 20 : 24}
+                                />
                                 <T size={font.control} weight="600">
                                   {comment.author ?? say('Someone')}
                                 </T>
-                                {comment.bot ? (
-                                  <T size={font.caption} tone="muted">
-                                    {say('bot')}
-                                  </T>
-                                ) : null}
+                                {comment.bot ? <Pill text={say('bot')} /> : null}
                                 {!comment.trusted ? (
                                   <T size={font.caption} tone="warn">
                                     {say('From outside the project')}
+                                  </T>
+                                ) : null}
+                                {comment.createdAt ? (
+                                  <T size={font.caption} tone="muted">
+                                    {new Date(comment.createdAt).toLocaleDateString(undefined, {
+                                      month: 'short',
+                                      day: 'numeric',
+                                    })}
                                   </T>
                                 ) : null}
                               </View>
@@ -1234,5 +1263,17 @@ function MergeSheet({
         />
       </View>
     </Sheet>
+  )
+}
+
+/** A thread's state or an author's kind, as a quiet label beside the name. */
+function Pill({ text }: { text: string }) {
+  const { c } = useTheme()
+  return (
+    <View style={{ borderWidth: 1, borderColor: c.line, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1 }}>
+      <T size={font.caption} tone="muted">
+        {text}
+      </T>
+    </View>
   )
 }

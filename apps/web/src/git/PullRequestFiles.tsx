@@ -17,7 +17,7 @@ import { ICON_BUTTON_CLASS, NOTE_CLASS, WHERE_CLASS } from '../changes/styles'
 import { commentLabel } from './ReviewChip'
 import { LargeDiffBanner } from '../changes/LargeDiffBanner'
 import { useColorizedLines } from '../editor/colorize'
-import { ThreadReply } from './ThreadReply'
+import { ReviewThread } from './ReviewThread'
 import { isLargeDiff } from '@ramu/shared/largeDiff'
 import { ReviewFileTree } from '../changes/ReviewFileTree'
 import { useNearViewport } from '../lib/useNearViewport'
@@ -92,42 +92,6 @@ function FilePath({ file }: { file: PullRequestFile }) {
       </span>
       <span className="flex-none text-foreground">{name}</span>
     </span>
-  )
-}
-
-/** A review thread shown under the line it is on, in the same card as a comment in the Changes tab, answered there. */
-function InlineThread({
-  thread,
-  onWrite,
-}: {
-  thread: PullRequestThread
-  onWrite?: (write: PullRequestWrite) => Promise<boolean>
-}) {
-  return (
-    <article className={NOTE_CLASS}>
-      {thread.comments.map((comment) => (
-        <Fragment key={comment.id}>
-          <header>
-            <span className="text-control font-medium text-foreground">{comment.author ?? t('Someone')}</span>
-            {comment.bot && <span className="text-caption text-muted-foreground">{t('bot')}</span>}
-            {thread.resolved && <span className="text-caption text-muted-foreground">{t('Resolved')}</span>}
-          </header>
-          <PullRequestMarkdown>{comment.body}</PullRequestMarkdown>
-        </Fragment>
-      ))}
-      {onWrite && (
-        <div className="mt-1.5">
-          <ThreadReply
-            resolved={thread.resolved}
-            resolvable={thread.resolvable}
-            onReply={(body) => onWrite({ kind: 'reply', threadId: thread.id, body })}
-            onStatus={(resolve) =>
-              onWrite({ kind: 'thread-status', threadId: thread.id, status: resolve ? 'resolved' : 'active' })
-            }
-          />
-        </div>
-      )}
-    </article>
   )
 }
 
@@ -243,7 +207,9 @@ function FileDiff({
           {/* As wide as the visible diff and pinned to its left, so a long line never pushes the form out of view. */}
           <div className="sticky left-0 w-[100cqw] px-3 font-sans">
             {here.map((thread) => (
-              <InlineThread key={thread.id} thread={thread} onWrite={canComment ? onWrite : undefined} />
+              <div key={thread.id} className="my-2 whitespace-normal">
+                <ReviewThread thread={thread} location={false} onWrite={canComment ? onWrite : undefined} />
+              </div>
             ))}
             {mine.map((comment) => (
               <article key={comment.id} className={NOTE_CLASS}>
