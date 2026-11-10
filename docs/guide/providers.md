@@ -36,7 +36,7 @@ Claude Code, Codex, Cursor and OpenCode logins can use an API key instead of a s
 
 ## Abilities
 
-A provider offers an [ability](agents.md#abilities) to other providers' threads only after a live check passes on the installed version: one small request with only that tool, run a minute after the host starts or when Settings asks, once per version and sign-in of the provider's chosen login. A failure is kept too, so it is not retried until the version or login changes. Each provider card in **Settings → Providers** lists the results under **Abilities**, with why one is not available and **Check again**.
+A provider offers an [ability](working-with-agents.md#abilities) to other providers' threads only after a live check passes on the installed version: one small request with only that tool, run a minute after the host starts or when Settings asks, once per version and sign-in of the provider's chosen login. A failure is kept too, so it is not retried until the version or login changes. Each provider card in **Settings → Providers** lists the results under **Abilities**, with why one is not available and **Check again**.
 
 | Provider | Checked abilities |
 | --- | --- |

@@ -41,7 +41,7 @@ An optional `ramu.json` at a project's root (or `.ramu/config.json`) shares team
 - **Actions** appear in the project menu and run only when you choose them. **Manage actions** reorders and hides them for this host.
 - **Default model** applies to new threads until you pick another; an unavailable one asks you to choose.
 - **Workspace** and **commit** fields override the host's defaults for this project.
-- **Abilities** override **Settings → Models → Abilities** for threads in this project, ability by ability: `"auto"`, `"off"`, or one provider and model (an empty model uses the one its check ran on). An ability turned off here is refused with this file named as the reason ([Abilities](agents.md#abilities)).
+- **Abilities** override **Settings → Models → Abilities** for threads in this project, ability by ability: `"auto"`, `"off"`, or one provider and model (an empty model uses the one its check ran on). An ability turned off here is refused with this file named as the reason ([Abilities](working-with-agents.md#abilities)).
 - **Stack** says how to run, build and test the project and where it deploys. New threads in the project read it, so the agent uses these commands without being told. A project Ramu creates gets it filled in. `"database": true` makes the deploy sheet offer a Postgres database, and `"migrate"` (an argument list, such as `["npx", "prisma", "migrate", "deploy"]`) runs before each production deploy from Ramu ([Deploying an app](deploy.md#databases)). `"healthPath"` (such as `"/api/health"`) is the path the uptime watch checks on the live address ([Uptime](deploy.md#uptime)).
 
 ## Local diagnostics

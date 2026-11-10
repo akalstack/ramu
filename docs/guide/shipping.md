@@ -12,9 +12,9 @@ Type what you want into Home's message box, such as "a booking page for my barbe
 
 ## 2. The project
 
-Ramu creates a folder beside your other repositories (or where you put it with **Change…** on the desktop, or in the folder you tell the agent), runs the framework's own generator (Next.js, Vite, Astro, Expo, Hono, Django, FastAPI or Rails; a static site and a Go service start from files the agent writes), writes the stack's commands to `ramu.json` ([Configuration](configuration.md#repository-settings)) and commits. The thread moves into the new project and keeps working toward a [goal](goals.md) checked by the project's build and tests ([Threads started by agents](agents.md#threads-started-by-agents)). The agent starts the dev server as a [background command](background-work.md#background-commands) and opens the app in the [browser](browser-and-computer.md#browser), so you see it while it is built.
+Ramu creates a folder beside your other repositories (or where you put it with **Change…** on the desktop, or in the folder you tell the agent), runs the framework's own generator (Next.js, Vite, Astro, Expo, Hono, Django, FastAPI or Rails; a static site and a Go service start from files the agent writes), writes the stack's commands to `ramu.json` ([Configuration](configuration.md#repository-settings)) and commits. The thread moves into the new project and keeps working toward a [goal](goals.md) checked by the project's build and tests ([Threads started by agents](working-with-agents.md#threads-started-by-agents)). The agent starts the dev server as a [background command](background-work.md#background-commands) and opens the app in the [browser](browser-and-computer.md#browser), so you see it while it is built.
 
-When the agent needs something only you know, such as an API key, it asks with a masked card and can keep it for later threads ([Secrets agents ask for](agents.md#secrets-agents-ask-for)).
+When the agent needs something only you know, such as an API key, it asks with a masked card and can keep it for later threads ([Secrets agents ask for](working-with-agents.md#secrets-agents-ask-for)).
 
 ## 3. Put it on GitHub
 
@@ -56,4 +56,4 @@ The agent works on a branch and opens a pull request. Its card in Source Control
 
 ## Coming from an existing project
 
-Every step works on its own: **Deploy…** on any project with a GitHub repository, or **Set up CI…** alone. Agents in the project use the same steps through their deploy tools ([Deploys](agents.md#deploys)).
+Every step works on its own: **Deploy…** on any project with a GitHub repository, or **Set up CI…** alone. Agents in the project use the same steps through their deploy tools ([Deploys](working-with-agents.md#deploys)).

@@ -2,7 +2,7 @@
 
 ## The need
 
-A person asks: "make a small 3D game where a fox runs through a forest collecting coins, with music". Ramu already gets them part of the way. An App artifact runs a canvas game with no project ([Artifacts](../guide/artifacts.md)). `generate_image`, `make_music`, `make_sound`, `speak` and `make_video` make the art and sound ([Abilities](../guide/agents.md#abilities)). **Publish to the web** puts the game online, **Make it a project** turns it into a real app with deploys, and test devices check it on a phone. A 2D web game works end to end today.
+A person asks: "make a small 3D game where a fox runs through a forest collecting coins, with music". Ramu already gets them part of the way. An App artifact runs a canvas game with no project ([Artifacts](../guide/artifacts.md)). `generate_image`, `make_music`, `make_sound`, `speak` and `make_video` make the art and sound ([Abilities](../guide/working-with-agents.md#abilities)). **Publish to the web** puts the game online, **Make it a project** turns it into a real app with deploys, and test devices check it on a phone. A 2D web game works end to end today.
 
 A 3D game, or one built in an engine, breaks down in six places:
 
