@@ -76,6 +76,23 @@ describe('pull request parsing', () => {
     ])
   })
 
+  it('reads a hosting platform’s commit status beside the check runs', () => {
+    expect(
+      forge.parseCheckRuns(
+        [{ name: 'CI', status: 'completed', conclusion: 'success' }],
+        [
+          { context: 'Vercel', state: 'pending', target_url: 'https://vercel.com/o/r/1', updated_at: '2026-01-01' },
+          { context: 'Vercel', state: 'success', target_url: 'https://vercel.com/o/r/2', updated_at: '2026-01-02' },
+          { context: 'netlify/site/deploy-preview', state: 'error', target_url: null },
+        ],
+      ),
+    ).toEqual([
+      { name: 'CI', state: 'success', url: null },
+      { name: 'netlify/site/deploy-preview', state: 'failure', url: null },
+      { name: 'Vercel', state: 'success', url: 'https://vercel.com/o/r/2' },
+    ])
+  })
+
   it('plans requiring a check around the branch protection already there', () => {
     expect(forge.protectionPlan(null, 'CI')).toBe('create')
     expect(forge.protectionPlan({ required_status_checks: null }, 'CI')).toBe('protected')

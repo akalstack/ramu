@@ -146,29 +146,6 @@ async function accountEnvironmentFor(
   return origin === 'github.com' ? { GH_TOKEN: token } : { GH_HOST: origin, GH_ENTERPRISE_TOKEN: token }
 }
 
-/**
- * The GitHub token this checkout's calls use (the saved account Settings chose, or the `gh` sign-in), for a hosting
- * platform's Git link that must add a deploy key or webhook. Never stored or returned to a client.
- */
-export async function repositoryToken(cwd: string): Promise<string> {
-  const executable = ghExecutable()
-  const account = executable ? await accountEnvironment(cwd, executable) : {}
-  const given = account.GH_TOKEN ?? account.GH_ENTERPRISE_TOKEN ?? (await directAccess(cwd))?.token
-  if (given) return given
-  if (!executable) throw new ForgeError('Connect GitHub in Settings → Git hosting first.', 'no-cli')
-  return new Promise((resolve, reject) => {
-    execFile(
-      executable,
-      ['auth', 'token', '--hostname', 'github.com'],
-      { encoding: 'utf8', timeout: 15_000, env: { ...process.env, GH_PROMPT_DISABLED: '1', NO_COLOR: '1' } },
-      (error, stdout) =>
-        error || !stdout.trim()
-          ? reject(new ForgeError('Sign in to GitHub on this host first.', 'signed-out'))
-          : resolve(stdout.trim()),
-    )
-  })
-}
-
 /** The github.com token for host-owned work outside any checkout, such as a settings backup gist; null when signed out. */
 export async function githubToken(): Promise<string | null> {
   const executable = ghExecutable()
@@ -965,29 +942,46 @@ interface RawCheckRun {
   started_at?: string
 }
 
-/** The check runs on one commit, such as a push to the default branch, which no pull request reports. */
+interface RawStatus {
+  context?: string
+  state?: string
+  target_url?: string | null
+  updated_at?: string
+}
+
+/**
+ * The checks on one commit, such as a push, which no pull request reports: check runs and commit statuses, since
+ * hosting platforms such as Vercel and Netlify report their deployments as statuses.
+ */
 export async function commitChecks(cwd: string, sha: string): Promise<ForgeCheck[]> {
   const remote = await forgeRemoteOf(cwd)
   if (!remote) throw new ForgeError('This repository has no GitHub remote.', 'no-remote')
-  const raw = await githubRest<{ check_runs?: RawCheckRun[] } | null>(
-    cwd,
-    'GET',
-    `/repos/${remote.owner}/${remote.repo}/commits/${sha}/check-runs?per_page=100`,
-  )
-  return parseCheckRuns(raw?.check_runs ?? [])
+  const base = `/repos/${remote.owner}/${remote.repo}/commits/${sha}`
+  const [runs, combined] = await Promise.all([
+    githubRest<{ check_runs?: RawCheckRun[] } | null>(cwd, 'GET', `${base}/check-runs?per_page=100`),
+    githubRest<{ statuses?: RawStatus[] } | null>(cwd, 'GET', `${base}/status?per_page=100`),
+  ])
+  return parseCheckRuns(runs?.check_runs ?? [], combined?.statuses ?? [])
 }
 
-/** REST check runs (lowercase states) in the shape GraphQL's rollup is read in. */
-export function parseCheckRuns(runs: RawCheckRun[]): ForgeCheck[] {
-  return parseChecks(
-    runs.map((run) => ({
+/** REST check runs and commit statuses (lowercase states) in the shape GraphQL's rollup is read in. */
+export function parseCheckRuns(runs: RawCheckRun[], statuses: RawStatus[] = []): ForgeCheck[] {
+  return parseChecks([
+    ...runs.map((run) => ({
       name: run.name,
       status: run.status?.toUpperCase(),
       conclusion: run.conclusion?.toUpperCase() ?? null,
       detailsUrl: run.html_url,
       startedAt: run.started_at,
     })),
-  )
+    ...statuses.map((status) => ({
+      __typename: 'StatusContext',
+      context: status.context,
+      state: status.state?.toUpperCase(),
+      targetUrl: status.target_url ?? undefined,
+      startedAt: status.updated_at,
+    })),
+  ])
 }
 
 /** The prompt that hands a broken default branch to the thread that pushed it. */

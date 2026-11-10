@@ -306,7 +306,7 @@ describe('automatic watches on PR creation', () => {
   })
 })
 
-describe('pushes to the default branch', () => {
+describe('pushes from a thread', () => {
   const push = () => service.watchPush('task', '/repo', 'repo')
   const failing = [{ name: 'CI', state: 'failure' as const, url: 'https://github.com/o/r/actions/runs/2/job/3' }]
   beforeEach(() => {
@@ -349,17 +349,41 @@ describe('pushes to the default branch', () => {
     expect(enqueue).toHaveBeenCalledOnce()
   })
 
-  it('stops following a commit whose checks pass, and ignores pushes of other branches', async () => {
-    vi.mocked(commitChecks).mockResolvedValue([{ name: 'CI', state: 'success', url: null }])
+  it('wakes the thread once with the links when every check, deploys included, passes', async () => {
+    vi.mocked(commitChecks).mockResolvedValue([
+      { name: 'CI', state: 'success', url: null },
+      { name: 'Vercel', state: 'pending', url: 'https://vercel.com/o/r/1' },
+    ])
     await push()
     await service.tick(0)
-    vi.mocked(commitChecks).mockResolvedValue(failing)
+    expect(enqueue).not.toHaveBeenCalled()
+    vi.mocked(commitChecks).mockResolvedValue([
+      { name: 'CI', state: 'success', url: null },
+      { name: 'Vercel', state: 'success', url: 'https://vercel.com/o/r/1' },
+    ])
     await service.tick(60_000)
-    expect(enqueue).not.toHaveBeenCalled()
-    vi.mocked(commitBranchInfo).mockResolvedValue({ branch: 'feature', defaultBranch: 'main' })
-    await push()
+    expect(enqueue).toHaveBeenCalledOnce()
+    const text = String(enqueue.mock.calls[0]![1])
+    expect(text).toContain('Vercel: success (https://vercel.com/o/r/1)')
+    expect(text).toContain('external feedback')
+    expect(vi.mocked(commitChecksFeedback)).not.toHaveBeenCalled()
+    vi.mocked(commitChecks).mockResolvedValue(failing)
     await service.tick(120_000)
-    expect(enqueue).not.toHaveBeenCalled()
+    expect(enqueue).toHaveBeenCalledOnce()
+  })
+
+  it('follows pushes of other branches too, unless their pull request is watched', async () => {
+    vi.mocked(commitBranchInfo).mockResolvedValue({ branch: 'feature', defaultBranch: 'main' })
+    vi.mocked(currentBranch).mockResolvedValue('feature')
+    vi.mocked(commitChecks).mockResolvedValue(failing)
+    await push()
+    await service.tick(0)
+    expect(vi.mocked(commitChecksFeedback)).toHaveBeenCalledWith('/repo', 'abc1234def', 'feature')
+    expect(enqueue).toHaveBeenCalledOnce()
+    ws.setAppState('pull-request-watches', [{ id: 'w', cwd: '/repo', branch: 'feature', sessionId: 'session' }])
+    await push()
+    await service.tick(60_000)
+    expect(enqueue).toHaveBeenCalledOnce()
   })
 
   it('follows only the newest push of a branch and ends with the thread', async () => {

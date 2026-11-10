@@ -14,18 +14,18 @@ export function failedStepLog(title: string, log: string): string | null {
 }
 
 /**
- * The prompt that wakes the thread whose push broke the default branch. The fix goes on a new branch, since the
- * default branch only changes through a pull request the person merges.
+ * The prompt that wakes the thread whose push failed its checks. A fix for the default branch goes on a new branch,
+ * since the default branch only changes through a pull request the person merges.
  */
 export function brokenBranchPrompt(sha: string, branch: string, sections: string[]): string {
   return [
-    `CI failed on ${branch} after your push of ${sha.slice(0, 7)}.`,
+    `Checks failed on ${branch} after your push of ${sha.slice(0, 7)}.`,
     '',
     '<ramu-context>',
     ...sections,
     '',
     'Work out the cause from the logs and the code, and run the same check locally when you can.',
-    `Commit the fix on a new branch from ${branch}. Do not push; I will review it and open a pull request from Source Control.`,
+    `Commit the fix: on a new branch from ${branch} when it is the default branch, otherwise on ${branch}. Do not push; I will review it from Source Control.`,
     'Reply briefly: what failed, why, and what you changed. If a failure is flaky or unrelated to the push, say so instead of changing code.',
     '</ramu-context>',
   ].join('\n')
