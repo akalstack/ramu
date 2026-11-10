@@ -19,6 +19,9 @@ type Notification = { id: string; message: string; source: string }
 const pending: Omit<Notification, 'id'>[] = []
 let listening = false
 export function notifyError(message: string, source = 'Ramu') {
+  // A rejected call's value is untyped; an Error reaching the toast as its title would crash the whole view.
+  message = errorText(message)
+  source = typeof source === 'string' ? source : errorText(source)
   if (!listening) {
     pending.push({ message, source })
     return

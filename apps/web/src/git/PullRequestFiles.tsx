@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, MessageSquare, Plus, Trash2, WrapText } from 'lucide-react'
+import { ChevronRight, ChevronsDownUp, ChevronsUpDown, MessageSquare, Plus, Trash2, WrapText } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import { Textarea } from '@/components/ui/textarea'
 import type { PullRequestFile, PullRequestThread, ReviewVerdict } from '@ramu/shared/types'
@@ -136,6 +136,11 @@ function FileDiff({
   onRemove: (id: string) => void
 }) {
   const rows = useMemo(() => (file.patch ? patchRows(file.patch) : []), [file.patch])
+  // Each number column fits the file's largest line number (about 7.5px a digit in the 12px mono face) and its padding.
+  const numberWidth = useMemo(() => {
+    const largest = rows.reduce((most, row) => Math.max(most, row.old ?? 0, row.new ?? 0), 0)
+    return `${String(largest).length * 7.5 + 22}px`
+  }, [rows])
   // Lines are picked as in the Changes tab: press on a line number and drag, or click one and Shift-click another.
   const [range, setRange] = useState<Range | null>(null)
   const [draft, setDraft] = useState('')
@@ -263,12 +268,28 @@ function FileDiff({
     )
   return (
     <div className="@container overflow-x-auto rounded-b-(--radius-m) border-x border-b border-line">
-      <table className="w-full min-w-max border-collapse font-mono text-[12px] leading-[20px]">
+      {/* Wrapping needs a table as wide as the pane with fixed number columns; unwrapped, it grows to the longest line. */}
+      <table
+        className={cn(
+          'w-full border-collapse font-mono text-[12px] leading-[20px]',
+          wrap ? 'table-fixed' : 'min-w-max',
+        )}
+      >
+        {wrap && (
+          <colgroup>
+            <col style={{ width: numberWidth }} />
+            <col style={{ width: numberWidth }} />
+            <col />
+          </colgroup>
+        )}
         <tbody>
           {rows.map((row, index) =>
             row.kind === 'hunk' ? (
               <tr key={index} className="bg-[color-mix(in_srgb,var(--brand)_9%,transparent)] text-muted-foreground">
-                <td colSpan={3} className="px-4 py-1 whitespace-pre">
+                <td
+                  colSpan={3}
+                  className={cn('px-4 py-1', wrap ? 'whitespace-pre-wrap [overflow-wrap:anywhere]' : 'whitespace-pre')}
+                >
                   {row.text}
                 </td>
               </tr>
@@ -435,6 +456,8 @@ export function PullRequestFiles({
       else next.add(path)
       return next
     })
+  // One button expands every file while any is closed, and collapses them all once every one is open.
+  const allOpen = data.files.every((file, index) => !isClosed(file.path, index))
   const pick = (path: string) => {
     if (oneAtATime) {
       setActivePath(path)
@@ -492,23 +515,30 @@ export function PullRequestFiles({
           <span className="text-ok">+{added}</span> <span className="text-bad">−{removed}</span>
         </span>
         <div className="ml-auto flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-pressed={wrap}
-            className={cn(wrap && 'bg-accent text-foreground')}
-            title={t('Wrap long lines')}
-            onClick={toggleWrap}
-          >
-            <WrapText size={13} />
-            {t('Wrap')}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setClosed(new Set())}>
-            {t('Expand all')}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setClosed(new Set(data.files.map((file) => file.path)))}>
-            {t('Collapse all')}
-          </Button>
+          {/* View controls are icons with their name on hover, so the one action with words is Finish review. */}
+          <div role="group" aria-label={t('Diff view')} className="flex items-center gap-0.5">
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-pressed={wrap}
+              className={cn(ICON_BUTTON_CLASS, 'aria-pressed:bg-hover aria-pressed:text-foreground')}
+              aria-label={wrap ? t('Stop wrapping long lines') : t('Wrap long lines')}
+              title={wrap ? t('Stop wrapping long lines') : t('Wrap long lines')}
+              onClick={toggleWrap}
+            >
+              <WrapText size={15} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={ICON_BUTTON_CLASS}
+              aria-label={allOpen ? t('Collapse all files') : t('Expand all files')}
+              title={allOpen ? t('Collapse all files') : t('Expand all files')}
+              onClick={() => setClosed(allOpen ? new Set(data.files.map((file) => file.path)) : new Set())}
+            >
+              {allOpen ? <ChevronsDownUp size={15} /> : <ChevronsUpDown size={15} />}
+            </Button>
+          </div>
           {canReview && (
             <Button
               size="sm"
@@ -595,7 +625,9 @@ export function PullRequestFiles({
           )}
           <div className="flex min-w-0 flex-col gap-3">
             {large && (
-              <div ref={banner} className="scroll-mt-[84px]">
+              // Pinned under the toolbar while the diff scrolls, so the file count and Previous/Next stay in reach; file
+              // headers pin beneath it (84px + its 52px).
+              <div ref={banner} className="sticky top-[84px] z-12 h-[52px] scroll-mt-[84px] bg-canvas pb-2">
                 <LargeDiffBanner
                   oneAtATime={oneAtATime}
                   activeIndex={activeIndex}
@@ -620,11 +652,11 @@ export function PullRequestFiles({
                   key={file.path}
                   id={`pull-request-file-${encodeURIComponent(file.path)}`}
                   hidden={!shown}
-                  className="scroll-mt-[84px]"
+                  className={large ? 'scroll-mt-[136px]' : 'scroll-mt-[84px]'}
                 >
                   {/* Pinned under the tabs and the toolbar (36px + 48px), on the page's own colour so the diff never shows
                 through the header's tint. */}
-                  <div className="sticky top-[84px] z-10 bg-canvas">
+                  <div className={cn('sticky z-10 bg-canvas', large ? 'top-[136px]' : 'top-[84px]')}>
                     <Button
                       variant="ghost"
                       className={cn(

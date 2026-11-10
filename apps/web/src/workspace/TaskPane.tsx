@@ -1,6 +1,6 @@
 import { Spinner } from '@/components/ui/spinner'
 import { cachedDataOn } from '../dataQueries'
-import { errorText } from '../lib/errors'
+import { errorText, isOfflineError } from '../lib/errors'
 import { visibleName } from '@ramu/shared/text'
 import { t, useLanguage, formatLocale } from '../i18n'
 import { FileIcon, fileToneClass } from '../editor/FileIcon'
@@ -29,6 +29,7 @@ import {
   Minimize2,
   SquareTerminal,
   X,
+  CloudOff,
 } from 'lucide-react'
 import { memo, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { ChangeReviewTab } from '../Changes'
@@ -39,7 +40,7 @@ import { AgentControls } from '../chat/AgentControls'
 import { Composer } from '../composer/Composer'
 import { Menu, useContextMenu } from '../Menu'
 import { copyText } from '../ipc'
-import { useHost } from './HostProvider'
+import { useHost, useHostConnection } from './HostProvider'
 import { ownHostId } from '../hosts'
 import { NEW_TAB, openBrowser } from '../views/browserPane'
 import { AgentView } from '../views/AgentView'
@@ -72,6 +73,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
   const ws = useWorkspace()
   const { id: host, invoke } = useHost()
   const { on } = useHostRuntime()
+  const { name: hostName } = useHostConnection()
   const { preferences } = useAppSettings()
   const project = ws.projectOf(taskId)
   const composing = isWorkspaceCtx(taskId) && ws.composing === project?.id
@@ -92,7 +94,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
   )
   const agentViews = tabs.filter((v) => v.kind === 'agent')
   const [sessions, setSessions] = useState<AgentSessionInfo[]>(() => cachedDataOn(host, 'agent.list', taskId) ?? [])
-  const [sessionsError, setSessionsError] = useState<string | null>(null)
+  const [sessionsError, setSessionsError] = useState<{ text: string; offline: boolean } | null>(null)
   const [sessionsLoadedFor, setSessionsLoadedFor] = useState<string | null>(() =>
     cachedDataOn(host, 'agent.list', taskId) ? taskId : null,
   )
@@ -141,19 +143,25 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
           }
         },
         (error) => {
-          if (!cancelled) {
-            setSessionsError(errorText(error))
-            notifyError(error)
-          }
+          if (cancelled) return
+          // An unreachable host is a state of the host, not a failure of this thread: say so in the pane, without a
+          // toast, and read again once it reconnects.
+          const offline = isOfflineError(error)
+          setSessionsError({ text: errorText(error), offline })
+          if (!offline) notifyError(errorText(error))
         },
       )
     void load()
     const off = on('agent:event', ({ event }) => {
       if (event.kind === 'state') void load()
     })
+    const reconnected = on('background:connection', ({ connected }) => {
+      if (connected) void load()
+    })
     return () => {
       cancelled = true
       off()
+      reconnected()
     }
   }, [taskId, host, invoke, on])
 
@@ -291,11 +299,7 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
             {(showLauncherMain || (editorView && !chatView)) && isWorkspaceCtx(taskId) && (
               <NewThread projectId={project?.id ?? ''} onProjectChange={(id) => ws.newTask(id)} feed={!editorView} />
             )}
-            {sessionsError && !chatView && (
-              <p role="alert" className="p-4 text-bad">
-                {sessionsError}
-              </p>
-            )}
+            {sessionsError && !chatView && <ThreadUnavailable error={sessionsError} hostName={hostName} />}
             {!isWorkspaceCtx(taskId) && !chatView && !sessionsError && sessionsLoadedFor !== taskId && (
               <div className="flex flex-1 items-center justify-center">
                 <Spinner className="size-5 text-muted-foreground" aria-label={t('Loading conversation')} />
@@ -1030,6 +1034,29 @@ function DockZones({
               ws.setTerminalPanel(taskId, { terminalDock: 'bottom' }),
             ),
           ]}
+    </div>
+  )
+}
+
+/**
+ * Why a thread could not open: its host is unreachable (it opens by itself once the host is back), or the host
+ * answered with a reason.
+ */
+function ThreadUnavailable({ error, hostName }: { error: { text: string; offline: boolean }; hostName: string }) {
+  useLanguage()
+  if (!error.offline)
+    return (
+      <p role="alert" className="m-0 p-4 text-control text-bad">
+        {error.text}
+      </p>
+    )
+  return (
+    <div role="status" className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
+      <CloudOff size={22} className="text-muted-foreground" aria-hidden="true" />
+      <p className="m-0 text-control font-medium text-foreground">{t('{0} is not reachable', { '0': hostName })}</p>
+      <p className="m-0 max-w-sm text-caption text-muted-foreground">
+        {t('This thread opens by itself once the host is back. Messages you write meanwhile wait in the composer.')}
+      </p>
     </div>
   )
 }

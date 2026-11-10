@@ -24,6 +24,9 @@ export function showToast(message: string, action?: Toast['action']) {
 }
 /** An error, shown as a toast that clears itself. */
 export function showError(message: string) {
+  // Callers pass a rejected call's value; an Error object rendered as text would crash the screen.
+  const text: unknown = message
+  message = text instanceof Error ? text.message : String(text)
   current = { message, error: true, id: ++counter }
   emit()
 }

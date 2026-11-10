@@ -54,17 +54,18 @@ export function PullRequestGlyph({
   const dot = pr.state === 'open' && tone && (tone === 'bad' || tone === 'warn' || stage === 'agent-working')
   return (
     <View style={{ width: size, height: size }}>
-      <Icon size={size} color={c[GLYPH_TONE[glyph]]} strokeWidth={2} />
+      <Icon size={size} color={c[GLYPH_TONE[glyph]]} strokeWidth={size <= 14 ? 1.85 : 2} />
       {dot ? (
+        // The dot scales with the glyph and hangs just past its corner, ringed in the page colour to part it from the shape.
         <View
           style={{
             position: 'absolute',
-            right: -2,
-            bottom: -2,
-            width: 6,
-            height: 6,
-            borderRadius: 3,
-            borderWidth: 1,
+            right: -1.5,
+            bottom: -1.5,
+            width: Math.max(6, Math.round(size * 0.46)),
+            height: Math.max(6, Math.round(size * 0.46)),
+            borderRadius: 99,
+            borderWidth: 1.5,
             borderColor: c.window,
             backgroundColor: c[tone],
           }}

@@ -18,7 +18,7 @@ export function LargeDiffBanner({
 }) {
   return (
     <div
-      className="review-large-banner [&_>_svg:first-child]:text-brand [&_>_svg:first-child]:flex-none flex items-center gap-2 p-[8px_12px] [border:1px_solid_transparent] rounded-(--radius-m) bg-raised text-soft text-control"
+      className="review-large-banner [&_>_svg:first-child]:text-brand [&_>_svg:first-child]:flex-none flex h-11 items-center gap-2 px-3 [border:1px_solid_transparent] rounded-(--radius-m) bg-raised text-soft text-control"
       role="status"
     >
       <Info size={15} />

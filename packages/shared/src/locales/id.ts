@@ -6996,4 +6996,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Connect to this host to open the model.': 'Hubungkan ke host ini untuk membuka model.',
   'Push this folder to a private repository on your GitHub account': 'Kirim folder ini ke repositori privat di akun GitHub Anda',
   'Shared to {url}. Open a pull request to an index from there to get it listed.': 'Dibagikan ke {url}. Buka pull request ke sebuah indeks dari sana agar tercantum.',
+  '{0} is not reachable': '{0} tidak dapat dijangkau',
+  'This thread opens by itself once the host is back. Messages you write meanwhile wait in the composer.':
+    'Thread ini terbuka sendiri begitu host kembali. Pesan yang Anda tulis sementara menunggu di kolom pesan.',
+  'Diff view': 'Tampilan diff',
+  'Stop wrapping long lines': 'Berhenti membungkus baris panjang',
+  'Collapse all files': 'Ciutkan semua file',
+  'Expand all files': 'Bentangkan semua file',
 }

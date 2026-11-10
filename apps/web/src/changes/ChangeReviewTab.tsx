@@ -290,15 +290,21 @@ export function ChangeReviewTab({
                 }}
               />
             )}
-            <div className="review-main min-w-0 flex flex-col gap-2">
+            <div
+              className="review-main min-w-0 flex flex-col gap-2"
+              style={large ? ({ '--review-banner-height': '52px' } as React.CSSProperties) : undefined}
+            >
               {large && (
-                <LargeDiffBanner
-                  oneAtATime={oneAtATime}
-                  activeIndex={activeIndex}
-                  count={files.length}
-                  onStep={(delta) => setActiveFileId(files[activeIndex + delta]!.id)}
-                  onToggleAll={() => setShowAll(!showAll)}
-                />
+                // Pinned under the toolbar so the file count and Previous/Next stay in reach; file headers pin beneath it.
+                <div className="sticky top-(--review-toolbar-height,44px) z-12 h-[52px] bg-canvas pb-2">
+                  <LargeDiffBanner
+                    oneAtATime={oneAtATime}
+                    activeIndex={activeIndex}
+                    count={files.length}
+                    onStep={(delta) => setActiveFileId(files[activeIndex + delta]!.id)}
+                    onToggleAll={() => setShowAll(!showAll)}
+                  />
+                </div>
               )}
               <div className="review-file-stack flex flex-col gap-2">
                 {visibleFiles.map((file) => (

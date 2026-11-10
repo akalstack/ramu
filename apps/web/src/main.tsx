@@ -11,6 +11,7 @@ import './git-panel.css'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { monaco } from './editor/monaco'
 import { createRoot } from 'react-dom/client'
+import { errorText, isOfflineError } from './lib/errors'
 import { useCallback, useEffect, useState } from 'react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient, invalidateDataOn } from './dataQueries'
@@ -83,6 +84,15 @@ function Startup() {
 installAppearance()
 installTheme()
 installEditorTheme()
+
+// A call made in the background to a host that went offline (lost, timed out, never sent) is expected, not a crash:
+// the views show the host as offline and read again on reconnect. Anything else stays an unhandled rejection.
+window.addEventListener('unhandledrejection', (event) => {
+  if (isOfflineError(event.reason)) {
+    event.preventDefault()
+    console.warn('A call to an offline host was dropped:', errorText(event.reason))
+  }
+})
 
 // Fonts and application data load behind one continuous logo-to-wordmark reveal.
 if (new URLSearchParams(location.search).has('live')) {
