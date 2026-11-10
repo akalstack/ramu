@@ -2,7 +2,7 @@
   "index": "https://github.com/akalstack/ramu-plugins",
   "plugins": [
     {
-      "name": "railway",
+      "name": "railway-cli",
       "description": "Deploy apps and databases to Railway through its CLI, signed in with a token kept on the host.",
       "homepage": "https://railway.com",
       "author": "Akalstack",
@@ -29,7 +29,7 @@
       }
     },
     {
-      "name": "fly",
+      "name": "fly-cli",
       "description": "Launch and deploy apps on Fly.io through flyctl, signed in with a token kept on the host.",
       "homepage": "https://fly.io",
       "author": "Akalstack",
@@ -55,7 +55,7 @@
       }
     },
     {
-      "name": "cloudflare",
+      "name": "cloudflare-cli",
       "description": "Deploy Workers and Pages with wrangler, and publish Ramu pages to Cloudflare Pages, with a token kept on the host.",
       "homepage": "https://developers.cloudflare.com/workers/wrangler/",
       "author": "Akalstack",
@@ -84,7 +84,7 @@
       }
     },
     {
-      "name": "supabase",
+      "name": "supabase-cli",
       "description": "Manage Supabase projects, migrations and edge functions through the Supabase CLI, with a token kept on the host.",
       "homepage": "https://supabase.com/docs/guides/cli",
       "author": "Akalstack",
@@ -111,7 +111,7 @@
       }
     },
     {
-      "name": "grafana",
+      "name": "grafana-data",
       "description": "Read Grafana data sources in Ramu dashboards with a Viewer service account token.",
       "homepage": "https://grafana.com",
       "author": "Akalstack",
@@ -137,7 +137,7 @@
       }
     },
     {
-      "name": "amplitude",
+      "name": "amplitude-data",
       "description": "Read Amplitude event counts in Ramu dashboards with a project's API key and secret key.",
       "homepage": "https://amplitude.com",
       "author": "Akalstack",
@@ -162,7 +162,7 @@
       }
     },
     {
-      "name": "salesforce",
+      "name": "salesforce-data",
       "description": "Read Salesforce records with SOQL in Ramu dashboards, through your own connected app's sign-in.",
       "homepage": "https://www.salesforce.com",
       "author": "Akalstack",
