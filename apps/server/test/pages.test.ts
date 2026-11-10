@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { openDb, type Db } from '../src/db'
 import { InteractiveStore, type InteractiveInput } from '../src/interactive/store'
@@ -527,14 +529,13 @@ it('publishes a page without records or AI to the web and updates the same site 
     if (url.includes('/contents/') && !init?.method) return new Response('', { status: 404 })
     return new Response('{}')
   }) as typeof fetch
-  // Netlify and Vercel come from the hosting accounts deploys use; only Vercel is connected here.
-  const hosting = { connected: (target: string) => target === 'vercel' }
-  // Cloudflare Pages uses the token saved for the Cloudflare plugin.
+  // Cloudflare Pages uses the token saved for the Cloudflare CLI plugin.
   const plugins = {
     hasCredential: (name: string, slot: string) => name === 'cloudflare-cli' && slot === 'token',
-    credentialOf: async () => null,
+    clis: () => [],
+    secret: async () => null,
   }
-  const publisher = new PagePublisher(pages, () => forge as never, hosting as never, plugins, fetcher)
+  const publisher = new PagePublisher(pages, () => forge as never, plugins as never, fetcher)
   await expect(publisher.publish(page.id, 'github-pages')).rejects.toThrow('Make it a project')
   const plain = interactive.publish('s', (await interactive.preview('s', { ...input, html: '<p>Trip</p>' })).id, 'p1')
   const trip = pages.keep('s', plain.id, { title: 'Trip costs' })
@@ -548,38 +549,59 @@ it('publishes a page without records or AI to the web and updates the same site 
   requests.length = 0
   await publisher.publish(trip.id, 'github-pages')
   expect(requests.some((request) => request.startsWith('POST') && request.endsWith('/user/repos'))).toBe(false)
-  expect(publisher.targets().find((target) => target.target === 'github-pages')?.connected).toBe(true)
-  expect(publisher.targets().find((target) => target.target === 'vercel')?.connected).toBe(true)
-  expect(publisher.targets().find((target) => target.target === 'netlify')?.connected).toBe(false)
-  expect(publisher.targets().find((target) => target.target === 'cloudflare-pages')?.connected).toBe(true)
+  expect(publisher.targets()).toEqual([
+    { target: 'github-pages', name: 'GitHub Pages', connected: true },
+    { target: 'cloudflare-pages', name: 'Cloudflare Pages', connected: true },
+  ])
 })
 
-it('publishes to Cloudflare Pages with the Cloudflare plugin’s token and the account saved beside it', async () => {
-  const { PagePublisher } = await import('../src/interactive/pagePublish')
+it('publishes to Cloudflare Pages by running wrangler through the Cloudflare CLI plugin with its saved token', async () => {
+  const { PagePublisher, pagesAddress } = await import('../src/interactive/pagePublish')
   const { interactive, pages } = await setup()
-  const requests: { url: string; auth: string }[] = []
-  const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input)
-    requests.push({ url, auth: String((init?.headers as Record<string, string>)?.Authorization) })
-    return new Response(JSON.stringify(url.endsWith('/upload-token') ? { result: { jwt: 'upload' } } : {}))
-  }) as typeof fetch
-  const saved = { token: 'cf_token', fields: { account: 'acc_1' }, account: 'Ana' }
-  const plugins = { hasCredential: () => true, credentialOf: vi.fn(async () => saved) }
-  const publisher = new PagePublisher(pages, () => undefined, undefined, plugins, fetcher)
+  const target = { plugin: 'cloudflare-cli', pluginId: 'cf', cli: { binaries: ['wrangler'] }, slot: { id: 'token' } }
+  const saved = { token: 'cf_token', fields: { account: 'acc_1' } }
+  const plugins = { hasCredential: () => true, clis: vi.fn(() => [target]), secret: vi.fn(async () => saved) }
+  const runs: { args: readonly string[]; html: string }[] = []
+  const run = vi.fn(async (_target: unknown, args: readonly string[], cwd: string, _secret: unknown) => {
+    runs.push({ args, html: readFileSync(join(cwd, 'index.html'), 'utf8') })
+    return {
+      exitCode: 0,
+      timedOut: false,
+      output:
+        args[1] === 'deploy' ? '✨ Deployment complete! Take a peek over at https://1a2b3c.trip-costs.pages.dev' : '',
+    }
+  })
+  const publisher = new PagePublisher(pages, () => undefined, plugins as never, fetch, run as never)
   const plain = interactive.publish('s', (await interactive.preview('s', { ...input, html: '<p>Trip</p>' })).id, 'p1')
   const trip = pages.keep('s', plain.id, { title: 'Trip costs' })
   const live = await publisher.publish(trip.id, 'cloudflare-pages')
-  expect(plugins.credentialOf).toHaveBeenCalledWith('cloudflare-cli', 'token')
-  expect(live.published).toMatchObject({ target: 'cloudflare-pages', url: 'https://trip-costs.pages.dev' })
-  expect(requests[0]).toEqual({
-    url: 'https://api.cloudflare.com/client/v4/accounts/acc_1/pages/projects',
-    auth: 'Bearer cf_token',
+  expect(plugins.secret).toHaveBeenCalledWith('cf', 'token')
+  expect(live.published).toMatchObject({
+    target: 'cloudflare-pages',
+    url: 'https://trip-costs.pages.dev',
+    siteId: 'trip-costs',
   })
-  const missing = new PagePublisher(pages, () => undefined, undefined, {
+  expect(runs.map((entry) => entry.args.slice(0, 3))).toEqual([
+    ['pages', 'project', 'create'],
+    ['pages', 'deploy', expect.stringContaining('ramu-publish-')],
+  ])
+  expect(runs[1]!.args).toEqual(expect.arrayContaining(['--project-name', 'trip-costs', '--branch', 'main']))
+  expect(runs[1]!.html).toContain('<title>Trip costs</title>')
+  expect(run.mock.calls[1]![3]).toBe(saved)
+  // The next publish goes to the same project without making it again.
+  runs.length = 0
+  await publisher.publish(trip.id, 'cloudflare-pages')
+  expect(runs.map((entry) => entry.args[1])).toEqual(['deploy'])
+  // A failed deploy says what wrangler said.
+  run.mockResolvedValueOnce({ exitCode: 1, timedOut: false, output: 'Authentication error [code: 10000]' })
+  await expect(publisher.publish(trip.id, 'cloudflare-pages')).rejects.toThrow('Authentication error')
+  expect(pagesAddress('see https://trip-costs.pages.dev')).toBe('https://trip-costs.pages.dev')
+  const missing = new PagePublisher(pages, () => undefined, {
     hasCredential: () => false,
-    credentialOf: async () => null,
-  })
-  expect(missing.targets().find((target) => target.target === 'cloudflare-pages')?.connected).toBe(false)
+    clis: () => [],
+    secret: async () => null,
+  } as never)
+  expect(missing.targets().find((entry) => entry.target === 'cloudflare-pages')?.connected).toBe(false)
   await expect(missing.publish(trip.id, 'cloudflare-pages')).rejects.toThrow('Install the Cloudflare CLI plugin')
 })
 

@@ -5,10 +5,11 @@ import { RowButton } from '../components/row-button'
 import { Dialog } from '../Menu'
 import { t, useLanguage } from '../i18n'
 import { useHost } from '../workspace/HostProvider'
-import { openDeploySettings } from '../settings/DeployAccounts'
+import { DEPLOY_TARGET_PLUGINS } from '@ramu/shared/stacks'
+import { usePluginSetup } from '../customize/pluginSetup'
 import { openHostingSettings } from '../sidebar/scm/ForgeAccessPanel'
 
-type Target = 'github-pages' | 'netlify' | 'vercel' | 'cloudflare-pages'
+type Target = 'github-pages' | 'cloudflare-pages'
 
 const message = (error: unknown) =>
   error instanceof Error
@@ -21,7 +22,8 @@ const message = (error: unknown) =>
  */
 export function PublishDialog({ page, onClose }: { page: ArtifactInfo; onClose(): void }) {
   useLanguage()
-  const { id: hostId, invoke } = useHost()
+  const { invoke } = useHost()
+  const cloudflare = usePluginSetup(DEPLOY_TARGET_PLUGINS.cloudflare)
   const [targets, setTargets] = useState<{ target: Target; name: string; connected: boolean }[]>([])
   const [target, setTarget] = useState<Target>((page.published?.target as Target | undefined) ?? 'github-pages')
   const [busy, setBusy] = useState(false)
@@ -32,14 +34,14 @@ export function PublishDialog({ page, onClose }: { page: ArtifactInfo; onClose()
       .catch(() => {})
   }, [invoke])
   const chosen = targets.find((entry) => entry.target === target)
-  // Netlify, Vercel and Cloudflare Pages are connected once in Settings and shared with deploys.
-  const needsAccount = !!chosen && !chosen.connected && target !== 'github-pages'
+  // GitHub Pages uses the Git hosting login; Cloudflare Pages the Cloudflare CLI plugin's token, shared with deploys.
+  const needsAccount = !!chosen && !chosen.connected
   const update = page.published?.target === target
   return (
     <Dialog
       title={update ? t('Update live site') : t('Publish to the web')}
       confirmLabel={busy ? t('Publishing…') : update ? t('Update live site') : t('Publish')}
-      confirmDisabled={!chosen || needsAccount || (target === 'github-pages' && !chosen.connected)}
+      confirmDisabled={!chosen || needsAccount}
       busy={busy}
       error={error}
       onCancel={onClose}
@@ -84,10 +86,14 @@ export function PublishDialog({ page, onClose }: { page: ArtifactInfo; onClose()
             onClick={() => {
               onClose()
               if (chosen.target === 'github-pages') openHostingSettings()
-              else openDeploySettings(hostId, chosen.name)
+              else cloudflare.setUp()
             }}
           >
-            {t('Connect {0}', { 0: chosen.target === 'github-pages' ? 'GitHub' : chosen.name })}
+            {chosen.target === 'github-pages'
+              ? t('Connect {0}', { 0: 'GitHub' })
+              : cloudflare.state === 'missing'
+                ? t('Install the {0} plugin', { 0: 'Cloudflare CLI' })
+                : t('Save the {0} token', { 0: 'Cloudflare' })}
           </Button>
         </span>
       )}

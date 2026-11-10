@@ -1,56 +1,107 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { interactiveExport } from '@ramu/shared/interactiveExport'
 import { DEPLOY_TARGET_PLUGINS } from '@ramu/shared/stacks'
 import type { ArtifactInfo } from '@ramu/shared/artifacts'
 import type { ForgeAccountStore } from '../workspace/forgeAccounts'
-import type { HostingAccounts } from '../workspace/deploy/accounts'
 import type { PluginService } from '../plugins/service'
-import { STATIC_TARGETS, staticAdapter, type StaticTarget } from '../hosting/staticSite'
+import { runPluginCli } from '../plugins/cli'
+import { githubPages, slug, type Deployed } from '../hosting/staticSite'
 import type { PageStore } from './pages'
+
+/** Where a page can be published: the person's own GitHub Pages or Cloudflare Pages. */
+export const STATIC_TARGETS = ['github-pages', 'cloudflare-pages'] as const
+export type StaticTarget = (typeof STATIC_TARGETS)[number]
+const NAMES: Record<StaticTarget, string> = { 'github-pages': 'GitHub Pages', 'cloudflare-pages': 'Cloudflare Pages' }
+const CLOUDFLARE = DEPLOY_TARGET_PLUGINS.cloudflare
+
+/**
+ * The production address of a Cloudflare Pages project in wrangler's output. It prints the deployment's own address,
+ * `https://<deployment>.<project>.pages.dev`; the project's address is that without the first label.
+ */
+export function pagesAddress(output: string): string | null {
+  const found = output.match(/https:\/\/[a-z0-9.-]+\.pages\.dev\b/gi)?.at(-1)
+  if (!found) return null
+  const labels = new URL(found).hostname.toLowerCase().split('.')
+  return `https://${(labels.length > 3 ? labels.slice(1) : labels).join('.')}`
+}
 
 /**
  * Publish to the web: a page's exact tested bytes as a one-file static site on the person's own account. GitHub Pages
- * uses the GitHub login saved in Settings; Netlify and Vercel the hosting accounts deploys use (Settings → Deploy);
- * Cloudflare Pages the token saved for the Cloudflare plugin (Customize → Plugins).
+ * uses the GitHub login saved in Settings; Cloudflare Pages runs wrangler through the Cloudflare CLI plugin, signed in
+ * with the token saved for it in Customize → Plugins.
  */
 export class PagePublisher {
   constructor(
     private readonly pages: PageStore,
     private readonly forge: () => ForgeAccountStore | undefined,
-    private readonly hosting: Pick<HostingAccounts, 'auth' | 'connected'> | undefined,
-    private readonly plugins: Pick<PluginService, 'credentialOf' | 'hasCredential'> | undefined,
+    private readonly plugins: Pick<PluginService, 'clis' | 'secret' | 'hasCredential'> | undefined,
     private readonly fetcher: typeof fetch = fetch,
+    private readonly run: typeof runPluginCli = runPluginCli,
   ) {}
 
-  /** Each platform, and whether this host can deploy there without asking for a token. */
+  /** Each platform, and whether this host can publish there without asking for a sign-in. */
   targets(): { target: StaticTarget; name: string; connected: boolean }[] {
     return STATIC_TARGETS.map((target) => ({
       target,
-      name: staticAdapter(target).name,
+      name: NAMES[target],
       connected:
         target === 'github-pages'
           ? !!this.forge()?.choiceId('https://github.com')
-          : target === 'cloudflare-pages'
-            ? !!this.plugins?.hasCredential(DEPLOY_TARGET_PLUGINS.cloudflare, 'token')
-            : !!this.hosting?.connected(target),
+          : !!this.plugins?.hasCredential(CLOUDFLARE, 'token'),
     }))
   }
 
-  private async token(target: StaticTarget): Promise<string> {
-    if (target === 'github-pages') {
-      const account = await this.forge()?.resolve('https://github.com')
-      if (account?.kind !== 'saved') throw new Error('Connect a GitHub account in Settings → Git hosting first.')
-      return account.token
+  private async githubPages(html: string, site: { name: string; siteId?: string }, signal?: AbortSignal) {
+    const account = await this.forge()?.resolve('https://github.com')
+    if (account?.kind !== 'saved') throw new Error('Connect a GitHub account in Settings → Git hosting first.')
+    return githubPages(this.fetcher).deploy(
+      [{ path: 'index.html', content: Buffer.from(html) }],
+      site,
+      account.token,
+      signal,
+    )
+  }
+
+  private async cloudflarePages(
+    html: string,
+    site: { name: string; siteId?: string },
+    signal?: AbortSignal,
+  ): Promise<Deployed> {
+    const target = this.plugins?.clis(null).find((entry) => entry.plugin === CLOUDFLARE)
+    const secret = target?.slot ? await this.plugins?.secret(target.pluginId, target.slot.id) : null
+    if (!target || !secret)
+      throw new Error('Install the Cloudflare CLI plugin and save its token in Customize → Plugins first.')
+    const project = site.siteId ?? slug(site.name)
+    const folder = await mkdtemp(join(tmpdir(), 'ramu-publish-'))
+    try {
+      await writeFile(join(folder, 'index.html'), html)
+      // A first publish makes the project; when it already exists the deploy below goes to it.
+      if (!site.siteId)
+        await this.run(
+          target,
+          ['pages', 'project', 'create', project, '--production-branch', 'main'],
+          folder,
+          secret,
+          signal,
+        )
+      const ran = await this.run(
+        target,
+        ['pages', 'deploy', folder, '--project-name', project, '--branch', 'main', '--commit-dirty=true'],
+        folder,
+        secret,
+        signal,
+      )
+      const url = ran.exitCode === 0 ? pagesAddress(ran.output) : null
+      if (!url)
+        throw new Error(
+          `Cloudflare Pages did not take the page${ran.timedOut ? ' in time' : ''}. wrangler said:\n${ran.output.slice(-600)}`,
+        )
+      return { url, siteId: project }
+    } finally {
+      await rm(folder, { recursive: true, force: true })
     }
-    if (target === 'cloudflare-pages') {
-      const saved = await this.plugins?.credentialOf(DEPLOY_TARGET_PLUGINS.cloudflare, 'token')
-      if (!saved) throw new Error('Install the Cloudflare CLI plugin and save its token in Customize → Plugins first.')
-      // A token limited to Pages often cannot list accounts, so the account ID saved with it goes beside it; without
-      // one, the first account the token reaches is used.
-      const account = saved.fields.account?.trim()
-      return account ? `${account}:${saved.token}` : saved.token
-    }
-    if (!this.hosting) throw new Error('Update this host to publish there.')
-    return (await this.hosting.auth(target)).auth.token
   }
 
   /** Deploys the page's current version; a page already live on this platform updates the same site. */
@@ -67,19 +118,18 @@ export class PagePublisher {
       '<head>',
       `<head><title>${page.title.replace(/[<&]/g, (c) => (c === '<' ? '&lt;' : '&amp;'))}</title>`,
     )
-    const site = await staticAdapter(target, this.fetcher).deploy(
-      [{ path: 'index.html', content: Buffer.from(html) }],
-      {
-        name: page.title,
-        ...(page.published?.target === target && page.published.siteId ? { siteId: page.published.siteId } : {}),
-      },
-      await this.token(target),
-      signal,
-    )
+    const site = {
+      name: page.title,
+      ...(page.published?.target === target && page.published.siteId ? { siteId: page.published.siteId } : {}),
+    }
+    const deployed =
+      target === 'github-pages'
+        ? await this.githubPages(html, site, signal)
+        : await this.cloudflarePages(html, site, signal)
     this.pages.markPublished(artifactId, {
       target,
-      url: site.url,
-      siteId: site.siteId,
+      url: deployed.url,
+      siteId: deployed.siteId,
       version: page.version,
       at: Date.now(),
     })
