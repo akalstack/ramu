@@ -16,24 +16,19 @@ import type { SessionRegistry } from './sessionRegistry'
 import type { FallbackRouter } from './fallbackRouter'
 import type { SessionStore } from './sessionStore'
 import type { AgentTasks } from './agentTasks'
-import type { IdleCompactor } from './idleCompaction'
 import type { AgentService } from '../agent'
 import type { Db } from '../db'
 
 /** What ClaudeStreamPump needs from the rest of the service. */
 export interface ClaudeStreamPumpHost
   extends
-    Pick<ContextUsageTracker, 'refreshContext' | 'context' | 'setContext'>,
+    Pick<ContextUsageTracker, 'refreshContext' | 'context' | 'setContext' | 'noteRequest'>,
     Pick<SessionProcess, 'fail'>,
     Pick<SessionRecorder, 'record' | 'setState'>,
     Pick<SessionRegistry, 'live'>,
     Pick<FallbackRouter, 'fallback'>,
     Pick<SessionStore, 'events' | 'get'>,
-    Pick<AgentTasks, 'settleTasks' | 'updateTask'>,
-    Pick<
-      IdleCompactor,
-      'closed' | 'compacted' | 'compactionTrigger' | 'requestStarted' | 'responseUsage' | 'turnEnded'
-    > {
+    Pick<AgentTasks, 'settleTasks' | 'updateTask'> {
   usage(): AgentService['usage']
 }
 
@@ -88,11 +83,6 @@ export class ClaudeStreamPump {
             : msg.type === 'result' && msg.is_error
               ? classifyLimit(msg, { provider: 'claude-code', channel: 'error' })
               : null
-        // An idle compaction never moves a thread to another login; the person's next message meets the limit instead.
-        if (limit && this.host.compactionTrigger(id, query) === 'idle') {
-          if (msg.type === 'result') this.host.turnEnded(id, query)
-          continue
-        }
         if (limit) {
           this.host.record(id, {
             kind: 'error',
@@ -103,7 +93,7 @@ export class ClaudeStreamPump {
           queueMicrotask(() => void this.host.fallback(id, limit.confidence))
           return
         }
-        this.handle(id, query, msg, textStream, streamText)
+        this.handle(id, msg, textStream, streamText)
       }
       if (this.host.live.get(id)?.query === query) {
         flush()
@@ -121,20 +111,17 @@ export class ClaudeStreamPump {
       else this.host.fail(id, err)
     } finally {
       flush()
-      this.host.closed(id, query)
     }
   }
 
   private handle(
     id: string,
-    query: Query,
     msg: SDKMessage,
     textStream: ClaudeTextStream,
     streamText: (event: Extract<AgentEvent, { kind: 'text' | 'thinking' }>) => void,
   ): void {
     switch (msg.type) {
       case 'stream_event': {
-        if (!msg.parent_tool_use_id && msg.event.type === 'message_start') this.host.requestStarted(id, query)
         const block = textStream.partial(msg)
         if (block) {
           const agentId = msg.parent_tool_use_id ? this.claudeAgentId(id, msg) : undefined
@@ -155,21 +142,15 @@ export class ClaudeStreamPump {
       case 'system':
         if (msg.subtype === 'status' && msg.status === 'compacting') {
           const context = this.host.context(id)
-          const trigger = this.host.compactionTrigger(id, query)
           this.host.record(id, {
             kind: 'compaction',
             state: 'started',
             ...(context ? { beforeTokens: context.used, contextWindow: context.max } : {}),
-            ...(trigger ? { trigger } : {}),
           })
-        } else if (msg.subtype === 'status' && msg.compact_result === 'failed') {
-          const trigger = this.host.compactionTrigger(id, query)
-          this.host.compacted(id, query)
-          this.host.record(id, { kind: 'compaction', state: 'failed', ...(trigger ? { trigger } : {}) })
-        } else if (msg.subtype === 'compact_boundary') {
+        } else if (msg.subtype === 'status' && msg.compact_result === 'failed')
+          this.host.record(id, { kind: 'compaction', state: 'failed' })
+        else if (msg.subtype === 'compact_boundary') {
           const context = this.host.context(id)
-          const trigger = this.host.compactionTrigger(id, query)
-          this.host.compacted(id, query)
           const event: Extract<AgentEvent, { kind: 'compaction' }> = {
             kind: 'compaction',
             state: 'completed',
@@ -177,11 +158,11 @@ export class ClaudeStreamPump {
             beforeTokens: msg.compact_metadata.pre_tokens,
             afterTokens: msg.compact_metadata.post_tokens,
             ...(context ? { contextWindow: context.max } : {}),
-            ...(trigger ? { trigger } : {}),
           }
           this.host.record(id, event)
+          const query = this.host.live.get(id)?.query
           // Some SDK versions omit post_tokens. Read the provider's context at the boundary.
-          if (event.afterTokens === undefined && this.host.live.get(id)?.query === query)
+          if (event.afterTokens === undefined && query)
             void query
               .getContextUsage?.({ detail: 'summary' })
               .then((usage) => {
@@ -203,12 +184,11 @@ export class ClaudeStreamPump {
             providerSessionId: msg.session_id,
             mcpServers: mcpServerDetails(msg.mcp_servers ?? []),
           })
-          // An idle compaction is not a run the person started.
-          if (this.host.compactionTrigger(id, query) !== 'idle') this.host.setState(id, 'running')
+          this.host.setState(id, 'running')
         }
         return
       case 'assistant': {
-        if (!msg.parent_tool_use_id) this.host.responseUsage(id, query, msg.message.usage)
+        if (!msg.parent_tool_use_id) this.host.noteRequest(id, msg.message.usage?.cache_creation)
         const replacements = textStream.complete(msg)
         // Sub-agent output is kept, marked with its agent, for that agent's own transcript.
         const agentId = msg.parent_tool_use_id ? this.claudeAgentId(id, msg) : undefined
@@ -301,7 +281,6 @@ export class ClaudeStreamPump {
       }
       case 'result': {
         textStream.finishMainTurn()
-        const idleCompaction = this.host.turnEnded(id, query)
         this.host.record(id, {
           kind: 'result',
           isError: msg.is_error,
@@ -311,9 +290,8 @@ export class ClaudeStreamPump {
         })
         const current = this.host.live.get(id)?.query
         if (current) this.host.refreshContext(id, current)
-        // The agent's claim that it finished; checks and review decide readiness. An idle compaction leaves the state
-        // as it was: idle, or running a message the person sent while it compacted.
-        if (!idleCompaction) this.host.setState(id, msg.is_error ? 'failed' : 'idle')
+        // The agent's claim that it finished; checks and review decide readiness.
+        this.host.setState(id, msg.is_error ? 'failed' : 'idle')
         return
       }
       default:

@@ -18,6 +18,7 @@ import { MenuView } from '@react-native-menu/menu'
 import { markdownRuns, type MarkdownMark } from '@ramu/shared/chat/markdownRuns'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { fileContextKey } from '@ramu/shared/chat/fileContext'
+import { contextTokensShort } from '@ramu/shared/chat/compaction'
 import { SuggestionList, useComposerSuggest, type ComposerTeammate } from './ComposerSuggest'
 import {
   ArrowUp,
@@ -49,6 +50,8 @@ import {
   Shuffle,
   Zap,
   Users,
+  History,
+  Minimize2,
 } from 'lucide-react-native'
 import type { AgentProvider, AgentSettings, ChatGoal, FileContext, QueuedMessage, SkillInfo } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../theme'
@@ -673,7 +676,13 @@ export function Composer({
   chatId,
   teammate,
   onFindQuote,
+  compaction,
 }: {
+  /**
+   * An idle Claude thread past its prompt cache: Send can compact the history first. The screen decides what sending
+   * does; the composer shows the choice beside Send.
+   */
+  compaction?: { tokens: number; compact: boolean; onChange: (compact: boolean) => void }
   /** Leads a quote back to the message it came from in this thread. */
   onFindQuote?: (quote: string) => void
   draftKey?: string
@@ -1384,6 +1393,29 @@ export function Composer({
               }
             />
           ) : null}
+          {compaction && !running && !offline ? (
+            <Chip
+              small
+              icon={compaction.compact ? Minimize2 : History}
+              label={
+                compaction.compact
+                  ? translate(store.language, 'Compact · {0}', { 0: contextTokensShort(compaction.tokens) })
+                  : translate(store.language, 'Keep · {0}', { 0: contextTokensShort(compaction.tokens) })
+              }
+              selected={compaction.compact}
+              accessibilityLabel={translate(store.language, 'Compact {0} tokens of history before sending', {
+                0: contextTokensShort(compaction.tokens),
+              })}
+              accessibilityHint={
+                compaction.compact
+                  ? say(
+                      'Its cache has expired, so the next message re-reads the whole thread. Double-tap to keep the full history instead.',
+                    )
+                  : say('The next message re-reads the whole thread. Double-tap to compact it first.')
+              }
+              onPress={() => compaction.onChange(!compaction.compact)}
+            />
+          ) : null}
           {running && !has && !offline ? (
             <Pressable
               accessibilityRole="button"
@@ -1449,7 +1481,9 @@ export function Composer({
                         ? mode === 'queue'
                           ? t.queue
                           : t.steer
-                        : 'Send'
+                        : compaction?.compact
+                          ? say('Compact and send')
+                          : 'Send'
                 }
                 disabled={!has || viewOnly || busy || uploading || dictating}
                 // A 34-point button beside the keyboard is easy to miss; the touch area reaches past it.

@@ -62,7 +62,6 @@ import { ClaudeStreamPump } from './agent/claudeStreamPump'
 import { SessionStarter } from './agent/sessionStarter'
 import { RestartRecovery } from './agent/restartRecovery'
 import { ContextUsageTracker } from './agent/contextUsage'
-import { IdleCompactor } from './agent/idleCompaction'
 import type { AgentHost, Collaborators } from './agent/hosts'
 
 export type { QueryFn } from './agent/types'
@@ -120,8 +119,6 @@ export class AgentService {
   usage: (Pick<UsageService, 'list' | 'update'> & Partial<Pick<UsageService, 'all'>>) | undefined
   /** The saved app preferences: fallback chains, threshold and sub-agent routing. */
   preferences: (() => AppPreferences) | undefined
-  /** Saves app preferences the person changed from a thread, such as "Don't ask again"; absent in tests. */
-  savePreferences: ((preferences: AppPreferences) => void) | undefined
   /** Release and retirement dates from public model catalogs; set by the host, absent in tests. */
   modelSignals: (() => import('./providers/modelSignals').ModelSignals) | undefined
   /** New-model notices and tags; set by the host, absent in tests. */
@@ -291,14 +288,7 @@ export class AgentService {
       modelContextWindow: (...a) => parts.contexts.modelContextWindow(...a),
       rememberModelContext: (...a) => parts.contexts.rememberModelContext(...a),
       clearContext: (...a) => parts.contexts.clearContext(...a),
-      closed: (...a) => parts.idle.closed(...a),
-      compacted: (...a) => parts.idle.compacted(...a),
-      compactionTrigger: (...a) => parts.idle.compactionTrigger(...a),
-      requestStarted: (...a) => parts.idle.requestStarted(...a),
-      responseUsage: (...a) => parts.idle.responseUsage(...a),
-      resumeDialog: (...a) => parts.idle.resumeDialog(...a),
-      savePreferences: () => this.savePreferences,
-      turnEnded: (...a) => parts.idle.turnEnded(...a),
+      noteRequest: (...a) => parts.contexts.noteRequest(...a),
       setContext: (...a) => parts.contexts.setContext(...a),
       setGoal: (...a) => parts.goals.setGoal(...a),
       setVerify: (...a) => parts.goals.setVerify(...a),
@@ -365,7 +355,6 @@ export class AgentService {
     parts.starter = new SessionStarter(host, this.db)
     parts.recovery = new RestartRecovery(host, this.db)
     parts.contexts = new ContextUsageTracker(host, this.db)
-    parts.idle = new IdleCompactor(host)
     this.parts = parts
   }
 

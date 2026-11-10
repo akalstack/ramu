@@ -361,18 +361,6 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
         },
         {
           kind: 'choice',
-          path: 'idleCompaction',
-          title: 'Long idle Claude threads',
-          help: 'Compacting summarizes a long conversation so later replies read less of it. Applies to Claude threads over 200K tokens.',
-          words: 'compact compaction idle cache prompt summary tokens context return claude history',
-          options: [
-            { value: 'onReturn', label: 'Ask when I return' },
-            { value: 'beforeCacheExpires', label: 'Compact before the cache expires' },
-            { value: 'off', label: 'Keep full history' },
-          ],
-        },
-        {
-          kind: 'choice',
           path: 'autoBackgroundSeconds',
           advanced: true,
           title: 'Move slow commands to background',

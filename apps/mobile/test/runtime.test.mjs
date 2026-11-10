@@ -116,22 +116,3 @@ test('a human background stop remains visible without becoming a message or comp
   assert.equal(items[0].title, 'Background command stop requested')
   assert.equal(items[0].detail, 'pnpm dev')
 })
-
-test('compactions Ramu started say why, in a translatable title with the counts beneath', () => {
-  const notes = transcript([
-    { kind: 'result', isError: false, text: 'done', costUsd: null },
-    { kind: 'compaction', state: 'completed', trigger: 'idle', beforeTokens: 250000, afterTokens: 30000 },
-    { kind: 'compaction', state: 'completed', trigger: 'resume' },
-    { kind: 'compaction', state: 'completed' },
-    { kind: 'compaction', state: 'failed', trigger: 'idle' },
-  ]).filter((item) => item.kind === 'note')
-  assert.deepEqual(
-    notes.map(({ title, detail, translated, failed }) => ({ title, detail, translated, failed })),
-    [
-      { title: 'Compacted while idle', detail: '250k → 30k tokens', translated: true, failed: false },
-      { title: 'Compacted when you returned', detail: undefined, translated: true, failed: false },
-      { title: 'Context compacted', detail: undefined, translated: true, failed: false },
-      { title: 'Could not compact the conversation', detail: undefined, translated: true, failed: true },
-    ],
-  )
-})

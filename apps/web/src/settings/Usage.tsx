@@ -784,11 +784,10 @@ export function UsageRings() {
   )
 }
 
-/** How full the chat's context window is: a small ring and percentage in the composer. Claude and Codex both report it. */
-export function ContextMeter({ sessionId }: { sessionId: string }) {
+/** The chat's latest context reading, kept current as the host reports new ones. */
+export function useContextUsage(sessionId: string): ContextUsage | null {
   const { invoke } = useHost()
   const { on } = useHostRuntime()
-  useLanguage()
   const [context, setContext] = useState<ContextUsage | null>(null)
   useEffect(() => {
     let cancelled = false
@@ -807,6 +806,12 @@ export function ContextMeter({ sessionId }: { sessionId: string }) {
       off()
     }
   }, [sessionId, invoke, on])
+  return context
+}
+
+/** How full the chat's context window is: a small ring and percentage in the composer. Claude and Codex both report it. */
+export function ContextMeter({ context }: { context: ContextUsage | null }) {
+  useLanguage()
   if (!context) return null
   const tone: UsageTone = context.percent >= 95 ? 'bad' : context.percent >= 80 ? 'warn' : 'ok'
   const k = (n: number) => (n >= 1_000_000 ? `${Math.round(n / 100_000) / 10}M` : `${Math.round(n / 1000)}k`)

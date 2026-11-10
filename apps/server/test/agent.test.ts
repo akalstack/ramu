@@ -798,6 +798,36 @@ describe('AgentService', () => {
     svc.stopAll()
   })
 
+  it("carries a Claude reply's prompt cache lifetime and time into the thread's context reading", async () => {
+    const base = fakeQuery([])
+    const query: QueryFn = (args) => {
+      const original = base(args)
+      async function* stream() {
+        for await (const message of original) {
+          if (message.type === 'assistant' && !message.parent_tool_use_id)
+            yield {
+              ...message,
+              message: {
+                ...message.message,
+                usage: { ...message.message.usage, cache_creation: { ephemeral_5m_input_tokens: 50 } },
+              },
+            } as SDKMessage
+          else yield message
+        }
+      }
+      return Object.assign(stream(), {
+        getContextUsage: async () => ({ totalTokens: 240_000, maxTokens: 1_000_000, percentage: 24 }),
+      }) as unknown as Query
+    }
+    const svc = new AgentService(db, () => {}, query)
+    const before = Date.now()
+    const chat = svc.start('t', scopeOf(cwd), 'hello', { ...DEFAULT_AGENT_SETTINGS, access: 'full' })
+    await until(() => svc.context(chat.id)?.cacheTtlMs !== undefined)
+    expect(svc.context(chat.id)).toMatchObject({ used: 240_000, cacheTtlMs: 5 * 60_000 })
+    expect(svc.context(chat.id)!.lastRequestAt).toBeGreaterThanOrEqual(before)
+    svc.stopAll()
+  })
+
   it('launches in the binding cwd, routes permission requests and records the transcript', async () => {
     const calls: Options[] = []
     const svc = new AgentService(db, (id, event) => events.push({ id, event }), fakeQuery(calls))

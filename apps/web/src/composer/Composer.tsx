@@ -47,6 +47,7 @@ export function Composer({
   placeholder,
   onArrowUpEmpty,
   submitLabel,
+  submitTitle,
   disabled,
   autoFocus,
   footer,
@@ -71,6 +72,8 @@ export function Composer({
   alternateDisabled?: boolean
   placeholder: string
   submitLabel: string
+  /** What sending does, when the label alone does not say it; already translated. */
+  submitTitle?: string
   disabled?: boolean
   autoFocus?: boolean
   footer?: ReactNode
@@ -719,7 +722,7 @@ export function Composer({
                   ? t('Stop this turn')
                   : showResume
                     ? t(resume?.title ?? 'Resume where it stopped')
-                    : `${t(submitLabel)} (Enter)${onAlternateSubmit && alternateLabel ? ` · ${t(alternateLabel)} (⌘Enter / Ctrl+Enter)` : ''}`
+                    : `${submitTitle ?? t(submitLabel)} (Enter)${onAlternateSubmit && alternateLabel ? ` · ${t(alternateLabel)} (⌘Enter / Ctrl+Enter)` : ''}`
             }
             disabled={viewOnly || (showStop || showResume ? false : !canSend)}
             onClick={

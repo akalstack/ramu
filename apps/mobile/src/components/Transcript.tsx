@@ -1012,8 +1012,7 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
       ? loginName(s)
       : label(s)
   let title = item.goalNote ? (strings.goalNotes[item.goalNote] ?? item.title) : item.title
-  if (item.translated || item.title === 'Background command stop requested')
-    title = translate(store.language, item.title)
+  if (item.title === 'Background command stop requested') title = translate(store.language, item.title)
   // As on the desktop, each model carries its provider's mark: "[Claude] Opus Medium → [Codex] GPT-5.5 High".
   let change: ReactNode = null
   if (item.settings) {

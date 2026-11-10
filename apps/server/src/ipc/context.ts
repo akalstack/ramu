@@ -240,7 +240,6 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     agents.isolationRoot = join(host.userData, 'subagent-worktrees')
     agents.usage = usage
     agents.preferences = loadPreferences
-    agents.savePreferences = savePreferences
     const signals = new ModelSignalSource(
       join(host.userData, 'model-signals.json'),
       () => loadPreferences().modelCatalogLookups !== false,

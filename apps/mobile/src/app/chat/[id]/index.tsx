@@ -117,6 +117,7 @@ import { PendingBubble } from '../../../components/Outbox'
 import { SteeringBubble } from '../../../components/SteeringBubble'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { ContextMeter } from '../../../components/ContextMeter'
+import { useCompactOffer, useContextUsage } from '../../../runtime/useContextUsage'
 import { Presence, PressGrow, SentArrive, useReducedMotion } from '../../../components/Motion'
 import { ChatActionsSheet, confirmChatDeletion, offerThreadUndo } from '../../../components/ChatActions'
 import * as Clipboard from 'expo-clipboard'
@@ -745,6 +746,20 @@ export default function ChatScreen() {
     !!chat && store.isOnline(chat.computerId),
     chat?.turnStartedAt ?? null,
   )
+  const contextUsage = useContextUsage(chat?.computerId ?? '', chat?.sessionId ?? null)
+  const compactTokens = useCompactOffer(
+    chat?.provider,
+    !!chat?.sessionId &&
+      chat.status !== 'running' &&
+      chat.status !== 'needs-input' &&
+      !chat.compacting &&
+      !limitWaitOf(chat.items) &&
+      store.isOnline(chat.computerId) &&
+      !viewOnly,
+    contextUsage,
+  )
+  // Keep is chosen per thread for one message; the next idle spell offers Compact again.
+  const [keepHistoryFor, setKeepHistoryFor] = useState<string | null>(null)
   if (!chat)
     return (
       <Screen>
@@ -775,6 +790,12 @@ export default function ChatScreen() {
     ? limitTrayModel(limitWait, chat.settings, store.appPreferences[chat.computerId]?.fallback)
     : null
   const currentModel = { provider: chat.provider, model: chat.model, effort: chat.effort, settings: chat.settings }
+  // Commands, teammates, edits and a model change waiting to apply do not continue this conversation as it is.
+  const compactOffer =
+    compactTokens !== null && !recipient && !editing && staged?.chatId !== chat.id && !/^[/@]/.test(draftText.trim())
+      ? compactTokens
+      : null
+  const compactFirst = compactOffer !== null && keepHistoryFor !== chat.id
   // While the draft starts with `@model` or `@custom-agent`, the composer's model chip and mode are that teammate's.
   const joinTarget =
     chat.settings && chat.sessionId && !viewer
@@ -1812,8 +1833,20 @@ export default function ChatScreen() {
                             .then((joined) => setRecipientId(joined.agentId))
                         }
                         followSend()
+                        // The message queues behind the compaction and goes out once it finishes, as after a typed /compact.
+                        if (compactFirst) await store.send(chat.id, '/compact', 'queue')
+                        setKeepHistoryFor(null)
                         return store.send(chat.id, text, mode, attachments, context)
                       }}
+                      compaction={
+                        compactOffer !== null
+                          ? {
+                              tokens: compactOffer,
+                              compact: compactFirst,
+                              onChange: (compact) => setKeepHistoryFor(compact ? null : chat.id),
+                            }
+                          : undefined
+                      }
                       taskId={chat.taskId || undefined}
                       chatId={chat.id}
                       onFindQuote={findQuote}

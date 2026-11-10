@@ -22,7 +22,7 @@ import { Archive, CheckCircle2, RotateCcw } from 'lucide-react'
 import { timeAgo } from '../Menu'
 import { t as translate, useLanguage } from '../i18n'
 import { ScrollToLatestButton } from './agent/components/ScrollToLatestButton'
-import { isCompacting } from '@ramu/shared/chat/compaction'
+import { contextTokensShort, isCompacting } from '@ramu/shared/chat/compaction'
 import { Button } from '@/components/desktop-button'
 import { reportedStop } from '@ramu/shared/chat/turnResult'
 import {
@@ -64,7 +64,8 @@ import { useModelSets } from '../models/ModelSets'
 import type { AgentTask } from '@ramu/shared/types'
 import { ProviderRouteChip } from '../models/ProviderRoute'
 import { limitPlaceholder, limitResume } from '../models/limitCopy'
-import { ContextMeter } from '../settings/Usage'
+import { ContextMeter, useContextUsage } from '../settings/Usage'
+import { CompactBeforeSendToggle, useCompactOffer } from '../chat/CompactBeforeSend'
 import { CommentsChip, pendingComments } from '../git/ReviewChip'
 import { Composer } from '../composer/Composer'
 import { errorText } from '../workspace/TaskPane'
@@ -468,6 +469,17 @@ export const AgentView = memo(function AgentView({
     applyNow: busyAgent || !!providerWait,
     warnModelChange: preferences.warnModelChange,
   })
+  const context = useContextUsage(view.sessionId)
+  const compactTokens = useCompactOffer(
+    session?.provider,
+    !!session && !busyAgent && !providerWait && !pendingSettings && !hostOffline && !viewOnly,
+    context,
+  )
+  // Keep is chosen per thread for one message; the next idle spell offers Compact again.
+  const [keepHistoryFor, setKeepHistoryFor] = useState<string | null>(null)
+  // Commands and messages to teammates do not reach the thread's own conversation, so there is nothing to compact for.
+  const compactOffer = compactTokens !== null && !recipient && !/^[/@]/.test(draft.trim()) ? compactTokens : null
+  const compactFirst = compactOffer !== null && keepHistoryFor !== view.sessionId
   const [continueHost, setContinueHost] = useState<string | null>(null)
   const { continuing, confirmContinue, setConfirmContinue, continueInNewChat, canUseWorktree } = useContinueInNewChat({
     session,
@@ -643,6 +655,7 @@ export const AgentView = memo(function AgentView({
   }
   const sendToAgent = (mode: 'queue' | 'steer', context: FileContext[]) =>
     act(async () => {
+      const compacting = compactFirst
       const submitted = draft
       const submittedFiles = attachments
       const submittedContent = contentAttachments
@@ -676,6 +689,8 @@ export const AgentView = memo(function AgentView({
       setConfiguring(true)
       try {
         await applyPendingSettings()
+        // The message queues behind the compaction and goes out once it finishes, as after a typed /compact.
+        if (compacting) await invoke('agent.submit', view.sessionId, '/compact', 'queue', [], [])
         if (attached.length) {
           // Review comments go out with this message, as one request to the agent.
           for (const [index, group] of attached.entries())
@@ -702,6 +717,7 @@ export const AgentView = memo(function AgentView({
         if (consumed.unchanged) setDraft((current) => (current === submitted ? '' : current))
         setAttachments((current) => current.filter((file) => !submittedFiles.some((sent) => sent.id === file.id)))
         clearContent()
+        setKeepHistoryFor(null)
         stick.current = true
       } finally {
         setPendingSubmission(null)
@@ -1175,7 +1191,7 @@ export const AgentView = memo(function AgentView({
                             onChange={changeSettings}
                             disabled={viewOnly}
                             running={working}
-                            trailing={<ContextMeter sessionId={view.sessionId} />}
+                            trailing={<ContextMeter context={context} />}
                           />
                         </>
                       ))
@@ -1204,8 +1220,33 @@ export const AgentView = memo(function AgentView({
                                 ? translate('Reply to the agent')
                                 : translate('Message the agent')
                     }
+                    actions={
+                      compactOffer !== null && (
+                        <CompactBeforeSendToggle
+                          tokens={compactOffer}
+                          compact={compactFirst}
+                          disabled={configuring}
+                          onChange={(compact) => setKeepHistoryFor(compact ? null : view.sessionId)}
+                        />
+                      )
+                    }
                     submitLabel={
-                      hostOffline || limitView ? 'Queue' : busyAgent ? (action === 'queue' ? 'Queue' : 'Steer') : 'Send'
+                      hostOffline || limitView
+                        ? 'Queue'
+                        : busyAgent
+                          ? action === 'queue'
+                            ? 'Queue'
+                            : 'Steer'
+                          : compactFirst
+                            ? 'Compact and send'
+                            : 'Send'
+                    }
+                    submitTitle={
+                      compactFirst && compactOffer !== null
+                        ? translate('Summarize {0} tokens of history, then send', {
+                            0: contextTokensShort(compactOffer),
+                          })
+                        : undefined
                     }
                   />
                 </>

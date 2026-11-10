@@ -461,15 +461,3 @@ test("a page's Reset defaults puts back only rows that differ from the host's ad
     ['fallback.autoResume', true],
   ])
 })
-
-test('the phone sets what happens to long idle Claude threads, with the same three choices as the desktop', () => {
-  const rows = visibleGroups('chats', [setting('idleCompaction', 'onReturn', { type: 'string' })]).flatMap(
-    (group) => group.rows,
-  )
-  const row = rows.find((entry) => entry.path === 'idleCompaction')
-  assert.equal(row.kind, 'choice')
-  assert.deepEqual(
-    row.options.map((option) => option.value),
-    ['onReturn', 'beforeCacheExpires', 'off'],
-  )
-})

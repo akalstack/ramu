@@ -6,15 +6,9 @@ How a thread's agent works, how to bring in other models, and how work spreads a
 
 Pick another model while a turn runs and Ramu waits five seconds (**Apply now** or **Cancel**). Idle threads switch at once. When the new model can't resume the old session, Ramu hands it the conversation so far (a **Context handoff**). A change the provider can't take leaves the current model running.
 
-## Long idle Claude threads
+## Compacting a long Claude thread
 
-A Claude thread over 200K tokens that sits idle loses its prompt cache (after an hour on a subscription, five minutes on an API key), so the next reply re-reads the whole conversation at full cost. **Settings → Threads → Long idle Claude threads** decides what happens, on the desktop and the phone:
-
-- **Ask when I return** (default): when Claude offers to compact on your next message, the thread asks **Compact and continue**, **Keep full history** or **Don't ask again**, which switches this setting to **Keep full history**. Claude decides when to offer, after about an hour away, and not every account gets the offer.
-- **Compact before the cache expires:** two minutes before the cache of the last reply expires, Ramu sends `/compact` to the idle thread while the cache is still warm. It runs once per idle spell, does not count as a run or notify you, and never starts while a question or approval waits, helpers or background commands still run, messages are queued, a goal or usage-limit wait will continue the thread, the thread is marked done, or the last turn already compacted. A message you send meanwhile runs right after it. The timer lives in memory, so after a host restart the return question covers the next message.
-- **Keep full history:** never compacts an idle thread and answers Claude's offer without asking.
-
-The transcript labels these **Compacted while idle** and **Compacted when you returned**, apart from **Context compacted** for a manual `/compact` or a full context. Codex and other providers don't report when their cache expires, so this applies to Claude only.
+Claude keeps a thread's conversation in its prompt cache for an hour on a subscription, five minutes on an API key. Once a Claude thread over 200K tokens has sat idle longer than that, its next message re-reads the whole conversation at full cost. The composer then shows **Compact · 240K** beside Send, and Send becomes **Compact and send**: Ramu sends `/compact` and your message runs right after it, against the summary. Select the chip to switch to **Keep · 240K** and send with the full history; the choice applies to that one message. Ramu uses the cache lifetime Claude reported for the thread's last reply, or an hour when it has none. The chip does not show while a turn runs or waits for your answer, for a command, a message to a teammate, an edited message or a model change still to apply, or for other providers. It works the same on the desktop and the phone.
 
 ## Usage limits and fallback
 

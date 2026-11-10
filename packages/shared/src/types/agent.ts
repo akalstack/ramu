@@ -534,8 +534,6 @@ type AgentEventBody =
       beforeTokens?: number
       afterTokens?: number
       contextWindow?: number
-      /** Set when Ramu started it: `idle` before the prompt cache expired, `resume` when the person chose it on return. */
-      trigger?: 'idle' | 'resume'
     }
   | { kind: 'error'; message: string }
   | { kind: 'state'; state: AgentSessionState }
@@ -570,6 +568,10 @@ export interface ContextUsage {
   max: number
   percent: number
   at: number
+  /** When the thread's last main model request was answered; Claude's prompt cache lifetime counts from here. */
+  lastRequestAt?: number
+  /** The prompt cache lifetime Claude reported for that request. */
+  cacheTtlMs?: number
 }
 
 /** A side question about the chat, answered without touching the main conversation. */

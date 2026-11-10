@@ -6965,12 +6965,17 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Automatic follows this host’s memory; threads past the limit wait in line.": "Otomatis mengikuti memori host ini; thread di atas batas menunggu giliran.",
   "Slim iOS Simulators": "iOS Simulator ringan",
   "Quicker to start and lighter on memory, without some system apps such as Safari.": "Lebih cepat dinyalakan dan lebih hemat memori, tanpa beberapa aplikasi sistem seperti Safari.",
-  'Compacted while idle': 'Diringkas saat menganggur',
-  'Compacted when you returned': 'Diringkas saat Anda kembali',
-  'Long idle Claude threads': 'Thread Claude panjang yang menganggur',
-  'Compacting summarizes a long conversation so later replies read less of it. Applies to Claude threads over 200K tokens.': 'Peringkasan merangkum percakapan panjang agar balasan berikutnya membaca lebih sedikit. Berlaku untuk thread Claude di atas 200K token.',
-  'Ask when I return': 'Tanya saat saya kembali',
-  'Compact before the cache expires': 'Ringkas sebelum cache kedaluwarsa',
-  'Keep full history': 'Simpan seluruh riwayat',
-  'Could not compact the conversation': 'Tidak bisa meringkas percakapan',
+  'Compact · {0}': 'Ringkas · {0}',
+  'Keep · {0}': 'Simpan · {0}',
+  'Compact and send': 'Ringkas lalu kirim',
+  'Summarize {0} tokens of history, then send': 'Ringkas {0} token riwayat, lalu kirim',
+  'Compact {0} tokens of history before sending': 'Ringkas {0} token riwayat sebelum mengirim',
+  'This thread has been idle past its prompt cache, so the next message re-reads all {0} tokens. Compacting summarizes them first, and later replies read less. Click to keep the full history.':
+    'Thread ini menganggur melewati masa cache prompt-nya, jadi pesan berikutnya membaca ulang semua {0} token. Meringkas merangkumnya lebih dulu, dan balasan berikutnya membaca lebih sedikit. Klik untuk menyimpan seluruh riwayat.',
+  'The next message re-reads all {0} tokens of history. Click to compact them first.':
+    'Pesan berikutnya membaca ulang semua {0} token riwayat. Klik untuk meringkasnya lebih dulu.',
+  'Its cache has expired, so the next message re-reads the whole thread. Double-tap to keep the full history instead.':
+    'Cache-nya sudah kedaluwarsa, jadi pesan berikutnya membaca ulang seluruh thread. Ketuk dua kali untuk menyimpan seluruh riwayat.',
+  'The next message re-reads the whole thread. Double-tap to compact it first.':
+    'Pesan berikutnya membaca ulang seluruh thread. Ketuk dua kali untuk meringkasnya lebih dulu.',
 }

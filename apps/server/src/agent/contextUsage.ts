@@ -1,5 +1,6 @@
 import type { Query } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentSettings, ContextUsage, UsageReading, AppPreferences } from '@ramu/shared/types'
+import { promptCacheTtlMs } from '@ramu/shared/chat/compaction'
 import type { QueryFn } from './types'
 import { ClaudeUsageReader } from './usageReader'
 import type { SessionRegistry } from './sessionRegistry'
@@ -24,6 +25,8 @@ export class ContextUsageTracker {
   ) {}
 
   private readonly contexts = new Map<string, { value: ContextUsage; selection: string }>()
+  /** The latest main Claude request per thread, so the composer can tell when its prompt cache has expired. */
+  private readonly requests = new Map<string, { lastRequestAt: number; cacheTtlMs?: number }>()
 
   private selection(settings: Pick<AgentSettings, 'provider' | 'accountId' | 'model'>): string {
     return JSON.stringify([settings.provider, settings.accountId ?? 'default', settings.model])
@@ -45,7 +48,13 @@ export class ContextUsageTracker {
     if (!Number.isFinite(max) || !(max > 0) || !Number.isFinite(used) || used < 0) return
     const settings = this.host.get(id).settings
     this.rememberModelContext(settings, max)
-    const context: ContextUsage = { used, max, percent: Math.min(100, Math.round((used / max) * 100)), at: Date.now() }
+    const context: ContextUsage = {
+      used,
+      max,
+      percent: Math.min(100, Math.round((used / max) * 100)),
+      at: Date.now(),
+      ...this.requests.get(id),
+    }
     this.contexts.set(id, { value: context, selection: this.selection(settings) })
     this.host.onContext()?.(id, context)
   }
@@ -69,6 +78,16 @@ export class ContextUsageTracker {
 
   clearContext(id: string): void {
     this.contexts.delete(id)
+    this.requests.delete(id)
+  }
+
+  /**
+   * A main Claude reply arrived. Its cache lifetime counts from about now; a reply read fully from cache wrote no entry
+   * but refreshed the existing one, which keeps the lifetime reported last. The next context reading carries both.
+   */
+  noteRequest(id: string, cacheCreation: Parameters<typeof promptCacheTtlMs>[0], at = Date.now()): void {
+    const cacheTtlMs = promptCacheTtlMs(cacheCreation) ?? this.requests.get(id)?.cacheTtlMs
+    this.requests.set(id, { lastRequestAt: at, ...(cacheTtlMs ? { cacheTtlMs } : {}) })
   }
 
   /** Claude's context size is read after each turn, and on the first start, without a model call. */

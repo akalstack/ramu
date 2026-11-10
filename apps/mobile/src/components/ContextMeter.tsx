@@ -1,8 +1,6 @@
-import { useEffect, useState } from 'react'
 import { View } from 'react-native'
-import type { ContextUsage } from '@ramu/shared/types'
 import { font, useTheme } from '../theme'
-import { useStore } from '../runtime/store'
+import { useContextUsage } from '../runtime/useContextUsage'
 import { T } from './ui'
 import Svg, { Circle } from 'react-native-svg'
 
@@ -10,31 +8,8 @@ const CIRCUMFERENCE = 2 * Math.PI * 5.5
 
 /** How full the chat's context window is, like the desktop's ring beside the model: green, amber from 80%, red from 95%. */
 export function ContextMeter({ computerId, sessionId }: { computerId: string; sessionId: string | null }) {
-  const store = useStore()
   const { c } = useTheme()
-  const [context, setContext] = useState<ContextUsage | null>(null)
-  const online = store.isOnline(computerId)
-  useEffect(() => {
-    setContext(null)
-    if (!sessionId || !online) return
-    let alive = true
-    void store.invoke(computerId, 'agent.context', sessionId).then(
-      (value) => {
-        if (alive) setContext(value)
-      },
-      () => {},
-    )
-    const unwatch = store.watch(computerId, ['context:changed'], { 'context:changed': [sessionId] })
-    const off = store.subscribe(computerId, (channel, payload) => {
-      if (channel === 'context:changed' && payload.sessionId === sessionId) setContext(payload.context)
-    })
-    return () => {
-      alive = false
-      off()
-      unwatch()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [computerId, sessionId, online] by design; the values it reads beyond these are current as of that run
-  }, [computerId, sessionId, online])
+  const context = useContextUsage(computerId, sessionId)
   if (!context) return null
   const color = context.percent >= 95 ? c.bad : context.percent >= 80 ? c.warn : c.muted
   // At least a visible dot, so a nearly empty context still reads as a ring with progress.

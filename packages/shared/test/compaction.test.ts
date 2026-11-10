@@ -1,6 +1,15 @@
 import { expect, it } from 'vitest'
 import { DEFAULT_AGENT_SETTINGS } from '../src/types'
-import { compactionLabel, compactionCounts, isCompacting, isTurnFooter } from '../src/chat/compaction'
+import {
+  compactBeforeSend,
+  compactBeforeSendFrom,
+  compactionCounts,
+  compactionLabel,
+  contextTokensShort,
+  isCompacting,
+  isTurnFooter,
+  promptCacheTtlMs,
+} from '../src/chat/compaction'
 
 it('uses provider token counts only when available and valid', () => {
   expect(compactionLabel({ kind: 'compaction', state: 'completed', beforeTokens: 212000, afterTokens: 33700 })).toBe(
@@ -73,4 +82,47 @@ it('ends compaction activity for cancellation and future provider statuses', () 
   expect(compactionLabel({ kind: 'compaction', state: 'unknown', providerStatus: '_paused' })).toBe(
     'Context compaction · _paused',
   )
+})
+
+const hour = 60 * 60_000
+const context = (used: number, extra: { lastRequestAt?: number; cacheTtlMs?: number } = {}) => ({
+  used,
+  max: 1_000_000,
+  percent: Math.round(used / 10_000),
+  at: 10_000,
+  ...extra,
+})
+
+it('offers to compact an idle Claude thread of 200K tokens or more once its prompt cache has expired', () => {
+  const large = context(240_000, { lastRequestAt: 0, cacheTtlMs: hour })
+  expect(compactBeforeSend({ provider: 'claude-code', idle: true, context: large, now: hour - 1 })).toBeNull()
+  expect(compactBeforeSend({ provider: 'claude-code', idle: true, context: large, now: hour })).toBe(240_000)
+  expect(compactBeforeSend({ provider: 'claude-code', idle: false, context: large, now: 2 * hour })).toBeNull()
+  expect(compactBeforeSend({ provider: 'codex', idle: true, context: large, now: 2 * hour })).toBeNull()
+  expect(
+    compactBeforeSend({
+      provider: 'claude-code',
+      idle: true,
+      context: context(199_999, { lastRequestAt: 0 }),
+      now: 2 * hour,
+    }),
+  ).toBeNull()
+  expect(compactBeforeSend({ provider: 'claude-code', idle: true, context: null, now: 2 * hour })).toBeNull()
+})
+
+it('uses the cache lifetime Claude reported, falling back to an hour from the context reading', () => {
+  expect(compactBeforeSendFrom('claude-code', context(300_000, { lastRequestAt: 1_000, cacheTtlMs: 5 * 60_000 }))).toBe(
+    301_000,
+  )
+  expect(compactBeforeSendFrom('claude-code', context(300_000))).toBe(10_000 + hour)
+  expect(promptCacheTtlMs({ ephemeral_1h_input_tokens: 10, ephemeral_5m_input_tokens: 0 })).toBe(hour)
+  expect(promptCacheTtlMs({ ephemeral_5m_input_tokens: 10 })).toBe(5 * 60_000)
+  expect(promptCacheTtlMs({ ephemeral_1h_input_tokens: 0 })).toBeUndefined()
+  expect(promptCacheTtlMs(null)).toBeUndefined()
+})
+
+it('shortens context sizes for the composer', () => {
+  expect(contextTokensShort(240_400)).toBe('240K')
+  expect(contextTokensShort(1_240_000)).toBe('1.2M')
+  expect(contextTokensShort(NaN)).toBe('0K')
 })

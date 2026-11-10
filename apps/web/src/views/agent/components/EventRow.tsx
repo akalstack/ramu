@@ -9,7 +9,7 @@ import { SettingsChangeCard } from '../../../settings/SettingsChangeCard'
 import { InteractiveContent } from '../../../interactive/InteractiveContent'
 import { t as translate, useLanguage } from '../../../i18n'
 import { AgentContentView } from '../../../chat/AgentContentView'
-import { compactionCounts, compactionHeading, compactionLabel } from '@ramu/shared/chat/compaction'
+import { compactionLabel, compactionCounts } from '@ramu/shared/chat/compaction'
 import { Button } from '@/components/desktop-button'
 import { ArrowRightLeft, CircleAlert, Minimize2, RotateCcw, Settings2, Undo2 } from 'lucide-react'
 import type { Attachment, AgentEvent } from '@ramu/shared/types'
@@ -102,7 +102,7 @@ export function EventRow({
           <span className="h-px min-w-4 flex-1 bg-line" aria-hidden="true" />
           <span className="inline-flex min-w-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
             <Minimize2 size={14} className="flex-none" aria-hidden="true" />
-            {e.state === 'completed' ? translate(compactionHeading(e)) : compactionLabel(e)}
+            {e.state === 'completed' ? translate('Context compacted') : compactionLabel(e)}
             {e.state === 'completed' && (
               <span
                 className="text-caption tabular-nums"
