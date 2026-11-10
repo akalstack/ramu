@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { BarChart3, BookOpen, Bot, FileText, KeyRound, Server, Sparkles, SquareTerminal } from 'lucide-react'
 import { ABILITY_LABELS } from '@ramu/shared/providers/abilities'
-import { UNUSED_PART_NAMES, type PluginContents, type PluginSourceInfo } from '@ramu/shared/plugins'
+import { UNUSED_PART_NAMES, pluginPicture, type PluginContents, type PluginSourceInfo } from '@ramu/shared/plugins'
 import { Badge } from '@/components/ui/badge'
 import { t, useLanguage } from '../i18n'
 import { ExtensionIcon } from './parts'
@@ -166,7 +166,7 @@ export function PluginHeading({
   useLanguage()
   return (
     <div className="flex items-start gap-3">
-      <ExtensionIcon name={contents.name} size={44} />
+      <ExtensionIcon name={contents.name} picture={pluginPicture(source.location)} size={44} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {contents.description && <p className="m-0 text-control text-soft">{contents.description}</p>}
         <div className="flex flex-wrap items-center gap-1">

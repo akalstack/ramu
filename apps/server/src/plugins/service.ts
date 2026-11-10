@@ -34,7 +34,7 @@ import {
   type PluginUpdate,
   type RamuExtension,
 } from '@ramu/shared/plugins'
-import { RAMU_EXTENSION, UNUSED_PART_NAMES } from '@ramu/shared/plugins'
+import { RAMU_EXTENSION, UNUSED_PART_NAMES, pluginPicture } from '@ramu/shared/plugins'
 import { HostCredentialStore } from '../credentials/store'
 import { skillMetadata } from '../memory/skillFiles'
 import { SavedCredential } from '../workspace/forge/savedCredential'
@@ -246,6 +246,7 @@ export class PluginService {
       }),
       update: plugin.update,
       byRamu: plugin.byRamu,
+      picture: plugin.source.kind === 'git' ? pluginPicture(plugin.source.location) : null,
       companion: this.companionOf(plugin.name, plugin.extension.companion),
     }
   }
@@ -1415,6 +1416,7 @@ export class PluginService {
           stacks: ramu?.stacks ?? [],
           keywords,
           category: entry.category ?? null,
+          picture: pluginPicture(source.url),
           installed: installed.has(entry.name),
           alternatives: [],
           companion: (() => {

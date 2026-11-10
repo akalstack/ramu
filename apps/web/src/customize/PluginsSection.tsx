@@ -153,6 +153,7 @@ export function PluginsSection({
     <ExtensionItem
       key={plugin.id}
       name={plugin.name}
+      picture={plugin.picture}
       subtitle={plugin.contents.description || plugin.source.location}
       muted={!plugin.enabled}
       badge={
@@ -178,6 +179,7 @@ export function PluginsSection({
     <ExtensionItem
       key={`${listing.index}:${listing.name}`}
       name={listing.name}
+      picture={listing.picture}
       subtitle={listing.description}
       badge={
         listing.alternatives.length ? (

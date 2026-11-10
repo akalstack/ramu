@@ -736,6 +736,8 @@ export interface InstalledPlugin {
   /** What an update would change, when the daily check found one. */
   update: PluginUpdate | null
   byRamu: boolean
+  /** Its author's GitHub picture, for a service Ramu has no mark of its own for. */
+  picture: string | null
   /**
    * The plugin it pairs with, and whether that is installed: for Ramu's own, the service's plugin in Claude's directory;
    * for that one, Ramu's that connects it.
@@ -779,6 +781,8 @@ export interface PluginListing {
   keywords: string[]
   /** The index's category for it, such as development or productivity. */
   category: string | null
+  /** Its author's GitHub picture, for a service Ramu has no mark of its own for. */
+  picture: string | null
   installed: boolean
   /** The same plugin name in other indexes; the card shows the first listing and offers these instead. */
   alternatives: { index: string; indexName: string; source: string }[]
@@ -1005,4 +1009,19 @@ export function checkQuery(
     query[field.name] = value
   }
   return { ok: true, query }
+}
+
+/** Repository owners that publish other people's plugins, whose own picture would not stand for the plugin. */
+const DIRECTORY_OWNERS = new Set(['anthropics', 'akalstack'])
+
+/**
+ * The picture a plugin's card shows when Ramu has no mark of its own for the service: the GitHub account its source
+ * lives under, which for a vendor's plugin is the vendor's logo. A plugin kept inside a directory gets none.
+ */
+export function pluginPicture(source: string): string | null {
+  const match = /^(?:https?:\/\/|git@)github\.com[/:]([A-Za-z0-9-]{1,39})\//.exec(source.trim())
+  const owner = match?.[1]
+  return owner && !DIRECTORY_OWNERS.has(owner.toLowerCase())
+    ? `https://avatars.githubusercontent.com/${owner}?size=96`
+    : null
 }

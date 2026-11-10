@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  pluginPicture,
   readMarketplace,
   listingMatches,
   checkQuery,
@@ -264,6 +265,7 @@ describe('listingMatches', () => {
     stacks: ['node'],
     keywords: ['hosting'],
     category: null,
+    picture: null,
     installed: false,
     alternatives: [],
     companion: null,
@@ -288,5 +290,15 @@ describe('readMarketplace', () => {
     expect(read.plugins.map((entry) => entry.name)).toEqual(['linear'])
     expect(read.plugins[0]!.description).toHaveLength(1000)
     expect(read.skipped).toEqual(['xcode'])
+  })
+})
+
+describe('pluginPicture', () => {
+  it('uses the GitHub account a vendor publishes from, and none for a directory’s own folder', () => {
+    expect(pluginPicture('https://github.com/railwayapp/railway-skills.git')).toBe(
+      'https://avatars.githubusercontent.com/railwayapp?size=96',
+    )
+    expect(pluginPicture('https://github.com/anthropics/claude-plugins-official')).toBeNull()
+    expect(pluginPicture('https://gitlab.com/acme/plugin')).toBeNull()
   })
 })

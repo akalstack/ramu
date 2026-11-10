@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { BRAND_IDS, type BrandId } from '@ramu/shared/brands'
 import { cn } from 'cn'
 import { BrandIcon } from '@/components/brand-icon'
 import { RowButton } from '@/components/row-button'
 import { SearchInput } from '../SearchInput'
 import { useLanguage } from '../i18n'
+import { useHost } from '../workspace/HostProvider'
 
 /** A plugin's or server's brand, when its name is one Ramu has a mark for. */
 export function brandOf(name: string): BrandId | null {
@@ -18,11 +20,40 @@ export function brandOf(name: string): BrandId | null {
 }
 
 /**
- * The square tile beside every plugin, skill and server: the brand's mark when Ramu has one, else its first letter, so
- * a list scans by shape and never shows a gap.
+ * The square tile beside every plugin, skill and server: the brand's mark when Ramu has one, else the author's picture
+ * (fetched through the host, as comment pictures are), else its first letter, so a list scans by shape and never
+ * shows a gap.
  */
-export function ExtensionIcon({ name, icon, size = 36 }: { name: string; icon?: ReactNode; size?: number }) {
+export function ExtensionIcon({
+  name,
+  icon,
+  picture,
+  size = 36,
+}: {
+  name: string
+  icon?: ReactNode
+  picture?: string | null
+  size?: number
+}) {
   const brand = icon ? null : brandOf(name)
+  const { id: hostId, invoke } = useHost()
+  const image = useQuery({
+    queryKey: ['forge-avatar', hostId, picture],
+    queryFn: () => invoke('forge.avatar', picture!),
+    enabled: !icon && !brand && !!picture,
+    staleTime: Infinity,
+    retry: false,
+  }).data
+  if (!icon && !brand && image)
+    return (
+      <img
+        src={image}
+        alt=""
+        aria-hidden="true"
+        className="flex-none rounded-(--radius-s) object-cover [box-shadow:inset_0_0_0_1px_var(--line)]"
+        style={{ width: size, height: size }}
+      />
+    )
   return (
     <span
       className="flex flex-none items-center justify-center rounded-(--radius-s) bg-fill text-soft [box-shadow:inset_0_0_0_1px_var(--line)]"
@@ -71,6 +102,7 @@ export function ExtensionItem({
   title,
   subtitle,
   icon,
+  picture,
   badge,
   action,
   muted,
@@ -80,6 +112,8 @@ export function ExtensionItem({
   title?: string
   subtitle: ReactNode
   icon?: ReactNode
+  /** The author's picture, used when Ramu has no mark for the name. */
+  picture?: string | null
   badge?: ReactNode
   action?: ReactNode
   muted?: boolean
@@ -87,7 +121,7 @@ export function ExtensionItem({
 }) {
   const body = (
     <>
-      <ExtensionIcon name={name} icon={icon} />
+      <ExtensionIcon name={name} icon={icon} picture={picture} />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className={cn('truncate text-control font-medium', muted ? 'text-soft' : 'text-foreground')}>
