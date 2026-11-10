@@ -9,6 +9,17 @@ import { ensureInteractiveBrowser } from './browser'
 export { interactiveBrowserPath } from './browser'
 
 let running = 0
+
+/**
+ * Runs before the page: a WebGL canvas keeps its last frame so it can be read back, and the page notes each canvas
+ * that asked for WebGL and whether it got it.
+ */
+const WEBGL_WATCH = `(()=>{const g=HTMLCanvasElement.prototype.getContext;const seen=window.__ramuWebgl=[];
+HTMLCanvasElement.prototype.getContext=function(type,options){const gl=/^(webgl2?|experimental-webgl)$/.test(type);const c=g.call(this,type,gl?{...options,preserveDrawingBuffer:true}:options);if(gl&&!seen.some(e=>e.canvas===this))seen.push({canvas:this,ok:!!c});return c}})()`
+
+/** What the page's WebGL canvases show once it has run a moment: one entry per canvas that asked for WebGL. */
+const WEBGL_SAMPLE = `(()=>{const out=[];for(const {canvas,ok} of window.__ramuWebgl||[]){const r=canvas.getBoundingClientRect();if(!canvas.isConnected||r.width<8||r.height<8)continue;if(!ok){out.push('failed');continue}
+const s=document.createElement('canvas');s.width=48;s.height=48;const x=s.getContext('2d');x.drawImage(canvas,0,0,48,48);const d=x.getImageData(0,0,48,48).data;let same=true;for(let i=4;i<d.length;i+=4)if(Math.abs(d[i]-d[0])+Math.abs(d[i+1]-d[1])+Math.abs(d[i+2]-d[2])+Math.abs(d[i+3]-d[3])>12){same=false;break}out.push(same?'blank':'drawn')}return out})()`
 /** Isolated temporary browser with no saved profile. Only the document itself and https subresources load. */
 export async function previewInteractive(
   html: string,
@@ -32,7 +43,14 @@ export async function previewInteractive(
   }
   try {
     const executablePath = await ensureInteractiveBrowser(signal)
-    browser = await chromium.launch({ executablePath, headless: true, chromiumSandbox: true, timeout: 10_000 })
+    // SwiftShader draws WebGL in software, so a 3D page renders on a host with no GPU.
+    browser = await chromium.launch({
+      executablePath,
+      headless: true,
+      chromiumSandbox: true,
+      timeout: 10_000,
+      args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+    })
     signal?.addEventListener('abort', close, { once: true })
     if (signal?.aborted) throw new Error('Preview cancelled')
     timer = setTimeout(close, 45_000)
@@ -110,6 +128,7 @@ export async function previewInteractive(
       }
     })
     await context.routeWebSocket('**/*', (socket) => socket.close())
+    await context.addInitScript(WEBGL_WATCH)
     const page = await context.newPage()
     page.setDefaultTimeout(2000)
     page.on('dialog', (dialog) => {
@@ -138,6 +157,17 @@ export async function previewInteractive(
     })
     // Remote libraries need time to arrive; the document's own bytes are local.
     await page.goto('https://ramu-content.invalid/', { waitUntil: 'load', timeout: 20_000 })
+    // A 3D page gets a moment to load its models and draw; a canvas still one color then fails, as clipped text does.
+    if (await page.evaluate<boolean>('(window.__ramuWebgl||[]).length>0')) {
+      await page.waitForTimeout(1500)
+      for (const state of await page.evaluate<string[]>(WEBGL_SAMPLE))
+        if (state !== 'drawn' && errors.length < 20)
+          errors.push(
+            state === 'failed'
+              ? 'WebGL did not start in this canvas. Check the renderer is created once, on a canvas in the page.'
+              : 'A 3D canvas stayed one color after the page loaded: nothing was drawn. Check the camera faces the scene, the scene has lights and the loop renders every frame.',
+          )
+    }
     const results: InteractivePreview['checks'] = []
     for (const check of checks) {
       try {

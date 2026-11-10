@@ -56,3 +56,13 @@ export const fileContext = z
   .max(30)
   .optional()
 export const attachmentIds = z.array(id).max(10).optional()
+
+const viewerLabel = z.string().max(120)
+/** The words the 3D viewer shows, from the reader's device. */
+export const modelViewerLabels = z.object({
+  triangles: viewerLabel,
+  size: viewerLabel,
+  animation: viewerLabel,
+  still: viewerLabel,
+  failed: viewerLabel,
+})

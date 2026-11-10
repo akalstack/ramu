@@ -18,6 +18,7 @@ catalog:
   react-dom: 19.3.0
   react-markdown: 10.1.0
   remark-gfm: 4.0.1
+  three: 0.186.1
   typescript: 5.9.3
   vite: 7.3.7
   vitest: 5.0.3

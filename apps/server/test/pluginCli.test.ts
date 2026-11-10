@@ -23,7 +23,7 @@ const cli: PluginCli = { binaries: ['wrangler'], npx: 'wrangler@4', reads: [['wh
 const target: PluginCliTarget = { plugin: 'cloudflare', pluginId: 'p1', cli, slot }
 const secret: PluginSecret = { token: 'tok_secret', fields: { account: 'acc_1' }, account: 'Ana' }
 
-function setup(approve: boolean, saved: PluginSecret | null = secret) {
+function setup(approve: boolean, saved: PluginSecret | null = secret, entry: PluginCliTarget = target) {
   const tools = new Map<string, Handler>()
   const server = { registerTool: (name: string, _def: unknown, handler: Handler) => void tools.set(name, handler) }
   const asked: string[] = []
@@ -32,7 +32,7 @@ function setup(approve: boolean, saved: PluginSecret | null = secret) {
   const secretOf = vi.fn(async () => saved)
   registerPluginCliTools(
     server as never,
-    { clis: () => [target], secret: secretOf },
+    { clis: () => [entry], secret: secretOf },
     source as never,
     () => source as never,
     async (detail) => {
@@ -89,6 +89,20 @@ describe('platform_cli', () => {
       'API token for cloudflare is not saved',
     )
     expect(unsaved.run).not.toHaveBeenCalled()
+  })
+
+  it('runs a local tool with no credential, asking without naming an account', async () => {
+    const godot: PluginCliTarget = {
+      plugin: 'godot',
+      pluginId: 'p2',
+      cli: { binaries: ['godot'], reads: [['--version']] },
+    }
+    const { tool, run, asked, secretOf } = setup(true, null, godot)
+    await tool({ platform: 'godot', args: ['--version'] }, {})
+    expect(run).toHaveBeenCalledWith(godot, ['--version'], '/tmp/shop', null, undefined)
+    await tool({ platform: 'godot', args: ['--headless', '--export-release', 'Web', 'build/web/index.html'] }, {})
+    expect(asked).toEqual(['Run godot --headless --export-release Web build/web/index.html in /tmp/shop.'])
+    expect(secretOf).not.toHaveBeenCalled()
   })
 
   it('reports a failed command as an error result', async () => {

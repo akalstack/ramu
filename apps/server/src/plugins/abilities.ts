@@ -7,7 +7,7 @@ import type { AppPreferences } from '@ramu/shared/types'
  */
 export function mapPluginAbilities(
   preferences: { load(): AppPreferences; save(preferences: AppPreferences): void },
-  tools: { ability: string; connectionId: string; tool: string }[],
+  tools: ({ ability: string } & AbilityMcpTool)[],
   removed: string[] = [],
 ) {
   const current = preferences.load()
@@ -30,7 +30,15 @@ export function mapPluginAbilities(
   for (const entry of tools) {
     const ability = entry.ability as Ability
     if (!ABILITIES.includes(ability) || autoMcp[ability] || (choices[ability] && choices[ability] !== 'auto')) continue
-    autoMcp[ability] = { connectionId: entry.connectionId, tool: entry.tool }
+    autoMcp[ability] = {
+      connectionId: entry.connectionId,
+      tool: entry.tool,
+      ...(entry.status ? { status: entry.status } : {}),
+      ...(entry.balance ? { balance: entry.balance } : {}),
+      ...(entry.fromImage ? { fromImage: entry.fromImage } : {}),
+      ...(entry.refine ? { refine: entry.refine } : {}),
+      ...(entry.downloads?.length ? { downloads: entry.downloads } : {}),
+    }
     changed = true
   }
   if (changed) preferences.save({ ...current, abilities: { ...abilities, choices, autoMcp } })

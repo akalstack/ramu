@@ -158,6 +158,7 @@ export const registerPluginHandlers: RegisterHandlers = (ctx) => {
         return plugin
       },
     },
+    'plugins.share': { args: z.tuple([id]), run: (pluginId: string) => admin().share(pluginId) },
     'plugins.dataSources': { args: z.tuple([]), run: () => service().dataSources() },
   }
 }

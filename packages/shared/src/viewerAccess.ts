@@ -72,6 +72,7 @@ const viewerMethods = new Set([
   'artifacts.shareEditSlides',
   'attachments.text',
   'attachments.preview',
+  'attachments.modelViewer',
   'reviews.list',
   'reviews.get',
   'reviews.branches',

@@ -1,6 +1,6 @@
 import { MEDIA_SERVICE_NAMES } from '@ramu/shared/types/deploy'
 import { useState } from 'react'
-import { BookOpen, ImageIcon, Search, Sparkles } from 'lucide-react'
+import { BookOpen, Box, ImageIcon, Search, Sparkles } from 'lucide-react'
 import { ABILITY_DONE, ABILITY_LABELS, isMediaAbility, type AbilityCall } from '@ramu/shared/providers/abilities'
 import { providerName } from '@ramu/shared/providers/providers'
 import { Button } from '@/components/desktop-button'
@@ -11,7 +11,13 @@ import { notifyError } from '../../../chat/Notifications'
 import { errorText } from '../../../lib/errors'
 import { GHOST_TEXT_BUTTON_CLASS } from '../styles'
 
-const ICONS = { image_generation: ImageIcon, image_edit: ImageIcon, web_search: Search, long_context: BookOpen }
+const ICONS = {
+  image_generation: ImageIcon,
+  image_edit: ImageIcon,
+  web_search: Search,
+  long_context: BookOpen,
+  model_3d: Box,
+}
 
 /** Who ran the call, as the row's headline says it. */
 const abilityRunner = (call: AbilityCall) =>
@@ -49,7 +55,10 @@ export function AbilityRow({ call, sessionId, live }: { call: AbilityCall; sessi
       : '',
     call.durationMs ? t('{0}s', { '0': String(Math.max(1, Math.round(call.durationMs / 1000))) }) : '',
     call.tokens ? t('{0} tokens', { '0': (call.tokens.input + call.tokens.output).toLocaleString() }) : '',
+    call.credits !== undefined ? t('{0} credits left', { '0': call.credits.toLocaleString() }) : '',
   ].filter(Boolean)
+  // A 3D model comes from a plugin's service, so what was missing is set up under Plugins.
+  const model = call.ability === 'model_3d'
   const again = (other: boolean) => {
     setRunning(other ? 'other' : 'same')
     void invoke('abilities.again', sessionId, call.id, other)
@@ -93,6 +102,18 @@ export function AbilityRow({ call, sessionId, live }: { call: AbilityCall; sessi
         </ul>
       ) : null}
       {/* Running again needs the turn; setting up what was missing stays offered after the agent has moved on. */}
+      {!dismissed && model && call.status === 'failed' && call.mcp && (
+        <div className="flex flex-wrap gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={GHOST_TEXT_BUTTON_CLASS}
+            onClick={() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'plugins' } }))}
+          >
+            {t('Open {0} in Plugins', { '0': call.mcp.server })}
+          </Button>
+        </div>
+      )}
       {!dismissed && ((live && done) || call.refusal === 'unavailable') && (
         <div className="flex flex-wrap gap-1">
           {live && done && image && (
@@ -126,12 +147,18 @@ export function AbilityRow({ call, sessionId, live }: { call: AbilityCall; sessi
                 onClick={() =>
                   window.dispatchEvent(
                     new CustomEvent('ramu:settings', {
-                      detail: { section: 'providers', target: isMediaAbility(call.ability) ? 'Media' : undefined },
+                      detail: model
+                        ? { section: 'plugins' }
+                        : { section: 'providers', target: isMediaAbility(call.ability) ? 'Media' : undefined },
                     }),
                   )
                 }
               >
-                {isMediaAbility(call.ability) ? t('Add a media key') : t('Set up a provider')}
+                {model
+                  ? t('Open plugins')
+                  : isMediaAbility(call.ability)
+                    ? t('Add a media key')
+                    : t('Set up a provider')}
               </Button>
               <Button variant="ghost" size="sm" className={GHOST_TEXT_BUTTON_CLASS} onClick={() => setDismissed(true)}>
                 {t('Not now')}

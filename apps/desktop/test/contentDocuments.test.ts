@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { ContentDocuments } from '../src/main/contentDocuments'
+import { ContentDocuments, MAX_CONTENT_DOCUMENT } from '../src/main/contentDocuments'
 it('serves only bounded mounted documents with their own restrictive response policy', async () => {
   const documents = new ContentDocuments()
   const url = documents.mount('<p>Saved</p>')
@@ -21,7 +21,7 @@ it('serves only bounded mounted documents with their own restrictive response po
   expect(documents.response(url + '?path=/etc/passwd').status).toBe(404)
   documents.release(url)
   expect(documents.response(url).status).toBe(404)
-  expect(() => documents.mount('a'.repeat(2_000_001))).toThrow('Invalid')
+  expect(() => documents.mount('a'.repeat(MAX_CONTENT_DOCUMENT + 1))).toThrow('Invalid')
   for (let n = 0; n < 4; n++) documents.mount('document')
   expect(() => documents.mount('fifth')).toThrow('Too many')
   documents.clear()

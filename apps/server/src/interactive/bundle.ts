@@ -1,5 +1,5 @@
 import type { InteractiveFile } from '@ramu/shared/interactive'
-import { INTERACTIVE_MAX_FILES } from '@ramu/shared/interactive'
+import { INTERACTIVE_MAX_FILES, isInteractiveAsset } from '@ramu/shared/interactive'
 
 const PATH = /^[A-Za-z0-9_-][A-Za-z0-9._-]*(\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$/
 const MIME: Record<string, string> = {
@@ -16,6 +16,10 @@ const MIME: Record<string, string> = {
   ogg: 'audio/ogg',
   m4a: 'audio/mp4',
   mp4: 'video/mp4',
+  glb: 'model/gltf-binary',
+  gltf: 'model/gltf+json',
+  bin: 'application/octet-stream',
+  ktx2: 'image/ktx2',
   webm: 'video/webm',
   woff: 'font/woff',
   woff2: 'font/woff2',
@@ -32,6 +36,24 @@ const extension = (path: string) => path.slice(path.lastIndexOf('.') + 1).toLowe
 const dirname = (path: string) => path.slice(0, path.lastIndexOf('/') + 1)
 /** References outside the project (absolute URLs, fragments, data) are left for the runtime policy to handle. */
 const external = (ref: string) => /^([a-z][a-z0-9+.-]*:|\/\/|#)/i.test(ref) || ref.trim() === ''
+
+/**
+ * An App's assets travel once, in a data block at the top of the document. `ramuAsset(path)` turns one into a blob URL
+ * when it is first used (a GLTFLoader, an Audio, a texture), and elements whose source names an asset get it the same
+ * way, so a 20 MB model is decoded only when the game asks for it.
+ */
+const ASSET_RUNTIME = `(()=>{const d=JSON.parse(document.getElementById('ramu-assets').textContent),m={},t=${JSON.stringify(MIME)};
+const url=p=>{p=String(p).replace(/^\\.?\\//,'');if(m[p])return m[p];const b=d[p];if(b===undefined)throw new Error('No asset '+p+' in this artifact.');const s=atob(b),a=new Uint8Array(s.length);for(let i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return m[p]=URL.createObjectURL(new Blob([a],{type:t[p.slice(p.lastIndexOf('.')+1).toLowerCase()]||'application/octet-stream'}))};
+Object.defineProperty(window,'ramuAsset',{value:url});const fill=()=>document.querySelectorAll('[data-ramu-asset]').forEach(e=>e.setAttribute(e.getAttribute('data-ramu-asset-attr')||'src',url(e.getAttribute('data-ramu-asset'))));
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fill,{once:true});else fill()})();`
+
+/** The data block and resolver for an App's assets, or nothing when it has none. */
+export function assetBlock(files: InteractiveFile[]): string {
+  const assets = files.filter(isInteractiveAsset)
+  if (!assets.length) return ''
+  const data = JSON.stringify(Object.fromEntries(assets.map((file) => [file.path, file.content])))
+  return `<script type="application/json" id="ramu-assets">${data}</script><script>${ASSET_RUNTIME}</script>`
+}
 
 export function validateInteractiveFiles(files: InteractiveFile[], entry: string) {
   if (!files.length) throw new Error('Provide at least one file.')
@@ -125,9 +147,15 @@ export function bundleInteractive(files: InteractiveFile[], entry = 'index.html'
           (_match, attrs: string, body: string) => `<style${attrs}>${css({ path: file.path, content: body })}</style>`,
         )
         .replace(
-          /(<(?:img|source|audio|video|track|image|use|input|embed)\b[^>]*?\s(?:src|poster|href|xlink:href)\s*=\s*)(["'])([^"']*)\2/gi,
-          (match, prefix: string, quote: string, ref: string) =>
-            external(ref) ? match : `${prefix}${quote}${dataUri(resolve(file.path, ref))}${quote}`,
+          /(<(?:img|source|audio|video|track|image|use|input|embed)\b[^>]*?\s)(src|poster|href|xlink:href)(\s*=\s*)(["'])([^"']*)\4/gi,
+          (match, start: string, name: string, equals: string, quote: string, ref: string) => {
+            if (external(ref)) return match
+            const target = resolve(file.path, ref)
+            // An asset is filled from the data block when the page loads, so its bytes are not in the document twice.
+            return isInteractiveAsset(target)
+              ? `${start}data-ramu-asset=${quote}${target.path}${quote} data-ramu-asset-attr=${quote}${name}${quote}`
+              : `${start}${name}${equals}${quote}${dataUri(target)}${quote}`
+          },
         )
         .replace(
           /(\sstyle\s*=\s*)(["'])([^"']*url\([^"']*)\2/gi,
@@ -138,5 +166,5 @@ export function bundleInteractive(files: InteractiveFile[], entry = 'index.html'
         .replace(/\u0000ramu-held-(\d+)\u0000/g, (_match, index: string) => scripts[Number(index)]!)
     )
   }
-  return html(byPath.get(entry)!)
+  return assetBlock(files) + html(byPath.get(entry)!)
 }

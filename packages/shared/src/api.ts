@@ -46,6 +46,7 @@ import type {
   UsageReport,
 } from './types/deploy'
 import type { LimitRetryResult } from './chat/providerWait'
+import type { ModelViewerLabels } from './interactive'
 import type { CiPreview, CiSetupResult } from './ciWorkflow'
 import type { EnvSyncStatus } from './envSync'
 import type { VoiceBridge } from './voice/bridge'
@@ -845,6 +846,8 @@ export interface RamuMethods extends ArtifactMethods {
   'plugins.removeIndex'(url: string): import('./plugins').PluginIndexInfo[]
   /** Installs a folder as a Development plugin, reloaded when its files change. */
   'plugins.dev'(folder: string): import('./plugins').InstalledPlugin
+  /** Pushes a Development plugin's folder to a private repository on the person's own GitHub account. */
+  'plugins.share'(pluginId: string): { url: string }
   'plugins.dataSources'(): { id: string; label: string; plugin: string }[]
   'agent.all'(): AgentSessionInfo[]
   'learning.get'(): import('./types').LearningSnapshot
@@ -1356,6 +1359,8 @@ export interface RamuMethods extends ArtifactMethods {
   'files.read'(taskId: string, repoId: string, path: string): FileContent
   'files.editorconfig'(taskId: string, repoId: string, path: string): EditorConfigProps
   'files.image'(taskId: string, repoId: string, path: string): string
+  /** The 3D viewer for a `.glb` or `.gltf` file in the project. */
+  'files.modelViewer'(taskId: string, repoId: string, path: string, labels: ModelViewerLabels): string
   'files.media'(taskId: string, repoId: string, path: string): { mimeType: string; size: number; url: string }
   'files.write'(taskId: string, repoId: string, path: string, content: string, baseHash: string | null): SaveResult
   'git.status'(taskId: string, repoId: string): GitStatus
@@ -1752,6 +1757,8 @@ export interface RamuMethods extends ArtifactMethods {
   'attachments.status'(ids: string[]): { id: string; available: boolean }[]
   'attachments.text'(attachmentId: string): string | null
   'attachments.preview'(id: string): string | null
+  /** The 3D viewer for a model attachment, as a document for the isolated content frame, with labels in the reader's language. */
+  'attachments.modelViewer'(id: string, labels: ModelViewerLabels): string
   'attachments.menu'(id: string, removable: boolean, point: { x: number; y: number }): 'preview' | 'remove' | null
   'attachments.save'(id: string): boolean
   'attachments.copy'(id: string): void

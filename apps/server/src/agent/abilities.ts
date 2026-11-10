@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { crc32, deflateSync } from 'node:zlib'
 import { tmpdir } from 'node:os'
 import { extname, isAbsolute, join, relative } from 'node:path'
@@ -11,6 +11,7 @@ import {
   DEFAULT_ABILITY_PREFERENCES,
   abilityListing,
   abilityRoutes,
+  ASKED_MCP_ABILITIES,
   isMcpChoice,
   isMediaAbility,
   isMediaChoice,
@@ -85,6 +86,12 @@ export interface AbilityHost {
   /** Kept checks of Shared MCP tools offered to Auto. */
   readMcpChecks?(): unknown
   writeMcpChecks?(checks: AbilityMcpCheck[]): void
+  /** Whether the thread belongs to a project, so a model it makes is also written into the project's folder. */
+  inProject?(sessionId: string): boolean
+  /** Downloads a file a tool linked to; the global fetch unless a test replaces it. */
+  download?(url: string, signal: AbortSignal): Promise<Response>
+  /** How often a background task's status tool is asked, in milliseconds. */
+  statusEveryMs?: number
 }
 
 /** Input bounds per tool, enforced again on every call. */
@@ -120,6 +127,14 @@ export const abilityInputs = {
     files: z.array(z.string().min(1).max(1024)).max(50).optional(),
     text: z.string().max(2_000_000).optional(),
   },
+  make_model: {
+    prompt: z.string().trim().max(1000).optional(),
+    image: z.string().min(1).max(1024).optional(),
+    name: z.string().trim().min(1).max(60).optional(),
+    detail: z.enum(['low', 'medium', 'high']).optional(),
+    textured: z.boolean().optional(),
+    rigged: z.boolean().optional(),
+  },
 } as const
 
 const TIMEOUT_MS: Record<AbilityTool, number> = {
@@ -132,6 +147,7 @@ const TIMEOUT_MS: Record<AbilityTool, number> = {
   make_sound: 120_000,
   speak: 120_000,
   make_video: 600_000,
+  make_model: 660_000,
 }
 /** Text a long read may send, in characters: within a 400,000-token window with room for the answer. */
 const LONG_READ_CHARS = 1_200_000
@@ -147,6 +163,14 @@ const AUDIO_TYPES: Record<string, string> = {
   'audio/ogg': 'ogg',
   'audio/mp4': 'm4a',
 }
+
+/** How long a 3D service's background task is waited for. */
+const MODEL_WAIT_MS = 10 * 60_000
+/** The largest model file kept. */
+const MODEL_MAX_BYTES = 100 * 1024 * 1024
+/** The polygon target each detail level asks for, where the tool takes one. */
+const MODEL_POLYGONS = { low: 5_000, medium: 20_000, high: 60_000 } as const
+const GLTF_MAGIC = Buffer.from('glTF')
 
 /** A Shared MCP image's file extension, from the media type it reports. */
 const IMAGE_TYPES: Record<string, string> = {
@@ -188,6 +212,131 @@ export function mcpArguments(
   }
 }
 
+/** What `make_model` asks of the service beyond its words, where the tool takes it. */
+export interface ModelOptions {
+  detail?: keyof typeof MODEL_POLYGONS
+  textured?: boolean
+  rigged?: boolean
+}
+
+/**
+ * Arguments for a 3D service's tool: the image as a local path when the tool reads files on this host (a plugin's
+ * server runs here, and tool arguments are limited to 256 KB), else as a data URL; the description where the tool
+ * takes one; and the options it has fields for.
+ */
+export function modelArguments(
+  schema: Record<string, unknown>,
+  prompt: string,
+  image: { path: string; dataUrl: () => string } | null,
+  options: ModelOptions = {},
+): Record<string, unknown> {
+  const names = Object.keys((schema.properties ?? {}) as Record<string, unknown>)
+  const find = (pattern: RegExp) => names.find((name) => pattern.test(name))
+  const args: Record<string, unknown> = {}
+  if (image) {
+    const path = find(/^(file_path|image_path|local_path)$/i)
+    const url = find(/^(image_url|image|input_image|file_url|image_file)$/i)
+    const list = find(/^(images|image_urls)$/i)
+    if (path) args[path] = image.path
+    else if (url) args[url] = image.dataUrl()
+    else if (list) args[list] = [image.dataUrl()]
+    else throw new Error("This tool takes no image. Map image-to-3D to another tool as the mapping's fromImage.")
+  }
+  if (prompt) {
+    const text = find(/^(prompt|text|description|texture_prompt)$/i)
+    if (text) args[text] = prompt
+    else if (!image) throw new Error('This tool takes no description. Map 3D models to another tool.')
+  }
+  const option = (pattern: RegExp, value: unknown) => {
+    const name = value === undefined ? undefined : find(pattern)
+    if (name) args[name] = value
+  }
+  option(/^(should_texture|textured?|enable_texture|with_texture|texture_enabled)$/i, options.textured)
+  option(/^(rig|rigged|auto_rig|should_rig|enable_rig|rigging)$/i, options.rigged)
+  option(
+    /^(target_polycount|polycount|face_limit|faces|target_faces|face_count)$/i,
+    options.detail ? MODEL_POLYGONS[options.detail] : undefined,
+  )
+  return args
+}
+
+/** Arguments for a status or refine tool: the task id in its id field, and no waiting inside the call. */
+export function taskArguments(schema: Record<string, unknown>, task: string, pattern: RegExp): Record<string, unknown> {
+  const properties = (schema.properties ?? {}) as Record<string, { type?: unknown }>
+  const names = Object.keys(properties)
+  const key =
+    names.find((name) => pattern.test(name)) ?? names.find((name) => /^(task_?id|id)$/i.test(name)) ?? 'task_id'
+  // The status tool is asked every few seconds instead; a call that blocks until the model is ready outlasts its timeout.
+  const wait = names.find((name) => /^(wait|block|blocking)$/i.test(name) && properties[name]?.type === 'boolean')
+  return { [key]: task, ...(wait ? { [wait]: false } : {}) }
+}
+
+/** Whether an https origin is one a plugin declared, exactly or as `https://*.domain` for any of its subdomains. */
+export function declaredOrigin(origin: string, declared: readonly string[]): boolean {
+  return declared.some((entry) =>
+    entry.startsWith('https://*.')
+      ? origin.endsWith(`.${entry.slice(10)}`) && origin.startsWith('https://')
+      : entry === origin,
+  )
+}
+
+/** Every https address in a tool result, with the key it was under (`model_urls.glb`, `thumbnail_url`). */
+function linksIn(value: unknown, path = '', found: { url: string; key: string }[] = []): typeof found {
+  if (found.length > 50) return found
+  if (typeof value === 'string') {
+    for (const match of value.matchAll(/https:\/\/[^\s"'<>)\]]+/g)) found.push({ url: match[0], key: path })
+    // A text result is often JSON; its keys say what each address is.
+    if (/^\s*[[{]/.test(value))
+      try {
+        linksIn(JSON.parse(value), path, found)
+      } catch {
+        // Not JSON after all.
+      }
+  } else if (Array.isArray(value)) value.forEach((entry, index) => linksIn(entry, `${path}.${index}`, found))
+  else if (value && typeof value === 'object')
+    for (const [name, entry] of Object.entries(value)) linksIn(entry, path ? `${path}.${name}` : name, found)
+  return found
+}
+
+/** A field anywhere in a tool result, by name, as the first string or number found. */
+function fieldIn(value: unknown, pattern: RegExp, depth = 0): string | number | undefined {
+  if (depth > 6) return undefined
+  if (typeof value === 'string' && /^\s*[[{]/.test(value))
+    try {
+      return fieldIn(JSON.parse(value), pattern, depth + 1)
+    } catch {
+      return undefined
+    }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const found = fieldIn(entry, pattern, depth + 1)
+      if (found !== undefined) return found
+    }
+    return undefined
+  }
+  if (!value || typeof value !== 'object') return undefined
+  for (const [name, entry] of Object.entries(value))
+    if (pattern.test(name) && (typeof entry === 'string' || typeof entry === 'number')) return entry
+  for (const entry of Object.values(value)) {
+    const found = fieldIn(entry, pattern, depth + 1)
+    if (found !== undefined) return found
+  }
+  return undefined
+}
+
+/** The task id a 3D service's tool returned. */
+const taskIn = (result: { texts: string[]; structured: unknown }) =>
+  fieldIn(result.structured ?? result.texts, /^(task_?id|job_?id|result|id)$/i)
+
+/** The credits a balance tool reported, from a field named for them or a number beside the word. */
+function creditsIn(result: { texts: string[]; structured: unknown }): number | undefined {
+  const field = fieldIn(result.structured ?? result.texts, /^(credits?|balance|remaining(_credits)?|credits_left)$/i)
+  const value = typeof field === 'number' ? field : typeof field === 'string' ? Number(field) : NaN
+  if (Number.isFinite(value)) return value
+  const match = /(?:credits?|balance)\D{0,20}?(\d[\d,]*(?:\.\d+)?)/i.exec(result.texts.join(' '))
+  return match ? Number(match[1]!.replace(/,/g, '')) : undefined
+}
+
 const clip = (text: string, n: number) => (text.length > n ? `${text.slice(0, n - 1)}…` : text)
 const slug = (text: string) =>
   text
@@ -210,6 +359,7 @@ interface Prepared {
   ability: Ability
   request: AbilityRequest
   sent: AbilityCall['sent']
+  model?: ModelOptions
 }
 
 /**
@@ -234,6 +384,8 @@ export class AbilityService {
   private readonly stopping = new AbortController()
   /** An image generated by a check, kept so the editing check can use it. */
   private readonly checkImages = new Map<string, Buffer>()
+  /** Threads whose person approved making models on a service, as thread and connection. */
+  private readonly approvedModels = new Set<string>()
 
   constructor(
     private readonly host: AbilityHost,
@@ -724,6 +876,11 @@ export class AbilityService {
         'limited',
         `Every provider with ${ABILITY_LABELS[base.ability].toLowerCase()} is at its usage limit (${limited.map(providerName).join(', ')}). Continue without it and say so in your reply.`,
       )
+    if (base.ability === 'model_3d')
+      throw new Refusal(
+        'unavailable',
+        'No 3D model service is set up here. Offer to find one with plugin_search (Meshy and Tripo make models) and install it with plugin_install; if none fits, offer plugin_create. Until then build the shapes in code and say so.',
+      )
     throw new Refusal(
       'unavailable',
       `No signed-in provider here has ${ABILITY_LABELS[base.ability].toLowerCase()}. Continue without it and tell the person; ${isMediaAbility(base.ability) ? 'they can save an API key for a media service that makes it in Settings → Providers' : 'they can set one up in Settings → Providers'}. Do not make a placeholder without saying so.`,
@@ -781,13 +938,15 @@ export class AbilityService {
     text: string,
     signal?: AbortSignal,
     inputs: string[] = [],
+    build: (schema: Record<string, unknown>) => Record<string, unknown> = (schema) =>
+      mcpArguments(schema, text, inputs),
   ) {
     if (!this.host.mcp) throw new Error('Shared MCP is not available on this host.')
     const { server, result } = await this.host.mcp(
       session.id,
       tool.connectionId,
       tool.tool,
-      (schema) => mcpArguments(schema, text, inputs),
+      build,
       signal ?? new AbortController().signal,
     )
     const content = (Array.isArray(result.content) ? result.content : []) as {
@@ -795,7 +954,10 @@ export class AbilityService {
       text?: unknown
       data?: unknown
       mimeType?: unknown
+      uri?: unknown
+      resource?: { blob?: unknown; mimeType?: unknown; uri?: unknown; text?: unknown }
     }[]
+    const structured = (result as { structuredContent?: unknown }).structuredContent
     const texts = content.flatMap((part) => (part.type === 'text' && typeof part.text === 'string' ? [part.text] : []))
     if (result.isError) throw new Error(`${server} returned an error. ${clip(texts.join(' '), 300)}`.trim())
     const images = content.flatMap((part) => {
@@ -811,7 +973,20 @@ export class AbilityService {
         ? [{ bytes: Buffer.from(part.data, 'base64'), extension }]
         : []
     })
-    return { server, texts, images, audio }
+    // Files a 3D service returns: a resource's bytes, or a link to one, which is downloaded only from a declared origin.
+    const blobs = content.flatMap((part) =>
+      part.type === 'resource' && typeof part.resource?.blob === 'string'
+        ? [{ bytes: Buffer.from(part.resource.blob, 'base64'), uri: String(part.resource.uri ?? '') }]
+        : [],
+    )
+    const links = [
+      ...content.flatMap((part) =>
+        part.type === 'resource_link' && typeof part.uri === 'string' ? [{ url: part.uri, key: 'resource_link' }] : [],
+      ),
+      ...linksIn(texts),
+      ...linksIn(structured),
+    ]
+    return { server, texts, images, audio, blobs, links, structured }
   }
 
   /**
@@ -826,18 +1001,30 @@ export class AbilityService {
     signal: AbortSignal,
   ): Promise<AbilityCall | null> {
     const tool = this.preferences().autoMcp?.[base.ability]
-    if (!tool || !AUTO_MCP_ABILITIES.includes(base.ability) || !this.host.mcp) return null
+    if (
+      !tool ||
+      !(AUTO_MCP_ABILITIES.includes(base.ability) || ASKED_MCP_ABILITIES.includes(base.ability)) ||
+      !this.host.mcp
+    )
+      return null
     if (!this.mcpTools().some((entry) => entry.connectionId === tool.connectionId && entry.tool === tool.tool))
       return null
     const same = (entry: AbilityMcpCheck) =>
       entry.ability === base.ability && entry.connectionId === tool.connectionId && entry.tool === tool.tool
-    let check = this.mcpChecks().find(same)
+    const asked = ASKED_MCP_ABILITIES.includes(base.ability)
+    // A balance check costs nothing, so a paid service is checked on every call: credits added a minute ago count.
+    let check = asked ? undefined : this.mcpChecks().find(same)
     // A failed check is tried again a day later, since the server behind the tool may have been fixed.
     if (check && !check.ok && Date.now() - Date.parse(check.checkedAt) > 24 * 60 * 60_000) check = undefined
     if (!check) {
       check = await this.checkMcp(session, base.ability, tool, signal)
       this.host.writeMcpChecks?.([...this.mcpChecks().filter((entry) => !same(entry)), check].slice(-50))
     }
+    if (!check.ok && asked)
+      throw new Refusal(
+        'unavailable',
+        `${check.detail ?? 'The service did not pass its check.'} Tell the person; they can add credits or change the key on the plugin's card in Settings → Plugins. Continue without the model and say so.`,
+      )
     return check.ok ? this.viaMcp(session, base, prepared, tool, started, signal) : null
   }
 
@@ -847,8 +1034,17 @@ export class AbilityService {
     tool: AbilityMcpTool,
     signal: AbortSignal,
   ): Promise<AbilityMcpCheck> {
-    const base = { ...tool, ability, checkedAt: new Date().toISOString() }
+    const base = { connectionId: tool.connectionId, tool: tool.tool, ability, checkedAt: new Date().toISOString() }
     try {
+      // Making a model spends credits, so its check only reads the account's balance, when the plugin names a tool for it.
+      if (ability === 'model_3d') {
+        if (!tool.balance) return { ...base, ok: true }
+        const balance = await this.mcpCall(session, { ...tool, tool: tool.balance }, '', signal, [], () => ({}))
+        const credits = creditsIn(balance)
+        return credits === 0
+          ? { ...base, ok: false, credits, detail: `No credits are left on the ${balance.server} account.` }
+          : { ...base, ok: true, ...(credits === undefined ? {} : { credits }) }
+      }
       if (ability === 'image_generation') {
         const { images, texts } = await this.mcpCall(session, tool, IMAGE_SAMPLES[0]!.prompt, signal)
         return images.length
@@ -886,6 +1082,12 @@ export class AbilityService {
         'unavailable',
         `${ABILITY_LABELS[base.ability]} cannot run on a Shared MCP tool. Choose a provider for it in Settings → Models → Abilities.`,
       )
+    if (base.ability === 'model_3d') {
+      // A tool picked by hand in Settings keeps what its plugin declared: the status tool and where files download from.
+      const declared = this.preferences().autoMcp?.model_3d
+      const full = declared?.connectionId === choice.connectionId ? { ...declared, ...choice } : choice
+      return this.modelViaMcp(session, base, prepared, full, started, signal)
+    }
     // A long read sends its whole rendered prompt, documents included; an edit sends its images as data URLs.
     const text =
       base.ability === 'long_context'
@@ -916,6 +1118,229 @@ export class AbilityService {
       ...(attachments.length ? { attachments } : {}),
       durationMs: Date.now() - started,
     }
+  }
+
+  /**
+   * A 3D model from a plugin's service. The first call in a thread asks first, naming the service, since each one
+   * spends the account's credits. A service that works in the background returns a task id, which the mapped status
+   * tool is asked about every few seconds until the file is ready, it fails, Stop is pressed or ten minutes pass. The
+   * GLB is kept only when its bytes are glTF, downloaded only from an origin the plugin declared.
+   */
+  private async modelViaMcp(
+    session: AgentSessionInfo,
+    base: Pick<AbilityCall, 'id' | 'ability' | 'tool' | 'args'>,
+    prepared: Prepared,
+    choice: AbilityMcpTool,
+    started: number,
+    signal?: AbortSignal,
+  ): Promise<AbilityCall> {
+    const stop = signal ?? new AbortController().signal
+    const options = prepared.model ?? {}
+    const prompt = prepared.request.prompt
+    const server = this.mcpTools().find((entry) => entry.connectionId === choice.connectionId)?.server ?? 'the service'
+    const approval = `${session.id}\u0000${choice.connectionId}`
+    if (!this.approvedModels.has(approval)) {
+      const allowed = await this.host.requestPermission(
+        session.id,
+        `3D model with ${server}`,
+        [
+          `Makes a 3D model on your ${server} account, which spends its credits. Later models in this thread do not ask again. It sends only this:`,
+          clip(prompt || 'The image below.', 1200),
+          ...(prepared.sent.inputs.length ? [`Image: ${prepared.sent.inputs.join(', ')}`] : []),
+        ].join('\n\n'),
+        stop,
+      )
+      if (!allowed)
+        throw new Refusal(
+          'declined',
+          `The person declined making a model with ${server}. Continue without it and say so in your reply.`,
+        )
+      this.approvedModels.add(approval)
+    }
+    const path = prepared.request.images[0]
+    const image = path
+      ? {
+          path,
+          dataUrl: () => {
+            const extension = extname(path).slice(1).toLowerCase()
+            const mime = extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : `image/${extension}`
+            return `data:${mime};base64,${readFileSync(path).toString('base64')}`
+          },
+        }
+      : null
+    // Image-to-3D is often its own tool; a text preview may be textured by a second task.
+    const tool = image && choice.fromImage ? choice.fromImage : choice.tool
+    const first = await this.mcpCall(session, { ...choice, tool }, prompt, stop, [], (schema) =>
+      modelArguments(schema, prompt, image, options),
+    )
+    const preview = !image && choice.refine && options.textured !== false ? taskIn(first) : undefined
+    // A preview that will be textured is only waited on; its own untextured file is never downloaded.
+    let { file, result } = await this.waitForModel(session, first, choice, stop, preview === undefined)
+    if (preview !== undefined) {
+      const refined = await this.mcpCall(session, { ...choice, tool: choice.refine! }, '', stop, [], (schema) =>
+        taskArguments(schema, String(preview), /^(preview_task_id|input_task_id)$/i),
+      )
+      ;({ file, result } = await this.waitForModel(session, refined, choice, stop, true, true))
+    }
+    if (!file) throw new Error(`${result.server} returned no model. ${clip(result.texts.join(' '), 300)}`.trim())
+    const name = slug(String(base.args.name ?? (prompt || 'model')))
+    const attachments = [this.host.attachments.add(`${name}.glb`, file.model)]
+    if (file.poster) attachments.push(this.host.attachments.add(`${name}.${file.poster.extension}`, file.poster.bytes))
+    let savedTo: string | undefined
+    if (this.host.inProject?.(session.id)) {
+      const folder = join(session.cwd, 'assets', 'models')
+      mkdirSync(folder, { recursive: true })
+      let target = `${name}.glb`
+      for (let n = 2; existsSync(join(folder, target)); n++) target = `${name}-${n}.glb`
+      writeFileSync(join(folder, target), file.model)
+      savedTo = `assets/models/${target}`
+    }
+    let credits: number | undefined
+    if (choice.balance)
+      credits = await this.mcpCall(session, { ...choice, tool: choice.balance }, '', stop, [], () => ({}))
+        .then(creditsIn)
+        .catch(() => undefined)
+    return {
+      ...base,
+      status: 'done',
+      mcp: { server: result.server, tool: choice.tool },
+      sent: prepared.sent,
+      summary: clip(
+        [
+          `A ${(file.model.length / 1024 / 1024).toFixed(1)} MB GLB model.`,
+          savedTo ? `Saved in the project at ${savedTo}.` : '',
+          result.texts.join('\n\n'),
+        ]
+          .filter(Boolean)
+          .join(' '),
+        2_000,
+      ),
+      attachments,
+      ...(savedTo ? { savedTo } : {}),
+      ...(credits === undefined ? {} : { credits }),
+      durationMs: Date.now() - started,
+    }
+  }
+
+  /**
+   * Waits on a 3D service's task: its status tool is asked every few seconds until the result holds a model, the task
+   * fails, Stop is pressed or ten minutes pass. A result that already holds the model is returned as it is.
+   */
+  private async waitForModel(
+    session: AgentSessionInfo,
+    created: Awaited<ReturnType<AbilityService['mcpCall']>>,
+    choice: AbilityMcpTool,
+    stop: AbortSignal,
+    download = true,
+    fresh = false,
+  ): Promise<{ file: Awaited<ReturnType<AbilityService['modelFile']>>; result: typeof created }> {
+    let result = created
+    // A refine task's first answer carries the preview's links, which are not its model.
+    let file = fresh || !download ? null : await this.modelFile(result, choice, stop)
+    if (file || !choice.status) return { file, result }
+    const task = taskIn(created)
+    if (task === undefined)
+      throw new Error(
+        `${result.server} returned no model and no task to wait for. ${clip(result.texts.join(' '), 300)}`,
+      )
+    const deadline = Date.now() + MODEL_WAIT_MS
+    const every = this.host.statusEveryMs ?? 5_000
+    while (!file) {
+      if (Date.now() > deadline)
+        throw new Error(`${result.server} did not finish the model within ${MODEL_WAIT_MS / 60_000} minutes.`)
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, every)
+        stop.addEventListener(
+          'abort',
+          () => {
+            clearTimeout(timer)
+            reject(new Error('The model was stopped.'))
+          },
+          { once: true },
+        )
+      })
+      result = await this.mcpCall(session, { ...choice, tool: choice.status }, String(task), stop, [], (schema) =>
+        taskArguments(schema, String(task), /^(task_?id|job_?id)$/i),
+      )
+      const state = fieldIn(result.structured ?? result.texts, /^(status|state)$/i)
+      if (typeof state === 'string' && /^(fail(ed|ure)?|error|cancel(l)?ed|expired|banned)$/i.test(state))
+        throw new Error(`${result.server} could not make the model. ${clip(result.texts.join(' '), 300)}`.trim())
+      if (typeof state === 'string' && !/^(succeeded|success|done|completed?|finished)$/i.test(state)) continue
+      // With no status field, a preview is ready once it links to a model.
+      if (!download && (state !== undefined || result.links.some((entry) => /glb/i.test(entry.key + entry.url))))
+        return { file: null, result }
+      if (!download) continue
+      file = await this.modelFile(result, choice, stop)
+    }
+    return { file, result }
+  }
+
+  /** The model in a tool result, and a poster image the service made of it, or null when it is not ready yet. */
+  private async modelFile(
+    result: Awaited<ReturnType<AbilityService['mcpCall']>>,
+    choice: AbilityMcpTool,
+    signal: AbortSignal,
+  ): Promise<{ model: Buffer; poster?: { bytes: Buffer; extension: string } } | null> {
+    const pathOf = (url: string) => {
+      try {
+        return new URL(url).pathname.toLowerCase()
+      } catch {
+        return ''
+      }
+    }
+    let model: Buffer | undefined = result.blobs.find((blob) => blob.bytes.subarray(0, 4).equals(GLTF_MAGIC))?.bytes
+    if (!model) {
+      const link =
+        result.links.find((entry) => pathOf(entry.url).endsWith('.glb')) ??
+        result.links.find((entry) => /glb/i.test(entry.key) && !/thumb|preview|image|texture/i.test(entry.key))
+      if (!link) return null
+      model = await this.fetchFile(link.url, choice, signal, MODEL_MAX_BYTES)
+      if (!model.subarray(0, 4).equals(GLTF_MAGIC))
+        throw new Error(`${result.server} linked to a file that is not a GLB model.`)
+    }
+    const posterImage = result.images[0]
+    if (posterImage) return { model, poster: posterImage }
+    const posterLink = result.links.find(
+      (entry) => /\.(png|jpe?g|webp)$/.test(pathOf(entry.url)) || /thumb|preview|poster/i.test(entry.key),
+    )
+    if (posterLink) {
+      const bytes = await this.fetchFile(posterLink.url, choice, signal, 10 * 1024 * 1024).catch(() => null)
+      const extension = bytes ? imageExtension(bytes) : null
+      if (bytes && extension) return { model, poster: { bytes, extension } }
+    }
+    return { model }
+  }
+
+  /** Downloads one https file from an origin the plugin declared, following redirects only to declared origins. */
+  private async fetchFile(url: string, choice: AbilityMcpTool, signal: AbortSignal, limit: number): Promise<Buffer> {
+    const allowed = choice.downloads ?? []
+    let current = url
+    for (let hop = 0; hop < 5; hop++) {
+      const parsed = new URL(current)
+      if (parsed.protocol !== 'https:' || parsed.username || !declaredOrigin(parsed.origin, allowed))
+        throw new Error(`The model is at ${parsed.origin}, which the plugin does not list as a place to download from.`)
+      const response = await (
+        this.host.download ?? ((target, stop) => fetch(target, { redirect: 'manual', signal: stop }))
+      )(current, signal)
+      if (response.status >= 300 && response.status < 400) {
+        const next = response.headers.get('location')
+        if (!next) throw new Error('The download redirected nowhere.')
+        current = new URL(next, current).toString()
+        continue
+      }
+      if (!response.ok || !response.body) throw new Error(`The download failed with HTTP ${response.status}.`)
+      const declared = Number(response.headers.get('content-length') ?? 0)
+      if (declared > limit) throw new Error(`The file is larger than ${Math.round(limit / 1024 / 1024)} MB.`)
+      const chunks: Buffer[] = []
+      let size = 0
+      for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
+        size += chunk.byteLength
+        if (size > limit) throw new Error(`The file is larger than ${Math.round(limit / 1024 / 1024)} MB.`)
+        chunks.push(Buffer.from(chunk))
+      }
+      return Buffer.concat(chunks)
+    }
+    throw new Error('The download redirected too many times.')
   }
 
   /**
@@ -1089,6 +1514,22 @@ export class AbilityService {
           sent: { prompt: input.question, inputs: images.map((image) => image.name) },
         }
       }
+      case 'make_model': {
+        const input = z.object(abilityInputs.make_model).parse(args)
+        if (!input.prompt && !input.image) throw new Error('Describe the model, or pass an image to turn into one.')
+        const image = input.image ? await this.image(session, input.image) : null
+        const prompt = input.prompt ?? ''
+        return {
+          ability,
+          request: { ability, prompt, images: image ? [image.path] : [] },
+          sent: { prompt, inputs: image ? [image.name] : [] },
+          model: {
+            ...(input.detail ? { detail: input.detail } : {}),
+            ...(input.textured === undefined ? {} : { textured: input.textured }),
+            ...(input.rigged === undefined ? {} : { rigged: input.rigged }),
+          },
+        }
+      }
       case 'read_long': {
         const input = z.object(abilityInputs.read_long).parse(args)
         let budget = LONG_READ_CHARS - (input.text?.length ?? 0)
@@ -1139,7 +1580,7 @@ export class AbilityService {
     return { path: attachment.path, name: attachment.name, mimeType: attachment.mimeType }
   }
 
-  /** An image, audio or video attachment this thread holds, for an artifact file filled from it. */
+  /** An image, audio, video or model attachment this thread holds, for an artifact file filled from it. */
   heldFile(sessionId: string, ref: string): { path: string; name: string; mimeType: string } {
     const held = this.host
       .events(sessionId)
@@ -1150,8 +1591,8 @@ export class AbilityService {
       )
     if (!held) throw new Error('That attachment is not in this thread.')
     const attachment = this.host.attachments.get(ref)
-    if (!/^(image|audio|video)\//.test(attachment.mimeType))
-      throw new Error(`${attachment.name} is not an image, audio or video file.`)
+    if (!/^(image|audio|video|model)\//.test(attachment.mimeType))
+      throw new Error(`${attachment.name} is not an image, audio, video or 3D model file.`)
     return { path: attachment.path, name: attachment.name, mimeType: attachment.mimeType }
   }
 
@@ -1338,4 +1779,12 @@ function toolAnswer(call: AbilityCall) {
       : {}),
     ...(call.sources?.length ? { sources: call.sources } : {}),
   }
+}
+
+/** An image's extension from its first bytes, or null for anything else. */
+function imageExtension(bytes: Buffer): string | null {
+  if (bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) return 'png'
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) return 'jpg'
+  if (bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP') return 'webp'
+  return null
 }

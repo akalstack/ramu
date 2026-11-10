@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Download, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react'
+import { Download, RefreshCw, Share2, ShieldCheck, Trash2 } from 'lucide-react'
 import { SearchInput } from '../SearchInput'
 import { Switch } from '@/components/ui/switch'
 import {
@@ -472,6 +472,8 @@ export function PluginSettings() {
       setBusy(false)
     }
   }
+  /** Where each Development plugin was shared to, by plugin id. */
+  const [shared, setShared] = useState<Record<string, string>>({})
   // A link from getramu.dev opens the review straight away.
   useEffect(() => {
     if (link)
@@ -593,6 +595,23 @@ export function PluginSettings() {
                       })
                     }
                   />
+                  {plugin.source.kind === 'development' && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      title={t('Push this folder to a private repository on your GitHub account')}
+                      disabled={viewOnly || busy}
+                      onClick={() =>
+                        void act(async () => {
+                          const { url } = await invoke('plugins.share', plugin.id)
+                          setShared((current) => ({ ...current, [plugin.id]: url }))
+                        })
+                      }
+                    >
+                      <Share2 size={13} />
+                      {t('Share')}
+                    </Button>
+                  )}
                   <Button
                     size="icon-sm"
                     variant="ghost"
@@ -605,6 +624,13 @@ export function PluginSettings() {
                   </Button>
                 </div>
               </div>
+              {shared[plugin.id] && (
+                <p className="m-0 text-caption text-muted-foreground" role="status">
+                  {t('Shared to {url}. Open a pull request to an index from there to get it listed.', {
+                    url: shared[plugin.id]!,
+                  })}
+                </p>
+              )}
               {plugin.update && plugin.update.changes.length > 0 && (
                 <p className="m-0 text-caption text-muted-foreground">
                   {t('Update: {changes}', { changes: plugin.update.changes.join('; ') })}

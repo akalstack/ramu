@@ -237,7 +237,18 @@ export function readPluginFolder(folder: string): PluginFolder {
         file: found.file,
         message: `${ability} is mapped to server ${target.server}, which the plugin does not declare.`,
       })
-    return [{ ability: ability as Ability, server: target.server, tool: target.tool }]
+    return [
+      {
+        ability: ability as Ability,
+        server: target.server,
+        tool: target.tool,
+        ...(target.status ? { status: target.status } : {}),
+        ...(target.balance ? { balance: target.balance } : {}),
+        ...(target.fromImage ? { fromImage: target.fromImage } : {}),
+        ...(target.refine ? { refine: target.refine } : {}),
+        downloads: target.downloads,
+      },
+    ]
   })
 
   const unused: UnusedPart[] = UNUSED_PARTS.filter((part) => manifest[part] !== undefined)

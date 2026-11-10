@@ -275,6 +275,49 @@ describe('installing', () => {
     expect(h.preferences().abilities.autoMcp?.web_search).toEqual({ connectionId: connection.id, tool: 'search' })
   })
 
+  it('offers a 3D service’s mapping to Auto with its status tool, balance tool and download origins', async () => {
+    const h = host()
+    services.push(h.service)
+    const review = await h.service.stage({
+      source: renderPlugin(
+        {},
+        {
+          ...RAMU,
+          abilities: {
+            model_3d: {
+              server: 'render',
+              tool: 'text_to_3d',
+              status: 'task',
+              balance: 'balance',
+              downloads: ['https://assets.meshy.ai/'],
+            },
+          },
+        },
+      ),
+    })
+    await h.service.confirm(review.stageId, { scope: { kind: 'all' }, includeScripts: false })
+    expect(h.preferences().abilities.autoMcp?.model_3d).toEqual({
+      connectionId: h.connections[0]!.id,
+      tool: 'text_to_3d',
+      status: 'task',
+      balance: 'balance',
+      downloads: ['https://assets.meshy.ai'],
+    })
+  })
+
+  it('refuses a download origin with a path', () => {
+    const folder = readPluginFolder(
+      renderPlugin(
+        {},
+        {
+          ...RAMU,
+          abilities: { model_3d: { server: 'render', tool: 'make', downloads: ['https://a.example.com/x'] } },
+        },
+      ),
+    )
+    expect(folder.contents.problems.map((problem) => problem.message).join(' ')).toContain('https origin')
+  })
+
   it('refuses a second install of the same plugin and a plugin that needs a newer Ramu', async () => {
     const h = host()
     services.push(h.service)

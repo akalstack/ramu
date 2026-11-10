@@ -180,11 +180,12 @@ export async function checkPlugin(
     }
   for (const entry of read.contents.abilities) {
     const started = servers.find((server) => server.name === entry.server)
-    if (started && !started.tools.includes(entry.tool))
-      problems.push({
-        file: read.contents.manifest,
-        message: `${entry.ability} is mapped to ${entry.server}.${entry.tool}, but ${entry.server} has no tool named ${entry.tool} (it has ${started.tools.join(', ') || 'none'}).`,
-      })
+    for (const tool of [entry.tool, entry.status, entry.balance, entry.fromImage, entry.refine])
+      if (started && tool && !started.tools.includes(tool))
+        problems.push({
+          file: read.contents.manifest,
+          message: `${entry.ability} is mapped to ${entry.server}.${tool}, but ${entry.server} has no tool named ${tool} (it has ${started.tools.join(', ') || 'none'}).`,
+        })
   }
   let signed: boolean | null = null
   if (existsSync(join(read.root, '.git')))

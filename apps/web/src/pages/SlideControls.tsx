@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Presentation } from 'lucide-react'
 import { Button } from '../components/desktop-button'
 import { GHOST_ICON_BUTTON_CLASS, GHOST_TEXT_BUTTON_CLASS } from '../components/button-classes'
 import { t } from '../i18n'
-import { appThemeVariables } from '../interactive/InteractiveContent'
+import { appThemeVariables } from '../interactive/appTheme'
 import { audienceScreen, openPresenterWindow, showPresenterSlide, type PresenterSlide } from './PresenterNotes'
 
 const NEXT_KEYS = new Set(['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'])

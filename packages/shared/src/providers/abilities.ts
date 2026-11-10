@@ -14,6 +14,7 @@ export const ABILITIES = [
   'speech',
   'music',
   'sound_effect',
+  'model_3d',
 ] as const
 export type Ability = (typeof ABILITIES)[number]
 
@@ -28,6 +29,7 @@ export const ABILITY_TOOLS = {
   make_sound: 'sound_effect',
   speak: 'speech',
   make_video: 'video_generation',
+  make_model: 'model_3d',
 } as const satisfies Record<string, Ability>
 export type AbilityTool = keyof typeof ABILITY_TOOLS
 
@@ -53,6 +55,7 @@ export const ABILITY_LABELS: Record<Ability, string> = {
   speech: 'Speech',
   music: 'Music',
   sound_effect: 'Sound effects',
+  model_3d: '3D models',
 }
 
 /** The row's headline once a call finished, as a translation key with the provider as {0}. */
@@ -66,6 +69,7 @@ export const ABILITY_DONE: Record<Ability, string> = {
   speech: 'Narration made with {0}',
   music: 'Music made with {0}',
   sound_effect: 'Sound made with {0}',
+  model_3d: 'Model made with {0}',
 }
 
 /** The live check's outcome for one ability of one provider login on one installed version. */
@@ -92,6 +96,19 @@ export interface AbilityCheck {
 export interface AbilityMcpTool {
   connectionId: string
   tool: string
+  /**
+   * A tool the call's task id is passed to until the file is ready, for a service that makes it in the background
+   * (a 3D model takes minutes).
+   */
+  status?: string
+  /** A tool that reports the account's credits, which the live check calls instead of making something. */
+  balance?: string
+  /** A tool that makes a model from an image, when the service keeps image-to-3D apart from its text tool. */
+  fromImage?: string
+  /** A tool that textures a text preview, passed the finished preview's task id and then waited on the same way. */
+  refine?: string
+  /** The https origins a file the tool links to may be downloaded from; `https://*.domain` allows its subdomains. */
+  downloads?: string[]
 }
 
 /** A media service an ability runs on with the person's own API key. */
@@ -135,9 +152,15 @@ export const MCP_ABILITIES: readonly Ability[] = [
   'music',
   'sound_effect',
   'speech',
+  'model_3d',
 ]
 /** The ones Auto can also try on a Shared MCP tool, which have a sample check to run first. */
 export const AUTO_MCP_ABILITIES: readonly Ability[] = ['image_generation', 'web_search']
+/**
+ * The ones Auto uses on a plugin's mapped tool only after the person approves the first call in a thread, naming the
+ * service: each call spends the account's credits, so Auto never spends them unasked.
+ */
+export const ASKED_MCP_ABILITIES: readonly Ability[] = ['model_3d']
 
 /** A Shared MCP tool offered for mapping, with its server's name for the menu. */
 export interface AbilityMcpToolOption extends AbilityMcpTool {
@@ -154,6 +177,8 @@ export interface AbilityMcpCheck extends AbilityMcpTool {
   checkedAt: string
   /** The share of the check's sample tasks answered right, where they can be checked. */
   score?: number
+  /** The credits the service reported left on the account. */
+  credits?: number
   detail?: string
 }
 
@@ -322,5 +347,9 @@ export interface AbilityCall {
   costUsd?: number
   /** Auto chose the provider as the cheapest good-enough one. */
   cheapest?: true
+  /** The credits the service reported left on the account after the call. */
+  credits?: number
+  /** Where a model was also written in the thread's project, relative to its folder. */
+  savedTo?: string
   durationMs?: number
 }

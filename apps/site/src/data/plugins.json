@@ -35,7 +35,7 @@
     },
     {
       "name": "cloudflare",
-      "description": "Deploy Workers and Pages with wrangler, and publish Ramu artifacts to Cloudflare Pages, with a token kept on the host.",
+      "description": "Deploy Workers and Pages with wrangler, and publish Ramu pages to Cloudflare Pages, with a token kept on the host.",
       "homepage": "https://developers.cloudflare.com/workers/wrangler/",
       "author": "Akalstack",
       "keywords": ["cloudflare", "workers", "pages", "wrangler", "d1", "r2"],
@@ -111,6 +111,70 @@
         "skills": 1,
         "credentials": ["Salesforce"],
         "dataSources": ["Salesforce"]
+      }
+    },
+    {
+      "name": "meshy",
+      "description": "Make textured, rigged and animated 3D models for games with Meshy, on your Meshy API key.",
+      "homepage": "https://www.meshy.ai",
+      "author": "Akalstack",
+      "keywords": ["meshy", "3d", "model", "game", "glb", "rigging", "animation"],
+      "category": "media",
+      "byRamu": true,
+      "signed": true,
+      "stacks": [],
+      "adds": {
+        "skills": 1,
+        "mcpServers": 1,
+        "credentials": ["Meshy API key"],
+        "abilities": ["model_3d"]
+      }
+    },
+    {
+      "name": "tripo",
+      "description": "Make 3D models for games with Tripo from a description or a picture, and rig and animate them, on your Tripo API key.",
+      "homepage": "https://www.tripo3d.ai",
+      "author": "Akalstack",
+      "keywords": ["tripo", "3d", "model", "game", "glb", "image-to-3d", "animation"],
+      "category": "media",
+      "byRamu": true,
+      "signed": true,
+      "stacks": [],
+      "adds": {
+        "skills": 1,
+        "mcpServers": 1,
+        "credentials": ["Tripo API key"],
+        "abilities": ["model_3d"]
+      }
+    },
+    {
+      "name": "godot",
+      "description": "Build, check and export Godot 4 games through the godot command, including a web export that publishes like any static site.",
+      "homepage": "https://godotengine.org",
+      "author": "Akalstack",
+      "keywords": ["godot", "game", "engine", "gdscript", "3d", "2d", "export"],
+      "category": "games",
+      "byRamu": true,
+      "signed": true,
+      "stacks": [],
+      "adds": {
+        "skills": 1,
+        "cli": "godot"
+      }
+    },
+    {
+      "name": "unity",
+      "description": "Work on Unity 6 projects through the Unity CLI: drive the open Editor, run tests and make headless builds. The licence and Editor stay on your computer.",
+      "homepage": "https://docs.unity.com/en-us/unity-cli",
+      "author": "Akalstack",
+      "keywords": ["unity", "game", "engine", "csharp", "3d", "build"],
+      "category": "games",
+      "byRamu": true,
+      "signed": true,
+      "stacks": [],
+      "adds": {
+        "skills": 1,
+        "cli": "unity"
       }
     }
   ]

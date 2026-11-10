@@ -1,5 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import {
+  isInteractiveAsset,
+  withoutAssetBytes,
+  type InteractiveDocument,
+  type InteractiveFile,
+} from '@ramu/shared/interactive'
 import { interactiveInput, type InteractiveInput, type InteractiveStore } from './store'
 import type { PageStore } from './pages'
 import type { PageAi } from './pageAi'
@@ -8,7 +14,8 @@ import { declaredCapabilities } from '@ramu/shared/artifacts'
 export const INTERACTIVE_GUIDE = `Create an artifact when working with something beats reading about it: architecture and request-flow diagrams, algorithm or state-machine walkthroughs, data/log/JSON explorers, API, regex or config playgrounds, UI prototypes, performance or cost comparisons, calculators and simulations. Use the conversation's real code, data and numbers rather than placeholders. Use artifact_preview then artifact_publish; the card opens live in the chat, so the first frame must already be useful.
 Kinds: choose from what the person will do with it. Writing to read and keep (a report, plan, spec, release note, notes) is kind "doc": Markdown in source, with GFM tables, task lists, footnotes and \`\`\`mermaid blocks for diagrams inside the text; a picture is ![alt](path), with the image as a PNG or JPEG in files with encoding base64 at that path. A flowchart, sequence, state, class, ER, timeline or concept diagram on its own is kind "diagram": Mermaid in source with format "mermaid" (preferred), or one <svg> element with format "svg". A deck to present or send (a pitch, a review, a talk, "turn this report into 6 slides") is kind "slides": slides is a list of up to 60 slides, each with a layout (title, content, two-columns, image, chart, quote) and the fields that layout shows, speaker notes in notes, theme {appearance: auto|light|dark, accent: "#rrggbb"}, and images as PNG or JPEG in files with encoding base64, named by image.path. To illustrate a deck, design, doc or app, make the picture with generate_image when it is offered and give the file attachment: its attachmentId instead of content; the host puts the image's bytes there. Keep a slide to a title and a few short bullets; put the detail in notes; use a chart slide for numbers rather than a table. Numbers to watch at a glance (signups this week, costs by service, a project's errors) are kind "dashboard": datasets are tables {id, columns, rows, asOf (an ISO time the data was read)}, figures are headline numbers {label, dataset, column, aggregate: sum|average|count|min|max|last, unit}, and charts are {title, type: bar|line|pie, dataset, x (the category column), y (number columns, added up per category), unit}; put the data in the tables rather than in the text, and set asOf so the reader sees how fresh it is. For numbers about the thread's own project that should stay current, give a table a source instead of rows: deployments (created, state, production, branch, message, url), usage (platform, metric, service, used, limit, unit) uptime (checked, result, status, ms), threads (title, status, done as 1 or 0, lastActive), pullRequests (thread, number, title, state, stage, url) or activity (day, provider, turns, cost in USD, tokens over the last 30 days on this host); the host reads it again whenever the dashboard is opened. Numbers kept in a CSV (with a header row) or JSON (an array of objects) file in the project, such as an export or a metrics file the app writes, take file instead: its path inside the project, with columns naming which of its columns to show and no rows; the host reads it again the same way and never writes it. To chart what an App artifact in the same project keeps (a ledger's spending, a tracker's entries), give a table records {artifact: its id, collection} with columns naming the fields (createdAt is when each was added) and no rows. Numbers a Shared MCP server approved for the project can give (an analytics or billing service) take mcp {server, tool, arguments} instead: a tool the server marks read-only whose JSON result is an array of objects, with columns naming the fields. Set notify: true on a figure over a live table to tell the person's devices when that number changes (checked every ten minutes while the dashboard is kept). refreshMinutes (5 to 1440) reads live tables less often when the numbers change slowly. rangeDays (such as 30) shows only the last that many days of tables dated by a column of ISO dates, counted from when the dashboard is drawn. A screen, mockup, landing page or one-pager to look at is kind "design": frames is a list of up to 12 {name, width, height, html, css} at fixed CSS-pixel sizes (such as 1440×1024 for desktop and 390×844 for a phone), each frame's css scoped to it alone; use the theme tokens below for colors and type so the design matches the app, keep every frame's content inside its height, and add no script. To make a design system, set tokens {colors: {background, foreground, muted, primary, surface, border, chart-1…chart-6} as hex, fontSans, radius, spacing, fonts: [{family, weight, style, path}] with each font a WOFF2/WOFF/TTF/OTF in files with encoding base64} and show its type, colors and components in the frames; When asked for a design system in a project, draft it from the project's own CSS variables, theme or Tailwind config and components rather than inventing one, and say which files it came from. Once the person chooses it, the host draws designs, decks, dashboards and apps with those tokens, so keep using the token variables rather than fixed colors. A short animated explainer or walkthrough ("a 30-second explainer of how sync works") is kind "motion": scenes is a list of up to 20 {seconds (1 to 30), html, css}, at most 120 seconds together, each filling a 16:9 stage and played once in order with a fade between; a scene's css is scoped to it, and its own CSS animations should use animation-delay: var(--scene-start) so they begin when the scene does; no script. A scene's narration is words spoken over it in the exported video (about 2.5 words a second); music {path, volume} plays under the whole motion, a scene's sound {path, volume} when it starts, a scene's voice {path} (its narration recorded by speak) instead of the host's voice, and a scene's video {path, volume} (a clip from make_video) filling the scene behind its html with its own sound mixed in, each a file in files, such as make_music's, make_sound's, speak's or make_video's attachment given by attachmentId. Anything to operate (controls, calculations, data to explore, games) is an app, the default, in html or files; the rest of this guide is about apps. A doc, diagram, deck, dashboard, design or motion is drawn on the host in the app's theme with no script, network or capabilities; its preview fails when a Mermaid diagram does not parse, a heading is empty, two headings share an anchor, a #link has no heading to go to, a slide's text does not fit its box, a design frame has content past its edges, or a dashboard's figure or chart names a table or column that is not there or adds up values that are not numbers. Do not repeat the title as the doc's first heading. The person exports a deck as PowerPoint, PDF or slide images, a doc as Word, a diagram or dashboard as PNG, a design as one image per frame, a motion as MP4 or WebM video or a poster image, a dashboard's tables as CSV, and any artifact as PDF, so never write those files yourself.
 Quality bar: complete and dependable rather than decorative. Lead with the answer (the key diagram, chart or result) and let controls refine it; label units, states and edge cases; keep layout dense, aligned and readable in the app's dark/light theme; use motion only where it explains change. When the user asks for something creative (a game, story or illustration), make it a finished, polished piece with considered art and evolving state. Check the preview screenshot critically and revise visual flaws, clipped text or dead controls before publishing.
-Structure: send one html document, or files [{path, content, encoding?}] with an HTML entry (default index.html). Local CSS, classic scripts, SVG and base64 assets are inlined. For React/TSX use <script type="module" src="./src/main.tsx"></script>; local JS/TS/TSX/JSON/CSS and asset imports are compiled before preview. Available pinned imports: react, react/jsx-runtime, react-dom/client, chart.js, chart.js/auto, chart.js/helpers, @dagrejs/dagre. Use Chart.js for interactive charts and Dagre plus accessible SVG for flow/architecture diagrams. Simple diagrams can use SVG directly. No arbitrary package installs, Node imports or host filesystem access. Use imported assets in modules; strings containing file paths are not imports. Sources, library versions and the exact tested runnable bytes are retained with each publication.
+Structure: send one html document, or files [{path, content, encoding?}] with an HTML entry (default index.html). Local CSS, classic scripts, SVG and base64 assets are inlined. For React/TSX use <script type="module" src="./src/main.tsx"></script>; local JS/TS/TSX/JSON/CSS and asset imports are compiled before preview. Available pinned imports: react, react/jsx-runtime, react-dom/client, chart.js, chart.js/auto, chart.js/helpers, @dagrejs/dagre, three, three/addons/loaders/GLTFLoader.js, three/addons/controls/OrbitControls.js, three/addons/utils/SkeletonUtils.js. Use Chart.js for interactive charts, Dagre plus accessible SVG for flow/architecture diagrams, and three for 3D scenes and games. Simple diagrams can use SVG directly. No arbitrary package installs, Node imports or host filesystem access. Use imported assets in modules; strings containing file paths are not imports. Sources, library versions and the exact tested runnable bytes are retained with each publication.
+Games and 3D: models, textures and sounds (glb, gltf, bin, ktx2, png, jpg, webp, mp3, ogg, wav) are assets. Give each as a file with attachment: the attachmentId make_model, generate_image, make_music or make_sound returned, at a path like models/fox.glb; assets stay outside the 512 KB source limit, up to 25 MB each and 50 MB together, and work offline. In a module, import fox from './models/fox.glb' gives its URL; in any script ramuAsset('models/fox.glb') does; <img src> and <audio src> naming an asset work as written. Load a model with new GLTFLoader().loadAsync(url).then(...) (modules here have no top-level await) and clone a rigged one with SkeletonUtils.clone. Run the game on a fixed-step loop with requestAnimationFrame, size the canvas to its container (a fixed pixel height such as 480px, never vh), and draw every frame, since a canvas that stays one color fails the preview. Keys reach the artifact once it is clicked; whenever the game uses keys, also draw on-screen touch controls (pointer events) so it plays on a phone, and offer fullscreen with canvas.requestFullscreen(). Keep a phone game to about 50,000 triangles in view (make_model detail low).
 Runtime: new documents work offline by default, including bundled libraries. If remote data or resources are essential, declare network: {resources: ["https://images.example.com"], connect: ["https://data.example.com"]}; use exact public HTTPS origins, not paths, wildcards or broad CDN access. Resources and API connections are separate, immutable per published version. Prefer bundled libraries and local assets. No eval/new Function is available in new documents. Plain http, frames, forms, plugins, page navigation, local files and app commands are unavailable; controls run locally with no model call. Remote parts are missing when the reader is offline, so prefer the kit and icons for app-styled UI and use libraries for heavy lifting. Use accessible labels, keyboard controls and responsive layouts; preview checks narrow phone, phone, tablet and desktop widths and returns phone/desktop screenshots, your console.log/info/warn output, script errors and failed remote loads, so check both screenshots and fix every failure. Leave html, body and the outermost element without a background, border or outer card, and do not repeat the title as a heading: the card header already shows it and the document sits on the thread's own background. Give charts fixed pixel heights; viewport height units (vh, svh, lvh, dvh) are rejected because the frame grows to fit the content. Include check actions with expected visible text. Preview validates rendering/observed behavior, not factual accuracy. For custom state use window.ramuContent.setState(JSON-compatible data), onRestore(state=>...), and onActive(active=>...) to pause animation offscreen. Standard input/select/textarea values restore automatically. Theme tokens follow the app's live palette and light/dark mode: --background, --foreground, --muted (secondary text), --primary (brand accent), --surface (cards), --surface-raised (buttons, inputs), --border, --code-background, --button and --button-foreground (solid actions), --success, --warning, --danger, --chart-1 to --chart-6, --radius, --font-sans, --font-mono. Artwork may use its own palette.
 Built-ins (inlined at preview, so they work offline and never change after publishing; prefer them over a CSS framework): <link rel="stylesheet" href="ramu:kit"> adds app-styled defaults for headings, inputs and :focus-visible plus classes .card, .btn (data-variant=primary|ghost|danger, data-size=sm|icon), .badge, .callout, .dot and .bar>span (data-tone=primary|success|warning|danger), .stat/.stat-label/.stat-value/.stat-delta, .table (td.num right-aligns), [role=tablist]/[role=tab][aria-selected], .field, .stack, .row, .grid, .muted, .small, .mono, .num; all rules have zero specificity so your CSS wins. Any Lucide icon: <svg data-icon="chevron-right"></svg> (kebab-case name; sized 1em, currentColor; add aria-label for meaningful icons). For icons created from JS, put them in a <template> and clone them. Prefer the kit and icons over hand-drawn equivalents.
 Revisions: read the current version; a version whose changes begin "Edited by you" holds the person's own wording, so build on it and keep their words unless they ask to change them. Pass previous {id, version} to artifact_preview and artifact_publish, resend all files, and give artifact_publish a short changes sentence. Checks kept with the previous version run again; drop one with dropChecks only when that behavior changed on purpose. Set stateSchema to the same explicit identifier across revisions ONLY when control keys and custom JSON retain the exact same meaning; otherwise use a new identifier or omit it. Do not put document bytes in chat or claim static screenshots are working interactions.`
@@ -37,20 +44,41 @@ export function registerInteractiveTools(
     attachment?(id: string): Promise<Buffer>
   },
 ) {
-  // A file named by an attachment carries that image's bytes, so an agent never has to encode one itself.
-  const withAttachments = async (files: InteractiveInput['files']) =>
-    files &&
-    Promise.all(
-      files.map(async ({ attachment, ...file }) => {
-        if (!attachment) return file
-        if (!pageTools?.attachment) throw new Error('Attachments cannot be used in this thread.')
-        return {
-          ...file,
-          content: (await pageTools.attachment(attachment)).toString('base64'),
-          encoding: 'base64' as const,
-        }
-      }),
+  /** The files of the version a revision replaces, wherever it is kept. */
+  const previousFiles = (previous?: { id: string; version: number }): InteractiveFile[] => {
+    if (!previous) return []
+    try {
+      return store.get(session, previous.id, previous.version).files ?? []
+    } catch {
+      try {
+        return pageTools?.pages.document(previous.id, previous.version).files ?? []
+      } catch {
+        return []
+      }
+    }
+  }
+  // A file named by an attachment carries that image's bytes, so an agent never has to encode one itself. In a
+  // revision, an asset named with no content keeps the bytes it had, so a game's models are never sent twice.
+  const withAttachments = async (files: InteractiveInput['files'], previous?: { id: string; version: number }) => {
+    const kept = files?.some((file) => !file.content && !file.attachment) ? previousFiles(previous) : []
+    return (
+      files &&
+      Promise.all(
+        files.map(async ({ attachment, ...file }) => {
+          const before = !file.content && !attachment && kept.find((entry) => entry.path === file.path)
+          if (before && isInteractiveAsset(before))
+            return { ...file, content: before.content, encoding: 'base64' as const }
+          if (!attachment) return file
+          if (!pageTools?.attachment) throw new Error('Attachments cannot be used in this thread.')
+          return {
+            ...file,
+            content: (await pageTools.attachment(attachment)).toString('base64'),
+            encoding: 'base64' as const,
+          }
+        }),
+      )
     )
+  }
   const result = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] })
   server.registerTool(
     'artifact_preview',
@@ -74,7 +102,7 @@ export function registerInteractiveTools(
     async ({ previous, dropChecks, ...input }, extra) => {
       const preview = await store.preview(
         session,
-        { ...input, files: await withAttachments(input.files) },
+        { ...input, files: await withAttachments(input.files, previous) },
         extra.signal,
         { previous, dropChecks },
       )
@@ -167,7 +195,7 @@ export function registerInteractiveTools(
         'Read the saved source (html, and files for multi-file projects) of an artifact version before revising it. Only this conversation can read it.',
       inputSchema: { id: z.string().uuid(), version: z.number().int().positive() },
     },
-    ({ id, version }) => result(store.get(session, id, version)),
+    ({ id, version }) => result(forAgent(store.get(session, id, version))),
   )
   server.registerTool(
     'artifact_versions',
@@ -220,7 +248,7 @@ function registerPageTools(server: McpServer, pages: PageStore, ai: PageAi) {
           }
         }),
       )
-      return result({ artifact: page, document, records: counts })
+      return result({ artifact: page, document: forAgent(document), records: counts })
     },
   )
   server.registerTool(
@@ -302,4 +330,18 @@ function registerPageTools(server: McpServer, pages: PageStore, ai: PageAi) {
       return result(await ai.run(id, prompt, { name: run ?? null, source: 'agent' }))
     },
   )
+}
+
+/**
+ * A version as an agent reads it: assets are listed by path and size, not their bytes, and the document's data block of
+ * them is left out. A revision keeps an asset by naming its path with no content.
+ */
+export function forAgent(document: InteractiveDocument): InteractiveDocument {
+  return {
+    ...withoutAssetBytes(document),
+    html: document.html.replace(
+      /<script type="application\/json" id="ramu-assets">[\s\S]*?<\/script>/,
+      '<script type="application/json" id="ramu-assets">{}</script>',
+    ),
+  }
 }

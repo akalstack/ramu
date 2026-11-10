@@ -32,7 +32,9 @@ it('inlines stylesheets, imports, classic scripts and assets into one document',
   // Closing tags inside inlined code cannot end the script early.
   expect(html).toContain('document.title = "<\\/script>" + story.scene')
   expect(html).toContain('href="https://example.com"')
-  expect(html).not.toContain('icon.png')
+  // An icon link is dropped; the file itself is an asset, carried once in the data block.
+  expect(html).not.toContain('rel="icon"')
+  expect(html).toContain('<script type="application/json" id="ramu-assets">{"art/sky.png":"iVBORw0KGgo=","icon.png":"AA=="}</script>')
   // Markup inside JavaScript strings is left alone.
   expect(html).toContain('<img src="sprites/run.png">')
   expect(html.indexOf('window.story')).toBeLessThan(html.indexOf('document.title'))
@@ -115,3 +117,15 @@ it.skipIf(!interactiveBrowserPath())(
   },
   30_000,
 )
+
+it('fills an element naming an asset from the data block instead of copying its bytes', () => {
+  const html = bundleInteractive([
+    { path: 'index.html', content: '<img src="art/fox.png" alt="Fox"><audio src="./sfx/coin.mp3"></audio>' },
+    { path: 'art/fox.png', content: 'iVBORw0KGgo=', encoding: 'base64' },
+    { path: 'sfx/coin.mp3', content: 'SUQz', encoding: 'base64' },
+  ])
+  expect(html).toContain('<img data-ramu-asset="art/fox.png" data-ramu-asset-attr="src" alt="Fox">')
+  expect(html).toContain('<audio data-ramu-asset="sfx/coin.mp3" data-ramu-asset-attr="src">')
+  expect(html.split('iVBORw0KGgo=')).toHaveLength(2)
+  expect(html).toContain("Object.defineProperty(window,'ramuAsset'")
+})

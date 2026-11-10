@@ -20,6 +20,8 @@ const DESCRIPTIONS: Record<AbilityTool, string> = {
     "Record a motion scene's narration in a voice, on the media service or Shared MCP tool the person set up for speech. The audio is saved as an attachment; give its attachmentId as the motion file the scene names in voice.path, and it plays instead of the computer's own voice.",
   make_video:
     'Make a short video clip (3 to 15 seconds, with sound) from a description, on the media service the person saved an API key for (agent_models lists it), billed to their account. aspect: landscape (default) or portrait. The video is saved as an attachment of this thread. If it is refused, carry on without it and say so.',
+  make_model:
+    "Make a 3D model (a character, a prop, a building) as a GLB file, on the 3D service the person installed a plugin for (agent_models lists it). prompt describes it; image is an attachment id or a file in this thread's folder to turn into a model instead, such as concept art from generate_image. detail: low (for a phone game), medium or high; textured and rigged (a character that will be animated). It takes one to five minutes and spends the account's credits; the first call in a thread asks the person. The model is saved as an attachment of this thread (give its attachmentId as an App file), and in a project also at assets/models/<name>.glb. Rigging, animation and retexturing are the service's own tools. If it is refused, build the shape in code and say so.",
   read_long:
     "Answer one question about a large set of files or a long text on the signed-in model with the largest context window. files: paths in this thread's folder (up to about 1.2 million characters together); text: pasted text. Only the question and those inputs are sent.",
 }

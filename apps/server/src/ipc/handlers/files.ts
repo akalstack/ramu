@@ -5,7 +5,9 @@ import { resolveFileLink } from '../../workspace/fileLinks'
 import * as files from '../../workspace/files'
 import * as git from '../../workspace/git'
 import { lockCheckout } from '../helpers'
-import { id, relPath } from '../schemas'
+import type { ModelViewerLabels } from '@ramu/shared/interactive'
+import { modelViewerHtml } from '../../interactive/modelViewer'
+import { id, modelViewerLabels, relPath } from '../schemas'
 import type { HandlerContext, RegisterHandlers } from '../types'
 
 const MAX_QUICK_OPEN_FILES = 50_000
@@ -90,6 +92,11 @@ export const registerFileHandlers: RegisterHandlers = (ctx) => {
     'files.media': {
       args: z.tuple([id, id, relPath]),
       run: (taskId: string, repoId: string, path: string) => files.readMedia(cwdOf(taskId, repoId), path),
+    },
+    'files.modelViewer': {
+      args: z.tuple([id, id, relPath, modelViewerLabels]),
+      run: async (taskId: string, repoId: string, path: string, labels: ModelViewerLabels) =>
+        modelViewerHtml(await files.readModel(cwdOf(taskId, repoId), path), labels),
     },
     'files.write': {
       args: z.tuple([id, id, relPath, z.string().max(files.MAX_EDITABLE_BYTES), z.string().max(128).nullable()]),

@@ -934,6 +934,7 @@ const abilities = new AbilityService(
     writeChecks: (checks) => workspace.setAppState('ability-checks', checks),
     readMcpChecks: () => workspace.getAppState<unknown>('ability-mcp-checks', []),
     writeMcpChecks: (checks) => workspace.setAppState('ability-mcp-checks', checks),
+    inProject: (sessionId) => workspace.getTask(agents.get(sessionId).taskId).projectId !== NO_PROJECT,
   },
   abilityRunner(fake?.fakeQuery ?? query),
 )

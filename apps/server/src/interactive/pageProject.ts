@@ -1,3 +1,4 @@
+import { isInteractiveAsset } from '@ramu/shared/interactive'
 import { interactiveExport } from '@ramu/shared/interactiveExport'
 import type { ArtifactProjectDestination } from '@ramu/shared/api'
 import { titleFolderName } from '@ramu/shared/workspace/hostFolders'
@@ -82,7 +83,7 @@ async function writeArtifact(ctx: HandlerContext, artifactId: string, folder: st
   }
   await writeFile(
     join(folder, 'README.md'),
-    `# ${page.title}\n\nStarted from the Ramu ${design ? 'design' : 'artifact'} "${page.title}" (version ${page.version}).${design ? ' `design/` is the design reference.' : ''}\n${page.capabilities.records ? '\n`data/schema.json` holds the record collections the artifact kept and `data/seed.json` its records.\n' : ''}`,
+    `# ${page.title}\n\nStarted from the Ramu ${design ? 'design' : 'artifact'} "${page.title}" (version ${page.version}).${design ? ' `design/` is the design reference.' : ''}\n${page.capabilities.records ? '\n`data/schema.json` holds the record collections the artifact kept and `data/seed.json` its records.\n' : ''}${files.some(isInteractiveAsset) ? "\nThe artifact's models, textures and sounds are in their folders. Code that called `ramuAsset('<path>')` there loads the same file by its URL here.\n" : ''}`,
   )
   return source
 }

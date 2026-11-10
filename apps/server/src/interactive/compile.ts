@@ -2,7 +2,12 @@ import { build, type Loader } from 'esbuild'
 import { createRequire } from 'node:module'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, posix } from 'node:path'
-import type { InteractiveFile } from '@ramu/shared/interactive'
+import {
+  checkInteractiveAssets,
+  interactiveAssetAllowance,
+  isInteractiveAsset,
+  type InteractiveFile,
+} from '@ramu/shared/interactive'
 import { bundleInteractive, validateInteractiveFiles } from './bundle'
 
 const require = createRequire(import.meta.url)
@@ -15,6 +20,10 @@ export const INTERACTIVE_LIBRARIES = [
   'chart.js/auto',
   'chart.js/helpers',
   '@dagrejs/dagre',
+  'three',
+  'three/addons/loaders/GLTFLoader.js',
+  'three/addons/controls/OrbitControls.js',
+  'three/addons/utils/SkeletonUtils.js',
 ] as const
 export const INTERACTIVE_MAX_ARTIFACT = 1_500_000
 
@@ -24,6 +33,7 @@ const SHIPPED_LIBRARIES: Record<string, string> = {
   'react-dom': '19.3.0',
   'chart.js': '4.6.1',
   '@dagrejs/dagre': '2.0.4',
+  three: '0.186.1',
 }
 /** The versions the bundled libraries actually are, recorded with each version so a change can be noticed. */
 export function pinnedLibraries(): Record<string, string> {
@@ -48,6 +58,15 @@ export function pinnedLibraries(): Record<string, string> {
   }
   return versions
 }
+/**
+ * three's ES module build, so an App's own imports and the add-ons' imports of `three` meet in one copy; its CommonJS
+ * entry would bundle a second.
+ */
+function libraryPath(name: string): string {
+  if (name !== 'three' && !name.startsWith('three/')) return require.resolve(name)
+  const root = dirname(dirname(require.resolve('three')))
+  return name === 'three' ? join(root, 'build', 'three.module.js') : join(root, 'examples', 'jsm', name.slice(13))
+}
 const text = (file: InteractiveFile) =>
   file.encoding === 'base64' ? Buffer.from(file.content, 'base64').toString('utf8') : file.content
 const attr = (attrs: string, name: string) =>
@@ -59,6 +78,7 @@ const attr = (attrs: string, name: string) =>
 /** Compile only the supplied virtual project. Package resolution is entered exclusively through the allowlist. */
 export async function compileInteractive(files: InteractiveFile[], entry = 'index.html'): Promise<string> {
   validateInteractiveFiles(files, entry)
+  checkInteractiveAssets(files)
   const sources = new Map(files.map((file) => [file.path, file]))
   const root = sources.get(entry)!
   const scripts = [...text(root).matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)].filter(
@@ -98,7 +118,7 @@ export async function compileInteractive(files: InteractiveFile[], entry = 'inde
             })
             builder.onResolve({ filter: /.*/, namespace: 'project' }, (args) => {
               if ((INTERACTIVE_LIBRARIES as readonly string[]).includes(args.path))
-                return { path: require.resolve(args.path) }
+                return { path: libraryPath(args.path) }
               if (!args.path.startsWith('.') && !args.path.startsWith('/'))
                 throw new Error(`Unsupported library ${args.path}. Available: ${INTERACTIVE_LIBRARIES.join(', ')}.`)
               if (args.path.startsWith('/')) throw new Error('Imports must stay inside the supplied project.')
@@ -115,6 +135,9 @@ export async function compileInteractive(files: InteractiveFile[], entry = 'inde
             builder.onLoad({ filter: /.*/, namespace: 'project' }, (args) => {
               const file = sources.get(args.path)
               if (!file) throw new Error(`Missing project file ${args.path}.`)
+              // An imported asset is its URL, read from the document's data block when the page asks for it.
+              if (isInteractiveAsset(file))
+                return { contents: `export default window.ramuAsset(${JSON.stringify(file.path)})`, loader: 'js' }
               const extension = posix.extname(args.path).slice(1)
               const loader = (
                 ['ts', 'tsx', 'js', 'jsx', 'json', 'css'].includes(extension) ? extension : 'dataurl'
@@ -143,7 +166,7 @@ export async function compileInteractive(files: InteractiveFile[], entry = 'inde
     files.map((file) => (file.path === entry ? { ...file, content: html, encoding: 'utf8' } : file)),
     entry,
   )
-  if (Buffer.byteLength(output) > INTERACTIVE_MAX_ARTIFACT)
+  if (Buffer.byteLength(output) > INTERACTIVE_MAX_ARTIFACT + interactiveAssetAllowance(files))
     throw new Error('Compiled interactive content exceeds 1.5 MB. Use fewer dependencies or smaller assets.')
   return output
 }

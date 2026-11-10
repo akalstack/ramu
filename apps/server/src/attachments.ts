@@ -28,6 +28,14 @@ const videoTypes: Record<string, string> = {
   '.webm': 'video/webm',
 }
 
+/** 3D models a model ability saves, which may be larger than other attachments. */
+const modelTypes: Record<string, string> = {
+  '.glb': 'model/gltf-binary',
+  '.gltf': 'model/gltf+json',
+}
+export const MAX_MODEL_BYTES = 100 * 1024 * 1024
+const limitFor = (name: string) => (modelTypes[extname(name).toLowerCase()] ? MAX_MODEL_BYTES : MAX_ATTACHMENT_BYTES)
+
 export const isPdf = (file: Pick<Attachment, 'mimeType'>) => file.mimeType === 'application/pdf'
 
 /** Base64 content blocks for attachments Claude reads natively: images and PDFs (as documents). */
@@ -67,8 +75,12 @@ export class AttachmentStore {
   }
 
   add(name: string, bytes: Buffer): Attachment {
-    if (!bytes.length || bytes.length > MAX_ATTACHMENT_BYTES)
-      throw new Error('Each attachment must be nonempty and no larger than 10 MB.')
+    if (!bytes.length || bytes.length > limitFor(name))
+      throw new Error(
+        modelTypes[extname(name).toLowerCase()]
+          ? 'A 3D model must be nonempty and no larger than 100 MB.'
+          : 'Each attachment must be nonempty and no larger than 10 MB.',
+      )
     const safeName =
       basename(name.replace(/\\/g, '/'))
         // eslint-disable-next-line no-control-regex -- strips control characters on purpose
@@ -82,6 +94,7 @@ export class AttachmentStore {
       imageTypes[extname(safeName).toLowerCase()] ??
       audioTypes[extname(safeName).toLowerCase()] ??
       videoTypes[extname(safeName).toLowerCase()] ??
+      modelTypes[extname(safeName).toLowerCase()] ??
       (extname(safeName).toLowerCase() === '.pdf' ? 'application/pdf' : 'application/octet-stream')
     const attachment: Attachment = { id, name: safeName, size: bytes.length, mimeType, path }
     writeFileSync(path, bytes)
@@ -100,7 +113,7 @@ export class AttachmentStore {
         typeof value.mimeType !== 'string' ||
         !Number.isSafeInteger(value.size) ||
         value.size <= 0 ||
-        value.size > MAX_ATTACHMENT_BYTES
+        value.size > limitFor(value.name)
       )
         throw new Error('Invalid attachment metadata.')
       // Derive the location from the store rather than a caller-supplied path.
@@ -129,6 +142,13 @@ export class AttachmentStore {
   resolve(ids: string[] = []): Attachment[] {
     if (ids.length > MAX_ATTACHMENTS) throw new Error('Attach up to 10 files per message.')
     return [...new Set(ids)].map((id) => this.get(id))
+  }
+
+  /** A 3D model attachment's bytes, for the viewer; refused for any other file. */
+  model(id: string): Buffer {
+    const attachment = this.get(id)
+    if (!attachment.mimeType.startsWith('model/')) throw new Error(`${attachment.name} is not a 3D model.`)
+    return readFileSync(attachment.path)
   }
 
   /** Readable text of a non-image attachment (up to 400 KB), or null for binary files. */

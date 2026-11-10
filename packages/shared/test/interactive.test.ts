@@ -191,12 +191,13 @@ it('round-trips attached Interactive Content so a sent message can show what it 
 it('uses exact versioned network origins', async () => {
   const { interactiveCsp, interactiveOrigin } = await import('../src/interactive')
   const offline = interactiveCsp({ resources: [], connect: [] })
-  expect(offline).toContain("connect-src 'none'")
+  // Only the document's own blob: assets; no network.
+  expect(offline).toContain('connect-src blob:;')
   expect(offline).not.toContain('https:')
   expect(offline).not.toContain('unsafe-eval')
   const policy = { resources: ['https://images.example.com'], connect: ['https://data.example.com'] }
   const csp = interactiveCsp(policy)
-  expect(csp).toContain('connect-src https://data.example.com;')
+  expect(csp).toContain('connect-src blob: https://data.example.com;')
   expect(csp).toContain('img-src data: blob: https://images.example.com;')
   expect(interactiveHtml('<p>Hi</p>', 'one', null, undefined, policy)).toContain(`content="${csp}"`)
   expect(interactiveOrigin('https://data.example.com/')).toBe('https://data.example.com')

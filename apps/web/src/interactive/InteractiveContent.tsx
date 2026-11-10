@@ -14,8 +14,7 @@ import type { InteractiveDocument, InteractiveReference, InteractiveState } from
 import { interactiveFollowup, readInteractiveState } from '@ramu/shared/interactive'
 import { interactiveStorage } from '@ramu/shared/interactiveStorage'
 import { INTERACTIVE_FOLLOWUP_EVENT, type InteractiveFollowupDetail } from './followup'
-import { interactivePaletteFromVariant, interactiveThemeVariables } from '@ramu/shared/interactiveTheme'
-import { DEFAULT_DARK, DEFAULT_LIGHT } from '@ramu/shared/theme'
+import { appThemeVariables } from './appTheme'
 import { useHost } from '../workspace/HostProvider'
 import { hostStorageFor } from '../hostStorage'
 import { Button } from '../components/desktop-button'
@@ -47,28 +46,6 @@ type Viewport = (typeof VIEWPORTS)[number]['id']
 /** Last measured height per version, so remounting after scrolling back does not jump. */
 const heights = new Map<string, number>()
 
-/** The app's live palette as the theme tokens a document is drawn with. */
-export function appThemeVariables(): Record<string, string> {
-  const style = getComputedStyle(window.document.documentElement)
-  const dark = style.colorScheme !== 'light'
-  const fallback = interactivePaletteFromVariant(dark ? DEFAULT_DARK : DEFAULT_LIGHT, dark ? 'dark' : 'light')
-  const read = (name: string, value: string) => style.getPropertyValue(name).trim() || value
-  return interactiveThemeVariables({
-    scheme: fallback.scheme,
-    background: read('--canvas', fallback.background),
-    foreground: read('--text', fallback.foreground),
-    muted: read('--muted', fallback.muted),
-    primary: read('--accent', fallback.primary),
-    surface: read('--raised', fallback.surface),
-    surfaceRaised: read('--bubble', fallback.surfaceRaised),
-    codeBackground: read('--code-bg', fallback.codeBackground),
-    button: read('--primary', fallback.button),
-    buttonForeground: read('--primary-ink', fallback.buttonForeground),
-    success: read('--ok', fallback.success),
-    warning: read('--warn', fallback.warning),
-    danger: read('--bad', fallback.danger),
-  })
-}
 
 /** A document is never inserted in the application DOM and never receives a privileged bridge. */
 function InteractiveDocumentCard({

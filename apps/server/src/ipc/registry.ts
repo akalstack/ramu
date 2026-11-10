@@ -33,6 +33,7 @@ import { registerThreadStartHandlers } from './handlers/threadStart'
 import { registerWorkspaceHandlers } from './handlers/workspace'
 import type { HandlerContext, MethodTable } from './types'
 import { HOST_EXPORT_FORMATS, type HostExportFormat } from '@ramu/shared/interactiveExport'
+import { withoutAssetBytes } from '@ramu/shared/interactive'
 
 /** The renderer's method table: every handler group, merged. Method names are unique across groups. */
 export const registerHandlers = (ctx: HandlerContext): MethodTable => {
@@ -42,7 +43,8 @@ export const registerHandlers = (ctx: HandlerContext): MethodTable => {
         args: z.tuple([z.string().min(1).max(200), z.string().uuid(), z.number().int().positive()]),
         run: (session: string, id: string, version: number) => {
           if (!ctx.interactive) throw new Error('Update this host for Interactive Content')
-          const document = ctx.interactive.get(session, id, version)
+          // The page carries an App's assets; its file list names them without a second copy of their bytes.
+          const document = withoutAssetBytes(ctx.interactive.get(session, id, version))
           if (!ctx.liveDashboards || document.reference.kind !== 'dashboard') return document
           // A card in a thread reads its dashboard's live tables from the thread's project.
           let projectId: string | null = null

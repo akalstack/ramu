@@ -4,6 +4,7 @@ import {
   ABILITIES,
   ABILITY_LABELS,
   DEFAULT_ABILITY_PREFERENCES,
+  ASKED_MCP_ABILITIES,
   AUTO_MCP_ABILITIES,
   MCP_ABILITIES,
   isMcpChoice,
@@ -184,17 +185,20 @@ export function AbilitySettings({
           </SettingsRow>
         )
       })}
-      {AUTO_MCP_ABILITIES.filter((ability) => mcpTools.length && (abilities.choices[ability] ?? 'auto') === 'auto').map(
-        (ability) => {
+      {[...AUTO_MCP_ABILITIES, ...ASKED_MCP_ABILITIES]
+        .filter((ability) => mcpTools.length && (abilities.choices[ability] ?? 'auto') === 'auto')
+        .map((ability) => {
           const tool = abilities.autoMcp?.[ability]
           return (
             <SettingsRow key={`auto-mcp-${ability}`}>
               <span>
                 <SettingsTitle>{t('{0}: also try in Auto', { '0': t(ABILITY_LABELS[ability]) })}</SettingsTitle>
                 <span className="muted text-muted-foreground block small text-caption">
-                  {tool
-                    ? autoMcpText(ability, tool)
-                    : t('A Shared MCP tool Auto tries after your signed-in providers.')}
+                  {ASKED_MCP_ABILITIES.includes(ability)
+                    ? t('Each call spends the service’s credits, so the first one in a thread asks you.')
+                    : tool
+                      ? autoMcpText(ability, tool)
+                      : t('A Shared MCP tool Auto tries after your signed-in providers.')}
                 </span>
               </span>
               <Dropdown
@@ -208,13 +212,20 @@ export function AbilitySettings({
                 ]}
                 onChange={(next) => {
                   const picked = mcpTools.find((entry) => mcpValue(entry) === next)
-                  setAutoMcp(ability, picked ? { connectionId: picked.connectionId, tool: picked.tool } : undefined)
+                  // A plugin's mapping keeps its status tool and download origins when the same tool is picked again.
+                  setAutoMcp(
+                    ability,
+                    picked
+                      ? tool?.connectionId === picked.connectionId && tool.tool === picked.tool
+                        ? tool
+                        : { connectionId: picked.connectionId, tool: picked.tool }
+                      : undefined,
+                  )
                 }}
               />
             </SettingsRow>
           )
-        },
-      )}
+        })}
       <SettingsRow setting="abilities.askBeforeOtherProvider" className="settings-toggle">
         <span>
           <SettingsTitle>{t('Ask before using another provider')}</SettingsTitle>

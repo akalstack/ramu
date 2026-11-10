@@ -526,6 +526,15 @@ export async function readMedia(
   return { mimeType, size: bytes.length, url: `data:${mimeType};base64,${bytes.toString('base64')}` }
 }
 
+/** A `.glb` or `.gltf` model's bytes, for the 3D viewer. */
+export async function readModel(root: string, relPath: string): Promise<Buffer> {
+  if (!/\.(glb|gltf)$/i.test(relPath)) throw new Error('Only .glb and .gltf files open in the 3D viewer.')
+  const path = await resolveInRoot(root, relPath)
+  if ((await stat(path)).size > MAX_MODEL_BYTES) throw new Error('Models larger than 100 MB cannot be previewed.')
+  return readFile(path)
+}
+const MAX_MODEL_BYTES = 100 * 1024 * 1024
+
 /**
  * Writes only if the file on disk still matches `baseHash` (the hash the editor loaded).
  * A mismatch means an agent, terminal or external tool changed it; the caller must reconcile.

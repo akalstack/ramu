@@ -19,6 +19,7 @@ import { PERSON_ONLY, type SettingSchema } from '@ramu/shared/settingsCompatibil
 import {
   ABILITIES,
   DEFAULT_ABILITY_PREFERENCES,
+  ASKED_MCP_ABILITIES,
   AUTO_MCP_ABILITIES,
   type AbilityPreferences,
 } from '@ramu/shared/providers/abilities'
@@ -117,10 +118,27 @@ const subagentPreferences = z.preprocess(
     codexHook: z.boolean().default(false),
   }),
 )
+const mcpTool = z.object({
+  connectionId: z.string().min(1).max(200),
+  tool: z.string().min(1).max(200),
+  status: z.string().min(1).max(200).optional(),
+  balance: z.string().min(1).max(200).optional(),
+  fromImage: z.string().min(1).max(200).optional(),
+  refine: z.string().min(1).max(200).optional(),
+  downloads: z
+    .array(
+      z
+        .string()
+        .regex(/^https:\/\/(\*\.)?[a-z0-9.-]+$/)
+        .max(300),
+    )
+    .max(5)
+    .optional(),
+})
 const abilityChoice = z.union([
   z.enum(['auto', 'off']),
   z.object({ provider: providerId, model: z.string().max(200) }),
-  z.object({ connectionId: z.string().min(1).max(200), tool: z.string().min(1).max(200) }),
+  mcpTool,
   z.object({ media: z.enum(MEDIA_SERVICES) }),
 ])
 /** Auto, Off or one provider and model per ability; a project's `ramu.json` can set these over the host's. */
@@ -133,11 +151,14 @@ const keptChoice = z.preprocess(
 export const abilityChoices = z.object(
   Object.fromEntries(ABILITIES.map((ability) => [ability, keptChoice])),
 ) as z.ZodType<AbilityPreferences['choices']>
-const mcpTool = z.object({ connectionId: z.string().min(1).max(200), tool: z.string().min(1).max(200) })
 const abilityPreferences = z.object({
   choices: abilityChoices.default({}),
   autoMcp: z
-    .object(Object.fromEntries(AUTO_MCP_ABILITIES.map((ability) => [ability, mcpTool.optional()])))
+    .object(
+      Object.fromEntries(
+        [...AUTO_MCP_ABILITIES, ...ASKED_MCP_ABILITIES].map((ability) => [ability, mcpTool.optional()]),
+      ),
+    )
     .optional()
     .meta(personOnly),
   askBeforeOtherProvider: z.boolean().default(false).meta(personOnly),

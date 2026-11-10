@@ -1,10 +1,17 @@
 // What an agent can do with plugins: search the indexes when a task needs a service Ramu does not know, and ask the
 // person to install one. The install is the same review as in Settings, shown as a card the agent cannot answer, on
 // the desktop or a phone; a credential is never pasted through the agent.
+import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { UNUSED_PART_NAMES, type PluginReview } from '@ramu/shared/plugins'
+import { PLUGIN_NAME, RAMU_EXTENSION, UNUSED_PART_NAMES, type PluginReview } from '@ramu/shared/plugins'
+import { checkPlugin, newPlugin } from './authoring'
 import type { PluginService } from './service'
+
+/** Where plugins an agent drafts are kept, one folder each, outside any project. */
+export const draftPluginsFolder = () => join(homedir(), 'Ramu Plugins')
 
 /** The review in plain words, as the approval card names it. */
 export function reviewText(review: PluginReview): string {
@@ -43,13 +50,14 @@ export function registerPluginTools(
   /** Asks the person through the thread's approval card. Resolves false when refused. */
   requestApproval: (detail: string, signal?: AbortSignal) => Promise<boolean>,
   installed: (pluginId: string) => void,
+  drafts: () => string = draftPluginsFolder,
 ) {
   const result = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] })
   server.registerTool(
     'plugin_search',
     {
       description:
-        'Search the plugin indexes for a service this task needs that Ramu does not know (a hosting platform, an analytics or issue tracker, an image service). Returns each listed plugin with its source and whether it is installed. Suggest one only when the task needs it, then call plugin_install.',
+        'Search the plugin indexes for a service this task needs that Ramu does not know (a hosting platform, an analytics or issue tracker, an image service). Returns each listed plugin with its source and whether it is installed. Suggest one only when the task needs it, then call plugin_install. When nothing fits, offer plugin_create.',
       inputSchema: { query: z.string().trim().min(1).max(200) },
     },
     async ({ query }: { query: string }) => {
@@ -99,6 +107,75 @@ export function registerPluginTools(
           next: missing.length
             ? `Ask the person to add ${missing.join(' and ')} for ${name} in Settings → Plugins on the host.`
             : null,
+        })
+      } catch (error) {
+        await plugins.cancel(review.stageId).catch(() => {})
+        throw error
+      }
+    },
+  )
+  server.registerTool(
+    'plugin_create',
+    {
+      description: `Make a plugin for a service no index lists, when the person asks for one ("connect Rodin for 3D models"). step "start" writes a working folder in ~/Ramu Plugins/<name> (mcp: true adds a Node MCP server, cli: true a CLI); then write its .claude-plugin/plugin.json, server and skill from the service's own documentation with your file tools. Declare the API key as a credential slot whose env the server reads, never a value; map an ability under extensions["${RAMU_EXTENSION}"].abilities (model_3d needs a tool, a status tool for its task id, a balance tool, and downloads: the https origins its files come from). step "check" starts the servers and lists every problem with its file; fix them until it passes. step "install" asks the person through the plugin review card and installs it as a Development plugin whose abilities are used at once. The person pastes the key on the plugin's card in Settings → Plugins; you never see it.`,
+      inputSchema: {
+        name: z.string().regex(PLUGIN_NAME).describe('Lowercase words joined by dashes, such as rodin-3d.'),
+        step: z.enum(['start', 'check', 'install']),
+        mcp: z.boolean().optional(),
+        cli: z.boolean().optional(),
+      },
+    },
+    async (
+      { name, step, mcp, cli }: { name: string; step: 'start' | 'check' | 'install'; mcp?: boolean; cli?: boolean },
+      extra,
+    ) => {
+      const folder = join(drafts(), name)
+      if (step === 'start') {
+        if (existsSync(folder))
+          return result({
+            folder,
+            next: 'This plugin folder already exists. Edit it, then call plugin_create with step "check".',
+          })
+        newPlugin(drafts(), name, { mcp: mcp ?? true, cli: cli ?? false })
+        return result({
+          folder,
+          next: 'Write the manifest, the MCP server or CLI entry and the skill in this folder, then call plugin_create with step "check".',
+        })
+      }
+      if (!existsSync(folder)) throw new Error(`${folder} does not exist. Call plugin_create with step "start" first.`)
+      const report = await checkPlugin(folder)
+      if (step === 'check' || report.problems.length)
+        return result({
+          folder,
+          passed: !report.problems.length,
+          problems: report.problems,
+          servers: report.servers,
+          ...(step === 'install' && report.problems.length ? { next: 'Fix these problems before installing.' } : {}),
+        })
+      const review = await plugins.stage({ source: folder })
+      try {
+        if (review.blocked) throw new Error(review.blocked)
+        if (!(await requestApproval(`${reviewText(review)}\nMade in this thread, in ${folder}.`, extra.signal)))
+          throw new Error('The person declined the install. Do not retry it without a new request.')
+        const plugin = await plugins.confirm(review.stageId, {
+          scope: { kind: 'all' },
+          includeScripts: false,
+          development: true,
+          offerAbilities: true,
+        })
+        installed(plugin.id)
+        const missing = plugin.credentials.filter((slot) => slot.state !== 'saved').map((slot) => slot.label)
+        return result({
+          installed: true,
+          name,
+          next: [
+            missing.length
+              ? `Ask the person to add ${missing.join(' and ')} for ${name} in Settings → Plugins on the host.`
+              : '',
+            'Its tools reach threads started after the install. Share on its card in Settings → Plugins pushes it to their own repository.',
+          ]
+            .filter(Boolean)
+            .join(' '),
         })
       } catch (error) {
         await plugins.cancel(review.stageId).catch(() => {})

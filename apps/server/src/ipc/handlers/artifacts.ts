@@ -9,7 +9,12 @@ import { designTextEdit, withDesignTexts, type DesignTextEdit } from '@ramu/shar
 import { readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { join, sep } from 'node:path'
 import { z } from 'zod'
-import { INTERACTIVE_MAX_HTML, type InteractiveDocument, type JsonValue } from '@ramu/shared/interactive'
+import {
+  INTERACTIVE_MAX_HTML,
+  withoutAssetBytes,
+  type InteractiveDocument,
+  type JsonValue,
+} from '@ramu/shared/interactive'
 import {
   ARTIFACT_KINDS,
   type ArtifactGrants,
@@ -531,7 +536,7 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, z.number().int().positive().optional()]),
       run: async (artifactId: string, version?: number) => {
         const { pages } = need()
-        const document = pages.document(artifactId, version)
+        const document = withoutAssetBytes(pages.document(artifactId, version))
         // A dashboard's live tables are read again from its own project when it is opened.
         return ctx.liveDashboards ? ctx.liveDashboards.serve(document, pages.get(artifactId).projectId) : document
       },
@@ -1071,7 +1076,7 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
             version: page.version,
             capabilities: page.capabilities,
           },
-          document: pages.document(page.id),
+          document: withoutAssetBytes(pages.document(page.id)),
           state: pages.state(page.id),
         }
       },

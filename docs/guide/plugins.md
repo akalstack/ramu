@@ -30,6 +30,10 @@ Ramu checks each plugin's source once a day (and on **Check for updates**). The 
 
 An agent that needs a service Ramu does not know ("deploy this to Render") can call `plugin_search`, and `plugin_install` shows you the same review as an approval card, on the desktop or a phone. The agent cannot approve it, and it never handles the credential: it asks you to add it in **Settings → Plugins**. A plugin's CLI is run through `platform_cli` with its name, in threads started after the install.
 
+### A plugin made by asking
+
+For a service no index lists ("connect Rodin for 3D models"), the agent offers `plugin_create`: it starts a folder in `~/Ramu Plugins/<name>`, writes the manifest, the MCP server and a skill from the service's own documentation, runs the same check as `ramu plugin check` until it passes, and then shows you the usual review card. Approving installs it as a Development plugin whose abilities are used at once. The agent never sees the key: you paste it on the plugin's card.
+
 ### On the phone
 
 **Settings → Plugins** on the phone lists each host's plugins with what each still needs. Installing, credentials and removal stay on the host; an agent's install card and every CLI command card reach the phone like any approval.
@@ -51,7 +55,7 @@ ramu plugin dev .                        # install this folder as a Development 
 ramu plugin check .                      # validate everything, naming each problem and its file
 ```
 
-`ramu plugin dev` installs the folder without pinning a commit and reloads it whenever a file changes, so the next thread uses your edits; its card says **Development**, and Auto does not try its abilities. `ramu plugin check` validates the manifest, parses every skill, starts each local MCP server and lists its tools, checks that ability mappings name real tools and that every `${VAR}` a server reads comes from a credential, and says whether the latest commit is signed. The [template repository](https://github.com/akalstack/ramu-plugin-template) has the same files and a CI workflow that runs the check.
+`ramu plugin dev` installs the folder without pinning a commit and reloads it whenever a file changes, so the next thread uses your edits; its card says **Development**, and Auto does not try its abilities. **Share** on a Development plugin's card pushes its folder to a private repository on your own GitHub account through your `gh` sign-in, so you can open a pull request to an index from there. `ramu plugin check` validates the manifest, parses every skill, starts each local MCP server and lists its tools, checks that ability mappings name real tools and that every `${VAR}` a server reads comes from a credential, and says whether the latest commit is signed. The [template repository](https://github.com/akalstack/ramu-plugin-template) has the same files and a CI workflow that runs the check.
 
 ### Layout
 
@@ -97,9 +101,26 @@ What Ramu guarantees: every value is kept in the host's OS credential store and 
 { "binaries": ["render"], "npx": "@render/cli", "reads": [["whoami"], ["services", "list"], ["logs"]] }
 ```
 
-The agent runs it with `platform_cli` and the plugin's name. Reads run straight away; every other command asks the person with a card naming it. The CLI gets a home folder of Ramu's own, so the person's own CLI login is neither read nor changed. `credential` names the slot that signs it in when there are several.
+The agent runs it with `platform_cli` and the plugin's name. Reads run straight away; every other command asks the person with a card naming it. The CLI gets a home folder of Ramu's own, so the person's own CLI login is neither read nor changed. `credential` names the slot that signs it in when there are several. A plugin with no credential slot runs a local tool that signs nothing in (a game engine such as Godot): it keeps the person's own home folder, where the tool's settings live.
 
-**Abilities** map an ability to a server and tool: `{ "image_generation": { "server": "images", "tool": "generate" } }`. Image generation and editing, web search, long reads, music, sound effects and speech can be mapped.
+**Abilities** map an ability to a server and tool: `{ "image_generation": { "server": "images", "tool": "generate" } }`. Image generation and editing, web search, long reads, music, sound effects, speech and 3D models can be mapped. A 3D service works in the background and links to its file, so its mapping says more:
+
+```json
+{
+  "model_3d": {
+    "server": "meshy",
+    "tool": "meshy_text_to_3d",
+    "fromImage": "meshy_image_to_3d",
+    "refine": "meshy_text_to_3d_refine",
+    "status": "meshy_get_task_status",
+    "balance": "meshy_check_balance",
+    "downloads": ["https://assets.meshy.ai", "https://*.meshy.ai"]
+  }
+}
+```
+
+- `status` is asked with the task id the first call returned (and `wait: false` when it takes one) until the result links to a GLB; `fromImage` takes an image instead of words, as a local `file_path` when the tool reads one; `refine` textures a text preview, given the preview's task id.
+- `balance` is what the live check calls, so checking costs nothing; `downloads` lists the https origins a model may come from (`https://*.domain` for a CDN's subdomains), and a link anywhere else is refused.
 
 **Data sources** are tables a Dashboard artifact reads by `id`, declared without code:
 

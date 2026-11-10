@@ -38,6 +38,9 @@ import { HostCredentialStore } from '../credentials/store'
 import { skillMetadata } from '../memory/skillFiles'
 import { SavedCredential } from '../workspace/forge/savedCredential'
 import { platformCli } from '../workspace/deploy/signIn'
+import { gh } from '../workspace/forge/github'
+import { git } from '../workspace/git'
+import type { AbilityMcpTool } from '@ramu/shared/providers/abilities'
 import { mapPluginAbilities } from './abilities'
 import { pluginChanges, readPluginFolder, type PluginFingerprint, type PluginFolder } from './folder'
 import { fetchGitSource, latestCommit, signerName, signingKey, verifyCommit } from './source'
@@ -335,7 +338,13 @@ export class PluginService {
   /** Saves every part of a reviewed plugin. Scripts in skills come only with their second approval. */
   async confirm(
     stageId: string,
-    options: { scope: PluginScope; includeScripts: boolean; development?: boolean },
+    options: {
+      scope: PluginScope
+      includeScripts: boolean
+      development?: boolean
+      /** A Development plugin the person asked an agent to make: its abilities are offered to Auto at once. */
+      offerAbilities?: boolean
+    },
   ): Promise<InstalledPlugin> {
     const staged = this.stagedFor(stageId)
     if (staged.review.blocked) throw new Error(staged.review.blocked)
@@ -390,8 +399,9 @@ export class PluginService {
     if (!development) await staged.cleanup()
     if (development) this.watch(record)
     await this.refillSecrets(record)
-    // A Development plugin's abilities are not offered to Auto until it is installed normally.
-    const tools = development ? [] : this.abilityTools(id)
+    // A Development plugin's abilities are not offered to Auto until it is installed normally, unless the person asked
+    // for it to be made for this.
+    const tools = development && !options.offerAbilities ? [] : this.abilityTools(id)
     const before = old ? Object.values(old.parts.mcp) : []
     this.mapAbilities(
       tools,
@@ -400,7 +410,7 @@ export class PluginService {
     return this.view(record)
   }
 
-  private mapAbilities(tools: { ability: string; connectionId: string; tool: string }[], removed: string[]) {
+  private mapAbilities(tools: ({ ability: string } & AbilityMcpTool)[], removed: string[]) {
     if (this.host.preferences) mapPluginAbilities(this.host.preferences, tools, removed)
   }
 
@@ -1048,6 +1058,24 @@ export class PluginService {
     })
   }
 
+  /**
+   * Shares a Development plugin: its folder becomes a repository on the person's own GitHub account (private, through
+   * their `gh` sign-in) and is pushed, so they can open a pull request to an index from there. Later shares push again.
+   */
+  async share(id: string): Promise<{ url: string }> {
+    const record = this.record(id)
+    if (record.source.kind !== 'development') throw new Error('Only a Development plugin is shared from its folder.')
+    const root = record.root
+    if (!existsSync(join(root, '.git'))) await git(root, ['init', '-b', 'main'])
+    await git(root, ['add', '--all'])
+    if ((await git(root, ['status', '--porcelain'])).trim())
+      await git(root, ['commit', '-m', `${record.name} ${record.contents.version ?? ''}`.trim()])
+    const remotes = (await git(root, ['remote'])).split('\n').filter(Boolean)
+    if (remotes.includes('origin')) await git(root, ['push', '--set-upstream', 'origin', 'HEAD'])
+    else await gh(root, ['repo', 'create', record.name, '--private', '--source', '.', '--remote', 'origin', '--push'])
+    return { url: (await git(root, ['remote', 'get-url', 'origin'])).trim() }
+  }
+
   /** Watches every Development plugin again after a restart. */
   start() {
     for (const plugin of this.state().plugins) if (plugin.source.kind === 'development') this.watch(plugin)
@@ -1090,15 +1118,26 @@ export class PluginService {
     )
   }
 
-  /** The CLIs of plugins that apply to a project, with the slot that signs each in. */
+  /**
+   * The CLIs of plugins that apply to a project, with the slot that signs each in. A plugin with no credential slot
+   * runs a local tool (a game engine) that has nothing to sign in.
+   */
   clis(projectId: string | null) {
     return this.forProject(projectId).flatMap((plugin) => {
       const cli = plugin.extension.cli
       const slot = plugin.extension.credentials.find(
         (entry) => entry.id === (cli?.credential ?? plugin.extension.credentials[0]?.id),
       )
-      return cli && slot
-        ? [{ plugin: plugin.name, pluginId: plugin.id, development: plugin.source.kind === 'development', cli, slot }]
+      return cli
+        ? [
+            {
+              plugin: plugin.name,
+              pluginId: plugin.id,
+              development: plugin.source.kind === 'development',
+              cli,
+              ...(slot ? { slot } : {}),
+            },
+          ]
         : []
     })
   }
@@ -1151,7 +1190,20 @@ export class PluginService {
     const record = this.record(id)
     return Object.entries(record.extension.abilities).flatMap(([ability, target]) => {
       const connectionId = target ? record.parts.mcp[target.server] : undefined
-      return connectionId && target ? [{ ability, connectionId, tool: target.tool }] : []
+      return connectionId && target
+        ? [
+            {
+              ability,
+              connectionId,
+              tool: target.tool,
+              ...(target.status ? { status: target.status } : {}),
+              ...(target.balance ? { balance: target.balance } : {}),
+              ...(target.fromImage ? { fromImage: target.fromImage } : {}),
+              ...(target.refine ? { refine: target.refine } : {}),
+              ...(target.downloads?.length ? { downloads: target.downloads } : {}),
+            },
+          ]
+        : []
     })
   }
 

@@ -1,7 +1,9 @@
 import { readFileSync, statSync } from 'node:fs'
 import { z } from 'zod'
 import type { AgentSettings, FileContext, PermissionScope, SecretAnswer, TeammateMode } from '@ramu/shared/types'
+import type { ModelViewerLabels } from '@ramu/shared/interactive'
 import { MAX_ATTACHMENT_BYTES } from '../../attachments'
+import { modelViewerHtml } from '../../interactive/modelViewer'
 import { draftPrompt, interpretDraft, teammateRecipe, type CustomAgent } from '@ramu/shared/customAgents'
 import {
   chooseDuplicate,
@@ -20,7 +22,7 @@ import {
   type SkillSharing,
 } from '../../agent/projectSetup'
 import { lockCheckouts, lockSession } from '../helpers'
-import { agentSettings, attachmentIds, fileContext, id, text } from '../schemas'
+import { agentSettings, attachmentIds, fileContext, id, modelViewerLabels, text } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
 /** Chat sessions: sending prompts, interrupting, answering questions and permissions, and attachments. */
@@ -201,6 +203,11 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
     'attachments.preview': {
       args: z.tuple([id]),
       run: (attachmentId: string) => attachmentStore.preview(attachmentId),
+    },
+    'attachments.modelViewer': {
+      args: z.tuple([id, modelViewerLabels]),
+      run: (attachmentId: string, labels: ModelViewerLabels) =>
+        modelViewerHtml(attachmentStore.model(attachmentId), labels),
     },
     'agent.start': {
       args: z.tuple([id, z.string().max(1_000_000), agentSettings.optional(), attachmentIds, fileContext]),

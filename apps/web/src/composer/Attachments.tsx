@@ -15,6 +15,7 @@ import {
   AttachmentTrigger,
 } from '@/components/ui/attachment'
 import {
+  Box,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -35,6 +36,7 @@ import type { Attachment } from '@ramu/shared/types'
 import { invoke } from '../ipc'
 import { useHost } from '../workspace/HostProvider'
 import { notifyError } from '../chat/Notifications'
+import { isModelFile, ModelViewer } from '../interactive/ModelViewer'
 
 const isImage = (file: Attachment) => file.mimeType.startsWith('image/')
 const kb = (file: Attachment) => `${Math.max(1, Math.ceil(file.size / 1024))} KB`
@@ -69,7 +71,7 @@ function AttachmentPreview({
   useLanguage()
   const host = useHost()
   const file = files[index]!
-  const [content, setContent] = useState<{ image?: string | null; text?: string | null } | null>(null)
+  const [content, setContent] = useState<{ image?: string | null; text?: string | null; model?: true } | null>(null)
   const [loadError, setLoadError] = useState(false)
   const [zoom, setZoom] = useState<number | 'fit'>('fit')
   const [rotation, setRotation] = useState(0)
@@ -87,9 +89,11 @@ function AttachmentPreview({
     setRotation(0)
     setNotice('')
     setNatural({ width: 1, height: 1 })
-    const load = isImage(file)
-      ? host.invoke('attachments.preview', file.id).then((image) => ({ image }))
-      : host.invoke('attachments.text', file.id).then((text) => ({ text }))
+    const load = isModelFile(file)
+      ? Promise.resolve({ model: true as const })
+      : isImage(file)
+        ? host.invoke('attachments.preview', file.id).then((image) => ({ image }))
+        : host.invoke('attachments.text', file.id).then((text) => ({ text }))
     void load.then(
       (value) => {
         if (active) setContent(value)
@@ -355,6 +359,12 @@ function AttachmentPreview({
                 }}
               />
             </div>
+          ) : content.model ? (
+            <ModelViewer
+              source={file.id}
+              title={file.name}
+              load={(labels) => host.invoke('attachments.modelViewer', file.id, labels)}
+            />
           ) : content.text != null ? (
             <pre>{content.text}</pre>
           ) : (
@@ -369,7 +379,9 @@ function AttachmentPreview({
           <span>
             {content?.image
               ? t('Scroll to zoom · drag to pan · double-click 1:1 · + / − zoom · 0 fit · 1 actual size')
-              : t('Escape to close')}
+              : content?.model
+                ? t('Drag to turn · scroll to zoom · Escape to close')
+                : t('Escape to close')}
             {content?.text != null && (
               <span className="tabular-nums">
                 {' '}
@@ -444,7 +456,7 @@ function AttachmentItem({
       }}
     >
       <AttachmentMedia variant={image ? 'image' : 'icon'} className={tile ? 'rounded-[inherit]' : undefined}>
-        {image && thumb ? <img src={thumb} alt="" /> : <File />}
+        {image && thumb ? <img src={thumb} alt="" /> : isModelFile(file) ? <Box /> : <File />}
       </AttachmentMedia>
       {(!image || size === 'small' || names) && (
         <AttachmentContent className={tile ? 'px-2 py-1.5' : undefined}>

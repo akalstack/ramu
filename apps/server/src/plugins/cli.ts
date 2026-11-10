@@ -18,7 +18,8 @@ export interface PluginCliTarget {
   plugin: string
   pluginId: string
   cli: PluginCli
-  slot: PluginCredential
+  /** The credential that signs the CLI in; absent for a local tool with no account. */
+  slot?: PluginCredential
 }
 
 /** Whether a command only reads: its arguments start with one of the plugin's read prefixes. */
@@ -65,22 +66,23 @@ export function credentialEnvironment(slot: PluginCredential, secret: PluginSecr
 
 /**
  * Runs the plugin's CLI in `cwd` with the credential in its environment and none of Ramu's. HOME is a folder of Ramu's
- * own per plugin, so the CLI never reads or writes the person's own CLI sign-in.
+ * own per plugin, so the CLI never reads or writes the person's own CLI sign-in. A local tool with no account keeps
+ * the person's HOME, where its own settings live (Godot's export templates, Unity's installed editors).
  */
 export async function runPluginCli(
   target: Pick<PluginCliTarget, 'plugin' | 'cli' | 'slot'>,
   args: readonly string[],
   cwd: string,
-  secret: PluginSecret,
+  secret: PluginSecret | null,
   signal?: AbortSignal,
   spawner: typeof spawn = spawn,
 ): Promise<CliRun> {
   const command = cliCommand(target.cli)
   if (!command)
     throw new Error(`The ${target.cli.binaries[0]} CLI is not installed on this host. Ask the person to install it.`)
-  const home = join(tmpdir(), 'ramu-cli', target.plugin)
-  await mkdir(home, { recursive: true, mode: 0o700 })
-  const values = credentialEnvironment(target.slot, secret)
+  const home = target.slot ? join(tmpdir(), 'ramu-cli', target.plugin) : (process.env.HOME ?? tmpdir())
+  if (target.slot) await mkdir(home, { recursive: true, mode: 0o700 })
+  const values = target.slot && secret ? credentialEnvironment(target.slot, secret) : {}
   const env: NodeJS.ProcessEnv = { ...cliEnvironment(home), ...values, CI: '1' }
   return new Promise((resolve, reject) => {
     const child = spawner(command.executable, [...command.prefix, ...args], {
@@ -123,7 +125,7 @@ export async function runPluginCli(
 }
 
 const guide = (targets: readonly PluginCliTarget[]) =>
-  `Runs the CLI of an installed plugin (${targets.map((target) => `${target.plugin}: ${target.cli.binaries[0]}`).join(', ')}) in this thread's checkout, signed in with the credential the person saved for the plugin in Settings → Plugins. Use it instead of running those CLIs yourself: the credential is passed to the CLI in its environment and never shown, and a CLI you run yourself is signed out. Pass the plugin's name and the arguments after the CLI's name, such as ["status"] or ["deploy", "--detach"]; never pass a token or a login command. Commands that only read run straight away; every other command asks the person with a card naming it, and a refusal is final for this request. Run non-interactive forms (--yes, --json, --detach, --no-tail) since there is no terminal to answer prompts. Write the platform's own config files yourself and commit them like any change. For a service no plugin covers, call plugin_search.`
+  `Runs the CLI of an installed plugin (${targets.map((target) => `${target.plugin}: ${target.cli.binaries[0]}`).join(', ')}) in this thread's checkout, signed in with the credential the person saved for the plugin in Settings → Plugins when it has one (a local tool such as a game engine has none). Use it instead of running those CLIs yourself: the credential is passed to the CLI in its environment and never shown, a CLI you run yourself is signed out, and commands that only read run without a card. Pass the plugin's name and the arguments after the CLI's name, such as ["status"] or ["deploy", "--detach"]; never pass a token or a login command. Commands that only read run straight away; every other command asks the person with a card naming it, and a refusal is final for this request. Run non-interactive forms (--yes, --json, --detach, --no-tail) since there is no terminal to answer prompts. Write the platform's own config files yourself and commit them like any change. For a service no plugin covers, call plugin_search.`
 
 /** The CLIs of plugins that apply to this thread's project, signed in with the value saved on this host. */
 export function registerPluginCliTools(
@@ -153,8 +155,8 @@ export function registerPluginCliTools(
       const target = plugins.clis().find((entry) => entry.plugin === platform)
       if (!target)
         throw new Error(`No installed plugin named ${platform} has a CLI here. Call plugin_search to find one.`)
-      const secret = await plugins.secret(target.pluginId, target.slot.id)
-      if (!secret)
+      const secret = target.slot ? await plugins.secret(target.pluginId, target.slot.id) : null
+      if (target.slot && !secret)
         throw new Error(
           `${target.slot.label} for ${target.plugin} is not saved on this host. Ask the person to add it in Settings → Plugins.`,
         )
@@ -166,7 +168,12 @@ export function registerPluginCliTools(
       const shown = `${target.cli.binaries[0]} ${commandLine(args)}`
       if (
         !cliCommandReads(target.cli, args) &&
-        !(await requestApproval(`Run ${shown} with your ${target.plugin} account, in ${session.cwd}.`, extra.signal))
+        !(await requestApproval(
+          target.slot
+            ? `Run ${shown} with your ${target.plugin} account, in ${session.cwd}.`
+            : `Run ${shown} in ${session.cwd}.`,
+          extra.signal,
+        ))
       )
         throw new Error('The person declined this command. Do not retry it without a new request.')
       const ran = await run(target, args, session.cwd, secret, extra.signal)

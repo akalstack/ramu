@@ -4,6 +4,7 @@ import { markSource } from '../runtime/textMark'
 import { ContinuedCard } from './ContinueOnHost'
 import { toolActivity } from '@ramu/shared/chat/toolActivity'
 import { FileIcon } from './FileIcon'
+import { isModelFile, ModelTile } from './ModelViewer'
 import { translate, type Language } from '@ramu/shared/i18n'
 import { toolVerb } from '@ramu/shared/chat/toolStatus'
 import { DiffLines } from './DiffLines'
@@ -431,6 +432,7 @@ function AttachmentTile({ file, chat }: { file: Attachment; chat: Chat }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [file.id, image, chat.computerId] by design; the values it reads beyond these are current as of that run
   }, [file.id, image, chat.computerId])
   if (image && uri) return <ImageBlock uri={uri} alt={file.name} size={88} />
+  if (isModelFile(file)) return <ModelTile file={file} computerId={chat.computerId} />
   return (
     <View
       style={{
@@ -487,6 +489,11 @@ function AbilityCard({ call, chat }: { call: AbilityCall; chat: Chat }) {
           {call.cheapest ? `${call.model} · ${say('chosen as the cheapest good enough')}` : call.model}
         </T>
       ) : null}
+      {call.credits !== undefined ? (
+        <T size={font.caption} tone="muted" numberOfLines={1}>
+          {say('{0} credits left', { '0': call.credits.toLocaleString() })}
+        </T>
+      ) : null}
       {call.sent.prompt ? (
         <T
           size={font.caption}
@@ -513,14 +520,20 @@ function AbilityCard({ call, chat }: { call: AbilityCall; chat: Chat }) {
           {done && call.provider !== 'ramu' && !call.mcp && !call.media ? (
             <Button kind="ghost" title={say('Use another provider')} disabled={running} onPress={() => again(true)} />
           ) : null}
-          {call.refusal === 'unavailable' ? (
+          {call.refusal === 'unavailable' || (call.ability === 'model_3d' && call.status === 'failed' && call.mcp) ? (
             <Button
               kind="secondary"
-              title={isMediaAbility(call.ability) ? say('Add a media key') : say('Set up a provider')}
+              title={
+                call.ability === 'model_3d'
+                  ? say('Open plugins')
+                  : isMediaAbility(call.ability)
+                    ? say('Add a media key')
+                    : say('Set up a provider')
+              }
               onPress={() =>
                 router.push({
                   pathname: '/settings/[section]',
-                  params: { section: 'providers' },
+                  params: { section: call.ability === 'model_3d' ? 'plugins' : 'providers' },
                 })
               }
             />

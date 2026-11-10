@@ -8,8 +8,12 @@ import type {
   InteractiveReference,
 } from '@ramu/shared/interactive'
 import {
+  INTERACTIVE_MAX_ASSET,
   INTERACTIVE_MAX_FILES,
   INTERACTIVE_MAX_HTML,
+  checkInteractiveAssets,
+  interactiveAssetAllowance,
+  interactiveSourceBytes,
   interactiveOrigin,
   OFFLINE_NETWORK,
 } from '@ramu/shared/interactive'
@@ -155,14 +159,18 @@ export const interactiveInput = z.object({
     .array(
       z.object({
         path: z.string().min(1).max(200),
-        content: z.string().max(INTERACTIVE_MAX_HTML).default(''),
+        // An asset (a model, texture or sound) may be up to 25 MB; the rest of the source is held to 512 KB together.
+        content: z
+          .string()
+          .max(Math.ceil((INTERACTIVE_MAX_ASSET * 4) / 3) + 4)
+          .default(''),
         encoding: z.enum(['utf8', 'base64']).optional(),
         attachment: z
           .string()
           .uuid()
           .optional()
           .describe(
-            'An image, audio or video file this thread holds, such as one generate_image, make_music, make_sound, speak or make_video made (its attachmentId): the host puts its bytes in this file, so leave content out.',
+            'An image, audio, video or 3D model file this thread holds, such as one generate_image, make_music, make_sound, speak, make_video or make_model made (its attachmentId): the host puts its bytes in this file, so leave content out. In a revision, an asset path from the previous version with no content and no attachment keeps its bytes.',
           ),
       }),
     )
@@ -200,13 +208,15 @@ export function interactiveDocumentHtml(input: InteractiveInput): string {
     throw new Error('A doc or diagram is drawn when it is previewed. Preview it again.')
   if (!input.html === !input.files) throw new Error('Provide either html or files, not both.')
   if (input.files) {
-    const bytes = input.files.reduce((total, file) => total + Buffer.byteLength(file.content), 0)
-    if (bytes > INTERACTIVE_MAX_HTML) throw new Error('Interactive project files exceed 512 KB in total')
+    if (interactiveSourceBytes(input.files) > INTERACTIVE_MAX_HTML)
+      throw new Error('Interactive project files exceed 512 KB in total')
+    checkInteractiveAssets(input.files)
   }
   const html = resolveInteractiveKit(
     input.files ? bundleInteractive(input.files, input.entry ?? 'index.html') : input.html!,
   )
-  if (Buffer.byteLength(html) > INTERACTIVE_MAX_HTML) throw new Error('Interactive document exceeds 512 KB')
+  if (Buffer.byteLength(html) > INTERACTIVE_MAX_HTML + interactiveAssetAllowance(input.files ?? []))
+    throw new Error('Interactive document exceeds 512 KB')
   rejectViewportHeights(html)
   return html
 }
@@ -301,10 +311,7 @@ export class InteractiveStore {
     if (!input.html === !input.files) throw new Error('Provide either html or files, not both.')
     // A declaration that does not validate fails here, before any browser starts.
     pageCapabilitiesOf(input)
-    if (
-      input.files &&
-      input.files.reduce((total, file) => total + Buffer.byteLength(file.content), 0) > INTERACTIVE_MAX_HTML
-    )
+    if (input.files && interactiveSourceBytes(input.files) > INTERACTIVE_MAX_HTML)
       throw new Error('Interactive project files exceed 512 KB in total')
     const compiled = input.files
       ? resolveInteractiveKit(await compileInteractive(input.files, input.entry ?? 'index.html'))
@@ -312,7 +319,7 @@ export class InteractiveStore {
     // Apps follow the host's design system too: its tokens take the place of the theme's in the page.
     const system = this.designSystem(session)
     const html = system ? withDesignTokens(compiled, designTokenCss(system)) : compiled
-    if (Buffer.byteLength(html) > INTERACTIVE_MAX_ARTIFACT)
+    if (Buffer.byteLength(html) > INTERACTIVE_MAX_ARTIFACT + interactiveAssetAllowance(input.files ?? []))
       throw new Error('Compiled interactive content exceeds 1.5 MB.')
     rejectViewportHeights(html)
     const output = await this.previewer(html, input.checks, signal, input.network)

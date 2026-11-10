@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -660,6 +660,226 @@ describe('saved ability preferences', () => {
     const parse = (abilities: unknown) => appPreferences.parse({ ...DEFAULT_APP_PREFERENCES, abilities }).abilities
     expect(parse({ choices: { speech: { media: 'openai' }, music: { media: 'elevenlabs' } } }).choices).toEqual({
       music: { media: 'elevenlabs' },
+    })
+  })
+})
+
+describe('3D models on a plugin’s service', () => {
+  const GLB = Buffer.concat([Buffer.from('glTF'), Buffer.alloc(16, 1)])
+  const meshy = { connectionId: 'm1', tool: 'text_to_3d', status: 'task_status', balance: 'balance' }
+  const declared = { ...meshy, downloads: ['https://assets.meshy.ai'] }
+  const tools = () => [{ connectionId: 'm1', tool: 'text_to_3d', server: 'Meshy' }]
+
+  function meshyServer(statuses: string[], credits = 120) {
+    const sent: { tool: string; args: Record<string, unknown> }[] = []
+    let polls = 0
+    const mcp = vi.fn<NonNullable<AbilityHost['mcp']>>(async (_session, _connection, tool, build) => {
+      const schema =
+        tool === 'text_to_3d'
+          ? {
+              properties: {
+                prompt: { type: 'string' },
+                image_url: { type: 'string' },
+                should_texture: { type: 'boolean' },
+                target_polycount: { type: 'number' },
+              },
+            }
+          : tool === 'task_status'
+            ? { properties: { task_id: { type: 'string' } } }
+            : { properties: {} }
+      sent.push({ tool, args: build(schema) })
+      if (tool === 'balance')
+        return { server: 'Meshy', result: { content: [{ type: 'text', text: `{"balance": ${credits}}` }] } }
+      if (tool === 'text_to_3d')
+        return {
+          server: 'Meshy',
+          result: { content: [{ type: 'text', text: '{"task_id":"t-42","status":"PENDING"}' }] },
+        }
+      const status = statuses[Math.min(polls++, statuses.length - 1)]!
+      return {
+        server: 'Meshy',
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                status === 'SUCCEEDED'
+                  ? {
+                      status,
+                      model_urls: { glb: 'https://assets.meshy.ai/t-42/fox.glb' },
+                      thumbnail_url: 'https://assets.meshy.ai/t-42/fox.png',
+                    }
+                  : { status, message: status === 'FAILED' ? 'Not enough credits.' : 'Working' },
+              ),
+            },
+          ],
+        },
+      }
+    })
+    return { mcp, sent }
+  }
+  const download = vi.fn<NonNullable<AbilityHost['download']>>(
+    async (url) => new Response(url.endsWith('.glb') ? GLB : PNG, { status: 200 }),
+  )
+
+  it('waits on the task, downloads the GLB from the declared origin, asks once per thread and saves it in the project', async () => {
+    const { mcp, sent } = meshyServer(['IN_PROGRESS', 'SUCCEEDED'])
+    const abilities = service(working, 'claude-code', undefined, {
+      mcp,
+      mcpTools: tools,
+      download,
+      statusEveryMs: 1,
+      inProject: () => true,
+    })
+    withAbilities({ choices: { model_3d: declared } })
+    const answer = await abilities.call('thread', 'make_model', {
+      prompt: 'a low-poly fox',
+      detail: 'low',
+      textured: true,
+    })
+    expect(answer).toMatchObject({ status: 'done' })
+    const recorded = (events.at(-1) as { call: AbilityCall }).call
+    expect(recorded.mcp).toEqual({ server: 'Meshy', tool: 'text_to_3d' })
+    expect(recorded.attachments?.map((file) => file.mimeType)).toEqual(['model/gltf-binary', 'image/png'])
+    expect(recorded.savedTo).toBe('assets/models/a-low-poly-fox.glb')
+    expect(readFileSync(join(cwd, recorded.savedTo!))).toEqual(GLB)
+    expect(recorded.credits).toBe(120)
+    expect(sent[0]).toEqual({
+      tool: 'text_to_3d',
+      args: { prompt: 'a low-poly fox', should_texture: true, target_polycount: 5_000 },
+    })
+    expect(sent.filter((entry) => entry.tool === 'task_status').map((entry) => entry.args)).toEqual([
+      { task_id: 't-42' },
+      { task_id: 't-42' },
+    ])
+    expect(permission).toHaveBeenCalledTimes(1)
+    expect(permission.mock.calls[0]![1]).toBe('3D model with Meshy')
+    // A second model in the same thread does not ask again, and lands beside the first.
+    await abilities.call('thread', 'make_model', { prompt: 'a low-poly fox' })
+    expect(permission).toHaveBeenCalledTimes(1)
+    expect((events.at(-1) as { call: AbilityCall }).call.savedTo).toBe('assets/models/a-low-poly-fox-2.glb')
+  })
+
+  it('stops with the service’s words when the task fails, and refuses a link outside the declared origins', async () => {
+    const failing = meshyServer(['FAILED'])
+    const abilities = service(working, 'claude-code', undefined, {
+      mcp: failing.mcp,
+      mcpTools: tools,
+      download,
+      statusEveryMs: 1,
+    })
+    withAbilities({ choices: { model_3d: declared } })
+    expect(await abilities.call('thread', 'make_model', { prompt: 'a fox' })).toMatchObject({
+      status: 'failed',
+      message: expect.stringContaining('Not enough credits.'),
+    })
+    const elsewhere = service(working, 'claude-code', undefined, {
+      mcp: meshyServer(['SUCCEEDED']).mcp,
+      mcpTools: tools,
+      download,
+      statusEveryMs: 1,
+    })
+    withAbilities({ choices: { model_3d: { ...meshy, downloads: ['https://cdn.example.com'] } } })
+    expect(await elsewhere.call('thread', 'make_model', { prompt: 'a fox' })).toMatchObject({
+      status: 'failed',
+      message: expect.stringContaining('does not list as a place to download from'),
+    })
+  })
+
+  it('uses a plugin’s tool under Auto only after its balance check, and refuses an empty account', async () => {
+    const empty = meshyServer(['SUCCEEDED'], 0)
+    const abilities = service(working, 'claude-code', undefined, {
+      mcp: empty.mcp,
+      mcpTools: tools,
+      download,
+      statusEveryMs: 1,
+      readMcpChecks: () => [],
+      writeMcpChecks: () => {},
+    })
+    withAbilities({ autoMcp: { model_3d: declared } })
+    expect(await abilities.call('thread', 'make_model', { prompt: 'a fox' })).toMatchObject({
+      status: 'refused',
+      message: expect.stringContaining('No credits are left on the Meshy account.'),
+    })
+    // The check only read the balance; nothing was made.
+    expect(empty.sent.map((entry) => entry.tool)).toEqual(['balance'])
+    const funded = meshyServer(['SUCCEEDED'])
+    const paid = service(working, 'claude-code', undefined, {
+      mcp: funded.mcp,
+      mcpTools: tools,
+      download,
+      statusEveryMs: 1,
+      readMcpChecks: () => [],
+      writeMcpChecks: () => {},
+    })
+    expect(await paid.call('thread', 'make_model', { prompt: 'a fox' })).toMatchObject({ status: 'done' })
+  })
+
+  it('sends an image by its path to the image tool, textures a text preview, and never waits inside a call', async () => {
+    const calls: { tool: string; args: Record<string, unknown> }[] = []
+    const done = (id: string) => ({
+      server: 'Meshy',
+      result: {
+        structuredContent: { status: 'SUCCEEDED', model_urls: { glb: `https://cdn-7.meshy.ai/${id}/model.glb` } },
+        content: [{ type: 'text', text: 'Done' }],
+      },
+    })
+    const mcp = vi.fn<NonNullable<AbilityHost['mcp']>>(async (_session, _connection, tool, build) => {
+      const schemas: Record<string, Record<string, unknown>> = {
+        meshy_text_to_3d: { properties: { prompt: { type: 'string' }, target_polycount: { type: 'number' } } },
+        meshy_image_to_3d: { properties: { image_url: { type: 'string' }, file_path: { type: 'string' } } },
+        meshy_text_to_3d_refine: { properties: { preview_task_id: { type: 'string' } } },
+        meshy_get_task_status: { properties: { task_id: { type: 'string' }, wait: { type: 'boolean' } } },
+      }
+      const args = build(schemas[tool] ?? { properties: {} })
+      calls.push({ tool, args })
+      if (tool === 'meshy_get_task_status') return done(String(args.task_id))
+      const task =
+        tool === 'meshy_text_to_3d_refine' ? 'refined' : tool === 'meshy_image_to_3d' ? 'from-image' : 'preview'
+      return {
+        server: 'Meshy',
+        result: { structuredContent: { task_id: task }, content: [{ type: 'text', text: 'Started' }] },
+      }
+    })
+    const abilities = service(working, 'claude-code', undefined, {
+      mcp,
+      mcpTools: () => [{ connectionId: 'm1', tool: 'meshy_text_to_3d', server: 'Meshy' }],
+      download: async (url) => new Response(url.includes('/refined/') || url.includes('/from-image/') ? GLB : PNG),
+      statusEveryMs: 1,
+    })
+    withAbilities({
+      choices: {
+        model_3d: {
+          connectionId: 'm1',
+          tool: 'meshy_text_to_3d',
+          fromImage: 'meshy_image_to_3d',
+          refine: 'meshy_text_to_3d_refine',
+          status: 'meshy_get_task_status',
+          downloads: ['https://*.meshy.ai'],
+        },
+      },
+    })
+    const coin = await abilities.call('thread', 'make_model', { prompt: 'a coin', detail: 'low' })
+    expect(coin, JSON.stringify(coin)).toMatchObject({ status: 'done' })
+    expect(calls.map((entry) => entry.tool)).toEqual([
+      'meshy_text_to_3d',
+      'meshy_get_task_status',
+      'meshy_text_to_3d_refine',
+      'meshy_get_task_status',
+    ])
+    expect(calls[0]!.args).toEqual({ prompt: 'a coin', target_polycount: 5_000 })
+    expect(calls[1]!.args).toEqual({ task_id: 'preview', wait: false })
+    expect(calls[2]!.args).toEqual({ preview_task_id: 'preview' })
+    calls.length = 0
+    writeFileSync(join(cwd, 'fox.png'), PNG)
+    expect(await abilities.call('thread', 'make_model', { image: 'fox.png' })).toMatchObject({ status: 'done' })
+    expect(calls[0]).toEqual({ tool: 'meshy_image_to_3d', args: { file_path: join(cwd, 'fox.png') } })
+  })
+
+  it('points the agent at plugins when no 3D service is set up', async () => {
+    expect(await service(working).call('thread', 'make_model', { prompt: 'a fox' })).toMatchObject({
+      status: 'refused',
+      message: expect.stringContaining('plugin_search'),
     })
   })
 })

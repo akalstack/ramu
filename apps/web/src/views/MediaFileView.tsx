@@ -5,8 +5,9 @@ import { t, useLanguage } from '../i18n'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime } from '../workspace/workspace'
 import { errorText } from '../workspace/TaskPane'
+import { isModelPath, ModelViewer } from '../interactive/ModelViewer'
 
-const MEDIA = /\.(png|jpe?g|gif|webp|avif|bmp|ico|svg|pdf|mp3|wav|ogg|m4a|flac|mp4|webm|mov)$/i
+const MEDIA = /\.(png|jpe?g|gif|webp|avif|bmp|ico|svg|pdf|mp3|wav|ogg|m4a|flac|mp4|webm|mov|glb|gltf)$/i
 export const isMedia = (path: string) => MEDIA.test(path)
 export const isSvg = (path: string) => /\.svg$/i.test(path)
 
@@ -28,6 +29,53 @@ export function MediaFileView({
   onViewSource?: () => void
 }) {
   useLanguage()
+  if (isModelPath(view.path)) return <ModelFileView taskId={taskId} view={view} binding={binding} />
+  return <MediaPreview taskId={taskId} view={view} binding={binding} onViewSource={onViewSource} />
+}
+
+/** A model in the project, reloaded when it changes on disk. */
+function ModelFileView({
+  taskId,
+  view,
+  binding,
+}: {
+  taskId: string
+  view: Extract<ViewDescriptor, { kind: 'file' }>
+  binding: RepositoryBinding
+}) {
+  const { invoke } = useHost()
+  const { on } = useHostRuntime()
+  const [revision, setRevision] = useState(0)
+  useEffect(
+    () =>
+      on('fs:changed', ({ cwd, path }) => {
+        if (cwd === binding.cwd && path === view.path) setRevision((value) => value + 1)
+      }),
+    [on, binding.cwd, view.path],
+  )
+  const name = view.path.split('/').at(-1) ?? view.path
+  return (
+    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-auto p-3">
+      <ModelViewer
+        source={`${binding.cwd}/${view.path}#${revision}`}
+        title={name}
+        load={(labels) => invoke('files.modelViewer', taskId, binding.repoId, view.path, labels)}
+      />
+    </div>
+  )
+}
+
+function MediaPreview({
+  taskId,
+  view,
+  binding,
+  onViewSource,
+}: {
+  taskId: string
+  view: Extract<ViewDescriptor, { kind: 'file' }>
+  binding: RepositoryBinding
+  onViewSource?: () => void
+}) {
   const { invoke } = useHost()
   const { on } = useHostRuntime()
   const [media, setMedia] = useState<Media | null>(null),

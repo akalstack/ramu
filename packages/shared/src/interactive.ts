@@ -56,14 +56,72 @@ export function interactiveOrigin(value: string): string {
 export const OFFLINE_NETWORK: InteractiveNetwork = { resources: [], connect: [] }
 export function interactiveCsp(network: InteractiveNetwork): string {
   const resources = [...new Set(network.resources.map(interactiveOrigin))].join(' ')
-  const connect = [...new Set(network.connect.map(interactiveOrigin))].join(' ') || "'none'"
+  // blob: is the document's own assets (a model a loader fetches), never the network.
+  const connect = ['blob:', ...new Set(network.connect.map(interactiveOrigin))].join(' ')
   return `default-src 'none'; script-src 'unsafe-inline' ${resources}; style-src 'unsafe-inline' ${resources}; img-src data: blob: ${resources}; media-src data: blob: ${resources}; font-src data: ${resources}; connect-src ${connect}; worker-src blob:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'`
+}
+/** The words the 3D model viewer shows, in the reader's language; `{0}` is the value. */
+export interface ModelViewerLabels {
+  triangles: string
+  size: string
+  animation: string
+  still: string
+  failed: string
 }
 /** One source file of a multi-file project. Binary assets use base64. */
 export interface InteractiveFile {
   path: string
   content: string
   encoding?: 'utf8' | 'base64'
+  /** An asset's size in bytes, when its content was left out because the document already carries it. */
+  size?: number
+}
+
+/** Files an App carries as game assets (models, textures, sounds), kept outside the source limit. */
+const ASSET_EXTENSIONS = new Set(['glb', 'gltf', 'bin', 'ktx2', 'png', 'jpg', 'jpeg', 'webp', 'mp3', 'ogg', 'wav'])
+export const INTERACTIVE_MAX_ASSET = 25 * 1024 * 1024
+export const INTERACTIVE_MAX_ASSETS = 50 * 1024 * 1024
+export const isInteractiveAsset = (file: Pick<InteractiveFile, 'path' | 'encoding'>) =>
+  file.encoding === 'base64' && ASSET_EXTENSIONS.has(file.path.slice(file.path.lastIndexOf('.') + 1).toLowerCase())
+/** The bytes of an App's source, which the 512 KB limit counts: everything but its assets. */
+export const interactiveSourceBytes = (files: readonly InteractiveFile[]) =>
+  files.reduce(
+    (total, file) => total + (isInteractiveAsset(file) ? 0 : new TextEncoder().encode(file.content).length),
+    0,
+  )
+/** An asset's decoded size from its base64 text. */
+const decodedSize = (base64: string) =>
+  Math.floor((base64.length * 3) / 4) - (base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0)
+/** Refuses assets past 25 MB each or 50 MB together, naming the file. */
+export function checkInteractiveAssets(files: readonly InteractiveFile[]): void {
+  let total = 0
+  for (const file of files) {
+    if (!isInteractiveAsset(file)) continue
+    const size = decodedSize(file.content)
+    if (size > INTERACTIVE_MAX_ASSET)
+      throw new Error(`${file.path} is larger than 25 MB. Use a smaller or simpler file.`)
+    total += size
+  }
+  if (total > INTERACTIVE_MAX_ASSETS)
+    throw new Error('The assets are larger than 50 MB together. Use fewer or smaller files.')
+}
+/** How much longer an App's bundled document may be than the usual limit, for the assets it carries. */
+export const interactiveAssetAllowance = (files: readonly InteractiveFile[]) =>
+  files.reduce((total, file) => total + (isInteractiveAsset(file) ? file.content.length : 0), 0)
+/**
+ * An App as a device receives it: the bundled document already carries its assets, so the file list names them with
+ * their size and no second copy of their bytes.
+ */
+export function withoutAssetBytes(document: InteractiveDocument): InteractiveDocument {
+  if (!document.files?.some(isInteractiveAsset)) return document
+  return {
+    ...document,
+    files: document.files.map((file) =>
+      isInteractiveAsset(file)
+        ? { path: file.path, encoding: file.encoding, content: '', size: decodedSize(file.content) }
+        : file,
+    ),
+  }
 }
 export interface InteractiveDocument {
   reference: InteractiveReference
@@ -139,7 +197,7 @@ export function interactiveFollowup(ref: InteractiveReference, state: Interactiv
  * stay blocked.
  */
 export const INTERACTIVE_CSP =
-  "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https: blob:; style-src 'unsafe-inline' https:; img-src data: blob: https:; media-src data: blob: https:; font-src data: https:; connect-src https:; worker-src blob: https:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+  "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https: blob:; style-src 'unsafe-inline' https:; img-src data: blob: https:; media-src data: blob: https:; font-src data: https:; connect-src https: blob:; worker-src blob: https:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
 const INTERACTIVE_BASE_CSS =
   ':root{color-scheme:var(--scheme,dark)}*{box-sizing:border-box}html{font:14px/1.5 var(--font-sans);background:var(--background);color:var(--foreground)}code,kbd,pre,samp{font-family:var(--font-mono)}svg[data-icon]{vertical-align:-.125em;flex-shrink:0}body{margin:0;padding:12px;overflow-wrap:anywhere}button,input,select,textarea{font:inherit}button,input,select,textarea{max-width:100%}img,svg,canvas{max-width:100%}@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}'
 const js = (value: unknown) =>

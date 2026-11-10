@@ -180,10 +180,34 @@ const cli = z.strictObject({
   credential: z.string().regex(SLOT_ID).optional(),
 })
 
+/**
+ * An origin a file may be downloaded from: https, with no path, query or credentials. `https://*.example.com` allows
+ * every subdomain of a domain the service owns, for a CDN whose host varies.
+ */
+const downloadOrigin = z
+  .string()
+  .trim()
+  .max(300)
+  .transform((value) => value.replace(/\/$/, '').toLowerCase())
+  .refine(
+    (value) => /^https:\/\/(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(value),
+    'Use an https origin such as https://assets.example.com or https://*.example.com, with no path.',
+  )
+
 const ability = z.strictObject({
   /** A server named in `.mcp.json` (or the manifest's `mcpServers`). */
   server: z.string().min(1).max(100),
   tool: z.string().min(1).max(200),
+  /** For a service that works in the background: the tool the task id is passed to until the file is ready. */
+  status: z.string().min(1).max(200).optional(),
+  /** A tool that reports the account's credits, called by the live check instead of making something. */
+  balance: z.string().min(1).max(200).optional(),
+  /** A tool that makes a model from an image, when image-to-3D is its own tool. */
+  fromImage: z.string().min(1).max(200).optional(),
+  /** A tool that textures a text preview, given the preview's task id. */
+  refine: z.string().min(1).max(200).optional(),
+  /** Where a file the tool links to may be downloaded from; a link anywhere else is refused. */
+  downloads: z.array(downloadOrigin).max(5).default([]),
 })
 
 const queryField = z.strictObject({
@@ -272,8 +296,6 @@ const ramuExtension = z
         path: ['cli', 'credential'],
         message: `The CLI names credential ${value.cli.credential}, which no slot declares.`,
       })
-    if (value.cli && !value.credentials.length)
-      context.addIssue({ code: 'custom', path: ['cli'], message: 'A CLI needs a credential slot to sign it in.' })
     const sources = new Set<string>()
     value.dataSources.forEach((source, index) => {
       const slot = slots.get(source.credential)
@@ -411,7 +433,8 @@ export type PluginDataSource = z.infer<typeof dataSource>
 export type PluginQueryField = z.infer<typeof queryField>
 export type PluginRequest = z.infer<typeof request>
 export type PluginRows = z.infer<typeof rows>
-export type PluginAbilities = Partial<Record<Ability, { server: string; tool: string }>>
+export type PluginAbilities = Partial<Record<Ability, PluginAbility>>
+export type PluginAbility = z.infer<typeof ability>
 
 export const EMPTY_EXTENSION: RamuExtension = {
   credentials: [],
@@ -599,7 +622,7 @@ export interface PluginContents {
     fields: { id: string; label: string; kind: 'text' | 'url' | 'secret'; values?: string[] }[]
   }[]
   cli: { binaries: string[]; npx: string | null; reads: string[] } | null
-  abilities: { ability: Ability; server: string; tool: string }[]
+  abilities: ({ ability: Ability } & Omit<PluginAbility, never>)[]
   dataSources: { id: string; label: string; credential: string }[]
   stacks: string[]
   unused: UnusedPart[]
