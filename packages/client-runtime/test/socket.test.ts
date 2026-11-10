@@ -73,7 +73,8 @@ it('matches answers to calls by id, carries the operation key and delivers event
   socket.start()
   host(0, { t: 'ready', epoch: 'e1' })
   const first = socket.invoke('agent.send', ['a', undefined], { operationKey: 'operation-key-1' })
-  const second = socket.invoke('agent.list', [])
+  // A method the result table does not list is not checked.
+  const second = socket.invoke('test.echo', [])
   const [one, two] = calls(0)
   expect(one).toMatchObject({ method: 'agent.send', args: ['a', undefined], operationKey: 'operation-key-1' })
   host(0, { t: 'event', channel: 'automation:changed', payload: { n: 1 } })
@@ -204,5 +205,17 @@ it('does not acknowledge or ask for flow control unless enabled', () => {
   const frames = opened[0]!.sent.map((text) => decodeSocketFrame(text, 'client'))
   expect(frames.some((frame) => frame?.t === 'ack')).toBe(false)
   expect(frames.find((frame) => frame?.t === 'subscribe')).not.toHaveProperty('flow')
+  socket.close()
+})
+
+it('refuses an answer whose shape the method does not declare, naming the field', async () => {
+  const { socket, host, calls } = make()
+  socket.start()
+  host(0, { t: 'ready', epoch: 'e1' })
+  const listed = socket.invoke('agent.list', ['t'])
+  host(0, { t: 'result', id: calls(0)[0]!.id, value: ['not a session'] })
+  await expect(listed).rejects.toThrow(
+    'The host answered agent.list in a shape this app does not know (result[0]: expected an object',
+  )
   socket.close()
 })

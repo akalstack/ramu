@@ -8,6 +8,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
+    "rpc-results": "node scripts/rpcResults.ts",
     "test": "vitest run"
   },
   "dependencies": {

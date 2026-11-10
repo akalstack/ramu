@@ -10,6 +10,7 @@ apps/mobile/android/
 apps/mobile/src/assets/
 apps/web/src/assets/
 packages/shared/src/locales/
+packages/shared/src/rpcResults.generated.ts
 releases/
 *.min.js
 *.md

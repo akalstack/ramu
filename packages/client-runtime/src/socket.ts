@@ -6,6 +6,8 @@ import {
   PROTOCOL_VERSION,
   SOCKET_PATH,
 } from '@ramu/contracts'
+import { checkRpcResult } from '@ramu/shared/rpcResults'
+import { RPC_RESULTS } from '@ramu/shared/rpcResults.generated'
 
 /** What a platform's WebSocket must give back: text frames out, and a way to close. */
 export interface SocketLike {
@@ -239,7 +241,17 @@ export class RuntimeSocket {
         reject(new DOMException('Aborted', 'AbortError'))
       }
       this.pending.set(id, {
-        resolve: (value) => (cleanup(), resolve(value)),
+        resolve: (value) => {
+          cleanup()
+          // The answer must have the shape the method declares; a host on another version may not.
+          try {
+            checkRpcResult(RPC_RESULTS, method, value)
+          } catch (error) {
+            reject(error)
+            return
+          }
+          resolve(value)
+        },
         reject: (error) => (cleanup(), reject(error)),
       })
       options.signal?.addEventListener('abort', onAbort, { once: true })

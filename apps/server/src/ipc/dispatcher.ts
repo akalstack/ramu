@@ -1,3 +1,5 @@
+import { checkRpcResult } from '@ramu/shared/rpcResults'
+import { RPC_RESULTS } from '@ramu/shared/rpcResults.generated'
 import { operationLabels } from '../background/activity'
 import { describeValidationError } from '../validation'
 import { createHandlerContext } from './context'
@@ -29,7 +31,7 @@ export function createDispatcher(host: RuntimeHost, services: Services) {
       if (!parsed.success) throw new Error(describeValidationError(parsed.error))
       const run = () => {
         try {
-          const value = m.run(...parsed.data)
+          const value = checked(method, m.run(...parsed.data))
           return value instanceof Promise
             ? value.catch((error) => {
                 services.diagnostics?.record('service-error', error)
@@ -67,4 +69,17 @@ export function createDispatcher(host: RuntimeHost, services: Services) {
       ctx.watchers.close()
     },
   }
+}
+
+/**
+ * Under tests, every answer is checked against the result its method declares, after the trip through JSON a client
+ * sees, so a handler and its declared type cannot drift apart unnoticed. Clients check the same in production.
+ */
+function checked(method: string, value: unknown): unknown {
+  if (!process.env.VITEST || process.env.RAMU_RESULT_CHECKS === '0') return value
+  const check = (result: unknown) => {
+    checkRpcResult(RPC_RESULTS, method, result === undefined ? undefined : JSON.parse(JSON.stringify(result)))
+    return result
+  }
+  return value instanceof Promise ? value.then(check) : check(value)
 }

@@ -35,6 +35,7 @@ Every call is a method in the table in `packages/shared/src/api.ts`, for example
 3. **Register** happens in `ipc/registry.ts`, which merges the groups. A duplicate method name throws at startup.
 4. **Dispatch** is `ipc/dispatcher.ts`: it validates input, runs the handler, and notifies the workspace of changes.
 5. **Call it** from the UI through `apps/web/src/ipc.ts`.
+6. **Results are checked.** `packages/shared/src/rpcResults.generated.ts` holds the shape of every method's declared result, made from `RamuMethods` by `pnpm --filter @ramu/shared rpc-results`; run it after changing a result type (a test fails until you do). Every client checks a host's answer against it in `RuntimeSocket.invoke`, so a host that answers in a shape the app does not know fails with the method and the field named; extra fields a newer host adds pass. Under tests the dispatcher checks every handler's answer the same way. A test whose stub returns partial objects sets `RAMU_RESULT_CHECKS=0`.
 
 Use the keyed locks in `ipc/helpers.ts` (`lockSession`, `gitExclusive`, `lockCheckouts`) when a handler must not interleave with another on the same thread or repository.
 

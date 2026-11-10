@@ -8,7 +8,8 @@ export interface BackgroundStatus {
   running: boolean
   pid: number
   startedAt: number
-  loginEnabled: boolean
+  /** Whether the service starts at login; the desktop adds it for the host on this computer. */
+  loginEnabled?: boolean
   version?: string
   build?: string
   bundledVersion?: string

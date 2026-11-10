@@ -1,12 +1,20 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import type { AgentEvent, ChatGoal, Task } from '@ramu/shared/types'
 import { inputSummary } from '@ramu/shared/chat/inputSummary'
 import { openDb, type Db } from '../src/db'
 import { SessionStore } from '../src/agent/sessionStore'
 import { createDispatcher, type Services } from '../src/ipc'
+
+// The workspace here is a stub whose tasks carry only the fields the test reads, so their full shape is not checked.
+beforeAll(() => {
+  vi.stubEnv('RAMU_RESULT_CHECKS', '0')
+})
+afterAll(() => {
+  vi.unstubAllEnvs()
+})
 let db: Db, store: SessionStore, directory: string, file: string
 const events = new Map<string, AgentEvent[]>()
 const add = (session: string, event: AgentEvent) => {

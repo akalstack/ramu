@@ -1,5 +1,13 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { createDispatcher, type Services } from '../src/ipc'
+
+// The workspace here is a stub whose tasks carry only the fields the test reads, so their full shape is not checked.
+beforeAll(() => {
+  vi.stubEnv('RAMU_RESULT_CHECKS', '0')
+})
+afterAll(() => {
+  vi.unstubAllEnvs()
+})
 
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())

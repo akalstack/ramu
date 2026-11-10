@@ -103,13 +103,24 @@ it('pairs once, loses LAN during an action, switches to VPN, and returns to LAN 
       },
       invoke: async (_device, request) => {
         if (request.method === 'background.status')
-          return { ok: true, value: { protocol: 1, capabilities: ['mobile-companion'] } }
+          return {
+            ok: true,
+            value: {
+              protocol: 1,
+              capabilities: ['mobile-companion'],
+              running: true,
+              pid: 1,
+              startedAt: 0,
+              loginEnabled: false,
+            },
+          }
         if (request.method === 'tasks.rename') {
           mutations++
           online = false
           for (const sink of sinks) sink.destroy()
         }
-        return { ok: true, value: { mutations } }
+        // The fake host answers its own test method with how many renames it ran; real methods answer empty lists.
+        return { ok: true, value: request.method === 'test.mutations' ? { mutations } : [] }
       },
     })
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -167,7 +178,7 @@ it('pairs once, loses LAN during an action, switches to VPN, and returns to LAN 
   }
   const original = new HostClient(lan.address, paired.token, fetch)
   cleanup.push(() => original.close())
-  await original.invoke('tasks.list')
+  await original.invoke('projects.list')
   const stream = original.stream(
     () => {},
     async () => {},
@@ -211,7 +222,7 @@ it('pairs once, loses LAN during an action, switches to VPN, and returns to LAN 
   expect(moved?.address).toBe(vpn.address)
   const remote = new HostClient(moved!.address, paired.token, fetch)
   cleanup.push(() => remote.close())
-  expect(await remote.invoke('tasks.list')).toEqual({ mutations: 1 })
+  expect(await mutationsOn(remote)).toBe(1)
   const saved = rememberRoutes(lan.address, moved!.routes, identity.routes)
   vpn.offline()
   remote.close()
@@ -226,7 +237,11 @@ it('pairs once, loses LAN during an action, switches to VPN, and returns to LAN 
   expect(returned?.address).toBe(lan.address)
   const home = new HostClient(returned!.address, paired.token, fetch)
   cleanup.push(() => home.close())
-  expect(await home.invoke('tasks.list')).toEqual({ mutations: 1 })
+  expect(await mutationsOn(home)).toBe(1)
   expect(identityHeaders.length).toBeGreaterThan(2)
   expect(identityHeaders.every((header) => header === undefined)).toBe(true)
 })
+
+/** How many renames the fake host ran, through a method only the fake knows, so no declared result applies. */
+const mutationsOn = async (client: HostClient) =>
+  ((await (client.invoke as (method: string) => Promise<unknown>)('test.mutations')) as { mutations: number }).mutations

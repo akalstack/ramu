@@ -14,8 +14,16 @@ async function host(options: { operationKeys: boolean; dropFirst?: number }) {
   const running = await socketHost({
     token: 't',
     answer: (call) => {
-      if (call.method === 'background.status') return { capabilities: options.operationKeys ? ['operation-keys'] : [] }
-      return drops-- > 0 ? DROP : 'done'
+      if (call.method === 'background.status')
+        return {
+          running: true,
+          pid: 1,
+          startedAt: 0,
+          loginEnabled: false,
+          capabilities: options.operationKeys ? ['operation-keys'] : [],
+        }
+      // agent.send answers nothing.
+      return drops-- > 0 ? DROP : null
     },
   })
   stop = running.close
@@ -33,7 +41,7 @@ describe('runtimeInvokeRecoverable', () => {
       backoffMs: 1,
       newKey: () => 'operation-key-1',
     })
-    expect(result).toBe('done')
+    expect(result).toBeNull()
     expect(seen().map((entry) => entry.key)).toEqual(['operation-key-1', 'operation-key-1'])
   })
 

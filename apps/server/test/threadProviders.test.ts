@@ -1,6 +1,14 @@
-import { expect, it } from 'vitest'
+import { afterAll, beforeAll, expect, it, vi } from 'vitest'
 import { DEFAULT_AGENT_SETTINGS, type AgentSessionInfo, type Task } from '@ramu/shared/types'
 import { createDispatcher, type Services } from '../src/ipc'
+
+// The workspace here is a stub whose tasks carry only the fields the test reads, so their full shape is not checked.
+beforeAll(() => {
+  vi.stubEnv('RAMU_RESULT_CHECKS', '0')
+})
+afterAll(() => {
+  vi.unstubAllEnvs()
+})
 
 const session = (id: string, provider: AgentSessionInfo['settings']['provider'], createdAt: number) =>
   ({ id, state: 'idle', createdAt, settings: { ...DEFAULT_AGENT_SETTINGS, provider } }) as AgentSessionInfo
