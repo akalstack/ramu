@@ -102,6 +102,16 @@ export class SharedMcpService {
               : 'not-connected',
           checkedAt: check?.checkedAt ?? null,
           ...(check?.revision === connection.revision ? { reason: check.reason, toolCount: check.toolCount } : {}),
+          // Who has it now: grants for an older revision of the server no longer apply.
+          granted: state.grants
+            .filter((grant) => grant.connectionId === connection.id && grant.revision === connection.revision)
+            .flatMap((grant) =>
+              grant.accountIds.map((accountId) => ({
+                provider: grant.provider,
+                accountId,
+                tools: grant.tools.map((tool) => ({ name: tool.name, approval: tool.approval })),
+              })),
+            ),
         }
       }),
       readiness: this.readiness(state),

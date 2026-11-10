@@ -4,7 +4,7 @@ A plugin adds a service to Ramu in one install: its skills, MCP servers, custom 
 
 ## Installing
 
-**Settings → Plugins** lists what is installed and what each plugin still needs, **Browse** searches the indexes, and **Install from a source** takes a Git address (GitHub, GitLab, or anywhere `git` can clone) or a folder on the host. [getramu.dev/plugins](https://getramu.dev/plugins) lists the same plugins; **Open in Ramu** there opens the install review in the app.
+**Customize → Plugins** (the rail's Customize button on the desktop; **Settings → Plugins** on the phone) lists the plugins that need a key first, then what is installed, then **Recommended** (Ramu's own, signed) and **More plugins** from other indexes, each with its service's mark. The search filters all of them, **+** opens the install review, and **Add → From a GitHub address or folder** takes a Git address (GitHub, GitLab, or anywhere `git` can clone) or a folder on the host. [getramu.dev/plugins](https://getramu.dev/plugins) lists the same plugins; **Open in Ramu** there opens the install review in the app.
 
 Nothing is saved until you have seen the review. It lists:
 
@@ -16,9 +16,9 @@ Nothing is saved until you have seen the review. It lists:
 - Parts Claude Code or Codex use that Ramu does not (hooks, slash commands, language servers, output styles, monitors and app connectors), as **Not used in Ramu**. They are never run.
 - **Applies to:** all projects (the default) or one project, so a client's plugin reaches only that client's project. To limit a plugin to an [identity](identities.md), put it in one with the identity chip on its card.
 
-After **Install**, each credential asks for its value on the plugin's card. A token is checked with the service before it is kept, and the card shows whose it is; a sign-in opens the service's page in your browser and comes back to Ramu on this computer. **Later** leaves the plugin installed, and its card says what is missing. Credentials are pasted and signed in only on the computer running the host.
+The review groups what the plugin adds one kind per row (its skills, MCP servers, the key it asks for, the commands that run without asking, abilities, dashboard data, a rule), showing the first few of a long list and the rest on demand. After **Install**, a plugin that needs a key opens on it straight away; each credential asks for its value there. A token is checked with the service before it is kept, and the card shows whose it is; a sign-in opens the service's page in your browser and comes back to Ramu on this computer. **Later** leaves the plugin installed, and its card says what is missing. Credentials are pasted and signed in only on the computer running the host.
 
-MCP servers from a plugin are Shared MCP servers like any other: they appear under **Agent setup** and need the same approval for their tools. An ability a plugin maps (an image generator, a search tool) is offered in **Settings → Models → Abilities**, and Auto tries it for an ability you have not chosen once its live check passes.
+MCP servers from a plugin are Shared MCP servers like any other: they appear under **Customize → MCP servers**, turned on the same way. An ability a plugin maps (an image generator, a search tool) is offered in **Settings → Models → Abilities**, and Auto tries it for an ability you have not chosen once its live check passes.
 
 ### Updates and removal
 
@@ -28,7 +28,7 @@ Ramu checks each plugin's source once a day (and on **Check for updates**). The 
 
 ### When an agent needs a service
 
-An agent that needs a service Ramu does not know ("deploy this to Render") can call `plugin_search`, and `plugin_install` shows you the same review as an approval card, on the desktop or a phone. The agent cannot approve it, and it never handles the credential: it asks you to add it in **Settings → Plugins**. A plugin's CLI is run through `platform_cli` with its name, in threads started after the install.
+An agent that needs a service Ramu does not know ("deploy this to Render") can call `plugin_search`, and `plugin_install` shows you the same review as an approval card, on the desktop or a phone. The agent cannot approve it, and it never handles the credential: it asks you to add it in **Customize → Plugins**. A plugin's CLI is run through `platform_cli` with its name, in threads started after the install.
 
 ### A plugin made by asking
 
@@ -36,14 +36,14 @@ For a service no index lists ("connect Rodin for 3D models"), the agent offers `
 
 ### On the phone
 
-**Settings → Plugins** on the phone lists each host's plugins with what each still needs. Installing, credentials and removal stay on the host; an agent's install card and every CLI command card reach the phone like any approval.
+**Customize → Plugins** on the phone lists each host's plugins with what each still needs. Installing, credentials and removal stay on the host; an agent's install card and every CLI command card reach the phone like any approval.
 
 ## Where plugins come from
 
 Ramu hosts no plugins. A plugin is its author's Git repository or a folder. An **index** lists plugins with their source and pinned commit in `.claude-plugin/marketplace.json`, the same file Claude Code reads as a marketplace.
 
 - [akalstack/ramu-plugins](https://github.com/akalstack/ramu-plugins) is listed by default. Plugins Akalstack maintains are marked **By Ramu**: Railway, Fly.io, Cloudflare and Supabase (their CLIs, with a skill each), and Grafana, Amplitude and Salesforce (dashboard data). Every commit in that index is signed with Akalstack's key, which ships in Ramu; a clone it did not sign is refused before anything in it is read.
-- **Indexes** under **Settings → Plugins** adds any other marketplace repository, such as a company's own list. Claude Code marketplaces work as indexes too.
+- **Indexes** under **Customize → Plugins** adds any other marketplace repository, such as a company's own list. Claude Code marketplaces work as indexes too.
 - An index entry can name its author's signing key (an SSH public key or an armored GPG key). Ramu then installs only a pinned commit signed by that key, checked against that key alone, and an update signed by another key asks for approval again and says so.
 
 ## Building a plugin

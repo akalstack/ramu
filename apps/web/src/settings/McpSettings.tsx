@@ -30,7 +30,7 @@ import { SettingsCard, SettingsCardList, SettingsSectionHead } from './cards'
 import { ListCount, ListEmpty, ListToolbar, useListView } from './ListView'
 import { availabilityLabels, connectionAvailability } from './mcpAvailability'
 
-type Definition = Omit<SharedMcpConnection, 'id' | 'hostId' | 'revision'>
+export type Definition = Omit<SharedMcpConnection, 'id' | 'hostId' | 'revision'>
 const statusLabels = {
   disabled: 'Disabled',
   'not-connected': 'Not connected',
@@ -148,7 +148,7 @@ const LEGEND = 'mb-2 text-sm leading-snug font-medium'
 /** The dialog's surface matches the toggle's own pressed fill, so the chosen option gets one it can be seen on. */
 const SEGMENT = 'text-muted-foreground aria-pressed:bg-fill-hover aria-pressed:text-foreground'
 
-function ConnectionEditor({
+export function ConnectionEditor({
   initial,
   projects,
   defaultProject,
@@ -238,12 +238,14 @@ function ConnectionEditor({
     >
       <form
         ref={form}
+        className="min-w-0"
         onSubmit={(event) => {
           event.preventDefault()
           save()
         }}
       >
-        <fieldset disabled={busy} className="m-0 flex flex-col gap-4 border-0 p-0">
+        {/* A fieldset is as wide as its widest content by default, so a long path would push the dialog sideways. */}
+        <fieldset disabled={busy} className="m-0 flex min-w-0 flex-col gap-4 border-0 p-0">
           {!initial && (
             <ToggleGroup
               size="sm"
@@ -307,6 +309,7 @@ function ConnectionEditor({
                 <Textarea
                   id={`${id}-args`}
                   rows={3}
+                  className="font-mono text-caption break-all [field-sizing:fixed]"
                   value={args}
                   onChange={(event) => setArgs(event.target.value)}
                   spellCheck={false}

@@ -31,7 +31,7 @@ export function reviewText(review: PluginReview): string {
   if (contents.agents.length) lines.push(`Custom agents: ${contents.agents.map((agent) => agent.name).join(', ')}.`)
   if (contents.rule) lines.push('A rule from its AGENTS.md.')
   if (contents.credentials.length)
-    lines.push(`Asks for: ${contents.credentials.map((slot) => slot.label).join(', ')} (pasted in Settings → Plugins).`)
+    lines.push(`Asks for: ${contents.credentials.map((slot) => slot.label).join(', ')} (pasted in Customize → Plugins).`)
   if (contents.cli)
     lines.push(
       `CLI ${contents.cli.binaries[0]}; runs without asking: ${contents.cli.reads.length ? contents.cli.reads.join(', ') : 'nothing'}.`,
@@ -78,7 +78,7 @@ export function registerPluginTools(
     'plugin_install',
     {
       description:
-        'Ask the person to install a plugin found with plugin_search. They see the full review (skills, MCP servers and the commands they run, the credential asked for, commands that run without asking) and decide; you cannot approve it, and a refusal is final for this request. A credential the plugin needs is pasted by the person in Settings → Plugins on the host, never through you. New tools from it reach threads started after the install.',
+        'Ask the person to install a plugin found with plugin_search. They see the full review (skills, MCP servers and the commands they run, the credential asked for, commands that run without asking) and decide; you cannot approve it, and a refusal is final for this request. A credential the plugin needs is pasted by the person in Customize → Plugins on the host, never through you. New tools from it reach threads started after the install.',
       inputSchema: { name: z.string().trim().min(1).max(64) },
     },
     async ({ name }: { name: string }, extra) => {
@@ -105,7 +105,7 @@ export function registerPluginTools(
           installed: true,
           name,
           next: missing.length
-            ? `Ask the person to add ${missing.join(' and ')} for ${name} in Settings → Plugins on the host.`
+            ? `Ask the person to add ${missing.join(' and ')} for ${name} in Customize → Plugins on the host.`
             : null,
         })
       } catch (error) {
@@ -117,7 +117,7 @@ export function registerPluginTools(
   server.registerTool(
     'plugin_create',
     {
-      description: `Make a plugin for a service no index lists, when the person asks for one ("connect Rodin for 3D models"). step "start" writes a working folder in ~/Ramu Plugins/<name> (mcp: true adds a Node MCP server, cli: true a CLI); then write its .claude-plugin/plugin.json, server and skill from the service's own documentation with your file tools. Declare the API key as a credential slot whose env the server reads, never a value; map an ability under extensions["${RAMU_EXTENSION}"].abilities (model_3d needs a tool, a status tool for its task id, a balance tool, and downloads: the https origins its files come from). step "check" starts the servers and lists every problem with its file; fix them until it passes. step "install" asks the person through the plugin review card and installs it as a Development plugin whose abilities are used at once. The person pastes the key on the plugin's card in Settings → Plugins; you never see it.`,
+      description: `Make a plugin for a service no index lists, when the person asks for one ("connect Rodin for 3D models"). step "start" writes a working folder in ~/Ramu Plugins/<name> (mcp: true adds a Node MCP server, cli: true a CLI); then write its .claude-plugin/plugin.json, server and skill from the service's own documentation with your file tools. Declare the API key as a credential slot whose env the server reads, never a value; map an ability under extensions["${RAMU_EXTENSION}"].abilities (model_3d needs a tool, a status tool for its task id, a balance tool, and downloads: the https origins its files come from). step "check" starts the servers and lists every problem with its file; fix them until it passes. step "install" asks the person through the plugin review card and installs it as a Development plugin whose abilities are used at once. The person pastes the key on the plugin's card in Customize → Plugins; you never see it.`,
       inputSchema: {
         name: z.string().regex(PLUGIN_NAME).describe('Lowercase words joined by dashes, such as rodin-3d.'),
         step: z.enum(['start', 'check', 'install']),
@@ -170,9 +170,9 @@ export function registerPluginTools(
           name,
           next: [
             missing.length
-              ? `Ask the person to add ${missing.join(' and ')} for ${name} in Settings → Plugins on the host.`
+              ? `Ask the person to add ${missing.join(' and ')} for ${name} in Customize → Plugins on the host.`
               : '',
-            'Its tools reach threads started after the install. Share on its card in Settings → Plugins pushes it to their own repository.',
+            'Its tools reach threads started after the install. Share on its card in Customize → Plugins pushes it to their own repository.',
           ]
             .filter(Boolean)
             .join(' '),

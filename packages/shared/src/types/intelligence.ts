@@ -52,6 +52,18 @@ export interface ManagedSkill {
   changeNote?: string
 }
 
+/** A skill listed in the public directory at skills.sh, installed from its GitHub repository by name. */
+export interface DirectorySkill {
+  /** `owner/repo/skill`. */
+  id: string
+  /** The GitHub `owner/repo` it installs from. */
+  source: string
+  /** The skill's name inside that repository. */
+  skill: string
+  name: string
+  installs: number
+}
+
 export interface SkillInstallPreview {
   id: string
   source: string

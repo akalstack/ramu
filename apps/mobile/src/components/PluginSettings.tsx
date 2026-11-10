@@ -49,7 +49,7 @@ export function PluginSettings({ hostId }: { hostId: string }) {
         {plugins === null && online ? <ActivityIndicator color={c.accent} style={{ padding: space.m }} /> : null}
         {plugins && !plugins.length ? (
           <Row style={{ paddingVertical: space.m }}>
-            <RowLabel title={t('No plugins yet')} help={t('Install one in Settings → Plugins on the host.')} />
+            <RowLabel title={t('No plugins yet')} help={t('Install one in Customize → Plugins on the host.')} />
           </Row>
         ) : null}
         {plugins?.map((plugin, index) => {

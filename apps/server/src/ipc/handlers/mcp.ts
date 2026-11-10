@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { defaultToolChoice, type SharedMcpToolChoice } from '@ramu/shared/mcp'
+import type { AgentProvider } from '@ramu/shared/types'
 import type {
   SharedMcpConnection,
   SharedMcpGrant,
@@ -19,6 +21,21 @@ import type { RegisterHandlers } from '../types'
 const id = z.string().min(1).max(200)
 /** Safe status is readable by paired clients. All initial administration stays on the execution host. */
 export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
+  /**
+   * The first approval of an imported connection is when it replaces the declared copy's sharing: before that no other
+   * provider could use it, so turning the old one off would only remove access.
+   */
+  const importApplied = (connectionId: string) => {
+    const workspace = ctx.workspace
+    const imports = workspace.getAppState<McpImports>(MCP_IMPORTS_KEY, {})
+    const entry = imports[connectionId]
+    if (!entry || entry.applied) return
+    workspace.setAppState(MCP_IMPORTS_KEY, { ...imports, [connectionId]: { ...entry, applied: true } })
+    workspace.setAppState(MCP_SHARING_KEY, {
+      ...workspace.getAppState<Record<string, boolean>>(MCP_SHARING_KEY, {}),
+      [entry.key]: false,
+    })
+  }
   const service = () => {
     if (!ctx.getSharedMcp) throw new Error('Update this host for Shared MCP management')
     return ctx.getSharedMcp()
@@ -61,6 +78,70 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, sharedMcpSelection]),
       run: (connectionId: string, selection: SharedMcpSelection) => admin().check(connectionId, selection),
     },
+    'mcp.turnOn': {
+      args: z.tuple([
+        id,
+        z
+          .array(z.object({ provider: sharedMcpAccount.shape.provider, accountId: id }))
+          .min(1)
+          .max(40),
+        z.record(z.string().max(200), z.enum(['ask', 'allow', 'off'])).optional(),
+      ]),
+      run: async (
+        connectionId: string,
+        logins: { provider: AgentProvider; accountId: string }[],
+        choices: Record<string, SharedMcpToolChoice> = {},
+      ) => {
+        const manager = admin()
+        const connection = manager.policy.snapshot().connections.find((entry) => entry.id === connectionId)
+        if (!connection) throw new Error('That MCP server is no longer here.')
+        // Each login is known to Shared MCP before it is given access, as one added by hand would be.
+        const known = manager.policy.snapshot().accounts
+        for (const login of logins)
+          if (!known.some((entry) => entry.provider === login.provider && entry.accountId === login.accountId))
+            manager.saveAccount({ ...login, shareApprovals: false })
+        // One check reads the server's tools; its catalog is the same whichever login asks.
+        const inspection = await manager.check(connectionId, {
+          ...logins[0]!,
+          projectId: connection.scope.hostWide ? null : (connection.scope.projectIds[0] ?? null),
+        })
+        const tools = inspection.tools.flatMap((tool) => {
+          const choice = choices[tool.name] ?? defaultToolChoice(tool)
+          return choice === 'off'
+            ? []
+            : [
+                {
+                  name: tool.name,
+                  action: 'write' as const,
+                  approval: choice === 'allow' ? ('connection' as const) : ('always' as const),
+                },
+              ]
+        })
+        if (!tools.length) throw new Error('Leave at least one tool on, or turn the server off instead.')
+        for (const login of logins) {
+          if (!connection.providers.includes(login.provider)) continue
+          // Turning it on again replaces the login's earlier choices: an older, stricter grant would otherwise win.
+          for (const earlier of manager.policy.snapshot().grants)
+            if (
+              earlier.connectionId === connectionId &&
+              earlier.provider === login.provider &&
+              earlier.accountIds.includes(login.accountId)
+            )
+              manager.policy.revoke(earlier.id)
+          manager.approve({
+            connectionId,
+            revision: inspection.revision,
+            catalogRevision: inspection.catalogRevision,
+            provider: login.provider,
+            accountId: login.accountId,
+            scope: connection.scope,
+            tools,
+          })
+        }
+        importApplied(connectionId)
+        return inspection
+      },
+    },
     'mcp.recheckAccount': {
       args: z.tuple([sharedMcpAccount.shape.provider, id, id.nullable()]),
       run: (provider: SharedMcpProviderAccount['provider'], accountId: string, projectId: string | null) =>
@@ -70,18 +151,7 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([sharedMcpApproval]),
       run: (input: Omit<SharedMcpGrant, 'id' | 'accountIds' | 'shared'> & { accountId: string }) => {
         const grant = admin().approve(input)
-        // The first approval of an imported connection is when it replaces the declared copy's sharing: before that
-        // no other provider could use it, so turning the old one off would only remove access.
-        const workspace = ctx.workspace
-        const imports = workspace.getAppState<McpImports>(MCP_IMPORTS_KEY, {})
-        const entry = imports[input.connectionId]
-        if (entry && !entry.applied) {
-          workspace.setAppState(MCP_IMPORTS_KEY, { ...imports, [input.connectionId]: { ...entry, applied: true } })
-          workspace.setAppState(MCP_SHARING_KEY, {
-            ...workspace.getAppState<Record<string, boolean>>(MCP_SHARING_KEY, {}),
-            [entry.key]: false,
-          })
-        }
+        importApplied(input.connectionId)
         return grant
       },
     },

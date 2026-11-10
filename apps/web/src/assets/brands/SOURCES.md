@@ -21,3 +21,12 @@ Brand marks for forges, hosting platforms, databases and services, in each brand
 | `elevenlabs.svg`, `elevenlabs-dark.svg` | Simple Icons 13.21 (CC0 1.0), black and white | https://elevenlabs.io/brand |
 
 After adding or changing a file here, add it to `BRAND_IDS` in `packages/shared/src/brands.ts` and run `node apps/mobile/scripts/gen-assets.mjs`.
+| `supabase.svg` | [Simple Icons](https://simpleicons.org) 16.33 (CC0 1.0) in the brand's color | https://supabase.com/brand-assets |
+| `grafana.svg` | [Simple Icons](https://simpleicons.org) 16.33 (CC0 1.0) in the brand's color | https://grafana.com/legal/grafana-labs-trademark-policy/ |
+| `godot.svg` | [Simple Icons](https://simpleicons.org) 16.33 (CC0 1.0) in the brand's color | https://godotengine.org/press/ |
+| `unity.svg`, `unity-dark.svg` | [Simple Icons](https://simpleicons.org) 16.33 (CC0 1.0) in the brand's color | https://unity.com/legal/branding-trademarks |
+| `notion.svg`, `notion-dark.svg` | [Simple Icons](https://simpleicons.org) 16.33 (CC0 1.0) in the brand's color | https://www.notion.so/brand |
+| `linear.svg` | [Simple Icons](https://simpleicons.org) 16.33 (CC0 1.0) in the brand's color | https://linear.app/brand |
+| `figma.svg` | [Simple Icons](https://simpleicons.org) 16.33 (CC0 1.0) in the brand's color | https://www.figma.com/using-the-figma-brand/ |
+| `stripe.svg` | [Simple Icons](https://simpleicons.org) 16.33 (CC0 1.0) in the brand's color | https://stripe.com/newsroom/brand-assets |
+| `atlassian.svg` | [Simple Icons](https://simpleicons.org) 16.33 (CC0 1.0) in the brand's color | https://atlassian.design/foundations/logos |

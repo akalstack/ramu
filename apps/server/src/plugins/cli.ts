@@ -125,7 +125,7 @@ export async function runPluginCli(
 }
 
 const guide = (targets: readonly PluginCliTarget[]) =>
-  `Runs the CLI of an installed plugin (${targets.map((target) => `${target.plugin}: ${target.cli.binaries[0]}`).join(', ')}) in this thread's checkout, signed in with the credential the person saved for the plugin in Settings → Plugins when it has one (a local tool such as a game engine has none). Use it instead of running those CLIs yourself: the credential is passed to the CLI in its environment and never shown, a CLI you run yourself is signed out, and commands that only read run without a card. Pass the plugin's name and the arguments after the CLI's name, such as ["status"] or ["deploy", "--detach"]; never pass a token or a login command. Commands that only read run straight away; every other command asks the person with a card naming it, and a refusal is final for this request. Run non-interactive forms (--yes, --json, --detach, --no-tail) since there is no terminal to answer prompts. Write the platform's own config files yourself and commit them like any change. For a service no plugin covers, call plugin_search.`
+  `Runs the CLI of an installed plugin (${targets.map((target) => `${target.plugin}: ${target.cli.binaries[0]}`).join(', ')}) in this thread's checkout, signed in with the credential the person saved for the plugin in Customize → Plugins when it has one (a local tool such as a game engine has none). Use it instead of running those CLIs yourself: the credential is passed to the CLI in its environment and never shown, a CLI you run yourself is signed out, and commands that only read run without a card. Pass the plugin's name and the arguments after the CLI's name, such as ["status"] or ["deploy", "--detach"]; never pass a token or a login command. Commands that only read run straight away; every other command asks the person with a card naming it, and a refusal is final for this request. Run non-interactive forms (--yes, --json, --detach, --no-tail) since there is no terminal to answer prompts. Write the platform's own config files yourself and commit them like any change. For a service no plugin covers, call plugin_search.`
 
 /** The CLIs of plugins that apply to this thread's project, signed in with the value saved on this host. */
 export function registerPluginCliTools(
@@ -158,7 +158,7 @@ export function registerPluginCliTools(
       const secret = target.slot ? await plugins.secret(target.pluginId, target.slot.id) : null
       if (target.slot && !secret)
         throw new Error(
-          `${target.slot.label} for ${target.plugin} is not saved on this host. Ask the person to add it in Settings → Plugins.`,
+          `${target.slot.label} for ${target.plugin} is not saved on this host. Ask the person to add it in Customize → Plugins.`,
         )
       if (args.some((arg) => /^(login|logout)$/.test(arg) || /token/i.test(arg.split('=')[0] ?? '')))
         throw new Error('Sign-in is the person’s step in Settings, and the credential is passed for you. Leave it out.')

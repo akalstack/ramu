@@ -21,6 +21,15 @@ export const BRAND_IDS = [
   'googleplay',
   'gemini',
   'elevenlabs',
+  'supabase',
+  'grafana',
+  'godot',
+  'unity',
+  'notion',
+  'linear',
+  'figma',
+  'stripe',
+  'atlassian',
 ] as const
 
 export type BrandId = (typeof BRAND_IDS)[number]

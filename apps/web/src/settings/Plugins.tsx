@@ -199,7 +199,7 @@ function Review({
 }
 
 /** One credential slot on a plugin's card: paste a token, sign in, or see who it belongs to. */
-function Credential({
+export function Credential({
   plugin,
   slot,
   viewOnly,

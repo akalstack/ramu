@@ -334,3 +334,29 @@ it('names what a destination login still lacks without checking unreviewed conne
   expect(await manager.destinationAttention('codex', 'b', 'project')).toEqual([])
   expect(await manager.destinationAttention('codex', 'b', 'other-project')).toEqual([])
 })
+
+it('turns a server on for every login in one step, each tool asking unless the person lets it run', async () => {
+  const { invoke, manager, input } = fixture()
+  const connection = invoke('mcp.save', { ...input, scope: { hostWide: true, projectIds: [] } }) as SharedMcpConnection
+  const logins = [
+    { provider: 'codex', accountId: 'a' },
+    { provider: 'codex', accountId: 'b' },
+    { provider: 'claude-code', accountId: 'default' },
+    // A provider the server is not set up for gets nothing.
+    { provider: 'cursor', accountId: 'default' },
+  ]
+  await invoke('mcp.turnOn', connection.id, logins)
+  const grants = () => manager.policy.snapshot().grants.filter((grant) => grant.connectionId === connection.id)
+  expect(
+    grants()
+      .map((grant) => `${grant.provider}:${grant.accountIds.join(',')}`)
+      .sort(),
+  ).toEqual(['claude-code:default', 'codex:a', 'codex:b'])
+  // The fixture's tool makes no read-only claim, so it asks on every call.
+  expect(grants()[0]!.tools).toEqual([{ name: 'inspect_environment', action: 'write', approval: 'always' }])
+  await invoke('mcp.turnOn', connection.id, logins.slice(0, 1), { inspect_environment: 'allow' })
+  expect(grants().find((grant) => grant.accountIds.includes('a'))!.tools[0]!.approval).toBe('connection')
+  await expect(invoke('mcp.turnOn', connection.id, logins, { inspect_environment: 'off' })).rejects.toThrow(
+    'Leave at least one tool on',
+  )
+})

@@ -1023,7 +1023,7 @@ export class AbilityService {
     if (!check.ok && asked)
       throw new Refusal(
         'unavailable',
-        `${check.detail ?? 'The service did not pass its check.'} Tell the person; they can add credits or change the key on the plugin's card in Settings → Plugins. Continue without the model and say so.`,
+        `${check.detail ?? 'The service did not pass its check.'} Tell the person; they can add credits or change the key on the plugin's card in Customize → Plugins. Continue without the model and say so.`,
       )
     return check.ok ? this.viaMcp(session, base, prepared, tool, started, signal) : null
   }

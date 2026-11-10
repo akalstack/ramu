@@ -1,4 +1,5 @@
 import { ManagedSkills } from './IntelligenceSettings'
+import { MovedToCustomize } from '../customize/openCustomize'
 import { libraryFocusWaiting } from '../summaries/libraryFocus'
 import { InlineAction, InlineLink } from '@/components/inline-action'
 import { useStaging } from './stagedChanges'
@@ -29,7 +30,6 @@ import { ramu } from '../ipc'
 import { ProviderIcon } from '../models/ProviderIcon'
 import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './SettingsScope'
 import { SettingsEmpty, SettingsSectionHead, usePaged } from './cards'
-import { McpSettings } from './McpSettings'
 import { RulesSettings } from './RulesSettings'
 
 const CAPTION = 'm-0 text-caption text-muted-foreground'
@@ -571,7 +571,10 @@ export function AgentSetup({
           />
         )}
 
-        <McpSettings />
+        <MovedToCustomize
+          section="mcp"
+          text={t('Servers you add for every agent, with their tools and sign-in, are in Customize → MCP servers.')}
+        />
       </TabsContent>
 
       <TabsContent value="rules" className="flex flex-col">

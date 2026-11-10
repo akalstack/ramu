@@ -138,7 +138,7 @@ export function projectFactsText(config: ProjectConfig): string | undefined {
     stack.deployTarget === 'expo'
       ? 'Deploys to: the App Store and Google Play, released with release_status and release_start'
       : isPluginDeployTarget(stack.deployTarget)
-        ? `Deploys to: ${PLUGIN_DEPLOY_TARGETS[stack.deployTarget]}, through its plugin with platform_cli (plugin "${stack.deployTarget}"). If platform_cli does not offer it, ask the person to install the plugin from Settings → Plugins, or call plugin_search and plugin_install`
+        ? `Deploys to: ${PLUGIN_DEPLOY_TARGETS[stack.deployTarget]}, through its plugin with platform_cli (plugin "${stack.deployTarget}"). If platform_cli does not offer it, ask the person to install the plugin from Customize → Plugins, or call plugin_search and plugin_install`
         : stack.deployTarget
           ? `Deploys to: ${stack.deployTarget}, through the deploy tools (deploy_status first)`
           : '',

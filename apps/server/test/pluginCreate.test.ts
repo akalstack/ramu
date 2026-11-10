@@ -80,7 +80,7 @@ describe('plugin_create', () => {
     })
     expect(installed).toHaveBeenCalledWith('p1')
     // The key goes on the card; the agent is told to ask for it there.
-    expect(done.value.next).toContain('add Rodin API key for rodin-3d in Settings → Plugins')
+    expect(done.value.next).toContain('add Rodin API key for rodin-3d in Customize → Plugins')
   })
 
   it('refuses to install a folder with problems or one the person declined', async () => {

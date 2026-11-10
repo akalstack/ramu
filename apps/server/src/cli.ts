@@ -634,7 +634,7 @@ if (command === 'start') {
     ])
     const missing = plugin.credentials.filter((slot) => slot.state !== 'saved').map((slot) => slot.label)
     console.log(
-      `${plugin.name} is installed here as a Development plugin and reloads when a file changes.${missing.length ? ` Add ${missing.join(', ')} in Settings → Plugins.` : ''}`,
+      `${plugin.name} is installed here as a Development plugin and reloads when a file changes.${missing.length ? ` Add ${missing.join(', ')} in Customize → Plugins.` : ''}`,
     )
   } else fail('Use ramu plugin new <name>, ramu plugin check [folder] or ramu plugin dev [folder].')
 } else if (command === 'up') {

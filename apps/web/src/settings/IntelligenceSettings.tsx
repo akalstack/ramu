@@ -1,5 +1,5 @@
 import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
-import { InstalledSkills } from './InstalledSkills'
+import { MovedToCustomize } from '../customize/openCustomize'
 import { ListCount, ListEmpty, ListToolbar, useListView } from './ListView'
 import { Badge } from '@/components/ui/badge'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
@@ -562,7 +562,10 @@ export function ManagedSkills() {
         ))}
         {paged.more}
       </SettingsCardList>
-      <InstalledSkills />
+      <MovedToCustomize
+        section="skills"
+        text={t('Skills you write or install, and the skills.sh directory, are in Customize → Skills.')}
+      />
     </div>
   )
 }

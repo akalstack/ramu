@@ -698,6 +698,10 @@ export interface RamuMethods extends ArtifactMethods {
   'diagnostics.nativeEvent'(kind: 'renderer-crash' | 'desktop-crash'): void
   'skills.availability'(): { available: boolean; installUrl: string }
   'skills.find'(query: string): string
+  /** Skills in the skills.sh directory matching a query, most installed first. */
+  'skills.search'(query: string): import('./types').DirectorySkill[]
+  /** The directory's most installed skills, for Customize's recommendations. */
+  'skills.popular'(): import('./types').DirectorySkill[]
   'skills.stage'(input: {
     source: string
     skill?: string
@@ -1220,6 +1224,15 @@ export interface RamuMethods extends ArtifactMethods {
   /** Drops a provider account from shared approvals; its provider login is untouched. */
   'mcp.removeAccount'(provider: SharedMcpProviderAccount['provider'], accountId: string): void
   'mcp.check'(connectionId: string, selection: SharedMcpSelection): Promise<SharedMcpInspection>
+  /**
+   * Checks a server once and gives it to every listed provider login, each tool asking on every call, running without
+   * asking, or left off; tools not named take their default.
+   */
+  'mcp.turnOn'(
+    connectionId: string,
+    logins: { provider: import('./types').AgentProvider; accountId: string }[],
+    choices?: Record<string, import('./mcp').SharedMcpToolChoice>,
+  ): Promise<SharedMcpInspection>
   /** Checks every shared connection a login could use again and returns its readiness. */
   'mcp.recheckAccount'(
     provider: SharedMcpProviderAccount['provider'],
@@ -1934,7 +1947,7 @@ export type PushEvents = {
   'menu:action': { action: 'settings' | 'check-updates' }
   /** A `ramu://pair` link was opened; the text is validated by the screen that uses it. */
   'pair:link': { link: string }
-  /** A `ramu://plugin/install` link from getramu.dev: Settings → Plugins opens its review. */
+  /** A `ramu://plugin/install` link from getramu.dev: Customize → Plugins opens its review. */
   'plugin:link': { link: string }
   /** The live view window closed. */
   'live:closed': Record<string, never>

@@ -9,7 +9,7 @@ import type { PageStore } from './pages'
 /**
  * Publish to the web: a page's exact tested bytes as a one-file static site on the person's own account. GitHub Pages
  * uses the GitHub login saved in Settings; Netlify and Vercel the hosting accounts deploys use (Settings → Deploy);
- * Cloudflare Pages the token saved for the Cloudflare plugin (Settings → Plugins).
+ * Cloudflare Pages the token saved for the Cloudflare plugin (Customize → Plugins).
  */
 export class PagePublisher {
   constructor(
@@ -42,7 +42,7 @@ export class PagePublisher {
     }
     if (target === 'cloudflare-pages') {
       const saved = await this.plugins?.credentialOf('cloudflare', 'token')
-      if (!saved) throw new Error('Install the Cloudflare plugin and save its token in Settings → Plugins first.')
+      if (!saved) throw new Error('Install the Cloudflare plugin and save its token in Customize → Plugins first.')
       // A token limited to Pages often cannot list accounts, so the account ID saved with it goes beside it; without
       // one, the first account the token reaches is used.
       const account = saved.fields.account?.trim()

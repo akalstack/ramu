@@ -905,7 +905,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
         <div role="status" className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-caption">
           <span className="min-w-0 flex-1 text-muted-foreground">
             {t(
-              'This dashboard reads {0} with the credential saved for its plugin in Settings → Plugins. Its tables stay empty until you allow it.',
+              'This dashboard reads {0} with the credential saved for its plugin in Customize → Plugins. Its tables stay empty until you allow it.',
               { 0: unallowed.map(sourceName).join(', ') },
             )}
           </span>

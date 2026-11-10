@@ -63,8 +63,24 @@ export interface SharedMcpInspection {
   revision: string
   catalogRevision: string
   checkedAt: number
-  tools: { name: string; description?: string; inputSchema: Record<string, unknown> }[]
+  tools: {
+    name: string
+    description?: string
+    inputSchema: Record<string, unknown>
+    /** What the server says about the tool; read-only is a default the person can change, never a grant by itself. */
+    annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; title?: string }
+  }[]
 }
+
+/** How one tool of a server is used once it is turned on. */
+export type SharedMcpToolChoice = 'ask' | 'allow' | 'off'
+
+/**
+ * The default for a tool when a server is turned on: one the server marks read-only runs without a card, every other
+ * asks on each call. The person sees and can change each before or after.
+ */
+export const defaultToolChoice = (tool: SharedMcpInspection['tools'][number]): SharedMcpToolChoice =>
+  tool.annotations?.readOnlyHint === true && tool.annotations.destructiveHint !== true ? 'allow' : 'ask'
 
 /**
  * Whether one provider login can use the shared connections that apply to its provider. A grant, a provider sign-in or a
@@ -99,6 +115,12 @@ export interface SharedMcpManagement {
     checkedAt: number | null
     reason?: string
     toolCount?: number
+    /** The logins it is turned on for, and each tool's choice: asked on every call, or run without asking. */
+    granted?: {
+      provider: AgentProvider
+      accountId: string
+      tools: { name: string; approval: 'always' | 'connection' }[]
+    }[]
   }[]
   /** One entry per provider login set up for shared approvals. */
   readiness: SharedMcpAccountReadiness[]

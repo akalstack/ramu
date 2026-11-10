@@ -22,6 +22,7 @@ import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import {
   AppWindow,
+  Blocks,
   CalendarClock,
   Inbox,
   Settings,
@@ -104,6 +105,8 @@ import { useHost } from './workspace/HostProvider'
 import { useProjectIdentity } from './workspace/identities'
 import { IdentityChip } from './settings/IdentityChip'
 import { TaskPane } from './workspace/TaskPane'
+import { CustomizePage } from './customize/CustomizePage'
+import { CUSTOMIZE_EVENT, openCustomize, type CustomizeSection } from './customize/openCustomize'
 import {
   isWorkspaceCtx,
   worktreeCtx,
@@ -229,9 +232,25 @@ function Shell() {
     window.addEventListener('ramu:archived', open)
     return () => window.removeEventListener('ramu:archived', open)
   }, [])
+  // Customize opens on the section asked for, from the rail, a thread or an old Settings link.
+  const [customizeSection, setCustomizeSection] = useState<CustomizeSection>('plugins')
+  useEffect(() => {
+    const show = (event: Event) => {
+      const section = (event as CustomEvent<{ section?: CustomizeSection }>).detail?.section
+      if (section) setCustomizeSection(section)
+      ws.setSidebar('customize')
+    }
+    window.addEventListener(CUSTOMIZE_EVENT, show)
+    return () => window.removeEventListener(CUSTOMIZE_EVENT, show)
+  }, [ws])
   useEffect(() => {
     const open = (event: Event) => {
       const detail = (event as CustomEvent<{ section?: SettingsSection; target?: string; host?: string }>).detail
+      // Plugins moved to Customize; links that still ask for them land there.
+      if (detail?.section === 'plugins') {
+        openCustomize('plugins')
+        return
+      }
       setSettingsSection(detail?.section ?? 'appearance')
       setSettingsTarget(detail?.target)
       setSettingsHost(detail?.host)
@@ -619,7 +638,7 @@ function Shell() {
   // With the sidebar hidden, chats that want attention show on its toggle instead.
   /** One page on the sidebar's rail; choosing the page that is open goes back to the threads, except Inbox. */
   const railButton = (
-    page: 'projects' | 'inbox' | 'pulls' | 'schedules' | 'artifacts',
+    page: 'projects' | 'inbox' | 'pulls' | 'schedules' | 'artifacts' | 'customize',
     Icon: typeof Inbox,
     label: string,
     waiting: number,
@@ -699,7 +718,15 @@ function Shell() {
         {globalPage ? (
           <header className="task-header [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_.chat-switch-btn:hover_.header-secondary]:text-soft [&_.header-center]:flex [&_.header-center]:items-center [&_.header-center]:gap-2 [&_.header-center]:flex-1 [&_.header-center]:min-w-0 [&_.header-center]:overflow-hidden [&::after]:[content:''] [&::after]:flex-1 [&_.header-title]:relative [&_.header-title]:top-[-1px] [&_.header-title]:leading-[20px] [&_.header-secondary]:relative [&_.header-secondary]:top-[-1px] [&_.header-secondary]:leading-[20px] [&_.header-meta]:relative [&_.header-meta]:top-[-1px] [&_.header-meta]:leading-[20px] [&_.header-meta]:shrink-0 [&_.header-meta]:max-w-[25%] [&_.header-meta]:overflow-hidden [&_.header-meta]:text-ellipsis [&_.chat-switch-btn]:justify-start [&_.chat-switch-btn]:w-[fit-content] [&_.chat-switch-btn]:max-w-[none] [&_.chat-switch-btn]:flex-initial [&_.chat-switch-btn_.header-title]:flex-initial [&_.chat-switch-btn_.header-title]:min-w-0 [&_.chat-switch-btn_.header-title]:max-w-[none] [&_.chat-switch-btn_.header-title]:text-left [&_.chat-switch-btn_.header-secondary]:flex-initial [&_.chat-switch-btn_.header-secondary]:min-w-0 [&_.chat-switch-btn_.header-secondary]:max-w-[none] [&_.chat-switch-btn_.header-secondary]:text-left [&:has(.workspace-tool-buttons)::after]:hidden [&_.workspace-tool-buttons]:ml-auto [&_.header-center_>_svg]:flex-none [&_.header-center_.chat-switch-btn]:max-w-full [&_.header-center_.chat-switch-btn]:min-w-0 flex-none flex items-center gap-2.5 p-[0_12px_0_16px] [-webkit-app-region:drag] min-w-0 h-[46px] [border-bottom-color:var(--line)] [border-bottom:0]">
             <span className="header-title [.chat-switch-btn_&]:min-w-0 [.chat-switch-btn_&]:max-w-[none] font-medium text-body text-soft overflow-hidden text-ellipsis whitespace-nowrap max-w-full cursor-default">
-              {ui.sidebar === 'inbox' ? t('Inbox') : ui.sidebar === 'pulls' ? t('Pull requests') : t('Schedules')}
+              {ui.sidebar === 'inbox'
+                ? t('Inbox')
+                : ui.sidebar === 'pulls'
+                  ? t('Pull requests')
+                  : ui.sidebar === 'artifacts'
+                    ? t('Artifacts')
+                    : ui.sidebar === 'customize'
+                      ? t('Customize')
+                      : t('Schedules')}
             </span>
           </header>
         ) : (
@@ -741,6 +768,7 @@ function Shell() {
                 {railButton('pulls', GitPullRequest, t('Pull requests'), pullsWaiting)}
                 {railButton('schedules', CalendarClock, t('Schedules'), 0)}
                 {railButton('artifacts', AppWindow, t('Artifacts'), 0)}
+                {railButton('customize', Blocks, t('Customize'), 0)}
                 <Button
                   variant="ghost"
                   size="icon-sm"
@@ -810,6 +838,7 @@ function Shell() {
               {ui.sidebar === 'inbox' && <InboxPage />}
               {ui.sidebar === 'artifacts' && <PagesPage />}
               {ui.sidebar === 'pulls' && <PullRequestsPage />}
+              {ui.sidebar === 'customize' && <CustomizePage initial={customizeSection} />}
               {ui.sidebar === 'schedules' && (
                 <SchedulesPage
                   createRequested={createScheduleRequested}

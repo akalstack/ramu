@@ -24,6 +24,17 @@ import googleplay from '../assets/brands/googleplay.svg'
 import gemini from '../assets/brands/gemini.svg'
 import elevenlabs from '../assets/brands/elevenlabs.svg'
 import elevenlabsDark from '../assets/brands/elevenlabs-dark.svg'
+import supabase from '../assets/brands/supabase.svg'
+import grafana from '../assets/brands/grafana.svg'
+import godot from '../assets/brands/godot.svg'
+import unity from '../assets/brands/unity.svg'
+import unityDark from '../assets/brands/unity-dark.svg'
+import notion from '../assets/brands/notion.svg'
+import notionDark from '../assets/brands/notion-dark.svg'
+import linear from '../assets/brands/linear.svg'
+import figma from '../assets/brands/figma.svg'
+import stripe from '../assets/brands/stripe.svg'
+import atlassian from '../assets/brands/atlassian.svg'
 
 /** Each brand's own mark in its own colors; a black mark has a light version for dark surfaces. */
 const MARKS: Record<BrandId, { light: string; dark?: string }> = {
@@ -44,6 +55,15 @@ const MARKS: Record<BrandId, { light: string; dark?: string }> = {
   googleplay: { light: googleplay },
   gemini: { light: gemini },
   elevenlabs: { light: elevenlabs, dark: elevenlabsDark },
+  supabase: { light: supabase },
+  grafana: { light: grafana },
+  godot: { light: godot },
+  unity: { light: unity, dark: unityDark },
+  notion: { light: notion, dark: notionDark },
+  linear: { light: linear },
+  figma: { light: figma },
+  stripe: { light: stripe },
+  atlassian: { light: atlassian },
 }
 const FALLBACKS = { git: GitBranch, cloud: Cloud, database: Database, service: Boxes }
 

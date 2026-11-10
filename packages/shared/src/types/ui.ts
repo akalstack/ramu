@@ -90,10 +90,16 @@ export interface TerminalGroup {
 }
 
 /** The places that fill the main area instead of a thread. */
-export type GlobalPage = 'schedules' | 'inbox' | 'artifacts' | 'pulls'
+export type GlobalPage = 'schedules' | 'inbox' | 'artifacts' | 'pulls' | 'customize'
 
 export function isGlobalPage(sidebar: string): sidebar is GlobalPage {
-  return sidebar === 'schedules' || sidebar === 'inbox' || sidebar === 'artifacts' || sidebar === 'pulls'
+  return (
+    sidebar === 'schedules' ||
+    sidebar === 'inbox' ||
+    sidebar === 'artifacts' ||
+    sidebar === 'pulls' ||
+    sidebar === 'customize'
+  )
 }
 
 export interface WorkspaceUiState {

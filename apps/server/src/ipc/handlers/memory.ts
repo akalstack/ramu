@@ -5,6 +5,10 @@ import { discoverSkills } from '../../context'
 import { memoryInputSchema } from '../../memory/memory'
 import { need } from '../helpers'
 import { id, providerId } from '../schemas'
+import { SkillDirectory } from '../../memory/skillDirectory'
+
+/** One directory per host, so its popular list is fetched once a day. */
+const skillDirectory = new SkillDirectory()
 import type { RegisterHandlers } from '../types'
 
 /** Memories, learned skills and the skill catalog. */
@@ -16,6 +20,11 @@ export const registerMemoryHandlers: RegisterHandlers = ({
   externalSkills,
 }) => ({
   'skills.availability': { args: z.tuple([]), run: () => need(externalSkills).availability() },
+  'skills.search': {
+    args: z.tuple([z.string().trim().min(2).max(100)]),
+    run: (query: string) => skillDirectory.search(query),
+  },
+  'skills.popular': { args: z.tuple([]), run: () => skillDirectory.popular() },
   'skills.find': {
     args: z.tuple([
       z

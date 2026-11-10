@@ -808,7 +808,7 @@ export class PluginService {
     if (!response.ok)
       throw new Error(
         response.status === 401 || response.status === 403
-          ? `${slot.label} was refused (${response.status}). Check it in Settings → Plugins.`
+          ? `${slot.label} was refused (${response.status}). Check it in Customize → Plugins.`
           : `${url.host} answered ${response.status}: ${scrub(text).slice(0, 200)}`,
       )
     try {
@@ -1165,13 +1165,13 @@ export class PluginService {
     projectId?: string | null,
   ) {
     const found = this.dataSource(id)
-    if (!found) throw new Error(`No installed plugin provides ${id}. Install its plugin in Settings → Plugins.`)
+    if (!found) throw new Error(`No installed plugin provides ${id}. Install its plugin in Customize → Plugins.`)
     const checked = checkQuery(found.source.query, input)
     if (!checked.ok) throw new Error(`${found.source.label}: ${checked.error}`)
     const secret = await this.secret(found.plugin.id, found.slot.id, projectId ?? null)
     if (!secret)
       throw new Error(
-        `${found.slot.label} for ${found.plugin.name} is not saved on this host. Add it in Settings → Plugins.`,
+        `${found.slot.label} for ${found.plugin.name} is not saved on this host. Add it in Customize → Plugins.`,
       )
     const response = await this.request(found.slot, found.source.request, secret, checked.query)
     return dataSourceRows(response, found.source.rows, columns, limit, checked.query)

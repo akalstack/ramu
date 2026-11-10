@@ -66,7 +66,11 @@ const SECTION_ICONS: Record<SettingsMenuId, LucideIcon> = {
 }
 
 /** The shared menu (`@ramu/shared/settingsMenu`), which the phone draws too, with the desktop's icons. */
-export const SETTINGS_SECTIONS = SETTINGS_MENU.map((entry) => ({ ...entry, Icon: SECTION_ICONS[entry.id] }))
+// Plugins live in Customize on the desktop, beside skills and MCP servers; the phone keeps its own Plugins page.
+export const SETTINGS_SECTIONS = SETTINGS_MENU.filter((entry) => entry.id !== 'plugins').map((entry) => ({
+  ...entry,
+  Icon: SECTION_ICONS[entry.id],
+}))
 export type SettingsSection = SettingsMenuId
 
 function ResultIcon({ result }: { result: SettingsSearchResult }) {
