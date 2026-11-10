@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
-import { ArchiveRestore, ChevronRight, Copy, Download, FileDiff, Trash2 } from 'lucide-react-native'
+import { ArchiveRestore, ChevronRight, Copy, Download, FileDiff, ListTree, Trash2 } from 'lucide-react-native'
 import type { GitCommitFile } from '@ramu/shared/types'
 import { font, space, useTheme } from '../../../theme'
 import { ago, useSay } from '../../../i18n'
@@ -16,7 +16,11 @@ import {
   stashTitle,
 } from '../../../runtime/gitRevision'
 import { Header, HeaderButton, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
-import { Button, Card, Divider, Pill, SectionLabel, T, tap } from '../../../components/ui'
+import { Button, Card, Divider, IconButton, Pill, SectionLabel, T, tap } from '../../../components/ui'
+import { FileJumpSheet } from '../../../components/LargeDiff'
+
+/** Files listed before Show all; the rest mount only when asked for. */
+const SHOWN_FIRST = 100
 
 /**
  * One commit or stash from Source Control: what it is, the files it touched and a way into each file's diff, like the
@@ -44,6 +48,9 @@ export default function Revision() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState('')
+  // A commit that touched hundreds of files lists the first of them, with the rest a tap or a search away.
+  const [showAll, setShowAll] = useState(false)
+  const [jumping, setJumping] = useState(false)
   useEffect(() => {
     if (!chat || !revision || !params.repoId) return
     let alive = true
@@ -157,11 +164,33 @@ export default function Revision() {
           </T>
         ) : null}
         <View>
-          <SectionLabel>
+          <SectionLabel
+            right={
+              rows.length > SHOWN_FIRST ? (
+                <IconButton
+                  icon={ListTree}
+                  label={say('Jump to file')}
+                  size={32}
+                  tone="muted"
+                  onPress={() => setJumping(true)}
+                />
+              ) : undefined
+            }
+          >
             {files
               ? say(rows.length === 1 ? '{count} file changed' : '{count} files changed', { count: rows.length })
               : say('Files')}
           </SectionLabel>
+          <FileJumpSheet
+            open={jumping}
+            files={rows}
+            onPick={(path) => {
+              const file = rows.find((row) => row.path === path)
+              // iOS presents the file once the sheet has gone.
+              if (file) setTimeout(() => open(file), 300)
+            }}
+            onClose={() => setJumping(false)}
+          />
           {error ? (
             <T tone="bad" style={{ paddingHorizontal: space.l }}>
               {error}
@@ -170,7 +199,7 @@ export default function Revision() {
             <ActivityIndicator style={{ marginTop: space.l }} color={c.accent} />
           ) : rows.length ? (
             <View style={{ marginHorizontal: -space.l }}>
-              {rows.map((file, index) => {
+              {(showAll ? rows : rows.slice(0, SHOWN_FIRST)).map((file, index) => {
                 const { letter, tone } = revisionLetter(file.status)
                 return (
                   <View key={file.path}>
@@ -206,6 +235,14 @@ export default function Revision() {
                   </View>
                 )
               })}
+              {!showAll && rows.length > SHOWN_FIRST ? (
+                <Button
+                  kind="ghost"
+                  title={say('Show all {0} files', { 0: rows.length })}
+                  onPress={() => setShowAll(true)}
+                  style={{ marginHorizontal: space.l }}
+                />
+              ) : null}
             </View>
           ) : (
             <T tone="muted" style={{ paddingHorizontal: space.l }}>

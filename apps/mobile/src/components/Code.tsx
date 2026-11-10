@@ -117,8 +117,6 @@ export const CodeTokens = memo(function CodeTokens({ tokens }: { tokens: Token[]
   })
 })
 
-/** Up to this many lines wrap to the screen, so a path or a command is read whole; longer code scrolls sideways. */
-const WRAP_LINES = 4
 /**
  * A longer block shows its first lines and a "Show all" control. A thread full of generated code otherwise mounts every
  * line of every block at once, which is what made long threads slow to open, and scrolls past screens of code.
@@ -151,7 +149,6 @@ export function CodeBlock({ source: raw, hint }: { source: string; hint?: string
     [collapsed, source],
   )
   const lines = useMemo(() => highlightLines(shown, grammarFor(source, hint)), [shown, source, hint])
-  const wrap = total <= WRAP_LINES
   const copy = () => {
     tap()
     void Clipboard.setStringAsync(source).then(() => setCopied(true))
@@ -219,17 +216,16 @@ export function CodeBlock({ source: raw, hint }: { source: string; hint?: string
           </Text>
         </Pressable>
       </View>
-      {wrap ? (
-        <View style={{ paddingHorizontal: space.m, paddingVertical: space.m - 2 }}>{code}</View>
-      ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator
-          contentContainerStyle={{ paddingHorizontal: space.m, paddingVertical: space.m - 2 }}
-        >
-          {code}
-        </ScrollView>
-      )}
+      {/* Code never wraps: a long line scrolls sideways, keeping its indentation readable. */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator
+        nestedScrollEnabled
+        directionalLockEnabled
+        contentContainerStyle={{ paddingHorizontal: space.m, paddingVertical: space.m - 2 }}
+      >
+        {code}
+      </ScrollView>
       {total > COLLAPSE_OVER ? (
         <Pressable
           accessibilityRole="button"

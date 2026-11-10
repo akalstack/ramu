@@ -1,19 +1,38 @@
-import { useMemo } from 'react'
+import { Fragment, useMemo, type ReactNode } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import { CodeTokens, grammarFor, highlightLines } from './Code'
 import { space, useTheme } from '../theme'
-import type { ChangedFile } from '../runtime/types'
+import type { ChangedFile, DiffLine } from '../runtime/types'
 import { T } from './ui'
 
-/** The lines of one file's diff, shared by the review screen and the file viewer. Scrolls sideways for long lines. */
+/**
+ * The lines of one file's diff, shared by the review screen, the file viewer and a pull request's Files changed. Scrolls
+ * sideways for long lines unless `wrap` is on.
+ */
 export function DiffLines({
   file,
   onLine,
+  onLongLine,
   marked,
+  selected,
+  after,
+  wrap,
+  lineLabel,
 }: {
-  file: ChangedFile
-  /** Tapping a line (to comment on it). */ onLine?: (line: import('../runtime/types').DiffLine) => void
-  /** `old:12` / `new:7` keys of lines that already have a comment. */ marked?: Set<string>
+  file: Pick<ChangedFile, 'path' | 'lines'>
+  /** Tapping a line (to comment on it). */
+  onLine?: (line: DiffLine) => void
+  /** Long-pressing a line (to start a block of lines). */
+  onLongLine?: (line: DiffLine) => void
+  /** `old:12` / `new:7` keys of lines that already have a comment. */
+  marked?: Set<string>
+  /** A new-side line picked as the start of a block of lines. */
+  selected?: number | null
+  /** What sits under a line: its review threads and pending comments. */
+  after?: (line: DiffLine) => ReactNode
+  wrap?: boolean
+  /** What a tappable line says to a screen reader. */
+  lineLabel?: (line: DiffLine) => string
 }) {
   const { c } = useTheme()
   // Each side is highlighted as a whole (so multi-line strings and comments colour correctly), then matched back by line number.
@@ -30,30 +49,32 @@ export function DiffLines({
     }
     return { old: build('del'), new: build('add') }
   }, [file])
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ backgroundColor: c.code, borderRadius: 10 }}>
-      <View style={{ paddingVertical: space.s, minWidth: '100%' }}>
-        {file.lines.map((l, i) => {
-          const bg =
-            l.type === 'add'
-              ? c.okWash
-              : l.type === 'del'
-                ? c.badWash
-                : l.type === 'hunk'
-                  ? c.accentWash
-                  : 'transparent'
-          const sign = l.type === 'add' ? '+' : l.type === 'del' ? '−' : ' '
-          return (
+  const body = (
+    <View style={{ paddingVertical: space.s, minWidth: '100%', width: wrap ? '100%' : undefined }}>
+      {file.lines.map((l, i) => {
+        const bg =
+          l.type === 'add' ? c.okWash : l.type === 'del' ? c.badWash : l.type === 'hunk' ? c.accentWash : 'transparent'
+        const sign = l.type === 'add' ? '+' : l.type === 'del' ? '−' : ' '
+        const picked = selected != null && l.type !== 'del' && l.new === selected
+        return (
+          <Fragment key={i}>
             <Pressable
-              key={i}
-              disabled={!onLine || l.type === 'hunk'}
-              accessibilityLabel={`Comment on line ${l.new ?? l.old}`}
+              disabled={(!onLine && !onLongLine) || l.type === 'hunk'}
+              accessibilityRole={onLine && l.type !== 'hunk' ? 'button' : undefined}
+              accessibilityLabel={lineLabel?.(l) ?? `Comment on line ${l.new ?? l.old}`}
+              delayLongPress={350}
               onPress={() => onLine?.(l)}
-              style={{
+              onLongPress={onLongLine ? () => onLongLine(l) : undefined}
+              style={({ pressed }) => ({
                 flexDirection: 'row',
-                backgroundColor: marked?.has(l.type === 'del' ? `old:${l.old}` : `new:${l.new}`) ? c.warnWash : bg,
+                backgroundColor: picked
+                  ? c.accentSoft
+                  : marked?.has(l.type === 'del' ? `old:${l.old}` : `new:${l.new}`)
+                    ? c.warnWash
+                    : bg,
                 paddingRight: space.l,
-              }}
+                opacity: pressed && (onLine || onLongLine) ? 0.6 : 1,
+              })}
             >
               <T size={11} mono tone="placeholder" style={{ width: 30, textAlign: 'right', paddingVertical: 1 }}>
                 {l.type === 'hunk' ? '' : (l.new ?? l.old ?? '')}
@@ -66,7 +87,12 @@ export function DiffLines({
               >
                 {l.type === 'hunk' ? '' : sign}
               </T>
-              <T size={12} mono tone={l.type === 'hunk' ? 'accent' : 'soft'} style={{ paddingVertical: 1 }}>
+              <T
+                size={12}
+                mono
+                tone={l.type === 'hunk' ? 'accent' : 'soft'}
+                style={{ paddingVertical: 1, flexShrink: wrap ? 1 : 0 }}
+              >
                 {!l.text
                   ? ' '
                   : l.type === 'hunk'
@@ -77,9 +103,16 @@ export function DiffLines({
                       })()}
               </T>
             </Pressable>
-          )
-        })}
-      </View>
+            {after?.(l)}
+          </Fragment>
+        )
+      })}
+    </View>
+  )
+  if (wrap) return <View style={{ backgroundColor: c.code, borderRadius: 10 }}>{body}</View>
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ backgroundColor: c.code, borderRadius: 10 }}>
+      {body}
     </ScrollView>
   )
 }

@@ -32,3 +32,13 @@ export function changedFile(path: string, repo: string, original: string, modifi
   }
   return { path, repo, status: !original ? 'added' : !modified ? 'deleted' : 'modified', additions, deletions, lines }
 }
+
+/** A hosting service's unified patch as diff lines, so a pull request's files draw like the thread's own changes. */
+export function patchDiffLines(rows: readonly import('@ramu/shared/pullRequests').PatchRow[]): DiffLine[] {
+  return rows.map((row) => ({
+    type: row.kind === 'context' ? 'ctx' : row.kind === 'note' ? 'hunk' : row.kind,
+    text: row.text,
+    ...(row.old !== undefined ? { old: row.old } : {}),
+    ...(row.new !== undefined ? { new: row.new } : {}),
+  }))
+}

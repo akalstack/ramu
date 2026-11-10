@@ -13,7 +13,7 @@ import { UITextView } from '@bsky.app/react-native-uitextview'
 import { selectedText, type TextRun } from '../runtime/selectedText'
 import { NativeMarkdown, TextMarkContext, nativeMarkdown } from './NativeMarkdown'
 import { markSource } from '../runtime/textMark'
-import { markdownBlocks, nativeMarkdownSource } from '../runtime/nativeMarkdownSource'
+import { markdownBlocks, nativeMarkdownSource, splitCodeFences } from '../runtime/nativeMarkdownSource'
 
 // Native markdown for agent replies: headings, lists, tasks, quotes, tables, rules, coloured code, emphasis and links.
 // Kept native: shared's react-markdown renderer depends on the DOM.
@@ -450,6 +450,52 @@ export function closePartial(text: string): string {
   return lines.join('\n')
 }
 
+/**
+ * A reply in the native text view, with its closed code fences drawn as code blocks between the text, so a long code
+ * line scrolls sideways instead of wrapping inside the prose. Highlights from a find mark each text part.
+ */
+function NativeParts({
+  source,
+  marks,
+  streaming,
+  muted,
+  actions,
+}: {
+  source: string
+  marks?: readonly string[] | null
+  streaming?: boolean
+  muted?: boolean
+  actions: ReferenceActions
+}) {
+  const parts = useMemo(() => splitCodeFences(source), [source])
+  const single = parts.length === 1 && parts[0]!.kind === 'text'
+  const draw = (text: string, key?: number) => {
+    const marked = marks?.length ? markSource(text, marks) : null
+    return (
+      <NativeMarkdown
+        key={key}
+        source={marked ?? text}
+        marked={marked !== null}
+        streaming={streaming}
+        muted={muted}
+        actions={actions}
+      />
+    )
+  }
+  if (single || !parts.length) return draw(source)
+  return (
+    <View style={{ gap: space.m }}>
+      {parts.map((part, index) =>
+        part.kind === 'code' ? (
+          <CodeBlock key={index} source={part.source} hint={part.lang} />
+        ) : (
+          draw(part.source, index)
+        ),
+      )}
+    </View>
+  )
+}
+
 export function Markdown({
   text,
   muted,
@@ -466,10 +512,6 @@ export function Markdown({
   const actions = useContext(ReferenceContext)
   const source = useMemo(() => (nativeMarkdown ? nativeMarkdownSource(text) : null), [text])
   const marks = useContext(TextMarkContext)
-  const marked = useMemo(
-    () => (source !== null && !streaming && marks?.length ? markSource(source, marks) : null),
-    [source, streaming, marks],
-  )
   const blocks = useMemo(
     () => (source === null ? parseBlocks(streaming ? closePartial(text) : text) : []),
     [source, text, streaming],
@@ -490,21 +532,13 @@ export function Markdown({
       <View>
         {nativeBlocks.map((block, index) => (
           <Arrive key={index} animate={index >= settledCount}>
-            <NativeMarkdown source={block} streaming muted={muted} actions={actions} />
+            <NativeParts source={block} streaming muted={muted} actions={actions} />
           </Arrive>
         ))}
       </View>
     )
   if (source !== null)
-    return (
-      <NativeMarkdown
-        source={marked ?? source}
-        marked={marked !== null}
-        streaming={streaming}
-        muted={muted}
-        actions={actions}
-      />
-    )
+    return <NativeParts source={source} marks={streaming ? null : marks} muted={muted} actions={actions} />
   return (
     <View style={{ gap: space.m, opacity: muted ? 0.8 : 1 }}>
       {blocks.map((block, index) => (

@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PullRequestTimeline } from '../../../components/PullRequestTimeline'
 import { PullRequestFilesList } from '../../../components/PullRequestFilesList'
 import { PullRequestMarkdown } from '../../../components/PullRequestMarkdown'
-import { ActivityIndicator, Alert, Linking, RefreshControl, View } from 'react-native'
+import { ActivityIndicator, Alert, Linking, RefreshControl, View, type ScrollViewInstance } from 'react-native'
+import { diffAnchorFile, forgeRepoOf, parseForgeLink, sameForgeRepo } from '@ramu/shared/forgeLinks'
+import { ReferenceContext, type ReferenceActions } from '../../../components/Markdown'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Bot,
@@ -150,6 +152,10 @@ export default function PullRequestScreen() {
   const [description, setDescription] = useState<string | null>(kept?.description ?? null)
   const [files, setFiles] = useState<{ files: PullRequestFile[]; more: boolean } | null>(kept?.files ?? null)
   const [tab, setTab] = useState<'overview' | 'files'>('overview')
+  // A link to one of this pull request's files opens Files changed at that file.
+  const [focusFile, setFocusFile] = useState<{ path: string; key: number } | null>(null)
+  const scroll = useRef<ScrollViewInstance>(null)
+  const offset = useRef(0)
   const [timeline, setTimeline] = useState<PullRequestTimelineEvent[] | null>(kept?.timeline ?? null)
   // Kept data shows at once; only a pull request this phone never read waits on the spinner.
   const [loaded, setLoaded] = useState(!!kept)
@@ -433,6 +439,78 @@ export default function PullRequestScreen() {
         : openThread('work'))
   }
 
+  // Links in the description, comments and threads open what they point at here when the app has it: this pull
+  // request's files, another pull request it lists, or a file or folder in this repository's checkout.
+  const openLink = (href: string) => {
+    const browser = () => void Linking.openURL(href).catch(() => {})
+    const link = pr ? parseForgeLink(href, { url: pr.url, ref: pr.headBranch }) : null
+    const own = pr ? forgeRepoOf(pr.url) : null
+    if (!pr || !link || !own) return browser()
+    const sameRepo = sameForgeRepo(link.repo, own.repo)
+    if (link.kind === 'pull' && sameRepo && link.number === pr.number) {
+      setTab('files')
+      const target =
+        link.anchor && files
+          ? diffAnchorFile(
+              link.anchor,
+              files.files.map((file) => file.path),
+            )
+          : null
+      if (target) setFocusFile({ path: target.path, key: Date.now() })
+      return
+    }
+    if (link.kind === 'pull') {
+      for (const closed of [false, true])
+        for (const listed of pullRequestCopy.read(computerId, 'forge.allPullRequests', closed, false) ?? []) {
+          const found = listed.pullRequests.find((entry) => {
+            const theirs = forgeRepoOf(entry.url)
+            return entry.number === link.number && !!theirs && sameForgeRepo(theirs.repo, link.repo)
+          })
+          if (found)
+            return router.push({
+              pathname: '/pull-request',
+              params: { computer: computerId, project: listed.projectId, repoId: listed.repoId, url: found.url },
+            })
+        }
+      if (sameRepo)
+        return router.push({
+          pathname: '/pull-request',
+          params: {
+            computer: computerId,
+            project: projectId ?? '',
+            repoId,
+            url: pr.url.replace(/\d+(?=\/?$)/, String(link.number)),
+          },
+        })
+      return browser()
+    }
+    // A repository in no project has no checkout on the host to read files from.
+    if ((link.kind === 'file' || link.kind === 'folder') && sameRepo && !outside && taskId) {
+      if (link.kind === 'file')
+        return router.push({
+          pathname: '/file',
+          params: {
+            computer: computerId,
+            ctx: taskId,
+            repoId,
+            path: link.path,
+            ...(link.line ? { line: String(link.line) } : {}),
+          },
+        })
+      return router.push({
+        pathname: '/explorer',
+        params: { computer: computerId, ctx: taskId, repoId, path: link.path, revealId: String(Date.now()) },
+      })
+    }
+    browser()
+  }
+  const linkRef = useRef(openLink)
+  linkRef.current = openLink
+  const references = useMemo<ReferenceActions>(
+    () => ({ openUrl: (url) => linkRef.current(url), openFile: (href) => linkRef.current(href) }),
+    [],
+  )
+
   return (
     <Screen bg="canvas">
       <Header
@@ -449,346 +527,362 @@ export default function PullRequestScreen() {
           ) : null
         }
       />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{
-          padding: space.l,
-          paddingTop: space.s,
-          gap: space.l,
-          // The floating action bar sits over the page; the last content scrolls clear of it.
-          paddingBottom: space.xl + ACTION_BAR_SPACE + insets.bottom,
-        }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => void pullToRefresh()} tintColor={c.muted} />
-        }
-      >
-        {!loaded ? <ActivityIndicator color={c.muted} style={{ paddingVertical: space.xl }} /> : null}
-        {loaded && !pr ? (
-          <View style={{ gap: space.m }}>
-            <T tone={error ? 'bad' : 'muted'}>{error ?? say('This pull request was not found with this account.')}</T>
-            <Button kind="secondary" title={say('Try again')} onPress={() => void pullToRefresh()} />
-          </View>
-        ) : null}
-        {pr && stage ? (
-          <>
-            <PullRequestIdentity pr={pr} service={service} stage={stage} />
-            {store.computers.length > 1 ? (
-              // Which host it is read from and worked on; with its repository on several, it moves to another one.
-              <View style={{ flexDirection: 'row' }}>
-                <Chip
-                  small
-                  status={computer?.status}
-                  label={say('On {0}', { 0: computer?.name ?? computerId })}
-                  accessibilityLabel={say('Host for this pull request')}
-                  accessibilityHint={say('Its thread and checkout are on this host')}
-                  chevron={hostChoices.length > 1}
-                  onPress={() => hostChoices.length > 1 && setChoosingHost(true)}
-                />
-              </View>
-            ) : null}
-            {!online ? (
-              <PullRequestNote>
-                {say('Offline · showing what this phone last read. Reconnect to the host to act on it.')}
-              </PullRequestNote>
-            ) : null}
-            {outside && open ? (
-              <PullRequestNote icon={FolderGit2}>
-                {say(
-                  '{0} is in no project on this host. Review, comment and merge here; clone it as a project to work on it in a thread or have an agent review it.',
-                  { 0: outside },
-                )}
-              </PullRequestNote>
-            ) : null}
-            {pr.fork && !mine && open && !outside ? (
-              <PullRequestNote icon={GitFork}>
-                {say(
-                  'This pull request comes from a fork. An agent can review it here, but only its author can push to it.',
-                )}
-              </PullRequestNote>
-            ) : null}
-            {notice ? (
-              <T size={font.control} tone="soft" accessibilityLiveRegion="polite">
-                {notice}
-              </T>
-            ) : null}
-            {error ? (
-              <View
-                accessibilityLiveRegion="polite"
-                style={{
-                  flexDirection: 'row',
-                  gap: space.s,
-                  padding: space.m,
-                  borderRadius: radius.m,
-                  backgroundColor: c.badWash,
-                }}
-              >
-                <CircleAlert size={16} color={c.bad} style={{ marginTop: 2 }} />
-                <T size={font.control} tone="bad" style={{ flex: 1 }}>
-                  {error}
+      <ReferenceContext.Provider value={references}>
+        <ScrollView
+          ref={scroll}
+          onScroll={(event) => {
+            offset.current = event.nativeEvent.contentOffset.y
+          }}
+          scrollEventThrottle={32}
+          contentInsetAdjustmentBehavior="automatic"
+          contentContainerStyle={{
+            padding: space.l,
+            paddingTop: space.s,
+            gap: space.l,
+            // The floating action bar sits over the page; the last content scrolls clear of it.
+            paddingBottom: space.xl + ACTION_BAR_SPACE + insets.bottom,
+          }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => void pullToRefresh()} tintColor={c.muted} />
+          }
+        >
+          {!loaded ? <ActivityIndicator color={c.muted} style={{ paddingVertical: space.xl }} /> : null}
+          {loaded && !pr ? (
+            <View style={{ gap: space.m }}>
+              <T tone={error ? 'bad' : 'muted'}>{error ?? say('This pull request was not found with this account.')}</T>
+              <Button kind="secondary" title={say('Try again')} onPress={() => void pullToRefresh()} />
+            </View>
+          ) : null}
+          {pr && stage ? (
+            <>
+              <PullRequestIdentity pr={pr} service={service} stage={stage} />
+              {store.computers.length > 1 ? (
+                // Which host it is read from and worked on; with its repository on several, it moves to another one.
+                <View style={{ flexDirection: 'row' }}>
+                  <Chip
+                    small
+                    status={computer?.status}
+                    label={say('On {0}', { 0: computer?.name ?? computerId })}
+                    accessibilityLabel={say('Host for this pull request')}
+                    accessibilityHint={say('Its thread and checkout are on this host')}
+                    chevron={hostChoices.length > 1}
+                    onPress={() => hostChoices.length > 1 && setChoosingHost(true)}
+                  />
+                </View>
+              ) : null}
+              {!online ? (
+                <PullRequestNote>
+                  {say('Offline · showing what this phone last read. Reconnect to the host to act on it.')}
+                </PullRequestNote>
+              ) : null}
+              {outside && open ? (
+                <PullRequestNote icon={FolderGit2}>
+                  {say(
+                    '{0} is in no project on this host. Review, comment and merge here; clone it as a project to work on it in a thread or have an agent review it.',
+                    { 0: outside },
+                  )}
+                </PullRequestNote>
+              ) : null}
+              {pr.fork && !mine && open && !outside ? (
+                <PullRequestNote icon={GitFork}>
+                  {say(
+                    'This pull request comes from a fork. An agent can review it here, but only its author can push to it.',
+                  )}
+                </PullRequestNote>
+              ) : null}
+              {notice ? (
+                <T size={font.control} tone="soft" accessibilityLiveRegion="polite">
+                  {notice}
                 </T>
-              </View>
-            ) : null}
+              ) : null}
+              {error ? (
+                <View
+                  accessibilityLiveRegion="polite"
+                  style={{
+                    flexDirection: 'row',
+                    gap: space.s,
+                    padding: space.m,
+                    borderRadius: radius.m,
+                    backgroundColor: c.badWash,
+                  }}
+                >
+                  <CircleAlert size={16} color={c.bad} style={{ marginTop: 2 }} />
+                  <T size={font.control} tone="bad" style={{ flex: 1 }}>
+                    {error}
+                  </T>
+                </View>
+              ) : null}
 
-            <Segmented
-              value={tab}
-              onChange={setTab}
-              options={[
-                { key: 'overview', label: say('Overview') },
-                { key: 'files', label: say('Files changed'), count: files?.files.length ?? 0 },
-              ]}
-            />
+              <Segmented
+                value={tab}
+                onChange={setTab}
+                options={[
+                  { key: 'overview', label: say('Overview') },
+                  { key: 'files', label: say('Files changed'), count: files?.files.length ?? 0 },
+                ]}
+              />
 
-            {tab === 'overview' ? (
-              <>
-                <PullRequestReadinessCard
-                  pr={pr}
-                  openThreads={openThreads.length}
-                  step={step}
-                  onRow={(key) =>
-                    // Failing checks open on the service, where each check's log is.
-                    key === 'checks' && pr.checks && pr.checks !== 'success'
-                      ? () => void Linking.openURL(service === 'github' ? `${pr.url}/checks` : pr.url).catch(() => {})
-                      : key === 'merge' && pr.mergeable === 'conflicts'
-                        ? () => setTab('files')
-                        : undefined
-                  }
-                  rowAction={(key) =>
-                    key === 'checks' &&
-                    pr.checks === 'failure' &&
-                    canWrite &&
-                    supportsPullRequest(service, 'rerun-checks') ? (
-                      <Chip
-                        small
-                        fill
-                        icon={RefreshCcw}
-                        label={busy === 'rerun' ? say('Working…') : say('Re-run')}
-                        onPress={() => void write('rerun', { kind: 'rerun-checks' })}
-                      />
-                    ) : null
-                  }
-                />
-                {(() => {
-                  // Ways to work on it, each a row: its thread, a new one, an agent's review, a clone.
-                  const rows = [
-                    thread
-                      ? {
-                          key: 'thread',
-                          icon: SquareArrowOutUpRight,
-                          title: say('Open thread'),
-                          help: thread.title,
-                          onPress: () => openTask(thread.taskId),
-                        }
-                      : open && canWrite && !outside
+              {tab === 'overview' ? (
+                <>
+                  <PullRequestReadinessCard
+                    pr={pr}
+                    openThreads={openThreads.length}
+                    step={step}
+                    onRow={(key) =>
+                      // Failing checks open on the service, where each check's log is.
+                      key === 'checks' && pr.checks && pr.checks !== 'success'
+                        ? () => void Linking.openURL(service === 'github' ? `${pr.url}/checks` : pr.url).catch(() => {})
+                        : key === 'merge' && pr.mergeable === 'conflicts'
+                          ? () => setTab('files')
+                          : undefined
+                    }
+                    rowAction={(key) =>
+                      key === 'checks' &&
+                      pr.checks === 'failure' &&
+                      canWrite &&
+                      supportsPullRequest(service, 'rerun-checks') ? (
+                        <Chip
+                          small
+                          fill
+                          icon={RefreshCcw}
+                          label={busy === 'rerun' ? say('Working…') : say('Re-run')}
+                          onPress={() => void write('rerun', { kind: 'rerun-checks' })}
+                        />
+                      ) : null
+                    }
+                  />
+                  {(() => {
+                    // Ways to work on it, each a row: its thread, a new one, an agent's review, a clone.
+                    const rows = [
+                      thread
                         ? {
-                            key: 'work',
-                            icon: MessagesSquare,
-                            title: busy === 'work' ? say('Starting…') : say('Open in thread'),
-                            disabled: !!busy || (pr.fork && !mine),
-                            onPress: () => void openThread('work'),
+                            key: 'thread',
+                            icon: SquareArrowOutUpRight,
+                            title: say('Open thread'),
+                            help: thread.title,
+                            onPress: () => openTask(thread.taskId),
+                          }
+                        : open && canWrite && !outside
+                          ? {
+                              key: 'work',
+                              icon: MessagesSquare,
+                              title: busy === 'work' ? say('Starting…') : say('Open in thread'),
+                              disabled: !!busy || (pr.fork && !mine),
+                              onPress: () => void openThread('work'),
+                            }
+                          : null,
+                      open && !mine && !thread && !outside && canWrite
+                        ? {
+                            key: 'review',
+                            icon: Bot,
+                            title: busy === 'review' ? say('Starting…') : say('Review with agent'),
+                            help: say('Checks it out in a worktree and drafts a review for you to edit and post.'),
+                            disabled: !!busy,
+                            onPress: () => void openThread('review'),
                           }
                         : null,
-                    open && !mine && !thread && !outside && canWrite
-                      ? {
-                          key: 'review',
-                          icon: Bot,
-                          title: busy === 'review' ? say('Starting…') : say('Review with agent'),
-                          help: say('Checks it out in a worktree and drafts a review for you to edit and post.'),
-                          disabled: !!busy,
-                          onPress: () => void openThread('review'),
-                        }
-                      : null,
-                    open && thread && mine && openThreads.length && canWrite
-                      ? {
-                          key: 'reviews',
-                          icon: MessageSquare,
-                          title: busy === 'reviews' ? say('Starting…') : say('Address review comments'),
-                          disabled: !!busy,
-                          onPress: () => void sendThreadsToAgent(thread.taskId),
-                        }
-                      : null,
-                    outside && canWrite
-                      ? {
-                          key: 'clone',
-                          icon: FolderGit2,
-                          title: say('Clone {0} as a project', { 0: outside }),
-                          onPress: cloneAsProject,
-                        }
-                      : null,
-                  ].filter((row) => row !== null)
-                  return rows.length ? (
-                    <Card>
-                      {rows.map((row, index) => (
-                        <View key={row.key}>
-                          {index ? <Divider inset={space.l + 29} /> : null}
-                          <PullRequestWorkRow
-                            icon={row.icon}
-                            title={row.title}
-                            help={'help' in row ? row.help : undefined}
-                            disabled={'disabled' in row ? row.disabled : undefined}
-                            onPress={row.onPress}
-                          />
-                        </View>
-                      ))}
-                    </Card>
-                  ) : null
-                })()}
-                {open && pr.mergeable === 'conflicts' && canWrite && !outside ? (
-                  <T size={font.caption} tone="muted">
-                    {say('Merges the base branch in the thread working on it, so you can resolve the conflicts there')}
-                  </T>
-                ) : null}
-                {batch ? (
-                  <ReviewDrafts
-                    key={`${batch.id}:${batch.kind === 'review' ? `${batch.body.length}:${batch.comments.length}` : batch.drafts.map((draft) => `${draft.threadId}${draft.reply.length}${draft.postedId ?? ''}`).join()}`}
-                    computerId={computerId}
-                    batch={batch}
-                    readOnly={!canWrite}
-                    onDone={() => void read(true)}
-                  />
-                ) : null}
-
-                {description?.trim() ? (
-                  <View style={{ gap: space.s }}>
-                    <T size={font.control} weight="600" tone="muted">
-                      {say('Description')}
-                    </T>
-                    <PullRequestMarkdown text={description} />
-                  </View>
-                ) : null}
-
-                {timeline?.length ? <PullRequestTimeline timeline={timeline} /> : null}
-
-                <PullRequestComments
-                  computerId={computerId}
-                  taskId={taskId}
-                  repoId={repoId}
-                  url={url}
-                  service={service}
-                  canWrite={canWrite}
-                  open={open}
-                  revision={revision}
-                />
-
-                <View style={{ gap: space.s }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
-                    <T size={font.control} weight="600" tone="muted" style={{ flex: 1 }}>
-                      {say('Review threads')}
-                      {openThreads.length ? (
-                        <T
-                          size={font.control}
-                          tone="placeholder"
-                        >{` ${say('{0} unresolved', { 0: openThreads.length })}`}</T>
-                      ) : null}
-                    </T>
-                    {/* An order, as GitHub's Overview page gives its comments. */}
-                    <Chip
-                      small
-                      label={threadOrder === 'newest' ? say('Newest first') : say('Oldest first')}
-                      onPress={() => setThreadOrder((value) => (value === 'newest' ? 'oldest' : 'newest'))}
-                    />
-                  </View>
-                  <Segmented<ReviewThreadFilter>
-                    value={threadFilter}
-                    onChange={setThreadFilter}
-                    options={[
-                      { key: 'open', label: say('Unresolved') },
-                      { key: 'resolved', label: say('Resolved') },
-                      { key: 'all', label: say('All') },
-                    ]}
-                  />
-                  {threadsError ? (
-                    <T size={font.caption} tone="bad">
-                      {threadsError}
-                    </T>
-                  ) : threads === null ? (
-                    <ActivityIndicator color={c.muted} style={{ paddingVertical: space.m }} />
-                  ) : !shownThreads.length ? (
-                    <T tone="muted">
-                      {threadFilter === 'open' ? say('No open review threads.') : say('No review threads here.')}
-                    </T>
-                  ) : (
-                    shownThreads.map((entry) => (
-                      <Card key={entry.id} style={{ padding: space.m, gap: space.s }}>
-                        <T size={font.caption} tone="muted" mono numberOfLines={2}>
-                          {(entry.path ? `${entry.path}${entry.line ? `:${entry.line}` : ''}` : say('Conversation')) +
-                            (entry.outdated ? ` · ${say('Outdated')}` : '') +
-                            (entry.resolved ? ` · ${say('Resolved')}` : '')}
-                        </T>
-                        {entry.comments.map((comment, index) => (
-                          <View key={comment.id} style={{ gap: space.xs }}>
-                            {index ? <Divider /> : null}
-                            <View
-                              style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.s }}
-                            >
-                              <T size={font.control} weight="600">
-                                {comment.author ?? say('Someone')}
-                              </T>
-                              {comment.bot ? (
-                                <T size={font.caption} tone="muted">
-                                  {say('bot')}
-                                </T>
-                              ) : null}
-                              {!comment.trusted ? (
-                                <T size={font.caption} tone="warn">
-                                  {say('From outside the project')}
-                                </T>
-                              ) : null}
-                            </View>
-                            <PullRequestMarkdown text={comment.body} />
-                            {canWrite ? (
-                              <ReactionRow
-                                service={service}
-                                disabled={!!busy}
-                                onReact={(reaction) =>
-                                  void write('react', { kind: 'react', commentId: comment.id, reaction, remove: false })
-                                }
-                              />
-                            ) : null}
+                      open && thread && mine && openThreads.length && canWrite
+                        ? {
+                            key: 'reviews',
+                            icon: MessageSquare,
+                            title: busy === 'reviews' ? say('Starting…') : say('Address review comments'),
+                            disabled: !!busy,
+                            onPress: () => void sendThreadsToAgent(thread.taskId),
+                          }
+                        : null,
+                      outside && canWrite
+                        ? {
+                            key: 'clone',
+                            icon: FolderGit2,
+                            title: say('Clone {0} as a project', { 0: outside }),
+                            onPress: cloneAsProject,
+                          }
+                        : null,
+                    ].filter((row) => row !== null)
+                    return rows.length ? (
+                      <Card>
+                        {rows.map((row, index) => (
+                          <View key={row.key}>
+                            {index ? <Divider inset={space.l + 29} /> : null}
+                            <PullRequestWorkRow
+                              icon={row.icon}
+                              title={row.title}
+                              help={'help' in row ? row.help : undefined}
+                              disabled={'disabled' in row ? row.disabled : undefined}
+                              onPress={row.onPress}
+                            />
                           </View>
                         ))}
-                        {canWrite && open && entry.resolvable ? (
-                          <Button
-                            kind="secondary"
-                            title={entry.resolved ? say('Reopen thread') : say('Resolve thread')}
-                            disabled={!!busy}
-                            onPress={() =>
-                              void write('thread', {
-                                kind: 'thread-status',
-                                threadId: entry.id,
-                                status: entry.resolved ? 'active' : 'resolved',
-                              })
-                            }
-                          />
-                        ) : null}
                       </Card>
-                    ))
-                  )}
+                    ) : null
+                  })()}
+                  {open && pr.mergeable === 'conflicts' && canWrite && !outside ? (
+                    <T size={font.caption} tone="muted">
+                      {say(
+                        'Merges the base branch in the thread working on it, so you can resolve the conflicts there',
+                      )}
+                    </T>
+                  ) : null}
+                  {batch ? (
+                    <ReviewDrafts
+                      key={`${batch.id}:${batch.kind === 'review' ? `${batch.body.length}:${batch.comments.length}` : batch.drafts.map((draft) => `${draft.threadId}${draft.reply.length}${draft.postedId ?? ''}`).join()}`}
+                      computerId={computerId}
+                      batch={batch}
+                      readOnly={!canWrite}
+                      onDone={() => void read(true)}
+                    />
+                  ) : null}
+
+                  {description?.trim() ? (
+                    <View style={{ gap: space.s }}>
+                      <T size={font.control} weight="600" tone="muted">
+                        {say('Description')}
+                      </T>
+                      <PullRequestMarkdown text={description} />
+                    </View>
+                  ) : null}
+
+                  {timeline?.length ? <PullRequestTimeline timeline={timeline} /> : null}
+
+                  <PullRequestComments
+                    computerId={computerId}
+                    taskId={taskId}
+                    repoId={repoId}
+                    url={url}
+                    service={service}
+                    canWrite={canWrite}
+                    open={open}
+                    revision={revision}
+                  />
+
+                  <View style={{ gap: space.s }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+                      <T size={font.control} weight="600" tone="muted" style={{ flex: 1 }}>
+                        {say('Review threads')}
+                        {openThreads.length ? (
+                          <T
+                            size={font.control}
+                            tone="placeholder"
+                          >{` ${say('{0} unresolved', { 0: openThreads.length })}`}</T>
+                        ) : null}
+                      </T>
+                      {/* An order, as GitHub's Overview page gives its comments. */}
+                      <Chip
+                        small
+                        label={threadOrder === 'newest' ? say('Newest first') : say('Oldest first')}
+                        onPress={() => setThreadOrder((value) => (value === 'newest' ? 'oldest' : 'newest'))}
+                      />
+                    </View>
+                    <Segmented<ReviewThreadFilter>
+                      value={threadFilter}
+                      onChange={setThreadFilter}
+                      options={[
+                        { key: 'open', label: say('Unresolved') },
+                        { key: 'resolved', label: say('Resolved') },
+                        { key: 'all', label: say('All') },
+                      ]}
+                    />
+                    {threadsError ? (
+                      <T size={font.caption} tone="bad">
+                        {threadsError}
+                      </T>
+                    ) : threads === null ? (
+                      <ActivityIndicator color={c.muted} style={{ paddingVertical: space.m }} />
+                    ) : !shownThreads.length ? (
+                      <T tone="muted">
+                        {threadFilter === 'open' ? say('No open review threads.') : say('No review threads here.')}
+                      </T>
+                    ) : (
+                      shownThreads.map((entry) => (
+                        <Card key={entry.id} style={{ padding: space.m, gap: space.s }}>
+                          <T size={font.caption} tone="muted" mono numberOfLines={2}>
+                            {(entry.path ? `${entry.path}${entry.line ? `:${entry.line}` : ''}` : say('Conversation')) +
+                              (entry.outdated ? ` · ${say('Outdated')}` : '') +
+                              (entry.resolved ? ` · ${say('Resolved')}` : '')}
+                          </T>
+                          {entry.comments.map((comment, index) => (
+                            <View key={comment.id} style={{ gap: space.xs }}>
+                              {index ? <Divider /> : null}
+                              <View
+                                style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.s }}
+                              >
+                                <T size={font.control} weight="600">
+                                  {comment.author ?? say('Someone')}
+                                </T>
+                                {comment.bot ? (
+                                  <T size={font.caption} tone="muted">
+                                    {say('bot')}
+                                  </T>
+                                ) : null}
+                                {!comment.trusted ? (
+                                  <T size={font.caption} tone="warn">
+                                    {say('From outside the project')}
+                                  </T>
+                                ) : null}
+                              </View>
+                              <PullRequestMarkdown text={comment.body} />
+                              {canWrite ? (
+                                <ReactionRow
+                                  service={service}
+                                  disabled={!!busy}
+                                  onReact={(reaction) =>
+                                    void write('react', {
+                                      kind: 'react',
+                                      commentId: comment.id,
+                                      reaction,
+                                      remove: false,
+                                    })
+                                  }
+                                />
+                              ) : null}
+                            </View>
+                          ))}
+                          {canWrite && open && entry.resolvable ? (
+                            <Button
+                              kind="secondary"
+                              title={entry.resolved ? say('Reopen thread') : say('Resolve thread')}
+                              disabled={!!busy}
+                              onPress={() =>
+                                void write('thread', {
+                                  kind: 'thread-status',
+                                  threadId: entry.id,
+                                  status: entry.resolved ? 'active' : 'resolved',
+                                })
+                              }
+                            />
+                          ) : null}
+                        </Card>
+                      ))
+                    )}
+                  </View>
+                </>
+              ) : files?.files.length ? (
+                <View style={{ gap: space.s }}>
+                  {canReview ? (
+                    <T size={font.caption} tone="muted">
+                      {say('Tap a line to comment on it. Comments wait until you finish your review.')}
+                    </T>
+                  ) : null}
+                  <PullRequestFilesList
+                    files={files.files}
+                    more={files.more}
+                    threads={threads ?? []}
+                    pending={pending}
+                    onComment={
+                      canReview ? (path, line, startLine) => setCommenting({ path, line, startLine }) : undefined
+                    }
+                    onEditPending={canReview ? (comment) => setCommenting(comment) : undefined}
+                    focus={focusFile}
+                    onReveal={(y) => scroll.current?.scrollTo({ y: Math.max(0, offset.current + y - 140) })}
+                  />
                 </View>
-              </>
-            ) : files?.files.length ? (
-              <View style={{ gap: space.s }}>
-                {canReview ? (
-                  <T size={font.caption} tone="muted">
-                    {say('Tap a line to comment on it. Comments wait until you finish your review.')}
-                  </T>
-                ) : null}
-                <PullRequestFilesList
-                  files={files.files}
-                  more={files.more}
-                  threads={threads ?? []}
-                  pending={pending}
-                  onComment={
-                    canReview ? (path, line, startLine) => setCommenting({ path, line, startLine }) : undefined
-                  }
-                  onEditPending={canReview ? (comment) => setCommenting(comment) : undefined}
-                />
-              </View>
-            ) : (
-              <T tone="muted">{files ? say('No changed files to show.') : say('Loading files…')}</T>
-            )}
-          </>
-        ) : null}
-      </ScrollView>
+              ) : (
+                <T tone="muted">{files ? say('No changed files to show.') : say('Loading files…')}</T>
+              )}
+            </>
+          ) : null}
+        </ScrollView>
+      </ReferenceContext.Provider>
       {pr ? (
         <PullRequestActionBar
           busy={!!busy}

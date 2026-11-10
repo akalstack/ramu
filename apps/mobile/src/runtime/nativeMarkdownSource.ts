@@ -75,3 +75,42 @@ export function markdownBlocks(source: string): string[] {
   close()
   return blocks.map((lines) => lines.join('\n'))
 }
+
+export type MarkdownPart = { kind: 'text'; source: string } | { kind: 'code'; source: string; lang?: string }
+
+/**
+ * A reply cut around its top-level fenced code blocks. The native text view lays code out with the prose and cannot
+ * scroll a long line sideways, so each closed fence is drawn as its own code block instead; a fence still being written
+ * (no closing marker yet), or one nested in a list, stays in the text.
+ */
+export function splitCodeFences(source: string): MarkdownPart[] {
+  const parts: MarkdownPart[] = []
+  const lines = source.split('\n')
+  let text: string[] = []
+  const flush = () => {
+    const joined = text.join('\n')
+    if (joined.trim()) parts.push({ kind: 'text', source: joined })
+    text = []
+  }
+  for (let index = 0; index < lines.length; index++) {
+    const open = /^(`{3,}|~{3,})\s*([^\s`]*)[^`]*$/.exec(lines[index]!)
+    if (!open) {
+      text.push(lines[index]!)
+      continue
+    }
+    const fence = open[1]!
+    const end = lines.findIndex(
+      (line, at) =>
+        at > index && line.trimEnd().startsWith(fence[0]!.repeat(fence.length)) && /^(`{3,}|~{3,})\s*$/.test(line),
+    )
+    if (end < 0) {
+      text.push(...lines.slice(index))
+      break
+    }
+    flush()
+    parts.push({ kind: 'code', source: lines.slice(index + 1, end).join('\n'), ...(open[2] ? { lang: open[2] } : {}) })
+    index = end
+  }
+  flush()
+  return parts
+}
