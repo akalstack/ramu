@@ -2,9 +2,10 @@ import { Fragment, useEffect, useMemo, useRef, useState, type PointerEvent } fro
 import { useQuery } from '@tanstack/react-query'
 import { ChevronRight, ChevronsDownUp, ChevronsUpDown, MessageSquare, Plus, Trash2, WrapText } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
+import { SearchField } from '@/components/search-field'
 import { Textarea } from '@/components/ui/textarea'
 import type { PullRequestFile, PullRequestThread, PullRequestWrite, ReviewVerdict } from '@ramu/shared/types'
-import { patchRows } from '@ramu/shared/pullRequests'
+import { diffLineMatches, matchesPullRequestFile, patchRows } from '@ramu/shared/pullRequests'
 import { cn } from 'cn'
 import { PullRequestMarkdown } from './PullRequestMarkdown'
 import { t } from '../i18n'
@@ -108,11 +109,14 @@ function FileDiff({
   pending,
   canComment,
   wrap,
+  highlight,
   onAdd,
   onRemove,
   onWrite,
 }: {
   file: PullRequestFile
+  /** The Files search, whose words mark the lines that hold them. */
+  highlight: string
   threads: PullRequestThread[]
   pending: Pending[]
   canComment: boolean
@@ -302,6 +306,7 @@ function FileDiff({
                     'group/line',
                     row.kind === 'add' && 'bg-[color-mix(in_srgb,var(--ok)_12%,transparent)]',
                     row.kind === 'del' && 'bg-[color-mix(in_srgb,var(--bad)_12%,transparent)]',
+                    diffLineMatches(row.text, highlight) && 'bg-[color-mix(in_srgb,var(--warn)_22%,transparent)]!',
                     inRange(row.new) && 'bg-(--accent-wash)!',
                   )}
                   onPointerEnter={() => {
@@ -445,6 +450,7 @@ export function PullRequestFiles({
   // Files opened one at a time stay mounted, hidden, so a comment being written survives moving to another file.
   const [visited, setVisited] = useState<Set<string>>(() => new Set())
   const banner = useRef<HTMLDivElement>(null)
+  const [query, setQuery] = useState('')
   const data = files.data
   if (files.isPending) return <p className="m-0 text-caption text-muted-foreground">{t('Loading files…')}</p>
   if (files.isError) return <p className="m-0 text-caption text-bad">{errorText(files.error)}</p>
@@ -454,22 +460,25 @@ export function PullRequestFiles({
   const removed = data.files.reduce((sum, file) => sum + file.deletions, 0)
   const large = isLargeDiff(data.files.length, added + removed)
   const oneAtATime = large && !showAll
+  // A search narrows the list, the tree and Previous/Next to the files whose name or diff holds it.
+  const list = query.trim() ? data.files.filter((file) => matchesPullRequestFile(file, query)) : data.files
   const activeIndex = Math.max(
     0,
-    data.files.findIndex((file) => file.path === activePath),
+    list.findIndex((file) => file.path === activePath),
   )
-  const activeFile = data.files[activeIndex]!
-  const startsClosed = (index: number) => !oneAtATime && index >= OPEN_AT_FIRST
+  const activeFile = list[activeIndex]
+  // While searching, matching files open so the marked lines show without another click.
+  const startsClosed = (index: number) => !oneAtATime && !query.trim() && index >= OPEN_AT_FIRST
   const isClosed = (path: string, index: number) => (closed ? closed.has(path) : startsClosed(index))
   const toggle = (path: string, index: number) =>
     setClosed((current) => {
-      const next = new Set(current ?? data.files.filter((_, at) => startsClosed(at)).map((file) => file.path))
+      const next = new Set(current ?? list.filter((_, at) => startsClosed(at)).map((file) => file.path))
       if (isClosed(path, index)) next.delete(path)
       else next.add(path)
       return next
     })
   // One button expands every file while any is closed, and collapses them all once every one is open.
-  const allOpen = data.files.every((file, index) => !isClosed(file.path, index))
+  const allOpen = list.every((file, index) => !isClosed(file.path, index))
   const pick = (path: string) => {
     if (oneAtATime) {
       setActivePath(path)
@@ -539,9 +548,18 @@ export function PullRequestFiles({
           and the file headers pin flush beneath it. */}
       <div className="sticky top-9 z-15 -mx-1 flex h-12 items-center gap-2 overflow-x-auto bg-canvas px-1">
         <span className="text-control text-muted-foreground tabular-nums">
-          {t('{0} files', { '0': `${data.files.length}${data.more ? '+' : ''}` })} ·{' '}
-          <span className="text-ok">+{added}</span> <span className="text-bad">−{removed}</span>
+          {query.trim()
+            ? t('{0} of {1} files', { '0': list.length, '1': `${data.files.length}${data.more ? '+' : ''}` })
+            : t('{0} files', { '0': `${data.files.length}${data.more ? '+' : ''}` })}{' '}
+          · <span className="text-ok">+{added}</span> <span className="text-bad">−{removed}</span>
         </span>
+        <SearchField
+          value={query}
+          onChange={setQuery}
+          label={t('Search files and changes')}
+          className="w-56 min-w-36 flex-initial"
+          inputClassName="h-7"
+        />
         <div className="ml-auto flex items-center gap-1">
           {/* View controls are icons with their name on hover, so the one action with words is Finish review. */}
           <div role="group" aria-label={t('Diff view')} className="flex items-center gap-0.5">
@@ -562,7 +580,7 @@ export function PullRequestFiles({
               className={ICON_BUTTON_CLASS}
               aria-label={allOpen ? t('Collapse all files') : t('Expand all files')}
               title={allOpen ? t('Collapse all files') : t('Expand all files')}
-              onClick={() => setClosed(allOpen ? new Set(data.files.map((file) => file.path)) : new Set())}
+              onClick={() => setClosed(allOpen ? new Set(list.map((file) => file.path)) : new Set())}
             >
               {allOpen ? <ChevronsDownUp size={15} /> : <ChevronsUpDown size={15} />}
             </Button>
@@ -643,7 +661,7 @@ export function PullRequestFiles({
           {large && (
             <div className="hidden @[760px]:block">
               <ReviewFileTree
-                files={data.files.map((file) => ({
+                files={list.map((file) => ({
                   id: file.path,
                   path: file.path,
                   addedLines: file.additions,
@@ -651,27 +669,32 @@ export function PullRequestFiles({
                 }))}
                 counts={counts}
                 viewedFiles={new Set()}
-                activeId={oneAtATime ? activeFile.path : undefined}
+                activeId={oneAtATime ? activeFile?.path : undefined}
                 onPick={pick}
               />
             </div>
           )}
           <div className="flex min-w-0 flex-col gap-3">
-            {large && (
+            {!list.length && (
+              <p className="m-0 text-caption text-muted-foreground">
+                {t('No changed file or line matches “{0}”.', { '0': query.trim() })}
+              </p>
+            )}
+            {large && list.length > 0 && (
               // Pinned under the toolbar while the diff scrolls, so the file count and Previous/Next stay in reach; file
               // headers pin beneath it (84px + its 52px).
               <div ref={banner} className="sticky top-[84px] z-12 h-[52px] scroll-mt-[84px] bg-canvas pb-2">
                 <LargeDiffBanner
                   oneAtATime={oneAtATime}
                   activeIndex={activeIndex}
-                  count={data.files.length}
-                  onStep={(delta) => pick(data.files[activeIndex + delta]!.path)}
+                  count={list.length}
+                  onStep={(delta) => pick(list[activeIndex + delta]!.path)}
                   onToggleAll={() => setShowAll((value) => !value)}
                 />
               </div>
             )}
-            {data.files.map((file, index) => {
-              const shown = !oneAtATime || file.path === activeFile.path
+            {list.map((file, index) => {
+              const shown = !oneAtATime || file.path === activeFile?.path
               if (oneAtATime && !shown && !visited.has(file.path)) return null
               const open = !isClosed(file.path, index)
               const status = STATUS_LABEL[file.status]
@@ -723,6 +746,7 @@ export function PullRequestFiles({
                         pending={filePending}
                         canComment={canReview}
                         wrap={wrap}
+                        highlight={query}
                         onWrite={writeNow}
                         onAdd={(line, startLine, text) =>
                           setPending((current) => [

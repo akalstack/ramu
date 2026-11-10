@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { PullRequestSummary, RepositoryPullRequests } from '../src/types'
 import {
+  diffLineMatches,
   groupPullRequests,
   inPullRequestFilter,
   matchesPullRequest,
+  matchesPullRequestFile,
   matchesPullRequestRow,
+  matchesReviewThread,
   mergedPullRequestRows,
   outsideRepoId,
   outsideRepository,
@@ -314,5 +317,43 @@ describe('shownReviewThreads', () => {
   it('leaves the list it was given in its order', () => {
     shownReviewThreads(threads, 'all', 'newest')
     expect(threads.map((entry) => entry.id)).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('searching inside a pull request', () => {
+  const thread = {
+    id: 't',
+    path: 'src/auth/login.ts',
+    line: 4,
+    outdated: false,
+    resolved: false,
+    resolvable: true,
+    comments: [
+      { id: '1', author: 'ana', bot: false, trusted: true, body: 'Rename this token', createdAt: 1 },
+      { id: '2', author: 'bo', bot: false, trusted: true, body: 'Done', createdAt: 2 },
+    ],
+  }
+
+  it('finds a review thread by its file, an author or any comment', () => {
+    expect(matchesReviewThread(thread, '')).toBe(true)
+    expect(matchesReviewThread(thread, 'login')).toBe(true)
+    expect(matchesReviewThread(thread, 'BO token')).toBe(true)
+    expect(matchesReviewThread(thread, 'token cy')).toBe(false)
+    expect(shownReviewThreads([thread], 'all', 'newest', 'missing')).toEqual([])
+  })
+
+  it('finds a changed file by its path, its old path or its diff, and marks the lines that matched', () => {
+    const file = {
+      path: 'src/new.ts',
+      previousPath: 'src/old.ts',
+      patch: '@@ -1 +1 @@\n-const a = 1\n+const tokenTtl = 2',
+    }
+    expect(matchesPullRequestFile(file, 'new.ts')).toBe(true)
+    expect(matchesPullRequestFile(file, 'old.ts')).toBe(true)
+    expect(matchesPullRequestFile(file, 'TOKENTTL')).toBe(true)
+    expect(matchesPullRequestFile({ ...file, patch: null }, 'tokenttl')).toBe(false)
+    expect(diffLineMatches('const tokenTtl = 2', 'tokenttl')).toBe(true)
+    expect(diffLineMatches('const a = 1', 'tokenttl')).toBe(false)
+    expect(diffLineMatches('anything', ' ')).toBe(false)
   })
 })

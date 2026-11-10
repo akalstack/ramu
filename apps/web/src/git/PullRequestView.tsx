@@ -49,6 +49,7 @@ import { BrandIcon } from '@/components/brand-icon'
 import { cn } from 'cn'
 import { Dialog, Dropdown, Menu, type MenuEntry } from '../Menu'
 import { Input } from '@/components/desktop-input'
+import { SearchField } from '@/components/search-field'
 import { supportsPullRequest } from '@ramu/shared/pullRequestSupport'
 import type { ForgeService, PullRequestWrite } from '@ramu/shared/types'
 import { PullRequestConversation, ReactionMenu } from './PullRequestConversation'
@@ -103,6 +104,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
   const [tab, setTab] = useState<'overview' | 'files'>('overview')
   const [threadFilter, setThreadFilter] = useState<'open' | 'resolved' | 'all'>('open')
   const [threadOrder, setThreadOrder] = useState<'newest' | 'oldest'>('newest')
+  const [threadSearch, setThreadSearch] = useState('')
   const fileCount = usePullRequestFiles(taskId, view.repoId, view.url)
   // A repository no project holds is read and acted on through the service; work in a thread needs it cloned first.
   const outside = outsideRepository(view.repoId)
@@ -281,7 +283,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
         : openThread('work'))
     }
   }
-  const shownThreads = shownReviewThreads(threads.data ?? [], threadFilter, threadOrder)
+  const shownThreads = shownReviewThreads(threads.data ?? [], threadFilter, threadOrder, threadSearch)
   const thread = linked.at(-1)
 
   return (
@@ -510,7 +512,15 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
                   ) : null}
                 </h3>
                 {/* Filters and an order, as GitHub's Overview page gives its comments. */}
-                <div className="ml-auto flex items-center gap-1.5">
+                <div className="ml-auto flex min-w-0 items-center gap-1.5">
+                  <SearchField
+                    value={threadSearch}
+                    onChange={setThreadSearch}
+                    label={t('Search review threads')}
+                    placeholder={t('Search comments, people or files')}
+                    className="w-56"
+                    inputClassName="h-7"
+                  />
                   <Dropdown
                     label={t('Show')}
                     value={threadFilter}
@@ -536,7 +546,11 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
               {threads.isError && <p className="m-0 text-caption text-bad">{errorText(threads.error)}</p>}
               {threads.isSuccess && !shownThreads.length && (
                 <p className="m-0 text-caption text-muted-foreground">
-                  {threadFilter === 'open' ? t('No open review threads.') : t('No review threads here.')}
+                  {threadSearch.trim()
+                    ? t('No review thread matches “{0}”.', { '0': threadSearch.trim() })
+                    : threadFilter === 'open'
+                      ? t('No open review threads.')
+                      : t('No review threads here.')}
                 </p>
               )}
               {shownThreads.map((entry) => (

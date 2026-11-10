@@ -1,18 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { keptPullRequestRead } from './keptPullRequests'
 import { useQueries } from '@tanstack/react-query'
-import {
-  ArrowLeft,
-  CircleCheck,
-  CircleDot,
-  CircleX,
-  GitPullRequest,
-  MessageSquare,
-  RefreshCw,
-  Search,
-} from 'lucide-react'
+import { ArrowLeft, CircleCheck, CircleDot, CircleX, GitPullRequest, MessageSquare, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
-import { Input } from '@/components/desktop-input'
+import { SearchField } from '@/components/search-field'
 import { RowButton } from '@/components/row-button'
 import { ContentSkeleton } from '@/components/content-skeleton'
 import { OverlayScrollArea } from '@/components/overlay-scroll-area'
@@ -350,20 +341,13 @@ export function PullRequestsPage() {
       >
         <div className="flex flex-none flex-col gap-2 px-4 pt-4">
           <div className="flex items-center gap-1.5">
-            <div className="relative min-w-0 flex-1">
-              <Search
-                size={13}
-                className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={t('Search title, author, branch or repository')}
-                aria-label={t('Search pull requests')}
-                className="h-8 pl-7"
-              />
-            </div>
+            <SearchField
+              value={search}
+              onChange={setSearch}
+              label={t('Search pull requests')}
+              placeholder={t('Search title, author, branch or repository')}
+              className="flex-1"
+            />
             <Button
               variant="ghost"
               size="icon-sm"

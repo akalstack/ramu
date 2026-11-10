@@ -1,6 +1,7 @@
 import type {
   ForgeService,
   PullRequestChecksState,
+  PullRequestFile,
   PullRequestGroup,
   PullRequestStage,
   PullRequestSummary,
@@ -381,9 +382,39 @@ export function shownReviewThreads(
   threads: readonly PullRequestThread[],
   filter: ReviewThreadFilter,
   order: 'newest' | 'oldest',
+  search = '',
 ): PullRequestThread[] {
   const last = (entry: PullRequestThread) => entry.comments.at(-1)?.createdAt ?? 0
   return threads
     .filter((entry) => (filter === 'all' ? true : filter === 'open' ? !entry.resolved : entry.resolved))
+    .filter((entry) => matchesReviewThread(entry, search))
     .sort((a, b) => (order === 'newest' ? last(b) - last(a) : last(a) - last(b)))
+}
+
+const searchWords = (search: string) => search.trim().toLowerCase().split(/\s+/).filter(Boolean)
+
+/** Whether every word of a search is in a review thread's file, its authors or what they wrote. */
+export function matchesReviewThread(thread: PullRequestThread, search: string): boolean {
+  const words = searchWords(search)
+  if (!words.length) return true
+  const haystack = [thread.path ?? '', ...thread.comments.map((comment) => `${comment.author ?? ''} ${comment.body}`)]
+    .join('\n')
+    .toLowerCase()
+  return words.every((word) => haystack.includes(word))
+}
+
+/** Whether every word of a search is in a changed file's path or its diff, so a file is found by name or by code. */
+export function matchesPullRequestFile(file: Pick<PullRequestFile, 'path' | 'previousPath' | 'patch'>, search: string) {
+  const words = searchWords(search)
+  if (!words.length) return true
+  const haystack = `${file.path}\n${file.previousPath ?? ''}\n${file.patch ?? ''}`.toLowerCase()
+  return words.every((word) => haystack.includes(word))
+}
+
+/** Whether one diff line holds a word of the search, so the lines that made a file match can be marked. */
+export function diffLineMatches(text: string, search: string): boolean {
+  const words = searchWords(search)
+  if (!words.length) return false
+  const line = text.toLowerCase()
+  return words.some((word) => line.includes(word))
 }

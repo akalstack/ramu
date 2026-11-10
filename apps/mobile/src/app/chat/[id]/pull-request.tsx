@@ -41,6 +41,7 @@ import {
   pullRequestNextStep,
   pullRequestRef,
   pullRequestStage,
+  matchesPullRequestFile,
   shownReviewThreads,
   type ReviewThreadFilter,
 } from '@ramu/shared/pullRequests'
@@ -52,7 +53,8 @@ import { openPullRequestThread } from '../../../runtime/pullRequestThread'
 import { useSay } from '../../../i18n'
 import { Header, HeaderButton, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
-import { Button, Card, Chip, ConnectionDot, Divider, Segmented, Sheet, T, Toggle } from '../../../components/ui'
+import { Button, Card, Chip, ConnectionDot, Divider, Pill, Segmented, Sheet, T, Toggle } from '../../../components/ui'
+import { BottomSearch } from '../../../components/BottomSearch'
 import {
   ACTION_BAR_SPACE,
   PullRequestActionBar,
@@ -391,7 +393,10 @@ export default function PullRequestScreen() {
   const open = pr?.state === 'open'
   const mine = pr?.group === 'mine'
   const openThreads = (threads ?? []).filter((entry) => !entry.resolved)
-  const shownThreads = shownReviewThreads(threads ?? [], threadFilter, threadOrder)
+  // One search in the navigation bar narrows whichever tab is showing: review threads, or the changed files.
+  const [search, setSearch] = useState('')
+  const shownThreads = shownReviewThreads(threads ?? [], threadFilter, threadOrder, search)
+  const shownFiles = files ? files.files.filter((file) => matchesPullRequestFile(file, search)) : []
   const step = pr && stage ? readinessStep(pullRequestNextStep(pr, stage, mine), !!outside) : 'none'
   // Reviewing happens on the Files changed tab, on an open pull request whose service takes line comments.
   const canReview = !!pr && open && canWrite && supportsPullRequest(service, 'line-comment')
@@ -792,7 +797,11 @@ export default function PullRequestScreen() {
                       <ActivityIndicator color={c.muted} style={{ paddingVertical: space.m }} />
                     ) : !shownThreads.length ? (
                       <T tone="muted">
-                        {threadFilter === 'open' ? say('No open review threads.') : say('No review threads here.')}
+                        {search.trim()
+                          ? say('No review thread matches “{0}”.', { 0: search.trim() })
+                          : threadFilter === 'open'
+                            ? say('No open review threads.')
+                            : say('No review threads here.')}
                       </T>
                     ) : (
                       shownThreads.map((entry) => (
@@ -803,8 +812,8 @@ export default function PullRequestScreen() {
                                 ? `${entry.path}${entry.line ? `:${entry.line}` : ''}`
                                 : say('Review comment')}
                             </T>
-                            {entry.outdated ? <Pill text={say('Outdated')} /> : null}
-                            {entry.resolved ? <Pill text={say('Resolved')} /> : null}
+                            {entry.outdated ? <Pill>{say('Outdated')}</Pill> : null}
+                            {entry.resolved ? <Pill>{say('Resolved')}</Pill> : null}
                           </View>
                           {entry.comments.map((comment, index) => (
                             // Replies hang from a line under the first comment, as one conversation.
@@ -835,7 +844,7 @@ export default function PullRequestScreen() {
                                 <T size={font.control} weight="600">
                                   {comment.author ?? say('Someone')}
                                 </T>
-                                {comment.bot ? <Pill text={say('bot')} /> : null}
+                                {comment.bot ? <Pill>{say('bot')}</Pill> : null}
                                 {!comment.trusted ? (
                                   <T size={font.caption} tone="warn">
                                     {say('From outside the project')}
@@ -894,18 +903,28 @@ export default function PullRequestScreen() {
                       {say('Tap a line to comment on it. Comments wait until you finish your review.')}
                     </T>
                   ) : null}
-                  <PullRequestFilesList
-                    files={files.files}
-                    more={files.more}
-                    threads={threads ?? []}
-                    pending={pending}
-                    onComment={
-                      canReview ? (path, line, startLine) => setCommenting({ path, line, startLine }) : undefined
-                    }
-                    onEditPending={canReview ? (comment) => setCommenting(comment) : undefined}
-                    focus={focusFile}
-                    onReveal={(y) => scroll.current?.scrollTo({ y: Math.max(0, offset.current + y - 140) })}
-                  />
+                  {search.trim() ? (
+                    <T size={font.caption} tone="muted">
+                      {shownFiles.length
+                        ? say('{0} of {1} files', { 0: shownFiles.length, 1: files.files.length })
+                        : say('No changed file or line matches “{0}”.', { 0: search.trim() })}
+                    </T>
+                  ) : null}
+                  {shownFiles.length ? (
+                    <PullRequestFilesList
+                      key={search.trim() ? 'search' : 'all'}
+                      files={shownFiles}
+                      more={files.more}
+                      threads={threads ?? []}
+                      pending={pending}
+                      onComment={
+                        canReview ? (path, line, startLine) => setCommenting({ path, line, startLine }) : undefined
+                      }
+                      onEditPending={canReview ? (comment) => setCommenting(comment) : undefined}
+                      focus={focusFile}
+                      onReveal={(y) => scroll.current?.scrollTo({ y: Math.max(0, offset.current + y - 140) })}
+                    />
+                  ) : null}
                 </View>
               ) : (
                 <T tone="muted">{files ? say('No changed files to show.') : say('Loading files…')}</T>
@@ -1116,6 +1135,12 @@ export default function PullRequestScreen() {
           }
         />
       ) : null}
+      <BottomSearch
+        placement="header"
+        value={search}
+        onChangeText={setSearch}
+        placeholder={tab === 'files' ? say('Search files and changes') : say('Search comments, people or files')}
+      />
     </Screen>
   )
 }
@@ -1263,17 +1288,5 @@ function MergeSheet({
         />
       </View>
     </Sheet>
-  )
-}
-
-/** A thread's state or an author's kind, as a quiet label beside the name. */
-function Pill({ text }: { text: string }) {
-  const { c } = useTheme()
-  return (
-    <View style={{ borderWidth: 1, borderColor: c.line, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1 }}>
-      <T size={font.caption} tone="muted">
-        {text}
-      </T>
-    </View>
   )
 }

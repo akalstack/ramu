@@ -7115,4 +7115,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Comment on this file': 'Komentar pada file ini',
   'Review comment': 'Komentar tinjauan',
   '1 comment': '1 komentar',
+  'Search files and changes': 'Cari file dan perubahan',
+  'Search review threads': 'Cari thread tinjauan',
+  'Search comments, people or files': 'Cari komentar, orang, atau file',
+  'No review thread matches “{0}”.': 'Tidak ada thread tinjauan yang cocok dengan “{0}”.',
+  'No changed file or line matches “{0}”.': 'Tidak ada file atau baris berubah yang cocok dengan “{0}”.',
 }
