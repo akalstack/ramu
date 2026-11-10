@@ -2,6 +2,54 @@
   "index": "https://github.com/akalstack/ramu-plugins",
   "plugins": [
     {
+      "name": "vercel-cli",
+      "description": "Deploy to Vercel through its CLI, signed in with a token kept on the host: previews run without asking, production asks.",
+      "homepage": "https://vercel.com",
+      "author": "Akalstack",
+      "keywords": [
+        "vercel",
+        "deploy",
+        "hosting",
+        "preview"
+      ],
+      "category": "deploy",
+      "byRamu": true,
+      "signed": true,
+      "stacks": [
+        "nextjs"
+      ],
+      "adds": {
+        "skills": 1,
+        "credentials": [
+          "Vercel token"
+        ],
+        "cli": "vercel"
+      }
+    },
+    {
+      "name": "netlify-cli",
+      "description": "Deploy to Netlify through its CLI, signed in with a token kept on the host: previews run without asking, production asks.",
+      "homepage": "https://www.netlify.com",
+      "author": "Akalstack",
+      "keywords": [
+        "netlify",
+        "deploy",
+        "hosting",
+        "preview"
+      ],
+      "category": "deploy",
+      "byRamu": true,
+      "signed": true,
+      "stacks": [],
+      "adds": {
+        "skills": 1,
+        "credentials": [
+          "Netlify personal access token"
+        ],
+        "cli": "netlify"
+      }
+    },
+    {
       "name": "railway-cli",
       "description": "Deploy apps and databases to Railway through its CLI, signed in with a token kept on the host.",
       "homepage": "https://railway.com",
