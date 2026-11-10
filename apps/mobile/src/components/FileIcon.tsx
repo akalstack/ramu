@@ -1,4 +1,6 @@
 import {
+  BookOpen,
+  Bot,
   Box,
   Braces,
   Database,
@@ -15,8 +17,13 @@ import {
   FileText,
   FileType,
   FileVideo,
+  History,
   Presentation,
+  Scale,
+  ShieldCheck,
+  Sparkles,
   SquareTerminal,
+  Users,
 } from 'lucide-react-native'
 import Svg, { Path } from 'react-native-svg'
 import { fileIconStyle, type FileIconName } from '@ramu/shared/workspace/fileIcons'
@@ -24,6 +31,8 @@ import { useTheme } from '../theme'
 import type { Icon } from './ui'
 
 const ICONS: Record<FileIconName, Icon> = {
+  BookOpen,
+  Bot,
   Box,
   Braces,
   Database,
@@ -40,8 +49,13 @@ const ICONS: Record<FileIconName, Icon> = {
   FileText,
   FileType,
   FileVideo,
+  History,
   Presentation,
+  Scale,
+  ShieldCheck,
+  Sparkles,
   SquareTerminal,
+  Users,
 }
 
 /** A file's icon by name or extension, the same one the desktop draws. */

@@ -1,4 +1,6 @@
 import {
+  BookOpen,
+  Bot,
   Box,
   Braces,
   Database,
@@ -15,13 +17,20 @@ import {
   FileText,
   FileType,
   FileVideo,
+  History,
   Presentation,
+  Scale,
+  ShieldCheck,
+  Sparkles,
   SquareTerminal,
+  Users,
   type LucideIcon,
 } from 'lucide-react'
 import { fileIconStyle, type FileIconName, type FileIconTone } from '@ramu/shared/workspace/fileIcons'
 
 const ICONS: Record<FileIconName, LucideIcon> = {
+  BookOpen,
+  Bot,
   Box,
   Braces,
   Database,
@@ -38,8 +47,13 @@ const ICONS: Record<FileIconName, LucideIcon> = {
   FileText,
   FileType,
   FileVideo,
+  History,
   Presentation,
+  Scale,
+  ShieldCheck,
+  Sparkles,
   SquareTerminal,
+  Users,
 }
 const TONE: Record<FileIconTone, string> = {
   ok: 'text-ok',

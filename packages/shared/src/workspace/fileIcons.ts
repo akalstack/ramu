@@ -5,6 +5,8 @@ import { FILE_LOGO_PATHS, type FileLogoName } from './fileLogos'
 // the same in Explorer, the composer, chat references and tool rows on both.
 
 export type FileIconName =
+  | 'BookOpen'
+  | 'Bot'
   | 'Box'
   | 'Braces'
   | 'Database'
@@ -21,8 +23,13 @@ export type FileIconName =
   | 'FileText'
   | 'FileType'
   | 'FileVideo'
+  | 'History'
   | 'Presentation'
+  | 'Scale'
+  | 'ShieldCheck'
+  | 'Sparkles'
   | 'SquareTerminal'
+  | 'Users'
 export type FileIconTone = 'ok' | 'brand' | 'warn' | 'bad' | 'muted'
 export interface FileLogo {
   /** A filled path in a 24×24 box. */
@@ -51,7 +58,8 @@ const TYPESCRIPT = logo('typescript', '#3178C6'),
   MARKDOWN = logo('markdown', undefined, 'muted'),
   DOCKER = logo('docker', '#2496ED'),
   GIT = logo('git', '#F05032', 'muted'),
-  NODE = logo('node', '#5FA04E', 'ok')
+  NODE = logo('node', '#5FA04E', 'ok'),
+  CLAUDE = logo('claude', '#D97757', 'warn')
 
 const BY_EXT = new Map<string, FileIconStyle>([
   ...set('ts mts cts', TYPESCRIPT),
@@ -76,6 +84,7 @@ const BY_EXT = new Map<string, FileIconStyle>([
   ...set('css', logo('css', '#2D8CDB')),
   ...set('scss sass', logo('sass', '#CC6699')),
   ...set('md markdown mdx', MARKDOWN),
+  ...set('mdc', logo('cursor', undefined, 'muted')),
   ...set('json jsonc json5', JSON_ICON),
   ...set('yaml yml', logo('yaml', '#CB171E', 'bad')),
   ...set('toml', logo('toml', '#C0582F', 'warn')),
@@ -124,7 +133,16 @@ const BY_NAME = new Map<string, FileIconStyle>([
   ['.gitignore', GIT],
   ['.gitattributes', GIT],
   ['.gitmodules', GIT],
-  ['license', style('FileText', 'muted')],
+  // Instructions agents read: each tool's mark, and the shared AGENTS.md as an agent, so they stand apart from docs.
+  ['claude.md', CLAUDE],
+  ['claude.local.md', CLAUDE],
+  ['agents.md', style('Bot', 'brand')],
+  ['agents.override.md', style('Bot', 'brand')],
+  ['gemini.md', logo('gemini', '#8E75B2')],
+  ['.cursorrules', logo('cursor', undefined, 'muted')],
+  ['copilot-instructions.md', logo('copilot', undefined, 'muted')],
+  ['skill.md', style('Sparkles', 'brand')],
+  ['codeowners', style('Users', 'muted')],
 ])
 // Tool configs by name prefix, before the generic config icon.
 const BY_PREFIX: [RegExp, FileIconStyle][] = [
@@ -134,6 +152,12 @@ const BY_PREFIX: [RegExp, FileIconStyle][] = [
   [/^(eslint\.config\.|\.eslintrc)/, logo('eslint', '#8080F2')],
   [/^(prettier\.config\.|\.prettierrc)/, logo('prettier', '#E0A526', 'warn')],
   [/^dockerfile\./, DOCKER],
+  // A project's standard documents, whatever their extension.
+  [/^readme(\.|$)/, style('BookOpen', 'brand')],
+  [/^(changelog|changes|history)(\.|$)/, style('History', 'muted')],
+  [/^(license|licence|copying)(\.|$)/, style('Scale', 'muted')],
+  [/^contributing(\.|$)/, style('Users', 'muted')],
+  [/^security(\.|$)/, style('ShieldCheck', 'warn')],
 ]
 
 /** Icon and tint for a file, chosen by its name or extension. */
