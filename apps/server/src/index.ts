@@ -594,7 +594,7 @@ const refreshTestPlatforms = () =>
 setTimeout(refreshTestPlatforms, 5000).unref?.()
 setInterval(refreshTestPlatforms, 10 * 60_000).unref?.()
 agents.customAgents = () => customAgents.list()
-/** Everything still running that this service started and a thread owns: agents, terminals and commands. */
+/** Everything still running that this service started and a thread owns: agents, terminals, commands and test devices. */
 const threadRoots = (): ProcessRoot[] => {
   const sessions = new Map(agents.all().map((session) => [session.id, session]))
   return [
