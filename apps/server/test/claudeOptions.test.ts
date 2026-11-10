@@ -52,3 +52,26 @@ it("turns off Claude's own AskUserQuestion only when Ramu's question tools repla
   expect(options(true).disallowedTools).toEqual(['AskUserQuestion'])
   expect(options(false).disallowedTools).toBeUndefined()
 })
+
+it("keeps Claude Code's own idle compaction only when Ramu asks on return, and declares the return prompt", () => {
+  expect(launch(undefined, undefined, { idleCompaction: 'onReturn' }).settings).not.toHaveProperty('idleCompaction')
+  expect(launch(undefined, undefined, { idleCompaction: 'beforeCacheExpires' }).settings).toMatchObject({
+    idleCompaction: false,
+  })
+  expect(launch(undefined, undefined, { idleCompaction: 'off' }).settings).toMatchObject({ idleCompaction: false })
+  expect(launch(undefined).supportedDialogKinds).toBeUndefined()
+  const onUserDialog = async () => ({ behavior: 'cancelled' as const })
+  const options = claudeLaunchOptions({
+    session: { cwd: '/tmp', additionalDirs: [], settings: { access: 'edits' } } as unknown as AgentSessionInfo,
+    connection: undefined,
+    advisorModel: undefined,
+    abort: new AbortController(),
+    canUseTool: async () => ({ behavior: 'deny', message: '' }),
+    onUserDialog,
+    resume: null,
+    preferences: undefined,
+    hooks: undefined,
+  })
+  expect(options.onUserDialog).toBe(onUserDialog)
+  expect(options.supportedDialogKinds).toEqual(['resume_return'])
+})

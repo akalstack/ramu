@@ -5633,16 +5633,16 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Nilai dari v{version} tidak bisa dibawa karena versi ini mengubah artinya.',
   'Your values from v{version} carried over.': 'Nilaimu dari v{version} sudah dibawa.',
   'v{version} · replaced by v{latest}': 'v{version} · diganti oleh v{latest}',
-  'A new thread starts with this page attached. It works with its usual access and approvals.':
-    'Thread baru dimulai dengan halaman ini terlampir. Thread itu bekerja dengan akses dan persetujuan seperti biasa.',
+  'A new thread starts with this artifact attached. It works with its usual access and approvals.':
+    'Thread baru dimulai dengan artefak ini terlampir. Thread itu bekerja dengan akses dan persetujuan seperti biasa.',
   'A project can have a backend, more files, sign-in and its own domain.':
     'Proyek bisa punya backend, lebih banyak file, login, dan domain sendiri.',
   'Accepts records from outside services into {collection}': 'Menerima catatan dari layanan luar ke {collection}',
   'Acts when records match: {list}': 'Bertindak saat catatan cocok: {list}',
-  'Ask about this page': 'Tanya tentang halaman ini',
-  'Ask this page': 'Tanya halaman ini',
-  'Ask this page, such as “how much on food in March?”':
-    'Tanya halaman ini, misalnya “berapa untuk makan di bulan Maret?”',
+  'Ask about this artifact': 'Tanya tentang artefak ini',
+  'Ask this artifact': 'Tanya artefak ini',
+  'Ask this artifact, such as “how much on food in March?”':
+    'Tanya artefak ini, misalnya “berapa untuk makan di bulan Maret?”',
   'Asking…': 'Bertanya…',
   'Can add records': 'Bisa menambah catatan',
   'Copy link': 'Salin tautan',
@@ -5668,15 +5668,28 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Make it a project?': 'Jadikan proyek?',
   'Make it a project…': 'Jadikan proyek…',
   'No answer.': 'Tidak ada jawaban.',
-  'Page actions': 'Aksi halaman',
-  'Page settings': 'Pengaturan halaman',
-  'Page settings…': 'Pengaturan halaman…',
-  'Point at something on the page and say what to change':
-    'Tunjuk sesuatu di halaman dan katakan apa yang perlu diubah',
+  'Artifact actions': 'Aksi artefak',
+  'Artifact settings': 'Pengaturan artefak',
+  'Artifact settings…': 'Pengaturan artefak…',
+  'Point at something in the artifact and say what to change':
+    'Tunjuk sesuatu di artefak dan katakan apa yang perlu diubah',
   'Publish to the web': 'Terbitkan ke web',
   'Publish to the web…': 'Terbitkan ke web…',
-  'Ramu writes the page’s sources and records to a new folder in Ramu Projects and starts a thread there to turn it into an app.':
-    'Ramu menulis sumber dan catatan halaman ke folder baru di Ramu Projects dan memulai thread di sana untuk menjadikannya aplikasi.',
+  'Ramu writes the artifact’s sources and records to a new folder, adds it to your projects and starts a thread there to turn it into an app.':
+    'Ramu menulis sumber dan catatan artefak ke folder baru, menambahkannya ke proyekmu, dan memulai thread di sana untuk menjadikannya aplikasi.',
+  'Ramu writes the artifact’s sources and records to this folder in the project. A folder that already holds files is kept, and a numbered one is used instead.':
+    'Ramu menulis sumber dan catatan artefak ke folder ini di dalam proyek. Folder yang sudah berisi file dibiarkan, dan folder bernomor dipakai sebagai gantinya.',
+  'Start a thread there to build it into the project': 'Mulai thread di sana untuk membangunnya ke dalam proyek',
+  'Folder in the project': 'Folder di dalam proyek',
+  'Into a project': 'Ke proyek',
+  'Where it goes': 'Tempatnya',
+  'Exported to {0}': 'Diekspor ke {0}',
+  Export: 'Ekspor',
+  'Choose where to put it': 'Pilih tempatnya',
+  'Put it here': 'Taruh di sini',
+  'In the usual folder': 'Di folder biasanya',
+  'Change where the project goes': 'Ubah tempat proyek',
+  'Change…': 'Ubah…',
   'Read-only link': 'Tautan hanya baca',
   'Reads one project folder: {path}': 'Membaca satu folder proyek: {path}',
   Records: 'Catatan',
@@ -5690,21 +5703,21 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Apps, docs and diagrams agents made for you to keep. Open them here or on your phone, and ask in any thread to change one.':
     'Aplikasi, dokumen, dan diagram buatan agent untuk kamu simpan. Buka di sini atau di ponsel, dan minta perubahan di thread mana pun.',
   Smart: 'Pintar',
-  'The live site shows v{live}; this page is at v{version}.':
-    'Situs live masih v{live}, halaman ini sudah v{version}.',
-  'The page asks to start a thread': 'Halaman meminta memulai thread',
-  'The page never sees your keys or other pages. Change this later in Page settings.':
-    'Halaman tidak pernah melihat kunci atau halaman lainmu. Ubah nanti di Pengaturan halaman.',
-  'This page hit an error: {message}': 'Halaman ini error: {message}',
-  'This page keeps records or uses a model on this host, so it cannot go on the web as is. A project can have its own database and server.':
-    'Halaman ini menyimpan catatan atau memakai model di host ini, jadi tidak bisa diterbitkan ke web apa adanya. Proyek bisa punya database dan server sendiri.',
-  'This page uses nothing beyond its own frame.': 'Halaman ini tidak memakai apa pun di luar bingkainya sendiri.',
+  'The live site shows v{live}; this artifact is at v{version}.':
+    'Situs live masih v{live}, artefak ini sudah v{version}.',
+  'The artifact asks to start a thread': 'Artefak meminta memulai thread',
+  'The artifact never sees your keys or other artifacts. Change this later in Artifact settings.':
+    'Artefak tidak pernah melihat kunci atau artefak lainmu. Ubah nanti di Pengaturan artefak.',
+  'This artifact hit an error: {message}': 'Artefak ini error: {message}',
+  'This artifact keeps records or uses a model on this host, so it cannot go on the web as is. A project can have its own database and server.':
+    'Artefak ini menyimpan catatan atau memakai model di host ini, jadi tidak bisa diterbitkan ke web apa adanya. Proyek bisa punya database dan server sendiri.',
+  'This artifact uses nothing beyond its own frame.': 'Artefak ini tidak memakai apa pun di luar bingkainya sendiri.',
   'Today: {ai} model requests, {notify} notifications': 'Hari ini: {ai} permintaan model, {notify} notifikasi',
   Undone: 'Dibatalkan',
   'Update live site': 'Perbarui situs live',
   'Updated in another thread': 'Diperbarui di thread lain',
-  'Uses a model on this host: {purpose}. The model sees only what the page sends it.':
-    'Memakai model di host ini: {purpose}. Model hanya melihat apa yang dikirim halaman.',
+  'Uses a model on this host: {purpose}. The model sees only what the artifact sends it.':
+    'Memakai model di host ini: {purpose}. Model hanya melihat apa yang dikirim artefak.',
   'Uses photos you choose: {purpose}': 'Memakai foto yang kamu pilih: {purpose}',
   'Versions of {title}': 'Versi {title}',
   'Versions…': 'Versi…',
@@ -5716,14 +5729,14 @@ export const indonesian: Readonly<Record<string, string>> = {
   'An interaction failed.': 'Interaksi gagal.',
   'The run did not start.': 'Run gagal dimulai.',
   'Threads cannot be started through a share link.': 'Thread tidak bisa dimulai lewat tautan berbagi.',
-  'Change what this page may use in Page settings on the desktop.':
-    'Ubah apa yang boleh dipakai halaman ini di Pengaturan halaman di desktop.',
+  'Change what this artifact may use in Artifact settings on the desktop.':
+    'Ubah apa yang boleh dipakai artefak ini di Pengaturan artefak di desktop.',
   'Runs need the host. Reconnect and try again.': 'Run butuh host. Sambungkan lagi lalu coba lagi.',
   'Saved copy · reconnect to see the current version':
     'Salinan tersimpan · sambungkan lagi untuk melihat versi terkini',
   'Some changes made offline were not saved:': 'Beberapa perubahan saat offline tidak tersimpan:',
   'The offline queue is full. Reconnect to the host.': 'Antrean offline penuh. Sambungkan lagi ke host.',
-  'Make a page from this thread': 'Buat halaman dari thread ini',
+  'Make an artifact from this thread': 'Buat artefak dari thread ini',
   'Phone preview of {title}': 'Pratinjau ponsel {title}',
   'Desktop preview of {title}': 'Pratinjau desktop {title}',
   'Every Monday at {time}': 'Setiap Senin pukul {time}',
@@ -5731,12 +5744,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Let its runs search the web': 'Izinkan run-nya mencari di web',
   'Let its runs use {server}; each call asks you first':
     'Izinkan run-nya memakai {server}; setiap panggilan minta izinmu dulu',
-  'Page runs': 'Run halaman',
+  'Artifact runs': 'Run artefak',
   'Share link': 'Tautan berbagi',
   'Show in the home screen widget': 'Tampilkan di widget layar utama',
   'Remove from the home screen widget': 'Hapus dari widget layar utama',
-  'Deploys this page as a static site on your own account. Ramu hosts nothing.':
-    'Menerbitkan halaman ini sebagai situs statis di akunmu sendiri. Ramu tidak meng-host apa pun.',
+  'Deploys this artifact as a static site on your own account. Ramu hosts nothing.':
+    'Menerbitkan artefak ini sebagai situs statis di akunmu sendiri. Ramu tidak meng-host apa pun.',
   'Deploys v{version} to {url}.': 'Menerbitkan v{version} ke {url}.',
   Where: 'Tempat',
   '{name} token': 'Token {name}',
@@ -5744,13 +5757,13 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Token use by day and provider': 'Pemakaian token per hari dan provider',
   'Thread titles and states': 'Judul dan status thread',
   'Pull requests on threads': 'Pull request di thread',
-  'A page that keeps records or uses this host’s features cannot be opened to people without Ramu.':
-    'Halaman yang menyimpan catatan atau memakai fitur host ini tidak bisa dibuka untuk orang tanpa Ramu.',
-  'Anyone with the link sees this page, without Ramu, while this host is on. It gets its own address through your Cloudflare or ngrok tool and serves only this page.':
-    'Siapa pun yang punya tautannya bisa melihat halaman ini tanpa Ramu selama host ini menyala. Halaman mendapat alamat sendiri lewat Cloudflare atau ngrok milikmu dan hanya menyajikan halaman ini.',
+  'An artifact that keeps records or uses this host’s features cannot be opened to people without Ramu.':
+    'Artefak yang menyimpan catatan atau memakai fitur host ini tidak bisa dibuka untuk orang tanpa Ramu.',
+  'Anyone with the link sees this artifact, without Ramu, while this host is on. It gets its own address through your Cloudflare or ngrok tool and serves only this artifact.':
+    'Siapa pun yang punya tautannya bisa melihat artefak ini tanpa Ramu selama host ini menyala. Artefak mendapat alamat sendiri lewat Cloudflare atau ngrok milikmu dan hanya menyajikan artefak ini.',
   'Close to everyone': 'Tutup untuk semua orang',
-  'Install cloudflared or ngrok on this host to open pages to anyone.':
-    'Pasang cloudflared atau ngrok di host ini untuk membuka halaman ke siapa pun.',
+  'Install cloudflared or ngrok on this host to open artifacts to anyone.':
+    'Pasang cloudflared atau ngrok di host ini untuk membuka artefak ke siapa pun.',
   'Open to anyone': 'Buka untuk siapa pun',
   'The tunnel stopped. Ramu is retrying.': 'Tunnel berhenti. Ramu mencoba lagi.',
   'Ramu hit a problem': 'Ramu mengalami masalah',
@@ -5762,7 +5775,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Sepertinya ini hal baru. Pilih tempat mulai.',
   'Suggested · something new that needs no project yet': 'Disarankan · sesuatu yang baru dan belum perlu proyek',
   Standalone: 'Mandiri',
-  'Make me a page to': 'Buatkan halaman untuk',
   Artifacts: 'Artefak',
   Artifact: 'Artefak',
   'Back to Artifacts': 'Kembali ke Artefak',
@@ -6953,4 +6965,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   "Automatic follows this host’s memory; threads past the limit wait in line.": "Otomatis mengikuti memori host ini; thread di atas batas menunggu giliran.",
   "Slim iOS Simulators": "iOS Simulator ringan",
   "Quicker to start and lighter on memory, without some system apps such as Safari.": "Lebih cepat dinyalakan dan lebih hemat memori, tanpa beberapa aplikasi sistem seperti Safari.",
+  'Compacted while idle': 'Diringkas saat menganggur',
+  'Compacted when you returned': 'Diringkas saat Anda kembali',
+  'Long idle Claude threads': 'Thread Claude panjang yang menganggur',
+  'Compacting summarizes a long conversation so later replies read less of it. Applies to Claude threads over 200K tokens.': 'Peringkasan merangkum percakapan panjang agar balasan berikutnya membaca lebih sedikit. Berlaku untuk thread Claude di atas 200K token.',
+  'Ask when I return': 'Tanya saat saya kembali',
+  'Compact before the cache expires': 'Ringkas sebelum cache kedaluwarsa',
+  'Keep full history': 'Simpan seluruh riwayat',
+  'Could not compact the conversation': 'Tidak bisa meringkas percakapan',
 }

@@ -89,8 +89,8 @@
           "widgets": [
             {
               "name": "RamuPage",
-              "displayName": "Ramu page",
-              "description": "A number or short list from one of your Ramu pages.",
+              "displayName": "Ramu artifact",
+              "description": "A number or short list from one of your Ramu artifacts.",
               "supportedFamilies": ["systemSmall", "systemMedium"],
               "android": {
                 "minWidth": 110,

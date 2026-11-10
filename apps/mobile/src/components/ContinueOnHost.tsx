@@ -19,7 +19,8 @@ import { useStore } from '../runtime/store'
 import type { Chat } from '../runtime/types'
 import { font, space, useTheme } from '../theme'
 import { TextField } from './ScheduleFields'
-import { Button, Sheet, T } from './ui'
+import { Button, SHEET_SETTLE_MS, Sheet, T } from './ui'
+import { pickFolder } from '../runtime/folderPick'
 
 type Invoke = (hostId: string, method: string, ...args: unknown[]) => Promise<unknown>
 
@@ -35,6 +36,7 @@ export function ContinueOnHostSheet({
 }) {
   const say = useSay()
   const store = useStore()
+  const router = useRouter()
   const invoke = store.invoke as unknown as Invoke
   const here = store.computers.find((pc) => pc.id === chat.computerId)
   const available = store.computers.filter((pc) => pc.id !== chat.computerId && pc.status === 'online')
@@ -49,6 +51,8 @@ export function ContinueOnHostSheet({
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
+  // The sheet steps aside while the folder browser chooses where a clone goes, then comes back as it was.
+  const [picking, setPicking] = useState(false)
   if (targetId && !targets.length) setTargets([targetId])
   const key = targets.join(',')
   useEffect(() => {
@@ -115,6 +119,17 @@ export function ContinueOnHostSheet({
       setBusy(false)
     }
   }
+  const changeParent = (id: string, plan: TargetPlan) => {
+    setPicking(true)
+    setTimeout(() => {
+      void pickFolder(() =>
+        router.push({ pathname: '/folders', params: { purpose: 'parent', start: plan.parent, computer: id } }),
+      ).then((parent) => {
+        if (parent) setPlans((current) => ({ ...current, [id]: { ...plan, parent } }))
+        setPicking(false)
+      })
+    }, SHEET_SETTLE_MS)
+  }
   const line = (text: string, tone?: 'bad' | 'warn' | 'muted') => (
     <T key={text} size={font.control} tone={tone}>
       {text}
@@ -125,7 +140,7 @@ export function ContinueOnHostSheet({
       ? say('Continue on {0} hosts', { 0: targets.length })
       : say('Continue on {0}', { 0: name(targets[0] ?? '') })
   return (
-    <Sheet open={!!targetId} onClose={() => !busy && close()} title={title}>
+    <Sheet open={!!targetId && !picking} onClose={() => !busy && !picking && close()} title={title}>
       <View style={{ padding: space.l, gap: space.s }}>
         <T size={font.caption} tone="muted">
           {say(
@@ -193,9 +208,22 @@ export function ContinueOnHostSheet({
                       ) : plan.match ? (
                         line(say('Project: {0}', { 0: plan.match.name }))
                       ) : (
-                        line(
-                          say('Set up on {0}: clones {1} into {2}', { 0: name(id), 1: repo.repoName, 2: plan.parent }),
-                        )
+                        <>
+                          {line(
+                            say('Set up on {0}: clones {1} into {2}', {
+                              0: name(id),
+                              1: repo.repoName,
+                              2: plan.parent,
+                            }),
+                          )}
+                          <Button
+                            kind="secondary"
+                            title={say('Change…')}
+                            accessibilityLabel={say('Change where the project goes')}
+                            disabled={busy}
+                            onPress={() => changeParent(id, plan)}
+                          />
+                        </>
                       )}
                       {line(
                         say('Runs {0} with Allow edits', { 0: plan.settings.model || plan.settings.provider }),

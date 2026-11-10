@@ -116,7 +116,7 @@ export async function openHeadlessPage(
             return pages.file(page.id, String(collection))
           default:
             // A page loaded for a run only reads; its functions change records through the run's own tools.
-            throw new Error(`${method} is not available while the page runs on its own.`)
+            throw new Error(`${method} is not available while the artifact runs on its own.`)
         }
       })
     })
@@ -139,7 +139,7 @@ export async function openHeadlessPage(
           const id = `headless-${++next}`
           const timeout = setTimeout(() => {
             results.delete(id)
-            reject(new Error(`The page did not answer ${name} in time.`))
+            reject(new Error(`The artifact did not answer ${name} in time.`))
           }, 30_000)
           results.set(id, {
             resolve: (value) => {

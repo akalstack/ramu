@@ -21,6 +21,7 @@ import { invokeOn } from '../../../ipc'
 import { errorText } from '../../../lib/errors'
 import { useHost } from '../../../workspace/HostProvider'
 import { useComputers } from '../../../workspace/computers'
+import { pickHostFolder } from '../../../workspace/addProject'
 
 type Invoke = (hostId: string, method: string, ...args: unknown[]) => Promise<unknown>
 const anyHost = invokeOn as unknown as Invoke
@@ -184,12 +185,25 @@ export function ContinueOnHostDialog({
                     ) : plan.match ? (
                       <p className="m-0">{t('Project: {0}', { 0: plan.match.name })}</p>
                     ) : (
-                      <p className="m-0">
+                      <p className="m-0 flex flex-wrap items-center gap-2">
                         {t('Set up on {0}: clones {1} into {2}', {
                           0: name(id),
                           1: pack.repo!.repoName,
                           2: plan.parent,
                         })}
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          disabled={busy}
+                          aria-label={t('Change where the project goes')}
+                          onClick={() =>
+                            void pickHostFolder(id, { purpose: 'parent', start: plan.parent }).then(
+                              (parent) => parent && setPlans((current) => ({ ...current, [id]: { ...plan, parent } })),
+                            )
+                          }
+                        >
+                          {t('Change…')}
+                        </Button>
                       </p>
                     )}
                     <p className="m-0 text-muted-foreground">

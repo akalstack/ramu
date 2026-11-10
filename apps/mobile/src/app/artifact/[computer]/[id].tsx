@@ -34,6 +34,7 @@ import { Header, HeaderButton, Screen } from '../../../components/Screen'
 import { Button, Card, IconButton, Row, SHEET_SETTLE_MS, Sheet, SheetScrollView, T } from '../../../components/ui'
 import InteractiveFrame from '../../../components/InteractiveFrame'
 import { ArtifactSettings } from '../../../components/ArtifactSettings'
+import { MakeProjectSheet } from '../../../components/MakeProjectSheet'
 import MotionVideo from '../../../components/MotionVideo'
 import { hostShareLabel, SHARE_LABELS } from '../../../components/ArtifactKindMark'
 import { shareFile } from '../../../components/interactiveShare'
@@ -154,6 +155,7 @@ export default function PageScreen() {
   const [messages, setMessages] = useState<{ id: number; data: object }[]>([])
   const [menu, setMenu] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [makingProject, setMakingProject] = useState(false)
   const [versions, setVersions] = useState<ArtifactVersion[] | null>(null)
   const [running, setRunning] = useState<ArtifactRun | null>(null)
   const [confirm, setConfirm] = useState<{ id: string; text: string } | null>(null)
@@ -655,7 +657,7 @@ export default function PageScreen() {
     if (method === 'thread.start') {
       if (shared) return reply(requestId, null, say('Threads cannot be started through a share link.'))
       const prompt = String(args[0] ?? '')
-      Alert.alert(say('The page asks to start a thread'), prompt, [
+      Alert.alert(say('The artifact asks to start a thread'), prompt, [
         { text: say('Cancel'), style: 'cancel', onPress: () => reply(requestId, null) },
         { text: say('Start thread'), onPress: () => void startThread(prompt).then(() => reply(requestId, null)) },
       ])
@@ -687,7 +689,7 @@ export default function PageScreen() {
               ? `v${document.reference.version}`
               : undefined
         }
-        right={<HeaderButton icon={MoreHorizontal} label={say('Page actions')} onPress={() => setMenu(true)} />}
+        right={<HeaderButton icon={MoreHorizontal} label={say('Artifact actions')} onPress={() => setMenu(true)} />}
       />
       <View style={{ flex: 1 }}>
         {error && !document ? (
@@ -707,7 +709,7 @@ export default function PageScreen() {
             }}
           >
             <T size={font.caption} style={{ flex: 1 }} numberOfLines={2}>
-              {say('This page hit an error: {message}', { message: page.lastError.message })}
+              {say('This artifact hit an error: {message}', { message: page.lastError.message })}
             </T>
             {!viewer ? (
               <Button
@@ -716,7 +718,7 @@ export default function PageScreen() {
                 onPress={() => {
                   const failure = page.lastError!
                   void startThread(
-                    `Fix this error in my page. Reproduce it with artifact_preview, then publish the fixed version with artifact_publish {artifact: "${page.id}", changes}.\nError on ${failure.device ?? 'a device'} in v${failure.version}: ${failure.message}${failure.steps?.length ? `\nWhat the person did before it: ${failure.steps.join(' → ')}` : ''}`,
+                    `Fix this error in my artifact. Reproduce it with artifact_preview, then publish the fixed version with artifact_publish {artifact: "${page.id}", changes}.\nError on ${failure.device ?? 'a device'} in v${failure.version}: ${failure.message}${failure.steps?.length ? `\nWhat the person did before it: ${failure.steps.join(' → ')}` : ''}`,
                   ).then(() => store.invoke(computerId, 'artifacts.clearError', artifactId))
                 }}
               />
@@ -798,7 +800,7 @@ export default function PageScreen() {
                 disabled={!change.trim()}
                 onPress={() => {
                   void startThread(
-                    `${change.trim()}\nChange only this element of the page (the person pointed at it): ${picked.selector}\nIts text: ${JSON.stringify(picked.text)}\nIts HTML: ${picked.html}`,
+                    `${change.trim()}\nChange only this element of the artifact (the person pointed at it): ${picked.selector}\nIts text: ${JSON.stringify(picked.text)}\nIts HTML: ${picked.html}`,
                     picked.selector,
                   )
                   setPicked(null)
@@ -813,15 +815,15 @@ export default function PageScreen() {
             <TextInput
               autoFocus
               multiline
-              accessibilityLabel={say('Ask about this page')}
-              placeholder={say('Ask about this page')}
+              accessibilityLabel={say('Ask about this artifact')}
+              placeholder={say('Ask about this artifact')}
               placeholderTextColor={c.muted}
               value={about}
               onChangeText={setAbout}
               style={{ minHeight: 64, padding: space.m, borderRadius: 10, backgroundColor: c.fill, color: c.text }}
             />
             <T size={font.caption} tone="muted">
-              {say('A new thread starts with this page attached. It works with its usual access and approvals.')}
+              {say('A new thread starts with this artifact attached. It works with its usual access and approvals.')}
             </T>
             <View style={{ flexDirection: 'row', gap: space.s }}>
               <Button kind="ghost" title={say('Cancel')} onPress={() => setAbout(null)} />
@@ -839,8 +841,8 @@ export default function PageScreen() {
         {records && online ? (
           <View style={{ flexDirection: 'row', gap: space.s, paddingHorizontal: space.l, paddingVertical: space.s }}>
             <TextInput
-              accessibilityLabel={say('Ask this page')}
-              placeholder={say('Ask this page, such as “how much on food in March?”')}
+              accessibilityLabel={say('Ask this artifact')}
+              placeholder={say('Ask this artifact, such as “how much on food in March?”')}
               placeholderTextColor={c.muted}
               value={question}
               onChangeText={setQuestion}
@@ -874,7 +876,7 @@ export default function PageScreen() {
                   title={say('Keep as a panel')}
                   onPress={() =>
                     void startThread(
-                      `Add a panel to my page that always shows the answer to "${question}" from its records (today it is: ${answerValue.text ?? ''}). Compute it with ramuContent.records, not a model call, and publish the new version.`,
+                      `Add a panel to my artifact that always shows the answer to "${question}" from its records (today it is: ${answerValue.text ?? ''}). Compute it with ramuContent.records, not a model call, and publish the new version.`,
                     )
                   }
                 />
@@ -1016,7 +1018,18 @@ export default function PageScreen() {
                   })
                 }
               >
-                <T>{say('Page settings')}</T>
+                <T>{say('Artifact settings')}</T>
+              </Row>
+            ) : null}
+            {page && online && !shared && !viewer ? (
+              <Row
+                onPress={() =>
+                  afterMenu(() => {
+                    setMakingProject(true)
+                  })
+                }
+              >
+                <T>{say('Make it a project…')}</T>
               </Row>
             ) : null}
             <Row
@@ -1146,7 +1159,7 @@ export default function PageScreen() {
           </Card>
           {page && !shared && declaredCapabilities(page.capabilities).length ? (
             <T size={font.caption} tone="muted">
-              {say('Change what this page may use in Page settings on the desktop.')}
+              {say('Change what this artifact may use in Artifact settings on the desktop.')}
             </T>
           ) : null}
           {versions?.map((version) => (
@@ -1598,7 +1611,7 @@ export default function PageScreen() {
               <T key={name}>• {grantText(say, name, page)}</T>
             ))}
             <T size={font.caption} tone="muted">
-              {say('The page never sees your keys or other pages. Change this later in Page settings.')}
+              {say('The artifact never sees your keys or other artifacts. Change this later in Artifact settings.')}
             </T>
             <Button
               title={say('Allow')}
@@ -1615,6 +1628,14 @@ export default function PageScreen() {
             />
           </View>
         </Sheet>
+      ) : null}
+      {page && makingProject ? (
+        <MakeProjectSheet
+          open={makingProject}
+          onClose={() => setMakingProject(false)}
+          page={page}
+          computerId={computerId}
+        />
       ) : null}
       {page && settingsOpen ? (
         <ArtifactSettings
@@ -1639,7 +1660,7 @@ function grantText(say: ReturnType<typeof useSay>, name: string, page: ArtifactI
     case 'records':
       return say('Keeps records on this host: {list}', { list: Object.keys(c.records ?? {}).join(', ') })
     case 'ai':
-      return say('Uses a model on this host: {purpose}. The model sees only what the page sends it.', {
+      return say('Uses a model on this host: {purpose}. The model sees only what the artifact sends it.', {
         purpose: c.ai?.purpose ?? '',
       })
     case 'camera':
@@ -1676,7 +1697,7 @@ function allowAll(page: ArtifactInfo) {
         ? {
             model: page.capabilities.ai?.quality ?? 'fast',
             daily: page.capabilities.ai?.daily ?? 200,
-            // Shared MCP servers are granted one by one in Page settings on the desktop.
+            // Shared MCP servers are granted one by one in Artifact settings on the desktop.
             ...(page.capabilities.ai?.web ? { web: true } : {}),
           }
         : name === 'webhook'

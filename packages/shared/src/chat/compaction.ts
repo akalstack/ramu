@@ -20,6 +20,12 @@ export function compactionLabel(event: Compaction): string {
         ? `Compacted context · ${after} tokens after`
         : 'Compacted context'
 }
+/** The heading of a finished compaction: Ramu's own say why they ran, so they read apart from a manual /compact. */
+export function compactionHeading(event: Compaction): string {
+  if (event.trigger === 'idle') return 'Compacted while idle'
+  if (event.trigger === 'resume') return 'Compacted when you returned'
+  return 'Context compacted'
+}
 export function isCompacting(events: AgentEvent[]): boolean {
   const last = events.findLast(
     (event) => !event.agentId && ['compaction', 'result', 'error', 'settings'].includes(event.kind),

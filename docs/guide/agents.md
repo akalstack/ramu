@@ -6,6 +6,16 @@ How a thread's agent works, how to bring in other models, and how work spreads a
 
 Pick another model while a turn runs and Ramu waits five seconds (**Apply now** or **Cancel**). Idle threads switch at once. When the new model can't resume the old session, Ramu hands it the conversation so far (a **Context handoff**). A change the provider can't take leaves the current model running.
 
+## Long idle Claude threads
+
+A Claude thread over 200K tokens that sits idle loses its prompt cache (after an hour on a subscription, five minutes on an API key), so the next reply re-reads the whole conversation at full cost. **Settings → Threads → Long idle Claude threads** decides what happens, on the desktop and the phone:
+
+- **Ask when I return** (default): when Claude offers to compact on your next message, the thread asks **Compact and continue**, **Keep full history** or **Don't ask again**, which switches this setting to **Keep full history**. Claude decides when to offer, after about an hour away, and not every account gets the offer.
+- **Compact before the cache expires:** two minutes before the cache of the last reply expires, Ramu sends `/compact` to the idle thread while the cache is still warm. It runs once per idle spell, does not count as a run or notify you, and never starts while a question or approval waits, helpers or background commands still run, messages are queued, a goal or usage-limit wait will continue the thread, the thread is marked done, or the last turn already compacted. A message you send meanwhile runs right after it. The timer lives in memory, so after a host restart the return question covers the next message.
+- **Keep full history:** never compacts an idle thread and answers Claude's offer without asking.
+
+The transcript labels these **Compacted while idle** and **Compacted when you returned**, apart from **Context compacted** for a manual `/compact` or a full context. Codex and other providers don't report when their cache expires, so this applies to Claude only.
+
 ## Usage limits and fallback
 
 **Settings → Models → Provider fallback** is an ordered list of provider and model pairs, best first. When a model hits its limit, the thread moves to the next one with room, carrying the visible conversation (never private reasoning). Switch at the limit (default) or earlier at 80, 90 or 95%. Once a current usage reading shows the model it left has room again, the thread switches back before your next message, never mid-turn, and gets what happened in between. A model or login you picked yourself, or a provider held in the composer, is never switched back.
@@ -76,8 +86,8 @@ An agent can start separate threads you own: a follow-up, the matching change in
 
 - In Full access, one thread in the same project starts at once. Anything wider shows one approval card.
 - Started threads can start one more level, and a thread can start 8 an hour.
-- Asked to build something new, the agent can create the project (`project_create`): a folder beside your other repositories, the framework's own generator (Next.js, Vite, Astro, Expo, a Node or Python service, Rails or Go), a `.gitignore`, the stack in `ramu.json` and a first commit. Asked from a thread with no project, that same thread moves into the new project when the turn ends and continues there with a goal checked by the project's build and tests; the next turn starts a fresh provider session that is handed the conversation, and files written before the move stay in the old folder. Asked from a thread in another project, a linked thread starts in the new project with the brief and that goal. Outside Full access it asks first, naming the folder and the generator.
-- Asked to work on a repository that is not a project yet, the agent can add it: a Git URL is cloned beside your other repositories with the host's own Git credentials, and a folder on the host is registered. A project that already has that remote is reused. Outside Full access it asks first.
+- Asked to build something new, the agent can create the project (`project_create`): a folder beside your other repositories (or in the folder you name), the framework's own generator (Next.js, Vite, Astro, Expo, a Node or Python service, Rails or Go), a `.gitignore`, the stack in `ramu.json` and a first commit. Asked from a thread with no project, that same thread moves into the new project when the turn ends and continues there with a goal checked by the project's build and tests; the next turn starts a fresh provider session that is handed the conversation, and files written before the move stay in the old folder. Asked from a thread in another project, a linked thread starts in the new project with the brief and that goal. Outside Full access it asks first, naming the folder and the generator.
+- Asked to work on a repository that is not a project yet, the agent can add it: a Git URL is cloned beside your other repositories (or in the folder you name) with the host's own Git credentials, and a folder on the host is registered. A project that already has that remote is reused. Outside Full access it asks first.
 - **Let agents start threads** (Settings → Threads) turns this off.
 
 ### On another host
@@ -106,7 +116,7 @@ With **Auto** as the destination, Home also weighs the projects on your other co
 
 ## Continue on another host
 
-**Continue on ‹host›** (thread menu) copies a stopped thread to another connected host, or up to four with **Also on**. The sheet shows the branch it starts from, what stays behind (uncommitted files, unpushed commits), the project there and the model. It matches the project by Git remote, or clones it there. The conversation travels with secrets removed; files never do. Both threads stay linked, and **Bring back result** queues the other thread's latest reply in the original.
+**Continue on ‹host›** (thread menu) copies a stopped thread to another connected host, or up to four with **Also on**. The sheet shows the branch it starts from, what stays behind (uncommitted files, unpushed commits), the project there and the model. It matches the project by Git remote, or clones it there; **Change…** picks the folder the clone goes in. The conversation travels with secrets removed; files never do. Both threads stay linked, and **Bring back result** queues the other thread's latest reply in the original.
 
 Hosts whose platform or description (**Settings → Threads → Describe this host**) the request mentions are listed first.
 

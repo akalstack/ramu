@@ -35,7 +35,7 @@
     },
     {
       "name": "cloudflare",
-      "description": "Deploy Workers and Pages with wrangler, and publish Ramu pages to Cloudflare Pages, with a token kept on the host.",
+      "description": "Deploy Workers and Pages with wrangler, and publish Ramu artifacts to Cloudflare Pages, with a token kept on the host.",
       "homepage": "https://developers.cloudflare.com/workers/wrangler/",
       "author": "Akalstack",
       "keywords": ["cloudflare", "workers", "pages", "wrangler", "d1", "r2"],

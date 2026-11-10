@@ -9,7 +9,7 @@ export interface PageWidgetProps {
 
 export const EMPTY_PAGE_WIDGET: PageWidgetProps = {
   title: 'Ramu',
-  page: 'Choose a page in Ramu',
+  page: 'Choose an artifact in Ramu',
   value: '—',
   items: [],
   updatedAt: 0,

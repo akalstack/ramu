@@ -163,6 +163,8 @@ export type TranscriptItem = (
       title: string
       detail?: string
       failed?: boolean
+      /** The title is a dictionary key, so it follows the app language; the detail carries any numbers. */
+      translated?: boolean
       /** Set on a goal's turning-point note, so the title follows the app language. */
       goalNote?: import('@ramu/shared/chat/goalHistory').GoalChangeType
       /** The goal a turning-point note is about. */

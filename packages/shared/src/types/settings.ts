@@ -10,6 +10,7 @@ import { DEFAULT_INTELLIGENCE_PREFERENCES } from './intelligence'
 import type { IntelligencePreferences } from './intelligence'
 import { DEFAULT_MEMORY_PREFERENCES } from './memory'
 import { DEFAULT_ABILITY_PREFERENCES, type AbilityPreferences } from '../providers/abilities'
+import { DEFAULT_IDLE_COMPACTION, type IdleCompactionMode } from '../chat/idleCompaction'
 import type { MemoryPreferences } from './memory'
 
 export interface ModelStep {
@@ -107,6 +108,8 @@ export interface AppPreferences extends WorkspaceDefaults {
   asyncQuestions: boolean
   /** Seconds a Claude command may run in the foreground before Ramu moves it to the background; 0 leaves it to the agent. */
   autoBackgroundSeconds: number
+  /** What happens to a long Claude thread left idle: ask on return, compact before its prompt cache expires, or keep it. */
+  idleCompaction: IdleCompactionMode
   providerBinaries: ProviderConfiguration
   providerUpdateChecks: boolean
   appUpdateChecks: boolean
@@ -196,6 +199,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   resumeChatsOnRestart: true,
   asyncQuestions: true,
   autoBackgroundSeconds: 60,
+  idleCompaction: DEFAULT_IDLE_COMPACTION,
   providerBinaries: {},
   providerUpdateChecks: true,
   appUpdateChecks: true,

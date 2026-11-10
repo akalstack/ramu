@@ -1,4 +1,5 @@
-import type { CanUseTool, Options } from '@anthropic-ai/claude-agent-sdk'
+import type { CanUseTool, OnUserDialog, Options } from '@anthropic-ai/claude-agent-sdk'
+import { DEFAULT_IDLE_COMPACTION } from '@ramu/shared/chat/idleCompaction'
 import type { AgentSessionInfo, AppPreferences, McpConnection } from '@ramu/shared/types'
 import { claudeMcpServers, claudeMcpEnvironment } from '../providers/claudeMcp'
 import { providerAdapter } from '../providers/adapters'
@@ -33,6 +34,8 @@ export interface ClaudeLaunch {
   advisorModel: string | undefined
   abort: AbortController
   canUseTool: CanUseTool
+  /** Answers Claude's return prompt for a long idle thread; main threads only. */
+  onUserDialog?: OnUserDialog
   resume: string | null
   preferences: (() => AppPreferences) | undefined
   /** Sub-agent hooks, set for main chats only. */
@@ -46,10 +49,12 @@ export function claudeLaunchOptions({
   advisorModel,
   abort,
   canUseTool,
+  onUserDialog,
   resume,
   preferences,
   hooks,
 }: ClaudeLaunch): Options {
+  const idleCompaction = preferences?.().idleCompaction ?? DEFAULT_IDLE_COMPACTION
   const env = providerEnvironment(
     'claude-code',
     preferences?.().providerBinaries,
@@ -97,9 +102,11 @@ export function claudeLaunchOptions({
     // Overrides the user's settings. Newer Claude models omit thinking text unless summaries are requested, which
     // would leave the chat's thinking rows empty. `advisorModel` is Claude Code's own advisor on the configured model,
     // or off while Ramu's runs. Empty attribution keeps Claude Code's co-author trailer and footer out of commits
-    // and pull requests.
+    // and pull requests. Claude Code's own idle compaction would compact on its own schedule; it stays on only when
+    // the person asked to be asked on return, and Ramu times it itself before the cache expires.
     settings: {
       showThinkingSummaries: true,
+      ...(idleCompaction !== 'onReturn' ? { idleCompaction: false } : {}),
       ...(advisorModel !== undefined ? { advisorModel } : {}),
       ...(preferences?.().removeAgentCredits !== false
         ? { attribution: { commit: '', pr: '', sessionUrl: false } }
@@ -108,6 +115,8 @@ export function claudeLaunchOptions({
     ...(s.additionalDirs.length ? { additionalDirectories: s.additionalDirs } : {}),
     abortController: abort,
     canUseTool,
+    // Claude raises its return prompt only for a dialog kind the host declares it can show.
+    ...(onUserDialog ? { onUserDialog, supportedDialogKinds: ['resume_return'] } : {}),
     permissionMode: baseMode(s.settings),
     // A review chat about learned memories has no built-in file, shell or Git tools, only Ramu's own.
     ...(connection?.restricted ? { tools: [] } : {}),

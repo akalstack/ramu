@@ -302,6 +302,13 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
   },
   {
     section: 'chats',
+    title: 'Long idle Claude threads',
+    path: 'idleCompaction',
+    help: 'Compacting summarizes a long conversation so later replies read less of it. Applies to Claude threads over 200K tokens.',
+    words: 'compact compaction idle cache prompt summary tokens context return claude history',
+  },
+  {
+    section: 'chats',
     title: 'Keep working while asking questions',
     path: 'asyncQuestions',
     help: 'Let the agent continue independent work while it waits for your answer. Applies when a thread starts or restarts.',

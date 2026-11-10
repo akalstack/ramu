@@ -51,6 +51,15 @@ const REQUEST_ID = z
   .max(120)
   .optional()
   .describe('Any unique string; sending the same call again returns the first result instead of repeating it.')
+// Held to the host's browse roots by the folder calls it goes through, as the folder browser is.
+const PARENT_FOLDER = z
+  .string()
+  .min(1)
+  .max(4096)
+  .optional()
+  .describe(
+    'Absolute host folder to put it in, only when the person names one; defaults to beside their other repositories.',
+  )
 const TERMINAL_DEVICE = 'terminal'
 const TERMINAL_GROUP = 'terminal:'
 
@@ -257,6 +266,7 @@ export class AgentThreadService {
             .regex(/^[\w.-]{1,100}$/)
             .optional()
             .describe('Folder name for a clone; defaults to the repository name.'),
+          parent: PARENT_FOLDER,
           requestId: REQUEST_ID,
         },
       },
@@ -268,7 +278,7 @@ export class AgentThreadService {
               sessionId,
               'adding a project',
               input.url
-                ? `Clone ${input.url} into ${this.workspace.newProjectParent()} and add it as a project.`
+                ? `Clone ${input.url} into ${input.parent ?? this.workspace.newProjectParent()} and add it as a project.`
                 : `Add ${input.path} as a project.`,
               extra.signal,
             )
@@ -293,6 +303,7 @@ export class AgentThreadService {
               'What to build, as a complete brief: the person’s answers, pages, data, and how to tell it is done.',
             ),
           continue: z.boolean().optional(),
+          parent: PARENT_FOLDER,
           requestId: REQUEST_ID,
         },
       },
@@ -845,7 +856,7 @@ export class AgentThreadService {
   }
 
   /** Clones a repository, or registers a folder already on this host, as a project; an existing match is reused. */
-  async addProject(input: { url?: string; path?: string; name?: string }): Promise<{
+  async addProject(input: { url?: string; path?: string; name?: string; parent?: string }): Promise<{
     projectId: string
     name: string
     added: boolean
@@ -856,7 +867,7 @@ export class AgentThreadService {
       const match = matchProject({ remoteUrl: input.url, repoName }, await this.projectRemotes())
       if (match?.by === 'remote') return { projectId: match.projectId, name: match.name, added: false }
       const path = (await this.invoke('folders.clone', [
-        this.workspace.newProjectParent(),
+        input.parent ?? this.workspace.newProjectParent(),
         repoName,
         input.url,
       ])) as string
@@ -878,11 +889,11 @@ export class AgentThreadService {
    */
   private async createProject(
     sessionId: string,
-    input: { name: string; stack?: StackId; brief: string; continue?: boolean },
+    input: { name: string; stack?: StackId; brief: string; continue?: boolean; parent?: string },
     signal?: AbortSignal,
   ) {
     const caller = this.agents.get(sessionId)
-    const parent = this.workspace.newProjectParent()
+    const parent = input.parent ?? this.workspace.newProjectParent()
     const stack = input.stack ? STACKS[input.stack] : null
     if (caller.settings.access !== 'full') {
       const commands = stack?.generator.map(commandLine) ?? []

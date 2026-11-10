@@ -43,16 +43,16 @@ export function PublicPageSection({ page }: { page: ArtifactInfo }) {
       <p className="mt-0 mb-2 text-caption text-muted-foreground">
         {servable
           ? t(
-              'Anyone with the link sees this page, without Ramu, while this host is on. It gets its own address through your Cloudflare or ngrok tool and serves only this page.',
+              'Anyone with the link sees this artifact, without Ramu, while this host is on. It gets its own address through your Cloudflare or ngrok tool and serves only this artifact.',
             )
-          : t('A page that keeps records or uses this host’s features cannot be opened to people without Ramu.')}
+          : t('An artifact that keeps records or uses this host’s features cannot be opened to people without Ramu.')}
       </p>
       {open && (
         <div className="mb-2 flex items-center gap-1.5 text-caption">
           <span className="min-w-0 flex-1 truncate">
             {status.url ??
               (status.state === 'missing'
-                ? t('Install cloudflared or ngrok on this host to open pages to anyone.')
+                ? t('Install cloudflared or ngrok on this host to open artifacts to anyone.')
                 : status.state === 'failed'
                   ? (status.error ?? t('The tunnel stopped. Ramu is retrying.'))
                   : t('Starting…'))}

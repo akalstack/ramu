@@ -208,7 +208,7 @@ export function AgentHeader({
                     key: 'make-page',
                     label: (
                       <>
-                        <AppWindow size={13} /> {translate('Make a page from this thread')}
+                        <AppWindow size={13} /> {translate('Make an artifact from this thread')}
                       </>
                     ),
                     onSelect: onMakePage,

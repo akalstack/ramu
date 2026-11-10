@@ -37,7 +37,7 @@ export function PageScheduleRows({ hosts }: { hosts: readonly string[] }) {
   if (!rows.length) return null
   return (
     <View>
-      <SectionLabel>{say('Page runs')}</SectionLabel>
+      <SectionLabel>{say('Artifact runs')}</SectionLabel>
       {rows.map(({ host, page, schedule, index }) => (
         <Row
           key={`${host}:${page.id}:${index}`}

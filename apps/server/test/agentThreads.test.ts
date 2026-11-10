@@ -438,6 +438,19 @@ describe('project_create', () => {
     expect(permissionDetails[0]).toMatch(/shop[\s\S]*create-next-app/)
     expect(calls).not.toContain('folders.create')
   })
+
+  it('puts the project in the folder the person named, and asks with that folder', async () => {
+    await callerIn(api, 'edits')
+    const { call } = tools('caller')
+    expect(await call('project_create', { name: 'shop', brief: 'A shop.', parent: '/work/clients' })).toMatchObject({
+      created: false,
+    })
+    expect(permissionDetails[0]).toContain(join('/work/clients', 'shop'))
+    expect(
+      await call('project_add', { url: 'https://github.com/acme/billing.git', parent: '/work/clients' }),
+    ).toMatchObject({ added: false })
+    expect(permissionDetails[1]).toContain('into /work/clients')
+  })
 })
 
 describe('Let agents start threads', () => {

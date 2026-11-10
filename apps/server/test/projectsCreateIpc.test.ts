@@ -59,5 +59,22 @@ it('accepts only a folder name and a known stack', () => {
   expect(parse({ name: 'a/b' })).toBe(false)
   expect(parse({ name: 'x'.repeat(101) })).toBe(false)
   expect(parse({ name: 'shop', stack: 'cobol' })).toBe(false)
-  expect(parse({ name: 'shop', parent: '/etc' })).toBe(false)
+  expect(parse({ name: 'shop', parent: 'x'.repeat(4097) })).toBe(false)
+  expect(parse({ name: 'shop', extra: true })).toBe(false)
+})
+
+it('creates the project in a chosen parent, but only inside the host browse roots', async () => {
+  mkdirSync(join(home, 'clients'))
+  const made = await create({ name: 'shop', parent: join(home, 'clients') })
+  expect(made.path).toBe(join(home, 'clients', 'shop'))
+  const elsewhere = realpathSync(mkdtempSync(join(tmpdir(), 'ramu-elsewhere-')))
+  try {
+    await expect(create({ name: 'shop', parent: elsewhere })).rejects.toThrow(/outside the host browse roots/)
+  } finally {
+    rmSync(elsewhere, { recursive: true, force: true })
+  }
+})
+
+it('tells the client where a new project goes when none is chosen', async () => {
+  expect(await methods['projects.defaultParent']!.run()).toBe(home)
 })

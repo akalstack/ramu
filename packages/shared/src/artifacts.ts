@@ -123,9 +123,9 @@ export interface ArtifactPublication {
  * What an artifact is: an App is interactive web content, a Doc is writing to keep, a Diagram is a drawing, Slides is a
  * deck.
  */
-/** What **Make a page from this thread** sends, on the desktop and the phone alike. */
+/** What **Make an artifact from this thread** sends, on the desktop and the phone alike. */
 export const MAKE_PAGE_PROMPT =
-  'Make a page I can keep from what this thread found or built (results, comparisons, checklists, numbers): use the real data from this conversation, preview it, and publish it with artifact: true, a short title and one emoji icon.'
+  'Make an artifact I can keep from what this thread found or built (results, comparisons, checklists, numbers): use the real data from this conversation, preview it, and publish it with artifact: true, a short title and one emoji icon.'
 
 /** **Tell people what shipped** on a project: English copy keys, so each app sends them in its own language. */
 export const RELEASE_NOTE_PROMPT =

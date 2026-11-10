@@ -22,8 +22,13 @@ const chooseRepos = (name: string, repos: string[]) =>
     choiceListeners.forEach((listener) => listener({ name, repos, resolve }))
   })
 
-/** `clone` names a GitHub repository (`owner/repo`) to clone into the chosen folder, with its search filled in. */
-export type FolderPick = { host: string; clone?: string; resolve: (dir: string | null) => void }
+/**
+ * What the folder browser is for. `add`: a folder to add as a project, where `clone` names a GitHub repository
+ * (`owner/repo`) to clone into it with its search filled in. `parent`: the folder a new project's folder goes in,
+ * opened at `start` when it is given.
+ */
+export type FolderPickOptions = { purpose?: 'add'; clone?: string } | { purpose: 'parent'; start?: string }
+export type FolderPick = FolderPickOptions & { host: string; resolve: (dir: string | null) => void }
 const pickListeners = new Set<(pick: FolderPick) => void>()
 /** The host folder browser subscribes here; it answers with the chosen folder on the host, or null when cancelled. */
 export function onFolderPick(listener: (pick: FolderPick) => void) {
@@ -32,10 +37,10 @@ export function onFolderPick(listener: (pick: FolderPick) => void) {
     pickListeners.delete(listener)
   }
 }
-export const pickHostFolder = (host: string, clone?: string) =>
+export const pickHostFolder = (host: string, options: FolderPickOptions = {}) =>
   new Promise<string | null>((resolve) => {
     if (!pickListeners.size) return resolve(null)
-    pickListeners.forEach((listener) => listener({ host, ...(clone ? { clone } : {}), resolve }))
+    pickListeners.forEach((listener) => listener({ ...options, host, resolve }))
   })
 
 /**
@@ -115,7 +120,7 @@ export function useAddProject(host?: string) {
   const cloneProject = (repository: string) =>
     guarded(async () => {
       // Cloning happens on the host, so even this computer's folders are browsed in-app.
-      const dir = await pickHostFolder(target, repository)
+      const dir = await pickHostFolder(target, { clone: repository })
       if (dir) await open([dir])
     })
   return { add, addDropped, cloneProject, busy }

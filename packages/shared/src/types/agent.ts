@@ -534,6 +534,8 @@ type AgentEventBody =
       beforeTokens?: number
       afterTokens?: number
       contextWindow?: number
+      /** Set when Ramu started it: `idle` before the prompt cache expired, `resume` when the person chose it on return. */
+      trigger?: 'idle' | 'resume'
     }
   | { kind: 'error'; message: string }
   | { kind: 'state'; state: AgentSessionState }

@@ -56,6 +56,7 @@ export const TRANSFER_GROUPS = [
       'teammateSuggestions',
       'asyncQuestions',
       'autoBackgroundSeconds',
+      'idleCompaction',
       'goals',
       'intelligence',
       'memory',

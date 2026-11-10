@@ -49,7 +49,7 @@ interface PageRow {
 }
 
 const today = () => new Date().toISOString().slice(0, 10)
-const clipTitle = (title: string) => title.trim().slice(0, 160) || 'Page'
+const clipTitle = (title: string) => title.trim().slice(0, 160) || 'Artifact'
 /** One emoji, or the default page mark. */
 export const pageIcon = (icon: string | undefined) => {
   const value = [...(icon?.trim() ?? '')].slice(0, 2).join('')
@@ -78,7 +78,7 @@ export class PageStore {
 
   private row(id: string): PageRow {
     const row = this.db.prepare('SELECT * FROM artifacts WHERE id=?').get(id) as PageRow | undefined
-    if (!row) throw new Error('Page not found. It may have been deleted.')
+    if (!row) throw new Error('Artifact not found. It may have been deleted.')
     return row
   }
   private info(row: PageRow): ArtifactInfo {
@@ -289,7 +289,7 @@ export class PageStore {
       .prepare('SELECT reference,html,preview,files FROM artifact_versions WHERE artifact_id=? AND version=?')
       .get(artifactId, target) as
       { reference: string; html: string; preview: string | null; files: string | null } | undefined
-    if (!row) throw new Error('Page version not found')
+    if (!row) throw new Error('Artifact version not found')
     return {
       reference: JSON.parse(row.reference),
       html: row.html,
@@ -499,7 +499,7 @@ export class PageStore {
     const current = this.state(artifactId)
     if (current.revision !== revision) return { ...current, accepted: false }
     const state = value === null ? null : readInteractiveState(value)
-    if (value !== null && !state) throw new Error('Page state is too large or malformed.')
+    if (value !== null && !state) throw new Error('Artifact state is too large or malformed.')
     const next = current.revision + 1
     this.db
       .prepare(
@@ -541,8 +541,9 @@ export class PageStore {
       name === 'records'
         ? !!page.capabilities.records
         : (page.capabilities as Record<string, unknown>)[name] !== undefined
-    if (!declared) throw new Error(`This page did not declare ${name}.`)
-    if (!page.grants[name]) throw new Error(`This page is not allowed to use ${name}. Allow it in Page settings.`)
+    if (!declared) throw new Error(`This artifact did not declare ${name}.`)
+    if (!page.grants[name])
+      throw new Error(`This artifact is not allowed to use ${name}. Allow it in Artifact settings.`)
     return page
   }
   usage(artifactId: string): ArtifactUsage {
@@ -562,8 +563,8 @@ export class PageStore {
     if (usage[kind] >= limit)
       throw new Error(
         kind === 'ai'
-          ? `This page reached its ${limit} model requests for today. Raise the limit in Page settings.`
-          : 'This page has sent all its notifications for today.',
+          ? `This artifact reached its ${limit} model requests for today. Raise the limit in Artifact settings.`
+          : 'This artifact has sent all its notifications for today.',
       )
     this.write(artifactId, (data) => ({ ...data, usage: { ...usage, [kind]: usage[kind] + 1 } }), false)
   }
@@ -573,7 +574,7 @@ export class PageStore {
   private collection(artifactId: string, name: string) {
     const page = this.requireGrant(artifactId, 'records')
     const schema = page.capabilities.records?.[name]
-    if (!schema) throw new Error(`This page has no collection named ${name}.`)
+    if (!schema) throw new Error(`This artifact has no collection named ${name}.`)
     return schema
   }
   private bytes(artifactId: string): number {
@@ -674,9 +675,10 @@ export class PageStore {
     if (problem) throw new Error(`Record not saved: ${problem}.`)
     const text = JSON.stringify(data)
     if (text.length > 100_000) throw new Error('Record not saved: it is larger than 100 KB.')
-    if (this.count(artifactId) >= ARTIFACT_LIMITS.records) throw new Error('This page already keeps 10,000 records.')
+    if (this.count(artifactId) >= ARTIFACT_LIMITS.records)
+      throw new Error('This artifact already keeps 10,000 records.')
     if (this.bytes(artifactId) + text.length > ARTIFACT_LIMITS.bytes)
-      throw new Error('This page already keeps 20 MB of records.')
+      throw new Error('This artifact already keeps 20 MB of records.')
     const now = Date.now()
     const recordId = options.id ?? randomUUID()
     this.db
@@ -808,7 +810,8 @@ export class PageStore {
     if (!match) throw new Error('Only JPEG, PNG and WebP photos can be kept.')
     const bytes = Buffer.from(match[2]!, 'base64')
     if (bytes.length > ARTIFACT_LIMITS.file) throw new Error('That photo is larger than 2 MB after resizing.')
-    if (this.bytes(artifactId) + bytes.length > ARTIFACT_LIMITS.bytes) throw new Error('This page already keeps 20 MB.')
+    if (this.bytes(artifactId) + bytes.length > ARTIFACT_LIMITS.bytes)
+      throw new Error('This artifact already keeps 20 MB.')
     const id = randomUUID()
     this.db
       .prepare('INSERT INTO artifact_files(artifact_id,id,mime,data,created_at) VALUES(?,?,?,?,?)')

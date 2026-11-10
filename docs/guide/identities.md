@@ -12,7 +12,7 @@ An **identity** names the accounts that belong together, such as Work and Person
 - **Pinning** a project from its menu (**Identity** on the desktop, **Use ‹identity› for this project** in its actions on the phone, or **Projects** in Settings) overrides the rules; **Follow its rules** clears the pin.
 - When a project's remote owner matches no rule yet, Settings offers **Projects from github.com/acme use…** with **Add rule** or **Not now**, once per project.
 
-The identity is looked up when an action runs, never stored on a thread, schedule or page, so pinning a project takes effect everywhere at once. With two or more identities, a project's row and its threads' headers show a small chip in the identity's color, on the desktop and the phone.
+The identity is looked up when an action runs, never stored on a thread, schedule or artifact, so pinning a project takes effect everywhere at once. With two or more identities, a project's row and its threads' headers show a small chip in the identity's color, on the desktop and the phone.
 
 ### Accounts: shared unless split
 

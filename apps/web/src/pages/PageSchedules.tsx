@@ -15,8 +15,8 @@ export function PageSchedules() {
   )
   if (!rows.length) return null
   return (
-    <section className="flex flex-col gap-1" aria-label={t('Page runs')}>
-      <h2 className="m-0 text-control font-medium text-muted-foreground">{t('Page runs')}</h2>
+    <section className="flex flex-col gap-1" aria-label={t('Artifact runs')}>
+      <h2 className="m-0 text-control font-medium text-muted-foreground">{t('Artifact runs')}</h2>
       {rows.map(({ page, schedule, index }) => (
         <RowButton key={`${page.id}:${index}`} onClick={() => openPage(page.id, host)}>
           <span aria-hidden className="w-6 flex-none text-center">

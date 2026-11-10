@@ -5,6 +5,7 @@ import { t } from '../i18n'
 import { Dropdown } from '../Menu'
 import { SETTINGS_FORM_CLASS } from './constants'
 import { ToggleRow, type DraftProps } from './ToggleRow'
+import { IDLE_COMPACTION_MODES, type IdleCompactionMode } from '@ramu/shared/chat/idleCompaction'
 
 export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
   const toggleProps = { draft, onChange, busy }
@@ -98,6 +99,31 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
         title="Keep working while asking questions"
         description="Let the agent continue independent work while it waits for your answer. Applies when a thread starts or restarts."
       />
+      <SettingsRow setting="idleCompaction">
+        <SettingsLabel
+          title={t('Long idle Claude threads')}
+          help={t(
+            'Compacting summarizes a long conversation so later replies read less of it. Applies to Claude threads over 200K tokens.',
+          )}
+        />
+        <Dropdown
+          label={t('Long idle Claude threads')}
+          value={draft.idleCompaction}
+          options={[
+            { value: 'onReturn', label: t('Ask when I return') },
+            { value: 'beforeCacheExpires', label: t('Compact before the cache expires') },
+            { value: 'off', label: t('Keep full history') },
+          ]}
+          onChange={(value) =>
+            onChange({
+              ...draft,
+              idleCompaction: IDLE_COMPACTION_MODES.includes(value as IdleCompactionMode)
+                ? (value as IdleCompactionMode)
+                : draft.idleCompaction,
+            })
+          }
+        />
+      </SettingsRow>
       <SettingsGroupTitle>{t('Sidebar')}</SettingsGroupTitle>
       <SettingsRow setting="recentChatMode">
         <SettingsLabel

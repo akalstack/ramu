@@ -739,7 +739,7 @@ export class AbilityService {
     const choice = this.preferences().choices.image_generation
     if (isMcpChoice(choice))
       throw new Error(
-        'Image generation is mapped to a Shared MCP tool, which a page cannot use. Choose a provider for it.',
+        'Image generation is mapped to a Shared MCP tool, which an artifact cannot use. Choose a provider for it.',
       )
     const routes = abilityRoutes('image_generation', this.preferences(), this.passed(), this.order(), providerAccountId)
     if (routes === null) throw new Error('Image generation is turned off in Settings → Models → Abilities.')

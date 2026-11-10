@@ -19,6 +19,7 @@ import { requestOutcomes, parseAnswerMessage, questionState } from '@ramu/shared
 import { goalChanges, goalFactLines } from '@ramu/shared/chat/goalHistory'
 import { providerWaitState, type ProviderWaitState } from '@ramu/shared/chat/providerWait'
 import { foldSettingsChanges } from '@ramu/shared/chat/settingsChanges'
+import { compactionHeading } from '@ramu/shared/chat/compaction'
 
 /**
  * The line for a thread at a provider's usage limit. It names the cause and says the thread continues; "Paused" stays
@@ -327,15 +328,15 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
       items.push({ kind: 'note', id, title: 'Background command stop requested', detail: e.command })
     else if (e.kind === 'recovery') items.push({ kind: 'note', id, title: 'Continued after restart' })
     else if (e.kind === 'compaction' && e.state !== 'started')
+      // Ramu's own compactions say why they ran, as on the desktop, so they read apart from a manual /compact.
       items.push({
         kind: 'note',
         id,
-        title:
-          e.state === 'failed'
-            ? 'Could not compact the conversation'
-            : e.beforeTokens && e.afterTokens
-              ? `Conversation compacted · ${Math.round(e.beforeTokens / 1000)}k → ${Math.round(e.afterTokens / 1000)}k tokens`
-              : 'Conversation compacted',
+        title: e.state === 'failed' ? 'Could not compact the conversation' : compactionHeading(e),
+        translated: true,
+        ...(e.state !== 'failed' && e.beforeTokens && e.afterTokens
+          ? { detail: `${Math.round(e.beforeTokens / 1000)}k → ${Math.round(e.afterTokens / 1000)}k tokens` }
+          : {}),
         failed: e.state === 'failed',
       })
     else if (e.kind === 'result') items.push({ kind: 'end', id, ended: true, interrupted: resultStopped(e) })

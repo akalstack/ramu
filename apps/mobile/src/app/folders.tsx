@@ -25,6 +25,7 @@ import {
   type HostFolderListing,
 } from '@ramu/shared/workspace/hostFolders'
 import { goBackOrHome } from '../runtime/navigation'
+import { finishFolderPick } from '../runtime/folderPick'
 import { Header, Screen, GlassButton, PageScrollView as ScrollView } from '../components/Screen'
 import { useKeyboardInset } from '../components/Keyboard'
 import { Button, Chip, Divider, IconButton, ROW_INSET, Row, SectionLabel, T, tap } from '../components/ui'
@@ -36,7 +37,8 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 /**
  * Add a project from a folder on the selected host: walk its folders (Git repositories are marked), make a new one, or
- * clone a repository here, then add the folder in view with the one button at the bottom.
+ * clone a repository here, then add the folder in view with the one button at the bottom. Opened with `purpose=parent`
+ * it chooses where a new project's folder goes instead (from `start`, on host `computer`), answering `pickFolder`.
  */
 export default function HostFolders() {
   const say = useSay()
@@ -45,10 +47,14 @@ export default function HostFolders() {
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
   const keyboard = useKeyboardInset()
-  const computerId = store.selected
+  const params = useLocalSearchParams<{ clone?: string; purpose?: string; start?: string; computer?: string }>()
+  const choosingParent = params.purpose === 'parent'
+  const computerId = params.computer ?? store.selected
   const host = store.computers.find((x) => x.id === computerId)
   // Opened from a pull request in a repository no project holds: that repository (`owner/repo`) is the one to clone.
-  const { clone: wanted } = useLocalSearchParams<{ clone?: string }>()
+  const wanted = choosingParent ? undefined : params.clone
+  // Leaving without choosing answers the sheet that asked with no folder.
+  useEffect(() => () => void (choosingParent && finishFolderPick(null)), [choosingParent])
   const [roots, setRoots] = useState<string[]>([])
   const [listing, setListing] = useState<HostFolderListing | null>(null)
   const [error, setError] = useState('')
@@ -77,8 +83,9 @@ export default function HostFolders() {
     void run(async () => {
       const found = await store.invoke(computerId, 'folders.roots')
       setRoots(found)
-      // One place to browse needs no choosing.
-      if (found.length === 1) setListing(await store.invoke(computerId, 'folders.list', found[0]!))
+      // Where the project would go now opens first; one place to browse needs no choosing.
+      const first = (choosingParent && params.start) || (found.length === 1 ? found[0]! : null)
+      if (first) setListing(await store.invoke(computerId, 'folders.list', first))
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [computerId] by design; the values it reads beyond these are current as of that run
   }, [computerId])
@@ -115,7 +122,7 @@ export default function HostFolders() {
 
   return (
     <Screen bg="canvas">
-      <Header modal title={say('Add project')} subtitle={host?.name} />
+      <Header modal title={choosingParent ? say('Choose where to put it') : say('Add project')} subtitle={host?.name} />
       {wanted ? (
         <T size={font.caption} tone="muted" style={{ paddingHorizontal: space.l, paddingTop: space.s }}>
           {say('Open the folder to clone {0} into, then choose Clone a repository here.', { 0: wanted })}
@@ -229,13 +236,17 @@ export default function HostFolders() {
                 <IconButton icon={X} label={say('Cancel')} size={34} tone="muted" onPress={() => setNaming(null)} />
               </View>
             )}
-            <Divider inset={ROW_INSET} />
-            <Row onPress={() => setCloning(true)} disabled={busy}>
-              <Download size={16} color={c.accent} />
-              <T tone="accent" weight="500" style={{ flex: 1 }}>
-                {say('Clone a repository here')}
-              </T>
-            </Row>
+            {choosingParent ? null : (
+              <>
+                <Divider inset={ROW_INSET} />
+                <Row onPress={() => setCloning(true)} disabled={busy}>
+                  <Download size={16} color={c.accent} />
+                  <T tone="accent" weight="500" style={{ flex: 1 }}>
+                    {say('Clone a repository here')}
+                  </T>
+                </Row>
+              </>
+            )}
             <SectionLabel>{here}</SectionLabel>
             {listing.folders.map((folder, index) => (
               <View key={folder.path}>
@@ -275,9 +286,13 @@ export default function HostFolders() {
           <GlassButton
             primary
             icon={listing.repo ? FolderGit2 : Folder}
-            title={say('Add {0}', { 0: here })}
+            title={choosingParent ? say('Put it here') : say('Add {0}', { 0: here })}
             disabled={busy}
-            onPress={() => void addProject(listing.path)}
+            onPress={() => {
+              if (!choosingParent) return void addProject(listing.path)
+              finishFolderPick(listing.path)
+              goBackOrHome(router)
+            }}
           />
           <T size={font.caption} tone="muted" numberOfLines={1} ellipsizeMode="head" style={{ textAlign: 'center' }}>
             {listing.path}

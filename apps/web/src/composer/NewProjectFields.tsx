@@ -2,6 +2,7 @@ import { STACKS, STACK_IDS, type StackId } from '@ramu/shared/stacks'
 import { Input } from '@/components/desktop-input'
 import { Combobox } from '../Menu'
 import { t } from '../i18n'
+import { ProjectParentField, type useProjectParent } from '../workspace/ProjectParentField'
 
 export interface NewProjectDraft {
   name: string
@@ -9,8 +10,8 @@ export interface NewProjectDraft {
 }
 
 /**
- * Name and stack for a project Ramu creates before the thread starts. An empty name leaves both to the agent, which asks
- * what to build first.
+ * Name, stack and folder for a project Ramu creates before the thread starts. An empty name leaves the name and stack to
+ * the agent, which asks what to build first.
  */
 export function NewProjectFields({
   value,
@@ -18,6 +19,7 @@ export function NewProjectFields({
   disabled,
   designs = [],
   onFromDesign,
+  location,
 }: {
   value: NewProjectDraft
   onChange: (value: NewProjectDraft) => void
@@ -25,6 +27,8 @@ export function NewProjectFields({
   /** Design artifacts a project can start from: its first screens are built to match. */
   designs?: { id: string; title: string }[]
   onFromDesign?: (designId: string) => void
+  /** Where Ramu puts the project's folder, shown once a name or design means Ramu makes it. */
+  location: ReturnType<typeof useProjectParent>
 }) {
   const named = !!value.name.trim()
   return (
@@ -75,6 +79,7 @@ export function NewProjectFields({
             : t('An empty project the agent fills in')
           : t('Leave it empty and the agent asks a few questions first')}
       </span>
+      {(named || designs.length > 0) && <ProjectParentField location={location} disabled={disabled} />}
     </div>
   )
 }

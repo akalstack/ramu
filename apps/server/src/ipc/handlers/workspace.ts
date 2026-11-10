@@ -220,19 +220,26 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       run: (taskId: string, event: ContinuedEvent) => agents.recordContinued(taskId, event),
     },
     'projects.create': {
-      // The folder always goes where project_create puts it, so a client cannot choose a place outside it.
+      // A chosen parent is held to the host's browse roots by hostFolders.create, as the folder browser is.
       args: z.tuple([
-        z.object({ name: z.string().max(100).regex(PROJECT_NAME), stack: z.enum(STACK_IDS).optional() }).strict(),
+        z
+          .object({
+            name: z.string().max(100).regex(PROJECT_NAME),
+            stack: z.enum(STACK_IDS).optional(),
+            parent: z.string().min(1).max(4096).optional(),
+          })
+          .strict(),
       ]),
-      run: async (input: { name: string; stack?: StackId }) => {
+      run: async ({ parent, ...input }: { name: string; stack?: StackId; parent?: string }) => {
         const folder = await createProjectFolder(
-          { parent: workspace.newProjectParent(), ...input },
+          { parent: parent ?? workspace.newProjectParent(), ...input },
           { create: (parent, name) => hostFolders.create(parent, name), run: runCommand },
         )
         const { project } = await workspace.addProjectFromFolder(await hostFolders.inspect(folder.path))
         return { project, path: folder.path }
       },
     },
+    'projects.defaultParent': { args: z.tuple([]), run: () => workspace.newProjectParent() },
     'folders.roots': { args: z.tuple([]), run: () => hostFolders.roots() },
     'folders.list': { args: z.tuple([z.string().max(4096)]), run: (path: string) => hostFolders.list(path) },
     'folders.create': {

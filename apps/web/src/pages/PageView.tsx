@@ -48,6 +48,7 @@ import { usePageBridge, type PickedElement } from './usePageBridge'
 import { GrantSheet, PageSettings, runStatusLabel } from './PageSettings'
 import { openPage } from './openPage'
 import { PublishDialog } from './PublishDialog'
+import { MakeProjectDialog } from './MakeProjectDialog'
 import { ArtifactKindMark, hostExportEntries, kindExportEntries } from './ArtifactKindMark'
 import { SlideToolbar, useSlideControls } from './SlideControls'
 import { MotionToolbar } from './MotionControls'
@@ -428,7 +429,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
       setPicked(element)
     },
     onError: setFrameError,
-    onStartThread: (prompt) => askThread(prompt, t('The page asks to start a thread')),
+    onStartThread: (prompt) => askThread(prompt, t('The artifact asks to start a thread')),
   })
   bridgeRestore.current = bridge.restore
   // Editing labels keeps the drawing in view in pick mode, so a word on it can be clicked to edit.
@@ -494,7 +495,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
     link.click()
   }
   const menu: MenuEntry[] = [
-    { key: 'settings', label: t('Page settings…'), onSelect: () => setDialog({ kind: 'settings' }) },
+    { key: 'settings', label: t('Artifact settings…'), onSelect: () => setDialog({ kind: 'settings' }) },
     { key: 'versions', label: t('Versions…'), onSelect: () => setDialog({ kind: 'versions' }) },
     { key: 'rename', label: t('Rename…'), disabled: viewOnly, onSelect: () => setDialog({ kind: 'rename' }) },
     {
@@ -795,7 +796,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
             className={GHOST_TEXT_BUTTON_CLASS}
             aria-pressed={picking}
             disabled={viewOnly || !ready}
-            title={t('Point at something on the page and say what to change')}
+            title={t('Point at something in the artifact and say what to change')}
             onClick={() => {
               const next = !picking
               setPicking(next)
@@ -808,7 +809,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
             variant="ghost"
             className={GHOST_TEXT_BUTTON_CLASS}
             disabled={viewOnly}
-            onClick={() => setDialog({ kind: 'thread', prompt: '', title: t('Ask about this page') })}
+            onClick={() => setDialog({ kind: 'thread', prompt: '', title: t('Ask about this artifact') })}
           >
             <MessageSquarePlus size={13} /> {t('Ask about this')}
           </Button>
@@ -829,7 +830,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
             ))}
           </div>
           <Menu
-            label={t('Page actions')}
+            label={t('Artifact actions')}
             icon={<MoreHorizontal size={14} />}
             className={GHOST_ICON_BUTTON_CLASS}
             align="end"
@@ -841,7 +842,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
         <div role="alert" className="flex items-center gap-2 border-b border-border bg-fill px-3 py-1.5 text-caption">
           <Bug size={13} className="flex-none text-bad" />
           <span className="min-w-0 flex-1 truncate">
-            {t('This page hit an error: {message}', { message: page.lastError.message })}
+            {t('This artifact hit an error: {message}', { message: page.lastError.message })}
           </span>
           {!viewOnly && (
             <Button
@@ -850,7 +851,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
               onClick={() => {
                 const error = page.lastError!
                 void startThread(
-                  `Fix this error in my page. Reproduce it with artifact_preview, then publish the fixed version with artifact_publish {artifact: "${page.id}", changes}.\nError on ${error.device ?? 'a device'} in v${error.version}: ${error.message}${error.steps?.length ? `\nWhat the person did before it: ${error.steps.join(' → ')}` : ''}`,
+                  `Fix this error in my artifact. Reproduce it with artifact_preview, then publish the fixed version with artifact_publish {artifact: "${page.id}", changes}.\nError on ${error.device ?? 'a device'} in v${error.version}: ${error.message}${error.steps?.length ? `\nWhat the person did before it: ${error.steps.join(' → ')}` : ''}`,
                 ).then(() => invoke('artifacts.clearError', artifactId))
               }}
             >
@@ -871,7 +872,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
       {outdated && (
         <div className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-caption text-muted-foreground">
           <span className="flex-1">
-            {t('The live site shows v{live}; this page is at v{version}.', {
+            {t('The live site shows v{live}; this artifact is at v{version}.', {
               live: page.published!.version,
               version: page.version,
             })}
@@ -956,7 +957,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
             const input = (event.currentTarget.elements.namedItem('change') as HTMLInputElement).value.trim()
             if (!input) return
             void startThread(
-              `${input}\nChange only this element of the page (the person pointed at it): ${picked.selector}\nIts text: ${JSON.stringify(picked.text)}\nIts HTML: ${picked.html}`,
+              `${input}\nChange only this element of the artifact (the person pointed at it): ${picked.selector}\nIts text: ${JSON.stringify(picked.text)}\nIts HTML: ${picked.html}`,
               picked.selector,
             )
             setPicked(null)
@@ -1000,8 +1001,8 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           <Input
             value={question}
             onChange={(event) => setQuestion(event.target.value)}
-            placeholder={t('Ask this page, such as “how much on food in March?”')}
-            aria-label={t('Ask this page')}
+            placeholder={t('Ask this artifact, such as “how much on food in March?”')}
+            aria-label={t('Ask this artifact')}
           />
           <Button type="submit" variant="outline" disabled={asking || question.trim().length < 2}>
             {asking ? t('Asking…') : t('Ask')}
@@ -1560,33 +1561,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
         </Dialog>
       )}
       {dialog?.kind === 'project' && (
-        <Dialog
-          title={t('Make it a project?')}
-          confirmLabel={t('Make it a project')}
-          onCancel={() => setDialog(null)}
-          onConfirm={() => {
-            setDialog(null)
-            void invoke('artifacts.makeProject', artifactId)
-              .then(async (made) => {
-                await ws.refresh()
-                ws.openTask(made.thread.taskId)
-              })
-              .catch((e) => notifyError(message(e), page.title))
-          }}
-        >
-          <p>
-            {page.capabilities.records || page.capabilities.ai
-              ? t(
-                  'This page keeps records or uses a model on this host, so it cannot go on the web as is. A project can have its own database and server.',
-                )
-              : t('A project can have a backend, more files, sign-in and its own domain.')}
-          </p>
-          <p>
-            {t(
-              'Ramu writes the page’s sources and records to a new folder in Ramu Projects and starts a thread there to turn it into an app.',
-            )}
-          </p>
-        </Dialog>
+        <MakeProjectDialog page={page} onClose={() => setDialog(null)} onExported={setStatus} />
       )}
       {dialog?.kind === 'thread' && (
         <ThreadDialog
@@ -1639,7 +1614,7 @@ function PageAnswer({
             className={GHOST_TEXT_BUTTON_CLASS}
             onClick={() =>
               onKeep(
-                `Add a panel to my page that always shows the answer to "${question}" from its records (today it is: ${value.text ?? ''}). Compute it with ramuContent.records, not a model call, and publish the new version.`,
+                `Add a panel to my artifact that always shows the answer to "${question}" from its records (today it is: ${value.text ?? ''}). Compute it with ramuContent.records, not a model call, and publish the new version.`,
               )
             }
           >
@@ -1800,7 +1775,7 @@ function ThreadDialog({
       onCancel={onCancel}
       onConfirm={() => onConfirm(text.trim())}
     >
-      <p>{t('A new thread starts with this page attached. It works with its usual access and approvals.')}</p>
+      <p>{t('A new thread starts with this artifact attached. It works with its usual access and approvals.')}</p>
       <Textarea
         className="min-h-24 bg-field text-body"
         aria-label={t('Request')}

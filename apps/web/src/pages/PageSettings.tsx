@@ -27,7 +27,7 @@ export function capabilityLine(name: ArtifactCapability, page: Pick<ArtifactInfo
     case 'records':
       return t('Keeps records on this host: {list}', { list: Object.keys(c.records ?? {}).join(', ') })
     case 'ai':
-      return t('Uses a model on this host: {purpose}. The model sees only what the page sends it.', {
+      return t('Uses a model on this host: {purpose}. The model sees only what the artifact sends it.', {
         purpose: c.ai?.purpose ?? '',
       })
     case 'camera':
@@ -283,7 +283,7 @@ export function GrantSheet({ page, onDone }: { page: ArtifactInfo; onDone(): voi
         setDaily={setDaily}
       />
       <p className="mt-3 text-caption text-muted-foreground">
-        {t('The page never sees your keys or other pages. Change this later in Page settings.')}
+        {t('The artifact never sees your keys or other artifacts. Change this later in Artifact settings.')}
       </p>
     </Dialog>
   )
@@ -350,7 +350,7 @@ export function PageSettings({ page, onClose }: { page: ArtifactInfo; onClose():
     artifactLink({ computerId: hostId, artifactId: share.artifactId, share: share.token })
   return (
     <Dialog
-      title={t('Page settings')}
+      title={t('Artifact settings')}
       confirmLabel={t('Save')}
       busy={busy}
       onCancel={onClose}
@@ -383,7 +383,7 @@ export function PageSettings({ page, onClose }: { page: ArtifactInfo; onClose():
             )}
           </section>
         ) : (
-          <p className="m-0 text-muted-foreground">{t('This page uses nothing beyond its own frame.')}</p>
+          <p className="m-0 text-muted-foreground">{t('This artifact uses nothing beyond its own frame.')}</p>
         )}
         {hooks.length > 0 && (
           <section>

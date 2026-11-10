@@ -238,7 +238,8 @@ function CloneFromGitHub({
 
 /**
  * Browses folders on the host the project is added to, since a native picker would open on this machine instead: a
- * path to step back along, Git repositories marked, a new folder named in place, or a repository cloned here.
+ * path to step back along, Git repositories marked, a new folder named in place, or a repository cloned here. Choosing
+ * where a new project goes uses the same browser, opened where it goes now, without the clone.
  */
 function HostFolderDialog() {
   useLanguage()
@@ -263,14 +264,17 @@ function HostFolderDialog() {
         setRequest(next)
         setListing(null)
         // A repository asked for by name opens on its clone search once a folder is listed.
-        setCloning(!!next.clone)
+        setCloning(next.purpose !== 'parent' && !!next.clone)
         setNaming(null)
         setError('')
+        const start = next.purpose === 'parent' ? next.start : undefined
         // The folders are on the host the project is added to, which may not be the one on screen.
         invokerFor(next.host)('folders.roots')
           .then((found) => {
             setRoots(found)
-            if (found.length === 1) void browse(found[0]!, next.host)
+            // A folder that is gone or outside the roots falls back to the host's starting places.
+            if (start) void browse(start, next.host)
+            else if (found.length === 1) void browse(found[0]!, next.host)
           })
           .catch((e) => setError(errorText(e)))
       }),
@@ -290,10 +294,13 @@ function HostFolderDialog() {
       .catch((e) => setError(errorText(e)))
   }
   const crumbs = listing ? folderCrumbs(listing.path, roots) : []
+  const parent = request.purpose === 'parent'
   return (
     <Dialog
-      title={t('Choose a folder on the host')}
-      confirmLabel={listing ? t('Add {0}', { '0': name(listing.path) }) : t('Add this folder')}
+      title={parent ? t('Choose where to put it') : t('Choose a folder on the host')}
+      confirmLabel={
+        parent ? t('Put it here') : listing ? t('Add {0}', { '0': name(listing.path) }) : t('Add this folder')
+      }
       confirmDisabled={!listing || cloning}
       footerLeading={
         listing && !cloning ? (
@@ -301,9 +308,11 @@ function HostFolderDialog() {
             <Button variant="ghost" size="sm" onClick={() => setNaming('')}>
               <FolderPlus size={14} /> {t('New folder')}
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => setCloning(true)}>
-              <BrandIcon brand="github" /> {t('Clone from GitHub')}
-            </Button>
+            {!parent && (
+              <Button variant="ghost" size="sm" onClick={() => setCloning(true)}>
+                <BrandIcon brand="github" /> {t('Clone from GitHub')}
+              </Button>
+            )}
           </div>
         ) : undefined
       }
@@ -314,7 +323,7 @@ function HostFolderDialog() {
         <CloneFromGitHub
           host={request.host}
           parent={listing.path}
-          search={request.clone}
+          search={request.purpose === 'parent' ? undefined : request.clone}
           onCloned={(path) => close(path)}
           onBack={() => setCloning(false)}
         />

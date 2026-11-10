@@ -1,5 +1,12 @@
 import { expect, it } from 'vitest'
-import { cloneFolderName, cloneProgressText, folderCrumbs, folderName } from '../src/workspace/hostFolders'
+import {
+  cloneFolderName,
+  cloneProgressText,
+  folderCrumbs,
+  folderName,
+  isProjectFolder,
+  titleFolderName,
+} from '../src/workspace/hostFolders'
 
 it('names a folder by its last part on POSIX and Windows hosts', () => {
   expect(folderName('/Users/ana/code/ramu')).toBe('ramu')
@@ -44,4 +51,15 @@ it('describes clone progress with the phase and, once known, the percentage', ()
   expect(cloneProgressText(null, say)).toBe('Cloning…')
   expect(cloneProgressText({ phase: 'Receiving objects', percent: null }, say)).toBe('Receiving objects')
   expect(cloneProgressText({ phase: 'Receiving objects', percent: 60 }, say)).toBe('Receiving objects 60%')
+})
+
+it('names a folder after a title, and accepts only plain project-relative folders', () => {
+  expect(titleFolderName('Pricing — Q3 plan!')).toBe('pricing-q3-plan')
+  expect(titleFolderName('日本語')).toBe('artifact')
+  expect(titleFolderName(`${'a'.repeat(59)} b`)).toBe('a'.repeat(59))
+  expect(isProjectFolder('src/pricing')).toBe(true)
+  expect(isProjectFolder('../outside')).toBe(false)
+  expect(isProjectFolder('/etc')).toBe(false)
+  expect(isProjectFolder('src/.hidden')).toBe(false)
+  expect(isProjectFolder('src//x')).toBe(false)
 })

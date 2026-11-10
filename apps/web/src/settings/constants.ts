@@ -43,6 +43,7 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
     'notifyAgentDone',
     'resumeChatsOnRestart',
     'asyncQuestions',
+    'idleCompaction',
     'autoBackgroundSeconds',
     'recentChatMode',
     'threadRowBranches',

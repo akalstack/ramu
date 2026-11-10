@@ -17,6 +17,9 @@ import {
   type RamuDataSource,
 } from '@ramu/shared/artifacts'
 import { NO_PROJECT } from '@ramu/shared/types'
+import { PROJECT_NAME } from '@ramu/shared/stacks'
+import { isProjectFolder } from '@ramu/shared/workspace/hostFolders'
+import type { ArtifactProjectDestination } from '@ramu/shared/api'
 import {
   DOC_MAX_SOURCE,
   MOTION_SCENES_MAX,
@@ -51,6 +54,26 @@ import type { StaticTarget } from '../../hosting/staticSite'
 
 /** Shared by every connection, so the desktop and the phone see each other editing. */
 const editingPresence = new EditingPresence()
+const projectDestination = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('new'),
+      parent: z.string().min(1).max(4096).optional(),
+      name: z.string().max(100).regex(PROJECT_NAME).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('project'),
+      projectId: id,
+      folder: z
+        .string()
+        .refine(isProjectFolder, 'Use folder names of letters, digits, dots, dashes or underscores.')
+        .optional(),
+      startThread: z.boolean().optional(),
+    })
+    .strict(),
+])
 /** Live typing, shared by every connection; set up by the first registration, which also saves its versions. */
 let liveEditing: LiveEditing | null = null
 
@@ -213,7 +236,7 @@ function runFrameCall(ctx: HandlerContext, artifactId: string, call: FrameCall):
 async function readPageFolder(ctx: HandlerContext, artifactId: string, path: string, mode: 'list' | 'read') {
   const page = ctx.pages!.requireGrant(artifactId, 'folder')
   const root = ctx.workspace.listProjects().find((project) => project.id === page.projectId)?.root
-  if (!root) throw new Error('This page belongs to no project with a folder.')
+  if (!root) throw new Error('This artifact belongs to no project with a folder.')
   const base = await realpath(join(root, page.capabilities.folder!.path)).catch(() => {
     throw new Error(`The folder ${page.capabilities.folder!.path} does not exist in the project.`)
   })
@@ -242,7 +265,7 @@ async function readPageFolder(ctx: HandlerContext, artifactId: string, path: str
 /** An image the page's AI asked for, within its AI grant and daily budget, as a data URL the page can show. */
 async function pageImage(ctx: HandlerContext, artifactId: string, prompt: string): Promise<string> {
   ctx.pages!.requireGrant(artifactId, 'ai')
-  if (!ctx.abilities) throw new Error('Update this host for images in pages.')
+  if (!ctx.abilities) throw new Error('Update this host for images in artifacts.')
   ctx.pages!.spend(artifactId, 'ai')
   const image = await ctx.abilities.pageImage(prompt)
   const mime = image.extension === 'jpg' || image.extension === 'jpeg' ? 'image/jpeg' : `image/${image.extension}`
@@ -255,19 +278,21 @@ async function pageImage(ctx: HandlerContext, artifactId: string, prompt: string
  */
 async function queryDataSource(ctx: HandlerContext, artifactId: string, spec: z.infer<typeof pageServiceQuery>) {
   const page = ctx.pages!.get(artifactId)
-  if (!page.capabilities.services?.services.includes(spec.id)) throw new Error(`This page did not declare ${spec.id}.`)
+  if (!page.capabilities.services?.services.includes(spec.id))
+    throw new Error(`This artifact did not declare ${spec.id}.`)
   if (!page.grants.services || !page.grants.services.includes(spec.id))
-    throw new Error(`This page is not allowed to read ${spec.id}. Allow it in Page settings.`)
-  if (!ctx.plugins) throw new Error('Update this host for pages that read data sources.')
+    throw new Error(`This artifact is not allowed to read ${spec.id}. Allow it in Artifact settings.`)
+  if (!ctx.plugins) throw new Error('Update this host for artifacts that read data sources.')
   const { columns, ...query } = spec
   return ctx.plugins.query(spec.id, query, columns, DASHBOARD_ROWS_MAX, page.projectId)
 }
 
 function readRamuData(ctx: HandlerContext, artifactId: string, source: RamuDataSource) {
   const page = ctx.pages!.get(artifactId)
-  if (!page.capabilities.ramu?.sources.includes(source)) throw new Error(`This page did not declare Ramu ${source}.`)
+  if (!page.capabilities.ramu?.sources.includes(source))
+    throw new Error(`This artifact did not declare Ramu ${source}.`)
   if (!page.grants.ramu || !page.grants.ramu.includes(source))
-    throw new Error(`This page is not allowed to read Ramu ${source}. Allow it in Page settings.`)
+    throw new Error(`This artifact is not allowed to read Ramu ${source}. Allow it in Artifact settings.`)
   if (source === 'activity') {
     const since = new Date()
     since.setHours(0, 0, 0, 0)
@@ -822,7 +847,7 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       run: (artifactId: string, flow: string, functions?: PageFunction[]) => {
         const { pages, ai } = need()
         const declared = pages.get(artifactId).capabilities.runs?.[flow]
-        if (!declared) throw new Error(`This page has no run named ${flow}.`)
+        if (!declared) throw new Error(`This artifact has no run named ${flow}.`)
         void ai.run(artifactId, declared.prompt, { name: flow, functions, source: 'artifact' }).catch(() => {})
         return new Promise((resolve) => setTimeout(() => resolve(pages.runs(artifactId)[0]?.id ?? null), 50))
       },
@@ -832,7 +857,7 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       run: (artifactId: string, question: string) =>
         need().ai.run(
           artifactId,
-          `Answer the person's question about this page's records with exact numbers you computed with the tools: ${question}\nAnswer with "text" (one or two sentences) and, when a breakdown helps, "rows": a short list of {"label", "value"} for a small chart.`,
+          `Answer the person's question about this artifact's records with exact numbers you computed with the tools: ${question}\nAnswer with "text" (one or two sentences) and, when a breakdown helps, "rows": a short list of {"label", "value"} for a small chart.`,
           {
             source: 'question',
             readOnly: true,
@@ -936,8 +961,9 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       },
     },
     'artifacts.makeProject': {
-      args: z.tuple([id, z.string().trim().min(1).max(120).optional()]),
-      run: (artifactId: string, projectName?: string) => makePageProject(ctx, artifactId, projectName),
+      args: z.tuple([id, projectDestination.optional()]),
+      run: (artifactId: string, destination?: ArtifactProjectDestination) =>
+        makePageProject(ctx, artifactId, destination),
     },
     'artifacts.publicStatus': {
       args: z.tuple([id]),
@@ -947,7 +973,7 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
     'artifacts.openPublic': {
       args: z.tuple([id]),
       run: (artifactId: string) => {
-        if (!ctx.publicPages || !ctx.publicPageTunnel) throw new Error('Update this host to open pages to anyone.')
+        if (!ctx.publicPages || !ctx.publicPageTunnel) throw new Error('Update this host to open artifacts to anyone.')
         return ctx.publicPages.start(artifactId, ctx.publicPageTunnel())
       },
     },

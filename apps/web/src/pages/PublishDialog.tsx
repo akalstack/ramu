@@ -57,7 +57,7 @@ export function PublishDialog({ page, onClose }: { page: ArtifactInfo; onClose()
       <p>
         {update
           ? t('Deploys v{version} to {url}.', { version: page.version, url: page.published!.url })
-          : t('Deploys this page as a static site on your own account. Ramu hosts nothing.')}
+          : t('Deploys this artifact as a static site on your own account. Ramu hosts nothing.')}
       </p>
       <div role="radiogroup" aria-label={t('Where')} className="flex flex-col gap-0.5">
         {targets.map((entry) => (

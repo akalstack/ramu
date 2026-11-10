@@ -75,6 +75,7 @@ import { useOtherHostTargets } from './workspace/otherHostTargets'
 import { routedAgentSettings } from '@ramu/shared/workspace/agentDefaults'
 import { PROJECT_NAME } from '@ramu/shared/stacks'
 import { NewProjectFields, type NewProjectDraft } from './composer/NewProjectFields'
+import { useProjectParent } from './workspace/ProjectParentField'
 import { hasOfflineCopy } from './workspace/offlineCopy'
 import { canOpenOffline } from './workspace/selectionRoute'
 
@@ -282,6 +283,7 @@ export function NewThread({
   const [startingNew, setStartingNew] = useState(false)
   // With a name, Ramu creates the project itself and the thread starts in it; without one the agent creates it.
   const [newProject, setNewProject] = useState<NewProjectDraft>({ name: '', stack: '' })
+  const projectParent = useProjectParent(host.id)
   // Designs a new project can start from; its first screens are built to match the chosen one.
   const [designs, setDesigns] = useState<{ id: string; title: string }[]>([])
   useEffect(() => {
@@ -294,10 +296,14 @@ export function NewThread({
   const fromDesign = (designId: string) => {
     setBusy(true)
     void host
-      .invoke('artifacts.makeProject', designId, newProject.name.trim() || undefined)
+      .invoke('artifacts.makeProject', designId, {
+        kind: 'new',
+        ...(newProject.name.trim() ? { name: newProject.name.trim() } : {}),
+        ...(projectParent.chosen ? { parent: projectParent.chosen } : {}),
+      })
       .then(async (made) => {
         await ws.refresh()
-        ws.openTask(made.thread.taskId)
+        if (made.thread) ws.openTask(made.thread.taskId)
       })
       .catch((error) => notifyError(errorText(error)))
       .finally(() => setBusy(false))
@@ -636,6 +642,7 @@ export function NewThread({
           const { project: createdProject } = await host.invoke('projects.create', {
             name: newName,
             ...(newProject.stack ? { stack: newProject.stack } : {}),
+            ...(projectParent.chosen ? { parent: projectParent.chosen } : {}),
           })
           made = madeProject.current = { name: newName, projectId: createdProject.id }
           await ws.refresh()
@@ -906,6 +913,7 @@ export function NewThread({
             disabled={busy}
             designs={designs}
             onFromDesign={fromDesign}
+            location={projectParent}
           />
         )}
         {pending && (

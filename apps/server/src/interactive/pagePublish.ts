@@ -57,7 +57,7 @@ export class PagePublisher {
     const page = this.pages.get(artifactId)
     if (page.capabilities.records || page.capabilities.ai)
       throw new Error(
-        'This page keeps records or uses a model on this host, so it cannot go on the web as it is. Make it a project instead.',
+        'This artifact keeps records or uses a model on this host, so it cannot go on the web as it is. Make it a project instead.',
       )
     const document = this.pages.document(artifactId)
     // The runnable export: the tested bytes with their isolation policy, opening on the page's saved values.

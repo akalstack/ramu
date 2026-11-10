@@ -51,6 +51,7 @@ import type { SessionStore } from './sessionStore'
 import type { SubagentRunner } from './subagentRunner'
 import { launchCompatibility, ProviderIncompatibleError } from '../providers/launchCompatibility'
 import type { AgentTasks } from './agentTasks'
+import type { IdleCompactor } from './idleCompaction'
 import type { AgentService } from '../agent'
 import type { Db } from '../db'
 
@@ -84,7 +85,8 @@ export interface SessionProcessHost
     Pick<FallbackRouter, 'fallback' | 'retryQuietly' | 'subagentSettings'>,
     Pick<SessionStore, 'emit' | 'events' | 'get' | 'hasRunningTasks' | 'isRecoveryPending' | 'queued' | 'task'>,
     Pick<SubagentRunner, 'children' | 'nativeSubagentsOff' | 'subagentHooks' | 'cancelPendingStarts'>,
-    Pick<AgentTasks, 'settleTasks' | 'updateTask'> {
+    Pick<AgentTasks, 'settleTasks' | 'updateTask'>,
+    Pick<IdleCompactor, 'resumeDialog'> {
   learningInstructions(): AgentService['learningInstructions']
   memoryInstructions(): AgentService['memoryInstructions']
   rulesInstructions(): AgentService['rulesInstructions']
@@ -577,6 +579,8 @@ export class SessionProcess {
           advisorModel: this.host.claudeAdvisorModel(id),
           abort,
           canUseTool,
+          // Helpers run for their thread; only the thread itself is asked about compacting on return.
+          onUserDialog: s.parentId ? undefined : this.host.resumeDialog(id, pending),
           resume,
           preferences: this.host.preferencesSource(),
           hooks: claudeHooks(

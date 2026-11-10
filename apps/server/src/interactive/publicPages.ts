@@ -43,11 +43,11 @@ export class PublicPages {
     const page = this.pages.get(artifactId)
     if (!servableAlone(page.capabilities))
       throw new Error(
-        'This page uses records, AI or other host features, so it cannot be opened to people without Ramu. Make it a project instead.',
+        'This artifact uses records, AI or other host features, so it cannot be opened to people without Ramu. Make it a project instead.',
       )
     if (choice.kind === 'tailscale')
       throw new Error(
-        'Tailscale Funnel would serve the page on this host’s own name. Choose Cloudflare or ngrok in Remote access.',
+        'Tailscale Funnel would serve the artifact on this host’s own name. Choose Cloudflare or ngrok in Remote access.',
       )
     if (choice.kind === 'ngrok' && choice.domain)
       throw new Error('A fixed ngrok domain belongs to this host. Use ngrok without a domain or Cloudflare.')

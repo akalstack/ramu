@@ -1,4 +1,5 @@
 import { isMediaService, MEDIA_SERVICES } from '@ramu/shared/types/deploy'
+import { DEFAULT_IDLE_COMPACTION, IDLE_COMPACTION_MODES } from '@ramu/shared/chat/idleCompaction'
 import { z } from 'zod'
 import { validBranchPrefix } from '@ramu/shared/workspaceDefaults'
 import { intelligenceSchema } from '../intelligence'
@@ -220,6 +221,7 @@ export const appPreferences = z.object({
   resumeChatsOnRestart: z.boolean().default(true),
   asyncQuestions: z.boolean().default(true),
   autoBackgroundSeconds: z.number().int().min(0).max(3600).default(60),
+  idleCompaction: z.enum(IDLE_COMPACTION_MODES).default(DEFAULT_IDLE_COMPACTION),
   providerBinaries: providerBinaries.default({}),
   providerUpdateChecks: z.boolean().default(true),
   appUpdateChecks: z.boolean().default(true),

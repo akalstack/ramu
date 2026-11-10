@@ -1019,7 +1019,7 @@ export default function ChatScreen() {
       ? [
           {
             icon: AppWindow,
-            label: tr('Make a page from this thread'),
+            label: tr('Make an artifact from this thread'),
             symbol: 'macwindow' as const,
             group: 'tools' as const,
             onPress: () => {

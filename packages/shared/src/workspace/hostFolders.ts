@@ -1,3 +1,5 @@
+import { PROJECT_NAME } from '../stacks'
+
 /** A folder on a host, as the folder picker lists it. `repo` marks a Git repository (it holds `.git`). */
 export interface HostFolder {
   name: string
@@ -67,6 +69,23 @@ export function cloneFolderName(value: string): string {
       .split(/[/:]/)
       .pop() ?? ''
   )
+}
+
+/** A folder name made from a title: lowercase letters and digits joined by dashes, `fallback` when nothing is left. */
+export function titleFolderName(title: string, fallback = 'artifact'): string {
+  return (
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60)
+      .replace(/-+$/, '') || fallback
+  )
+}
+
+/** A folder inside a project given as `a/b`: every part a plain name, never `..`, absolute or hidden. */
+export function isProjectFolder(path: string): boolean {
+  return path.length <= 400 && path.split('/').every((part) => PROJECT_NAME.test(part))
 }
 
 /** `Receiving objects 60%`, or just the phase while Git has not reported a percentage. */

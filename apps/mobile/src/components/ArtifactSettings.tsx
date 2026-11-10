@@ -23,7 +23,7 @@ const RUN_STATUS: Record<ArtifactRun['status'], string> = {
 }
 
 /**
- * An artifact's settings on the phone, as the desktop's Page settings has them for someone away from the computer:
+ * An artifact's settings on the phone, as the desktop's Artifact settings has them for someone away from the computer:
  * its name, opening it to anyone (and closing it again), share links for paired devices, what its runs changed with
  * Undo run, and Delete. Grants stay in the toolbar's Allow sheet.
  */
@@ -98,7 +98,7 @@ export function ArtifactSettings({
     backgroundColor: c.raised2,
   }
   return (
-    <Sheet open={open} onClose={onClose} title={say('Page settings')}>
+    <Sheet open={open} onClose={onClose} title={say('Artifact settings')}>
       <View style={{ padding: space.l, gap: space.s }}>
         <T size={font.caption} tone="muted">
           {say('Name')}
@@ -130,15 +130,17 @@ export function ArtifactSettings({
         <T size={font.caption} tone="muted">
           {servable
             ? say(
-                'Anyone with the link sees this page, without Ramu, while this host is on. It gets its own address through your Cloudflare or ngrok tool and serves only this page.',
+                'Anyone with the link sees this artifact, without Ramu, while this host is on. It gets its own address through your Cloudflare or ngrok tool and serves only this artifact.',
               )
-            : say('A page that keeps records or uses this host’s features cannot be opened to people without Ramu.')}
+            : say(
+                'An artifact that keeps records or uses this host’s features cannot be opened to people without Ramu.',
+              )}
         </T>
         {publicOpen ? (
           <T size={font.caption} tone={status.state === 'failed' ? 'bad' : 'soft'} selectable>
             {status.url ??
               (status.state === 'missing'
-                ? say('Install cloudflared or ngrok on this host to open pages to anyone.')
+                ? say('Install cloudflared or ngrok on this host to open artifacts to anyone.')
                 : status.state === 'failed'
                   ? (status.error ?? say('The tunnel stopped. Ramu is retrying.'))
                   : say('Starting…'))}

@@ -241,6 +241,15 @@ type ComputerAction = import('./computerBridge').ComputerAction
 /** Why a changed address was or was not adopted: only `moved` changes anything. */
 export type ReviewAddressResult = 'moved' | 'unchanged' | 'mismatch' | 'unsupported' | 'unreachable' | 'insecure'
 
+/**
+ * Where Make it a project puts an artifact's sources. `new`: a new folder `name` under `parent` (the usual place for
+ * new projects when omitted) that joins the project list. `project`: the folder `folder` (a relative path) inside an
+ * existing project, with a thread started there unless `startThread` is false.
+ */
+export type ArtifactProjectDestination =
+  | { kind: 'new'; parent?: string; name?: string }
+  | { kind: 'project'; projectId: string; folder?: string; startThread?: boolean }
+
 /** Artifacts: what agents make and people keep, with their state, records, runs, shares and publishing. */
 interface ArtifactMethods {
   'artifacts.list'(): import('./artifacts').ArtifactInfo[]
@@ -359,8 +368,8 @@ interface ArtifactMethods {
   'artifacts.startThread'(artifactId: string, prompt: string, selector?: string): StartedThread
   'artifacts.makeProject'(
     artifactId: string,
-    name?: string,
-  ): { projectId: string; folder: string; thread: StartedThread }
+    destination?: ArtifactProjectDestination,
+  ): { projectId: string; folder: string; thread: StartedThread | null }
   /** A motion scene's narration spoken on this computer, as a WAV data URL to hear before keeping it. */
   'artifacts.narrationPreview'(text: string): string
   /** Sets how loud a motion's music and each scene's sound play (0 to 1), or removes one with null, as a new version. */
@@ -1104,10 +1113,16 @@ export interface RamuMethods extends ArtifactMethods {
   ): RoutingOutcome
   'projects.setup'(projectId: string | null): ProjectSetup
   /**
-   * A new project folder beside the person's other repositories, as `project_create` makes it: the stack's generator
-   * (none writes an empty project), `ramu.json`, a first commit, then added as a project.
+   * A new project folder, as `project_create` makes it: the stack's generator (none writes an empty project),
+   * `ramu.json`, a first commit, then added as a project. `parent` is the host folder it goes in; the usual place
+   * (`projects.defaultParent`, beside the person's other repositories) when omitted.
    */
-  'projects.create'(input: { name: string; stack?: import('./stacks').StackId }): { project: Project; path: string }
+  'projects.create'(input: { name: string; stack?: import('./stacks').StackId; parent?: string }): {
+    project: Project
+    path: string
+  }
+  /** Where a new project's folder goes when the person does not choose: beside their other repositories. */
+  'projects.defaultParent'(): string
   'projects.inspect'(dir: string): FolderInspection
   'projects.addFolder'(dir: string, repos?: string[]): { project: Project; repositories: Repository[] }
   'repos.list'(projectId: string): Repository[]
