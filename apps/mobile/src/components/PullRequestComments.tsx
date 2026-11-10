@@ -17,7 +17,7 @@ const message = (error: unknown) => (error instanceof Error ? error.message : St
 const COMMENT_MAX = 20_000
 
 /** A comment's text field, as the new comment and an edit share it. */
-function CommentField(props: {
+export function CommentField(props: {
   value: string
   onChangeText: (text: string) => void
   label: string

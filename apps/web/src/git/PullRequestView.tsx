@@ -62,6 +62,7 @@ import { queryInvokerFor } from './hostQuery'
 import { PullRequestIcon, StageChip } from './PullRequestIcon'
 import { ReviewDraftsCard } from './ReviewDraftsCard'
 import { openPullRequestThread } from './pullRequestThreads'
+import { ThreadReply } from './ThreadReply'
 import { useAddProject } from '../workspace/addProject'
 
 type View = Extract<ViewDescriptor, { kind: 'pull-request' }>
@@ -546,22 +547,6 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
                       {entry.outdated && ` · ${t('Outdated')}`}
                       {entry.resolved && ` · ${t('Resolved')}`}
                     </span>
-                    {open && entry.resolvable && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={!!busy}
-                        onClick={() =>
-                          void write('thread', {
-                            kind: 'thread-status',
-                            threadId: entry.id,
-                            status: entry.resolved ? 'active' : 'resolved',
-                          })
-                        }
-                      >
-                        {entry.resolved ? t('Reopen thread') : t('Resolve thread')}
-                      </Button>
-                    )}
                   </div>
                   {entry.comments.map((comment) => (
                     <div key={comment.id} className="flex flex-col gap-1 pt-2 first-of-type:pt-0">
@@ -590,6 +575,20 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
                       <PullRequestMarkdown>{comment.body}</PullRequestMarkdown>
                     </div>
                   ))}
+                  {open && (
+                    <ThreadReply
+                      resolved={entry.resolved}
+                      resolvable={entry.resolvable}
+                      onReply={(body) => write('reply', { kind: 'reply', threadId: entry.id, body })}
+                      onStatus={(resolve) =>
+                        write('thread', {
+                          kind: 'thread-status',
+                          threadId: entry.id,
+                          status: resolve ? 'resolved' : 'active',
+                        })
+                      }
+                    />
+                  )}
                 </article>
               ))}
             </section>

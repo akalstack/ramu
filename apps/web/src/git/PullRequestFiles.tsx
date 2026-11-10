@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ChevronRight, ChevronsDownUp, ChevronsUpDown, MessageSquare, Plus, Trash2, WrapText } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import { Textarea } from '@/components/ui/textarea'
-import type { PullRequestFile, PullRequestThread, ReviewVerdict } from '@ramu/shared/types'
+import type { PullRequestFile, PullRequestThread, PullRequestWrite, ReviewVerdict } from '@ramu/shared/types'
 import { patchRows } from '@ramu/shared/pullRequests'
 import { cn } from 'cn'
 import { PullRequestMarkdown } from './PullRequestMarkdown'
@@ -17,6 +17,7 @@ import { ICON_BUTTON_CLASS, NOTE_CLASS, WHERE_CLASS } from '../changes/styles'
 import { commentLabel } from './ReviewChip'
 import { LargeDiffBanner } from '../changes/LargeDiffBanner'
 import { useColorizedLines } from '../editor/colorize'
+import { ThreadReply } from './ThreadReply'
 import { isLargeDiff } from '@ramu/shared/largeDiff'
 import { ReviewFileTree } from '../changes/ReviewFileTree'
 import { useNearViewport } from '../lib/useNearViewport'
@@ -94,8 +95,14 @@ function FilePath({ file }: { file: PullRequestFile }) {
   )
 }
 
-/** A review thread shown under the line it is on, in the same card as a comment in the Changes tab. */
-function InlineThread({ thread }: { thread: PullRequestThread }) {
+/** A review thread shown under the line it is on, in the same card as a comment in the Changes tab, answered there. */
+function InlineThread({
+  thread,
+  onWrite,
+}: {
+  thread: PullRequestThread
+  onWrite?: (write: PullRequestWrite) => Promise<boolean>
+}) {
   return (
     <article className={NOTE_CLASS}>
       {thread.comments.map((comment) => (
@@ -108,6 +115,18 @@ function InlineThread({ thread }: { thread: PullRequestThread }) {
           <PullRequestMarkdown>{comment.body}</PullRequestMarkdown>
         </Fragment>
       ))}
+      {onWrite && (
+        <div className="mt-1.5">
+          <ThreadReply
+            resolved={thread.resolved}
+            resolvable={thread.resolvable}
+            onReply={(body) => onWrite({ kind: 'reply', threadId: thread.id, body })}
+            onStatus={(resolve) =>
+              onWrite({ kind: 'thread-status', threadId: thread.id, status: resolve ? 'resolved' : 'active' })
+            }
+          />
+        </div>
+      )}
     </article>
   )
 }
@@ -127,12 +146,15 @@ function FileDiff({
   wrap,
   onAdd,
   onRemove,
+  onWrite,
 }: {
   file: PullRequestFile
   threads: PullRequestThread[]
   pending: Pending[]
   canComment: boolean
   wrap: boolean
+  /** Posts a reply or a thread's status on the pull request now, outside the pending review. */
+  onWrite: (write: PullRequestWrite) => Promise<boolean>
   onAdd: (line: number, startLine: number | undefined, body: string) => void
   onRemove: (id: string) => void
 }) {
@@ -221,7 +243,7 @@ function FileDiff({
           {/* As wide as the visible diff and pinned to its left, so a long line never pushes the form out of view. */}
           <div className="sticky left-0 w-[100cqw] px-3 font-sans">
             {here.map((thread) => (
-              <InlineThread key={thread.id} thread={thread} />
+              <InlineThread key={thread.id} thread={thread} onWrite={canComment ? onWrite : undefined} />
             ))}
             {mine.map((comment) => (
               <article key={comment.id} className={NOTE_CLASS}>
@@ -524,6 +546,18 @@ export function PullRequestFiles({
       setBusy(false)
     }
   }
+  // Replies and resolving go to the pull request at once, unlike line comments, which wait for Finish review.
+  const writeNow = async (change: PullRequestWrite) => {
+    setError(null)
+    try {
+      await invoke('forge.pullRequestWrite', taskId, repoId, url, change)
+      onReviewed()
+      return true
+    } catch (reason) {
+      setError(errorText(reason))
+      return false
+    }
+  }
   const toggleWrap = () =>
     setWrap((value) => {
       try {
@@ -580,6 +614,11 @@ export function PullRequestFiles({
           )}
         </div>
       </div>
+      {error && !finishing && (
+        <p role="alert" className="m-0 text-caption text-bad">
+          {error}
+        </p>
+      )}
       {finishing && (
         <div className="flex flex-col gap-2.5 rounded-(--radius-m) bg-card p-3">
           <Textarea
@@ -718,6 +757,7 @@ export function PullRequestFiles({
                         pending={filePending}
                         canComment={canReview}
                         wrap={wrap}
+                        onWrite={writeNow}
                         onAdd={(line, startLine, text) =>
                           setPending((current) => [
                             ...current,

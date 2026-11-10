@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ThreadReply } from '../../../components/ThreadReply'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PullRequestTimeline } from '../../../components/PullRequestTimeline'
 import { PullRequestFilesList } from '../../../components/PullRequestFilesList'
@@ -837,16 +838,17 @@ export default function PullRequestScreen() {
                               ) : null}
                             </View>
                           ))}
-                          {canWrite && open && entry.resolvable ? (
-                            <Button
-                              kind="secondary"
-                              title={entry.resolved ? say('Reopen thread') : say('Resolve thread')}
+                          {canWrite && open ? (
+                            <ThreadReply
+                              resolved={entry.resolved}
+                              resolvable={entry.resolvable}
                               disabled={!!busy}
-                              onPress={() =>
-                                void write('thread', {
+                              onReply={(body) => write('reply', { kind: 'reply', threadId: entry.id, body })}
+                              onStatus={(resolve) =>
+                                write('thread', {
                                   kind: 'thread-status',
                                   threadId: entry.id,
-                                  status: entry.resolved ? 'active' : 'resolved',
+                                  status: resolve ? 'resolved' : 'active',
                                 })
                               }
                             />

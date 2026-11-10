@@ -7096,4 +7096,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0} skills': '{0} skill',
   '{0}: when it runs': '{0}: kapan berjalan',
   '{name} asks you to sign in with your account.': '{name} meminta Anda masuk dengan akun Anda.',
+  'Resolve': 'Selesaikan',
+  'Reply to this thread': 'Balas utas ini',
+  'Reply. Markdown works.': 'Balas. Markdown bisa dipakai.',
+  'Reply and resolve': 'Balas dan selesaikan',
 }

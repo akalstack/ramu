@@ -28,7 +28,7 @@ Opening a pull request shows it in full, with these actions:
 - **Update branch** (when it is behind) merges its base in. GitHub and GitLab do it themselves. For Bitbucket and Azure DevOps, and for any pull request with conflicts (**Resolve conflicts**), Ramu merges the base into the branch in the thread working on it: a clean merge is pushed, and conflicts stay there for [Conflicts](#conflicts).
 - **Merge…** offers the methods the repository allows, the last one you used first, and says what still blocks the merge before it can run. It can delete the branch and mark the thread done. **Merge automatically once required checks pass** sets it to merge itself later (GitHub, GitLab and Azure DevOps).
 - **Comments** lists the comments on the pull request itself and has a box to add one. Your own comments can be edited and deleted, and any comment can get a reaction the service offers.
-- **Resolve thread** and **Reopen thread** on each review thread you can resolve.
+- **Reply** under each review thread, in the Overview's threads and under its line in Files changed, on the desktop and the phone; a reply posts at once, outside any pending review, and **Reply and resolve** closes the thread with it. **Resolve** and **Reopen** sit beside **Reply** on each thread you can resolve.
 - **More actions** (desktop) and the buttons below the summary (phone): **Reviewers…**, **Labels…** and **Assignees…** as one list each, **Re-run failed checks** when checks fail, and **Back to draft**. Only what the service has is shown; see [What each service can do](#what-each-service-can-do).
 
 ### Review replies

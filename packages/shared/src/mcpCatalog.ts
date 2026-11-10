@@ -52,7 +52,7 @@ export const RECOMMENDED_MCP_SERVERS: readonly RecommendedMcpServer[] = [
   {
     name: 'atlassian',
     title: 'Atlassian',
-    url: 'https://mcp.atlassian.com/v1/mcp',
+    url: 'https://mcp.atlassian.com/v2/mcp',
     description: 'Jira and Confluence',
     signIn: true,
   },
