@@ -31,7 +31,9 @@ export function reviewText(review: PluginReview): string {
   if (contents.agents.length) lines.push(`Custom agents: ${contents.agents.map((agent) => agent.name).join(', ')}.`)
   if (contents.rule) lines.push('A rule from its AGENTS.md.')
   if (contents.credentials.length)
-    lines.push(`Asks for: ${contents.credentials.map((slot) => slot.label).join(', ')} (pasted in Customize → Plugins).`)
+    lines.push(
+      `Asks for: ${contents.credentials.map((slot) => slot.label).join(', ')} (pasted in Customize → Plugins).`,
+    )
   if (contents.cli)
     lines.push(
       `CLI ${contents.cli.binaries[0]}; runs without asking: ${contents.cli.reads.length ? contents.cli.reads.join(', ') : 'nothing'}.`,

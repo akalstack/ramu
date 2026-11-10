@@ -15,6 +15,7 @@ import {
   pluginManifest,
   readRamuExtension,
   type PluginContents,
+  type PluginCredential,
   type PluginManifest,
   type PluginMcpServer,
   type PluginProblem,
@@ -48,6 +49,8 @@ export interface PluginFolder {
   agents: PluginAgent[]
   rule: string | null
   contents: PluginContents
+  /** Variables its MCP servers read that no declared slot fills, asked for as keys of their own. */
+  asked: string[]
   /** A hash per part, so an update can say what changed and whether it needs approval again. */
   fingerprint: PluginFingerprint
 }
@@ -122,10 +125,23 @@ export function readPluginFolder(folder: string): PluginFolder {
   const problems: PluginProblem[] = []
   const found = findManifest(root)
   if ('error' in found) throw new PluginReadError([{ file: found.file, message: found.error }])
-  const parsed = pluginManifest.safeParse(found.json)
+  // Claude Code accepts a display name such as "Notion"; Ramu keys plugins by the lowercase, dashed form of it.
+  const json =
+    found.json && typeof found.json === 'object' && typeof (found.json as { name?: unknown }).name === 'string'
+      ? {
+          ...found.json,
+          name: (found.json as { name: string }).name
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, ''),
+        }
+      : found.json
+  const parsed = pluginManifest.safeParse(json)
   if (!parsed.success) throw new PluginReadError(manifestProblems(parsed.error, found.file))
   const manifest = parsed.data
-  const { extension, problems: extensionProblems } = readRamuExtension(manifest, found.file)
+  const { extension: declared, problems: extensionProblems } = readRamuExtension(manifest, found.file)
+  let extension = declared
   problems.push(...extensionProblems)
 
   // Skills
@@ -134,7 +150,10 @@ export function readPluginFolder(folder: string): PluginFolder {
   let totalBytes = 0
   let totalFiles = 0
   if (existsSync(skillsDir) && lstatSync(skillsDir).isDirectory()) {
-    const names = readdirSync(skillsDir).filter((name) => !name.startsWith('.'))
+    // Only folders with a SKILL.md are skills; a README or an old version kept beside them is left alone.
+    const names = readdirSync(skillsDir).filter(
+      (name) => !name.startsWith('.') && existsSync(join(skillsDir, name, 'SKILL.md')),
+    )
     if (names.length > PLUGIN_LIMITS.skills)
       problems.push({ file: 'skills', message: `A plugin has at most ${PLUGIN_LIMITS.skills} skills.` })
     for (const name of names.slice(0, PLUGIN_LIMITS.skills)) {
@@ -142,13 +161,19 @@ export function readPluginFolder(folder: string): PluginFolder {
       try {
         const folder = readSkillFolder(join(skillsDir, name), { skipHidden: true })
         const meta = skillMetadata(folder.markdown)
-        if (meta.name !== name) throw new Error(`The skill's name is ${meta.name}; its folder must have the same name.`)
+        // Claude Code names a skill by its SKILL.md, whatever its folder is called; so does Ramu.
+        if (skills.some((skill) => skill.name === meta.name)) throw new Error(`Two skills are named ${meta.name}.`)
         const bytes = Object.values(folder.files).reduce((sum, value) => sum + Math.ceil((value.length * 3) / 4), 0)
         if (bytes > PLUGIN_LIMITS.skillBytes)
-          throw new Error(`The skill is larger than ${PLUGIN_LIMITS.skillBytes / 1024} KB.`)
+          throw new Error(`The skill is larger than ${PLUGIN_LIMITS.skillBytes / 1024 / 1024} MB.`)
         totalBytes += bytes
         totalFiles += Object.keys(folder.files).length
-        skills.push({ name, description: meta.description, files: folder.files, scripts: [...folder.scripts].sort() })
+        skills.push({
+          name: meta.name,
+          description: meta.description,
+          files: folder.files,
+          scripts: [...folder.scripts].sort(),
+        })
       } catch (error) {
         problems.push({ file, message: (error as Error).message })
       }
@@ -159,6 +184,44 @@ export function readPluginFolder(folder: string): PluginFolder {
   if (totalBytes > PLUGIN_LIMITS.totalBytes)
     problems.push({ file: 'skills', message: `A plugin is at most ${PLUGIN_LIMITS.totalBytes / 1024 / 1024} MB.` })
 
+  // Slash commands become skills: Claude Code runs both the same way, and every agent Ramu runs reads skills.
+  const commandsDir = join(root, 'commands')
+  const commandSkills = existsSync(commandsDir) && lstatSync(commandsDir).isDirectory()
+  if (commandSkills)
+    for (const file of commandFiles(commandsDir).slice(0, PLUGIN_LIMITS.skills - skills.length)) {
+      try {
+        const text = readText(root, `commands/${file}`, PLUGIN_LIMITS.skillBytes)
+        if (text === null) continue
+        const parsedCommand = frontmatter(text)
+        const body = (parsedCommand?.body ?? text).trim()
+        const name = file
+          .replace(/\.md$/, '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 64)
+        if (!name || !body || skills.some((skill) => skill.name === name)) continue
+        const description = (
+          (typeof parsedCommand?.data.description === 'string' ? parsedCommand.data.description.trim() : '') ||
+          firstLine(body)
+        ).slice(0, 1000)
+        const markdown = [
+          '---',
+          `name: ${name}`,
+          `description: ${JSON.stringify(description)}`,
+          '---',
+          '',
+          `Follow this when the person asks for /${name}. $ARGUMENTS stands for what they wrote after it.`,
+          '',
+          body,
+          '',
+        ].join('\n')
+        skills.push({ name, description, files: { 'SKILL.md': Buffer.from(markdown).toString('base64') }, scripts: [] })
+      } catch (error) {
+        problems.push({ file: `commands/${file}`, message: (error as Error).message })
+      }
+    }
+
   // MCP servers: inline in the manifest, a file it names, or `.mcp.json`.
   let mcpServers: Record<string, PluginMcpServer> = {}
   const mcpPath = typeof manifest.mcpServers === 'string' ? manifest.mcpServers.replace(/^\.\//, '') : '.mcp.json'
@@ -168,7 +231,11 @@ export function readPluginFolder(folder: string): PluginFolder {
     try {
       const text = readText(root, mcpPath, PLUGIN_LIMITS.manifestBytes)
       if (text !== null) {
-        const file = mcpFile.safeParse(JSON.parse(text))
+        const json = JSON.parse(text) as unknown
+        // Claude Code also reads a file that is only the servers, without the `mcpServers` wrapper.
+        const file = mcpFile.safeParse(
+          json && typeof json === 'object' && !('mcpServers' in json) ? { mcpServers: json } : json,
+        )
         if (file.success) mcpServers = file.data.mcpServers
         else problems.push(...manifestProblems(file.error, mcpPath))
       }
@@ -202,9 +269,12 @@ export function readPluginFolder(folder: string): PluginFolder {
         const text = readText(root, file, 64 * 1024)!
         const parsedAgent = frontmatter(text)
         const name = typeof parsedAgent?.data.name === 'string' ? parsedAgent.data.name : entry.slice(0, -3)
-        const description = typeof parsedAgent?.data.description === 'string' ? parsedAgent.data.description.trim() : ''
         const instructions = (parsedAgent?.body ?? text).trim()
-        if (!description || !instructions) throw new Error('An agent needs a description and instructions.')
+        // Without a description, its first line of instructions says what it is for.
+        const description =
+          (typeof parsedAgent?.data.description === 'string' ? parsedAgent.data.description.trim() : '') ||
+          firstLine(instructions)
+        if (!instructions) throw new Error('An agent needs instructions.')
         const tools = parsedAgent?.data.tools
         const list = Array.isArray(tools)
           ? tools.map(String)
@@ -221,6 +291,28 @@ export function readPluginFolder(folder: string): PluginFolder {
         problems.push({ file, message: (error as Error).message })
       }
     }
+
+  // Values an MCP server reads from the person's environment (`${GITHUB_TOKEN}`, as Claude Code plugins write them)
+  // become keys the plugin asks for, the way its own declared keys are, unless a declared key already fills them.
+  const filled = new Set(extension.credentials.flatMap((slot) => [slot.env, ...slot.fields.map((field) => field.env)]))
+  const wanted = new Set<string>()
+  for (const server of Object.values(mcpServers)) {
+    const values =
+      'url' in server ? [server.url, ...Object.values(server.headers)] : [...Object.values(server.env), ...server.args]
+    for (const value of values)
+      for (const match of value.matchAll(/\$\{([A-Z][A-Z0-9_]*)\}/g))
+        if (!PLUGIN_ROOT_NAMES.has(match[1]!) && !filled.has(match[1]!)) wanted.add(match[1]!)
+  }
+  const asked: PluginCredential[] = [...wanted]
+    .slice(0, Math.max(0, PLUGIN_LIMITS.credentials - extension.credentials.length))
+    .map((env) => ({
+      id: env.toLowerCase().replace(/_/g, '-').slice(0, 40),
+      label: env.charAt(0) + env.slice(1).toLowerCase().replace(/_/g, ' '),
+      env,
+      kind: 'token',
+      fields: [],
+    }))
+  if (asked.length) extension = { ...extension, credentials: [...extension.credentials, ...asked] }
 
   let rule: string | null = null
   try {
@@ -256,7 +348,8 @@ export function readPluginFolder(folder: string): PluginFolder {
     if (present && !unused.includes(part)) unused.push(part)
   }
   add('hooks', existsSync(join(root, 'hooks')))
-  add('commands', existsSync(join(root, 'commands')))
+  if (!commandSkills) add('commands', existsSync(join(root, 'commands')))
+  else if (unused.includes('commands')) unused.splice(unused.indexOf('commands'), 1)
   add('lspServers', existsSync(join(root, '.lsp.json')))
   add('outputStyles', existsSync(join(root, 'output-styles')))
   add('apps', existsSync(join(root, '.app.json')))
@@ -333,7 +426,18 @@ export function readPluginFolder(folder: string): PluginFolder {
     reads: hash(extension.cli?.reads ?? []),
     cli: hash(extension.cli ? { ...extension.cli, reads: [] } : null),
   }
-  return { root, manifest, extension, skills, mcpServers, agents, rule, contents, fingerprint }
+  return {
+    root,
+    manifest,
+    extension,
+    skills,
+    mcpServers,
+    agents,
+    rule,
+    contents,
+    asked: asked.map((slot) => slot.env),
+    fingerprint,
+  }
 }
 
 /** A manifest that cannot be read at all: nothing else is worth reporting until it is fixed. */
@@ -377,4 +481,31 @@ export function pluginChanges(
     needsApproval = true
   }
   return { changes, needsApproval }
+}
+
+/** Names Ramu fills with the plugin's own folder, never asked for. */
+const PLUGIN_ROOT_NAMES = new Set(['CLAUDE_PLUGIN_ROOT', 'PLUGIN_ROOT', 'CODEX_PLUGIN_ROOT'])
+
+/** The first line of text that is not a heading, for a description a file did not give. */
+function firstLine(text: string) {
+  const line = text
+    .split('\n')
+    .map((entry) => entry.trim())
+    .find((entry) => entry && !entry.startsWith('#'))
+  return (line ?? text.split('\n')[0]!.replace(/^#+\s*/, '')).slice(0, 300)
+}
+
+/** Markdown files under `commands/`, with one folder level kept as a prefix as Claude Code namespaces them. */
+function commandFiles(dir: string): string[] {
+  const files: string[] = []
+  for (const entry of readdirSync(dir).sort()) {
+    if (entry.startsWith('.')) continue
+    const full = join(dir, entry)
+    const stat = lstatSync(full)
+    if (stat.isFile() && entry.endsWith('.md')) files.push(entry)
+    else if (stat.isDirectory())
+      for (const inner of readdirSync(full).sort())
+        if (inner.endsWith('.md') && lstatSync(join(full, inner)).isFile()) files.push(`${entry}/${inner}`)
+  }
+  return files
 }

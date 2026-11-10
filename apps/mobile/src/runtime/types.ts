@@ -134,6 +134,8 @@ export type TranscriptItem = (
       patterns?: string[]
       /** A rule that makes this host always ask, shown so the person knows why. */
       reviewRule?: string
+      /** An MCP tool set to Ask: Always allow switches it to Allow. */
+      always?: boolean
     }
   | { kind: 'elicitation'; id: string; request: import('@ramu/shared/types').AgentElicitation; outcome?: string }
   | {

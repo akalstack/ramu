@@ -63,11 +63,18 @@ export class UserRequests {
   secretFiles: SecretFiles | undefined
   private appPermissions = new Map<
     string,
-    { sessionId: string; finish: (allow: boolean, cancelled?: boolean) => void }
+    { sessionId: string; finish: (allow: boolean, cancelled?: boolean) => void; always?: () => void }
   >()
 
   /** App-owned capabilities use the same durable approval UI for every provider, without borrowing its runner. */
-  requestPermission(id: string, toolName: string, detail: string, signal?: AbortSignal): Promise<boolean> {
+  requestPermission(
+    id: string,
+    toolName: string,
+    detail: string,
+    signal?: AbortSignal,
+    /** Offers Always allow, which runs this instead of saving an approval rule. */
+    always?: () => void,
+  ): Promise<boolean> {
     if (signal?.aborted || this.host.shutdown() || !['starting', 'running'].includes(this.host.get(id).state))
       return Promise.reject(new Error('This permission request is no longer active.'))
     const requestId = randomUUID()
@@ -91,7 +98,7 @@ export class UserRequests {
         if (cancelled) reject(new Error('Permission request was cancelled.'))
         else resolve(allow)
       }
-      this.appPermissions.set(requestId, { sessionId: id, finish })
+      this.appPermissions.set(requestId, { sessionId: id, finish, ...(always ? { always } : {}) })
       this.host.record(id, {
         kind: 'permission-request',
         requestId,
@@ -99,6 +106,7 @@ export class UserRequests {
         title: `Allow ${toolName}?`,
         detail,
         approvalOnceOnly: true,
+        ...(always ? { approvalAlways: toolName } : {}),
       })
       this.host.setState(id, 'needs-input')
       signal?.addEventListener('abort', abort, { once: true })
@@ -360,12 +368,14 @@ export class UserRequests {
       return this.replyPermission(request.approvalSessionId, requestId, allow, message, scope, pattern)
     if (requestOutcomes(this.host.events(id)).get(requestId))
       throw new Error('This permission request is already closed.')
-    if (scope !== 'once' && (!allow || !request.approvalKey)) throw new Error('This request can only be approved once.')
+    if (scope !== 'once' && (!allow || (!request.approvalKey && !request.approvalAlways)))
+      throw new Error('This request can only be approved once.')
     if (pattern && (scope === 'once' || !matchesCommand(pattern, request.approvalCommand)))
       throw new Error('Choose an offered command pattern.')
     const appPermission = this.appPermissions.get(requestId)
     if (appPermission) {
       if (appPermission.sessionId !== id) throw new Error('This approval belongs to another thread.')
+      if (allow && scope !== 'once') appPermission.always?.()
       appPermission.finish(allow)
       return
     }

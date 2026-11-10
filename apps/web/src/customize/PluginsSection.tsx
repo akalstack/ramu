@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, ChevronDown, Plus, RefreshCw, Share2 } from 'lucide-react'
+import { Check, ChevronDown, Plus, RefreshCw, Server, Share2 } from 'lucide-react'
 import {
+  CLAUDE_PLUGIN_INDEX,
   listingMatches,
   type InstalledPlugin,
   type PluginListing,
@@ -21,6 +22,7 @@ import { errorText } from '../lib/errors'
 import { t, useLanguage } from '../i18n'
 import { CustomizeHeader, displayName, ExtensionGrid, ExtensionItem, Quiet, SectionTitle } from './parts'
 import { PluginHeading, PluginParts, PluginSource } from './PluginParts'
+import { openCustomize } from './openCustomize'
 
 const matches = (plugin: InstalledPlugin, query: string) =>
   !query.trim() ||
@@ -30,8 +32,29 @@ const matches = (plugin: InstalledPlugin, query: string) =>
     .filter(Boolean)
     .every((word) => `${plugin.name} ${plugin.contents.description}`.toLowerCase().includes(word))
 
+/** Cards Claude's directory shows before Show all. */
+const CLAUDE_PAGE = 24
+
+/** An index by the name people know it by. */
+const indexLabel = (entry: { index: string; indexName: string }) =>
+  entry.index === CLAUDE_PLUGIN_INDEX
+    ? t('Claude plugins')
+    : entry.indexName === 'ramu-plugins'
+      ? 'Ramu'
+      : entry.indexName
+
+/** A directory category, such as "development", as a label; the directory names them in English. */
+const categoryLabel = (name: string) => name.charAt(0).toUpperCase() + name.slice(1)
+
 /** Plugins: what is installed and what needs finishing, then what to add, Ramu's own first. */
-export function PluginsSection() {
+export function PluginsSection({
+  open: requested,
+  install,
+}: {
+  open?: { id: string } | null
+  /** A listed plugin whose install review opens on arrival, asked for from elsewhere in Customize. */
+  install?: { index: string; name: string } | null
+}) {
   useLanguage()
   const { invoke } = useHost()
   const { on } = useHostRuntime()
@@ -42,8 +65,13 @@ export function PluginsSection() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [review, setReview] = useState<PluginReview | null>(null)
+  // The listing a review came from, so the same plugin in another index can be reviewed instead.
+  const [reviewing, setReviewing] = useState<PluginListing | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
   const [adding, setAdding] = useState<'source' | 'index' | null>(null)
+  useEffect(() => {
+    if (requested) setOpenId(requested.id)
+  }, [requested])
   const load = useCallback(() => {
     void invoke('plugins.list').then(setInstalled, (reason) => setError(errorText(reason)))
     void invoke('plugins.browse').then(setListings, (reason) => setError(errorText(reason)))
@@ -66,6 +94,14 @@ export function PluginsSection() {
   }
   const stage = (key: string, input: Parameters<typeof invoke<'plugins.stage'>>[1]) =>
     act(key, async () => setReview(await invoke('plugins.stage', input)))
+  const openListing = (listing: PluginListing) => {
+    setReviewing(listing)
+    void stage(`listing:${listing.name}`, { source: listing.name, index: listing.index })
+  }
+  useEffect(() => {
+    if (install) void stage(`listing:${install.name}`, { source: install.name, index: install.index })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- opens once for each request
+  }, [install])
   const shown = (installed ?? []).filter((plugin) => matches(plugin, query))
   const needsSetup = shown.filter((plugin) => plugin.credentials.some((slot) => slot.state !== 'saved'))
   const ready = shown.filter((plugin) => !needsSetup.includes(plugin))
@@ -74,7 +110,19 @@ export function PluginsSection() {
     [listings, query],
   )
   const recommended = available.filter((listing) => listing.byRamu)
-  const others = available.filter((listing) => !listing.byRamu)
+  const claude = available.filter((listing) => !listing.byRamu && listing.index === CLAUDE_PLUGIN_INDEX)
+  const others = available.filter((listing) => !listing.byRamu && listing.index !== CLAUDE_PLUGIN_INDEX)
+  // Claude's directory is long: a category narrows it, and a page of cards shows until the person asks for the rest.
+  const [category, setCategory] = useState('')
+  const [allClaude, setAllClaude] = useState(false)
+  const categories = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const listing of claude)
+      if (listing.category) counts.set(listing.category, (counts.get(listing.category) ?? 0) + 1)
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name)
+  }, [claude])
+  const inCategory = claude.filter((listing) => !category || listing.category === category)
+  const claudeShown = allClaude || query ? inCategory : inCategory.slice(0, CLAUDE_PAGE)
   const open = installed?.find((plugin) => plugin.id === openId) ?? null
   const installedItem = (plugin: InstalledPlugin, setup: boolean) => (
     <ExtensionItem
@@ -106,7 +154,14 @@ export function PluginsSection() {
       key={`${listing.index}:${listing.name}`}
       name={listing.name}
       subtitle={listing.description}
-      onOpen={() => void stage(`listing:${listing.name}`, { source: listing.name, index: listing.index })}
+      badge={
+        listing.alternatives.length ? (
+          <Badge variant="outline" title={listing.alternatives.map((entry) => entry.indexName).join(', ')}>
+            {t('Also in {0}', { '0': indexLabel(listing.alternatives[0]!) })}
+          </Badge>
+        ) : undefined
+      }
+      onOpen={() => openListing(listing)}
       action={
         <Button
           size="icon-sm"
@@ -114,7 +169,7 @@ export function PluginsSection() {
           aria-label={t('Install {name}', { name: listing.name })}
           title={t('Install {name}', { name: listing.name })}
           disabled={busy !== null}
-          onClick={() => void stage(`listing:${listing.name}`, { source: listing.name, index: listing.index })}
+          onClick={() => openListing(listing)}
         >
           {busy === `listing:${listing.name}` ? <RefreshCw size={15} className="animate-spin" /> : <Plus size={16} />}
         </Button>
@@ -187,6 +242,37 @@ export function PluginsSection() {
               <ExtensionGrid label={t('Recommended')}>{recommended.map(listingItem)}</ExtensionGrid>
             </>
           )}
+          {claude.length > 0 && (
+            <>
+              <SectionTitle
+                title={t('Claude plugins')}
+                count={inCategory.length}
+                help={t('Claude’s plugin directory. Ramu uses their skills, MCP servers, agents and slash commands.')}
+              />
+              {categories.length > 1 && (
+                <div role="group" aria-label={t('Category')} className="mb-2 flex flex-wrap gap-1">
+                  {['', ...categories].map((name) => (
+                    <Button
+                      key={name || 'all'}
+                      size="sm"
+                      variant="ghost"
+                      aria-pressed={category === name}
+                      className="h-7 rounded-full border border-line px-2.5 text-caption text-muted-foreground aria-pressed:bg-fill aria-pressed:text-foreground"
+                      onClick={() => setCategory(name)}
+                    >
+                      {name ? categoryLabel(name) : t('All')}
+                    </Button>
+                  ))}
+                </div>
+              )}
+              <ExtensionGrid label={t('Claude plugins')}>{claudeShown.map(listingItem)}</ExtensionGrid>
+              {claudeShown.length < inCategory.length && (
+                <Button size="sm" variant="ghost" className="mt-2 self-start" onClick={() => setAllClaude(true)}>
+                  {t('Show all {0}', { '0': inCategory.length })}
+                </Button>
+              )}
+            </>
+          )}
           {others.length > 0 && (
             <>
               <SectionTitle title={t('More plugins')} help={t('From the other indexes you added.')} />
@@ -203,6 +289,19 @@ export function PluginsSection() {
       {review && (
         <InstallReview
           review={review}
+          alternatives={
+            reviewing && reviewing.name === review.contents.name
+              ? [
+                  { index: reviewing.index, indexName: reviewing.indexName, source: reviewing.source },
+                  ...reviewing.alternatives,
+                ].filter((entry) => entry.index !== review.source.index)
+              : []
+          }
+          onAlternative={(entry) => {
+            void invoke('plugins.cancel', review.stageId).catch(() => {})
+            setReview(null)
+            void stage(`listing:${review.contents.name}`, { source: review.contents.name, index: entry.index })
+          }}
           projects={projects}
           busy={busy === 'confirm'}
           onCancel={() => {
@@ -214,8 +313,10 @@ export function PluginsSection() {
               const plugin = await invoke('plugins.confirm', review.stageId, options)
               setReview(null)
               load()
-              // A plugin that asks for a key opens on its setup straight away.
+              // The next step opens on its own: a key the plugin asks for first, else choosing what its MCP tools may do,
+              // since a server is useful only once it is on and some of its tools should ask before they run.
               if (plugin.credentials.some((slot) => slot.state !== 'saved')) setOpenId(plugin.id)
+              else if (plugin.mcpConnections[0]) openCustomize('mcp', plugin.mcpConnections[0].id)
             })
           }
         />
@@ -262,12 +363,17 @@ export function PluginsSection() {
 /** Everything a plugin would add, before anything is saved, laid out the same as an installed plugin's details. */
 function InstallReview({
   review,
+  alternatives,
+  onAlternative,
   projects,
   busy,
   onConfirm,
   onCancel,
 }: {
   review: PluginReview
+  /** The same plugin listed in other indexes. */
+  alternatives: { index: string; indexName: string; source: string }[]
+  onAlternative: (entry: { index: string; indexName: string; source: string }) => void
   projects: Project[]
   busy: boolean
   onConfirm: (options: { scope: PluginScope; includeScripts: boolean }) => void
@@ -307,6 +413,25 @@ function InstallReview({
           </div>
         )}
         <PluginParts contents={contents} />
+        {alternatives.map((entry) => (
+          <div
+            key={entry.index}
+            className="flex items-center justify-between gap-3 rounded-(--radius-s) bg-fill px-3 py-2 text-caption"
+          >
+            <span className="min-w-0 text-muted-foreground">
+              {t('{0} also lists a plugin with this name.', { '0': indexLabel(entry) })}
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="flex-none"
+              disabled={busy}
+              onClick={() => onAlternative(entry)}
+            >
+              {t('Review that one')}
+            </Button>
+          </div>
+        ))}
         {contents.problems.map((problem) => (
           <p key={`${problem.file}:${problem.message}`} role="alert" className="m-0 text-caption text-bad">
             {problem.file}: {problem.message}
@@ -419,6 +544,28 @@ function PluginDetail({
               {t('Review update')}
             </Button>
           </div>
+        )}
+        {plugin.mcpConnections.length > 0 && (
+          // Each server's tools are chosen where every MCP server's are; this is the way there.
+          <ul className="m-0 flex list-none flex-col gap-1 p-0" aria-label={t('Its MCP servers')}>
+            {plugin.mcpConnections.map((server) => (
+              <li
+                key={server.id}
+                className="flex items-center justify-between gap-3 rounded-(--radius-s) bg-fill px-3 py-2 text-caption"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <Server size={14} className="flex-none text-muted-foreground" aria-hidden />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate text-control text-foreground">{server.name}</span>
+                    <span className="text-muted-foreground">{t('Choose which tools ask before they run')}</span>
+                  </span>
+                </span>
+                <Button size="sm" variant="secondary" onClick={() => openCustomize('mcp', server.id)}>
+                  {t('Choose tools')}
+                </Button>
+              </li>
+            ))}
+          </ul>
         )}
         <PluginParts contents={plugin.contents} />
         <div className="flex items-center justify-between gap-2">

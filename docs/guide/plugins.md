@@ -4,7 +4,7 @@ A plugin adds a service to Ramu in one install: its skills, MCP servers, custom 
 
 ## Installing
 
-**Customize → Plugins** (the rail's Customize button on the desktop; **Settings → Plugins** on the phone) lists the plugins that need a key first, then what is installed, then **Recommended** (Ramu's own, signed) and **More plugins** from other indexes, each with its service's mark. The search filters all of them, **+** opens the install review, and **Add → From a GitHub address or folder** takes a Git address (GitHub, GitLab, or anywhere `git` can clone) or a folder on the host. [getramu.dev/plugins](https://getramu.dev/plugins) lists the same plugins; **Open in Ramu** there opens the install review in the app.
+**Customize → Plugins** (the rail's Customize button on the desktop; **Settings → Plugins** on the phone) lists the plugins that need a key first, then what is installed, then **Recommended** (Ramu's own, signed), **Claude plugins** (Claude's plugin directory, filtered by category, a page at a time until **Show all**) and **More plugins** from other indexes, each with its service's mark. A plugin listed in two indexes shows once, from Ramu's index first, and its review offers the other listing with **Review that one**. The search filters all of them, **+** opens the install review, and **Add → From a GitHub address or folder** takes a Git address (GitHub, GitLab, or anywhere `git` can clone) or a folder on the host. [getramu.dev/plugins](https://getramu.dev/plugins) lists the same plugins; **Open in Ramu** there opens the install review in the app.
 
 Nothing is saved until you have seen the review. It lists:
 
@@ -13,12 +13,14 @@ Nothing is saved until you have seen the review. It lists:
 - Custom agents, and a rule from the plugin's `AGENTS.md`.
 - The credentials it asks for, its CLI and the commands that run without asking, the abilities it maps and the dashboard data it provides.
 - Its source pinned to a commit, its license, and **Signed by ‹author›** or **Unsigned**.
-- Parts Claude Code or Codex use that Ramu does not (hooks, slash commands, language servers, output styles, monitors and app connectors), as **Not used in Ramu**. They are never run.
+- Parts Claude Code or Codex use that Ramu does not (hooks, language servers, output styles, monitors and app connectors), as **Not used in Ramu**. They are never run. A plugin with nothing else cannot be installed, and the review says why.
+- Slash commands (`commands/*.md`) as skills of the same name, which every agent reads; `$ARGUMENTS` stands for what the person asks with them.
+- An MCP server that already exists at the same address, added by hand: the plugin takes it over instead of adding a second copy, and its tools are turned on again after installing.
 - **Applies to:** all projects (the default) or one project, so a client's plugin reaches only that client's project. To limit a plugin to an [identity](identities.md), put it in one with the identity chip on its card.
 
-The review groups what the plugin adds one kind per row (its skills, MCP servers, the key it asks for, the commands that run without asking, abilities, dashboard data, a rule), showing the first few of a long list and the rest on demand. After **Install**, a plugin that needs a key opens on it straight away; each credential asks for its value there. A token is checked with the service before it is kept, and the card shows whose it is; a sign-in opens the service's page in your browser and comes back to Ramu on this computer. **Later** leaves the plugin installed, and its card says what is missing. Credentials are pasted and signed in only on the computer running the host.
+The review groups what the plugin adds one kind per row (its skills, MCP servers, the key it asks for, the commands that run without asking, abilities, dashboard data, a rule), showing the first few of a long list and the rest on demand. After **Install**, a plugin that needs a key opens on it straight away; each credential asks for its value there. A variable a plugin's MCP server reads from the environment (`${GITHUB_TOKEN}` in a Claude Code plugin's `.mcp.json`) that no declared credential fills is asked for the same way, named after the variable. A plugin that needs no key opens its first MCP server's tools next, so you choose which ones ask before they run. A token is checked with the service before it is kept, and the card shows whose it is; a sign-in opens the service's page in your browser and comes back to Ramu on this computer. **Later** leaves the plugin installed, and its card says what is missing. Credentials are pasted and signed in only on the computer running the host.
 
-MCP servers from a plugin are Shared MCP servers like any other: they appear under **Customize → MCP servers**, turned on the same way. An ability a plugin maps (an image generator, a search tool) is offered in **Settings → Models → Abilities**, and Auto tries it for an ability you have not chosen once its live check passes.
+MCP servers from a plugin are Shared MCP servers like any other: they appear under **Customize → MCP servers** marked with the plugin, turned on and their tools chosen the same way, and **Choose tools** on the plugin's card opens each one. Removing or changing what one runs belongs to its plugin, so its server shows **Open plugin** instead of **Remove** and **Edit**. A plugin's local command is saved with its lasting path, so a version manager's per-shell folder (fnm's) going away after a restart does not break it. An ability a plugin maps (an image generator, a search tool) is offered in **Settings → Models → Abilities**, and Auto tries it for an ability you have not chosen once its live check passes.
 
 ### Updates and removal
 
@@ -42,7 +44,8 @@ For a service no index lists ("connect Rodin for 3D models"), the agent offers `
 
 Ramu hosts no plugins. A plugin is its author's Git repository or a folder. An **index** lists plugins with their source and pinned commit in `.claude-plugin/marketplace.json`, the same file Claude Code reads as a marketplace.
 
-- [akalstack/ramu-plugins](https://github.com/akalstack/ramu-plugins) is listed by default. Plugins Akalstack maintains are marked **By Ramu**: Railway, Fly.io, Cloudflare and Supabase (their CLIs, with a skill each), and Grafana, Amplitude and Salesforce (dashboard data). Every commit in that index is signed with Akalstack's key, which ships in Ramu; a clone it did not sign is refused before anything in it is read.
+- [akalstack/ramu-plugins](https://github.com/akalstack/ramu-plugins) is listed by default. Plugins Akalstack maintains are marked **By Ramu**: Railway, Fly.io, Cloudflare and Supabase (their CLIs, with a skill each), Grafana, Amplitude and Salesforce (dashboard data), Meshy and Tripo (3D models) and Godot. Every commit in that index is signed with Akalstack's key, which ships in Ramu; a clone it did not sign is refused before anything in it is read.
+- [anthropics/claude-plugins-official](https://github.com/anthropics/claude-plugins-official), Claude's plugin directory, is listed by default too. Its plugins are their authors' (Atlassian, Notion, Figma, Stripe, Vercel, Unity and hundreds more), pinned to a commit in the directory, and reviewed like any other before they install. A listing Ramu cannot fetch (one installed by running a command) is left out rather than hiding the rest of the index.
 - **Indexes** under **Customize → Plugins** adds any other marketplace repository, such as a company's own list. Claude Code marketplaces work as indexes too.
 - An index entry can name its author's signing key (an SSH public key or an armored GPG key). Ramu then installs only a pinned commit signed by that key, checked against that key alone, and an update signed by another key asks for approval again and says so.
 
@@ -62,8 +65,9 @@ ramu plugin check .                      # validate everything, naming each prob
 | Path | Becomes |
 | --- | --- |
 | `plugin.json`, `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json` (read in that order) | The manifest: `name` (lowercase words joined by dashes), `version`, `description`, `author`, `homepage`, `license`, `keywords` |
-| `skills/<name>/SKILL.md` | Installed skills naming the plugin as their source; the folder's name and the skill's `name` match |
-| `.mcp.json` (or `mcpServers` in the manifest) | Shared MCP servers; `${CLAUDE_PLUGIN_ROOT}` is the installed copy |
+| `skills/<name>/SKILL.md` | Installed skills naming the plugin as their source, named by the skill's `name`; a folder without a `SKILL.md` is ignored |
+| `commands/*.md` | Slash commands, installed as skills of the same name |
+| `.mcp.json` (or `mcpServers` in the manifest) | Shared MCP servers, with or without the `mcpServers` wrapper; `${CLAUDE_PLUGIN_ROOT}` is the installed copy |
 | `agents/<name>.md` | Custom agents; one whose `tools` lists no editing tool is read-only |
 | `AGENTS.md` | A rule for every project the plugin applies to |
 

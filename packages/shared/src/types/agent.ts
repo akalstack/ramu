@@ -466,6 +466,8 @@ type AgentEventBody =
       title: string
       detail: string
       approvalReviewRule?: string
+      /** An MCP tool set to Ask: Always allow switches it to Allow in its server's settings, where it can be changed back. */
+      approvalAlways?: string
       approvalOnceOnly?: boolean
       approvalKey?: string
       approvalCommand?: string

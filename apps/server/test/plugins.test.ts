@@ -223,9 +223,39 @@ describe('reading a plugin folder', () => {
       ),
     )
     const problems = folder.contents.problems.map((problem) => `${problem.file}: ${problem.message}`)
-    expect(problems.some((line) => line.startsWith('skills/wrong/SKILL.md') && line.includes('same name'))).toBe(true)
     expect(problems.some((line) => line.includes('server missing'))).toBe(true)
-    expect(problems.some((line) => line.startsWith('agents/empty.md'))).toBe(true)
+    // As Claude Code reads them: a skill is named by its SKILL.md, and an agent's first line says what it is for.
+    expect(folder.contents.skills.map((skill) => skill.name)).toContain('render-deploy')
+    expect(folder.contents.agents).toContainEqual(
+      expect.objectContaining({ name: 'empty', description: 'no front matter' }),
+    )
+  })
+
+  it('reads a Claude Code plugin as Claude Code does: bare .mcp.json, slash commands, keys from the environment', () => {
+    const folder = readPluginFolder(
+      write(temp(), {
+        '.claude-plugin/plugin.json': JSON.stringify({ name: 'GitHub Tools' }),
+        '.mcp.json': JSON.stringify({
+          github: {
+            type: 'http',
+            url: 'https://api.example.com/mcp',
+            headers: { Authorization: 'Bearer ${GITHUB_TOKEN}' },
+          },
+        }),
+        'commands/review-pr.md': '---\ndescription: Review a pull request\n---\n\nReview $ARGUMENTS.',
+        'skills/README.md': 'not a skill',
+        'hooks/hooks.json': '{}',
+      }),
+    )
+    expect(folder.contents.problems).toEqual([])
+    expect(folder.manifest.name).toBe('github-tools')
+    expect(folder.contents.mcpServers).toEqual([expect.objectContaining({ name: 'github', type: 'http' })])
+    expect(folder.contents.skills).toEqual([
+      expect.objectContaining({ name: 'review-pr', description: 'Review a pull request' }),
+    ])
+    expect(folder.contents.credentials).toEqual([expect.objectContaining({ label: 'Github token' })])
+    expect(folder.asked).toEqual(['GITHUB_TOKEN'])
+    expect(folder.contents.unused).toEqual(['hooks'])
   })
 
   it('refuses a folder with no manifest or an oversized one', () => {

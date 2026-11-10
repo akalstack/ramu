@@ -268,6 +268,23 @@ export class SharedMcpPolicy {
     return structuredClone(approved)
   }
 
+  /** Lets one tool run without asking in every grant of a connection, as choosing Allow for it in its settings does. */
+  allowTool(connectionId: string, toolName: string) {
+    this.commit({
+      ...this.state,
+      grants: this.state.grants.map((entry) =>
+        entry.connectionId === connectionId
+          ? {
+              ...entry,
+              tools: entry.tools.map((tool) =>
+                tool.name === toolName ? { ...tool, approval: 'connection' as const } : tool,
+              ),
+            }
+          : entry,
+      ),
+    })
+  }
+
   revoke(grantId: string) {
     this.commit({ ...this.state, grants: this.state.grants.filter((entry) => entry.id !== grantId) })
   }

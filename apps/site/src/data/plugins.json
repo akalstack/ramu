@@ -6,14 +6,25 @@
       "description": "Deploy apps and databases to Railway through its CLI, signed in with a token kept on the host.",
       "homepage": "https://railway.com",
       "author": "Akalstack",
-      "keywords": ["railway", "deploy", "hosting", "postgres"],
+      "keywords": [
+        "railway",
+        "deploy",
+        "hosting",
+        "postgres"
+      ],
       "category": "deploy",
       "byRamu": true,
       "signed": true,
-      "stacks": ["node-api", "django", "fastapi"],
+      "stacks": [
+        "node-api",
+        "django",
+        "fastapi"
+      ],
       "adds": {
         "skills": 1,
-        "credentials": ["Railway token"],
+        "credentials": [
+          "Railway token"
+        ],
         "cli": "railway"
       }
     },
@@ -22,14 +33,24 @@
       "description": "Launch and deploy apps on Fly.io through flyctl, signed in with a token kept on the host.",
       "homepage": "https://fly.io",
       "author": "Akalstack",
-      "keywords": ["fly", "flyio", "deploy", "hosting"],
+      "keywords": [
+        "fly",
+        "flyio",
+        "deploy",
+        "hosting"
+      ],
       "category": "deploy",
       "byRamu": true,
       "signed": true,
-      "stacks": ["go", "rails"],
+      "stacks": [
+        "go",
+        "rails"
+      ],
       "adds": {
         "skills": 1,
-        "credentials": ["Fly.io token"],
+        "credentials": [
+          "Fly.io token"
+        ],
         "cli": "fly"
       }
     },
@@ -38,14 +59,27 @@
       "description": "Deploy Workers and Pages with wrangler, and publish Ramu pages to Cloudflare Pages, with a token kept on the host.",
       "homepage": "https://developers.cloudflare.com/workers/wrangler/",
       "author": "Akalstack",
-      "keywords": ["cloudflare", "workers", "pages", "wrangler", "d1", "r2"],
+      "keywords": [
+        "cloudflare",
+        "workers",
+        "pages",
+        "wrangler",
+        "d1",
+        "r2"
+      ],
       "category": "deploy",
       "byRamu": true,
       "signed": true,
-      "stacks": ["static", "astro", "vite-react"],
+      "stacks": [
+        "static",
+        "astro",
+        "vite-react"
+      ],
       "adds": {
         "skills": 1,
-        "credentials": ["Cloudflare API token"],
+        "credentials": [
+          "Cloudflare API token"
+        ],
         "cli": "wrangler"
       }
     },
@@ -54,14 +88,25 @@
       "description": "Manage Supabase projects, migrations and edge functions through the Supabase CLI, with a token kept on the host.",
       "homepage": "https://supabase.com/docs/guides/cli",
       "author": "Akalstack",
-      "keywords": ["supabase", "postgres", "database", "auth", "migrations"],
+      "keywords": [
+        "supabase",
+        "postgres",
+        "database",
+        "auth",
+        "migrations"
+      ],
       "category": "deploy",
       "byRamu": true,
       "signed": true,
-      "stacks": ["nextjs", "vite-react"],
+      "stacks": [
+        "nextjs",
+        "vite-react"
+      ],
       "adds": {
         "skills": 1,
-        "credentials": ["Supabase access token"],
+        "credentials": [
+          "Supabase access token"
+        ],
         "cli": "supabase"
       }
     },
@@ -70,15 +115,25 @@
       "description": "Read Grafana data sources in Ramu dashboards with a Viewer service account token.",
       "homepage": "https://grafana.com",
       "author": "Akalstack",
-      "keywords": ["grafana", "prometheus", "metrics", "observability", "dashboard"],
+      "keywords": [
+        "grafana",
+        "prometheus",
+        "metrics",
+        "observability",
+        "dashboard"
+      ],
       "category": "data",
       "byRamu": true,
       "signed": true,
       "stacks": [],
       "adds": {
         "skills": 1,
-        "credentials": ["Grafana service account token"],
-        "dataSources": ["Grafana"]
+        "credentials": [
+          "Grafana service account token"
+        ],
+        "dataSources": [
+          "Grafana"
+        ]
       }
     },
     {
@@ -86,15 +141,24 @@
       "description": "Read Amplitude event counts in Ramu dashboards with a project's API key and secret key.",
       "homepage": "https://amplitude.com",
       "author": "Akalstack",
-      "keywords": ["amplitude", "analytics", "events", "product"],
+      "keywords": [
+        "amplitude",
+        "analytics",
+        "events",
+        "product"
+      ],
       "category": "data",
       "byRamu": true,
       "signed": true,
       "stacks": [],
       "adds": {
         "skills": 1,
-        "credentials": ["Amplitude API key"],
-        "dataSources": ["Amplitude"]
+        "credentials": [
+          "Amplitude API key"
+        ],
+        "dataSources": [
+          "Amplitude"
+        ]
       }
     },
     {
@@ -102,15 +166,24 @@
       "description": "Read Salesforce records with SOQL in Ramu dashboards, through your own connected app's sign-in.",
       "homepage": "https://www.salesforce.com",
       "author": "Akalstack",
-      "keywords": ["salesforce", "crm", "soql", "opportunities"],
+      "keywords": [
+        "salesforce",
+        "crm",
+        "soql",
+        "opportunities"
+      ],
       "category": "data",
       "byRamu": true,
       "signed": true,
       "stacks": [],
       "adds": {
         "skills": 1,
-        "credentials": ["Salesforce"],
-        "dataSources": ["Salesforce"]
+        "credentials": [
+          "Salesforce"
+        ],
+        "dataSources": [
+          "Salesforce"
+        ]
       }
     },
     {
@@ -118,7 +191,15 @@
       "description": "Make textured, rigged and animated 3D models for games with Meshy, on your Meshy API key.",
       "homepage": "https://www.meshy.ai",
       "author": "Akalstack",
-      "keywords": ["meshy", "3d", "model", "game", "glb", "rigging", "animation"],
+      "keywords": [
+        "meshy",
+        "3d",
+        "model",
+        "game",
+        "glb",
+        "rigging",
+        "animation"
+      ],
       "category": "media",
       "byRamu": true,
       "signed": true,
@@ -126,8 +207,12 @@
       "adds": {
         "skills": 1,
         "mcpServers": 1,
-        "credentials": ["Meshy API key"],
-        "abilities": ["model_3d"]
+        "credentials": [
+          "Meshy API key"
+        ],
+        "abilities": [
+          "model_3d"
+        ]
       }
     },
     {
@@ -135,7 +220,15 @@
       "description": "Make 3D models for games with Tripo from a description or a picture, and rig and animate them, on your Tripo API key.",
       "homepage": "https://www.tripo3d.ai",
       "author": "Akalstack",
-      "keywords": ["tripo", "3d", "model", "game", "glb", "image-to-3d", "animation"],
+      "keywords": [
+        "tripo",
+        "3d",
+        "model",
+        "game",
+        "glb",
+        "image-to-3d",
+        "animation"
+      ],
       "category": "media",
       "byRamu": true,
       "signed": true,
@@ -143,8 +236,12 @@
       "adds": {
         "skills": 1,
         "mcpServers": 1,
-        "credentials": ["Tripo API key"],
-        "abilities": ["model_3d"]
+        "credentials": [
+          "Tripo API key"
+        ],
+        "abilities": [
+          "model_3d"
+        ]
       }
     },
     {
@@ -152,7 +249,15 @@
       "description": "Build, check and export Godot 4 games through the godot command, including a web export that publishes like any static site.",
       "homepage": "https://godotengine.org",
       "author": "Akalstack",
-      "keywords": ["godot", "game", "engine", "gdscript", "3d", "2d", "export"],
+      "keywords": [
+        "godot",
+        "game",
+        "engine",
+        "gdscript",
+        "3d",
+        "2d",
+        "export"
+      ],
       "category": "games",
       "byRamu": true,
       "signed": true,
@@ -160,21 +265,6 @@
       "adds": {
         "skills": 1,
         "cli": "godot"
-      }
-    },
-    {
-      "name": "unity",
-      "description": "Work on Unity 6 projects through the Unity CLI: drive the open Editor, run tests and make headless builds. The licence and Editor stay on your computer.",
-      "homepage": "https://docs.unity.com/en-us/unity-cli",
-      "author": "Akalstack",
-      "keywords": ["unity", "game", "engine", "csharp", "3d", "build"],
-      "category": "games",
-      "byRamu": true,
-      "signed": true,
-      "stacks": [],
-      "adds": {
-        "skills": 1,
-        "cli": "unity"
       }
     }
   ]

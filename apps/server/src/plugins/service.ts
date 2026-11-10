@@ -3,8 +3,8 @@
 // tagged with the plugin so Remove takes them all out together. Credentials stay in the host's credential store and reach
 // only the plugin's own MCP servers, CLI and data sources.
 import { randomUUID } from 'node:crypto'
-import { cpSync, existsSync, mkdirSync, rmSync, watch, type FSWatcher } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { cpSync, existsSync, mkdirSync, realpathSync, rmSync, watch, type FSWatcher } from 'node:fs'
+import { basename, dirname, join, resolve } from 'node:path'
 import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
 import type { CustomAgent } from '@ramu/shared/customAgents'
 import type { SharedMcpConnection } from '@ramu/shared/mcp'
@@ -12,12 +12,13 @@ import type { AppPreferences, ManagedSkill } from '@ramu/shared/types'
 import type { Rule, RuleInput } from '@ramu/shared/types/rules'
 import { newerVersion } from '@ramu/shared/version'
 import {
+  CLAUDE_PLUGIN_INDEX,
   DEFAULT_PLUGIN_INDEX,
   checkQuery,
   dataSourceRows,
   fillBody,
   fillTemplate,
-  marketplaceFile,
+  readMarketplace,
   readPath,
   resolveIndexSource,
   type IndexEntry,
@@ -33,7 +34,7 @@ import {
   type PluginUpdate,
   type RamuExtension,
 } from '@ramu/shared/plugins'
-import { RAMU_EXTENSION } from '@ramu/shared/plugins'
+import { RAMU_EXTENSION, UNUSED_PART_NAMES } from '@ramu/shared/plugins'
 import { HostCredentialStore } from '../credentials/store'
 import { skillMetadata } from '../memory/skillFiles'
 import { SavedCredential } from '../workspace/forge/savedCredential'
@@ -141,13 +142,54 @@ export interface PluginHost {
   indexKey?: string
 }
 
+/**
+ * The command's folder with its links followed, keeping the command's own name: version managers such as fnm put a
+ * per-shell folder first on PATH that is gone after a restart, while the folder it points to stays.
+ */
+function lastingPath(executable: string) {
+  try {
+    return join(realpathSync(dirname(executable)), basename(executable))
+  } catch {
+    return executable
+  }
+}
+
+/** One index as last read: its entries, or the error that stopped the read (keeping the entries from before). */
+interface IndexListing {
+  at: number
+  entries: IndexEntry[]
+  name: string
+  error: string | null
+  commit: string | null
+  skipped?: number
+  pluginRoot?: string
+}
+
+/** Whether installing gives agents anything: a plugin of only hooks or language servers would add nothing here. */
+const usable = (contents: PluginContents) =>
+  contents.skills.length > 0 ||
+  contents.credentials.length > 0 ||
+  contents.mcpServers.length > 0 ||
+  contents.agents.length > 0 ||
+  !!contents.rule ||
+  !!contents.cli ||
+  contents.abilities.length > 0 ||
+  contents.dataSources.length > 0
+
+/** An MCP address without its query, so a plugin's `?utm_source=plugin` still matches the same server. */
+function serverAddress(url: string) {
+  try {
+    const parsed = new URL(url)
+    return `${parsed.origin}${parsed.pathname.replace(/\/$/, '')}`
+  } catch {
+    return url
+  }
+}
+
 export class PluginService {
   private staged = new Map<string, Staged>()
   private watchers = new Map<string, FSWatcher>()
-  private listings = new Map<
-    string,
-    { at: number; entries: IndexEntry[]; name: string; error: string | null; commit: string | null }
-  >()
+  private listings = new Map<string, IndexListing>()
   private readonly credentials: HostCredentialStore
   private readonly fetcher: typeof fetch
 
@@ -187,6 +229,7 @@ export class PluginService {
       installedAt: plugin.installedAt,
       updatedAt: plugin.updatedAt,
       enabled: plugin.enabled,
+      mcpConnections: Object.entries(plugin.parts.mcp).map(([name, id]) => ({ name, id })),
       credentials: plugin.extension.credentials.map((slot) => {
         const saved = plugin.credentials[slot.id]
         return {
@@ -262,6 +305,8 @@ export class PluginService {
     if (old && old.name !== read.manifest.name) throw new Error('That source is a different plugin.')
     const keyChanged = !!old && (old.signingKey ?? null) !== (listing?.signingKey ?? old.signingKey ?? null)
     const diff = old ? pluginChanges(old.fingerprint, read.fingerprint) : { changes: [], needsApproval: true }
+    for (const replaced of this.replacedServers(read.mcpServers))
+      diff.changes.push(`Takes over your ${replaced.name} MCP server; turn its tools on again after installing`)
     if (keyChanged) diff.changes.unshift('The author’s signing key changed')
     const requires = read.extension.requires?.ramu
     const blocked =
@@ -269,7 +314,9 @@ export class PluginService {
         ? `This plugin needs Ramu ${requires} or newer. Update Ramu first.`
         : read.contents.problems.length
           ? `Fix ${read.contents.problems.length === 1 ? 'one problem' : `${read.contents.problems.length} problems`} first.`
-          : this.dataSourceClash(read, old?.id)
+          : !usable(read.contents)
+            ? `Nothing in this plugin works in Ramu: it only has ${read.contents.unused.map((part) => UNUSED_PART_NAMES[part].toLowerCase()).join(', ') || 'nothing Ramu reads'}.`
+            : this.dataSourceClash(read, old?.id)
     const stageId = randomUUID()
     const review: PluginReview = {
       stageId,
@@ -471,6 +518,8 @@ export class PluginService {
       if (!folder.skills.some((skill) => skill.name === stale.name)) this.host.skills.remove(stale.id)
 
     const scope = projectId ? { hostWide: false, projectIds: [projectId] } : { hostWide: true, projectIds: [] }
+    // A server the person added by hand at the same address becomes the plugin's, instead of a second copy beside it.
+    for (const replaced of this.replacedServers(folder.mcpServers)) await this.host.mcp.remove(replaced.id)
     const taken = new Set(
       this.host.mcp
         .connections()
@@ -537,11 +586,11 @@ export class PluginService {
     const fill = (value: string) => value.replace(ROOT_VARIABLES, root)
     if ('url' in server) return { type: 'http', url: fill(server.url), headerSecretRefs: {} }
     const command = fill(server.command)
-    const executable = command.startsWith('/') ? command : platformCli(command)
-    if (!executable) throw new Error(`${server.command} is not installed on this host. Install it, then try again.`)
+    const found = command.startsWith('/') ? command : platformCli(command)
+    if (!found) throw new Error(`${server.command} is not installed on this host. Install it, then try again.`)
     return {
       type: 'stdio',
-      command: executable,
+      command: lastingPath(found),
       args: server.args.map(fill),
       cwd: server.cwd ? resolve(root, fill(server.cwd)) : root,
       envSecretRefs: {},
@@ -1079,9 +1128,39 @@ export class PluginService {
   /** Watches every Development plugin again after a restart. */
   start() {
     for (const plugin of this.state().plugins) if (plugin.source.kind === 'development') this.watch(plugin)
+    this.settleCommands()
     void this.checkUpdates().catch(() => {})
     const timer = setInterval(() => void this.checkUpdates().catch(() => {}), 60 * 60_000)
     timer.unref?.()
+  }
+
+  /** Hand-added MCP servers at the same address as one of these, which installing them would duplicate. */
+  private replacedServers(servers: Record<string, PluginMcpServer>) {
+    const owned = new Set(this.state().plugins.flatMap((plugin) => Object.values(plugin.parts.mcp)))
+    const addresses = new Set(
+      Object.values(servers).flatMap((server) => ('url' in server ? [serverAddress(server.url)] : [])),
+    )
+    return this.host.mcp
+      .connections()
+      .filter(
+        (connection) =>
+          !owned.has(connection.id) &&
+          !connection.split &&
+          connection.transport.type === 'http' &&
+          addresses.has(serverAddress(connection.transport.url)),
+      )
+  }
+
+  /** A server saved with a per-shell path while that path still exists gets the lasting one, before it disappears. */
+  private settleCommands() {
+    const owned = new Set(this.state().plugins.flatMap((plugin) => Object.values(plugin.parts.mcp)))
+    for (const connection of this.host.mcp.connections()) {
+      if (!owned.has(connection.id) || connection.transport.type !== 'stdio') continue
+      const lasting = lastingPath(connection.transport.command)
+      if (lasting === connection.transport.command) continue
+      const { id, hostId: _hostId, revision: _revision, ...definition } = connection
+      this.host.mcp.save({ ...definition, transport: { ...connection.transport, command: lasting } }, id)
+    }
   }
 
   private watch(record: PluginRecord) {
@@ -1212,7 +1291,10 @@ export class PluginService {
   indexes(): PluginIndexInfo[] {
     const all = [
       { url: DEFAULT_PLUGIN_INDEX, name: 'ramu-plugins', builtIn: true },
-      ...this.state().indexes.map((entry) => ({ ...entry, builtIn: false })),
+      { url: CLAUDE_PLUGIN_INDEX, name: 'claude-plugins-official', builtIn: true },
+      ...this.state()
+        .indexes.filter((entry) => entry.url !== CLAUDE_PLUGIN_INDEX)
+        .map((entry) => ({ ...entry, builtIn: false })),
     ]
     return all.map((entry) => {
       const cached = this.listings.get(entry.url)
@@ -1223,6 +1305,7 @@ export class PluginService {
         checkedAt: cached?.at ?? null,
         error: cached?.error ?? null,
         count: cached?.entries.length ?? 0,
+        skipped: cached?.skipped ?? 0,
       }
     })
   }
@@ -1237,14 +1320,15 @@ export class PluginService {
   }
 
   removeIndex(url: string) {
-    if (url === DEFAULT_PLUGIN_INDEX) throw new Error('The Ramu index cannot be removed.')
+    if (url === DEFAULT_PLUGIN_INDEX || url === CLAUDE_PLUGIN_INDEX)
+      throw new Error('The built-in indexes cannot be removed.')
     const state = this.state()
     this.save({ ...state, indexes: state.indexes.filter((entry) => entry.url !== url) })
     this.listings.delete(url)
     return this.indexes()
   }
 
-  private async readIndex(url: string, force = false) {
+  private async readIndex(url: string, force = false): Promise<IndexListing> {
     const cached = this.listings.get(url)
     if (cached && !force && Date.now() - cached.at < 60 * 60_000 && !cached.error) return cached
     let fetched: Awaited<ReturnType<typeof fetchGitSource>> | null = null
@@ -1259,14 +1343,15 @@ export class PluginService {
         .map((path) => join(fetched!.dir, path))
         .find((path) => existsSync(path))
       if (!file) throw new Error('This repository has no .claude-plugin/marketplace.json.')
-      const parsed = marketplaceFile.parse(JSON.parse(readFileSync(file, 'utf8')))
+      const parsed = readMarketplace(JSON.parse(readFileSync(file, 'utf8')))
       const entry = {
         at: Date.now(),
         entries: parsed.plugins,
         name: parsed.name,
         error: null,
         commit: fetched.commit,
-        pluginRoot: parsed.metadata?.pluginRoot,
+        skipped: parsed.skipped.length,
+        ...(parsed.pluginRoot ? { pluginRoot: parsed.pluginRoot } : {}),
       }
       this.listings.set(url, entry)
       return entry
@@ -1277,6 +1362,7 @@ export class PluginService {
         name: cached?.name ?? url,
         error: (error as Error).message.slice(0, 300),
         commit: null,
+        ...(cached?.pluginRoot ? { pluginRoot: cached.pluginRoot } : {}),
       }
       this.listings.set(url, failed)
       if (force) throw error
@@ -1314,11 +1400,20 @@ export class PluginService {
             (index.url === DEFAULT_PLUGIN_INDEX && !!this.host.indexKey && source.url === index.url),
           stacks: ramu?.stacks ?? [],
           keywords,
+          category: entry.category ?? null,
           installed: installed.has(entry.name),
+          alternatives: [],
         })
       }
     }
-    return out.slice(0, 200)
+    // One card per plugin name: the first index's listing (Ramu's own before Claude's), the others offered on it.
+    const byName = new Map<string, PluginListing>()
+    for (const listing of out) {
+      const first = byName.get(listing.name)
+      if (first) first.alternatives.push({ index: listing.index, indexName: listing.indexName, source: listing.source })
+      else byName.set(listing.name, listing)
+    }
+    return [...byName.values()].slice(0, 1000)
   }
 
   /** One index entry, resolved to the Git URL, folder and pinned commit to fetch. */
@@ -1330,7 +1425,7 @@ export class PluginService {
     const ramu = entry.extensions?.[RAMU_EXTENSION]
     const source = resolveIndexSource(entry.source, {
       url: indexUrl,
-      pluginRoot: (read as { pluginRoot?: string }).pluginRoot,
+      pluginRoot: read.pluginRoot,
     })
     // A plugin kept inside the index itself is pinned by the index's own signed commit.
     const inIndex = source.url === indexUrl

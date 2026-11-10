@@ -97,6 +97,7 @@ export class ExternalSessionTools {
       title: string,
       detail: string,
       signal: AbortSignal,
+      always: () => void,
     ) => Promise<boolean>,
   ) {}
 
@@ -152,6 +153,7 @@ export class ExternalSessionTools {
             `Arguments: ${redactSecrets(JSON.stringify(args)).slice(0, 2000)}`,
           ].join('\n'),
           signal,
+          () => service.allowTool(call.connectionId, call.toolName),
         ),
     )
     this.gateways.set(key, { gateway, timer: this.expire(key) })

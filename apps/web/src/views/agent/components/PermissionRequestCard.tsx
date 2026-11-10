@@ -106,6 +106,11 @@ export function PermissionRequestCard({
                 {translate('Allow for this user')}
               </Button>
             )}
+            {e.approvalAlways && (
+              <Button variant="secondary" disabled={busy} onClick={() => void act(true, 'user')}>
+                {translate('Always allow')}
+              </Button>
+            )}
             <Button
               variant="secondary"
               className="bg-fill hover:bg-fill-hover"
@@ -119,7 +124,9 @@ export function PermissionRequestCard({
             {translate(
               e.approvalKey
                 ? 'Saved approvals apply to the selected rule. Allow once applies only to this request.'
-                : 'Applies to this request only.',
+                : e.approvalAlways
+                  ? 'Always allow lets this tool run without asking. Change it back in Customize → MCP servers.'
+                  : 'Applies to this request only.',
             )}
           </p>
         </div>

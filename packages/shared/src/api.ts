@@ -708,6 +708,8 @@ export interface RamuMethods extends ArtifactMethods {
     projectId: string | null
     updatingId?: string
   }): import('./types').SkillInstallPreview
+  /** One file of a staged or saved skill as text, to read before installing or after; null for binary or very large. */
+  'skills.fileText'(ref: { stageId: string } | { skillId: string }, path: string): string | null
   'skills.confirm'(stageId: string, includeScripts: boolean): import('./types').ManagedSkill
   /** Writes a skill the person authored. It is pinned, so learning never rewrites it. */
   'skills.create'(input: {

@@ -12,6 +12,8 @@ export const RAMU_EXTENSION = 'dev.getramu'
 export const PLUGIN_SCHEMA_URL = 'https://getramu.dev/schema/plugin.json'
 /** The index Ramu lists by default, and the repository its plugins are added to with a pull request. */
 export const DEFAULT_PLUGIN_INDEX = 'https://github.com/akalstack/ramu-plugins'
+/** Claude's own plugin directory, listed beside Ramu's: the same marketplace format, read without Akalstack's key. */
+export const CLAUDE_PLUGIN_INDEX = 'https://github.com/anthropics/claude-plugins-official'
 /**
  * The key Akalstack signs the Ramu index's commits with. A clone of the index whose commit this key did not sign is
  * refused before anything in it is read, so a tampered index or a pushed-over plugin never reaches the review.
@@ -26,11 +28,12 @@ export const MANIFEST_PATHS = ['plugin.json', '.claude-plugin/plugin.json', '.co
 
 export const PLUGIN_LIMITS = {
   manifestBytes: 64 * 1024,
-  skills: 40,
-  skillBytes: 256 * 1024,
+  skills: 60,
+  /** Room for the references vendors bundle with a skill, as the plugins in Claude's directory do. */
+  skillBytes: 2 * 1024 * 1024,
   /** Every file a plugin brings, skills' supporting files included. */
-  files: 400,
-  totalBytes: 8 * 1024 * 1024,
+  files: 1000,
+  totalBytes: 16 * 1024 * 1024,
   mcpServers: 10,
   agents: 20,
   credentials: 4,
@@ -565,6 +568,40 @@ export const marketplaceFile = z.object({
 })
 export type MarketplaceFile = z.infer<typeof marketplaceFile>
 
+/**
+ * A marketplace read entry by entry, so one listing Ramu cannot use (a source it does not fetch, a field past a limit)
+ * is skipped instead of hiding the whole index. Over-long descriptions are shortened rather than refused.
+ */
+export function readMarketplace(json: unknown): {
+  name: string
+  pluginRoot?: string
+  plugins: IndexEntry[]
+  skipped: string[]
+} {
+  const head = marketplaceFile.omit({ plugins: true }).parse(json)
+  const raw = (json as { plugins?: unknown }).plugins
+  if (!Array.isArray(raw)) throw new Error('The marketplace lists no plugins.')
+  const plugins: IndexEntry[] = []
+  const skipped: string[] = []
+  for (const item of raw.slice(0, 2000)) {
+    const entry =
+      item && typeof item === 'object' && typeof (item as { description?: unknown }).description === 'string'
+        ? { ...item, description: shorten((item as { description: string }).description, 1000) }
+        : item
+    const parsed = indexEntry.safeParse(entry)
+    if (parsed.success) plugins.push(parsed.data)
+    else skipped.push(String((item as { name?: unknown })?.name ?? '?').slice(0, 100))
+  }
+  return {
+    name: head.name,
+    ...(head.metadata?.pluginRoot ? { pluginRoot: head.metadata.pluginRoot } : {}),
+    plugins,
+    skipped,
+  }
+}
+
+const shorten = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
+
 /** The Git URL and folder an index entry points to. Relative paths resolve against the index's own repository. */
 export function resolveIndexSource(
   source: IndexSource,
@@ -657,6 +694,8 @@ export interface InstalledPlugin {
   installedAt: number
   updatedAt: number
   enabled: boolean
+  /** The MCP connections it added, by the server's name in the plugin, whose tools are chosen in MCP servers. */
+  mcpConnections: { name: string; id: string }[]
   credentials: {
     id: string
     label: string
@@ -703,7 +742,11 @@ export interface PluginListing {
   signed: boolean
   stacks: string[]
   keywords: string[]
+  /** The index's category for it, such as development or productivity. */
+  category: string | null
   installed: boolean
+  /** The same plugin name in other indexes; the card shows the first listing and offers these instead. */
+  alternatives: { index: string; indexName: string; source: string }[]
 }
 
 /** Whether a listing matches what the person typed: every word appears in its name, description, keywords or stacks. */
@@ -721,6 +764,8 @@ export interface PluginIndexInfo {
   checkedAt: number | null
   error: string | null
   count: number
+  /** Listings Ramu could not read, left out of Browse. */
+  skipped: number
 }
 
 /** The link getramu.dev/plugins opens: the install review for one source. */

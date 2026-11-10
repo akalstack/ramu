@@ -21,6 +21,7 @@ import { AccountIdentityPicker, IdentityDropdown, IdentityName, useAccountIdenti
 import { t, useLanguage } from '../i18n'
 import { errorText } from '../lib/errors'
 import { revocationNotice } from './mcpRevocation'
+import { openCustomize } from '../customize/openCustomize'
 import { ramu } from '../ipc'
 import { useWorkspace } from '../workspace/workspace'
 import { useModelSets } from '../models/ModelSets'
@@ -623,7 +624,7 @@ export function McpSettings() {
       )}
       <SettingsCardList>
         {data &&
-          view.paged.shown.map(({ connection, status, reason, checkedAt, toolCount }) => (
+          view.paged.shown.map(({ connection, status, reason, checkedAt, toolCount, plugin }) => (
             <SettingsCard
               key={connection.id}
               title={
@@ -760,18 +761,22 @@ export function McpSettings() {
                     {t('Add account')}
                   </Button>
                 )}
+                {/* A plugin's server is changed or removed with its plugin. */}
+                {!plugin && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="ml-auto"
+                    disabled={!canAdminister || busy}
+                    onClick={() => setEditing(connection)}
+                  >
+                    {t('Edit')}
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="ml-auto"
-                  disabled={!canAdminister || busy}
-                  onClick={() => setEditing(connection)}
-                >
-                  {t('Edit')}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
+                  className={plugin ? 'ml-auto' : undefined}
                   disabled={!canAdminister || busy}
                   onClick={() =>
                     void act(async () => {
@@ -796,15 +801,21 @@ export function McpSettings() {
                 >
                   {t('Disconnect')}
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="hover:text-bad"
-                  disabled={!canAdminister || busy}
-                  onClick={() => setRemoving(connection)}
-                >
-                  {t('Remove')}
-                </Button>
+                {plugin ? (
+                  <Button size="sm" variant="ghost" onClick={() => openCustomize('plugins', plugin.id)}>
+                    {t('Open plugin')}
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="hover:text-bad"
+                    disabled={!canAdminister || busy}
+                    onClick={() => setRemoving(connection)}
+                  >
+                    {t('Remove')}
+                  </Button>
+                )}
               </div>
             </SettingsCard>
           ))}

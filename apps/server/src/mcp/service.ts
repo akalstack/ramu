@@ -592,6 +592,12 @@ export class SharedMcpService {
     }
   }
 
+  /** Always allow from a tool's approval card: the tool runs without asking from now on, for every login. */
+  allowTool(connectionId: string, toolName: string) {
+    this.policy.allowTool(connectionId, toolName)
+    this.changed()
+  }
+
   approve(input: Omit<SharedMcpGrant, 'id' | 'accountIds' | 'shared'> & { accountId: string }) {
     const inspection = this.inspections.get(input.connectionId)
     if (

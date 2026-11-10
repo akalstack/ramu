@@ -1223,8 +1223,8 @@ const account = new AccountService({
 })
 account.start()
 workspace.settingsStore?.subscribe(() => account.settingsChanged())
-const externalTools = new ExternalSessionTools(getSharedMcp, (sessionId, title, detail, signal) =>
-  agents.requestPermission(sessionId, title, detail, signal),
+const externalTools = new ExternalSessionTools(getSharedMcp, (sessionId, title, detail, signal, always) =>
+  agents.requestPermission(sessionId, title, detail, signal, always),
 )
 const externalSource = (session: AgentSessionInfo): ExternalSessionSource => {
   const project = projectOf(session)

@@ -121,6 +121,8 @@ export interface SharedMcpManagement {
       accountId: string
       tools: { name: string; approval: 'always' | 'connection' }[]
     }[]
+    /** The plugin that added it: removing, editing or turning it off belongs to the plugin. */
+    plugin?: { id: string; name: string }
   }[]
   /** One entry per provider login set up for shared approvals. */
   readiness: SharedMcpAccountReadiness[]

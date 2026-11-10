@@ -106,7 +106,7 @@ import { useProjectIdentity } from './workspace/identities'
 import { IdentityChip } from './settings/IdentityChip'
 import { TaskPane } from './workspace/TaskPane'
 import { CustomizePage } from './customize/CustomizePage'
-import { CUSTOMIZE_EVENT, openCustomize, type CustomizeSection } from './customize/openCustomize'
+import { CUSTOMIZE_EVENT, openCustomize, type CustomizeTarget } from './customize/openCustomize'
 import {
   isWorkspaceCtx,
   worktreeCtx,
@@ -233,11 +233,11 @@ function Shell() {
     return () => window.removeEventListener('ramu:archived', open)
   }, [])
   // Customize opens on the section asked for, from the rail, a thread or an old Settings link.
-  const [customizeSection, setCustomizeSection] = useState<CustomizeSection>('plugins')
+  const [customizeTarget, setCustomizeTarget] = useState<CustomizeTarget>({ section: 'plugins' })
   useEffect(() => {
     const show = (event: Event) => {
-      const section = (event as CustomEvent<{ section?: CustomizeSection }>).detail?.section
-      if (section) setCustomizeSection(section)
+      const target = (event as CustomEvent<CustomizeTarget | undefined>).detail
+      if (target?.section) setCustomizeTarget(target)
       ws.setSidebar('customize')
     }
     window.addEventListener(CUSTOMIZE_EVENT, show)
@@ -838,7 +838,7 @@ function Shell() {
               {ui.sidebar === 'inbox' && <InboxPage />}
               {ui.sidebar === 'artifacts' && <PagesPage />}
               {ui.sidebar === 'pulls' && <PullRequestsPage />}
-              {ui.sidebar === 'customize' && <CustomizePage initial={customizeSection} />}
+              {ui.sidebar === 'customize' && <CustomizePage initial={customizeTarget} />}
               {ui.sidebar === 'schedules' && (
                 <SchedulesPage
                   createRequested={createScheduleRequested}

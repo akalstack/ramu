@@ -301,6 +301,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
         ...(e.approvalKey && !e.approvalOnceOnly ? { rememberable: { project: !!e.approvalProjectId } } : {}),
         ...(e.approvalPatterns?.length ? { patterns: e.approvalPatterns } : {}),
         ...(e.approvalReviewRule ? { reviewRule: e.approvalReviewRule } : {}),
+        ...(e.approvalAlways ? { always: true } : {}),
       })
     else if (e.kind === 'elicitation')
       items.push({ kind: 'elicitation', id: e.requestId, request: e, outcome: resolved.get(e.requestId) })

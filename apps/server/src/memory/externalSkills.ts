@@ -451,6 +451,29 @@ export class ExternalSkills {
   cancel(id: string, owner?: string) {
     if (this.staged.get(id)?.owner === owner) this.staged.delete(id)
   }
+  /**
+   * One file of a skill as text, so it can be read before installing or after: a staged install's, or a saved skill's.
+   * Null for a binary file or one too large to show.
+   */
+  fileText(ref: { stageId: string } | { skillId: string }, path: string, owner?: string): string | null {
+    let files: Record<string, string> | undefined
+    if ('stageId' in ref) {
+      const staged = this.staged.get(ref.stageId)
+      if (!staged || staged.expires < Date.now() || staged.owner !== owner)
+        throw new Error('This preview expired. Stage the skill again.')
+      files = staged.files
+    } else {
+      const skill = this.learning.skills().find((entry) => entry.id === ref.skillId)
+      if (!skill) throw new Error('That skill is no longer here.')
+      files = (skill.installation ?? skill.bundle)?.files
+    }
+    const data = files?.[path]
+    if (data === undefined) throw new Error('That file is not part of this skill.')
+    const bytes = Buffer.from(data, 'base64')
+    if (bytes.length > 256 * 1024 || bytes.includes(0)) return null
+    return bytes.toString('utf8')
+  }
+
   installed(id: string): ManagedSkill {
     const skill = this.learning.skills().find((s) => s.id === id && s.installation)
     if (!skill) throw new Error('Unknown installed skill.')

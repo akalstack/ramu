@@ -40,6 +40,10 @@ export const registerMemoryHandlers: RegisterHandlers = ({
     args: z.tuple([skillInstallInput]),
     run: (input: z.infer<typeof skillInstallInput>) => need(externalSkills).stage(input),
   },
+  'skills.fileText': {
+    args: z.tuple([z.union([z.object({ stageId: id }), z.object({ skillId: id })]), z.string().min(1).max(500)]),
+    run: (ref: { stageId: string } | { skillId: string }, path: string) => need(externalSkills).fileText(ref, path),
+  },
   'skills.confirm': {
     args: z.tuple([id, z.boolean()]),
     run: (stageId: string, scripts: boolean) => need(externalSkills).confirm(stageId, scripts),

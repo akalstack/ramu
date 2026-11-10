@@ -1971,13 +1971,22 @@ function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind
             onPress={() => decide(chatId, item.id, 'allow', 'user', pattern)}
           />
         ) : null}
+        {item.always ? (
+          <Button
+            kind="secondary"
+            title={say('Always allow')}
+            onPress={() => decide(chatId, item.id, 'allow', 'user')}
+          />
+        ) : null}
         <Button kind="secondary" title={say('Deny')} onPress={() => decide(chatId, item.id, 'deny')} />
       </View>
       <T size={font.caption} tone="muted">
         {say(
           item.rememberable
             ? 'Saved approvals apply to the selected rule. Allow once applies only to this request.'
-            : 'Applies to this request only.',
+            : item.always
+              ? 'Always allow lets this tool run without asking. Change it back in Customize → MCP servers.'
+              : 'Applies to this request only.',
         )}
       </T>
     </Card>

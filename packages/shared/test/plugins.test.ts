@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  readMarketplace,
   listingMatches,
   checkQuery,
   fillBody,
@@ -262,12 +263,29 @@ describe('listingMatches', () => {
     signed: true,
     stacks: ['node'],
     keywords: ['hosting'],
+    category: null,
     installed: false,
+    alternatives: [],
   }
   it('matches every typed word anywhere in what the listing says about itself', () => {
     expect(listingMatches(listing, '')).toBe(true)
     expect(listingMatches(listing, 'Render hosting')).toBe(true)
     expect(listingMatches(listing, 'node deploy')).toBe(true)
     expect(listingMatches(listing, 'render python')).toBe(false)
+  })
+})
+
+describe('readMarketplace', () => {
+  it('skips a listing it cannot use and shortens a long description, keeping the rest of the index', () => {
+    const read = readMarketplace({
+      name: 'claude-plugins-official',
+      plugins: [
+        { name: 'linear', source: './external_plugins/linear', description: 'x'.repeat(1500) },
+        { name: 'xcode', source: { source: 'command', command: 'xcrun agent plugin path' } },
+      ],
+    })
+    expect(read.plugins.map((entry) => entry.name)).toEqual(['linear'])
+    expect(read.plugins[0]!.description).toHaveLength(1000)
+    expect(read.skipped).toEqual(['xcode'])
   })
 })

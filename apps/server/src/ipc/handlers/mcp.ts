@@ -19,6 +19,13 @@ import {
 import type { RegisterHandlers } from '../types'
 
 const id = z.string().min(1).max(200)
+/** JSON with keys sorted, so two definitions compare by content whatever order their fields were written in. */
+const canonical = (value: unknown): string =>
+  JSON.stringify(value, (_key, inner: unknown) =>
+    inner && typeof inner === 'object' && !Array.isArray(inner)
+      ? Object.fromEntries(Object.entries(inner).sort(([a], [b]) => a.localeCompare(b)))
+      : inner,
+  )
 /** Safe status is readable by paired clients. All initial administration stays on the execution host. */
 export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
   /**
@@ -36,6 +43,9 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
       [entry.key]: false,
     })
   }
+  /** The name of the plugin that added a connection, if one did. */
+  const pluginOf = (connectionId: string) =>
+    ctx.plugins?.list().find((plugin) => plugin.mcpConnections.some(({ id }) => id === connectionId))?.name ?? null
   const service = () => {
     if (!ctx.getSharedMcp) throw new Error('Update this host for Shared MCP management')
     return ctx.getSharedMcp()
@@ -53,8 +63,18 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
         const providerManaged = AGENT_PROVIDERS.flatMap((provider) =>
           (seen[provider] ?? []).map((name) => ({ provider, name })),
         )
+        const owners = new Map(
+          (ctx.plugins?.list() ?? []).flatMap((plugin) =>
+            plugin.mcpConnections.map(({ id }) => [id, { id: plugin.id, name: plugin.name }] as const),
+          ),
+        )
+        const list = service().list()
         return {
-          ...service().list(),
+          ...list,
+          connections: list.connections.map((entry) => {
+            const plugin = owners.get(entry.connection.id)
+            return plugin ? { ...entry, plugin } : entry
+          }),
           ...(providerManaged.length ? { providerManaged } : {}),
           canAdminister: ctx.host.canAdministerIntegrations?.() === true,
         }
@@ -62,8 +82,20 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
     },
     'mcp.save': {
       args: z.tuple([sharedMcpDefinition, id.optional()]),
-      run: (input: Omit<SharedMcpConnection, 'id' | 'hostId' | 'revision'>, connectionId?: string) =>
-        admin().save(input, connectionId),
+      run: (input: Omit<SharedMcpConnection, 'id' | 'hostId' | 'revision'>, connectionId?: string) => {
+        const manager = admin()
+        const plugin = connectionId ? pluginOf(connectionId) : null
+        if (plugin) {
+          // A plugin's server can be turned off and on here; what it runs and where comes from the plugin.
+          const current = manager.policy.snapshot().connections.find((entry) => entry.id === connectionId)
+          const { id: _id, hostId: _host, revision: _revision, ...kept } = current ?? ({} as SharedMcpConnection)
+          if (!current || canonical({ ...kept, enabled: input.enabled }) !== canonical(input))
+            throw new Error(
+              `This server comes from the ${plugin} plugin. Change it by updating or removing the plugin.`,
+            )
+        }
+        return manager.save(input, connectionId)
+      },
     },
     'mcp.account': {
       args: z.tuple([sharedMcpAccount]),
@@ -193,6 +225,9 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
     'mcp.remove': {
       args: z.tuple([id]),
       run: async (id: string) => {
+        const plugin = pluginOf(id)
+        if (plugin)
+          throw new Error(`This server comes from the ${plugin} plugin. Remove the plugin in Customize → Plugins.`)
         await admin().remove(id)
         // An imported server stops replacing the declared copy: give back the sharing it displaced.
         const workspace = ctx.workspace

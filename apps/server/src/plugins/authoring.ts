@@ -125,7 +125,12 @@ export async function checkPlugin(
     return { name: null, problems: [{ file: folder, message: (error as Error).message }], servers: [], signed: null }
   }
   const problems = [...read.contents.problems]
-  const declared = new Set(read.extension.credentials.flatMap((slot) => [slot.env, ...slot.fields.map((f) => f.env)]))
+  // Installing asks for an undeclared variable on its own; an author still declares it, to name it and say where it is made.
+  const declared = new Set(
+    read.extension.credentials
+      .filter((slot) => !read.asked.includes(slot.env))
+      .flatMap((slot) => [slot.env, ...slot.fields.map((f) => f.env)]),
+  )
   const mcpFile =
     typeof read.manifest.mcpServers === 'object'
       ? read.contents.manifest

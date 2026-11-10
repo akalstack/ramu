@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Globe, Plus, RefreshCw, SquareTerminal } from 'lucide-react'
+import { Globe, Plus, Puzzle, RefreshCw, SquareTerminal } from 'lucide-react'
 import { RECOMMENDED_MCP_SERVERS, type RecommendedMcpServer } from '@ramu/shared/mcpCatalog'
+import { CLAUDE_PLUGIN_INDEX } from '@ramu/shared/plugins'
 import {
   defaultToolChoice,
   type SharedMcpConnection,
@@ -14,13 +15,14 @@ import { Button } from '@/components/desktop-button'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { Dialog } from '../Menu'
+import { Dialog, Menu } from '../Menu'
 import { ramu } from '../ipc'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { useAppSettings } from '../settings/AppSettings'
 import { ConnectionEditor, McpSettings, type Definition } from '../settings/McpSettings'
 import { errorText } from '../lib/errors'
+import { openCustomize, reviewPluginInstall } from './openCustomize'
 import { t, useLanguage } from '../i18n'
 import {
   Advanced,
@@ -42,7 +44,7 @@ const iconOf = (connection: SharedMcpConnection) =>
  * MCP servers: each one is turned on for every agent in one step (checked once, every login given its tools), with
  * each tool asking on every call unless the person lets it run. Recommended servers add in one click.
  */
-export function McpSection() {
+export function McpSection({ open: requested }: { open?: { id: string } | null }) {
   useLanguage()
   const { invoke } = useHost()
   const { on } = useHostRuntime()
@@ -56,6 +58,9 @@ export function McpSection() {
   const [openId, setOpenId] = useState<string | null>(null)
   const [editing, setEditing] = useState<SharedMcpConnection | 'new' | null>(null)
   const [signingIn, setSigningIn] = useState<string | null>(null)
+  useEffect(() => {
+    if (requested) setOpenId(requested.id)
+  }, [requested])
   const load = useCallback(() => {
     void invoke('mcp.status').then(setStatus, (reason) => setError({ id: 'page', text: errorText(reason) }))
   }, [invoke])
@@ -122,13 +127,15 @@ export function McpSection() {
         `${entry.connection.name} ${entry.connection.transport.type === 'http' ? entry.connection.transport.url : entry.connection.transport.command}`,
       ),
   )
+  // By address without its query, so a plugin's copy of a server (`?utm_source=plugin`) counts as added too.
+  const address = (url: string) => url.split('?')[0]!.replace(/\/$/, '')
   const added = new Set(
     (status?.connections ?? []).map((entry) =>
-      entry.connection.transport.type === 'http' ? entry.connection.transport.url : '',
+      entry.connection.transport.type === 'http' ? address(entry.connection.transport.url) : '',
     ),
   )
   const recommended = RECOMMENDED_MCP_SERVERS.filter(
-    (server) => !added.has(server.url) && fits(`${server.name} ${server.description}`),
+    (server) => !added.has(address(server.url)) && fits(`${server.name} ${server.description}`),
   )
   const canAdminister = status?.canAdminister === true
   const open = status?.connections.find((entry) => entry.connection.id === openId) ?? null
@@ -203,7 +210,14 @@ export function McpSection() {
                   }
                   muted={entry.status === 'disabled'}
                   badge={
-                    signingIn === entry.connection.id ? <Badge variant="outline">{t('Signing in…')}</Badge> : undefined
+                    signingIn === entry.connection.id ? (
+                      <Badge variant="outline">{t('Signing in…')}</Badge>
+                    ) : entry.plugin ? (
+                      <Badge variant="outline" title={t('Added by the {0} plugin', { '0': entry.plugin.name })}>
+                        <Puzzle size={11} aria-hidden />
+                        {displayName(entry.plugin.name)}
+                      </Badge>
+                    ) : undefined
                   }
                   onOpen={() => setOpenId(entry.connection.id)}
                   action={action(entry)}
@@ -226,17 +240,41 @@ export function McpSection() {
                     name={server.name}
                     title={server.title}
                     subtitle={server.description}
+                    badge={server.plugin ? <Badge variant="outline">{t('Plugin')}</Badge> : undefined}
                     action={
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label={t('Add {name}', { name: server.name })}
-                        title={server.signIn ? t('Add, then sign in with your account') : t('Add')}
-                        disabled={!canAdminister || busy !== null}
-                        onClick={() => void addRecommended(server)}
-                      >
-                        <Plus size={16} />
-                      </Button>
+                      server.plugin ? (
+                        // Its plugin adds the service's skills to the same server; the server alone stays a choice.
+                        <Menu
+                          standard
+                          label={t('Add {name}', { name: server.name })}
+                          icon={<Plus size={16} />}
+                          align="end"
+                          disabled={!canAdminister || busy !== null}
+                          items={[
+                            {
+                              key: 'plugin',
+                              label: t('Add with its skills (plugin)'),
+                              onSelect: () => reviewPluginInstall(CLAUDE_PLUGIN_INDEX, server.plugin!),
+                            },
+                            {
+                              key: 'server',
+                              label: t('Add only the MCP server'),
+                              onSelect: () => void addRecommended(server),
+                            },
+                          ]}
+                        />
+                      ) : (
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label={t('Add {name}', { name: server.name })}
+                          title={server.signIn ? t('Add, then sign in with your account') : t('Add')}
+                          disabled={!canAdminister || busy !== null}
+                          onClick={() => void addRecommended(server)}
+                        >
+                          <Plus size={16} />
+                        </Button>
+                      )
                     }
                   />
                 ))}
@@ -400,28 +438,54 @@ function ServerDetail({
       onConfirm={() => onApply(Object.fromEntries((tools ?? []).map((tool) => [tool.name, current(tool.name, tool)])))}
       onCancel={onClose}
       footerLeading={
-        <>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="hover:text-bad"
-            disabled={!canAdminister}
-            onClick={() => setConfirmRemove(true)}
-          >
-            {t('Remove')}
+        entry.plugin ? (
+          // What it runs comes from the plugin, so removing or changing it happens there.
+          <Button size="sm" variant="ghost" onClick={() => openCustomize('plugins', entry.plugin!.id)}>
+            <Puzzle size={13} />
+            {t('Open plugin')}
           </Button>
-          <Button size="sm" variant="ghost" disabled={!canAdminister} onClick={onEdit}>
-            {t('Edit')}
-          </Button>
-        </>
+        ) : (
+          <>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="hover:text-bad"
+              disabled={!canAdminister}
+              onClick={() => setConfirmRemove(true)}
+            >
+              {t('Remove')}
+            </Button>
+            <Button size="sm" variant="ghost" disabled={!canAdminister} onClick={onEdit}>
+              {t('Edit')}
+            </Button>
+          </>
+        )
       }
     >
       <div className="flex min-w-0 flex-col gap-3">
-        <p className="m-0 truncate font-mono text-caption text-muted-foreground">
-          {connection.transport.type === 'http'
-            ? connection.transport.url
-            : [connection.transport.command, ...connection.transport.args].join(' ')}
-        </p>
+        {(() => {
+          const full =
+            connection.transport.type === 'http'
+              ? connection.transport.url
+              : [connection.transport.command, ...connection.transport.args].join(' ')
+          // A local command reads by its name; the full path is on hover.
+          const shown =
+            connection.transport.type === 'http'
+              ? full
+              : [connection.transport.command.split(/[\\/]/).pop(), ...connection.transport.args].join(' ')
+          return (
+            <p className="m-0 flex min-w-0 items-center gap-1.5 text-caption text-muted-foreground">
+              <span className="truncate font-mono" title={full}>
+                {shown}
+              </span>
+              {entry.plugin && (
+                <span className="flex-none">
+                  · {t('Added by the {0} plugin', { '0': displayName(entry.plugin.name) })}
+                </span>
+              )}
+            </p>
+          )
+        })()}
         <div className="flex items-center justify-between gap-3 rounded-(--radius-s) bg-fill px-3 py-2">
           <span className="flex min-w-0 flex-col">
             <span className="text-control text-foreground">

@@ -13,6 +13,7 @@ import { useHost } from '../workspace/HostProvider'
 import { errorText } from '../lib/errors'
 import { formatLocale, t, useLanguage } from '../i18n'
 import { InstalledSkills } from '../settings/InstalledSkills'
+import { SkillFiles } from './SkillFiles'
 import { Advanced, CustomizeHeader, ExtensionGrid, ExtensionItem, Quiet, SectionTitle } from './parts'
 
 const fromPlugin = (skill: ManagedSkill) => skill.installation?.source.startsWith('plugin:') === true
@@ -304,6 +305,9 @@ function SkillDetail({
   useLanguage()
   const { invoke } = useHost()
   const [confirmRemove, setConfirmRemove] = useState(false)
+  const [showFiles, setShowFiles] = useState(false)
+  const read = useCallback((path: string) => invoke('skills.fileText', { skillId: skill.id }, path), [invoke, skill.id])
+  const bundle = skill.installation ?? skill.bundle
   const plugin = fromPlugin(skill)
   const chosen = skill.providers?.length ? skill.providers : [...AGENT_PROVIDERS]
   if (confirmRemove)
@@ -351,6 +355,27 @@ function SkillDetail({
                   source: skill.installation.source,
                 })}
           </p>
+        )}
+        {showFiles ? (
+          <div className="dialog-wide">
+            <SkillFiles
+              markdown={bundle?.markdown ?? skill.content}
+              files={
+                bundle
+                  ? Object.entries(bundle.files).map(([path, data]) => ({
+                      path,
+                      bytes: Math.floor((data.length * 3) / 4),
+                    }))
+                  : []
+              }
+              read={read}
+            />
+          </div>
+        ) : (
+          <Button size="sm" variant="ghost" className="self-start" onClick={() => setShowFiles(true)}>
+            <BookOpen size={13} />
+            {t('Show what it tells agents')}
+          </Button>
         )}
         <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0" disabled={busy !== null}>
           <legend className="mb-1.5 text-caption text-muted-foreground">{t('Used by')}</legend>
@@ -476,8 +501,13 @@ function SkillReview({
   onCancel: () => void
 }) {
   useLanguage()
+  const { invoke } = useHost()
   const [scripts, setScripts] = useState(false)
   const scriptFiles = preview.files.filter((file) => file.script)
+  const read = useCallback(
+    (path: string) => invoke('skills.fileText', { stageId: preview.id }, path),
+    [invoke, preview.id],
+  )
   return (
     <Dialog
       title={
@@ -488,23 +518,28 @@ function SkillReview({
       onCancel={onCancel}
       onConfirm={() => onConfirm(scripts)}
     >
-      <div className="flex min-w-0 flex-col gap-3">
+      <div className="dialog-wide flex min-w-0 flex-col gap-3">
         {preview.description && <p className="m-0 text-control text-soft">{preview.description}</p>}
         <p className="m-0 truncate text-caption text-muted-foreground" title={preview.source}>
           {preview.source}
         </p>
-        <details className="text-caption">
-          <summary className="cursor-pointer text-soft">
-            {preview.files.length === 1 ? t('1 file') : t('{0} files', { '0': preview.files.length })}
-          </summary>
-          <ul className="m-0 mt-1 max-h-40 list-none overflow-auto p-0 font-mono text-[11px] text-muted-foreground">
-            {preview.files.map((file) => (
-              <li key={file.path} className="truncate">
-                {file.path} · {file.bytes} B{file.script ? ` · ${t('Script')}` : ''}
-              </li>
-            ))}
-          </ul>
-        </details>
+        {preview.updatingId && (
+          <p className="m-0 text-caption text-muted-foreground">
+            {[
+              preview.changes.added.length ? t('{0} added', { '0': preview.changes.added.length }) : '',
+              preview.changes.changed.length ? t('{0} changed', { '0': preview.changes.changed.length }) : '',
+              preview.changes.removed.length ? t('{0} removed', { '0': preview.changes.removed.length }) : '',
+            ]
+              .filter(Boolean)
+              .join(' · ') || t('No file changes')}
+          </p>
+        )}
+        <SkillFiles
+          markdown={preview.markdown}
+          files={preview.files}
+          read={read}
+          changed={preview.updatingId ? new Set([...preview.changes.added, ...preview.changes.changed]) : undefined}
+        />
         {scriptFiles.length > 0 && (
           <label className="flex items-start gap-2 text-caption">
             <Checkbox checked={scripts} onCheckedChange={(value) => setScripts(value === true)} />

@@ -5,7 +5,7 @@ import { t, useLanguage } from '../i18n'
 import { McpSection } from './McpSection'
 import { PluginsSection } from './PluginsSection'
 import { SkillsSection } from './SkillsSection'
-import { CUSTOMIZE_EVENT, type CustomizeSection } from './openCustomize'
+import { CUSTOMIZE_EVENT, type CustomizeSection, type CustomizeTarget } from './openCustomize'
 
 const SECTIONS: { id: CustomizeSection; label: string; Icon: typeof Puzzle }[] = [
   { id: 'plugins', label: 'Plugins', Icon: Puzzle },
@@ -17,13 +17,19 @@ const SECTIONS: { id: CustomizeSection; label: string; Icon: typeof Puzzle }[] =
  * Customize: what agents can use beyond their own model, in one place: plugins, skills and MCP servers, each with what
  * is installed and what to add, recommended first.
  */
-export function CustomizePage({ initial = 'plugins' }: { initial?: CustomizeSection }) {
+export function CustomizePage({ initial = { section: 'plugins' } }: { initial?: CustomizeTarget }) {
   useLanguage()
-  const [section, setSection] = useState<CustomizeSection>(initial)
+  const [section, setSection] = useState<CustomizeSection>(initial.section)
+  // The plugin or server a link asked to open; a new object each time, so asking for the same one again reopens it.
+  const [item, setItem] = useState<{ id: string } | null>(initial.item ? { id: initial.item } : null)
+  const [install, setInstall] = useState<{ index: string; name: string } | null>(initial.install ?? null)
   useEffect(() => {
     const show = (event: Event) => {
-      const next = (event as CustomEvent<{ section?: CustomizeSection }>).detail?.section
-      if (next) setSection(next)
+      const next = (event as CustomEvent<CustomizeTarget | undefined>).detail
+      if (!next?.section) return
+      setSection(next.section)
+      setItem(next.item ? { id: next.item } : null)
+      setInstall(next.install ? { ...next.install } : null)
     }
     window.addEventListener(CUSTOMIZE_EVENT, show)
     return () => window.removeEventListener(CUSTOMIZE_EVENT, show)
@@ -54,9 +60,9 @@ export function CustomizePage({ initial = 'plugins' }: { initial?: CustomizeSect
       </nav>
       <div className="@container min-h-0 min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[920px] px-6 py-6">
-          {section === 'plugins' && <PluginsSection />}
+          {section === 'plugins' && <PluginsSection open={item} install={install} />}
           {section === 'skills' && <SkillsSection onOpenPlugins={() => setSection('plugins')} />}
-          {section === 'mcp' && <McpSection />}
+          {section === 'mcp' && <McpSection open={item} />}
         </div>
       </div>
     </div>
