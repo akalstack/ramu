@@ -125,7 +125,7 @@ Agents choose an artifact's kind (`kind`: an `app`, a `doc` in Markdown, a `diag
 
 ## Deploys
 
-Threads deploy with `platform_cli`, which runs an installed platform plugin's CLI with the token saved for it. A preview deploy runs without asking; a production deploy always asks you, with **Allow production deploys** for the rest of the thread as the widest choice, and runs the project's migrations first. After a push, the thread is woken once when the commit's checks, the platform's deploy included, finish. See [Deploying an app](deploy.md#deploying).
+Threads deploy with the platform's plugin: its MCP tools, the platform's CLI in their shell, or `platform_cli` for a plugin whose CLI Ramu signs in with a saved token. Ramu recognises a production deploy from the action itself on every path: it always asks you, with **Allow production deploys in this thread** as the widest choice, and runs the project's migrations first. A preview follows the thread's access mode. After a push, the thread is woken once when the commit's checks, the platform's deploy included, finish. See [Deploying an app](deploy.md#deploying).
 
 `ci_setup` writes a CI workflow into the thread's checkout for the agent to review and commit through a pull request. See [Set up CI](git-hosting.md#set-up-ci).
 

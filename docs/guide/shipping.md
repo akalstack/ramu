@@ -22,10 +22,10 @@ Deploys and CI work from a GitHub repository. **Publish to GitHub** in Source Co
 
 ## 4. Deploy
 
-**Deploy…** in the project's menu opens the Deploy sheet. **Set up deploy** names the platform the stack suits (Vercel, Netlify, Railway, Fly.io or Cloudflare) and its plugin, and opens the install review or the plugin's card until it is installed with its token ([Set up a platform](deploy.md#set-up-a-platform)). Then ask the project's agent to deploy: it writes the platform's config and runs the platform's CLI with your token through `platform_cli` ([Deploying](deploy.md#deploying)).
+**Deploy…** in the project's menu opens the Deploy sheet. **Set up deploy** names the platform the stack suits (Vercel, Netlify, Railway, Fly.io or Cloudflare) and its plugin, and opens the install review or the plugin's card until it is set up ([Set up a platform](deploy.md#set-up-a-platform)). Then ask the project's agent to deploy: it writes the platform's config and deploys with the plugin's MCP tools or the platform's CLI ([Deploying](deploy.md#deploying)).
 
-- **Previews** run without asking.
-- **Production** always asks you with a card, in every access mode: **Allow once**, or allow production deploys for the rest of the thread. The project's migrations run first against the production database address saved in the sheet, and a failed migration stops the deploy ([Migrations first](deploy.md#migrations-first)).
+- **Previews** follow the thread's access mode like any other command.
+- **Production** always asks you with a card, in every access mode and however the agent deploys: **Allow once**, or allow production deploys for the rest of the thread. The project's migrations run first against the production database address saved in the sheet, and a failed migration stops the deploy ([Migrations first](deploy.md#migrations-first)).
 - An Expo app ships through the app stores with EAS, which the agent runs like any other CLI; Ramu never submits an app for store review.
 
 ## 5. What the app needs
@@ -50,4 +50,4 @@ The agent works on a branch and opens a pull request. Its card in Source Control
 
 ## Coming from an existing project
 
-Every step works on its own: **Deploy…** on any project, or **Set up CI…** alone. Agents in any project deploy through the platform's plugin with `platform_cli` ([Deploying](deploy.md#deploying)).
+Every step works on its own: **Deploy…** on any project, or **Set up CI…** alone. Agents in any project deploy through the platform's plugin ([Deploying](deploy.md#deploying)).
