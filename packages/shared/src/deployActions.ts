@@ -270,7 +270,8 @@ export const argvDeploy = (argv: readonly string[]): DeployKind | null => argvKi
 /** Whether a shell command line deploys; any production command in a chain makes the whole line production. */
 export const commandDeploy = (line: string): DeployKind | null => lineKind(line, 0)
 
-const DEPLOY_VERBS = new Set(['deploy', 'redeploy', 'rollback', 'promote', 'publish', 'release'])
+/** "Publish" and "release" are left out: unrelated tools use them (a page, a GitHub release), and each would ask. */
+const DEPLOY_VERBS = new Set(['deploy', 'redeploy', 'rollback', 'promote'])
 /** Words that make a tool about deploys only read about them, such as `list_deployments` or `get_release`. */
 const READ_VERBS = new Set(['get', 'list', 'read', 'search', 'fetch', 'describe', 'show', 'status', 'logs', 'log'])
 const PREVIEW = /^(?:preview|staging|stage|development|dev|draft|test|testing|qa|sandbox|branch)$/i
@@ -298,7 +299,7 @@ function namesPreview(args: Record<string, unknown>, depth = 0): boolean {
 }
 
 /**
- * Whether an MCP tool call deploys: its name says deploy, redeploy, rollback, promote, publish or release, and it is
+ * Whether an MCP tool call deploys: its name says deploy, redeploy, rollback or promote, and it is
  * not marked read-only. It is production unless its arguments name a preview, staging or development target.
  */
 export function toolDeploy(
