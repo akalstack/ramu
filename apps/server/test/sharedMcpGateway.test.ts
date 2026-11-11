@@ -40,6 +40,10 @@ async function fixture() {
       executions.push({ name: 'update_issue', id })
       return { content: [{ type: 'text', text: 'Updated' }] }
     })
+    server.registerTool('deploy_site', { inputSchema: { target: z.string().optional() } }, ({ target }) => {
+      executions.push({ name: 'deploy_site', id: target })
+      return { content: [{ type: 'text', text: 'Deployed' }] }
+    })
     const client = new Client({ name: 'ramu-external-test', version: 'test' })
     const [left, right] = InMemoryTransport.createLinkedPair()
     await Promise.all([server.connect(left), client.connect(right)])
@@ -129,6 +133,33 @@ it('enforces write approval on the server and rechecks revoked grants after appr
     'Review',
   )
   expect(executions).toEqual([])
+})
+
+it('asks before a production deploy even when the tool is allowed, and calls nothing when that fails', async () => {
+  const { connection, first, catalog, executions, approve, policy } = await fixture()
+  policy.approve({
+    connectionId: connection.id,
+    revision: connection.revision,
+    catalogRevision: catalog.catalogRevision,
+    provider: 'claude-code',
+    accountId: 'a',
+    scope: connection.scope,
+    tools: [{ name: 'deploy_site', action: 'write', approval: 'connection' }],
+  })
+  await first.invoke(connection.id, catalog.catalogRevision, 'deploy_site', { target: 'preview' })
+  expect(approve).not.toHaveBeenCalled()
+  await first.invoke(connection.id, catalog.catalogRevision, 'deploy_site', {})
+  expect(approve).toHaveBeenCalledWith(expect.objectContaining({ production: true }))
+  approve.mockRejectedValueOnce(new Error('The migration (npm run migrate) failed.\nNothing was deployed.'))
+  await expect(first.invoke(connection.id, catalog.catalogRevision, 'deploy_site', {})).rejects.toThrow(
+    'Nothing was deployed',
+  )
+  approve.mockResolvedValueOnce(false)
+  await expect(first.invoke(connection.id, catalog.catalogRevision, 'deploy_site', {})).rejects.toThrow('declined')
+  expect(executions).toEqual([
+    { name: 'deploy_site', id: 'preview' },
+    { name: 'deploy_site', id: undefined },
+  ])
 })
 
 it('rejects restricted, wrong-project and thread-narrowed sessions before connecting upstream', async () => {

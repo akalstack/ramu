@@ -1,9 +1,11 @@
 import { homedir, tmpdir } from 'node:os'
 import { basename, resolve, sep } from 'node:path'
+import { commandDeploy } from '@ramu/shared/deployActions'
+import type { AgentSettings } from '@ramu/shared/types'
 
 /**
  * The few commands full access still stops for. Full access skips approvals, so this list stays narrow: work or data
- * that a command can destroy for good, the machine itself, and acting as administrator. Deleting, cleaning or
+ * that a command can destroy for good, the machine itself, acting as administrator, and a production deploy. Deleting, cleaning or
  * resetting inside the thread's own folders stays routine.
  *
  * The parse is deliberately loose: quotes are dropped, and shells, `env`, `xargs` and similar wrappers are looked
@@ -178,12 +180,24 @@ function forgeWrite(name: string, args: string[]): string | null {
     : null
 }
 
+/** Why a command asks at every access level: it deploys to production. */
+export function productionDeploy(command: string): string | null {
+  return commandDeploy(command) === 'production' ? 'Deploys to production' : null
+}
+
+/** Why a command asks although the access level would run it on its own, or null. */
+export function alwaysAsks(command: string, scope: CommandScope, access: AgentSettings['access']): string | null {
+  return access === 'full' ? dangerousCommand(command, scope) : productionDeploy(command)
+}
+
 /**
  * Why a shell command needs a person's approval even under full access, or null when it may run. Reasons are short
  * sentences shown on the approval.
  */
 export function dangerousCommand(command: string, scope: CommandScope): string | null {
   if (typeof command !== 'string' || !command.trim()) return null
+  const deploy = productionDeploy(command)
+  if (deploy) return deploy
   if (/>\s*\/dev\/(?:r?disk|sd|nvme|hd|mmcblk)/.test(command)) return 'Writes directly to a disk'
   for (const raw of commandsOf(command)) {
     const { words, admin, fromInput } = unwrap(raw)

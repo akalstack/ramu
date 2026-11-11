@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { openDb, type Db } from '../src/db'
 import { InteractiveStore, type InteractiveInput } from '../src/interactive/store'
@@ -529,17 +527,12 @@ it('publishes a page without records or AI to the web and updates the same site 
     if (url.includes('/contents/') && !init?.method) return new Response('', { status: 404 })
     return new Response('{}')
   }) as typeof fetch
-  // Cloudflare Pages uses the token saved for the Cloudflare CLI plugin.
-  const plugins = {
-    hasCredential: (name: string, slot: string) => name === 'cloudflare-cli' && slot === 'token',
-    clis: () => [],
-    secret: async () => null,
-  }
-  const publisher = new PagePublisher(pages, () => forge as never, plugins as never, fetcher)
-  await expect(publisher.publish(page.id, 'github-pages')).rejects.toThrow('Make it a project')
+  const publisher = new PagePublisher(pages, () => forge as never, fetcher)
+  expect(publisher.ready()).toBe(true)
+  await expect(publisher.publish(page.id)).rejects.toThrow('Make it a project')
   const plain = interactive.publish('s', (await interactive.preview('s', { ...input, html: '<p>Trip</p>' })).id, 'p1')
   const trip = pages.keep('s', plain.id, { title: 'Trip costs' })
-  const live = await publisher.publish(trip.id, 'github-pages')
+  const live = await publisher.publish(trip.id)
   expect(live.published).toMatchObject({
     target: 'github-pages',
     url: 'https://me.github.io/trip-costs/',
@@ -547,62 +540,11 @@ it('publishes a page without records or AI to the web and updates the same site 
     version: 1,
   })
   requests.length = 0
-  await publisher.publish(trip.id, 'github-pages')
+  await publisher.publish(trip.id)
   expect(requests.some((request) => request.startsWith('POST') && request.endsWith('/user/repos'))).toBe(false)
-  expect(publisher.targets()).toEqual([
-    { target: 'github-pages', name: 'GitHub Pages', connected: true },
-    { target: 'cloudflare-pages', name: 'Cloudflare Pages', connected: true },
-  ])
-})
-
-it('publishes to Cloudflare Pages by running wrangler through the Cloudflare CLI plugin with its saved token', async () => {
-  const { PagePublisher, pagesAddress } = await import('../src/interactive/pagePublish')
-  const { interactive, pages } = await setup()
-  const target = { plugin: 'cloudflare-cli', pluginId: 'cf', cli: { binaries: ['wrangler'] }, slot: { id: 'token' } }
-  const saved = { token: 'cf_token', fields: { account: 'acc_1' } }
-  const plugins = { hasCredential: () => true, clis: vi.fn(() => [target]), secret: vi.fn(async () => saved) }
-  const runs: { args: readonly string[]; html: string }[] = []
-  const run = vi.fn(async (_target: unknown, args: readonly string[], cwd: string, _secret: unknown) => {
-    runs.push({ args, html: readFileSync(join(cwd, 'index.html'), 'utf8') })
-    return {
-      exitCode: 0,
-      timedOut: false,
-      output:
-        args[1] === 'deploy' ? '✨ Deployment complete! Take a peek over at https://1a2b3c.trip-costs.pages.dev' : '',
-    }
-  })
-  const publisher = new PagePublisher(pages, () => undefined, plugins as never, fetch, run as never)
-  const plain = interactive.publish('s', (await interactive.preview('s', { ...input, html: '<p>Trip</p>' })).id, 'p1')
-  const trip = pages.keep('s', plain.id, { title: 'Trip costs' })
-  const live = await publisher.publish(trip.id, 'cloudflare-pages')
-  expect(plugins.secret).toHaveBeenCalledWith('cf', 'token')
-  expect(live.published).toMatchObject({
-    target: 'cloudflare-pages',
-    url: 'https://trip-costs.pages.dev',
-    siteId: 'trip-costs',
-  })
-  expect(runs.map((entry) => entry.args.slice(0, 3))).toEqual([
-    ['pages', 'project', 'create'],
-    ['pages', 'deploy', expect.stringContaining('ramu-publish-')],
-  ])
-  expect(runs[1]!.args).toEqual(expect.arrayContaining(['--project-name', 'trip-costs', '--branch', 'main']))
-  expect(runs[1]!.html).toContain('<title>Trip costs</title>')
-  expect(run.mock.calls[1]![3]).toBe(saved)
-  // The next publish goes to the same project without making it again.
-  runs.length = 0
-  await publisher.publish(trip.id, 'cloudflare-pages')
-  expect(runs.map((entry) => entry.args[1])).toEqual(['deploy'])
-  // A failed deploy says what wrangler said.
-  run.mockResolvedValueOnce({ exitCode: 1, timedOut: false, output: 'Authentication error [code: 10000]' })
-  await expect(publisher.publish(trip.id, 'cloudflare-pages')).rejects.toThrow('Authentication error')
-  expect(pagesAddress('see https://trip-costs.pages.dev')).toBe('https://trip-costs.pages.dev')
-  const missing = new PagePublisher(pages, () => undefined, {
-    hasCredential: () => false,
-    clis: () => [],
-    secret: async () => null,
-  } as never)
-  expect(missing.targets().find((entry) => entry.target === 'cloudflare-pages')?.connected).toBe(false)
-  await expect(missing.publish(trip.id, 'cloudflare-pages')).rejects.toThrow('Install the Cloudflare CLI plugin')
+  const signedOut = new PagePublisher(pages, () => undefined, fetcher)
+  expect(signedOut.ready()).toBe(false)
+  await expect(signedOut.publish(trip.id)).rejects.toThrow('Connect a GitHub account')
 })
 
 it('reads Ramu data only for the sources declared and allowed, scoped to the page project', async () => {

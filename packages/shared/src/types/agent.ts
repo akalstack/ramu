@@ -469,8 +469,11 @@ type AgentEventBody =
       approvalReviewRule?: string
       /** An MCP tool set to Ask: Always allow switches it to Allow in its server's settings, where it can be changed back. */
       approvalAlways?: string
-      /** What Allow in this thread covers, such as "production deploys with railway-cli"; it ends with the thread. */
-      approvalThread?: string
+      /**
+       * A production deploy: the card offers Allow once and Allow production deploys in this thread, never a saved rule,
+       * and the project's migrations run before the deploy goes out.
+       */
+      productionDeploy?: true
       approvalOnceOnly?: boolean
       approvalKey?: string
       approvalCommand?: string

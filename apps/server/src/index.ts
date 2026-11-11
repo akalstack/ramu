@@ -1234,14 +1234,20 @@ const account = new AccountService({
 })
 account.start()
 workspace.settingsStore?.subscribe(() => account.settingsChanged())
-/** Migrations a production deploy through a plugin runs first, against the database address saved for the project. */
+/** Migrations every production deploy runs first, against the database address saved for the project. */
 const productionMigrations = new ProductionMigrations({
   getState: (key, fallback) => workspace.getAppState(key, fallback),
   setState: (key, value) => workspace.setAppState(key, value),
   migrate: (projectId) => workspace.projectConfiguration(projectId).config.stack?.migrate ?? null,
 })
-const externalTools = new ExternalSessionTools(getSharedMcp, (sessionId, title, detail, signal, options) =>
-  agents.requestPermission(sessionId, title, detail, signal, options),
+agents.beforeProduction = (session) => {
+  const project = projectOf(session)
+  return productionMigrations.beforeProduction(project && project !== NO_PROJECT ? project : null, session.cwd)
+}
+const externalTools = new ExternalSessionTools(
+  getSharedMcp,
+  (sessionId, title, detail, signal, options) => agents.requestPermission(sessionId, title, detail, signal, options),
+  (sessionId, title, detail, signal) => agents.approveProductionDeploy(sessionId, title, detail, signal),
 )
 const externalSource = (session: AgentSessionInfo): ExternalSessionSource => {
   const project = projectOf(session)
@@ -1833,8 +1839,8 @@ const mcpHttp = createServer(async (req, res) => {
       { clis: () => plugins.clis(pluginProject), secret: (id, slot) => plugins.secret(id, slot, pluginProject) },
       source,
       () => agents.get(source.id),
-      (detail, signal, options) => agents.requestPermission(source.id, 'Platform CLI', detail, signal, options),
-      (cwd) => productionMigrations.beforeProduction(pluginProject, cwd),
+      (detail, signal) => agents.requestPermission(source.id, 'Platform CLI', detail, signal),
+      (detail, signal) => agents.approveProductionDeploy(source.id, 'Platform CLI', detail, signal),
     )
     registerPluginTools(
       server,

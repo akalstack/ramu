@@ -4,7 +4,7 @@
 // ignore. Everything here is pure: the host, both clients, `ramu plugin check` and the index's CI validate with it.
 import { z } from 'zod'
 import { MCP_ABILITIES, type Ability } from './providers/abilities'
-import { STACK_IDS } from './stacks'
+import { STACK_IDS, type DeployTargetId } from './stacks'
 
 /** The key Ramu's fields sit under in a manifest's `extensions` block. */
 export const RAMU_EXTENSION = 'dev.getramu'
@@ -14,6 +14,17 @@ export const PLUGIN_SCHEMA_URL = 'https://getramu.dev/schema/plugin.json'
 export const DEFAULT_PLUGIN_INDEX = 'https://github.com/akalstack/ramu-plugins'
 /** Claude's own plugin directory, listed beside Ramu's: the same marketplace format, read without Akalstack's key. */
 export const CLAUDE_PLUGIN_INDEX = 'https://github.com/anthropics/claude-plugins-official'
+/**
+ * The plugin each deploy target installs: the platform's own in Claude's directory, and Ramu's `fly-cli` for Fly.io,
+ * which Claude's directory has no plugin for.
+ */
+export const DEPLOY_TARGET_PLUGINS = {
+  vercel: { index: CLAUDE_PLUGIN_INDEX, name: 'vercel' },
+  netlify: { index: CLAUDE_PLUGIN_INDEX, name: 'netlify-skills' },
+  railway: { index: CLAUDE_PLUGIN_INDEX, name: 'railway' },
+  cloudflare: { index: CLAUDE_PLUGIN_INDEX, name: 'cloudflare' },
+  fly: { index: DEFAULT_PLUGIN_INDEX, name: 'fly-cli' },
+} as const satisfies Record<DeployTargetId, { index: string; name: string }>
 /**
  * The key Akalstack signs the Ramu index's commits with. A clone of the index whose commit this key did not sign is
  * refused before anything in it is read, so a tampered index or a pushed-over plugin never reaches the review.
@@ -174,36 +185,13 @@ const cli = z.strictObject({
     .string()
     .regex(/^(@[a-z0-9._-]+\/)?[a-z0-9._-]+(@[A-Za-z0-9.^~<>=*-]+)?$/)
     .optional(),
-  /** Argument prefixes that only read: they run without asking. Every other command asks the person. */
+  /** Argument prefixes that only read: they run without asking, like a preview deploy. Every other command asks. */
   reads: z
     .array(z.array(z.string().min(1).max(60)).min(1).max(6))
     .max(PLUGIN_LIMITS.readPrefixes)
     .default([]),
   /** Environment set from a slot's field rather than its token, such as `CLOUDFLARE_ACCOUNT_ID`. */
   credential: z.string().regex(SLOT_ID).optional(),
-  /**
-   * Which commands deploy. A preview runs without asking; a production deploy asks every time unless the person allows
-   * production deploys for the thread, and the project's migrations run before it.
-   */
-  deploys: z
-    .strictObject({
-      /** Argument prefixes that deploy, such as `["up"]` or `["deploy"]`. */
-      commands: z
-        .array(z.array(z.string().min(1).max(60)).min(1).max(6))
-        .min(1)
-        .max(10),
-      /** The flag that makes a deploy command production (`--prod`); without one, every deploy is production. */
-      productionFlag: z
-        .string()
-        .regex(/^--?[A-Za-z0-9-]{1,40}$/)
-        .optional(),
-      /** Prefixes that change production without a new deploy, such as a rollback or a promotion. */
-      production: z
-        .array(z.array(z.string().min(1).max(60)).min(1).max(6))
-        .max(10)
-        .default([]),
-    })
-    .optional(),
 })
 
 /**

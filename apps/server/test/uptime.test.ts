@@ -98,7 +98,7 @@ describe('uptime watch', () => {
     expect(projectId).toBe('p1')
     expect(title).toBe('Down: shop.example')
     expect(brief).toContain('HTTP 502 after 340 ms')
-    expect(brief).toContain('platform_cli')
+    expect(brief).toContain('platform plugin')
     expect(brief).toContain('roll back')
     expect(notify).toHaveBeenCalledWith({ taskId: 't-incident', sessionId: 's-incident' })
     // A third failure does not open a second incident.

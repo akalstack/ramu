@@ -22,7 +22,7 @@ import type {
 } from '@ramu/shared/types'
 import { ResumeUnavailable, type AgentRunner, type AgentRunnerFactory } from '../agent/agentRunner'
 import { providerAdapter } from './adapters'
-import { dangerousCommand } from '../agent/dangerousCommands'
+import { alwaysAsks } from '../agent/dangerousCommands'
 import { providerBinary, providerEnvironment } from './providerBinaries'
 import { classifyLimit, limitSignal } from './limitClassifier'
 import { limitedReading } from './usageLimit'
@@ -632,11 +632,12 @@ export class OpenCodeSession implements AgentRunner {
         return this.turn?.done({ interrupted: true })
       case 'permission.asked': {
         // OpenCode --auto approves asks once; explicit denies never reach this event.
-        // Forms/questions remain interactive. Full access approves too, except a dangerous command.
+        // Forms/questions remain interactive. Auto and full access approve too, except a command that always asks.
         const danger =
-          this.settings.access === 'full' && !this.readOnly && ['bash', 'shell'].includes(d.action)
-            ? ((d.resources ?? []).map((command: string) => dangerousCommand(command, this.scope)).find(Boolean) ??
-              null)
+          !this.readOnly && ['bash', 'shell'].includes(d.action)
+            ? ((d.resources ?? [])
+                .map((command: string) => alwaysAsks(command, this.scope, this.settings.access))
+                .find(Boolean) ?? null)
             : null
         if (
           !danger &&
@@ -660,10 +661,15 @@ export class OpenCodeSession implements AgentRunner {
           requestId: d.id,
           toolName: d.action,
           title: d.message || `Allow ${d.action}?`,
-          detail: [...(danger ? [danger, 'Full access still asks before this.'] : []), ...(d.resources ?? [])].join(
-            '\n',
-          ),
-          ...(danger ? { approvalOnceOnly: true } : {}),
+          detail: [
+            ...(danger
+              ? [danger, ...(this.settings.access === 'full' ? ['Full access still asks before this.'] : [])]
+              : []),
+            ...(d.resources ?? []),
+          ].join('\n'),
+          ...(danger
+            ? { approvalOnceOnly: true, ...(d.resources?.length === 1 ? { approvalCommand: d.resources[0] } : {}) }
+            : {}),
           ...(!danger && d.resources?.length && !d.resources.includes('*')
             ? {
                 approvalKey: permissionKey(d.action, d.resources),

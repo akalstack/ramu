@@ -1,14 +1,14 @@
 // A plugin's CLI, driven by the agent through `platform_cli`. Agents already know these CLIs, so Ramu adds only what an
 // agent cannot do for itself: the credential stays on the host (passed to the CLI in its environment, never in the
 // arguments or the transcript), commands that only read run straight away, and every other command asks the person
-// with a card naming it.
-import type { PermissionOptions } from '../agent/userRequests'
+// with a card naming it. A deploy follows Ramu's one rule for deploys, whichever way an agent makes them.
 import { spawn } from 'node:child_process'
 import { mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import { argvDeploy } from '@ramu/shared/deployActions'
 import type { PluginCli, PluginCredential } from '@ramu/shared/plugins'
 import { commandLine } from '@ramu/shared/stacks'
 import type { AgentSessionInfo } from '@ramu/shared/types'
@@ -23,26 +23,12 @@ export interface PluginCliTarget {
   slot?: PluginCredential
 }
 
-/** Whether a command only reads: its arguments start with one of the plugin's read prefixes. */
 const startsWith = (args: readonly string[], prefix: readonly string[]) =>
   prefix.length <= args.length && prefix.every((part, index) => args[index] === part)
 
+/** Whether a command only reads: its arguments start with one of the plugin's read prefixes. */
 export function cliCommandReads(cli: Pick<PluginCli, 'reads'>, args: readonly string[]): boolean {
   return cli.reads.some((prefix) => startsWith(args, prefix))
-}
-
-/** Whether a command deploys, and where to: a preview, production, or neither. */
-export function cliDeployKind(
-  cli: Pick<PluginCli, 'deploys'>,
-  args: readonly string[],
-): 'preview' | 'production' | null {
-  const deploys = cli.deploys
-  if (!deploys) return null
-  if (deploys.production.some((prefix) => startsWith(args, prefix))) return 'production'
-  if (!deploys.commands.some((prefix) => startsWith(args, prefix))) return null
-  if (!deploys.productionFlag) return 'production'
-  const flag = deploys.productionFlag
-  return args.some((arg) => arg === flag || arg.startsWith(`${flag}=`)) ? 'production' : 'preview'
 }
 
 /** The CLI to run and the arguments before the agent's: the installed one, else its package through npx. */
@@ -143,7 +129,7 @@ export async function runPluginCli(
 }
 
 const guide = (targets: readonly PluginCliTarget[]) =>
-  `Runs the CLI of an installed plugin (${targets.map((target) => `${target.plugin}: ${target.cli.binaries[0]}`).join(', ')}) in this thread's checkout, signed in with the credential the person saved for the plugin in Customize → Plugins when it has one (a local tool such as a game engine has none). Use it instead of running those CLIs yourself: the credential is passed to the CLI in its environment and never shown, a CLI you run yourself is signed out, and commands that only read run without a card. Pass the plugin's name and the arguments after the CLI's name, such as ["status"] or ["deploy", "--detach"]; never pass a token or a login command. Commands that only read run straight away; every other command asks the person with a card naming it, and a refusal is final for this request. Run non-interactive forms (--yes, --json, --detach, --no-tail) since there is no terminal to answer prompts. Write the platform's own config files yourself and commit them like any change. For a service no plugin covers, call plugin_search.`
+  `Runs the CLI of an installed plugin (${targets.map((target) => `${target.plugin}: ${target.cli.binaries[0]}`).join(', ')}) in this thread's checkout, signed in with the credential the person saved for the plugin in Customize → Plugins when it has one (a local tool such as a game engine has none). Use it instead of running those CLIs yourself: the credential is passed to the CLI in its environment and never shown, a CLI you run yourself is signed out, and commands that only read run without a card. Pass the plugin's name and the arguments after the CLI's name, such as ["status"] or ["deploy", "--detach"]; never pass a token or a login command. Commands that only read run straight away, and so does a preview deploy; a production deploy asks unless the person allowed production deploys for this thread, and the project's migrations run first; every other command asks the person with a card naming it, and a refusal is final for this request. Run non-interactive forms (--yes, --json, --detach, --no-tail) since there is no terminal to answer prompts. Write the platform's own config files yourself and commit them like any change. For a service no plugin covers, call plugin_search.`
 
 /** The CLIs of plugins that apply to this thread's project, signed in with the value saved on this host. */
 export function registerPluginCliTools(
@@ -155,9 +141,12 @@ export function registerPluginCliTools(
   source: AgentSessionInfo,
   current: () => AgentSessionInfo,
   /** Asks the person through the thread's approval card. Resolves false when refused. */
-  requestApproval: (detail: string, signal: AbortSignal | undefined, options: PermissionOptions) => Promise<boolean>,
-  /** Runs the project's migrations before a production deploy; throws to stop it. Returns what it did. */
-  beforeProduction: (cwd: string) => Promise<string>,
+  requestApproval: (detail: string, signal: AbortSignal | undefined) => Promise<boolean>,
+  /**
+   * Asks for a production deploy (unless the thread allowed them) and runs the project's migrations: what they did, or
+   * null when refused. Throws when the migrations fail.
+   */
+  approveProduction: (detail: string, signal: AbortSignal | undefined) => Promise<string | null>,
   run: typeof runPluginCli = runPluginCli,
 ) {
   const targets = plugins.clis()
@@ -186,33 +175,22 @@ export function registerPluginCliTools(
       if (session.id !== source.id || session.cwd !== source.cwd)
         throw new Error('The thread’s checkout changed. Reconnect before trying again.')
       const shown = `${target.cli.binaries[0]} ${commandLine(args)}`
-      const deploy = cliDeployKind(target.cli, args)
+      const deploy = argvDeploy([target.cli.binaries[0]!, ...args])
       const where = target.slot
         ? `Run ${shown} with your ${target.plugin} account, in ${session.cwd}.`
         : `Run ${shown} in ${session.cwd}.`
-      // A preview never touches what people use, so it runs like a read. Production asks each time unless the person
-      // allowed production deploys for this thread; there is no lasting allow for it.
-      if (
+      const declined = new Error('The person declined this command. Do not retry it without a new request.')
+      // A preview never touches what people use, so it runs like a read.
+      let migrated: string | null = null
+      if (deploy === 'production') {
+        migrated = await approveProduction(where, extra.signal)
+        if (migrated === null) throw declined
+      } else if (
         !cliCommandReads(target.cli, args) &&
         deploy !== 'preview' &&
-        !(await requestApproval(
-          deploy === 'production' ? `${where}\nThis deploys to production; the project's migrations run first.` : where,
-          extra.signal,
-          deploy === 'production'
-            ? { thread: { key: `deploy:${target.plugin}`, label: `production deploys with ${target.plugin}` } }
-            : {},
-        ))
+        !(await requestApproval(where, extra.signal))
       )
-        throw new Error('The person declined this command. Do not retry it without a new request.')
-      let migrated: string | null = null
-      if (deploy === 'production')
-        try {
-          migrated = await beforeProduction(session.cwd)
-        } catch (error) {
-          throw new Error(`${(error as Error).message}\nNothing was deployed. Fix the cause, then deploy again.`, {
-            cause: error,
-          })
-        }
+        throw declined
       const ran = await run(target, args, session.cwd, secret, extra.signal)
       return {
         content: [

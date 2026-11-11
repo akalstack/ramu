@@ -579,6 +579,15 @@ export class AgentService {
     this.parts.requests.secretFiles = files
   }
 
+  /** Runs a thread's project's migrations against production before any production deploy goes out. */
+  set beforeProduction(run: UserRequests['beforeProduction']) {
+    this.parts.requests.beforeProduction = run
+  }
+
+  approveProductionDeploy(...args: Parameters<UserRequests['approveProductionDeploy']>) {
+    return this.parts.requests.approveProductionDeploy(...args)
+  }
+
   waitForAnswer(...args: Parameters<UserRequests['waitForAnswer']>) {
     return this.parts.requests.waitForAnswer(...args)
   }

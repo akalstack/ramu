@@ -1,12 +1,13 @@
 import { INSERT_EVENT_SQL, UPDATE_EVENT_SQL } from './eventRevision'
 import { permissionKey, PermissionApprovals, commandPatterns } from './permissionApprovals'
 import { goalContinues } from '@ramu/shared/chat/goalHold'
+import { commandDeploy } from '@ramu/shared/deployActions'
 import { isStaleProgress } from '@ramu/shared/chat/agentTasks'
 import type { AppPreferences, AgentEvent, AgentSessionState, AgentTask } from '@ramu/shared/types'
 import type { MessageDispatcher } from './messageDispatcher'
 import type { GoalManager } from './goalManager'
 import type { SessionRegistry } from './sessionRegistry'
-import type { UserRequests } from './userRequests'
+import { PRODUCTION_DEPLOY_NOTE, type UserRequests } from './userRequests'
 import type { SessionStore } from './sessionStore'
 import type { SubagentRunner } from './subagentRunner'
 import type { AgentTasks } from './agentTasks'
@@ -49,15 +50,26 @@ export class SessionRecorder {
       return
     if (recorded.kind === 'permission-request') {
       const pending = this.host.live.get(id)?.pending.get(recorded.requestId)
-      const key = recorded.approvalOnceOnly
-        ? undefined
-        : (recorded.approvalKey ??
-          (pending?.kind === 'permission' ? permissionKey(recorded.toolName, pending.input) : undefined))
       const command =
         recorded.approvalCommand ??
         (pending?.kind === 'permission' && recorded.toolName === 'Bash' && typeof pending.input.command === 'string'
           ? pending.input.command
           : undefined)
+      // A production deploy asks however the provider would have answered: never through a saved rule, at most once
+      // per thread, and the reply runs the project's migrations first.
+      if (!recorded.productionDeploy && command && commandDeploy(command) === 'production')
+        recorded = {
+          ...recorded,
+          detail: `${recorded.detail}\n${PRODUCTION_DEPLOY_NOTE}`,
+          productionDeploy: true,
+          approvalOnceOnly: true,
+          approvalKey: undefined,
+          approvalPatterns: undefined,
+        }
+      const key = recorded.approvalOnceOnly
+        ? undefined
+        : (recorded.approvalKey ??
+          (pending?.kind === 'permission' ? permissionKey(recorded.toolName, pending.input) : undefined))
       if (key)
         recorded = {
           ...recorded,
@@ -202,7 +214,7 @@ export class SessionRecorder {
     }
     this.host.emit(id, event, seq)
     if (event.kind === 'request-resolved') this.host.notifyWaiters(id, event.requestId)
-    if (event.kind === 'permission-request' && event.approvalKey) {
+    if (event.kind === 'permission-request' && (event.approvalKey || event.productionDeploy)) {
       const request = event
       // Providers set needs-input immediately after emitting the request; answer after that transition.
       queueMicrotask(() => this.host.applySavedPermission(id, request))

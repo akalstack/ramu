@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Linking, View } from 'react-native'
 import { ExternalLink } from 'lucide-react-native'
 import { translate } from '@ramu/shared/i18n'
-import { DEPLOY_TARGET_PLUGINS, DEPLOY_TARGETS } from '@ramu/shared/stacks'
+import { DEPLOY_TARGET_PLUGINS } from '@ramu/shared/plugins'
+import { DEPLOY_TARGETS } from '@ramu/shared/stacks'
 import type { DeployStatus, UptimeStatus } from '@ramu/shared/types/deploy'
 import { deployCheckRows, uptimeLines } from '../runtime/projectDeploy'
 import { useStore } from '../runtime/store'
@@ -109,7 +110,7 @@ export function ProjectDeploy({
               <T style={{ flex: 1 }}>
                 {t('{0} suits this project’s stack, through the {1} plugin.', {
                   0: DEPLOY_TARGETS[target],
-                  1: DEPLOY_TARGET_PLUGINS[target],
+                  1: DEPLOY_TARGET_PLUGINS[target].name,
                 })}
               </T>
             </View>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CHECK_STATE } from '@ramu/shared/deployText'
-import { DEPLOY_TARGET_PLUGINS, DEPLOY_TARGETS } from '@ramu/shared/stacks'
+import { DEPLOY_TARGET_PLUGINS } from '@ramu/shared/plugins'
+import { DEPLOY_TARGETS } from '@ramu/shared/stacks'
 import type { DeployStatus, Project, Repository } from '@ramu/shared/types'
 import { BrandIcon } from '@/components/brand-icon'
 import { Button } from '@/components/desktop-button'
@@ -93,7 +94,7 @@ export function DeployDialog({
             <span>
               {t('{0} suits this project’s stack, through the {1} plugin.', {
                 0: DEPLOY_TARGETS[target],
-                1: DEPLOY_TARGET_PLUGINS[target],
+                1: DEPLOY_TARGET_PLUGINS[target].name,
               })}{' '}
               {plugin.state === 'ready'
                 ? t(
@@ -123,7 +124,7 @@ export function DeployDialog({
               {!target
                 ? t('Open plugins')
                 : plugin.state === 'missing'
-                  ? t('Install the {0} plugin', { 0: DEPLOY_TARGET_PLUGINS[target] })
+                  ? t('Install the {0} plugin', { 0: DEPLOY_TARGET_PLUGINS[target].name })
                   : t('Open plugin settings')}
             </Button>
           </span>

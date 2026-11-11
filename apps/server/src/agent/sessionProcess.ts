@@ -26,7 +26,7 @@ import type { QueryFn, PendingRequest } from './types'
 import { InputQueue, userEvent } from './inputQueue'
 import { errorMessage } from './util'
 import { helperRoleReadOnly } from '@ramu/shared/chat/helperRoles'
-import { claudeHooks, createCanUseTool, dangerousCommandHooks, readOnlyBashHooks } from './permissions'
+import { alwaysAskHooks, claudeHooks, createCanUseTool, readOnlyBashHooks } from './permissions'
 import { ramuFileHooks } from './ramuFiles'
 import { claudeLaunchOptions } from './claudeOptions'
 import { sessionGuidance } from './guidance'
@@ -581,7 +581,7 @@ export class SessionProcess {
           preferences: this.host.preferencesSource(),
           hooks: claudeHooks(
             !s.parentId && this.host.preferencesSource() ? this.host.subagentHooks(id) : undefined,
-            s.settings.access === 'full' && !readOnly && !connection?.restricted ? dangerousCommandHooks(s) : undefined,
+            !readOnly && !connection?.restricted ? alwaysAskHooks(s, s.settings.access) : undefined,
             readOnly ? readOnlyBashHooks() : undefined,
             ramuFileHooks(s),
           ),

@@ -401,20 +401,10 @@ interface ArtifactMethods {
     state: import('./artifacts').ArtifactState
   }
   'artifacts.shareCall'(token: string, method: string, args: unknown[]): unknown
-  /**
-   * Where an artifact can be published, and whether this host can publish there: GitHub Pages through the saved GitHub
-   * account, Cloudflare Pages through the Cloudflare CLI plugin's saved token.
-   */
-  'artifacts.publishTargets'(): {
-    target: 'github-pages' | 'cloudflare-pages'
-    name: string
-    connected: boolean
-  }[]
-  /** Deploys the artifact's current version as a static site on the person's own account; updates the same site later. */
-  'artifacts.publish'(
-    artifactId: string,
-    target: 'github-pages' | 'cloudflare-pages',
-  ): import('./artifacts').ArtifactInfo
+  /** Whether this host has a GitHub login to publish an artifact to GitHub Pages with. */
+  'artifacts.publishReady'(): boolean
+  /** Deploys the artifact's current version to GitHub Pages on the person's own account; updates the same site later. */
+  'artifacts.publish'(artifactId: string): import('./artifacts').ArtifactInfo
   /** Whether an artifact is open to people without Ramu, and its address. */
   'artifacts.publicStatus'(artifactId: string): import('./artifacts').PublicArtifactStatus
   /** Opens an artifact to anyone through its own listener and tunnel; only one that uses no host feature. */

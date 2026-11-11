@@ -467,6 +467,41 @@ describe('OpenCode Full access', () => {
   })
 })
 
+describe('OpenCode Auto', () => {
+  it.each([
+    ['vercel deploy', false],
+    ['npx vercel deploy --prod', true],
+  ] as const)('answers commands itself and asks before a production deploy: %s', async (command, asks) => {
+    const { client, replies } = fakeOpenCode('bash', [command])
+    const events: AgentEvent[] = []
+    const runner = new OpenCodeSession(
+      scope,
+      { ...DEFAULT_AGENT_SETTINGS, provider: 'opencode', access: 'auto' },
+      (event) => events.push(event),
+      false,
+      async () => client as never,
+    )
+    try {
+      await runner.start('Ship it', null)
+      if (asks) {
+        await settle(events, 'permission-request')
+        expect(events.find((event) => event.kind === 'permission-request')).toMatchObject({
+          approvalOnceOnly: true,
+          approvalCommand: command,
+          detail: expect.stringContaining('Deploys to production'),
+        })
+        expect(replies).toEqual([])
+        runner.replyPermission('p1', false)
+      } else await settle(events)
+      await vi.waitFor(() =>
+        expect(replies).toEqual([{ sessionID: 'session-1', requestID: 'p1', decision: asks ? 'reject' : 'once' }]),
+      )
+    } finally {
+      await runner.stop()
+    }
+  })
+})
+
 describe('OpenCode tool results', () => {
   it('marks a command that exits non-zero as failed, and shows images a tool returned', async () => {
     const { client } = fakeOpenCode('bash')

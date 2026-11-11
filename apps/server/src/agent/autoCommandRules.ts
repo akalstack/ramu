@@ -264,8 +264,8 @@ const CLOUD = new Set([
   'terragrunt',
   'ansible',
   'ansible-playbook',
-  // Hosting and store CLIs always ask: agents deploy through `platform_cli`, which runs a plugin's CLI with the token
-  // saved for it and asks with a card that names the command that changes anything.
+  // Hosting and store CLIs always ask under Auto. A production deploy also asks at every other level, through the
+  // shared deploy classifier, so it can never pass on a saved rule.
   'vercel',
   'netlify',
   'eas',

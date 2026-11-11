@@ -1,7 +1,7 @@
 import { matchesCommand } from './permissionApprovals'
 import { randomUUID } from 'node:crypto'
 import type { CanUseTool, Options, PermissionResult } from '@anthropic-ai/claude-agent-sdk'
-import { dangerousCommand, type CommandScope } from './dangerousCommands'
+import { alwaysAsks, type CommandScope } from './dangerousCommands'
 import { readsOnly } from './autoCommandRules'
 import type { AgentEvent, AgentQuestion, AgentSessionState, AgentSettings } from '@ramu/shared/types'
 import { summarizeInput } from './toolSummaries'
@@ -21,10 +21,11 @@ export interface PermissionHost {
 }
 
 /**
- * Full access asks before the few commands that can destroy work or the machine. Bypass mode never calls `canUseTool`
- * on its own for a command, so this hook turns the call into an ask, which then reaches it.
+ * Commands that ask whatever the access level allows: under full access the few that can destroy work or the machine,
+ * and at every level a production deploy. Bypass mode, Claude's own auto mode and a saved allow rule never call
+ * `canUseTool` for such a command, so this hook turns the call into an ask, which then reaches it.
  */
-export function dangerousCommandHooks(scope: CommandScope): NonNullable<Options['hooks']> {
+export function alwaysAskHooks(scope: CommandScope, access: AgentSettings['access']): NonNullable<Options['hooks']> {
   return {
     PreToolUse: [
       {
@@ -33,7 +34,7 @@ export function dangerousCommandHooks(scope: CommandScope): NonNullable<Options[
           async (input) => {
             if (input.hook_event_name !== 'PreToolUse') return {}
             const command = (input.tool_input as { command?: unknown } | undefined)?.command
-            const reason = typeof command === 'string' ? dangerousCommand(command, scope) : null
+            const reason = typeof command === 'string' ? alwaysAsks(command, scope, access) : null
             return reason
               ? {
                   hookSpecificOutput: {

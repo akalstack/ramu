@@ -62,6 +62,7 @@ function fixture() {
   const tools = new ExternalSessionTools(
     () => service,
     async () => true,
+    async () => 'Ran npm run migrate against production first.',
   )
   cleanup.push(() => tools.close())
   return { service, connection, source, tools }

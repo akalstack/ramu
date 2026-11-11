@@ -4,18 +4,18 @@
 type Fetch = typeof fetch
 
 /** One file of a static site, at its path from the site root. */
-export interface SiteFile {
+interface SiteFile {
   path: string
   content: Buffer
 }
 
 /** Where a site went: its address, and the id the next publish updates. */
-export interface Deployed {
+interface Deployed {
   url: string
   siteId: string
 }
 
-export const slug = (text: string) =>
+const slug = (text: string) =>
   text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')

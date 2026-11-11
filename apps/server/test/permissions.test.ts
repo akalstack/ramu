@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { DEFAULT_AGENT_SETTINGS, type AgentEvent, type AgentSettings, type AgentSessionState } from '@ramu/shared/types'
-import { claudeHooks, createCanUseTool, dangerousCommandHooks, readOnlyBashHooks } from '../src/agent/permissions'
+import { alwaysAskHooks, claudeHooks, createCanUseTool, readOnlyBashHooks } from '../src/agent/permissions'
 import type { PendingRequest } from '../src/agent/types'
 
 function fixture(access: AgentSettings['access'], restricted = false) {
@@ -129,7 +129,7 @@ it('Full access asks once for whatever Claude still sends it, while Ramu tools s
 })
 
 it('turns a dangerous Bash call into an ask before Claude runs it, and leaves routine ones alone', async () => {
-  const hooks = claudeHooks({ PreToolUse: [] }, dangerousCommandHooks({ cwd: '/work/app' }))!
+  const hooks = claudeHooks({ PreToolUse: [] }, alwaysAskHooks({ cwd: '/work/app' }, 'full'))!
   const hook = hooks.PreToolUse![0]!.hooks[0]!
   const run = (command: string) =>
     hook({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command } } as never, 'id', {
@@ -139,7 +139,25 @@ it('turns a dangerous Bash call into an ask before Claude runs it, and leaves ro
   expect(await run('git push --force')).toMatchObject({
     hookSpecificOutput: { permissionDecision: 'ask', permissionDecisionReason: expect.stringContaining('remote') },
   })
+  expect(await run('npx vercel deploy --prod')).toMatchObject({
+    hookSpecificOutput: { permissionDecision: 'ask', permissionDecisionReason: 'Deploys to production' },
+  })
   expect(claudeHooks(undefined, undefined)).toBeUndefined()
+})
+
+it('asks before a production deploy at every access level, while a preview and routine commands follow the level', async () => {
+  for (const access of ['edits', 'auto'] as const) {
+    const hook = alwaysAskHooks({ cwd: '/work/app' }, access).PreToolUse![0]!.hooks[0]!
+    const run = (command: string) =>
+      hook({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command } } as never, 'id', {
+        signal: new AbortController().signal,
+      })
+    expect(await run('cd web && vercel deploy --prod')).toMatchObject({
+      hookSpecificOutput: { permissionDecision: 'ask', permissionDecisionReason: 'Deploys to production' },
+    })
+    expect(await run('vercel deploy')).toEqual({})
+    expect(await run('git push --force')).toEqual({})
+  }
 })
 
 it('lets a read-only reviewer run commands that only read, anywhere, and refuses the rest with the reason', async () => {

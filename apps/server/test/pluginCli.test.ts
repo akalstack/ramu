@@ -3,7 +3,6 @@ import type { PluginCli, PluginCredential } from '@ramu/shared/plugins'
 import {
   cliCommand,
   cliCommandReads,
-  cliDeployKind,
   cliOutput,
   credentialEnvironment,
   registerPluginCliTools,
@@ -11,7 +10,10 @@ import {
 } from '../src/plugins/cli'
 import type { PluginSecret } from '../src/plugins/service'
 
-type Handler = (args: Record<string, unknown>, extra: { signal?: AbortSignal }) => Promise<{ isError?: boolean }>
+type Handler = (
+  args: Record<string, unknown>,
+  extra: { signal?: AbortSignal },
+) => Promise<{ isError?: boolean; content: { text: string }[] }>
 
 const slot: PluginCredential = {
   id: 'token',
@@ -21,14 +23,10 @@ const slot: PluginCredential = {
   fields: [{ id: 'account', label: 'Account ID', env: 'CLOUDFLARE_ACCOUNT_ID', kind: 'text' }],
 }
 const cli: PluginCli = { binaries: ['wrangler'], npx: 'wrangler@4', reads: [['whoami'], ['d1', 'list']] }
-const vercel: PluginCliTarget = {
-  plugin: 'vercel-cli',
+const fly: PluginCliTarget = {
+  plugin: 'fly-cli',
   pluginId: 'p3',
-  cli: {
-    binaries: ['vercel'],
-    reads: [['ls']],
-    deploys: { commands: [['deploy']], productionFlag: '--prod', production: [['rollback'], ['promote']] },
-  },
+  cli: { binaries: ['fly', 'flyctl'], reads: [['status'], ['releases']] },
 }
 const target: PluginCliTarget = { plugin: 'cloudflare', pluginId: 'p1', cli, slot }
 const secret: PluginSecret = { token: 'tok_secret', fields: { account: 'acc_1' }, account: 'Ana' }
@@ -37,8 +35,11 @@ function setup(approve: boolean, saved: PluginSecret | null = secret, entry: Plu
   const tools = new Map<string, Handler>()
   const server = { registerTool: (name: string, _def: unknown, handler: Handler) => void tools.set(name, handler) }
   const asked: string[] = []
-  const offered: unknown[] = []
-  const beforeProduction = vi.fn(async () => 'Ran npm run migrate against production first.')
+  const production: string[] = []
+  const approveProduction = vi.fn(async (detail: string): Promise<string | null> => {
+    production.push(detail)
+    return approve ? 'Ran npm run migrate against production first.' : null
+  })
   const source = { id: 's1', parentId: null, cwd: '/tmp/shop', settings: { access: 'full' } }
   const run = vi.fn(async () => ({ exitCode: 0, output: 'ok', timedOut: false }))
   const secretOf = vi.fn(async () => saved)
@@ -47,15 +48,14 @@ function setup(approve: boolean, saved: PluginSecret | null = secret, entry: Plu
     { clis: () => [entry], secret: secretOf },
     source as never,
     () => source as never,
-    async (detail, _signal, options) => {
+    async (detail) => {
       asked.push(detail)
-      offered.push(options)
       return approve
     },
-    beforeProduction,
+    approveProduction,
     run,
   )
-  return { tool: tools.get('platform_cli')!, run, asked, offered, secretOf, beforeProduction }
+  return { tool: tools.get('platform_cli')!, run, asked, production, secretOf, approveProduction }
 }
 
 describe('platform_cli', () => {
@@ -68,7 +68,7 @@ describe('platform_cli', () => {
       {} as never,
       () => ({}) as never,
       async () => true,
-      async () => '',
+      async () => null,
     )
     expect(tools.size).toBe(0)
   })
@@ -83,11 +83,11 @@ describe('platform_cli', () => {
 
   it('asks with a card naming any other command, and runs nothing when refused', async () => {
     const { tool, run, asked } = setup(false)
-    await expect(tool({ platform: 'cloudflare', args: ['deploy'] }, {})).rejects.toThrow('declined')
-    expect(asked[0]).toBe('Run wrangler deploy with your cloudflare account, in /tmp/shop.')
+    await expect(tool({ platform: 'cloudflare', args: ['d1', 'create', 'shop'] }, {})).rejects.toThrow('declined')
+    expect(asked[0]).toBe('Run wrangler d1 create shop with your cloudflare account, in /tmp/shop.')
     expect(run).not.toHaveBeenCalled()
     const approved = setup(true)
-    await approved.tool({ platform: 'cloudflare', args: ['deploy'] }, {})
+    await approved.tool({ platform: 'cloudflare', args: ['d1', 'create', 'shop'] }, {})
     expect(approved.run).toHaveBeenCalled()
   })
 
@@ -120,42 +120,42 @@ describe('platform_cli', () => {
     expect(secretOf).not.toHaveBeenCalled()
   })
 
-  it('runs a preview without asking, and asks before production with Allow in this thread, migrating first', async () => {
-    const { tool, run, asked, offered, beforeProduction } = setup(true, secret, vercel)
-    await tool({ platform: 'vercel-cli', args: ['deploy'] }, {})
+  it('recognises deploys from the command itself: a preview runs, production asks for production and migrates', async () => {
+    const wrangler = setup(true)
+    await wrangler.tool({ platform: 'cloudflare', args: ['versions', 'upload'] }, {})
+    expect(wrangler.asked).toEqual([])
+    expect(wrangler.production).toEqual([])
+    expect(wrangler.run).toHaveBeenCalledTimes(1)
+    const { tool, run, asked, production } = setup(true, secret, fly)
+    // A read prefix does not let a production command through.
+    await tool({ platform: 'fly-cli', args: ['releases', 'rollback', 'v3'] }, {})
+    await tool({ platform: 'fly-cli', args: ['deploy', '--detach'] }, {})
     expect(asked).toEqual([])
-    expect(beforeProduction).not.toHaveBeenCalled()
-    await tool({ platform: 'vercel-cli', args: ['deploy', '--prod'] }, {})
-    expect(asked[0]).toContain('This deploys to production')
-    expect(offered[0]).toEqual({ thread: { key: 'deploy:vercel-cli', label: 'production deploys with vercel-cli' } })
-    expect(beforeProduction).toHaveBeenCalledWith('/tmp/shop')
+    expect(production).toEqual(['Run fly releases rollback v3 in /tmp/shop.', 'Run fly deploy --detach in /tmp/shop.'])
     expect(run).toHaveBeenCalledTimes(2)
+    expect(JSON.parse((await tool({ platform: 'fly-cli', args: ['deploy'] }, {})).content[0]!.text)).toMatchObject({
+      migrations: 'Ran npm run migrate against production first.',
+    })
   })
 
-  it('deploys nothing when the migrations fail', async () => {
-    const { tool, run, beforeProduction } = setup(true, secret, vercel)
-    beforeProduction.mockRejectedValueOnce(new Error('The migration (npm run migrate) failed'))
-    await expect(tool({ platform: 'vercel-cli', args: ['rollback'] }, {})).rejects.toThrow('Nothing was deployed')
+  it('deploys nothing when production is refused or the migrations fail', async () => {
+    const refused = setup(false, secret, fly)
+    await expect(refused.tool({ platform: 'fly-cli', args: ['deploy'] }, {})).rejects.toThrow('declined')
+    expect(refused.run).not.toHaveBeenCalled()
+    const { tool, run, approveProduction } = setup(true, secret, fly)
+    approveProduction.mockRejectedValueOnce(new Error('The migration (npm run migrate) failed.\nNothing was deployed.'))
+    await expect(tool({ platform: 'fly-cli', args: ['deploy'] }, {})).rejects.toThrow('Nothing was deployed')
     expect(run).not.toHaveBeenCalled()
   })
 
   it('reports a failed command as an error result', async () => {
     const { tool, run } = setup(true)
     run.mockResolvedValueOnce({ exitCode: 1, output: 'Error: no project', timedOut: false })
-    expect((await tool({ platform: 'cloudflare', args: ['deploy'] }, {})).isError).toBe(true)
+    expect((await tool({ platform: 'cloudflare', args: ['d1', 'list'] }, {})).isError).toBe(true)
   })
 })
 
 describe('plugin CLIs', () => {
-  it('tells a preview from production by the deploy prefixes and the production flag', () => {
-    expect(cliDeployKind(vercel.cli, ['deploy'])).toBe('preview')
-    expect(cliDeployKind(vercel.cli, ['deploy', '--prod'])).toBe('production')
-    expect(cliDeployKind(vercel.cli, ['promote', 'dpl_1'])).toBe('production')
-    expect(cliDeployKind(vercel.cli, ['ls'])).toBeNull()
-    expect(cliDeployKind({ deploys: { commands: [['up']], production: [] } }, ['up', '--detach'])).toBe('production')
-    expect(cliDeployKind(cli, ['deploy'])).toBeNull()
-  })
-
   it('treats only the listed prefixes as reads', () => {
     expect(cliCommandReads(cli, ['d1', 'list', '--json'])).toBe(true)
     expect(cliCommandReads(cli, ['d1'])).toBe(false)

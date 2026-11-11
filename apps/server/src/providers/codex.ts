@@ -690,6 +690,7 @@ class CodexSession implements CodexRunner {
           title: 'Allow command?',
           detail: [danger, 'Full access still asks before this.', command].join('\n'),
           approvalOnceOnly: true,
+          approvalCommand: command,
         })
         this.emit({ kind: 'state', state: 'needs-input' })
       } else if (

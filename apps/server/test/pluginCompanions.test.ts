@@ -15,13 +15,13 @@ function index(name: string, plugins: unknown[]) {
 const folders: Record<string, string> = {
   [DEFAULT_PLUGIN_INDEX]: index('ramu-plugins', [
     {
-      name: 'railway-cli',
-      source: './plugins/railway-cli',
-      extensions: { 'dev.getramu': { byRamu: true, companion: 'railway' } },
+      name: 'grafana-data',
+      source: './plugins/grafana-data',
+      extensions: { 'dev.getramu': { byRamu: true, companion: 'grafana-mcp' } },
     },
   ]),
   [CLAUDE_PLUGIN_INDEX]: index('claude-plugins-official', [
-    { name: 'railway', source: { source: 'url', url: 'https://github.com/railwayapp/railway-skills.git' } },
+    { name: 'grafana-mcp', source: { source: 'url', url: 'https://github.com/grafana/mcp-grafana.git' } },
     { name: 'linear', source: './external_plugins/linear', category: 'productivity' },
   ]),
 }
@@ -45,7 +45,7 @@ it('pairs a Ramu plugin with the service’s own plugin in Claude’s directory,
   } as unknown as PluginHost)
   const listings = await service.browse()
   const named = (name: string) => listings.find((listing) => listing.name === name)
-  expect(named('railway-cli')?.companion).toEqual({ index: CLAUDE_PLUGIN_INDEX, name: 'railway' })
-  expect(named('railway')?.companion).toEqual({ index: DEFAULT_PLUGIN_INDEX, name: 'railway-cli' })
+  expect(named('grafana-data')?.companion).toEqual({ index: CLAUDE_PLUGIN_INDEX, name: 'grafana-mcp' })
+  expect(named('grafana-mcp')?.companion).toEqual({ index: DEFAULT_PLUGIN_INDEX, name: 'grafana-data' })
   expect(named('linear')).toMatchObject({ companion: null, category: 'productivity' })
 })

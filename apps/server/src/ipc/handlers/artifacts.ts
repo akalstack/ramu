@@ -54,7 +54,7 @@ import type { AnswerShape, PageFunction } from '../../interactive/pageAi'
 import { widgetData } from '../../interactive/pageAutomation'
 import { makePageProject } from '../../interactive/pageProject'
 import { openHeadlessPage } from '../../interactive/pageHeadless'
-import { PagePublisher, STATIC_TARGETS, type StaticTarget } from '../../interactive/pagePublish'
+import { PagePublisher } from '../../interactive/pagePublish'
 
 /** Shared by every connection, so the desktop and the phone see each other editing. */
 const editingPresence = new EditingPresence()
@@ -333,7 +333,7 @@ function readRamuData(ctx: HandlerContext, artifactId: string, source: RamuDataS
 export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
   if (ctx.pageAi) ctx.pageAi.track = (label, detail, work, cancel) => ctx.activity.run(label, detail, work, cancel)
   let publisher: PagePublisher | undefined
-  const publishing = () => (publisher ??= new PagePublisher(need().pages, () => ctx.forgeAccounts, ctx.plugins))
+  const publishing = () => (publisher ??= new PagePublisher(need().pages, () => ctx.forgeAccounts))
   /** A document another host shared, with the title and icon it had there. */
   const importArgs = z.tuple([
     z.object({
@@ -981,11 +981,8 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
       },
     },
     'artifacts.closePublic': { args: z.tuple([id]), run: (artifactId: string) => ctx.publicPages?.stop(artifactId) },
-    'artifacts.publishTargets': { args: z.tuple([]), run: () => publishing().targets() },
-    'artifacts.publish': {
-      args: z.tuple([id, z.enum(STATIC_TARGETS)]),
-      run: (artifactId: string, target: StaticTarget) => publishing().publish(artifactId, target),
-    },
+    'artifacts.publishReady': { args: z.tuple([]), run: () => publishing().ready() },
+    'artifacts.publish': { args: z.tuple([id]), run: (artifactId: string) => publishing().publish(artifactId) },
     'artifacts.share': {
       args: z.tuple([id, z.boolean(), z.string().trim().min(1).max(60).optional()]),
       run: (artifactId: string, canAdd: boolean, editor?: string) => {

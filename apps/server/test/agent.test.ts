@@ -4671,6 +4671,78 @@ it('keeps Antigravity Auto rules internal and preserves them when saved approval
   }
 })
 
+it('asks before a production deploy command whatever the provider would do, runs migrations first, and honours Allow in this thread', async () => {
+  let command = 'vercel deploy --prod'
+  let seq = 0
+  const factory: import('../src/agent/agentRunner').AgentRunnerFactory = (_scope, _settings, emit) => {
+    const request = async () => {
+      emit({
+        kind: 'permission-request',
+        requestId: `deploy-${++seq}`,
+        toolName: 'Bash',
+        title: 'Run command?',
+        detail: command,
+        approvalCommand: command,
+        approvalKey: `key:${command}`,
+      })
+      emit({ kind: 'state', state: 'needs-input' })
+    }
+    return {
+      start: request,
+      send: request,
+      steer: async () => {},
+      interrupt: async () => {},
+      stop: async () => {},
+      replyQuestion: () => {},
+      replyPermission: (id, allow) => {
+        emit({ kind: 'request-resolved', requestId: id, outcome: allow ? 'allowed' : 'denied' })
+        emit({ kind: 'result', text: 'done', isError: false, costUsd: null })
+      },
+    }
+  }
+  const svc = new AgentService(db, () => {}, fakeQuery([]), factory)
+  const migrate = vi.fn(async () => 'Ran npm run migrate against production first.')
+  svc.beforeProduction = migrate
+  // A saved rule for the exact command does not let a production deploy through.
+  new PermissionApprovals(db).remember('codex', 'key:vercel deploy --prod', 'user', undefined, { label: 'vercel' })
+  try {
+    const session = svc.start('t', scopeOf(cwd), 'Ship it', { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' })
+    await until(() => svc.get(session.id).state === 'needs-input')
+    const request = svc.events(session.id).findLast((event) => event.kind === 'permission-request')!
+    expect(request).toMatchObject({ productionDeploy: true, approvalOnceOnly: true })
+    expect(request).not.toHaveProperty('approvalKey')
+    expect(() => svc.replyPermission(session.id, 'deploy-1', true, undefined, 'user')).toThrow('once')
+    svc.replyPermission(session.id, 'deploy-1', true, undefined, 'thread')
+    await until(() => svc.get(session.id).state === 'idle')
+    expect(migrate).toHaveBeenCalledTimes(1)
+    // Allowed for the thread: the next production deploy goes after its migrations, with no card to answer.
+    await svc.send(session.id, 'Ship again')
+    await until(() => migrate.mock.calls.length === 2 && svc.get(session.id).state === 'idle')
+    expect(svc.events(session.id)).toContainEqual(
+      expect.objectContaining({ kind: 'request-resolved', requestId: 'deploy-2', outcome: 'allowed' }),
+    )
+    // A failed migration refuses the deploy, and the thread says why.
+    migrate.mockRejectedValueOnce(new Error('The migration (npm run migrate) failed.'))
+    await svc.send(session.id, 'Ship once more')
+    await until(() => svc.get(session.id).state === 'idle')
+    expect(svc.events(session.id)).toContainEqual(
+      expect.objectContaining({ kind: 'request-resolved', requestId: 'deploy-3', outcome: 'denied' }),
+    )
+    expect(svc.events(session.id)).toContainEqual(
+      expect.objectContaining({ kind: 'error', message: expect.stringContaining('Nothing was deployed') }),
+    )
+    // A preview follows the normal rules.
+    command = 'vercel deploy'
+    await svc.send(session.id, 'Preview')
+    await until(() => svc.get(session.id).state === 'needs-input')
+    expect(svc.events(session.id).findLast((event) => event.kind === 'permission-request')).not.toHaveProperty(
+      'productionDeploy',
+    )
+  } finally {
+    svc.stopAll()
+  }
+})
+
 describe('MCP connection status', () => {
   it('reads live status and reconnects a known server without sending an agent prompt', async () => {
     const reconnectMcpServer = vi.fn(async () => {})

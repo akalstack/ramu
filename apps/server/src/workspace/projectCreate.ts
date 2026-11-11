@@ -2,15 +2,8 @@ import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import {
-  DEPLOY_TARGET_PLUGINS,
-  DEPLOY_TARGETS,
-  PROJECT_NAME,
-  STACKS,
-  commandLine,
-  isDeployTarget,
-  type StackId,
-} from '@ramu/shared/stacks'
+import { DEPLOY_TARGET_PLUGINS } from '@ramu/shared/plugins'
+import { DEPLOY_TARGETS, PROJECT_NAME, STACKS, commandLine, isDeployTarget, type StackId } from '@ramu/shared/stacks'
 import { git } from './git'
 import type { ProjectConfig } from './projectConfig'
 
@@ -137,7 +130,7 @@ export function projectFactsText(config: ProjectConfig): string | undefined {
     stack.build ? `Build: ${stack.build}` : '',
     stack.test ? `Test: ${stack.test}` : '',
     isDeployTarget(stack.deployTarget)
-      ? `Deploys to: ${DEPLOY_TARGETS[stack.deployTarget]}, through its plugin with platform_cli (platform "${DEPLOY_TARGET_PLUGINS[stack.deployTarget]}"). A preview deploy runs without asking; production asks the person and runs the migrations first. If platform_cli does not offer it, ask the person to install the plugin from Customize → Plugins, or call plugin_search and plugin_install`
+      ? `Deploys to: ${DEPLOY_TARGETS[stack.deployTarget]}, with the ${DEPLOY_TARGET_PLUGINS[stack.deployTarget].name} plugin: its MCP tools or its CLI. A preview deploy runs without asking; a production deploy, however you make it, asks the person and runs the migrations first. If the plugin is not installed, ask the person to install it from the project's Deploy sheet, or call plugin_search and plugin_install`
       : '',
     stack.database ? 'Stores data in Postgres: read DATABASE_URL (DATABASE_URL_UNPOOLED for migrations).' : '',
     stack.migrate ? `Migrate (runs before each production deploy): ${commandLine(stack.migrate)}` : '',

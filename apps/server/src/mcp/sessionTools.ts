@@ -100,6 +100,13 @@ export class ExternalSessionTools {
       signal: AbortSignal,
       options: PermissionOptions,
     ) => Promise<boolean>,
+    /** Asks for a production deploy and runs the project's migrations; null when refused, throws when they fail. */
+    private readonly approveProduction: (
+      sessionId: string,
+      title: string,
+      detail: string,
+      signal: AbortSignal,
+    ) => Promise<string | null>,
   ) {}
 
   private session(source: ExternalSessionSource): ExternalMcpSession {
@@ -142,20 +149,22 @@ export class ExternalSessionTools {
     const gateway = service.gateway(
       source.sessionId,
       this.session(source),
-      async ({ call, serverName, arguments: args, signal }) =>
-        this.approve(
-          source.sessionId,
-          `${serverName}: ${call.toolName}`,
-          [
-            `Server: ${serverName}`,
-            `Service account: ${call.serviceAccountId}`,
-            `Provider login: ${call.accountId}`,
-            `Action: ${call.action === 'write' ? 'may change data' : 'read'}`,
-            `Arguments: ${redactSecrets(JSON.stringify(args)).slice(0, 2000)}`,
-          ].join('\n'),
-          signal,
-          { always: () => service.allowTool(call.connectionId, call.toolName) },
-        ),
+      async ({ call, serverName, arguments: args, signal, production }) => {
+        const title = `${serverName}: ${call.toolName}`
+        const detail = [
+          `Server: ${serverName}`,
+          `Service account: ${call.serviceAccountId}`,
+          `Provider login: ${call.accountId}`,
+          `Action: ${call.action === 'write' ? 'may change data' : 'read'}`,
+          `Arguments: ${redactSecrets(JSON.stringify(args)).slice(0, 2000)}`,
+        ].join('\n')
+        // Always allow would let production change without a person, so a production deploy never offers it.
+        return production
+          ? (await this.approveProduction(source.sessionId, title, detail, signal)) !== null
+          : this.approve(source.sessionId, title, detail, signal, {
+              always: () => service.allowTool(call.connectionId, call.toolName),
+            })
+      },
     )
     this.gateways.set(key, { gateway, timer: this.expire(key) })
     return gateway

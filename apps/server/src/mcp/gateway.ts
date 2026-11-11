@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js'
+import { toolDeploy } from '@ramu/shared/deployActions'
 import type { SharedMcpConnection } from '@ramu/shared/mcp'
 import { SharedMcpPolicy, sharedMcpCatalogRevision, type ExternalMcpSession } from './policy'
 import { SharedMcpConnectionError } from './errors'
@@ -32,11 +33,16 @@ export interface ExternalMcpGatewayHost {
   connect(connection: SharedMcpConnection, session: ExternalMcpSession, signal: AbortSignal): Promise<Client>
   /** Persist before sending a write. Records omit arguments, results, URLs and credentials. */
   record(call: ExternalMcpCall): void
+  /**
+   * Asks the person. A production deploy asks even when the tool is set to Allow, offers nothing lasting, and runs the
+   * project's migrations before it resolves; their failure throws, and nothing is called.
+   */
   approve(input: {
     call: ExternalMcpCall
     serverName: string
     arguments: Record<string, unknown>
     signal: AbortSignal
+    production: boolean
   }): Promise<boolean>
 }
 
@@ -209,8 +215,11 @@ export class ExternalMcpGateway {
       const current = await this.catalog(connection, entry, requestSignal)
       if (current.revision !== catalogRevision)
         throw new Error('Upstream tools changed; review Shared MCP access again')
-      if (!current.tools.some((tool) => tool.name === toolName)) throw new Error('Unknown upstream tool')
+      const tool = current.tools.find((entry) => entry.name === toolName)
+      if (!tool) throw new Error('Unknown upstream tool')
       const permission = this.policy.authorize(this.session, connectionId, catalogRevision, toolName)
+      const production = toolDeploy(tool, argumentsCopy) === 'production'
+      const asks = permission.requiresApproval || production
       const call: ExternalMcpCall = {
         id: randomUUID(),
         sessionId: this.sessionId,
@@ -227,17 +236,18 @@ export class ExternalMcpGateway {
         outcome: 'pending',
       }
       if (
-        permission.requiresApproval &&
+        asks &&
         !(await this.host.approve({
           call: structuredClone(call),
           serverName: connection.name,
           arguments: structuredClone(argumentsCopy),
           signal: requestSignal,
+          production,
         }))
       )
         throw new Error('Shared MCP tool approval was declined')
       requestSignal.throwIfAborted()
-      if (permission.requiresApproval) {
+      if (asks) {
         const afterApproval = await this.catalog(connection, entry, requestSignal)
         if (afterApproval.revision !== catalogRevision)
           throw new Error('Upstream tools changed during approval; review Shared MCP access again')

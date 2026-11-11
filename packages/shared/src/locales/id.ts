@@ -5748,8 +5748,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Share link': 'Tautan berbagi',
   'Show in the home screen widget': 'Tampilkan di widget layar utama',
   'Remove from the home screen widget': 'Hapus dari widget layar utama',
-  'Deploys this artifact as a static site on your own account. Ramu hosts nothing.':
-    'Menerbitkan artefak ini sebagai situs statis di akunmu sendiri. Ramu tidak meng-host apa pun.',
+  'Deploys this artifact to GitHub Pages on your own account. Ramu hosts nothing.':
+    'Menerbitkan artefak ini ke GitHub Pages di akunmu sendiri. Ramu tidak meng-host apa pun.',
   'Deploys v{version} to {url}.': 'Menerbitkan v{version} ke {url}.',
   Where: 'Tempat',
   '{name} token': 'Token {name}',
@@ -7152,7 +7152,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Pairs with {0}': 'Berpasangan dengan {0}',
   'Ramu’s plugin for it: runs its CLI with your saved sign-in, or reads its data into dashboards.': 'Plugin Ramu untuknya: menjalankan CLI-nya dengan login yang kamu simpan, atau membaca datanya ke dasbor.',
   'The service’s own plugin: its skills teach agents the service in full, often with its MCP server.': 'Plugin milik layanan itu sendiri: skill-nya mengajarkan layanan itu secara lengkap ke agen, sering kali dengan server MCP-nya.',
-  'Allow {0} in this thread': 'Izinkan {0} di thread ini',
+  'Allow production deploys in this thread': 'Izinkan deploy produksi di thread ini',
   'Allow in this thread lasts until the thread ends or Ramu restarts; other threads still ask.': 'Izinkan di thread ini berlaku sampai thread selesai atau Ramu dimulai ulang; thread lain tetap bertanya.',
   'In progress': 'Sedang berjalan',
   'Skipped': 'Dilewati',
@@ -7170,7 +7170,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Production database address': 'Alamat database production',
   'Ramu reads each deploy from the checks the Git host lists on the default branch. Connect the platform to the repository, and its deploys show here.': 'Ramu membaca setiap deploy dari pemeriksaan yang dicantumkan Git host pada branch default. Hubungkan platform ke repositori, dan deploy-nya muncul di sini.',
   'Replace address': 'Ganti alamat',
-  'Save the {0} token': 'Simpan token {0}',
   'Set up deploy': 'Siapkan deploy',
   'This repository is not on a Git host yet. Publish it, then connect the platform to it.': 'Repositori ini belum ada di Git host. Publikasikan dulu, lalu hubungkan platform ke repositori itu.',
   'key saved on this host': 'kunci tersimpan di host ini',

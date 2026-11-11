@@ -14,7 +14,7 @@ export function brandOf(name: string): BrandId | null {
   const aliases: Record<string, BrandId> = { flyio: 'fly', godotengine: 'godot', githubcopilot: 'github' }
   if (aliases[key]) return aliases[key]
   if ((BRAND_IDS as readonly string[]).includes(key)) return key as BrandId
-  // "railway-cli" or "grafana-mcp" is still Railway's or Grafana's.
+  // "fly-cli" or "grafana-mcp" is still Fly.io's or Grafana's.
   const first = key.split('-')[0]!
   return (BRAND_IDS as readonly string[]).includes(first) ? (first as BrandId) : (aliases[first] ?? null)
 }
@@ -74,7 +74,7 @@ export function ExtensionIcon({
 
 /** A name as people read it: a plugin's lowercase id gets a capital first letter. */
 const ACRONYMS = new Set(['cli', 'mcp', 'lsp', 'api', 'sdk', 'ai', 'aws', 'gcp', 'sql', 'ui', 'pr', 'md'])
-/** A plugin, skill or server's name as words: "railway-cli" reads "Railway CLI". */
+/** A plugin, skill or server's name as words: "fly-cli" reads "Fly CLI". */
 export const displayName = (name: string) =>
   name
     .split('-')

@@ -2,7 +2,7 @@ import type { ForwardedRequest } from './childRequests'
 import { randomUUID } from 'node:crypto'
 import { rm } from 'node:fs/promises'
 import { matchesCommand, PermissionApprovals } from './permissionApprovals'
-import type { AgentEvent, PermissionScope, AppPreferences } from '@ramu/shared/types'
+import type { AgentEvent, AgentSessionInfo, PermissionScope, AppPreferences } from '@ramu/shared/types'
 import {
   answerMessage,
   questionKey,
@@ -47,15 +47,18 @@ export interface UserRequestsHost
   shutdown(): AgentService['shutdown']
 }
 
-/** Requests that wait for the user: questions, permission prompts and elicitations, including those a sub-agent raises in its parent's chat. */
 /** What Ramu's own approval card offers beside Allow once. */
 export interface PermissionOptions {
   /** Always allow: runs this instead of saving an approval rule, such as switching an MCP tool to Allow. */
   always?: () => void
-  /** Allow in this thread: later requests with the same key pass without a card until the thread ends. */
-  thread?: { key: string; label: string }
+  /** A production deploy: the card offers Allow production deploys in this thread, and nothing lasting. */
+  productionDeploy?: boolean
 }
 
+/** The line a production deploy's card adds to say what happens when it is allowed. */
+export const PRODUCTION_DEPLOY_NOTE = "This deploys to production; the project's migrations run first."
+
+/** Requests that wait for the user: questions, permission prompts and elicitations, including those a sub-agent raises in its parent's chat. */
 export class UserRequests {
   constructor(
     private readonly host: UserRequestsHost,
@@ -73,8 +76,17 @@ export class UserRequests {
     string,
     { sessionId: string; finish: (allow: boolean, cancelled?: boolean) => void; options: PermissionOptions }
   >()
-  /** What each thread allowed for itself with Allow in this thread; kept in memory, so a restart asks again. */
-  private allowedInThread = new Map<string, Set<string>>()
+  /** Threads that allowed production deploys for themselves; kept in memory, so a restart asks again. */
+  private productionAllowed = new Set<string>()
+  /** Provider requests whose migrations are running, so a second click does not run them twice. */
+  private migrating = new Set<string>()
+  /**
+   * Runs the thread's project's migrations against production before a deploy goes out, and says what it did; throws
+   * when they fail. Set by the server; a host without it deploys nothing to production.
+   */
+  beforeProduction: (session: AgentSessionInfo) => Promise<string> = async () => {
+    throw new Error('This host cannot run the migrations a production deploy needs first.')
+  }
 
   /** App-owned capabilities use the same durable approval UI for every provider, without borrowing its runner. */
   requestPermission(
@@ -86,7 +98,7 @@ export class UserRequests {
   ): Promise<boolean> {
     if (signal?.aborted || this.host.shutdown() || !['starting', 'running'].includes(this.host.get(id).state))
       return Promise.reject(new Error('This permission request is no longer active.'))
-    if (options.thread && this.allowedInThread.get(id)?.has(options.thread.key)) return Promise.resolve(true)
+    if (options.productionDeploy && this.productionAllowed.has(id)) return Promise.resolve(true)
     const requestId = randomUUID()
     return new Promise((resolve, reject) => {
       const abort = () => finish(false, true)
@@ -117,12 +129,40 @@ export class UserRequests {
         detail,
         approvalOnceOnly: true,
         ...(options.always ? { approvalAlways: toolName } : {}),
-        ...(options.thread ? { approvalThread: options.thread.label } : {}),
+        ...(options.productionDeploy ? { productionDeploy: true as const } : {}),
       })
       this.host.setState(id, 'needs-input')
       signal?.addEventListener('abort', abort, { once: true })
       if (signal?.aborted) abort()
     })
+  }
+
+  /**
+   * A production deploy Ramu itself performs (an MCP tool, a plugin's CLI): asks unless the thread allowed production
+   * deploys, then runs the migrations. Resolves with what the migrations did, or null when refused; throws when the
+   * migrations fail, and then nothing may be deployed.
+   */
+  async approveProductionDeploy(
+    id: string,
+    toolName: string,
+    detail: string,
+    signal?: AbortSignal,
+  ): Promise<string | null> {
+    const allowed = await this.requestPermission(id, toolName, `${detail}\n${PRODUCTION_DEPLOY_NOTE}`, signal, {
+      productionDeploy: true,
+    })
+    return allowed ? this.migrateFirst(id) : null
+  }
+
+  private async migrateFirst(id: string): Promise<string> {
+    try {
+      return await this.beforeProduction(this.host.get(id))
+    } catch (error) {
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)}\nNothing was deployed. Fix the cause, then deploy again.`,
+        { cause: error },
+      )
+    }
   }
 
   /** Shows a secret card in the thread and waits for the person, the timeout, or the run to end. */
@@ -333,12 +373,22 @@ export class UserRequests {
     if (
       (request.approvalSessionId && request.approvalSessionId !== id) ||
       this.host.shutdown() ||
-      !request.approvalKey ||
+      (!request.approvalKey && !request.productionDeploy) ||
       requestOutcomes(this.host.events(id)).get(request.requestId)
     )
       return
     const session = this.host.get(id)
     if (!['running', 'starting', 'needs-input'].includes(session.state)) return
+    if (request.productionDeploy) {
+      if (this.productionAllowed.has(id))
+        try {
+          this.replyPermission(id, request.requestId, true)
+        } catch {
+          /* A provider may withdraw the request before this microtask. */
+        }
+      return
+    }
+    if (!request.approvalKey) return
     const approvals = new PermissionApprovals(this.db)
     const rule = approvals.find(
       request.approvalProvider ?? session.provider,
@@ -383,8 +433,8 @@ export class UserRequests {
       scope !== 'once' &&
       (!allow ||
         (scope === 'thread'
-          ? !request.approvalThread
-          : !request.approvalKey && !(scope === 'user' && request.approvalAlways)))
+          ? !request.productionDeploy
+          : request.productionDeploy || (!request.approvalKey && !(scope === 'user' && request.approvalAlways))))
     )
       throw new Error('This request can only be approved once.')
     if (pattern && (scope === 'once' || !matchesCommand(pattern, request.approvalCommand)))
@@ -392,32 +442,22 @@ export class UserRequests {
     const appPermission = this.appPermissions.get(requestId)
     if (appPermission) {
       if (appPermission.sessionId !== id) throw new Error('This approval belongs to another thread.')
-      if (allow && scope === 'thread' && appPermission.options.thread) {
-        const allowed = this.allowedInThread.get(id) ?? new Set<string>()
-        allowed.add(appPermission.options.thread.key)
-        this.allowedInThread.set(id, allowed)
-      } else if (allow && scope === 'user') appPermission.options.always?.()
+      if (allow && scope === 'thread') this.productionAllowed.add(id)
+      else if (allow && scope === 'user') appPermission.options.always?.()
       appPermission.finish(allow)
       return
     }
-    if (scope === 'thread') throw new Error('This request can only be approved once.')
+    if (request.productionDeploy && allow) {
+      if (scope === 'thread') this.productionAllowed.add(id)
+      this.deployAfterMigrations(id, requestId)
+      return
+    }
     const session = this.host.get(id)
     const approvals = new PermissionApprovals(this.db)
     const project = approvals.project(session.taskId)
     if (scope === 'project' && !project) throw new Error('This thread has no project.')
-    const runner = this.host.runners.get(id)
-    if (runner) runner.replyPermission(requestId, allow)
-    else {
-      const pending = this.takePending(id, requestId, 'permission')
-      pending.resolve(
-        allow
-          ? { behavior: 'allow', updatedInput: pending.input }
-          : { behavior: 'deny', message: message || 'Denied by the user' },
-      )
-      this.host.record(id, { kind: 'request-resolved', requestId, outcome: allow ? 'allowed' : 'denied' })
-      this.afterRequest(id)
-    }
-    if (allow && scope !== 'once') {
+    this.answerProvider(id, requestId, allow, message)
+    if (allow && (scope === 'project' || scope === 'user')) {
       const savedApprovalId = approvals.remember(
         request.approvalProvider ?? session.provider,
         request.approvalKey!,
@@ -427,6 +467,41 @@ export class UserRequests {
       )
       this.host.record(id, { kind: 'request-resolved', requestId, outcome: `allowed-${scope}`, savedApprovalId })
     }
+  }
+
+  /** Answers the provider's own request: its runner, or Claude's waiting permission callback. */
+  private answerProvider(id: string, requestId: string, allow: boolean, message?: string): void {
+    const runner = this.host.runners.get(id)
+    if (runner) return runner.replyPermission(requestId, allow)
+    const pending = this.takePending(id, requestId, 'permission')
+    pending.resolve(
+      allow
+        ? { behavior: 'allow', updatedInput: pending.input }
+        : { behavior: 'deny', message: message || 'Denied by the user' },
+    )
+    this.host.record(id, { kind: 'request-resolved', requestId, outcome: allow ? 'allowed' : 'denied' })
+    this.afterRequest(id)
+  }
+
+  /**
+   * Lets an allowed production deploy go once the project's migrations ran against production. A failure refuses the
+   * command instead, so nothing is deployed, and the thread shows why.
+   */
+  private deployAfterMigrations(id: string, requestId: string): void {
+    if (this.migrating.has(requestId))
+      throw new Error('The migrations are running; the deploy goes out when they finish.')
+    this.migrating.add(requestId)
+    void (async () => {
+      const failure = await this.migrateFirst(id).then(
+        () => null,
+        (error: Error) => error.message,
+      )
+      if (failure) this.host.record(id, { kind: 'error', message: failure })
+      this.answerProvider(id, requestId, !failure, failure ?? undefined)
+    })()
+      // The request may have ended with the run while the migrations ran; there is nobody left to answer.
+      .catch(() => {})
+      .finally(() => this.migrating.delete(requestId))
   }
 
   forgetPermission(id: string, requestId: string, scope: 'project' | 'user'): void {

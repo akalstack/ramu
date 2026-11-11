@@ -106,9 +106,9 @@ export function PermissionRequestCard({
                 {translate('Allow for this user')}
               </Button>
             )}
-            {e.approvalThread && (
+            {e.productionDeploy && (
               <Button variant="secondary" disabled={busy} onClick={() => void act(true, 'thread')}>
-                {translate('Allow {0} in this thread', { 0: e.approvalThread })}
+                {translate('Allow production deploys in this thread')}
               </Button>
             )}
             {e.approvalAlways && (
@@ -131,7 +131,7 @@ export function PermissionRequestCard({
                 ? 'Saved approvals apply to the selected rule. Allow once applies only to this request.'
                 : e.approvalAlways
                   ? 'Always allow lets this tool run without asking. Change it back in Customize → MCP servers.'
-                  : e.approvalThread
+                  : e.productionDeploy
                     ? 'Allow in this thread lasts until the thread ends or Ramu restarts; other threads still ask.'
                     : 'Applies to this request only.',
             )}

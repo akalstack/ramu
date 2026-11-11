@@ -1,5 +1,5 @@
-// A project's migrations, run against its production database before a production deploy goes out through a plugin's
-// CLI. The database address is saved once per project on this host; the migrate command comes from `ramu.json`.
+// A project's migrations, run against its production database before a production deploy goes out, however the agent
+// deploys. The database address is saved once per project on this host; the migrate command comes from `ramu.json`.
 import { execFile } from 'node:child_process'
 import { commandLine } from '@ramu/shared/stacks'
 import { HostCredentialStore } from '../../credentials/store'
@@ -95,17 +95,14 @@ export class ProductionMigrations {
     const saved = await this.saved(projectId).read()
     if (!saved)
       throw new MigrationError(
-        `This project migrates with ${commandLine(argv)}, but no production database address is saved, so the migrations cannot run first. Ask the person to add it in the project's Deploy sheet, then deploy again.`,
+        `This project migrates with ${commandLine(argv)}, but no production database address is saved, so the migrations cannot run first. Ask the person to add it in the project's Deploy sheet.`,
         '',
       )
     const result = await this.run(argv, cwd, { DATABASE_URL: saved.token, DATABASE_URL_UNPOOLED: saved.token })
     if (!result.ok) {
       // It ran with production's address, which an error may print; the output reaches the thread.
       const output = redactSecrets(tail(result.output)).replaceAll(saved.token, '[database address]')
-      throw new MigrationError(
-        `The migration (${commandLine(argv)}) failed, so nothing was deployed.\n${output}`,
-        output,
-      )
+      throw new MigrationError(`The migration (${commandLine(argv)}) failed.\n${output}`, output)
     }
     return `Ran ${commandLine(argv)} against production first.`
   }

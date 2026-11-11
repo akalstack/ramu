@@ -1,13 +1,6 @@
 import { expect, it } from 'vitest'
-import {
-  DEPLOY_TARGET_PLUGINS,
-  DEPLOY_TARGETS,
-  STACKS,
-  chooseStack,
-  commandLine,
-  isDeployTarget,
-  stackCheck,
-} from '../src/stacks'
+import { CLAUDE_PLUGIN_INDEX, DEFAULT_PLUGIN_INDEX, DEPLOY_TARGET_PLUGINS } from '../src/plugins'
+import { DEPLOY_TARGETS, STACKS, chooseStack, commandLine, isDeployTarget, stackCheck } from '../src/stacks'
 
 it('chooses the smallest stack that does the job', () => {
   expect(chooseStack({ kind: 'web', signIn: false, data: false })).toBe('static')
@@ -30,12 +23,12 @@ it('gives every web stack a deploy target and argument-list commands, and checks
   expect(commandLine(['uv', 'add', 'fastapi[standard]', "it's here"])).toBe(`uv add fastapi[standard] 'it'\\''s here'`)
 })
 
-it('deploys every target through its plugin', () => {
+it('deploys every target through the platform’s own plugin, or Ramu’s where Claude’s directory has none', () => {
   for (const stack of Object.values(STACKS))
-    if (stack.deployTarget) expect(DEPLOY_TARGET_PLUGINS[stack.deployTarget]).toMatch(/-cli$/)
+    if (stack.deployTarget) expect(DEPLOY_TARGET_PLUGINS[stack.deployTarget].name).toBeTruthy()
   expect(DEPLOY_TARGETS.cloudflare).toBe('Cloudflare')
-  // Ramu's CLI plugin is named apart from the platform's own plugin in Claude's directory, so both install.
-  expect(DEPLOY_TARGET_PLUGINS.vercel).toBe('vercel-cli')
+  expect(DEPLOY_TARGET_PLUGINS.vercel).toEqual({ index: CLAUDE_PLUGIN_INDEX, name: 'vercel' })
+  expect(DEPLOY_TARGET_PLUGINS.fly).toEqual({ index: DEFAULT_PLUGIN_INDEX, name: 'fly-cli' })
   expect(isDeployTarget('netlify')).toBe(true)
   expect(isDeployTarget('expo')).toBe(false)
   expect(isDeployTarget('toString')).toBe(false)

@@ -16,7 +16,7 @@ const liveAddress = z
 /**
  * A project's Deploy sheet: the latest deploy as the Git host reports it, the live address watch, the production
  * database migrations run against, and an app published from this computer. Platforms themselves are reached through
- * plugins with platform_cli, so nothing here names one.
+ * their plugins, so nothing here names one.
  */
 export const registerDeployHandlers: RegisterHandlers = (ctx) => {
   const need = <T>(service: T | undefined): T => {

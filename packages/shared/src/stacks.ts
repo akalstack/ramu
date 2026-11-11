@@ -20,8 +20,8 @@ export type StackId = (typeof STACK_IDS)[number]
 export const PROJECT_NAME = /^[A-Za-z0-9][\w.-]{0,99}$/
 
 /**
- * Platforms a stack deploys to by default, each with its own name. Agents reach them through a plugin's CLI with
- * `platform_cli`, so Ramu has no code of its own for any of them.
+ * Platforms a stack deploys to by default, each with its own name. Agents deploy through the platform's plugin (its MCP
+ * tools or its CLI), so Ramu has no code of its own for any of them.
  */
 export const DEPLOY_TARGETS = {
   vercel: 'Vercel',
@@ -31,17 +31,6 @@ export const DEPLOY_TARGETS = {
   cloudflare: 'Cloudflare',
 } as const
 export type DeployTargetId = keyof typeof DEPLOY_TARGETS
-/**
- * The plugin in Ramu's index that runs each target's CLI, and the `platform` `platform_cli` takes for it. It is named
- * apart from the platform's own plugin in Claude's directory, which teaches agents the platform and installs beside it.
- */
-export const DEPLOY_TARGET_PLUGINS = {
-  vercel: 'vercel-cli',
-  netlify: 'netlify-cli',
-  railway: 'railway-cli',
-  fly: 'fly-cli',
-  cloudflare: 'cloudflare-cli',
-} as const satisfies Record<DeployTargetId, string>
 export const isDeployTarget = (value: unknown): value is DeployTargetId =>
   typeof value === 'string' && Object.hasOwn(DEPLOY_TARGETS, value)
 
