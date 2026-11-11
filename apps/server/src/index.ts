@@ -4,6 +4,7 @@ import { DASHBOARD_ROWS_MAX } from '@ramu/shared/artifactSource'
 import { LastingAddresses } from './workspace/deploy/namedTunnel'
 import { ShellPushes } from './agent/shellPushes'
 import { followPush } from './workspace/followPush'
+import { productionAddress } from './workspace/forge'
 import { terminalThreadRequest } from './background/agentThreads'
 import { NO_PROJECT_GUIDE, projectFactsText } from './workspace/projectCreate'
 import { HELPER_ROLES } from '@ramu/shared/chat/helperRoles'
@@ -690,6 +691,13 @@ const uptime = new UptimeWatches(
     },
     // The uptime watch follows an app published from this computer at its lasting address.
     localAddress: (projectId) => localApps.lastingUrl(projectId),
+    async productionAddress(projectId) {
+      for (const repository of workspace.listRepositories(projectId)) {
+        const url = await productionAddress(repository.root)
+        if (url) return url
+      }
+      return null
+    },
     // Any answer, even a refusal, shows this host reaches the internet.
     online: () =>
       fetch('https://github.com', { method: 'HEAD', signal: AbortSignal.timeout(5000) }).then(

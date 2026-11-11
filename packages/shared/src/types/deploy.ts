@@ -41,8 +41,10 @@ export interface UptimeCheck {
 export interface UptimeStatus {
   /** On unless the person turned it off; checks start once the project has a live address. */
   enabled: boolean
-  /** The live address the person saved, or the lasting address of the app published from this computer. */
+  /** The live address watched: saved by the person, found by Ramu, or the app published from this computer. */
   address: string | null
+  /** Where it came from: saved in the sheet, the Git host's production deployment, or the app on this computer. */
+  source: 'saved' | 'git-host' | 'this-computer' | null
   /** The address checked: the live address and the health path from `ramu.json`. */
   url: string | null
   last: UptimeCheck | null

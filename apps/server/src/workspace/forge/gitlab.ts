@@ -475,6 +475,15 @@ export async function commitChecks(cwd: string, sha: string): Promise<ForgeCheck
   return pipelineJobs(await access(cwd), sha)
 }
 
+/** The external address GitLab keeps for the project's production environment, which a deploy job sets. */
+export async function productionAddress(cwd: string): Promise<string | null> {
+  const environments = (await projectApi(await access(cwd), '/environments?name=production&states=available').catch(
+    () => [],
+  )) as { external_url?: string | null }[]
+  const url = environments[0]?.external_url
+  return url && /^https?:\/\//.test(url) ? url : null
+}
+
 export async function commitChecksFeedback(cwd: string, sha: string, branch: string): Promise<string> {
   const a = await access(cwd)
   const failed = (await pipelineJobs(a, sha)).filter((check) => check.state === 'failure')
@@ -1409,6 +1418,7 @@ registerForgeAdapter({
   checksFeedback,
   commitChecks,
   commitChecksFeedback,
+  productionAddress,
   listPullRequests,
   mergeOptions,
   pullRequestAction,

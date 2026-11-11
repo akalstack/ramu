@@ -52,6 +52,11 @@ export async function commitChecks(cwd: string, sha: string): Promise<ForgeCheck
   const adapter = await adapterFor(cwd)
   return adapter.commitChecks ? adapter.commitChecks(cwd, sha) : null
 }
+/** The live address of the production deployment the repository's Git host recorded, where the service keeps one. */
+export async function productionAddress(cwd: string): Promise<string | null> {
+  const adapter = await adapterFor(cwd)
+  return adapter.productionAddress ? adapter.productionAddress(cwd).catch(() => null) : null
+}
 export async function commitChecksFeedback(cwd: string, sha: string, branch: string): Promise<string> {
   const adapter = await adapterFor(cwd)
   if (!adapter.commitChecksFeedback) throw new Error('Ramu does not follow this repository’s checks.')

@@ -964,6 +964,39 @@ export async function commitChecks(cwd: string, sha: string): Promise<ForgeCheck
   return parseCheckRuns(runs?.check_runs ?? [], combined?.statuses ?? [])
 }
 
+/**
+ * The live address of the newest successful production deployment on GitHub. Platforms connected to the repository
+ * (Vercel, Netlify, Render, Railway) and GitHub Pages record each deploy as a deployment with its address.
+ */
+export async function productionAddress(cwd: string): Promise<string | null> {
+  const remote = await forgeRemoteOf(cwd)
+  if (!remote) return null
+  const base = `/repos/${remote.owner}/${remote.repo}/deployments`
+  const deployments =
+    (await githubRest<RawDeployment[] | null>(cwd, 'GET', `${base}?per_page=20`).catch(() => null)) ?? []
+  for (const deployment of deployments.filter(isProduction).slice(0, 5)) {
+    const statuses =
+      (await githubRest<RawDeploymentStatus[] | null>(cwd, 'GET', `${base}/${deployment.id}/statuses?per_page=5`).catch(
+        () => null,
+      )) ?? []
+    const live = statuses.find((status) => status.state === 'success' && status.environment_url)
+    if (live?.environment_url && /^https?:\/\//.test(live.environment_url)) return live.environment_url
+  }
+  return null
+}
+
+interface RawDeployment {
+  id: number
+  environment?: string
+  production_environment?: boolean
+}
+interface RawDeploymentStatus {
+  state?: string
+  environment_url?: string
+}
+const isProduction = (deployment: RawDeployment) =>
+  deployment.production_environment === true || /^(production|github-pages)$/i.test(deployment.environment ?? '')
+
 /** REST check runs and commit statuses (lowercase states) in the shape GraphQL's rollup is read in. */
 export function parseCheckRuns(runs: RawCheckRun[], statuses: RawStatus[] = []): ForgeCheck[] {
   return parseChecks([
@@ -1224,6 +1257,7 @@ registerForgeAdapter({
   checksFeedback,
   commitChecks,
   commitChecksFeedback,
+  productionAddress,
   listIssues,
   issueDetails,
   publishRepository,

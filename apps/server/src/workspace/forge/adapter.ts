@@ -46,6 +46,8 @@ export interface ForgeAdapter {
   commitChecks?(cwd: string, sha: string): Promise<ForgeCheck[]>
   /** The prompt for a default branch that a push broke, with the end of each failed job's log. */
   commitChecksFeedback?(cwd: string, sha: string, branch: string): Promise<string>
+  /** The live address of the newest successful production deployment the service recorded; null when it has none. */
+  productionAddress?(cwd: string): Promise<string | null>
   /** The repository's open pull requests, and the latest closed and merged ones when asked. */
   listPullRequests(cwd: string, options: { includeClosed: boolean }): Promise<PullRequestList>
   /** The merge methods the repository allows and what still blocks merging `url`. */

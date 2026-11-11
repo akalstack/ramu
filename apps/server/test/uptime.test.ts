@@ -3,7 +3,14 @@ import type { AddressInfo } from 'node:net'
 import { describe, expect, it, vi } from 'vitest'
 import { checkedUrl, liveProbe, UPTIME_INTERVAL, UptimeWatches, type ProbeAnswer } from '../src/workspace/deploy/uptime'
 
-function setup(options: { healthPath?: string | null; offline?: () => boolean; address?: string | null } = {}) {
+function setup(
+  options: {
+    healthPath?: string | null
+    offline?: () => boolean
+    address?: string | null
+    productionAddress?: () => Promise<string | null>
+  } = {},
+) {
   const state = new Map<string, unknown>()
   const answers: ProbeAnswer[] = []
   const probe = vi.fn(async (_url: string) => answers.shift() ?? { status: 200, ms: 120, failure: null })
@@ -22,6 +29,7 @@ function setup(options: { healthPath?: string | null; offline?: () => boolean; a
       openThread,
       notify,
       online: async () => !options.offline?.(),
+      ...(options.productionAddress ? { productionAddress: options.productionAddress } : {}),
     },
     { send },
     probe,
@@ -35,6 +43,19 @@ function setup(options: { healthPath?: string | null; offline?: () => boolean; a
 const down: ProbeAnswer = { status: 502, ms: 340, failure: null }
 
 describe('uptime watch', () => {
+  it('watches the production address the Git host recorded until the person saves another', async () => {
+    const found = vi.fn(async () => 'https://shop.vercel.app')
+    const { watches, probe, step } = setup({ address: null, productionAddress: found })
+    await step()
+    expect(watches.status('p1')).toMatchObject({ address: 'https://shop.vercel.app', source: 'git-host' })
+    expect(probe).toHaveBeenCalledWith('https://shop.vercel.app/')
+    // The Git host is asked again only after a while, not on every check.
+    await step()
+    expect(found).toHaveBeenCalledTimes(1)
+    watches.setAddress('p1', 'https://shop.example')
+    expect(watches.status('p1')).toMatchObject({ address: 'https://shop.example', source: 'saved' })
+  })
+
   it('checks the health path on the live address the person saved', async () => {
     const { watches, probe, step } = setup({ healthPath: '/api/health' })
     await step()

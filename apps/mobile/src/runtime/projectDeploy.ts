@@ -43,7 +43,8 @@ export function uptimeLines(
     lines: [
       uptime.url
         ? t('The host checks {0} every five minutes.', { 0: uptime.url })
-        : t('Checks start once you save the address people use the app at.'),
+        : t('Checks start once your Git host records a production deploy, or once you save the address.'),
+      ...(uptime.source === 'git-host' ? [t('Found from the production deployment on your Git host.')] : []),
       ...(uptime.last ? [uptimeCheckText(t, time, uptime.last)] : []),
       ...(uptime.downSince !== null ? [t('Failing since {0}', { 0: time(uptime.downSince) })] : []),
       ...(uptime.incident

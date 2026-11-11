@@ -7161,7 +7161,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'An address is saved on this computer.': 'Sebuah alamat tersimpan di komputer ini.',
   'Ask the project’s agent to deploy: previews run without asking, and production asks you first and runs the migrations before it.': 'Minta agent proyek untuk deploy: preview berjalan tanpa bertanya, dan production bertanya dulu lalu menjalankan migrasi sebelumnya.',
   'Before each production deploy, Ramu runs {0} against this database.': 'Sebelum setiap deploy production, Ramu menjalankan {0} pada database ini.',
-  'Checks start once you save the address people use the app at.': 'Pemeriksaan dimulai setelah kamu menyimpan alamat yang dipakai orang untuk membuka aplikasi.',
   'Install the plugin for the platform you deploy to from Customize → Plugins, then ask the project’s agent to deploy.': 'Pasang plugin untuk platform tujuan deploy dari Kustomisasi → Plugin, lalu minta agent proyek untuk deploy.',
   'Latest deploy': 'Deploy terakhir',
   'Live address': 'Alamat live',
@@ -7178,4 +7177,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0} suits this project’s stack, through the {1} plugin.': '{0} cocok untuk stack proyek ini, lewat plugin {1}.',
   '{0} · {1} at {2}': '{0} · {1} di {2}',
   'No address is saved yet. Add it in the Deploy sheet on the host’s own computer.': 'Belum ada alamat yang tersimpan. Tambahkan di lembar Deploy pada komputer host itu sendiri.',
+  'Checks start once your Git host records a production deploy, or once you save the address.': 'Pemeriksaan dimulai begitu host Git-mu mencatat deploy produksi, atau begitu kamu menyimpan alamatnya.',
+  'Found from the production deployment on your Git host.': 'Ditemukan dari deployment produksi di host Git-mu.',
+  'Found from the production deployment on your Git host. Type another address to use that instead.': 'Ditemukan dari deployment produksi di host Git-mu. Ketik alamat lain untuk memakainya.',
 }

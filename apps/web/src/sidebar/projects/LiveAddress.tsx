@@ -44,7 +44,7 @@ export function LiveAddressSection({ projectId }: { projectId: string }) {
     }
   }
   if (!status && !error) return null
-  // The field shows the saved address until the person edits it.
+  // The field shows the address watched (saved, or found on the Git host) until the person edits it.
   const shown = address ?? status?.address ?? ''
   const changed = shown.trim() !== (status?.address ?? '')
   return (
@@ -74,6 +74,11 @@ export function LiveAddressSection({ projectId }: { projectId: string }) {
           {shown.trim() ? t('Save') : t('Forget')}
         </Button>
       </form>
+      {status?.source === 'git-host' && !changed && (
+        <p className="m-0 text-caption text-muted-foreground">
+          {t('Found from the production deployment on your Git host. Type another address to use that instead.')}
+        </p>
+      )}
       <label className="flex items-center gap-2">
         <Checkbox
           checked={status?.enabled ?? false}
@@ -90,7 +95,7 @@ export function LiveAddressSection({ projectId }: { projectId: string }) {
                   'This computer checks {0} every five minutes. Two failed checks in a row open a thread here and notify your phone.',
                   { 0: status.url },
                 )
-              : t('Checks start once you save the address people use the app at.')}
+              : t('Checks start once your Git host records a production deploy, or once you save the address.')}
           </span>
           {status.last && (
             <span className={status.last.result === 'down' ? 'text-destructive' : undefined}>

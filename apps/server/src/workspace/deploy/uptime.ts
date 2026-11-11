@@ -14,6 +14,8 @@ const STALLED = TIMEOUT + 30_000
 const MAX_REDIRECTS = 5
 const FAILURES = 2
 const POLL = 15_000
+/** How often the Git host is asked for the production address of a project that has none saved. */
+const FIND_INTERVAL = 30 * 60_000
 
 /** What one request to the address returned: its status, or why there was none. */
 export interface ProbeAnswer {
@@ -67,6 +69,10 @@ interface UptimeRecord {
   enabled: boolean | null
   /** The live address the person saved in the Deploy sheet. */
   url: string | null
+  /** The address Ramu found itself: the Git host's production deployment. */
+  found: { url: string; from: 'git-host' } | null
+  /** When the Git host was last asked for it. */
+  foundCheckedAt: number | null
   lastCheckAt: number | null
   failures: number
   last: UptimeCheck | null
@@ -78,6 +84,8 @@ interface UptimeRecord {
 const EMPTY: UptimeRecord = {
   enabled: null,
   url: null,
+  found: null,
+  foundCheckedAt: null,
   lastCheckAt: null,
   failures: 0,
   last: null,
@@ -104,6 +112,8 @@ export interface UptimeHost {
   notify(thread: { taskId: string; sessionId: string }): void
   /** The lasting address of the project's app published from this computer, while it is published. */
   localAddress?(projectId: string): string | null
+  /** The production address the project's Git host recorded for its latest deploy, if any. */
+  productionAddress?(projectId: string): Promise<string | null>
   /** Whether this host reaches the internet at all, asked only when the address gave no answer. */
   online(): Promise<boolean>
 }
@@ -144,9 +154,35 @@ export class UptimeWatches {
     this.host.setState(key(projectId), record)
   }
 
-  /** The address watched: the one saved for the project, else the lasting address of its app on this computer. */
+  /**
+   * The address watched: the one the person saved, else the Git host's production deployment, else the lasting address
+   * of its app on this computer.
+   */
   private address(projectId: string, record: UptimeRecord): string | null {
-    return record.url ?? this.host.localAddress?.(projectId) ?? null
+    return record.url ?? record.found?.url ?? this.host.localAddress?.(projectId) ?? null
+  }
+
+  /** Where the watched address came from, for the sheet to say. */
+  private source(projectId: string, record: UptimeRecord): UptimeStatus['source'] {
+    if (record.url) return 'saved'
+    if (record.found) return record.found.from
+    return this.host.localAddress?.(projectId) ? 'this-computer' : null
+  }
+
+  /**
+   * An address Ramu found for the project. It is watched only while the person has saved none, and a new one starts
+   * the checks over, since the app now lives somewhere else.
+   */
+  found(projectId: string, url: string, from: 'git-host'): void {
+    const record = this.record(projectId)
+    if (record.found?.url === url) return
+    const moved = !record.url
+    this.save(projectId, {
+      ...(moved ? { ...EMPTY, enabled: record.enabled, url: null } : record),
+      found: { url, from },
+      foundCheckedAt: Date.now(),
+    })
+    this.nextPoll = 0
   }
 
   status(projectId: string): UptimeStatus {
@@ -155,7 +191,8 @@ export class UptimeWatches {
     const address = this.address(projectId, record)
     return {
       enabled,
-      address: record.url,
+      address,
+      source: this.source(projectId, record),
       url: enabled && address ? checkedUrl(address, this.host.healthPath(projectId)) : null,
       last: enabled ? record.last : null,
       downSince: enabled ? record.downSince : null,
@@ -170,7 +207,7 @@ export class UptimeWatches {
   /** Turning the watch off forgets its checks and closes any open incident without a recap. */
   setEnabled(projectId: string, enabled: boolean): UptimeStatus {
     const record = this.record(projectId)
-    this.save(projectId, enabled ? { ...record, enabled } : { ...EMPTY, enabled, url: record.url })
+    this.save(projectId, enabled ? { ...record, enabled } : { ...EMPTY, enabled, url: record.url, found: record.found })
     this.nextPoll = 0
     return this.status(projectId)
   }
@@ -178,7 +215,7 @@ export class UptimeWatches {
   /** Saves the live address (null forgets it); checks start over at the new address. */
   setAddress(projectId: string, url: string | null): UptimeStatus {
     const record = this.record(projectId)
-    this.save(projectId, { ...EMPTY, enabled: record.enabled, url })
+    this.save(projectId, { ...EMPTY, enabled: record.enabled, url, found: record.found })
     this.nextPoll = 0
     return this.status(projectId)
   }
@@ -195,8 +232,15 @@ export class UptimeWatches {
   private async poll(now: number): Promise<void> {
     for (const projectId of this.host.projectIds()) {
       if (this.stopping) return
-      const record = this.record(projectId)
-      if (record.enabled === false || !this.address(projectId, record)) continue
+      let record = this.record(projectId)
+      if (record.enabled === false) continue
+      if (!record.url && (record.foundCheckedAt === null || now - record.foundCheckedAt >= FIND_INTERVAL)) {
+        const url = await this.host.productionAddress?.(projectId).catch(() => null)
+        if (url) this.found(projectId, url, 'git-host')
+        record = { ...this.record(projectId), foundCheckedAt: now }
+        this.save(projectId, record)
+      }
+      if (!this.address(projectId, record)) continue
       if (record.lastCheckAt !== null && now - record.lastCheckAt < UPTIME_INTERVAL) continue
       try {
         await this.check(projectId, record, now)
