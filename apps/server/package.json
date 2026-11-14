@@ -43,7 +43,7 @@
     "editorconfig": "^3.0.2",
     "esbuild": "0.28.2",
     "jszip": "3.10.1",
-    "lucide": "1.54.0",
+    "lucide": "1.72.0",
     "luxon": "catalog:",
     "mdast-util-from-markdown": "2.1.0",
     "mdast-util-gfm": "3.1.0",
