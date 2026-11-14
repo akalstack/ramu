@@ -31,7 +31,8 @@
         "esbuild",
         "react",
         "react-dom",
-        "ws"
+        "ws",
+        "three"
       ]
     },
     "apps/mobile": {
@@ -40,7 +41,7 @@
       "entry": ["plugins/*.cjs", "src/runtime/isomorphicWebcrypto.ts"]
     },
     "apps/server": {
-      "ignoreBinaries": ["osascript", "ssh-keygen"],
+      "ignoreBinaries": ["osascript", "ssh-keygen", "ffprobe"],
       "ignoreDependencies": ["@dagrejs/dagre", "chart.js", "react", "react-dom"]
     },
     "apps/account": {

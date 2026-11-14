@@ -34,7 +34,9 @@ it('inlines stylesheets, imports, classic scripts and assets into one document',
   expect(html).toContain('href="https://example.com"')
   // An icon link is dropped; the file itself is an asset, carried once in the data block.
   expect(html).not.toContain('rel="icon"')
-  expect(html).toContain('<script type="application/json" id="ramu-assets">{"art/sky.png":"iVBORw0KGgo=","icon.png":"AA=="}</script>')
+  expect(html).toContain(
+    '<script type="application/json" id="ramu-assets">{"art/sky.png":"iVBORw0KGgo=","icon.png":"AA=="}</script>',
+  )
   // Markup inside JavaScript strings is left alone.
   expect(html).toContain('<img src="sprites/run.png">')
   expect(html.indexOf('window.story')).toBeLessThan(html.indexOf('document.title'))

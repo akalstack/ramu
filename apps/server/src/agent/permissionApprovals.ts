@@ -134,7 +134,12 @@ export class PermissionApprovals {
       { project_id: string } | undefined
     return row?.project_id && row.project_id !== NO_PROJECT ? row.project_id : undefined
   }
-  private key(provider: AgentProvider, action: string, scope: Exclude<PermissionScope, 'once' | 'thread'>, project?: string) {
+  private key(
+    provider: AgentProvider,
+    action: string,
+    scope: Exclude<PermissionScope, 'once' | 'thread'>,
+    project?: string,
+  ) {
     if (scope === 'project' && !project) throw new Error('Choose a project to save a project approval.')
     return `permission-approval:v1:${JSON.stringify([provider, action, scope, scope === 'project' ? project : null])}`
   }
@@ -160,7 +165,11 @@ export class PermissionApprovals {
       .run(id, JSON.stringify({ createdAt: Date.now(), ...metadata }))
     return id
   }
-  match(provider: AgentProvider, action: string, project?: string): Exclude<PermissionScope, 'once' | 'thread'> | undefined {
+  match(
+    provider: AgentProvider,
+    action: string,
+    project?: string,
+  ): Exclude<PermissionScope, 'once' | 'thread'> | undefined {
     for (const scope of ['project', 'user'] as const) {
       if (scope === 'project' && !project) continue
       if (this.db.prepare('SELECT 1 FROM app_state WHERE key = ?').get(this.key(provider, action, scope, project)))
@@ -168,7 +177,12 @@ export class PermissionApprovals {
     }
     return undefined
   }
-  forget(provider: AgentProvider, action: string, scope: Exclude<PermissionScope, 'once' | 'thread'>, project?: string): void {
+  forget(
+    provider: AgentProvider,
+    action: string,
+    scope: Exclude<PermissionScope, 'once' | 'thread'>,
+    project?: string,
+  ): void {
     this.db.prepare('DELETE FROM app_state WHERE key = ?').run(this.key(provider, action, scope, project))
   }
 }

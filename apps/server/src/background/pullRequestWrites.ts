@@ -402,7 +402,7 @@ export class PullRequestWrites {
     for (const item of chosen) {
       const edit = edits.find((entry) => entry.itemId === item.id)
       const write = edit ? withBody(item.write, edit.body) : item.write
-      if (edit) latest = this.update(cardId, item.id, { write })
+      if (edit) this.update(cardId, item.id, { write })
       try {
         const postedId = await performWrite(cwd, card.url, write)
         latest = this.update(cardId, item.id, {

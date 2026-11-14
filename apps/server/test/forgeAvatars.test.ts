@@ -18,7 +18,9 @@ describe('comment avatars', () => {
       return response
     })
     const url = 'https://avatars.githubusercontent.com/u/2'
-    expect(await avatarDataUrl(url, get as unknown as typeof fetch)).toBe(`data:image/png;base64,${png.toString('base64')}`)
+    expect(await avatarDataUrl(url, get as unknown as typeof fetch)).toBe(
+      `data:image/png;base64,${png.toString('base64')}`,
+    )
     await avatarDataUrl(url, get as unknown as typeof fetch)
     expect(get).toHaveBeenCalledTimes(1)
     const html = vi.fn(async () => new Response('<html>', { headers: { 'content-type': 'text/html' } }))

@@ -46,7 +46,6 @@ type Viewport = (typeof VIEWPORTS)[number]['id']
 /** Last measured height per version, so remounting after scrolling back does not jump. */
 const heights = new Map<string, number>()
 
-
 /** A document is never inserted in the application DOM and never receives a privileged bridge. */
 function InteractiveDocumentCard({
   reference,
