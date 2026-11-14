@@ -35,7 +35,7 @@ export default function ActivityRoute() {
       <Header title={say('Ongoing work')} />
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
         <ActivityIndicator />
-        <T tone="muted">Opening your workspace…</T>
+        <T tone="muted">{say('Opening your workspace…')}</T>
       </View>
     </Screen>
   )

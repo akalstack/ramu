@@ -35,7 +35,7 @@ import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
 import { showError, showToast } from '../runtime/toast'
 import { VIEW_ONLY_WRITE_NOTICE } from '../runtime/viewerAccess'
-import { useT } from '../i18n'
+import { useT, useSay } from '../i18n'
 import { Button, Sheet, T, type Icon } from './ui'
 import { ProjectCommandSettings } from './ProjectCommandSettings'
 import { ProjectDeploy } from './ProjectDeploy'
@@ -166,6 +166,7 @@ export function offerThreadUndo(store: ReturnType<typeof useStore>, chat: Chat, 
 /** One-shot pin/done/archive commands shared by the row's swipe actions. */
 export function useChatCommands(chat: Chat) {
   const store = useStore()
+  const say = useSay()
   const latestStore = useRef(store)
   latestStore.current = store
   const revision = useRef(0)
@@ -186,7 +187,7 @@ export function useChatCommands(chat: Chat) {
       await fn()
       await store.refresh(chat.computerId)
     } catch (error) {
-      Alert.alert('Could not update thread', error instanceof Error ? error.message : String(error))
+      Alert.alert(say('Could not update thread'), error instanceof Error ? error.message : String(error))
     }
   }
   return {
@@ -268,7 +269,7 @@ export function ChatActionsSheet({
       await fn()
       await store.refresh(chat.computerId)
     } catch (error) {
-      Alert.alert('Could not update thread', error instanceof Error ? error.message : String(error))
+      Alert.alert(say('Could not update thread'), error instanceof Error ? error.message : String(error))
     }
   }
   const confirmDelete = () => commands.confirmDelete(onGone, onClose)

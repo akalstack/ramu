@@ -30,7 +30,6 @@ export function useOpenFileLink(taskId: string | undefined) {
             throw new Error(t('This path was not found in this thread’s folders, or it matches more than one place.'))
           if (file.kind === 'folder') {
             ws.setSidebar('explorer')
-            window.dispatchEvent(new Event('ramu:show-explorer'))
             requestAnimationFrame(() =>
               window.dispatchEvent(
                 new CustomEvent('ramu:explorer-reveal', { detail: { repoId: file.repoId, path: file.path } }),

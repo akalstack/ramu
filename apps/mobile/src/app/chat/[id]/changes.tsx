@@ -318,7 +318,7 @@ export default function Changes() {
         }}
       >
         {error ? <T tone="bad">{error}</T> : null}
-        {!reviews.length ? <T tone="muted">No recorded changes for this thread yet.</T> : null}
+        {!reviews.length ? <T tone="muted">{say('No recorded changes for this thread yet.')}</T> : null}
         {/* Which run's changes are shown: one row that opens the list, newest first. */}
         {reviews.length ? (
           <Pressable

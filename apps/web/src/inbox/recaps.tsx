@@ -168,9 +168,6 @@ export function RecapCard({
           onClick={() => {
             ws.openTask(item.taskId)
             ws.openView(item.taskId, { kind: 'agent', sessionId: item.sessionId, sourceSeq: item.sourceSeq })
-            window.dispatchEvent(
-              new CustomEvent('ramu:source-event', { detail: { sessionId: item.sessionId, seq: item.sourceSeq } }),
-            )
           }}
         >
           {t('Open thread')}

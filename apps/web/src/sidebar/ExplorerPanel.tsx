@@ -30,7 +30,9 @@ export function ExplorerPanel() {
               />
             ) : (
               <div key={b.repoId} className="muted text-muted-foreground">
-                {b.repoName}: worktree {b.setupState}
+                {t(b.setupState === 'failed' ? '{0}: worktree setup failed' : '{0}: setting up worktree…', {
+                  '0': b.repoName,
+                })}
               </div>
             ),
           )}

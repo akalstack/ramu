@@ -783,7 +783,6 @@ function FileTab({
       onSelect: () => {
         ws.activateView(taskId, view.id)
         ws.setSidebar('explorer')
-        window.dispatchEvent(new Event('ramu:show-explorer'))
       },
     },
   ])

@@ -1,3 +1,4 @@
+import { useSay } from '../i18n'
 import { useEffect, useRef, useState } from 'react'
 import { Alert } from 'react-native'
 import type { AgentSettingMark, SettingsSnapshot, SharedSetting } from '@ramu/shared/settingsCompatibility'
@@ -17,6 +18,7 @@ export type HostSettingsState =
  */
 export function useHostSettings(computerId: string) {
   const store = useStore()
+  const say = useSay()
   const online = store.computers.find((computer) => computer.id === computerId)?.status === 'online'
   const [state, setState] = useState<HostSettingsState>({ status: online ? 'loading' : 'offline' })
   const confirmed = useRef<SettingsSnapshot | null>(null)
@@ -87,7 +89,7 @@ export function useHostSettings(computerId: string) {
         const was = (path: string) => confirmed.current?.settings.find((setting) => setting.path === path)?.value
         if (shown.current)
           show(values.reduce((snapshot, [path]) => applyValue(snapshot, path, was(path)), shown.current))
-        Alert.alert('Could not save', error instanceof Error ? error.message : String(error))
+        Alert.alert(say('Could not save'), error instanceof Error ? error.message : String(error))
       }
     })
   }

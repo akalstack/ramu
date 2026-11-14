@@ -124,7 +124,7 @@ export function ModelStepCard({
       </div>
       <div className="settings-step-controls grid [grid-template-columns:minmax(0,_1fr)_minmax(0,_1fr)] gap-3">
         <label>
-          Model
+          {t('Model')}
           <Dropdown
             label={t('Step {0} model', { '0': index + 1 })}
             value={key}

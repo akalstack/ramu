@@ -78,14 +78,17 @@ export function SkillsSection({ onOpenPlugins }: { onOpenPlugins: () => void }) 
     }, 300)
     return () => clearTimeout(timer)
   }, [query, invoke])
+  /** Runs one action; false when it failed, so a dialog that started it stays open with what was typed. */
   const act = async (key: string, work: () => Promise<unknown>) => {
     setBusy(key)
     setError(null)
     try {
       await work()
       await load()
+      return true
     } catch (reason) {
       setError(errorText(reason))
+      return false
     } finally {
       setBusy(null)
     }
@@ -274,8 +277,14 @@ export function SkillsSection({ onOpenPlugins }: { onOpenPlugins: () => void }) 
       {adding && (
         <AddSkillSource
           busy={busy === 'source'}
-          onCancel={() => setAdding(false)}
-          onSubmit={(source, name) => void install('source', source, name || undefined).then(() => setAdding(false))}
+          error={error}
+          onCancel={() => {
+            setAdding(false)
+            setError(null)
+          }}
+          onSubmit={(source, name) =>
+            void install('source', source, name || undefined).then((done) => done && setAdding(false))
+          }
         />
       )}
     </div>
@@ -298,7 +307,7 @@ function SkillDetail({
   busy: string | null
   onClose: () => void
   onOpenPlugins: () => void
-  act: (key: string, work: () => Promise<unknown>) => Promise<void>
+  act: (key: string, work: () => Promise<unknown>) => Promise<unknown>
   onEdit: (skill: ManagedSkill) => void
   onUpdate: (skill: ManagedSkill) => void
 }) {
@@ -616,10 +625,13 @@ function SkillEditor({
 
 function AddSkillSource({
   busy,
+  error,
   onCancel,
   onSubmit,
 }: {
   busy: boolean
+  /** Why the last try failed, shown in the dialog so the source can be corrected without typing it again. */
+  error: string | null
   onCancel: () => void
   onSubmit: (source: string, name: string) => void
 }) {
@@ -649,6 +661,7 @@ function AddSkillSource({
           value={name}
           onChange={(event) => setName(event.target.value)}
         />
+        {error && <Quiet alert>{error}</Quiet>}
       </div>
     </Dialog>
   )

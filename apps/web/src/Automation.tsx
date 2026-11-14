@@ -1040,7 +1040,7 @@ export function ScheduleChatCard({ schedule }: { schedule: Schedule }) {
         className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover small text-caption"
         onClick={open}
       >
-        Edit
+        {t('Edit')}
       </Button>
     </div>
   )

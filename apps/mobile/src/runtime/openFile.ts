@@ -1,3 +1,4 @@
+import { useSay } from '../i18n'
 import { Alert } from 'react-native'
 import { useRouter } from 'expo-router'
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
@@ -17,6 +18,7 @@ export function useOpenLink(
   openFile: (repoId: string, path: string, line?: number) => void,
 ) {
   const store = useStore()
+  const say = useSay()
   const router = useRouter()
   return async (href: string): Promise<boolean> => {
     const local = localFileLink(href)
@@ -43,7 +45,7 @@ export function useOpenLink(
         })
       else openFile(file.repoId, file.path, file.line)
     } catch (error) {
-      Alert.alert('Could not open file', error instanceof Error ? error.message : String(error))
+      Alert.alert(say('Could not open file'), error instanceof Error ? error.message : String(error))
     }
     return true
   }

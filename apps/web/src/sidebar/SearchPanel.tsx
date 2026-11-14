@@ -562,7 +562,7 @@ function WorkspaceSearch({ taskId }: { taskId: string }) {
               <Input
                 maxLength={2000}
                 aria-label={t('Files to include')}
-                placeholder="e.g. src/**, *.tsx"
+                placeholder={t('e.g. {0}', { '0': 'src/**, *.tsx' })}
                 value={options.include}
                 onChange={(event) => setOptions({ ...options, include: event.target.value })}
               />
@@ -572,7 +572,7 @@ function WorkspaceSearch({ taskId }: { taskId: string }) {
               <Input
                 maxLength={2000}
                 aria-label={t('Files to exclude')}
-                placeholder="e.g. **/dist/**"
+                placeholder={t('e.g. {0}', { '0': '**/dist/**' })}
                 value={options.exclude}
                 onChange={(event) => setOptions({ ...options, exclude: event.target.value })}
               />

@@ -12,42 +12,47 @@ import { LongMessage } from './Transcript'
 /** Asks how to cancel an outbox item: edit puts the text back in the composer, delete drops it. */
 export function confirmCancel(
   item: OutboxItem,
-  onEdit?: (text: string) => void,
-  cancel?: (id: string) => string | undefined,
+  onEdit: ((text: string) => void) | undefined,
+  cancel: ((id: string) => string | undefined) | undefined,
+  say: (text: string) => string,
 ) {
   const first = item.kind === 'chat'
-  const title = first ? 'Cancel this new thread?' : 'Cancel this message?'
-  const message =
+  const title = say(first ? 'Cancel this new thread?' : 'Cancel this message?')
+  const message = say(
     item.state === 'uncertain'
       ? 'Delivery is uncertain. Check the host conversation before sending again. Removing this entry does not undo an action the host already received.'
       : first
         ? "It hasn't reached the host yet, so the thread is discarded."
-        : "It hasn't been sent yet."
+        : "It hasn't been sent yet.",
+  )
   const remove = () => cancel?.(item.id)
   const edit = () => {
     const text = cancel?.(item.id)
     if (text != null) onEdit?.(text)
   }
-  const options = onEdit && !first ? ['Edit message', 'Delete', 'Keep'] : ['Delete', 'Keep']
+  const actions = [
+    ...(onEdit && !first ? [{ label: say('Edit message'), run: edit }] : []),
+    { label: say('Delete'), run: remove },
+  ]
   if (Platform.OS === 'ios') {
     ActionSheetIOS.showActionSheetWithOptions(
       {
         title,
         message,
-        options,
-        destructiveButtonIndex: options.indexOf('Delete'),
-        cancelButtonIndex: options.length - 1,
+        options: [...actions.map((action) => action.label), say('Keep')],
+        destructiveButtonIndex: actions.length - 1,
+        cancelButtonIndex: actions.length,
       },
-      (i) => {
-        if (options[i] === 'Delete') remove()
-        else if (options[i] === 'Edit message') edit()
-      },
+      (i) => actions[i]?.run(),
     )
   } else {
     Alert.alert(title, message, [
-      { text: 'Keep', style: 'cancel' },
-      ...(onEdit && !first ? [{ text: 'Edit', onPress: edit }] : []),
-      { text: 'Delete', style: 'destructive' as const, onPress: remove },
+      { text: say('Keep'), style: 'cancel' },
+      ...actions.map((action) => ({
+        text: action.label,
+        onPress: action.run,
+        ...(action.run === remove ? { style: 'destructive' as const } : {}),
+      })),
     ])
   }
 }
@@ -76,16 +81,21 @@ export function PendingBubble({
   const t = useT()
   const say = useSay()
   const [reviewing, setReviewing] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const ModeIcon = item.mode === 'steer' ? CornerDownRight : item.mode === 'queue' ? ListPlus : Clock
   return (
     <>
       <Pressable
         disabled={delivering}
         accessibilityRole={delivering ? 'text' : 'button'}
-        accessibilityLabel={delivering ? `Sending: ${item.text}` : `Waiting to send: ${item.text}. Tap to cancel`}
+        accessibilityLabel={
+          delivering
+            ? say('Sending: {0}', { 0: item.text })
+            : say('Waiting to send: {0}. Tap to cancel', { 0: item.text })
+        }
         onPress={() => {
           tap()
-          confirmCancel(item, onEdit, cancelOutbox)
+          confirmCancel(item, onEdit, cancelOutbox, say)
         }}
         style={{ alignSelf: 'flex-end', maxWidth: '86%', alignItems: 'flex-end', gap: 4 }}
       >
@@ -105,10 +115,10 @@ export function PendingBubble({
           {delivering ? (
             <LongMessage
               text={item.text}
-              expanded={false}
-              label={say('Show more')}
+              expanded={expanded}
+              label={say(expanded ? 'Show less' : 'Show more')}
               accent={c.accent}
-              onToggle={() => {}}
+              onToggle={() => setExpanded((open) => !open)}
             />
           ) : (
             <T style={{ lineHeight: 21 }}>{item.text}</T>
@@ -120,24 +130,26 @@ export function PendingBubble({
             <T size={font.caption} tone="muted">
               {item.state === 'review'
                 ? t.branchReviewBases
-                : item.state === 'uncertain'
-                  ? 'Check delivery on host'
-                  : item.state === 'sending'
-                    ? 'Sending'
-                    : item.mode === 'steer'
-                      ? 'Steer'
-                      : item.mode === 'queue'
-                        ? 'Queued'
-                        : 'Waiting'}{' '}
+                : say(
+                    item.state === 'uncertain'
+                      ? 'Check delivery on host'
+                      : item.state === 'sending'
+                        ? 'Sending'
+                        : item.mode === 'steer'
+                          ? 'Steer'
+                          : item.mode === 'queue'
+                            ? 'Queued'
+                            : 'Waiting',
+                  )}{' '}
               ·{' '}
               {viewOnly
                 ? VIEW_ONLY_WRITE_NOTICE[store.language]
                 : item.state === 'uncertain' || item.state === 'review'
                   ? item.error
-                  : `sends when ${computer} is back`}{' '}
+                  : say('sends when {0} is back', { 0: computer })}{' '}
               ·{' '}
               <T size={font.caption} tone="accent" weight="600">
-                Cancel
+                {say('Cancel')}
               </T>
             </T>
           </View>

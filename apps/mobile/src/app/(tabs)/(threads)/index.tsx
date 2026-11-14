@@ -371,7 +371,7 @@ export default function Threads() {
                   label={t.cancel}
                   size={32}
                   tone="muted"
-                  onPress={() => confirmCancel(row.o, undefined, cancelOutbox)}
+                  onPress={() => confirmCancel(row.o, undefined, cancelOutbox, say)}
                 />
               </View>
             </View>

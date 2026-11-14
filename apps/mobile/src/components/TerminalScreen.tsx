@@ -292,9 +292,9 @@ export function TerminalScreen({
     else if (latch === 'alt') text = '\x1b' + text
     setLatch(null)
     if (label === 'paste' && /[\r\n]/.test(text))
-      Alert.alert('Paste into host terminal?', text.slice(0, 1000), [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Paste', onPress: () => void write('\x1b[200~' + text + '\x1b[201~') },
+      Alert.alert(say('Paste into host terminal?'), text.slice(0, 1000), [
+        { text: say('Cancel'), style: 'cancel' },
+        { text: say('Paste'), onPress: () => void write('\x1b[200~' + text + '\x1b[201~') },
       ])
     else void write(text)
   }
@@ -321,10 +321,14 @@ export function TerminalScreen({
         () => true,
       ))
     if (!running) return remove()
-    Alert.alert('Stop the running command?', `${value.cwd}\n\nClosing this terminal ends what is running in it.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Close terminal', style: 'destructive', onPress: remove },
-    ])
+    Alert.alert(
+      say('Stop the running command?'),
+      `${value.cwd}\n\n${say('Closing this terminal ends what is running in it.')}`,
+      [
+        { text: say('Cancel'), style: 'cancel' },
+        { text: say('Close terminal'), style: 'destructive', onPress: remove },
+      ],
+    )
   }
   const toggleKeyboard = () => {
     const visible = !keyboardVisible

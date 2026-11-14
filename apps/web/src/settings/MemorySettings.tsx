@@ -509,9 +509,6 @@ function MemorySource({ memory }: { memory: Memory }) {
         ws.openTask(source.taskId)
         if (source.sessionId && source.eventSeq !== undefined) {
           ws.openView(source.taskId, { kind: 'agent', sessionId: source.sessionId, sourceSeq: source.eventSeq })
-          window.dispatchEvent(
-            new CustomEvent('ramu:source-event', { detail: { sessionId: source.sessionId, seq: source.eventSeq } }),
-          )
         }
       }}
     >

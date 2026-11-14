@@ -63,23 +63,23 @@ function AppearancePage() {
   const t = useT()
   return (
     <>
-      <SectionLabel>Theme</SectionLabel>
+      <SectionLabel>{say('Theme')}</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         <Segmented<Appearance>
           style={{ margin: space.m }}
           value={appearance}
           onChange={setAppearance}
           options={[
-            { key: 'system', label: 'System' },
-            { key: 'light', label: 'Light' },
-            { key: 'dark', label: 'Dark' },
+            { key: 'system', label: say('System') },
+            { key: 'light', label: say('Light') },
+            { key: 'dark', label: say('Dark') },
           ]}
         />
       </Card>
       <ScopeControl
         field="appearance"
         overridden={appearance !== 'system'}
-        inheritedLabel="System"
+        inheritedLabel={say('System')}
         onUseInherited={() => setAppearance('system')}
       />
       <ThemeLibrary />
@@ -103,7 +103,7 @@ function AppearancePage() {
         inheritedLabel={t.textSizeDefault}
         onUseInherited={() => setTextSize('default')}
       />
-      <SectionLabel>Language</SectionLabel>
+      <SectionLabel>{say('Language')}</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         <Segmented<Language>
           style={{ margin: space.m }}
@@ -115,12 +115,12 @@ function AppearancePage() {
           ]}
         />
       </Card>
-      <Hint>Only changes this phone. Each computer keeps its own language.</Hint>
-      <SectionLabel>Feedback</SectionLabel>
+      <Hint>{say('Only changes this phone. Each computer keeps its own language.')}</Hint>
+      <SectionLabel>{say('Feedback')}</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         <ToggleRow
           title={say('Haptic feedback')}
-          help="A light tap when you switch tabs, pick an option or copy text."
+          help={say('A light tap when you switch tabs, pick an option or copy text.')}
           value={drafts.haptics !== 'off'}
           onChange={(on) => setDraft('haptics', on ? '' : 'off')}
         />
@@ -212,14 +212,14 @@ function Notifications({ host, name }: { host: ReturnType<typeof useHostSettings
   }
   return (
     <>
-      <SectionLabel>This phone</SectionLabel>
+      <SectionLabel>{say('This phone')}</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         <ToggleRow
           title={say('Background alerts')}
-          help="Get alerts from your paired hosts when a task needs your attention."
+          help={say('Get alerts from your paired hosts when a task needs your attention.')}
           value={pushOn}
           onChange={(on) => {
-            void (on ? enablePush() : disablePush()).catch((e) => Alert.alert('Notifications', e.message))
+            void (on ? enablePush() : disablePush()).catch((e) => Alert.alert(say('Notifications'), e.message))
           }}
         />
         {Platform.OS === 'ios' ? (
@@ -227,7 +227,7 @@ function Notifications({ host, name }: { host: ReturnType<typeof useHostSettings
             <Divider inset={space.l} />
             <ToggleRow
               title={say('Live Activities')}
-              help="Track ongoing work on your Lock Screen and Dynamic Island."
+              help={say('Track ongoing work on your Lock Screen and Dynamic Island.')}
               value={drafts['live-activities-enabled'] !== 'no'}
               onChange={(on) => setDraft('live-activities-enabled', on ? 'yes' : 'no')}
             />
@@ -279,7 +279,7 @@ function Computers() {
   const pc = computers.find((computer) => computer.id === selected)
   return (
     <>
-      <SectionLabel>Paired computers</SectionLabel>
+      <SectionLabel>{say('Paired computers')}</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         {computers.map((computer, index) => (
           <View key={computer.id}>
@@ -298,17 +298,17 @@ function Computers() {
         {computers.length ? <Divider inset={space.l} /> : null}
         <Row onPress={() => router.push('/pair')}>
           <Plus size={17} color={c.primary} />
-          <T tone="accent">Pair a computer</T>
+          <T tone="accent">{say('Pair a computer')}</T>
         </Row>
       </Card>
-      <Hint>Settings and new threads go to the checked computer.</Hint>
+      <Hint>{say('Settings and new threads go to the checked computer.')}</Hint>
       {pc ? (
         <>
           <PhonePermissions computerId={pc.id} />
-          <SectionLabel>Connection</SectionLabel>
+          <SectionLabel>{say('Connection')}</SectionLabel>
           <Card style={{ marginHorizontal: space.l }}>
             <Row style={{ paddingVertical: space.m }} onPress={() => retry(pc.id)}>
-              <RowLabel title={say('Reconnect')} help={pc.error ?? 'Refresh the connection to this host.'} />
+              <RowLabel title={say('Reconnect')} help={pc.error ?? say('Refresh the connection to this host.')} />
               <RefreshCw size={16} color={c.muted} />
             </Row>
             <Divider inset={space.l} />
@@ -321,7 +321,7 @@ function Computers() {
             </Row>
             <Divider inset={space.l} />
             <Row onPress={() => router.push('/computers')}>
-              <T style={{ flex: 1 }}>Manage computers</T>
+              <T style={{ flex: 1 }}>{say('Manage computers')}</T>
             </Row>
           </Card>
           {addressOpen ? <HostAddressSheet key={pc.id} computer={pc} onClose={() => setAddressOpen(false)} /> : null}
@@ -332,18 +332,19 @@ function Computers() {
 }
 
 function About() {
+  const say = useSay()
   return (
     <>
       <SectionLabel>Ramu</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         <Row>
-          <T style={{ flex: 1 }}>Version</T>
+          <T style={{ flex: 1 }}>{say('Version')}</T>
           <T tone="muted">{Constants.expoConfig?.version ?? '0.1.0'} · alpha</T>
         </Row>
         <Divider inset={space.l} />
         <Row>
-          <T style={{ flex: 1 }}>Data</T>
-          <T tone="muted">Live workspace</T>
+          <T style={{ flex: 1 }}>{say('Data')}</T>
+          <T tone="muted">{say('Live workspace')}</T>
         </Row>
       </Card>
     </>
@@ -357,7 +358,7 @@ function Usage({ computer }: { computer: string }) {
   const logins = useAccountLogins([computer], readings.length > 0)[computer]
   return (
     <>
-      <SectionLabel>Plan usage</SectionLabel>
+      <SectionLabel>{say('Plan usage')}</SectionLabel>
       <PlanUsageSummary hostIds={[computer]} />
       <Card style={{ marginHorizontal: space.l }}>
         {readings.length ? (

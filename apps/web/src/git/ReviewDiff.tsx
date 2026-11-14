@@ -72,8 +72,7 @@ export function ReviewDiff({
   }, [near])
   const clearZones = useRef<(() => void) | null>(null)
   const activeSide = useRef<'old' | 'new'>('new')
-  const navigateRef = useRef<(direction: 'next' | 'previous') => void>(() => {}),
-    commentRef = useRef<(side: 'old' | 'new') => void>(() => {})
+  const navigateRef = useRef<(direction: 'next' | 'previous') => void>(() => {})
   const handlers = useRef({ onSelect, onComment, inlineBlocks })
   handlers.current = { onSelect, onComment, inlineBlocks }
   const selection = (side: 'old' | 'new') => {
@@ -420,14 +419,9 @@ export function ReviewDiff({
         } else navigateRef.current(detail.direction)
       }
     }
-    const onComment = (event: Event) => {
-      if ((event as CustomEvent).detail?.fileId === file.id) commentRef.current(activeSide.current)
-    }
     window.addEventListener('ramu:review-nav', onNav)
-    window.addEventListener('ramu:review-comment-selection', onComment)
     return () => {
       window.removeEventListener('ramu:review-nav', onNav)
-      window.removeEventListener('ramu:review-comment-selection', onComment)
     }
   }, [file.id])
   const goToChange = (index: number) => {
@@ -497,7 +491,6 @@ export function ReviewDiff({
     return () => window.removeEventListener('ramu:review-enter', onEnter)
   }, [file.id])
   navigateRef.current = navigate
-  commentRef.current = comment
   return (
     <div className={`review-diff-wrap${flow ? ' flowing-diff' : ''}`}>
       <div className="review-diff-controls [&_[aria-pressed='true']]:bg-hover [&_[aria-pressed='true']]:text-foreground [.review-diff-wrap.flowing-diff_>_&]:hidden flex items-center gap-[5px] p-[5px_10px] [border-bottom:1px_solid_var(--line)] bg-card">

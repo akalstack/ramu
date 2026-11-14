@@ -585,7 +585,7 @@ export function InstalledSkills() {
           <div className="flex flex-col gap-2">
             <Input
               aria-label={t('Skill name')}
-              placeholder={t('review-checklist')}
+              placeholder="review-checklist"
               value={draft.name}
               disabled={viewOnly || !!draft.id}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}

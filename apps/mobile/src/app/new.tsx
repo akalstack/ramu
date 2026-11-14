@@ -586,9 +586,9 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
       >
         <MessageCircle size={17} color={c.soft} />
         <View style={{ flex: 1 }}>
-          <T weight="500">Standalone</T>
+          <T weight="500">{say('Standalone')}</T>
           <T size={font.caption} tone="muted">
-            No project folder
+            {say('No project folder')}
           </T>
         </View>
         {projectId === STANDALONE && !startingNew ? <Check size={16} color={c.accent} /> : null}

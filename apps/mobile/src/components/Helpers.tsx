@@ -1,3 +1,4 @@
+import { useSay } from '../i18n'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Alert, Pressable, TextInput, View } from 'react-native'
 import { useFocusEffect } from 'expo-router'
@@ -98,6 +99,7 @@ function HelperTime({ task, online }: { task: AgentTask; online: boolean }) {
 }
 export function HelperDetails({ task, chat, onClose }: { task: Helper | undefined; chat: Chat; onClose: () => void }) {
   const store = useStore()
+  const say = useSay()
   const { c } = useTheme()
   const [draft, setDraft] = useState('')
   // The helper's whole output is on hand; the sheet shows its tail and reveals earlier parts a page at a time.
@@ -191,7 +193,7 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
             writable() &&
             void latestStore.current
               .invoke(chat.computerId, 'agent.stopTask', chat.sessionId!, task.agentId)
-              .catch((error) => Alert.alert('Could not stop', String(error))),
+              .catch((error) => Alert.alert(say('Could not stop'), String(error))),
         },
       ],
     )

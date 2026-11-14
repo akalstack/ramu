@@ -89,13 +89,16 @@ export function PluginsSection({
     void invoke('projects.list').then(setProjects, () => {})
     return on('plugins:changed', load)
   }, [load, invoke, on])
+  /** Runs one action; false when it failed, so a dialog that started it stays open with what was typed. */
   const act = async (key: string, work: () => Promise<unknown>) => {
     setBusy(key)
     setError(null)
     try {
       await work()
+      return true
     } catch (reason) {
       setError(errorText(reason))
+      return false
     } finally {
       setBusy(null)
     }
@@ -379,10 +382,14 @@ export function PluginsSection({
         <AddSource
           kind={adding}
           busy={busy !== null}
-          onCancel={() => setAdding(null)}
+          error={error}
+          onCancel={() => {
+            setAdding(null)
+            setError(null)
+          }}
           onSubmit={(value) =>
             adding === 'source'
-              ? void stage('source', { source: value }).then(() => setAdding(null))
+              ? void stage('source', { source: value }).then((done) => done && setAdding(null))
               : void act('index', async () => {
                   await invoke('plugins.addIndex', value)
                   setAdding(null)
@@ -664,11 +671,14 @@ function PluginDetail({
 function AddSource({
   kind,
   busy,
+  error,
   onCancel,
   onSubmit,
 }: {
   kind: 'source' | 'index'
   busy: boolean
+  /** Why the last try failed, shown in the dialog so the address can be corrected without typing it again. */
+  error: string | null
   onCancel: () => void
   onSubmit: (value: string) => void
 }) {
@@ -696,6 +706,7 @@ function AddSource({
             ? t('Nothing is saved until you review what it adds.')
             : t('Its plugins appear under More plugins.')}
         </p>
+        {error && <Quiet alert>{error}</Quiet>}
       </div>
     </Dialog>
   )

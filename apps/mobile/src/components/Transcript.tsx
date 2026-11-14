@@ -244,6 +244,7 @@ function MessageActions({
   children: ReactNode
 }) {
   const menu = useContext(MessageMenu)
+  const say = useSay()
   const latestMenu = useRef(menu)
   latestMenu.current = menu
   // The message open for selecting, and the paragraph that was pressed to open it.
@@ -284,24 +285,27 @@ function MessageActions({
   const open = () => {
     if (!text.trim()) return
     const actions: [string, () => void][] = [
-      ['Copy', () => void Clipboard.setStringAsync(text)],
+      [say('Copy'), () => void Clipboard.setStringAsync(text)],
       ...(menu
         ? ([
-            ['Quote in reply', () => menu.quote(text)],
-            ['Quote in new thread', () => menu.quoteNew(text)],
+            [say('Quote in reply'), () => menu.quote(text)],
+            [say('Quote in new thread'), () => menu.quoteNew(text)],
             ...(!menu.readOnly && from === 'user' && seq !== undefined
               ? ([
                   [
-                    'Edit from here',
+                    say('Edit from here'),
                     () => !latestMenu.current?.readOnly && latestMenu.current?.edit(seq, text, files ?? []),
                   ],
-                  ['Undo file changes from here', () => !latestMenu.current?.readOnly && latestMenu.current?.undo(seq)],
+                  [
+                    say('Undo file changes from here'),
+                    () => !latestMenu.current?.readOnly && latestMenu.current?.undo(seq),
+                  ],
                 ] as [string, () => void][])
               : []),
             ...(!menu.readOnly
               ? ([
                   [
-                    'Ask aside about this',
+                    say('Ask aside about this'),
                     () => !latestMenu.current?.readOnly && latestMenu.current?.aside(text, from),
                   ],
                 ] as [string, () => void][])
@@ -311,13 +315,13 @@ function MessageActions({
     ]
     if (Platform.OS === 'ios')
       ActionSheetIOS.showActionSheetWithOptions(
-        { options: [...actions.map((a) => a[0]), 'Cancel'], cancelButtonIndex: actions.length },
+        { options: [...actions.map((a) => a[0]), say('Cancel')], cancelButtonIndex: actions.length },
         (index) => actions[index]?.[1](),
       )
     else
-      Alert.alert('Message', undefined, [
+      Alert.alert(say('Message'), undefined, [
         ...actions.map(([label, run]) => ({ text: label, onPress: run })),
-        { text: 'Cancel', style: 'cancel' as const },
+        { text: say('Cancel'), style: 'cancel' as const },
       ])
   }
   openRef.current = open
@@ -994,7 +998,7 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
             .invoke(chat.computerId, 'agent.configure', chat.sessionId!, item.previous!)
             .then(() => store.refresh(chat.computerId, true))
             .catch((error) =>
-              Alert.alert('Could not switch back', error instanceof Error ? error.message : String(error)),
+              Alert.alert(say('Could not switch back'), error instanceof Error ? error.message : String(error)),
             )
             .finally(() => setUndoing(false))
         }

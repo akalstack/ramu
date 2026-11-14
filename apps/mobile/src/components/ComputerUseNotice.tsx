@@ -1,3 +1,4 @@
+import { useSay } from '../i18n'
 import { useState } from 'react'
 import { Alert, Pressable, StyleSheet, View } from 'react-native'
 import { Monitor, Square } from 'lucide-react-native'
@@ -10,6 +11,7 @@ import { ActivityPill } from './ActivityPill'
 
 /** A persistent, per-thread stop control, separate from agent Stop and from horizontally scrolling tools. */
 export function ComputerUseNotice({ chat, onOpen }: { chat: Chat; onOpen?(): void }) {
+  const say = useSay()
   const { session, refresh } = useComputerUse(chat.computerId, chat.taskId)
   const store = useStore()
   const { c } = useTheme()
@@ -41,7 +43,7 @@ export function ComputerUseNotice({ chat, onOpen }: { chat: Chat; onOpen?(): voi
               .invoke(chat.computerId, 'computer.revoke', chat.taskId)
               .then(() => refresh())
               .catch((error) =>
-                Alert.alert('Could not stop computer use', error instanceof Error ? error.message : String(error)),
+                Alert.alert(say('Could not stop computer use'), error instanceof Error ? error.message : String(error)),
               )
               .finally(() => setBusy(false))
           }}

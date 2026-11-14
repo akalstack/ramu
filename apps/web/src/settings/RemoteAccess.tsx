@@ -762,7 +762,7 @@ function PairDialog({ onClose }: { onClose: () => void }) {
                 )}
                 {qr && !expired && (
                   <div className="flex flex-col items-center gap-2">
-                    <img src={qr} width={240} height={240} alt="Scan this pairing offer with Ramu on your phone" />
+                    <img src={qr} width={240} height={240} alt={t('Scan this pairing offer with Ramu on your phone')} />
                     <Dropdown
                       label={t('QR host address')}
                       value={qrUrl || offer.urls[0]!.url}

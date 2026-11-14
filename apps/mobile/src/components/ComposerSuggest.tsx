@@ -1,3 +1,4 @@
+import { useSay } from '../i18n'
 import { useEffect, useMemo, useState } from 'react'
 import type { DraftMention } from '@ramu/shared/chat/composerDraft'
 import { ActivityIndicator, Alert, Pressable, ScrollView, View } from 'react-native'
@@ -63,6 +64,7 @@ export function useComposerSuggest({
   teammate?: ComposerTeammate
 }) {
   const store = useStore()
+  const say = useSay()
   const router = useRouter()
   const [loaded, setLoaded] = useState<Loaded>()
   const [loading, setLoading] = useState(false)
@@ -153,8 +155,8 @@ export function useComposerSuggest({
         ? [
             {
               id: 'add-teammate',
-              label: 'Add teammate…',
-              description: "Messages this thread's model. Change the model, or pick Review or Take over below",
+              label: say('Add teammate…'),
+              description: say("Messages this thread's model. Change the model, or pick Review or Take over below"),
               kind: 'Teammate' as const,
               insertion: '',
               run: onAddTeammate,
@@ -265,8 +267,8 @@ export function useComposerSuggest({
         kind: 'Command',
         run: () => {
           store.invoke(computerId, 'learning.run').then(
-            () => Alert.alert('Learning started', 'Ramu is reviewing recent threads on the host.'),
-            (e) => Alert.alert('Could not start learning', e instanceof Error ? e.message : String(e)),
+            () => Alert.alert(say('Learning started'), say('Ramu is reviewing recent threads on the host.')),
+            (e) => Alert.alert(say('Could not start learning'), e instanceof Error ? e.message : String(e)),
           )
         },
       },

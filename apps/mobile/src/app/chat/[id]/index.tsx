@@ -847,13 +847,15 @@ export default function ChatScreen() {
     )
       return applyModel(m)
     Alert.alert(
-      'Change model mid-conversation?',
-      'The new model cannot reuse the cache built for this conversation, so the first message after the change uses more of your usage than usual.',
+      tr('Change model mid-conversation?'),
+      tr(
+        'The new model cannot reuse the cache built for this conversation, so the first message after the change uses more of your usage than usual.',
+      ),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Change', onPress: () => applyModel(m) },
+        { text: tr('Cancel'), style: 'cancel' },
+        { text: tr('Change'), onPress: () => applyModel(m) },
         {
-          text: "Change, don't warn again",
+          text: tr("Change, don't warn again"),
           onPress: () => {
             store.setDraft(MODEL_WARNING_DEVICE_KEY, 'off')
             applyModel(m)
@@ -979,12 +981,12 @@ export default function ChatScreen() {
   const quickCommit = () => {
     if (!live || live.repos > 1) return openScm()
     Alert.alert(
-      `Commit & push ${changed} change${changed === 1 ? '' : 's'}?`,
-      `${computer?.name ?? 'This host'} · ${live.branch}\n\nRamu drafts the message with AI, commits every change, and pushes to origin.`,
+      tr(changed === 1 ? 'Commit & push 1 change?' : 'Commit & push {0} changes?', { 0: changed }),
+      `${computer?.name ?? tr('This host')} · ${live.branch}\n\n${tr('Ramu drafts the message with AI, commits every change, and pushes to origin.')}`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: tr('Cancel'), style: 'cancel' },
         {
-          text: 'Commit & push',
+          text: tr('Commit & push'),
           onPress: () =>
             void act(async () => {
               const message = await commitAndPush(store.invoke, chat, live.repoId, () =>
@@ -1475,7 +1477,7 @@ export default function ChatScreen() {
                   ],
                 )
               } catch (error) {
-                Alert.alert('Could not undo', error instanceof Error ? error.message : String(error))
+                Alert.alert(tr('Could not undo'), error instanceof Error ? error.message : String(error))
               }
             },
             // Edit from here, as on the desktop: the thread rewinds to before this message (stopping the agent first),
@@ -1748,7 +1750,7 @@ export default function ChatScreen() {
                               }
                               actions={[
                                 ...(toolActivity.terminal
-                                  ? [{ label: 'Terminal', icon: SquareTerminal, onPress: openTerminal }]
+                                  ? [{ label: tr('Terminal'), icon: SquareTerminal, onPress: openTerminal }]
                                   : []),
                               ]}
                             >

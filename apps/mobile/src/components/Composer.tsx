@@ -982,7 +982,7 @@ export function Composer({
     }
   }
   const upload = async (kind: 'document' | 'camera' | 'photos') => {
-    if (attachments.length >= 10) return Alert.alert('Attachments', 'Attach up to ten files per message.')
+    if (attachments.length >= 10) return Alert.alert(say('Attachments'), say('Attach up to ten files per message.'))
     if (uploadPending.current) return
     uploadPending.current = true
     const owner = attachmentOwner.current
@@ -1114,7 +1114,7 @@ export function Composer({
         store.setDraft(`${draftKey}:restored-attachments`, '')
       }
     } catch (error) {
-      Alert.alert('Could not send', error instanceof Error ? error.message : String(error))
+      Alert.alert(say('Could not send'), error instanceof Error ? error.message : String(error))
     } finally {
       sending.current = false
       setBusy(false)
@@ -1759,7 +1759,7 @@ async function pickAttachment(
     if (base64.length > 13_400_000) throw new Error('Attachments must be 10 MB or smaller.')
     add(await store.invoke(computerId, 'attachments.add', asset.name, base64))
   } catch (error) {
-    Alert.alert('Attachment failed', error instanceof Error ? error.message : String(error))
+    Alert.alert(translate(store.language, 'Attachment failed'), error instanceof Error ? error.message : String(error))
   }
 }
 
