@@ -1,12 +1,12 @@
 // The account service: a small Hono app on plain Postgres. It stores sealed backups it cannot read, relays the key
 // exchange that brings the backup key to a new device, lists hosts the person chose to list, and relays pairing
-// messages between a signed-in device and a listed host. It never grants access to a host: the host approves every
-// device itself, as it does a nearby one.
+// messages between a signed-in device and a listed host. It never grants access itself: the host decides each request,
+// asking the person there or, when they chose so at the host, pairing the same account's devices on its own.
 import { createHash, randomUUID } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import type { Pool } from 'pg'
 import { z } from 'zod'
-import { ACCOUNT_LIMITS } from '@ramu/shared/account'
+import { ACCOUNT_LIMITS, ACCOUNT_TRUST, type AccountTrust, type RelayMessage } from '@ramu/shared/account'
 import type { Auth } from './auth'
 import { devicePage } from './page'
 
@@ -24,8 +24,13 @@ const uuid = z.uuid()
 const bytes = (value: string) => Buffer.from(value, 'base64')
 const iso = (value: Date | string | null) => (value ? new Date(value).getTime() : null)
 
-export function createApp(pool: Pool, auth: Auth, options: { now?: () => number } = {}) {
+export function createApp(
+  pool: Pool,
+  auth: Auth,
+  options: { now?: () => number; sleep?: (ms: number) => Promise<void> } = {},
+) {
   const now = () => options.now?.() ?? Date.now()
+  const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
   const app = new Hono<Env>()
   const q = <T = Record<string, unknown>>(text: string, values: unknown[] = []) =>
     pool.query(text, values).then((result) => result.rows as T[])
@@ -247,24 +252,38 @@ export function createApp(pool: Pool, auth: Auth, options: { now?: () => number 
   // ---- Your hosts ----
 
   app.get('/api/hosts', async (c) => {
-    const rows = await q<{ id: string; name: string; host_key: string; last_seen: Date }>(
-      'select id, name, host_key, last_seen from listed_host where user_id = $1 order by name',
+    const rows = await q<{ id: string; name: string; host_key: string; last_seen: Date; trust: AccountTrust }>(
+      'select id, name, host_key, last_seen, trust from listed_host where user_id = $1 order by name',
       [me(c).userId],
     )
     return c.json(
-      rows.map((row) => ({ id: row.id, name: row.name, hostKey: row.host_key, lastSeen: iso(row.last_seen) })),
+      rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        hostKey: row.host_key,
+        lastSeen: iso(row.last_seen),
+        trust: row.trust,
+      })),
     )
   })
 
-  /** List in my account: a host names itself by its public key; listing again updates the name and last seen. */
+  /**
+   * List in my account: a host names itself by its public key; listing again updates the name, its trust and last seen.
+   * Trust is only what the host says it does, so devices can say "connects without asking"; the host enforces it.
+   */
   app.put('/api/hosts', async (c) => {
     const body = z
-      .object({ name: z.string().trim().min(1).max(80), hostKey: z.string().min(16).max(200) })
+      .object({
+        name: z.string().trim().min(1).max(80),
+        hostKey: z.string().min(16).max(200),
+        trust: z.enum(ACCOUNT_TRUST as [AccountTrust, ...AccountTrust[]]).default('ask'),
+      })
       .parse(await c.req.json())
     const [row] = await q<{ id: string }>(
-      `insert into listed_host (id, user_id, host_key, name) values ($1, $2, $3, $4)
-       on conflict (user_id, host_key) do update set name = excluded.name, last_seen = now() returning id`,
-      [randomUUID(), me(c).userId, body.hostKey, body.name],
+      `insert into listed_host (id, user_id, host_key, name, trust) values ($1, $2, $3, $4, $5)
+       on conflict (user_id, host_key) do update set name = excluded.name, trust = excluded.trust, last_seen = now()
+       returning id`,
+      [randomUUID(), me(c).userId, body.hostKey, body.name, body.trust],
     )
     return c.json({ id: row!.id })
   })
@@ -325,21 +344,41 @@ export function createApp(pool: Pool, auth: Auth, options: { now?: () => number 
     return c.json({ waiting: false, reply: JSON.parse(row.reply) as unknown })
   })
 
-  /** A listed host's waiting messages; checking also marks it seen. */
+  /**
+   * A listed host's waiting messages; checking also marks it seen. With `wait`, an empty check holds for up to
+   * `hostWaitMs`, looking once a second, so a request reaches the host within a second or two for about the requests a
+   * 30-second poll makes. `except` names messages the host is still answering, so they do not end the wait.
+   */
   app.get('/api/hosts/:id/messages', async (c) => {
     const hostId = await ownHost(c)
+    const except = z
+      .array(uuid)
+      .max(20)
+      .parse((c.req.query('except') ?? '').split(',').filter(Boolean))
     await q('update listed_host set last_seen = now() where id = $1', [hostId])
-    const rows = await q<{ id: string; path: string; body: string; session_id: string }>(
-      `select id, path, body, session_id from relay_message where host_id = $1 and reply is null and ${live} order by created_at limit 20`,
-      [hostId],
-    )
+    const read = () =>
+      q<{ id: string; path: string; body: string; session_id: string }>(
+        `select id, path, body, session_id from relay_message where host_id = $1 and reply is null and ${live}
+         and not (id = any($2::uuid[])) order by created_at limit 20`,
+        [hostId, except],
+      )
+    let rows = await read()
+    if (c.req.query('wait') === '1') {
+      // Wall time, not the service clock: this bounds how long the request holds.
+      const until = Date.now() + ACCOUNT_LIMITS.hostWaitMs
+      while (!rows.length && Date.now() < until) {
+        await sleep(1_000)
+        rows = await read()
+      }
+    }
     // `from` names the asking device without revealing its session: one device's messages share it.
     return c.json(
-      rows.map((row) => ({
+      rows.map((row): RelayMessage => ({
         id: row.id,
         path: row.path,
         body: JSON.parse(row.body) as unknown,
         from: createHash('sha256').update(`relay:${hostId}:${row.session_id}`).digest('hex').slice(0, 32),
+        account: me(c).userId,
       })),
     )
   })

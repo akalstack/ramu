@@ -121,7 +121,7 @@ import {
   type InvokeRequest,
 } from '@ramu/contracts'
 import { loadConfig } from './config'
-import { DeviceStore, isHostAccess, validLifetime, type DeviceInfo } from './remote/devices'
+import { DeviceStore, isHostAccess, validLifetime, type DeviceInfo, type DeviceRole } from './remote/devices'
 import { RemoteAccess, accessOf, deviceMayInvoke } from './remote/access'
 import { PermissionRequests } from './remote/permissionRequests'
 import { PairBackInvites } from './remote/pairBackInvites'
@@ -209,17 +209,32 @@ mkdirSync(userData, { recursive: true })
 // Network clients present either their own device token (see `ramu pair`) or the older shared token.
 const devices = new DeviceStore(config.devicesPath, config.deviceLifetimeMs)
 const hostId = readDiscoveryHostId(join(userData, 'discovery.json'))
-const pairingRequests = new PairingRequests({
+const pairingRequests: PairingRequests = new PairingRequests({
   devices,
   hostId,
   // Nearby devices may ask while this host lets itself be found, or while Pair a device is open. A request the Ramu
-  // account relayed comes from the same person's signed-in device, to a host they listed; it still needs approval here.
+  // account relayed comes from the same person's signed-in device, to a host they listed; it needs approval here unless
+  // the person here chose to let the account's devices in.
   accepting: (peer) => peer.startsWith('account:') || network.discoverable || devices.offers().length > 0,
   addresses: () =>
     [
       ...publicCandidates(),
       ...(network.enabled ? candidateUrls(network.host, network.port, Boolean(config.tls)) : []),
     ].map((candidate) => candidate.url),
+  // The person here can let devices signed in to this host's own Ramu account pair without asking (Settings → Account).
+  autoApprove: (peer): DeviceRole | null =>
+    account.trustFor(peer, (id: string) => devices.list().some((device) => device.id === id)),
+  joined: (device, peer) => {
+    account.pairedOnItsOwn(peer, device.id)
+    const email = account.email() ?? ''
+    console.log(`${device.name} connected through the Ramu account ${email} with ${device.role} access.`)
+    const message = `data: ${JSON.stringify({
+      channel: 'pairing:joined',
+      payload: { deviceId: device.id, name: device.name, role: device.role, email },
+    })}\n\n`
+    for (const client of hostClients) if (!client.destroyed) writeEvent(client, message)
+    syncDiscovery()
+  },
   changed: () => pairingNotice(pairingRequests.list()),
 })
 // Only the desktop apps on this machine answer permission requests, like pairing; paired devices never see them.
@@ -1193,7 +1208,7 @@ const plugins = new PluginService({
   identityAllows: (pluginId, projectId) => identities.allowed(projectId, accountKey('plugin', pluginId)),
 })
 plugins.start()
-const account = new AccountService({
+const account: AccountService = new AccountService({
   getState: (key, fallback) => workspace.getAppState(key, fallback),
   setState: (key, value) => workspace.setAppState(key, value),
   hostName: () => hostname(),

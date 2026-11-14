@@ -35,7 +35,7 @@ import { unloadLoginService } from './runtimeLauncher'
 import type { AppUpdateStatus } from '@ramu/shared/updates'
 import { configureDesktopLanguage, desktopLanguage, t } from './localization'
 import { editorMenu, type EditorMenuOptions } from './editorMenu'
-import { existsSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir, hostname } from 'node:os'
 import { type AppPreferences } from '@ramu/shared/types'
 import { join } from 'node:path'
@@ -66,6 +66,7 @@ import { attachmentActions } from './attachmentActions'
 import { terminalMenu } from './terminalMenu'
 import { createAgentNotifier } from './agentNotifier'
 import { createPairingNotifier } from './pairingNotifier'
+import { AccountHostConnector } from '@ramu/shared/accountHosts'
 import { createPermissionNotifier } from './permissionNotifier'
 import {
   runtimeInvoke,
@@ -648,6 +649,8 @@ async function main() {
     renew: (url, token) => runtimeRenew(url, token),
     deliver: (id, ...[channel, payload]) => {
       if (id === LOCAL && channel === 'pairing:requests') pairing.receive(payload.requests)
+      if (id === LOCAL && channel === 'pairing:joined') pairing.joined(payload)
+      if (id === LOCAL && channel === 'account:changed') void accountHosts.connect()
       if (id === LOCAL && channel === 'permission:requests') permissions.receive(payload.requests)
       observeHostActivity(id, ...([channel, payload] as PushArgs))
       sendTo(id, channel, payload)
@@ -655,6 +658,36 @@ async function main() {
     },
     changed: announce,
   })
+  // Hosts listed in this computer's Ramu account that let the account's devices in are added on their own, after
+  // sign-in and every few minutes; a host that asks first waits for Add this host.
+  const addedFile = join(userData, 'account-hosts-added.json')
+  const added = new Set<string>(
+    (() => {
+      try {
+        const saved: unknown = JSON.parse(readFileSync(addedFile, 'utf8'))
+        return Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string') : []
+      } catch {
+        return []
+      }
+    })(),
+  )
+  const accountHosts = new AccountHostConnector({
+    hosts: () => runtimeInvoke(runtime, 'account.hosts'),
+    added: {
+      has: (id) => added.has(id),
+      add: (id) => {
+        added.add(id)
+        writeFileSync(addedFile, JSON.stringify([...added]))
+      },
+    },
+    saved: (hostKey) => computers.byHostId(hostKey) !== null,
+    pair: async (host) => {
+      await computers.pairThroughAccount(host.id, host.name, () => {}, AbortSignal.timeout(60_000))
+      announce()
+    },
+  })
+  void accountHosts.connect()
+  setInterval(() => void accountHosts.connect(), 5 * 60_000).unref()
   const overviewReads = new HostOverviewQueue(async (id) => {
     if (!computers.exists(id) || computers.status(id) !== 'connected') throw new Error('That host is not connected')
     const endpoint = computers.endpoint(id)

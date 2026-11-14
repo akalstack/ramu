@@ -34,6 +34,22 @@ export function createPairingNotifier(options: {
   return {
     /** The person opened the app themselves (Dock, menu); it is theirs now and stays open. */
     reveal,
+    /** A device on this host's Ramu account paired on its own; the window shows the same with Remove when in front. */
+    joined(device: { name: string; role: string; email: string }) {
+      if (inFront() || !Notification.isSupported()) return
+      const notification = new Notification({
+        title: t('{0} connected', { 0: device.name || t('A device') }),
+        body: t(
+          device.role === 'owner'
+            ? 'Signed in to your Ramu account {0}, so it paired with full access.'
+            : 'Signed in to your Ramu account {0}, so it paired with view-only access.',
+          { 0: device.email },
+        ),
+        silent: false,
+      })
+      notification.on('click', reveal)
+      notification.show()
+    },
     receive(requests: PairingRequest[]) {
       for (const [id, notification] of live)
         if (!requests.some((request) => request.id === id)) {

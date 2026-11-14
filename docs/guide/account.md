@@ -1,6 +1,6 @@
 # Ramu account and settings backup
 
-The Ramu account is optional. Everything works without it; signing in adds settings backups that only your own devices can open, and **Your hosts**, for adding a host from a signed-in device without copying a code. The account is run by Akalstack at `account.akalstack.com`, and it never gives access to a host: every device is still approved on the host itself.
+The Ramu account is optional. Everything works without it; signing in adds settings backups that only your own devices can open, and **Your hosts**, so a phone or computer signed in to the same account connects to your hosts without a code. The account is run by Akalstack at `account.akalstack.com`. It lets a device into a host only when you chose that on the host itself, with the access you chose there.
 
 ## Signing in
 
@@ -36,6 +36,13 @@ The phone signs in the same way, answers a new host's request for the key, and b
 
 ## Your hosts
 
-**List this host in my account** puts the host under **Your hosts**: the account learns its name and id and when it was last seen, never its address. While listed, the host checks the account for pairing requests every 30 seconds.
+**List this host in my account** puts the host under **Your hosts**: the account learns its name and id, what it does when your devices ask, and when it was last seen, never its address. While listed, the host waits at the account for pairing requests, so one reaches it within a second or two.
 
-On another device signed in to the same account, **Your hosts** in **Settings → Account** lists those hosts with **Add this host** (desktop) or **Pair** (phone). It runs the same exchange as a nearby request, carried by the account: the host shows the request with the same six-digit number as the device, and the host chooses the access as for any pairing. The approval carries the host's addresses sealed to the device, which then connects directly and checks the host's identity on each address. At most five requests wait per host, and one device sends at most one a minute.
+**When a device signed in to ‹your email› asks** is chosen on the host only:
+
+- **Connect it with full access** (the default once listed) or **Connect it with view-only access:** a device signed in to the same account pairs with no prompt. The host says so each time, with the device's name and the account, as a notice with **Remove** (and a system notification when Ramu is not in front).
+- **Ask me here first:** the host shows each request with the same six-digit number as the device, and you choose the access, as for a nearby request.
+
+On a phone or computer signed in to the same account, a host that lets the account in is added on its own: after you sign in, when the phone app comes to the front, and every few minutes on the desktop. **Your hosts** in **Settings → Account** also lists every listed host, with **Connect** for those, and **Add this host** (desktop) or **Pair** (phone) for one that asks first. Each host is added on its own only once, so a host you forget on a device stays forgotten until you add it again.
+
+Either way it is the same exchange as a nearby request, carried by the account: the host's answer carries its addresses sealed to the device, which then connects directly and checks the host's identity on each address. A device removed in **Remote access** (or with `ramu devices revoke`, or expired) asks the person at the host the next time, whatever the choice. A host answers only requests from devices on the account it is signed in to. At most five requests wait per host, and one device sends at most one a minute.

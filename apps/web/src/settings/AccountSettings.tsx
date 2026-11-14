@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Copy, Download } from 'lucide-react'
-import type { AccountStatus, ListedHostInfo, RestoreChoice } from '@ramu/shared/account'
+import type { AccountStatus, AccountTrust, ListedHostInfo, RestoreChoice } from '@ramu/shared/account'
 import type { SettingsExport, TransferChange } from '@ramu/shared/settingsTransfer'
 import { defaultGroups } from '@ramu/shared/settingsTransfer'
 import { Button } from '@/components/desktop-button'
@@ -54,7 +54,8 @@ function RecoveryCode({ code, onClose }: { code: string; onClose: () => void }) 
 
 /**
  * Settings › Account: the optional Ramu account. Signing in backs settings up sealed on this host, so only your devices
- * can open them; it never gives access to a host. Restore, recovery and Your hosts live here too.
+ * can open them. Restore, recovery and Your hosts live here too: a listed host lets the account's devices connect with
+ * the access chosen here, or asks first.
  */
 export function AccountSettings() {
   useLanguage()
@@ -71,6 +72,7 @@ export function AccountSettings() {
   const [restore, setRestore] = useState<{ file: SettingsExport; changes: TransferChange[]; from: string } | null>(null)
   const [hosts, setHosts] = useState<ListedHostInfo[]>([])
   const [pairCode, setPairCode] = useState<string | null>(null)
+  const [pairingHost, setPairingHost] = useState<ListedHostInfo | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -117,7 +119,7 @@ export function AccountSettings() {
       <SettingsSectionHead
         title={t('Ramu account')}
         help={t(
-          'Optional. It keeps settings backups that only your devices can open, and lists your hosts so a signed-in device can ask to pair without a code. The account is run by Akalstack and never gives access to a host.',
+          'Optional. It keeps settings backups that only your devices can open, and lists your hosts so your signed-in devices connect without a code. The account is run by Akalstack; only a host you list lets your devices in, with the access you choose there.',
         )}
       />
       {error && (
@@ -418,7 +420,7 @@ export function AccountSettings() {
           <SettingsSectionHead
             title={t('Your hosts')}
             help={t(
-              'A listed host can be added from your other signed-in devices without a code; it still asks you to approve each one. The account learns its name, never its address.',
+              'A listed host can be added from your other devices signed in to this account, with no code. The account learns its name, never its address, and you can remove any device in Remote access.',
             )}
           />
           <label className="flex items-center gap-2 text-control">
@@ -429,13 +431,33 @@ export function AccountSettings() {
             />
             {t('List this host in my account')}
           </label>
+          {status.listed && (
+            <div className="flex flex-wrap items-center gap-2 text-control">
+              <span>{t('When a device signed in to {0} asks', { 0: status.user?.email ?? '' })}</span>
+              <Dropdown
+                label={t('When a device signed in to {0} asks', { 0: status.user?.email ?? '' })}
+                value={status.trust}
+                disabled={viewOnly || busy}
+                options={[
+                  { value: 'owner', label: t('Connect it with full access') },
+                  { value: 'viewer', label: t('Connect it with view-only access') },
+                  { value: 'ask', label: t('Ask me here first') },
+                ]}
+                onChange={(value) => void act(() => invoke('account.setTrust', value as AccountTrust))}
+              />
+            </div>
+          )}
           {hosts.length > 0 && (
             <SettingsCardList>
               {hosts.map((host) => (
                 <SettingsCard
                   key={host.id}
                   title={host.name}
-                  meta={t('Last seen {time}', { time: when(host.lastSeen) })}
+                  meta={
+                    host.trust === 'ask'
+                      ? t('Last seen {time} · asks before connecting', { time: when(host.lastSeen) })
+                      : t('Last seen {time} · connects without asking', { time: when(host.lastSeen) })
+                  }
                   actions={
                     <Button
                       size="sm"
@@ -444,12 +466,17 @@ export function AccountSettings() {
                       onClick={() =>
                         void act(async () => {
                           setPairCode(null)
-                          await onThisComputer('computers.pairThroughAccount', host.id, host.name)
-                          setPairCode(null)
+                          setPairingHost(host)
+                          try {
+                            await onThisComputer('computers.pairThroughAccount', host.id, host.name)
+                          } finally {
+                            setPairCode(null)
+                            setPairingHost(null)
+                          }
                         })
                       }
                     >
-                      {t('Add this host')}
+                      {host.trust === 'ask' ? t('Add this host') : t('Connect')}
                     </Button>
                   }
                 />
@@ -458,7 +485,9 @@ export function AccountSettings() {
           )}
           {pairCode && busy && (
             <p role="status" className="m-0 text-caption text-muted-foreground">
-              {t('Allow this computer on the host when it shows {code}.', { code: pairCode })}
+              {pairingHost && pairingHost.trust !== 'ask'
+                ? t('Connecting to {0}…', { 0: pairingHost.name })
+                : t('Allow this computer on the host when it shows {code}.', { code: pairCode })}
             </p>
           )}
         </>

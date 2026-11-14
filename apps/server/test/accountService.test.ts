@@ -11,6 +11,9 @@ function fakeService() {
   >()
   let recovery: string | null = null
   const requests = new Map<string, Record<string, unknown>>()
+  const listed: Record<string, unknown>[] = []
+  const relayed: { id: string; path: string; body: unknown; from: string; account: string }[] = []
+  const replies: { id: string; reply: unknown }[] = []
   let next = 1
   const fetcher = vi.fn<typeof fetch>(async (input, init) => {
     const url = new URL(String(input))
@@ -19,6 +22,16 @@ function fakeService() {
     const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status })
     const path = url.pathname
     if (path === '/api/me') return json({ id: 'u1', name: 'Ada', email: 'ada@example.com', image: null })
+    if (path === '/api/hosts' && method === 'PUT') {
+      listed.push(body)
+      return json({ id: '00000000-0000-4000-8000-0000000000aa' })
+    }
+    const messages = /^\/api\/hosts\/[^/]+\/messages(?:\/([^/]+))?$/.exec(path)
+    if (messages && method === 'GET') return json(relayed.splice(0))
+    if (messages && method === 'POST') {
+      replies.push({ id: messages[1]!, reply: body.reply })
+      return json({ ok: true })
+    }
     if (path === '/api/recovery') {
       if (method === 'PUT') recovery = body.sealed as string
       return json({ sealed: recovery })
@@ -66,7 +79,7 @@ function fakeService() {
     }
     return json({ error: `unexpected ${method} ${path}` }, 404)
   })
-  return { fetcher, backups }
+  return { fetcher, backups, listed, relayed, replies }
 }
 
 const file: SettingsExport = {
@@ -78,7 +91,14 @@ const file: SettingsExport = {
   preferences: { accent: 'teal' },
 }
 
-function host(service: ReturnType<typeof fakeService>, name = 'ada-mac') {
+function host(
+  service: ReturnType<typeof fakeService>,
+  name = 'ada-mac',
+  pairing: (peer: string, path: string, body: unknown) => Promise<{ status: number; body: unknown }> = async () => ({
+    status: 200,
+    body: {},
+  }),
+) {
   const state = new Map<string, unknown>()
   const vault = new Map<string, string>()
   const account = new AccountService({
@@ -88,7 +108,7 @@ function host(service: ReturnType<typeof fakeService>, name = 'ada-mac') {
     hostId: 'host-1234567890abcdef',
     exportSettings: async () => file,
     githubToken: async () => null,
-    pairing: async () => ({ status: 200, body: {} }),
+    pairing,
     changed: () => {},
     credentials: new HostCredentialStore(async (_service, key) => ({
       setPassword: async (value) => void vault.set(key, value),
@@ -101,8 +121,8 @@ function host(service: ReturnType<typeof fakeService>, name = 'ada-mac') {
   return { account, state, vault }
 }
 
-async function signedIn(service: ReturnType<typeof fakeService>, name?: string) {
-  const made = host(service, name)
+async function signedIn(service: ReturnType<typeof fakeService>, name?: string, pairing?: Parameters<typeof host>[2]) {
+  const made = host(service, name, pairing)
   // As after the device code sign-in: a session token in the credential store and the user in state.
   await (made.account as unknown as { session: { save(value: { token: string }): Promise<void> } }).session.save({
     token: 'session-token',
@@ -175,5 +195,62 @@ describe('settings backup on this host', () => {
     await made.account.signOut()
     expect(await made.account.status()).toMatchObject({ signedIn: false, backup: { hasKey: false } })
     expect(made.vault.size).toBe(0)
+  })
+})
+
+describe('Your hosts on this host', () => {
+  it('lets the account’s devices in with the access chosen here, until one of them is removed', async () => {
+    const service = fakeService()
+    const { account } = await signedIn(service)
+    const paired = new Set<string>()
+    const stillPaired = (id: string) => paired.has(id)
+    // Not listed: every relayed request asks the person here.
+    expect(account.trustFor('account:phone', stillPaired)).toBeNull()
+    await account.setListed(true)
+    account.close()
+    // Listing defaults to connecting the account's devices with full access, and tells the account so.
+    expect(service.listed.at(-1)).toMatchObject({ hostKey: 'host-1234567890abcdef', trust: 'owner' })
+    expect((await account.status()).trust).toBe('owner')
+    expect(account.trustFor('account:phone', stillPaired)).toBe('owner')
+    // Only relayed requests: a nearby address is never let in this way.
+    expect(account.trustFor('192.168.1.50', stillPaired)).toBeNull()
+
+    await account.setTrust('viewer')
+    account.close()
+    expect(service.listed.at(-1)).toMatchObject({ trust: 'viewer' })
+    expect(account.trustFor('account:phone', stillPaired)).toBe('viewer')
+
+    account.pairedOnItsOwn('account:phone', 'device-1')
+    paired.add('device-1')
+    expect(account.trustFor('account:phone', stillPaired)).toBe('viewer')
+    // Removed here (or from the CLI, or expired): that device asks the person next time; others still connect.
+    paired.delete('device-1')
+    expect(account.trustFor('account:phone', stillPaired)).toBeNull()
+    expect(account.trustFor('account:laptop', stillPaired)).toBe('viewer')
+
+    await account.setTrust('ask')
+    expect(account.trustFor('account:laptop', stillPaired)).toBeNull()
+    account.close()
+  })
+
+  it('answers only relayed messages from its own account', async () => {
+    const service = fakeService()
+    const seen: string[] = []
+    const { account } = await signedIn(service, 'ada-mac', async (peer) => {
+      seen.push(peer)
+      return { status: 200, body: { ok: true } }
+    })
+    await account.setListed(true)
+    account.close()
+    service.relayed.push(
+      { id: 'm1', path: '/pair/request', body: {}, from: 'phone', account: 'u1' },
+      { id: 'm2', path: '/pair/request', body: {}, from: 'stranger', account: 'u2' },
+    )
+    await account.checkRelay()
+    expect(seen).toEqual(['account:phone'])
+    expect(service.replies.sort((a, b) => a.id.localeCompare(b.id))).toEqual([
+      { id: 'm1', reply: { status: 200, body: { ok: true } } },
+      { id: 'm2', reply: { status: 403, body: { error: 'This host is listed under another Ramu account.' } } },
+    ])
   })
 })

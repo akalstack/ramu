@@ -1,9 +1,11 @@
 import { z } from 'zod'
+import { ACCOUNT_TRUST, type AccountTrust } from '@ramu/shared/account'
 import type { AccountService } from '../../account/service'
 import type { RegisterHandlers } from '../types'
 
 const id = z.uuid()
 const source = z.enum(['account', 'github'])
+const trust = z.enum(ACCOUNT_TRUST as [AccountTrust, ...AccountTrust[]])
 
 /** The Ramu account on this host. Signing in and backup changes stay on the host, like other credentials. */
 export const registerAccountHandlers: RegisterHandlers = (ctx) => {
@@ -47,7 +49,12 @@ export const registerAccountHandlers: RegisterHandlers = (ctx) => {
     'account.answerKeyRequest': { args: z.tuple([id]), run: (request: string) => admin().answerKeyRequest(request) },
     'account.approveKeyRequest': { args: z.tuple([id]), run: (request: string) => admin().approveKeyRequest(request) },
     'account.denyKeyRequest': { args: z.tuple([id]), run: (request: string) => admin().denyKeyRequest(request) },
-    'account.setListed': { args: z.tuple([z.boolean()]), run: (listed: boolean) => admin().setListed(listed) },
+    // Whether this host's own account may pair devices without asking is a host decision, like pairing itself.
+    'account.setListed': {
+      args: z.union([z.tuple([z.boolean()]), z.tuple([z.boolean(), trust])]),
+      run: (listed: boolean, chosen?: AccountTrust) => admin().setListed(listed, chosen),
+    },
+    'account.setTrust': { args: z.tuple([trust]), run: (chosen: AccountTrust) => admin().setTrust(chosen) },
     'account.hosts': { args: z.tuple([]), run: () => service().hosts() },
     'account.relay': {
       args: z.tuple([id, z.enum(['/pair/request', '/pair/reveal', '/pair/wait']), z.unknown()]),

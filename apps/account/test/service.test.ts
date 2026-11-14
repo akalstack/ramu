@@ -90,15 +90,17 @@ describe.skipIf(!available)('the account service on plain Postgres', () => {
   let app: ReturnType<typeof createApp>
   let auth: ReturnType<typeof createAuth>
   let clock = Date.now()
+  /** What a held check does while it waits; a test can deliver a message here. */
+  let sleeping: (ms: number) => Promise<void> = () => Promise.resolve()
 
   beforeAll(async () => {
     if (!url) url = startPostgres()!
     await ready(url)
     pool = new pg.Pool({ connectionString: url })
-    expect(await migrate(pool)).toEqual(['0001_auth.sql', '0002_ramu.sql'])
+    expect(await migrate(pool)).toEqual(['0001_auth.sql', '0002_ramu.sql', '0003_host_trust.sql'])
     expect(await migrate(pool)).toEqual([])
     auth = createAuth(pool, { baseURL: 'http://localhost:8787', secret: 'a'.repeat(40), passkeyDomain: 'localhost' })
-    app = createApp(pool, auth, { now: () => clock })
+    app = createApp(pool, auth, { now: () => clock, sleep: (ms) => sleeping(ms) })
   }, 120_000)
 
   afterAll(async () => {
@@ -249,6 +251,39 @@ describe.skipIf(!available)('the account service on plain Postgres', () => {
     const rows = JSON.stringify((await pool.query('select * from listed_host')).rows)
     expect(rows).toContain('home-server')
     expect(rows).not.toMatch(/https?:\/\/|\d+\.\d+\.\d+\.\d+/)
+  })
+
+  it('tells the account’s devices what a listed host does when they ask, as only the host sets it', async () => {
+    const host = await client('grace@example.com')
+    const phone = await client('grace@example.com')
+    const listed = await host.call('PUT', '/api/hosts', { name: 'studio', hostKey: 's'.repeat(64) })
+    expect((await phone.call('GET', '/api/hosts')).body).toMatchObject([{ id: listed.body.id, trust: 'ask' }])
+    await host.call('PUT', '/api/hosts', { name: 'studio', hostKey: 's'.repeat(64), trust: 'owner' })
+    expect((await phone.call('GET', '/api/hosts')).body).toMatchObject([{ id: listed.body.id, trust: 'owner' }])
+    expect(
+      (await host.call('PUT', '/api/hosts', { name: 'studio', hostKey: 's'.repeat(64), trust: 'admin' })).status,
+    ).toBe(400)
+  })
+
+  it('a held check returns as soon as a device asks, naming the asking account, and skips messages in hand', async () => {
+    const host = await client('hedy@example.com')
+    const phone = await client('hedy@example.com')
+    const hostId = (await host.call('PUT', '/api/hosts', { name: 'den', hostKey: 'd'.repeat(64) })).body.id as string
+    let slept = 0
+    sleeping = async () => {
+      slept++
+      if (slept === 2) await phone.call('POST', `/api/hosts/${hostId}/relay`, { path: '/pair/request', body: {} })
+    }
+    try {
+      const held = await host.call('GET', `/api/hosts/${hostId}/messages?wait=1`)
+      expect(slept).toBe(2)
+      expect(held.body).toMatchObject([{ path: '/pair/request', account: host.userId }])
+      // A message the host is still answering is left out, so it does not end the host's next wait.
+      expect((await host.call('GET', `/api/hosts/${hostId}/messages?except=${held.body[0].id}`)).body).toEqual([])
+      expect((await host.call('GET', `/api/hosts/${hostId}/messages`)).body).toHaveLength(1)
+    } finally {
+      sleeping = () => Promise.resolve()
+    }
   })
 
   it('Delete account leaves no rows for the person', async () => {

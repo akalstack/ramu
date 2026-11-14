@@ -166,3 +166,55 @@ it('a request the account relayed gets the host’s addresses sealed to that dev
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+it('a relayed request from a device the host lets in pairs on its own, never showing a prompt, and says so once', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-pair-trust-'))
+  try {
+    const devices = new DeviceStore(join(dir, 'devices.json'))
+    const joined: { name: string; role: string; peer: string }[] = []
+    let prompts = 0
+    const pairing = new PairingRequests({
+      devices,
+      hostId: 'host-1',
+      accepting: (peer) => peer.startsWith('account:'),
+      addresses: () => ['https://home.example.ts.net'],
+      autoApprove: (peer) => (peer === 'account:trusted' ? 'viewer' : null),
+      joined: (device, peer) => joined.push({ name: device.name, role: device.role, peer }),
+      changed: () => (prompts += pairing.list().length),
+    })
+    const relay = (peer: string) => async (path: string, body: unknown) => {
+      if (path === PAIR_REQUEST_PATH) return { status: 200, body: pairing.begin(peer, body) }
+      if (path === PAIR_REVEAL_PATH) {
+        pairing.reveal(peer, body)
+        return { status: 200, body: { ok: true } }
+      }
+      return { status: 200, body: await pairing.wait(peer, body, AbortSignal.timeout(200)) }
+    }
+    const result = await requestPairing({
+      post: relay('account:trusted'),
+      name: 'Phone',
+      random,
+      onCode: () => {},
+      signal: new AbortController().signal,
+    })
+    // The same checked exchange as an approval by hand: the host's answer and its sealed addresses.
+    expect(result).toMatchObject({ hostId: 'host-1', role: 'viewer', addresses: ['https://home.example.ts.net'] })
+    expect(joined).toEqual([{ name: 'Phone', role: 'viewer', peer: 'account:trusted' }])
+    expect(prompts).toBe(0)
+    expect(devices.list().map((device) => device.name)).toEqual(['Phone'])
+
+    // Any other asking device still waits for the person here.
+    const asking = requestPairing({
+      post: relay('account:other'),
+      name: 'Tablet',
+      random,
+      onCode: () => {},
+      signal: AbortSignal.timeout(2_000),
+    }).catch(() => null)
+    await answerAtHost(pairing, (id) => pairing.deny(id))
+    await asking
+    expect(joined).toHaveLength(1)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

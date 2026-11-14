@@ -1,6 +1,7 @@
 // Pairing by request, on the host (see `@ramu/shared/pairRequest`). A nearby device asks while the host is discoverable
 // (or has Pair a device open); the request shows at the host only once the device has revealed the key it committed
-// to, with the six-digit code both screens show. A person at the host approves it with the access it should have.
+// to, with the six-digit code both screens show. A person at the host approves it with the access it should have, or,
+// for a request the Ramu account relayed from the same account, the host pairs it on its own if the person chose that.
 import { randomBytes, randomUUID } from 'node:crypto'
 import {
   PAIR_REQUEST_TTL_MS,
@@ -67,6 +68,10 @@ export class PairingRequests {
       accepting?: (peer: string) => boolean
       /** The addresses to seal into an approval for a request the account service relayed (`account:` peers). */
       addresses?: () => string[]
+      /** The access to pair a request from `peer` with straight away, or null to ask the person here. */
+      autoApprove?: (peer: string) => DeviceRole | null
+      /** A device this host paired on its own, so the person here hears of it. */
+      joined?: (device: DeviceInfo, peer: string) => void
       changed?: () => void
       now?: () => number
       random?: (bytes: number) => Uint8Array
@@ -145,6 +150,12 @@ export class PairingRequests {
     request.code = secrets.code
     request.token = secrets.token
     request.macKey = secrets.macKey
+    // The same exchange as one a person approves, so the device still checks the host's answer and addresses.
+    const role = this.options.autoApprove?.(peer) ?? null
+    if (role) {
+      this.options.joined?.(this.approve(request.id, role), peer)
+      return
+    }
     this.options.changed?.()
   }
 

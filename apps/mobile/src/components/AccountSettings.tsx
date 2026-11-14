@@ -6,6 +6,7 @@ import { translate } from '@ramu/shared/i18n'
 import * as account from '../runtime/account'
 import { secureRandom } from '../runtime/secureRandom'
 import { useStore } from '../runtime/store'
+import { connectAccountHosts } from './AccountHosts'
 import { space, useTheme, type Appearance, type TextSize } from '../theme'
 import { RowLabel, TextRow } from './SettingRows'
 import { Button, Card, Divider, Row, SectionLabel, T } from './ui'
@@ -75,7 +76,7 @@ export function AccountSettings() {
     <View>
       <T size={13} tone="muted" style={{ paddingHorizontal: space.l, paddingTop: space.m }}>
         {t(
-          'Optional. It keeps backups only your devices can open and lists your hosts, and never gives access to a host. Run by Akalstack.',
+          'Optional. It keeps backups only your devices can open and connects this phone to the hosts you listed, as each host allows. Run by Akalstack.',
         )}
       </T>
       {status ? (
@@ -118,6 +119,7 @@ export function AccountSettings() {
                   setSignIn(null)
                   if (!signed) throw new Error(t('The sign-in expired or was denied. Try again.'))
                   await refresh()
+                  connectAccountHosts()
                 })
               }
             />
@@ -271,11 +273,19 @@ export function AccountSettings() {
                 <Row style={{ paddingVertical: space.m }}>
                   <RowLabel
                     title={host.name}
-                    help={t('Last seen {time}', { time: new Date(host.lastSeen).toLocaleString() })}
+                    help={
+                      host.trust === 'ask'
+                        ? t('Last seen {time} · asks before connecting', {
+                            time: new Date(host.lastSeen).toLocaleString(),
+                          })
+                        : t('Last seen {time} · connects without asking', {
+                            time: new Date(host.lastSeen).toLocaleString(),
+                          })
+                    }
                   />
                   <Button
                     kind="secondary"
-                    title={t('Pair')}
+                    title={host.trust === 'ask' ? t('Pair') : t('Connect')}
                     disabled={busy || store.computers.some((computer) => computer.hostId === host.hostKey)}
                     onPress={() =>
                       void act(async () => {
@@ -286,7 +296,11 @@ export function AccountSettings() {
                           host.name,
                           host.id,
                           (code) =>
-                            setStatus(t('Allow this phone on {name} when it shows {code}.', { name: host.name, code })),
+                            setStatus(
+                              host.trust === 'ask'
+                                ? t('Allow this phone on {name} when it shows {code}.', { name: host.name, code })
+                                : t('Connecting to {name}…', { name: host.name }),
+                            ),
                           controller.signal,
                         )
                         setStatus(t('Paired with {name}.', { name: host.name }))

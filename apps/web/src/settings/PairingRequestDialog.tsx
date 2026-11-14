@@ -9,6 +9,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/desktop-button'
+import { notify } from '@/components/app-toaster'
+import { TOAST_MS } from '../chat/notificationCenter'
 import { Dropdown } from '../Menu'
 import { invoke, ramu } from '../ipc'
 import { errorText } from '../lib/errors'
@@ -44,6 +46,31 @@ export function PairingRequestDialog() {
       off()
     }
   }, [])
+  // A device signed in to this host's Ramu account paired on its own, as the person chose: say so, with a way back.
+  useEffect(
+    () =>
+      ramu.on('pairing:joined', ({ deviceId, name, role, email }) =>
+        notify.add({
+          type: 'info',
+          timeout: TOAST_MS.input,
+          title: t('{0} connected', { 0: name || t('A device') }),
+          description: t(
+            role === 'owner'
+              ? 'Signed in to your Ramu account {0}, so it paired with full access.'
+              : 'Signed in to your Ramu account {0}, so it paired with view-only access.',
+            { 0: email },
+          ),
+          actionProps: {
+            children: t('Remove'),
+            onClick: () =>
+              void Promise.resolve(invoke('network.revoke', deviceId)).catch((cause) =>
+                notify.add({ type: 'error', title: errorText(cause), timeout: TOAST_MS.error }),
+              ),
+          },
+        }),
+      ),
+    [],
+  )
   const request = requests.find((entry) => entry.expiresAt > now)
   const requestId = request?.id
   useEffect(() => {

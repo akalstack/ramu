@@ -757,7 +757,8 @@ export interface RamuMethods extends ArtifactMethods {
   'account.answerKeyRequest'(id: string): void
   'account.approveKeyRequest'(id: string): void
   'account.denyKeyRequest'(id: string): void
-  'account.setListed'(listed: boolean): void
+  'account.setListed'(listed: boolean, trust?: import('./account').AccountTrust): void
+  'account.setTrust'(trust: import('./account').AccountTrust): void
   'account.hosts'(): import('./account').ListedHostInfo[]
   'account.relay'(hostId: string, path: string, body: unknown): { status: number; body: unknown }
   'identities.get'(): import('./identities').IdentitySnapshot
@@ -1929,6 +1930,8 @@ export type PushEvents = {
   'device:permissions': Record<string, never>
   /** Nearby devices waiting for the person at this host to allow them. Sent only to apps on the host itself. */
   'pairing:requests': { requests: NetworkStatus['requests'] }
+  /** A device signed in to this host's Ramu account that the host paired on its own. Sent only to apps on the host. */
+  'pairing:joined': { deviceId: string; name: string; role: 'owner' | 'viewer'; email: string }
   'pairBack:invites': { invites: import('./types').PairBackInvite[] }
   /** Paired devices asking for a permission, waiting for the person here. Sent only to apps on the host itself. */
   'permission:requests': { requests: NetworkStatus['permissionRequests'] }

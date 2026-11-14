@@ -1,7 +1,8 @@
 // This host's side of the optional Ramu account: sign-in by device code, settings backups sealed here before they go
 // to the account or to the person's own GitHub, the recovery code, handing the backup key to a new device after both
-// screens show the same number, restore, and listing this host under Your hosts so a signed-in device can ask to pair
-// without a code. The account never grants access: pairing still ends with the person approving here.
+// screens show the same number, restore, and listing this host under Your hosts so a signed-in device can pair without
+// a code. The account grants nothing itself: this host asks the person here, or, if they chose it here, pairs devices
+// signed in to the same account straight away with the access they picked.
 import { randomBytes } from 'node:crypto'
 import { deflateRawSync, inflateRawSync } from 'node:zlib'
 import {
@@ -9,10 +10,12 @@ import {
   ACCOUNT_URL,
   type AccountSignIn,
   type AccountStatus,
+  type AccountTrust,
   type AccountUser,
   type BackupSlotInfo,
   type KeyRequestInfo,
   type ListedHostInfo,
+  type RelayMessage,
   type RestoreChoice,
 } from '@ramu/shared/account'
 import {
@@ -49,7 +52,16 @@ interface State {
   lastBackupAt: number | null
   error: string | null
   listedId: string | null
+  trust: AccountTrust
+  /**
+   * Devices this host paired on its own: device id to the relay's name for the asking device. Once that device is no
+   * longer paired (removed here, from the CLI, or expired), the same asking device asks the person here again.
+   */
+  accountDevices: Record<string, string>
 }
+
+/** The account pairings remembered; the oldest are forgotten first. */
+const ACCOUNT_DEVICES_KEPT = 500
 
 export interface AccountHost {
   getState<T>(key: string, fallback: T): T
@@ -75,7 +87,10 @@ export class AccountService {
   private readonly url: string
   private signing: { started: AccountSignIn; deviceCode: string; interval: number; client: string } | null = null
   private backupTimer: ReturnType<typeof setTimeout> | null = null
-  private pollTimer: ReturnType<typeof setInterval> | null = null
+  /** The running check loop; a new one replaces it. */
+  private polling: { stop: boolean } | null = null
+  /** Relayed messages being answered, so a check while one waits does not answer it twice. */
+  private inFlight = new Set<string>()
   /** This host asking another device for the backup key. */
   private asking: { id: string; keys: ExchangeKeys; code: string | null; done: boolean; error: string | null } | null =
     null
@@ -113,6 +128,8 @@ export class AccountService {
       lastBackupAt: saved?.lastBackupAt ?? null,
       error: saved?.error ?? null,
       listedId: saved?.listedId ?? null,
+      trust: saved?.trust ?? 'owner',
+      accountDevices: saved?.accountDevices ?? {},
     }
     if (!saved?.slot) this.host.setState(STATE_KEY, state)
     return state
@@ -136,19 +153,20 @@ export class AccountService {
         hasKey: !!this.key.savedField(),
       },
       listed: !!state.listedId,
+      trust: state.trust,
       pendingSignIn: this.signing?.started ?? null,
     }
   }
 
   // ---- Talking to the service ----
 
-  private async call<T>(method: string, path: string, body?: unknown, token?: string): Promise<T> {
+  private async call<T>(method: string, path: string, body?: unknown, token?: string, timeoutMs = 20_000): Promise<T> {
     const bearer = token ?? (await this.session.read())?.token
     const response = await this.fetcher(`${this.url}${path}`, {
       method,
       headers: { 'Content-Type': 'application/json', ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(timeoutMs),
     })
     const parsed = (await response.json().catch(() => ({}))) as { error?: string; message?: string }
     if (response.status === 401 && bearer) {
@@ -494,7 +512,7 @@ export class AccountService {
     const asking = this.asking
     const until = Date.now() + ACCOUNT_LIMITS.requestMs
     while (asking && this.asking === asking && !asking.done && Date.now() < until) {
-      await new Promise((resolve) => setTimeout(resolve, 2_000))
+      await new Promise((resolve) => setTimeout(resolve, 1_000))
       try {
         const request = await this.call<KeyRequestInfo>('GET', `/api/key-requests/${asking.id}`)
         if (request.approverKey && !request.requesterKey) {
@@ -579,16 +597,21 @@ export class AccountService {
 
   // ---- Your hosts ----
 
-  /** List in my account: the account learns this host's name and id, and when it was last seen; never an address. */
-  async setListed(listed: boolean) {
+  /**
+   * List in my account: the account learns this host's name and id, what it does when the same account's devices ask,
+   * and when it was last seen; never an address. `trust` is chosen here only, by the person at this host.
+   */
+  async setListed(listed: boolean, trust?: AccountTrust) {
     const state = this.state()
     if (listed) {
       if (!state.user) throw new Error('Sign in to the Ramu account first.')
+      const next = trust ?? state.trust
       const { id } = await this.call<{ id: string }>('PUT', '/api/hosts', {
         name: this.host.hostName().slice(0, 80),
         hostKey: this.host.hostId,
+        trust: next,
       })
-      this.save({ listedId: id })
+      this.save({ listedId: id, trust: next })
       this.startPolling()
     } else {
       if (state.listedId) await this.call('DELETE', `/api/hosts/${state.listedId}`).catch(() => {})
@@ -597,37 +620,94 @@ export class AccountService {
     }
   }
 
-  /** Checks for relayed pairing requests while it runs, and immediately while Pair a device is open. */
+  /** What this host does when a device on the same account asks; saved, and told to the account while listed. */
+  async setTrust(trust: AccountTrust) {
+    if (this.state().listedId) await this.setListed(true, trust)
+    else this.save({ trust })
+  }
+
+  /**
+   * The access to pair a relayed request with on its own, or null to ask the person here. Only while listed and signed
+   * in, and never for an asking device whose earlier pairing here is gone, so removing a device sticks.
+   */
+  trustFor(peer: string, stillPaired: (deviceId: string) => boolean): 'owner' | 'viewer' | null {
+    const state = this.state()
+    if (!peer.startsWith('account:') || !state.listedId || !state.user || state.trust === 'ask') return null
+    const from = peer.slice('account:'.length)
+    const removed = Object.entries(state.accountDevices).some(([id, asker]) => asker === from && !stillPaired(id))
+    return removed ? null : state.trust
+  }
+
+  /** The account this host is signed in to, for telling the person here which account paired a device. */
+  email(): string | null {
+    return this.state().user?.email ?? null
+  }
+
+  /** Remembers which asking device a pairing this host made on its own belongs to. */
+  pairedOnItsOwn(peer: string, deviceId: string) {
+    const entries = Object.entries({ ...this.state().accountDevices, [deviceId]: peer.slice('account:'.length) })
+    this.save({ accountDevices: Object.fromEntries(entries.slice(-ACCOUNT_DEVICES_KEPT)) })
+  }
+
+  /** Checks for relayed pairing requests while it runs. */
   start() {
     if (this.state().listedId && this.state().user) this.startPolling()
   }
 
+  /**
+   * One loop per host: each check waits at the service until a request arrives (or `hostWaitMs` passes), so a request
+   * reaches this host in a second or two; after a failure it rests `hostRetryMs`.
+   */
   private startPolling() {
     this.stopPolling()
-    this.pollTimer = setInterval(() => void this.checkRelay().catch(() => {}), ACCOUNT_LIMITS.hostPollMs)
-    this.pollTimer.unref?.()
-    void this.checkRelay().catch(() => {})
+    const loop = { stop: false }
+    this.polling = loop
+    void (async () => {
+      while (!loop.stop && this.state().listedId && this.state().user) {
+        const ok = await this.checkRelay(true).then(
+          () => true,
+          () => false,
+        )
+        if (!ok && !loop.stop) await new Promise((resolve) => setTimeout(resolve, ACCOUNT_LIMITS.hostRetryMs).unref?.())
+      }
+      if (this.polling === loop) this.polling = null
+    })()
   }
 
   private stopPolling() {
-    if (this.pollTimer) clearInterval(this.pollTimer)
-    this.pollTimer = null
+    if (this.polling) this.polling.stop = true
+    this.polling = null
   }
 
-  async checkRelay() {
-    const listed = this.state().listedId
-    if (!listed) return
-    const messages = await this.call<{ id: string; path: string; body: unknown; from: string }[]>(
+  /** Answers the waiting relayed messages; a message that holds (a pairing wait) is answered without holding the rest. */
+  async checkRelay(wait = false) {
+    const state = this.state()
+    const listed = state.listedId
+    if (!listed || !state.user) return
+    const messages = await this.call<RelayMessage[]>(
       'GET',
-      `/api/hosts/${listed}/messages`,
+      `/api/hosts/${listed}/messages${wait ? `?wait=1&except=${[...this.inFlight].slice(0, 20).join(',')}` : ''}`,
+      undefined,
+      undefined,
+      ACCOUNT_LIMITS.hostWaitMs + 10_000,
     )
-    await Promise.all(
-      messages.map(async (message) => {
-        // A device's three messages come from one session, so the host sees one peer for the whole exchange.
-        const reply = await this.host.pairing(`account:${message.from}`, message.path, message.body)
-        await this.call('POST', `/api/hosts/${listed}/messages/${message.id}`, { reply })
-      }),
-    )
+    const answers = messages
+      .filter((message) => !this.inFlight.has(message.id))
+      .map(async (message) => {
+        this.inFlight.add(message.id)
+        try {
+          // The service only carries a listed host's messages from its own account; checked here as well.
+          const reply =
+            message.account === state.user!.id
+              ? await this.host.pairing(`account:${message.from}`, message.path, message.body)
+              : { status: 403, body: { error: 'This host is listed under another Ramu account.' } }
+          await this.call('POST', `/api/hosts/${listed}/messages/${message.id}`, { reply })
+        } finally {
+          this.inFlight.delete(message.id)
+        }
+      })
+    if (!wait) await Promise.all(answers)
+    else for (const answer of answers) void answer.catch(() => {})
   }
 
   /** Hosts listed in this person's account, for **Add a host → Your hosts**. */
@@ -639,7 +719,7 @@ export class AccountService {
 
   /**
    * One pairing message from this device to a listed host, carried by the account: posted, then waited for until the
-   * host answers (it checks every 30 seconds). Used as `requestPairing`'s `post`, so the exchange is the nearby one.
+   * host answers (it is waiting at the service, so within a second or two). Used as `requestPairing`'s `post`, so the exchange is the nearby one.
    */
   async relay(
     hostId: string,

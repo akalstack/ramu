@@ -39,6 +39,7 @@ export const HOST_PUSH_CHANNELS = [
   'mcp:changed',
   'device:permissions',
   'pairing:requests',
+  'pairing:joined',
   'permission:requests',
   'pairBack:invites',
   'background:connection',
@@ -111,6 +112,7 @@ const REQUIRED: Partial<Record<keyof PushEvents, Record<string, 'string' | 'numb
   'notify:inapp': { sessionId: 'string', taskId: 'string', title: 'string', body: 'string' },
   'notify:open': { sessionId: 'string', taskId: 'string' },
   'background:connection': { connected: 'boolean' },
+  'pairing:joined': { deviceId: 'string', name: 'string', role: 'string', email: 'string' },
 }
 
 const allChannels = new Set<string>([...HOST_PUSH_CHANNELS, ...WINDOW_PUSH_CHANNELS])
