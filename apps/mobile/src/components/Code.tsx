@@ -1,7 +1,7 @@
 import { memo, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import { Check, Copy } from 'lucide-react-native'
+import { Check, Copy, Play } from 'lucide-react-native'
 import { codeBlockLabel, dedentCode } from '@ramu/shared/workspace/codeLanguage'
 import { font, radius, space, useTheme } from '../theme'
 import { grammarFor, highlightLines, type Token } from '../runtime/highlight'
@@ -9,6 +9,8 @@ import { tap } from './ui'
 import { FileIcon } from './FileIcon'
 import { useSay } from '../i18n'
 import { RowToggle } from './rowToggle'
+import { runnableCommand } from '@ramu/shared/chat/runnableCommand'
+import { useRunCommand } from '../runtime/runCommand'
 
 export { grammarFor, highlightLines, type Token }
 
@@ -140,6 +142,9 @@ export function CodeBlock({ source: raw, hint }: { source: string; hint?: string
   const toggled = useContext(RowToggle)
   const source = useMemo(() => dedentCode(raw), [raw])
   const header = codeBlockLabel(source, hint)
+  // In a thread, a shell block runs in its terminal; elsewhere it is only shown.
+  const runCommand = useRunCommand()
+  const command = runCommand ? runnableCommand(source, hint) : null
   const total = useMemo(() => source.split('\n').length, [source])
   const [expanded, setExpanded] = useState(false)
   const collapsed = total > COLLAPSE_OVER && !expanded
@@ -195,6 +200,29 @@ export function CodeBlock({ source: raw, hint }: { source: string; hint?: string
         >
           {header.label === 'Path' || header.label === 'Text' ? say(header.label) : header.label}
         </Text>
+        {command && runCommand ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={say('Run in terminal')}
+            hitSlop={6}
+            onPress={() => {
+              tap()
+              runCommand(command)
+            }}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 5,
+              height: 28,
+              paddingHorizontal: space.s,
+              borderRadius: radius.full,
+              backgroundColor: pressed ? c.pressed : 'transparent',
+            })}
+          >
+            <Play size={13} color={c.muted} />
+            <Text style={{ color: c.muted, fontSize: font.caption }}>{say('Run')}</Text>
+          </Pressable>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={say(copied ? 'Copied' : 'Copy code')}

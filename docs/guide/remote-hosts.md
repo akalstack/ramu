@@ -109,3 +109,5 @@ These threads run at **Allow edits**, show **Started from a terminal by â€¹nameâ
 See the [mobile guide](../../apps/mobile/README.md) to pair the iOS or Android app.
 
 Terminals live on the host, so every device shows the same shells: what you type on one appears on the other. A terminal opened on the phone does not open a tab on the desktop by itself; the desktop's Terminal button gets a dot, and the shell joins the panel the next time you open it (straight away if the panel is already open).
+
+**Run** on a shell code block in a reply (`bash`, `sh`, `zsh`, `console` and the like) types that command into the thread's workspace shell that is not running anything, or opens a new one in the workspace folder, and shows it: the terminal panel on the desktop, the terminal screen on the phone. A `console` block runs only its lines after a `$ ` prompt, not the output shown between them. It needs the **terminals** permission on a paired device, and a viewer pairing does not get it.

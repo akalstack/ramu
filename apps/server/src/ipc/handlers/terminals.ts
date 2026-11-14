@@ -30,6 +30,23 @@ export const registerTerminalHandlers: RegisterHandlers = ({ workspace, terminal
     run: (ids: string[]) => ids.filter((t) => terminals.busy(t)).length,
   },
   'term.list': { args: z.tuple([id]), run: (taskId: string) => terminals.list(taskId) },
+  /**
+   * Types a command into the workspace's newest shell that is not running anything, or a new one in its folder, and
+   * returns that shell for the person to watch: Run on a command in a reply.
+   */
+  'term.run': {
+    args: z.tuple([id, z.string().trim().min(1).max(20_000)]),
+    run: (ctx: string, command: string) => {
+      const idle = terminals
+        .list(ctx)
+        .filter((terminal) => !terminal.background && !terminal.exited)
+        .reverse()
+        .find((terminal) => !terminals.busy(terminal.id))
+      const terminal = idle ?? terminals.open(ctx, null, workspace.agentScope(ctx).cwd, 120, 32)
+      terminals.write(terminal.id, `${command.replace(/\r?\n/g, '\r')}\r`)
+      return terminal
+    },
+  },
   'term.background.launch': {
     args: z.tuple([id, id.nullable(), z.string().min(1).max(4000)]),
     run: (taskId: string, repoId: string | null, command: string) =>

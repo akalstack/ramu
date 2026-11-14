@@ -1673,6 +1673,8 @@ export interface RamuMethods extends ArtifactMethods {
     events: { seq: number; event: AgentEvent }[]
   }
   'term.list'(taskId: string): TerminalInfo[]
+  /** Runs a command in the workspace's newest idle shell, or a new one, and returns that shell. */
+  'term.run'(ctx: string, command: string): TerminalInfo
   /** Starts a persistent command in the thread's folder; repeating a running one returns it instead of starting another. */
   'term.background.launch'(taskId: string, repoId: string | null, command: string): BackgroundTerminalInfo
   /** The thread's persistent commands, running first. Works while the thread is idle. */

@@ -27,3 +27,17 @@ describe('ChatCodeBlock header', () => {
     expect(header('/Users/me/project/src')).toContain('Path')
   })
 })
+
+const { RunCommandContext } = await import('../src/chat/runCommandContext')
+const render = (source: string, hint: string, run: ((command: string) => void) | null) =>
+  renderToStaticMarkup(
+    createElement(RunCommandContext.Provider, { value: run }, createElement(ChatCodeBlock, { source, hint })),
+  )
+
+describe('ChatCodeBlock Run', () => {
+  it('offers Run on a shell block in a thread, and not on other code or outside a thread', () => {
+    expect(render('vercel login', 'bash', () => {})).toContain('Run in terminal')
+    expect(render('const a = 1', 'ts', () => {})).not.toContain('Run in terminal')
+    expect(render('vercel login', 'bash', null)).not.toContain('Run in terminal')
+  })
+})

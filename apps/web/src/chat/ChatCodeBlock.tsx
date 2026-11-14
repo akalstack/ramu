@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react'
 const MermaidBlock = lazy(() => import('./MermaidBlock').then((m) => ({ default: m.MermaidBlock })))
 import { useEffect, useState, type ComponentProps } from 'react'
 import type { Components, ExtraProps } from 'react-markdown'
-import { Check, Copy } from 'lucide-react'
+import { Check, Copy, Play } from 'lucide-react'
 import { cn } from 'cn'
 import { Button } from '@/components/desktop-button'
 import {
@@ -19,6 +19,8 @@ import { errorText } from '../lib/errors'
 import { notifyError } from './Notifications'
 import { t, useLanguage } from '../i18n'
 import { useColorizedLines } from '../editor/colorize'
+import { runnableCommand } from '@ramu/shared/chat/runnableCommand'
+import { useRunCommand } from './runCommandContext'
 
 export function ChatCodeBlock({ source, hint }: { source: string; hint?: string }) {
   useLanguage()
@@ -30,6 +32,9 @@ export function ChatCodeBlock({ source, hint }: { source: string; hint?: string 
   }, [copied, source])
   useEffect(() => setCopied(false), [source])
   const header = codeBlockLabel(source, hint)
+  // In a thread, a shell block runs in its terminal; elsewhere (skill files, artifacts) it is only shown.
+  const runCommand = useRunCommand()
+  const command = runCommand ? runnableCommand(source, hint) : null
   // A diff is drawn as added and removed rows, its code colored as the language it changes; the rest by its language.
   const diff = /^(diff|patch)$/i.test(hint ?? '')
   const lines = useColorizedLines(diff ? '' : source, hint)
@@ -54,6 +59,18 @@ export function ChatCodeBlock({ source, hint }: { source: string; hint?: string 
           <span className="truncate">{header.label === 'Path' ? t('Path') : header.label}</span>
         </CodeBlockTitle>
         <CodeBlockActions>
+          {command && runCommand && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="text-muted-foreground hover:bg-transparent hover:text-foreground"
+              aria-label={t('Run in terminal')}
+              title={t('Run in terminal')}
+              onClick={() => runCommand(command)}
+            >
+              <Play size={14} />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon-xs"

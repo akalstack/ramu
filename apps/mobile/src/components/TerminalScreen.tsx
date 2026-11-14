@@ -40,10 +40,13 @@ export interface TerminalTarget {
 export function TerminalScreen({
   computerId,
   ctx: initialCtx,
+  focus,
   onBack,
 }: {
   computerId: string
   ctx: string
+  /** A shell to show first, such as the one a Run button typed into. */
+  focus?: string
   onBack(): void
 }) {
   const say = useSay()
@@ -96,6 +99,7 @@ export function TerminalScreen({
   const autoOpened = useRef(new Set<string>())
   const cache = useRef(new Map<string, { tabs: TerminalInfo[]; activeId: string | undefined }>())
   const activeId = useRef<string | undefined>(undefined)
+  const focusId = useRef(focus)
   const keySequence = useRef(0)
   const terminal = tabs[active]
   const computer = store.computers.find((c) => c.id === chat?.computerId)
@@ -184,7 +188,8 @@ export function TerminalScreen({
       if (!alive || (!list.length && openingRef.current)) return
       setTabs(list)
       setActive((previous) => {
-        const index = list.findIndex((t) => t.id === activeId.current)
+        const index = list.findIndex((t) => t.id === (focusId.current ?? activeId.current))
+        if (index >= 0) focusId.current = undefined
         return index >= 0 ? index : Math.min(previous, Math.max(0, list.length - 1))
       })
     }

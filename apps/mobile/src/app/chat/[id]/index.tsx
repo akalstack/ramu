@@ -109,6 +109,7 @@ import {
   TranscriptListRow,
   type ItemMeta,
 } from '../../../components/Transcript'
+import { RunCommandProvider } from '../../../runtime/runCommand'
 import { SelectionBar } from '../../../components/SelectionBar'
 import { Button, Chip, ConnectionDot, IconButton, Segmented, Sheet, T, tap } from '../../../components/ui'
 import { BottomFade, Glass, TopFade, floatingChrome } from '../../../components/Glass'
@@ -1223,954 +1224,985 @@ export default function ChatScreen() {
   ]
 
   return (
-    <Screen>
-      <Header
-        align="left"
-        title={chat.title}
-        subtitle={
-          chat.projectId !== STANDALONE ? (
-            // Where the thread works: its project and branch, under the title instead of inside the conversation.
-            <View
-              accessible
-              accessibilityLabel={`Project ${project}${branch ? `, branch ${branch}` : ''}`}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' }}
-            >
-              {chat.startedFrom ? <GitFork size={11} color={c.muted} /> : null}
-              <T size={12} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
-                {project}
-              </T>
-              {identity ? (
-                <T size={12} tone="muted" numberOfLines={1}>
-                  · {identity.name}
-                </T>
-              ) : null}
-              {branch ? (
-                <>
-                  <GitBranch size={11} color={c.muted} />
-                  <T size={12} mono tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
-                    {branch}
-                  </T>
-                </>
-              ) : null}
+    <RunCommandProvider
+      chat={chat}
+      enabled={computer?.access !== 'viewer' && store.mayUse(chat.computerId, 'terminal')}
+    >
+      <Screen>
+        <Header
+          align="left"
+          title={chat.title}
+          subtitle={
+            chat.projectId !== STANDALONE ? (
+              // Where the thread works: its project and branch, under the title instead of inside the conversation.
               <View
                 accessible
-                accessibilityLabel={`${computer?.name ?? say_('Host unavailable')} · ${say_(computer?.status === 'online' ? 'Online' : computer?.status === 'connecting' ? 'Connecting…' : 'Offline')}`}
+                accessibilityLabel={`Project ${project}${branch ? `, branch ${branch}` : ''}`}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' }}
               >
+                {chat.startedFrom ? <GitFork size={11} color={c.muted} /> : null}
+                <T size={12} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+                  {project}
+                </T>
+                {identity ? (
+                  <T size={12} tone="muted" numberOfLines={1}>
+                    · {identity.name}
+                  </T>
+                ) : null}
+                {branch ? (
+                  <>
+                    <GitBranch size={11} color={c.muted} />
+                    <T size={12} mono tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+                      {branch}
+                    </T>
+                  </>
+                ) : null}
+                <View
+                  accessible
+                  accessibilityLabel={`${computer?.name ?? say_('Host unavailable')} · ${say_(computer?.status === 'online' ? 'Online' : computer?.status === 'connecting' ? 'Connecting…' : 'Offline')}`}
+                >
+                  <ConnectionDot status={computer?.status ?? 'offline'} size={5} />
+                </View>
+              </View>
+            ) : (
+              <View
+                accessible
+                accessibilityLabel={`Host: ${computer?.name ?? 'Unavailable'}, ${computer?.status ?? 'offline'}`}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' }}
+              >
+                <Monitor size={11} color={c.muted} />
+                <T size={12} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+                  {computer?.name ?? 'Host unavailable'}
+                </T>
                 <ConnectionDot status={computer?.status ?? 'offline'} size={5} />
               </View>
-            </View>
-          ) : (
-            <View
-              accessible
-              accessibilityLabel={`Host: ${computer?.name ?? 'Unavailable'}, ${computer?.status ?? 'offline'}`}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' }}
-            >
-              <Monitor size={11} color={c.muted} />
-              <T size={12} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
-                {computer?.name ?? 'Host unavailable'}
-              </T>
-              <ConnectionDot status={computer?.status ?? 'offline'} size={5} />
-            </View>
-          )
-        }
-        right={
-          !chat.pending ? (
-            <>
-              {chat.projectId !== STANDALONE ? (
-                <HeaderButton
-                  icon={GitBranch}
-                  label={tr('Source Control')}
-                  systemIcon="arrow.triangle.branch"
-                  onPress={() => setSheet(true)}
-                />
-              ) : (
-                <HeaderButton
-                  icon={Folder}
-                  label={tr('Explorer')}
-                  systemIcon="folder"
-                  onPress={() =>
-                    router.push({ pathname: '/explorer', params: { computer: chat.computerId, ctx: chat.taskId } })
-                  }
-                />
-              )}
-              <HeaderMenu
-                label={tr('Thread actions')}
-                onPress={() => setActions('menu')}
-                actions={[
-                  // The same groups as the sheet: workspace tools, usage, then the thread itself, with Delete last.
-                  ...chatExtras
-                    .filter((extra) => extra.onPress)
-                    .map((extra) => ({
-                      label: extra.label,
-                      onPress: extra.onPress!,
-                      icon: extra.symbol,
-                      section: extra.group,
-                    })),
-                  ...(!viewOnly
-                    ? [
-                        {
-                          label: say_(chat.pinnedAt !== null ? 'Unpin' : 'Pin to top'),
-                          icon: (chat.pinnedAt !== null ? 'pin.slash' : 'pin') as 'pin',
-                          section: 'thread',
-                          onPress: () => {
-                            if (viewerNow()) return
-                            void latestStore.current
-                              .invoke(chat.computerId, 'tasks.pin', chat.taskId, chat.pinnedAt === null)
-                              .then(() => store.refresh(chat.computerId))
-                              .catch((error) => say(String(error)))
-                          },
-                        },
-                        {
-                          label: say_('Rename'),
-                          icon: 'pencil' as const,
-                          section: 'thread',
-                          onPress: () => {
-                            if (!viewerNow()) setActions('rename')
-                          },
-                        },
-                        ...(chat.settings && chat.titleGenerationState !== 'pending' && !offline
-                          ? [
-                              {
-                                label: chat.titleGenerationState === 'failed' ? t.retryTitleGeneration : t.renameWithAI,
-                                icon: 'sparkles' as const,
-                                section: 'thread',
-                                onPress: () => {
-                                  if (viewerNow()) return
-                                  void latestStore.current
-                                    .invoke(chat.computerId, 'tasks.generateTitle', chat.taskId, chat.settings!, true)
-                                    .then(() => store.refresh(chat.computerId))
-                                    .catch((error) => say(String(error)))
-                                },
-                              },
-                            ]
-                          : []),
-                        {
-                          label: say_(chat.status === 'archived' ? 'Unarchive' : 'Archive'),
-                          icon: 'archivebox' as const,
-                          section: 'thread',
-                          onPress: () => {
-                            if (viewerNow()) return
-                            const archiving = chat.status !== 'archived'
-                            void latestStore.current
-                              .invoke(chat.computerId, 'tasks.archive', chat.taskId, archiving)
-                              .then(() => store.refresh(chat.computerId))
-                              // Archiving leaves the thread, as the sheet's Archive does.
-                              .then(() => {
-                                if (!archiving) return
-                                offerThreadUndo(latestStore.current, chat, 'archived')
-                                goBackOrHome(router)
-                              })
-                              .catch((error) => say(String(error)))
-                          },
-                        },
-                      ]
-                    : []),
-                  {
-                    label: say_('Copy thread ID'),
-                    icon: 'doc.on.doc' as const,
-                    section: 'thread',
-                    onPress: () => void Clipboard.setStringAsync(chat.taskId),
-                  },
-                  ...(!viewOnly
-                    ? [
-                        {
-                          label: say_('Delete…'),
-                          icon: 'trash' as const,
-                          destructive: true,
-                          section: 'danger',
-                          onPress: () => {
-                            if (!viewerNow())
-                              void confirmChatDeletion(latestStore.current, chat, () => goBackOrHome(router))
-                          },
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-            </>
-          ) : null
-        }
-      />
-      <PlanUsageSheet
-        hosts={[chat.computerId]}
-        open={usageOpen}
-        onClose={() => setUsageOpen(false)}
-        provider={chat.provider}
-        accountId={chat.settings?.accountId}
-        context={
-          <View style={{ padding: space.m }}>
-            <ContextMeter computerId={chat.computerId} sessionId={chat.sessionId} />
-          </View>
-        }
-      />
-      <MessageMenu.Provider
-        value={{
-          readOnly: viewOnly,
-          select: setSelection,
-          goTo: (itemId) => {
-            const index = pageRows.findIndex((row) => row.id === itemId)
-            if (index < 0) return
-            following.current = false
-            // A row not laid out yet can refuse to be scrolled to.
-            try {
-              scroll.current?.scrollToIndex({ index, animated: true, viewPosition: 0 })
-            } catch {}
-          },
-          // Quote: "> line" blocks appended to the draft, as the desktop's Quote does.
-          quote: (text) => {
-            const key = `${chat.computerId}:chat:${chat.taskId || chat.id}`
-            const current = store.drafts[key] ?? ''
-            const quoted = text
-              .trim()
-              .split('\n')
-              .map((line) => `> ${line}`)
-              .join('\n')
-            const next = current.trim() ? `${current.replace(/\s+$/, '')}\n\n${quoted}\n\n` : `${quoted}\n\n`
-            store.setDraft(key, next)
-            setRestore((r) => ({ text: next, n: (r?.n ?? 0) + 1 }))
-          },
-          // Quote in new chat: opens New chat in this project with the passage already quoted in the box.
-          // Puts back every file the agent changed after this message, after showing which ones.
-          undo: async (seq) => {
-            if (viewerNow() || !chat.sessionId) return
-            try {
-              const preview = await store.invoke(chat.computerId, 'reviews.chatUndoPreview', chat.sessionId, seq)
-              const ready = preview.files.filter((f) => f.status === 'ready')
-              const blocked = preview.files.filter((f) => f.status === 'conflict')
-              if (!ready.length)
-                return Alert.alert(
-                  'Nothing to undo',
-                  preview.files.map((f) => `${f.path}: ${f.reason}`).join('\n') ||
-                    'The agent has not changed files since this message.',
-                )
-              Alert.alert(
-                `Undo ${ready.length} file${ready.length === 1 ? '' : 's'}?`,
-                `${ready
-                  .map((f) => `${f.repoName}/${f.path}${f.remove ? ' (delete)' : ''}`)
-                  .slice(0, 8)
-                  .join('\n')}${blocked.length ? `\n\n${blocked.length} changed since and will be left alone.` : ''}`,
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'Undo',
-                    style: 'destructive',
-                    onPress: () =>
-                      !viewerNow() &&
-                      void latestStore.current
-                        .invoke(
-                          chat.computerId,
-                          'reviews.chatUndoApply',
-                          preview.token,
-                          ready.map((f) => f.fileId),
-                        )
-                        .then(() => say('Restored the files'))
-                        .catch((e) => say(e instanceof Error ? e.message : String(e))),
-                  },
-                ],
-              )
-            } catch (error) {
-              Alert.alert('Could not undo', error instanceof Error ? error.message : String(error))
-            }
-          },
-          // Edit from here, as on the desktop: the thread rewinds to before this message (stopping the agent first),
-          // the agent's file changes since can be put back, and the message returns to the box to change and send.
-          edit: async (seq, text, files) => {
-            if (viewerNow() || !chat.sessionId) return
-            if (!store.isOnline(chat.computerId)) {
-              Alert.alert(tr('Edit from here?'), tr('Reconnect to {0} to edit from here.', { 0: computer?.name ?? '' }))
-              return
-            }
-            const sessionId = chat.sessionId
-            try {
-              const done = await editFromHere({
-                invoke: (method, ...args) => looseInvoke(latestStore.current.invoke)(chat.computerId, method, ...args),
-                sessionId,
-                seq,
-                stillWritable: () => !viewerNow(),
-                confirm: (revertable) =>
-                  new Promise((resolve) =>
-                    Alert.alert(
-                      tr('Edit from here?'),
-                      tr(
-                        running
-                          ? 'Stops the agent and rewinds the thread to before this message. Your prompt and attachments return to the message box.'
-                          : 'Rewinds the thread to before this message. Your prompt and attachments return to the message box.',
-                      ),
-                      [
-                        { text: tr('Cancel'), style: 'cancel', onPress: () => resolve(null) },
-                        ...(revertable
-                          ? [
-                              {
-                                text:
-                                  revertable === 1
-                                    ? tr('Revert 1 file too')
-                                    : tr('Revert {0} files too', { 0: revertable }),
-                                onPress: () => resolve('revert' as const),
-                              },
-                            ]
-                          : []),
-                        { text: tr('Edit from here'), onPress: () => resolve('keep' as const) },
-                      ],
-                      { cancelable: true, onDismiss: () => resolve(null) },
-                    ),
-                  ),
-              })
-              if (done !== 'rewound') return
-              void latestStore.current.refresh(chat.computerId)
-              setEditing({ seq, files })
-              setRestore((r) => ({ text: visibleText(text), n: (r?.n ?? 0) + 1 }))
-            } catch (error) {
-              Alert.alert(tr('Edit from here?'), error instanceof Error ? error.message : String(error))
-            }
-          },
-          quoteNew: (text) =>
-            router.push({ pathname: '/new', params: { project: chat.projectId, quote: text.slice(0, 20_000) } }),
-          aside: (text, from) => {
-            if (!viewerNow() && chat.sessionId)
-              router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id, quote: text.slice(0, 20_000), from } })
-          },
-        }}
-      >
-        <ChatMentions.Provider value={composerTeammate.mentions}>
-          <CancelPendingSettings.Provider value={() => setStaged(null)}>
-            <RowToggle.Provider value={holdScroll}>
-              <PageLegendList
-                key={chat.id}
-                ref={scroll}
-                contentInsetAdjustmentBehavior="automatic"
-                automaticallyAdjustsScrollIndicatorInsets
-                ListHeaderComponent={
-                  <View style={{ gap: space.s, paddingBottom: space.m }}>
-                    {chat.branchNamingFallback ? (
-                      <T size={font.caption} tone="muted">
-                        {t.branchNamingFallback}
-                      </T>
-                    ) : null}
-                    {hiddenTurns > 0 ? (
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={() => {
-                          tap()
-                          following.current = false
-                          setPagedBack(true)
-                          setTurnsShown((n) => n + TURN_PAGE)
-                        }}
-                        style={{
-                          alignSelf: 'center',
-                          minHeight: 44,
-                          paddingHorizontal: space.l,
-                          borderRadius: radius.full,
-                          justifyContent: 'center',
-                          backgroundColor: c.fill,
-                        }}
-                      >
-                        <T size={font.control} weight="500" tone="soft">
-                          {store.language === 'id' ? 'Tampilkan giliran sebelumnya' : 'Show earlier turns'}
-                        </T>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                }
-                data={listRows}
-                viewabilityConfig={contentViewability}
-                onViewableItemsChanged={contentViewabilityChanged}
-                // Earlier turns arrive above what you are reading; they must not move it.
-                maintainVisibleContentPosition={pagedBack ? { data: true, size: true } : undefined}
-                keyExtractor={rowKey}
-                renderItem={renderRow}
-                // Each kind keeps its own measured size, so unmeasured rows above and below are estimated closely.
-                // A message on its way is measured as the sent message it becomes.
-                getItemType={(item) => (item.kind === 'pending' || item.kind === 'steering' ? 'user' : item.kind)}
-                estimatedItemSize={260}
-                drawDistance={400}
-                // Lays out the newest rows first instead of the whole page from the top.
-                initialScrollAtEnd
-                // Pinned to the end, gliding as a reply streams in or a message is sent (the list gathers the changes of
-                // half a second into one motion), and without motion before the chat is shown or with Reduce Motion on.
-                // It stops following once the reader scrolls up past its threshold, and a chat that fits on screen is
-                // left where UIKit rests it.
-                maintainScrollAtEnd={overflowing && !followPaused ? { animated: revealed && !reducedMotion } : false}
-                ItemSeparatorComponent={RowSeparator}
-                style={{ flex: 1 }}
-                contentInset={ios ? { bottom: cover } : undefined}
-                scrollIndicatorInsets={ios ? { bottom: cover } : undefined}
-                contentContainerStyle={{
-                  padding: space.l,
-                  paddingBottom: ios
-                    ? space.l
-                    : (floatingChrome ? composerHeight + space.l : space.l) + keyboard.height,
-                }}
-                onLayout={(event) => {
-                  metrics.current.viewport = event.nativeEvent.layout.height
-                  catchUp()
-                }}
-                onScroll={(event) => {
-                  const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
-                  metrics.current.offset = contentOffset.y
-                  if (
-                    ios &&
-                    !userScrolling.current &&
-                    contentOffset.y < 0 &&
-                    contentSize.height + metrics.current.cover <= layoutMeasurement.height + contentOffset.y
-                  ) {
-                    measuredRest.current = contentOffset.y
-                    restTop.current = contentOffset.y
-                  }
-                  const gap = contentSize.height - contentOffset.y - layoutMeasurement.height + metrics.current.cover
-                  // Only the reader's own scrolling decides whether to follow the end. The list's first, programmatic offset
-                  // (resting at the top before it is measured) used to switch following off, so a chat opened at its top.
-                  const position = transcriptScrollState(
-                    following.current,
-                    gap,
-                    userScrolling.current,
-                    !!settling.current,
-                  )
-                  following.current = position.following
-                  setAway(position.away)
-                  setScrolled(contentOffset.y > 8 - topInset)
-                }}
-                scrollEventThrottle={16}
-                onScrollBeginDrag={() => {
-                  userScrolling.current = true
-                }}
-                onScrollEndDrag={(event) => {
-                  if (!event.nativeEvent.velocity?.y) userScrolling.current = false
-                }}
-                onMomentumScrollEnd={() => {
-                  userScrolling.current = false
-                }}
-                onContentSizeChange={(_, height) => {
-                  metrics.current.content = height
-                  settleReveal()
-                  catchUp()
-                }}
-                keyboardDismissMode="on-drag"
-                keyboardShouldPersistTaps="handled"
-                ListFooterComponent={
-                  <View style={{ gap: space.m, paddingTop: space.m }}>
-                    {/* The running turn's status at its end, as on the desktop: a shimmering label, unless the newest row
-                        (reasoning, or a tool group at work) already says what the agent is doing. */}
-                    <WorkingLine inline quiet={lastShowsWork} chat={chat} sending={pending.length > 0} />
-                  </View>
-                }
-              />
-              {/* Covers the transcript while it settles at its end, then fades away; the composer stays above it. */}
-              <OpeningCover
-                visible={!revealed}
-                color={c.window}
-                spinner={c.muted}
-                top={topInset}
-                bottom={composerHeight}
-              />
-              {ios ? null : <TopFade visible={scrolled} color={c.window} />}
-              {finding ? (
-                <ChatFindBar
-                  rows={pageRows}
-                  onJump={jumpToMatch}
-                  onClose={() => {
-                    setFinding(false)
-                    // The highlight belongs to the find; closing it leaves plain text.
-                    setFound(null)
-                  }}
-                />
-              ) : null}
-              <KeyboardLift keyboard={keyboard}>
-                <BottomFade height={composerHeight * 0.75} color={c.window} />
-                {selection ? (
-                  <View
-                    style={{ position: 'absolute', left: 0, right: 0, bottom: composerHeight }}
-                    onLayout={(event) => setSelectionBarHeight(event.nativeEvent.layout.height)}
-                  >
-                    <SelectionBar selection={selection} />
-                  </View>
-                ) : null}
-                {/* iOS/web: the glass composer floats over the transcript, which scrolls beneath it. */}
-                <ComposerDock onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
-                  {chat.status === 'archived' && !viewer ? (
-                    // An archived thread takes no messages; it is unarchived first, which is offered right here.
-                    <Glass
-                      radius={radius.xl}
-                      style={{
-                        marginHorizontal: space.s + 2,
-                        padding: space.m,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: space.m,
-                      }}
-                    >
-                      <Archive size={18} color={c.muted} />
-                      <T tone="soft" style={{ flex: 1 }}>
-                        {tr('This thread is archived.')}
-                      </T>
-                      <Button
-                        kind="secondary"
-                        title={tr('Unarchive')}
-                        onPress={() =>
-                          void store
-                            .invoke(chat.computerId, 'tasks.archive', chat.taskId, false)
-                            .then(() => store.refresh(chat.computerId))
-                            .catch((error) =>
-                              Alert.alert(tr('Unarchive'), error instanceof Error ? error.message : String(error)),
-                            )
-                        }
-                      />
-                    </Glass>
-                  ) : (
-                    <Composer
-                      activity={
-                        <>
-                          <ThreadActivity
-                            inlineStatus
-                            chat={chat}
-                            onEditQueued={offline ? undefined : editQueued}
-                            leading={
-                              <>
-                                <ComputerUseNotice chat={chat} onOpen={() => setTool('computer')} />
-                                <BrowserNotice chat={chat} tabs={browserTabs.tabs} onOpen={() => setTool('browser')} />
-                              </>
-                            }
-                            actions={[
-                              ...(toolActivity.terminal
-                                ? [{ label: 'Terminal', icon: SquareTerminal, onPress: openTerminal }]
-                                : []),
-                            ]}
-                          >
-                            <ThreadServers
-                              key={`servers:${chat.computerId}:${chat.taskId}`}
-                              chat={chat}
-                              open={serversFor === chat.id}
-                              onOpen={() => setServersFor(chat.id)}
-                              onClose={() => setServersFor((current) => (current === chat.id ? null : current))}
-                              onOpenPage={(url) => {
-                                setPageToOpen(url)
-                                // iOS presents the browser only once the sheet has gone.
-                                setTimeout(() => setTool('browser'), 300)
-                              }}
-                            />
-                            <BackgroundTerminals
-                              key={`${chat.computerId}:${chat.taskId}`}
-                              chat={chat}
-                              open={backgroundFor === chat.id}
-                              onOpen={() => setBackgroundFor(chat.id)}
-                              onClose={() => setBackgroundFor((current) => (current === chat.id ? null : current))}
-                            />
-                          </ThreadActivity>
-                        </>
-                      }
-                      running={running}
-                      model={joining ? joining.model : staged?.chatId === chat.id ? staged.model : currentModel}
-                      onModel={joining ? chooseJoinModel : changeModel}
-                      onSend={async (text, mode, attachments, context) => {
-                        if (editing) return submitEdit(text, mode, attachments, context)
-                        if (staged?.chatId === chat.id) {
-                          const m = staged.model
-                          setStaged(null)
-                          await store.setModel(chat.id, m.provider, m.model, m.effort, m.settings)
-                        }
-                        // "/aside question" (or "/btw") asks beside the chat: the agent keeps working and never sees it.
-                        const side = /^\/(?:aside|btw)\s+(\S[\s\S]*)$/.exec(text.trim())
-                        if (side && !attachments?.length && chat.sessionId)
-                          // One side chat per thread: /btw continues it rather than starting another.
-                          return store
-                            .invoke(chat.computerId, 'aside.list', chat.sessionId)
-                            .then((asides) => {
-                              const latest = asides.find((aside) => aside.id === sideChat(asides).continueId)
-                              return store.invoke(
-                                chat.computerId,
-                                'aside.ask',
-                                chat.sessionId!,
-                                latest?.id ?? null,
-                                latest?.quote ?? '',
-                                latest?.quoteFrom ?? 'assistant',
-                                side[1]!.trim(),
-                              )
-                            })
-                            .then(() => {
-                              router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id } })
-                            })
-                        // `@lead` goes to the main agent; `@name` talks to a teammate here or brings a model or custom
-                        // agent in; without a mention, a teammate chosen as the recipient gets it.
-                        const lead = /^@(?:lead|main)\s+/i.test(text.trim())
-                        if (lead) setRecipientId(null)
-                        const mention =
-                          chat.sessionId && chat.settings && !attachments?.length && !lead
-                            ? resolveMention(text, teammates, models, agents, abilityModels)
-                            : null
-                        const target =
-                          mention ??
-                          (recipient && !lead && !attachments?.length && text.trim() && !text.trim().startsWith('/')
-                            ? ({ kind: 'teammate', task: recipient, body: text.trim() } as const)
-                            : null)
-                        if (target && chat.sessionId && chat.settings) {
-                          const base = chat.settings
-                          const sessionId = chat.sessionId
-                          if (target.kind === 'teammate')
-                            return store
-                              .invoke(chat.computerId, 'agent.messageTask', sessionId, target.task.agentId, target.body)
-                              .then(() => setRecipientId(target.task.agentId))
-                          // What the composer showed for this teammate is what it joins with.
-                          const start = joiningTeammate(target, base)
-                          const shown = joining?.key === start.key ? joining : null
-                          const chosen = shown?.model
-                          const settings: AgentSettings = chosen
-                            ? {
-                                ...start.settings,
-                                ...chosen.settings,
-                                provider: chosen.provider,
-                                model: chosen.model,
-                                effort: (chosen.effort || null) as AgentSettings['effort'],
-                              }
-                            : start.settings
-                          return store
-                            .invoke(
-                              chat.computerId,
-                              'agent.addTeammate',
-                              sessionId,
-                              settings,
-                              shown?.mode ?? start.mode,
-                              target.kind === 'agent' ? `${target.agent.instructions}\n\n${target.body}` : target.body,
-                            )
-                            .then((joined) => setRecipientId(joined.agentId))
-                        }
-                        followSend()
-                        // The message queues behind the compaction and goes out once it finishes, as after a typed /compact.
-                        if (compactFirst) await store.send(chat.id, '/compact', 'queue')
-                        setKeepHistoryFor(null)
-                        return store.send(chat.id, text, mode, attachments, context)
-                      }}
-                      compaction={
-                        compactOffer !== null
-                          ? {
-                              tokens: compactOffer,
-                              compact: compactFirst,
-                              onChange: (compact) => setKeepHistoryFor(compact ? null : chat.id),
-                            }
-                          : undefined
-                      }
-                      taskId={chat.taskId || undefined}
-                      chatId={chat.id}
-                      onFindQuote={findQuote}
-                      teammate={composerTeammate}
-                      header={
-                        joining ? (
-                          // One row says who joins and how; × takes the mention out and the message goes to the thread again.
-                          // The composer's text inset, so the row lines up with what is typed below it.
-                          <View style={{ width: '100%', gap: 4, paddingLeft: space.s + 4, paddingVertical: 2 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
-                              <ProviderIcon provider={joining.model.provider} size={14} />
-                              <T size={font.control} weight="500" numberOfLines={1} style={{ flexShrink: 1 }}>
-                                {tr('{0} joins as', { 0: joining.name })}
-                              </T>
-                              <View style={{ flex: 1, minWidth: 140, maxWidth: 220, marginLeft: 'auto' }}>
-                                <Segmented<TeammateMode>
-                                  small
-                                  value={joining.mode}
-                                  onChange={(mode) => setJoinEdits({ key: joining.key, model: joinOwn?.model, mode })}
-                                  options={[
-                                    { key: 'review', label: tr('Review') },
-                                    { key: 'take-over', label: tr('Take over') },
-                                  ]}
-                                />
-                              </View>
-                              <IconButton
-                                icon={X}
-                                label={tr('Don’t add {0}', { 0: joining.name })}
-                                size={32}
-                                tone="muted"
-                                onPress={() => writeDraft(draftText.replace(/^@\S+\s*/, ''))}
-                              />
-                            </View>
-                            <T size={font.caption} tone="muted" numberOfLines={1} style={{ paddingBottom: 4 }}>
-                              {joining.mode === 'review'
-                                ? tr('Reads the changes and reports. Never edits.')
-                                : tr('Edits while the lead waits, then hands back.')}
-                            </T>
-                          </View>
-                        ) : teammates.length && !viewer ? (
-                          <ScrollView
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            keyboardShouldPersistTaps="always"
-                          >
-                            {/* Who the next message goes to: a recipient, not a view, so the row says "To". */}
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
-                              <T size={font.caption} tone="muted" style={{ paddingLeft: space.s, paddingRight: 2 }}>
-                                {tr('To')}
-                              </T>
-                              <Chip
-                                small
-                                label={tr('Main agent')}
-                                selected={!recipient}
-                                onPress={() => setRecipientId(null)}
-                              />
-                              {teammates.map((task) => (
-                                <Chip
-                                  key={task.agentId}
-                                  small
-                                  icon={Users}
-                                  label={task.name}
-                                  maxLabelWidth={140}
-                                  selected={recipient?.agentId === task.agentId}
-                                  accessibilityLabel={tr('To {0}', { 0: task.name })}
-                                  accessibilityHint={tr('Touch and hold to see its work')}
-                                  onPress={() => setRecipientId(task.agentId)}
-                                  onLongPress={() => setTeammateShown(task.agentId)}
-                                />
-                              ))}
-                            </View>
-                          </ScrollView>
-                        ) : undefined
-                      }
-                      computerId={chat.computerId}
-                      draftKey={`${chat.computerId}:chat:${chat.taskId || chat.id}`}
-                      onStop={() => store.stop(chat.id)}
-                      goal={chat.goal}
-                      queue={chat.queue?.filter((message) => message.mode !== 'steer')}
-                      queuePaused={chat.queuePaused}
-                      onResumeQueue={
-                        chat.sessionId
-                          ? () =>
-                              void store
-                                .invoke(chat.computerId, 'agent.resumeQueue', chat.sessionId!)
+            )
+          }
+          right={
+            !chat.pending ? (
+              <>
+                {chat.projectId !== STANDALONE ? (
+                  <HeaderButton
+                    icon={GitBranch}
+                    label={tr('Source Control')}
+                    systemIcon="arrow.triangle.branch"
+                    onPress={() => setSheet(true)}
+                  />
+                ) : (
+                  <HeaderButton
+                    icon={Folder}
+                    label={tr('Explorer')}
+                    systemIcon="folder"
+                    onPress={() =>
+                      router.push({ pathname: '/explorer', params: { computer: chat.computerId, ctx: chat.taskId } })
+                    }
+                  />
+                )}
+                <HeaderMenu
+                  label={tr('Thread actions')}
+                  onPress={() => setActions('menu')}
+                  actions={[
+                    // The same groups as the sheet: workspace tools, usage, then the thread itself, with Delete last.
+                    ...chatExtras
+                      .filter((extra) => extra.onPress)
+                      .map((extra) => ({
+                        label: extra.label,
+                        onPress: extra.onPress!,
+                        icon: extra.symbol,
+                        section: extra.group,
+                      })),
+                    ...(!viewOnly
+                      ? [
+                          {
+                            label: say_(chat.pinnedAt !== null ? 'Unpin' : 'Pin to top'),
+                            icon: (chat.pinnedAt !== null ? 'pin.slash' : 'pin') as 'pin',
+                            section: 'thread',
+                            onPress: () => {
+                              if (viewerNow()) return
+                              void latestStore.current
+                                .invoke(chat.computerId, 'tasks.pin', chat.taskId, chat.pinnedAt === null)
                                 .then(() => store.refresh(chat.computerId))
-                                .catch(() => {})
-                          : undefined
-                      }
-                      onToggleGoal={() => store.toggleGoal(chat.id)}
-                      onClearGoal={() => store.clearGoal(chat.id)}
-                      onVerifyGoal={chat.sessionId ? (command) => store.setGoalVerify(chat.id, command) : undefined}
-                      onRemoveQueued={(q) => store.removeQueued(chat.id, q)}
-                      onSendQueuedNow={offline ? undefined : (q) => store.sendQueuedNow(chat.id, q)}
-                      onSteerQueued={offline ? undefined : (q) => store.steerQueued(chat.id, q)}
-                      onEditQueued={offline ? undefined : editQueued}
-                      offline={offline}
-                      restore={restore}
-                      limited={!!limit && !running}
-                      resumeLabel={limit && !stopped ? (limit.action === 'resume' ? t.resume : t.tryAgain) : undefined}
-                      onResume={
-                        limit && !running && limit.primary && !stopped
-                          ? () => {
-                              followSend()
-                              void store.retryLimitNow(chat.id)
-                            }
-                          : stopped
-                            ? () => {
-                                followSend()
-                                void store.send(
-                                  chat.id,
-                                  '\n\n<ramu-context>\nContinue where you left off.\n</ramu-context>',
-                                  'steer',
-                                )
-                              }
-                            : undefined
-                      }
-                      editing={
-                        editing ? { label: tr('Rewound to before your message. Change it and send.') } : undefined
-                      }
-                      onCancelEdit={() => {
-                        setEditing(null)
-                        setRestore((r) => ({ text: '', n: (r?.n ?? 0) + 1 }))
-                      }}
-                      placeholder={
-                        offline
-                          ? `Message · sends when ${computer?.name ?? 'it'} is back`
-                          : limit && !running
-                            ? fill(
-                                t[limitPlaceholderKey(limit)],
-                                limit.resetAt !== undefined
-                                  ? new Date(limit.resetAt).toLocaleTimeString([], {
-                                      hour: '2-digit',
-                                      minute: '2-digit',
-                                    })
-                                  : '',
-                              )
-                            : joining
-                              ? tr('Tell {0} what to do', { 0: joining.name })
-                              : undefined
-                      }
-                    />
-                  )}
-                </ComposerDock>
-                <Presence
-                  visible={away}
-                  fade={false}
-                  // While the agent works it turns into a spinner, so a reader scrolled up still sees the turn is running.
-                  style={{
-                    position: 'absolute',
-                    alignSelf: 'center',
-                    bottom: composerHeight + (selection ? selectionBarHeight : 0) + space.s,
-                  }}
-                >
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={tr('Scroll to latest')}
-                    // The send button's size, so the two round controls match; the slop keeps the target at 44 points.
-                    hitSlop={5}
-                    onPress={() => {
-                      tap()
-                      following.current = true
-                      userScrolling.current = false
-                      setAway(false)
-                      toEnd(true)
-                    }}
-                  >
-                    {({ pressed }) => (
-                      <PressGrow pressed={pressed}>
-                        {/* Not interactive glass: its press bulge balloons a button this small over the transcript. */}
-                        <Glass
-                          radius={radius.full}
+                                .catch((error) => say(String(error)))
+                            },
+                          },
+                          {
+                            label: say_('Rename'),
+                            icon: 'pencil' as const,
+                            section: 'thread',
+                            onPress: () => {
+                              if (!viewerNow()) setActions('rename')
+                            },
+                          },
+                          ...(chat.settings && chat.titleGenerationState !== 'pending' && !offline
+                            ? [
+                                {
+                                  label:
+                                    chat.titleGenerationState === 'failed' ? t.retryTitleGeneration : t.renameWithAI,
+                                  icon: 'sparkles' as const,
+                                  section: 'thread',
+                                  onPress: () => {
+                                    if (viewerNow()) return
+                                    void latestStore.current
+                                      .invoke(chat.computerId, 'tasks.generateTitle', chat.taskId, chat.settings!, true)
+                                      .then(() => store.refresh(chat.computerId))
+                                      .catch((error) => say(String(error)))
+                                  },
+                                },
+                              ]
+                            : []),
+                          {
+                            label: say_(chat.status === 'archived' ? 'Unarchive' : 'Archive'),
+                            icon: 'archivebox' as const,
+                            section: 'thread',
+                            onPress: () => {
+                              if (viewerNow()) return
+                              const archiving = chat.status !== 'archived'
+                              void latestStore.current
+                                .invoke(chat.computerId, 'tasks.archive', chat.taskId, archiving)
+                                .then(() => store.refresh(chat.computerId))
+                                // Archiving leaves the thread, as the sheet's Archive does.
+                                .then(() => {
+                                  if (!archiving) return
+                                  offerThreadUndo(latestStore.current, chat, 'archived')
+                                  goBackOrHome(router)
+                                })
+                                .catch((error) => say(String(error)))
+                            },
+                          },
+                        ]
+                      : []),
+                    {
+                      label: say_('Copy thread ID'),
+                      icon: 'doc.on.doc' as const,
+                      section: 'thread',
+                      onPress: () => void Clipboard.setStringAsync(chat.taskId),
+                    },
+                    ...(!viewOnly
+                      ? [
+                          {
+                            label: say_('Delete…'),
+                            icon: 'trash' as const,
+                            destructive: true,
+                            section: 'danger',
+                            onPress: () => {
+                              if (!viewerNow())
+                                void confirmChatDeletion(latestStore.current, chat, () => goBackOrHome(router))
+                            },
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+              </>
+            ) : null
+          }
+        />
+        <PlanUsageSheet
+          hosts={[chat.computerId]}
+          open={usageOpen}
+          onClose={() => setUsageOpen(false)}
+          provider={chat.provider}
+          accountId={chat.settings?.accountId}
+          context={
+            <View style={{ padding: space.m }}>
+              <ContextMeter computerId={chat.computerId} sessionId={chat.sessionId} />
+            </View>
+          }
+        />
+        <MessageMenu.Provider
+          value={{
+            readOnly: viewOnly,
+            select: setSelection,
+            goTo: (itemId) => {
+              const index = pageRows.findIndex((row) => row.id === itemId)
+              if (index < 0) return
+              following.current = false
+              // A row not laid out yet can refuse to be scrolled to.
+              try {
+                scroll.current?.scrollToIndex({ index, animated: true, viewPosition: 0 })
+              } catch {}
+            },
+            // Quote: "> line" blocks appended to the draft, as the desktop's Quote does.
+            quote: (text) => {
+              const key = `${chat.computerId}:chat:${chat.taskId || chat.id}`
+              const current = store.drafts[key] ?? ''
+              const quoted = text
+                .trim()
+                .split('\n')
+                .map((line) => `> ${line}`)
+                .join('\n')
+              const next = current.trim() ? `${current.replace(/\s+$/, '')}\n\n${quoted}\n\n` : `${quoted}\n\n`
+              store.setDraft(key, next)
+              setRestore((r) => ({ text: next, n: (r?.n ?? 0) + 1 }))
+            },
+            // Quote in new chat: opens New chat in this project with the passage already quoted in the box.
+            // Puts back every file the agent changed after this message, after showing which ones.
+            undo: async (seq) => {
+              if (viewerNow() || !chat.sessionId) return
+              try {
+                const preview = await store.invoke(chat.computerId, 'reviews.chatUndoPreview', chat.sessionId, seq)
+                const ready = preview.files.filter((f) => f.status === 'ready')
+                const blocked = preview.files.filter((f) => f.status === 'conflict')
+                if (!ready.length)
+                  return Alert.alert(
+                    'Nothing to undo',
+                    preview.files.map((f) => `${f.path}: ${f.reason}`).join('\n') ||
+                      'The agent has not changed files since this message.',
+                  )
+                Alert.alert(
+                  `Undo ${ready.length} file${ready.length === 1 ? '' : 's'}?`,
+                  `${ready
+                    .map((f) => `${f.repoName}/${f.path}${f.remove ? ' (delete)' : ''}`)
+                    .slice(0, 8)
+                    .join('\n')}${blocked.length ? `\n\n${blocked.length} changed since and will be left alone.` : ''}`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Undo',
+                      style: 'destructive',
+                      onPress: () =>
+                        !viewerNow() &&
+                        void latestStore.current
+                          .invoke(
+                            chat.computerId,
+                            'reviews.chatUndoApply',
+                            preview.token,
+                            ready.map((f) => f.fileId),
+                          )
+                          .then(() => say('Restored the files'))
+                          .catch((e) => say(e instanceof Error ? e.message : String(e))),
+                    },
+                  ],
+                )
+              } catch (error) {
+                Alert.alert('Could not undo', error instanceof Error ? error.message : String(error))
+              }
+            },
+            // Edit from here, as on the desktop: the thread rewinds to before this message (stopping the agent first),
+            // the agent's file changes since can be put back, and the message returns to the box to change and send.
+            edit: async (seq, text, files) => {
+              if (viewerNow() || !chat.sessionId) return
+              if (!store.isOnline(chat.computerId)) {
+                Alert.alert(
+                  tr('Edit from here?'),
+                  tr('Reconnect to {0} to edit from here.', { 0: computer?.name ?? '' }),
+                )
+                return
+              }
+              const sessionId = chat.sessionId
+              try {
+                const done = await editFromHere({
+                  invoke: (method, ...args) =>
+                    looseInvoke(latestStore.current.invoke)(chat.computerId, method, ...args),
+                  sessionId,
+                  seq,
+                  stillWritable: () => !viewerNow(),
+                  confirm: (revertable) =>
+                    new Promise((resolve) =>
+                      Alert.alert(
+                        tr('Edit from here?'),
+                        tr(
+                          running
+                            ? 'Stops the agent and rewinds the thread to before this message. Your prompt and attachments return to the message box.'
+                            : 'Rewinds the thread to before this message. Your prompt and attachments return to the message box.',
+                        ),
+                        [
+                          { text: tr('Cancel'), style: 'cancel', onPress: () => resolve(null) },
+                          ...(revertable
+                            ? [
+                                {
+                                  text:
+                                    revertable === 1
+                                      ? tr('Revert 1 file too')
+                                      : tr('Revert {0} files too', { 0: revertable }),
+                                  onPress: () => resolve('revert' as const),
+                                },
+                              ]
+                            : []),
+                          { text: tr('Edit from here'), onPress: () => resolve('keep' as const) },
+                        ],
+                        { cancelable: true, onDismiss: () => resolve(null) },
+                      ),
+                    ),
+                })
+                if (done !== 'rewound') return
+                void latestStore.current.refresh(chat.computerId)
+                setEditing({ seq, files })
+                setRestore((r) => ({ text: visibleText(text), n: (r?.n ?? 0) + 1 }))
+              } catch (error) {
+                Alert.alert(tr('Edit from here?'), error instanceof Error ? error.message : String(error))
+              }
+            },
+            quoteNew: (text) =>
+              router.push({ pathname: '/new', params: { project: chat.projectId, quote: text.slice(0, 20_000) } }),
+            aside: (text, from) => {
+              if (!viewerNow() && chat.sessionId)
+                router.push({
+                  pathname: '/chat/[id]/aside',
+                  params: { id: chat.id, quote: text.slice(0, 20_000), from },
+                })
+            },
+          }}
+        >
+          <ChatMentions.Provider value={composerTeammate.mentions}>
+            <CancelPendingSettings.Provider value={() => setStaged(null)}>
+              <RowToggle.Provider value={holdScroll}>
+                <PageLegendList
+                  key={chat.id}
+                  ref={scroll}
+                  contentInsetAdjustmentBehavior="automatic"
+                  automaticallyAdjustsScrollIndicatorInsets
+                  ListHeaderComponent={
+                    <View style={{ gap: space.s, paddingBottom: space.m }}>
+                      {chat.branchNamingFallback ? (
+                        <T size={font.caption} tone="muted">
+                          {t.branchNamingFallback}
+                        </T>
+                      ) : null}
+                      {hiddenTurns > 0 ? (
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => {
+                            tap()
+                            following.current = false
+                            setPagedBack(true)
+                            setTurnsShown((n) => n + TURN_PAGE)
+                          }}
                           style={{
-                            width: 34,
-                            height: 34,
-                            alignItems: 'center',
+                            alignSelf: 'center',
+                            minHeight: 44,
+                            paddingHorizontal: space.l,
+                            borderRadius: radius.full,
                             justifyContent: 'center',
-                            backgroundColor: floatingChrome ? undefined : c.raised,
+                            backgroundColor: c.fill,
                           }}
                         >
-                          {running ? (
-                            <ActivityIndicator size="small" color={c.text} style={{ transform: [{ scale: 0.75 }] }} />
-                          ) : (
-                            <ArrowDown size={18} color={c.text} strokeWidth={2.4} />
-                          )}
-                        </Glass>
-                      </PressGrow>
+                          <T size={font.control} weight="500" tone="soft">
+                            {store.language === 'id' ? 'Tampilkan giliran sebelumnya' : 'Show earlier turns'}
+                          </T>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  }
+                  data={listRows}
+                  viewabilityConfig={contentViewability}
+                  onViewableItemsChanged={contentViewabilityChanged}
+                  // Earlier turns arrive above what you are reading; they must not move it.
+                  maintainVisibleContentPosition={pagedBack ? { data: true, size: true } : undefined}
+                  keyExtractor={rowKey}
+                  renderItem={renderRow}
+                  // Each kind keeps its own measured size, so unmeasured rows above and below are estimated closely.
+                  // A message on its way is measured as the sent message it becomes.
+                  getItemType={(item) => (item.kind === 'pending' || item.kind === 'steering' ? 'user' : item.kind)}
+                  estimatedItemSize={260}
+                  drawDistance={400}
+                  // Lays out the newest rows first instead of the whole page from the top.
+                  initialScrollAtEnd
+                  // Pinned to the end, gliding as a reply streams in or a message is sent (the list gathers the changes of
+                  // half a second into one motion), and without motion before the chat is shown or with Reduce Motion on.
+                  // It stops following once the reader scrolls up past its threshold, and a chat that fits on screen is
+                  // left where UIKit rests it.
+                  maintainScrollAtEnd={overflowing && !followPaused ? { animated: revealed && !reducedMotion } : false}
+                  ItemSeparatorComponent={RowSeparator}
+                  style={{ flex: 1 }}
+                  contentInset={ios ? { bottom: cover } : undefined}
+                  scrollIndicatorInsets={ios ? { bottom: cover } : undefined}
+                  contentContainerStyle={{
+                    padding: space.l,
+                    paddingBottom: ios
+                      ? space.l
+                      : (floatingChrome ? composerHeight + space.l : space.l) + keyboard.height,
+                  }}
+                  onLayout={(event) => {
+                    metrics.current.viewport = event.nativeEvent.layout.height
+                    catchUp()
+                  }}
+                  onScroll={(event) => {
+                    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
+                    metrics.current.offset = contentOffset.y
+                    if (
+                      ios &&
+                      !userScrolling.current &&
+                      contentOffset.y < 0 &&
+                      contentSize.height + metrics.current.cover <= layoutMeasurement.height + contentOffset.y
+                    ) {
+                      measuredRest.current = contentOffset.y
+                      restTop.current = contentOffset.y
+                    }
+                    const gap = contentSize.height - contentOffset.y - layoutMeasurement.height + metrics.current.cover
+                    // Only the reader's own scrolling decides whether to follow the end. The list's first, programmatic offset
+                    // (resting at the top before it is measured) used to switch following off, so a chat opened at its top.
+                    const position = transcriptScrollState(
+                      following.current,
+                      gap,
+                      userScrolling.current,
+                      !!settling.current,
+                    )
+                    following.current = position.following
+                    setAway(position.away)
+                    setScrolled(contentOffset.y > 8 - topInset)
+                  }}
+                  scrollEventThrottle={16}
+                  onScrollBeginDrag={() => {
+                    userScrolling.current = true
+                  }}
+                  onScrollEndDrag={(event) => {
+                    if (!event.nativeEvent.velocity?.y) userScrolling.current = false
+                  }}
+                  onMomentumScrollEnd={() => {
+                    userScrolling.current = false
+                  }}
+                  onContentSizeChange={(_, height) => {
+                    metrics.current.content = height
+                    settleReveal()
+                    catchUp()
+                  }}
+                  keyboardDismissMode="on-drag"
+                  keyboardShouldPersistTaps="handled"
+                  ListFooterComponent={
+                    <View style={{ gap: space.m, paddingTop: space.m }}>
+                      {/* The running turn's status at its end, as on the desktop: a shimmering label, unless the newest row
+                        (reasoning, or a tool group at work) already says what the agent is doing. */}
+                      <WorkingLine inline quiet={lastShowsWork} chat={chat} sending={pending.length > 0} />
+                    </View>
+                  }
+                />
+                {/* Covers the transcript while it settles at its end, then fades away; the composer stays above it. */}
+                <OpeningCover
+                  visible={!revealed}
+                  color={c.window}
+                  spinner={c.muted}
+                  top={topInset}
+                  bottom={composerHeight}
+                />
+                {ios ? null : <TopFade visible={scrolled} color={c.window} />}
+                {finding ? (
+                  <ChatFindBar
+                    rows={pageRows}
+                    onJump={jumpToMatch}
+                    onClose={() => {
+                      setFinding(false)
+                      // The highlight belongs to the find; closing it leaves plain text.
+                      setFound(null)
+                    }}
+                  />
+                ) : null}
+                <KeyboardLift keyboard={keyboard}>
+                  <BottomFade height={composerHeight * 0.75} color={c.window} />
+                  {selection ? (
+                    <View
+                      style={{ position: 'absolute', left: 0, right: 0, bottom: composerHeight }}
+                      onLayout={(event) => setSelectionBarHeight(event.nativeEvent.layout.height)}
+                    >
+                      <SelectionBar selection={selection} />
+                    </View>
+                  ) : null}
+                  {/* iOS/web: the glass composer floats over the transcript, which scrolls beneath it. */}
+                  <ComposerDock onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
+                    {chat.status === 'archived' && !viewer ? (
+                      // An archived thread takes no messages; it is unarchived first, which is offered right here.
+                      <Glass
+                        radius={radius.xl}
+                        style={{
+                          marginHorizontal: space.s + 2,
+                          padding: space.m,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: space.m,
+                        }}
+                      >
+                        <Archive size={18} color={c.muted} />
+                        <T tone="soft" style={{ flex: 1 }}>
+                          {tr('This thread is archived.')}
+                        </T>
+                        <Button
+                          kind="secondary"
+                          title={tr('Unarchive')}
+                          onPress={() =>
+                            void store
+                              .invoke(chat.computerId, 'tasks.archive', chat.taskId, false)
+                              .then(() => store.refresh(chat.computerId))
+                              .catch((error) =>
+                                Alert.alert(tr('Unarchive'), error instanceof Error ? error.message : String(error)),
+                              )
+                          }
+                        />
+                      </Glass>
+                    ) : (
+                      <Composer
+                        activity={
+                          <>
+                            <ThreadActivity
+                              inlineStatus
+                              chat={chat}
+                              onEditQueued={offline ? undefined : editQueued}
+                              leading={
+                                <>
+                                  <ComputerUseNotice chat={chat} onOpen={() => setTool('computer')} />
+                                  <BrowserNotice
+                                    chat={chat}
+                                    tabs={browserTabs.tabs}
+                                    onOpen={() => setTool('browser')}
+                                  />
+                                </>
+                              }
+                              actions={[
+                                ...(toolActivity.terminal
+                                  ? [{ label: 'Terminal', icon: SquareTerminal, onPress: openTerminal }]
+                                  : []),
+                              ]}
+                            >
+                              <ThreadServers
+                                key={`servers:${chat.computerId}:${chat.taskId}`}
+                                chat={chat}
+                                open={serversFor === chat.id}
+                                onOpen={() => setServersFor(chat.id)}
+                                onClose={() => setServersFor((current) => (current === chat.id ? null : current))}
+                                onOpenPage={(url) => {
+                                  setPageToOpen(url)
+                                  // iOS presents the browser only once the sheet has gone.
+                                  setTimeout(() => setTool('browser'), 300)
+                                }}
+                              />
+                              <BackgroundTerminals
+                                key={`${chat.computerId}:${chat.taskId}`}
+                                chat={chat}
+                                open={backgroundFor === chat.id}
+                                onOpen={() => setBackgroundFor(chat.id)}
+                                onClose={() => setBackgroundFor((current) => (current === chat.id ? null : current))}
+                              />
+                            </ThreadActivity>
+                          </>
+                        }
+                        running={running}
+                        model={joining ? joining.model : staged?.chatId === chat.id ? staged.model : currentModel}
+                        onModel={joining ? chooseJoinModel : changeModel}
+                        onSend={async (text, mode, attachments, context) => {
+                          if (editing) return submitEdit(text, mode, attachments, context)
+                          if (staged?.chatId === chat.id) {
+                            const m = staged.model
+                            setStaged(null)
+                            await store.setModel(chat.id, m.provider, m.model, m.effort, m.settings)
+                          }
+                          // "/aside question" (or "/btw") asks beside the chat: the agent keeps working and never sees it.
+                          const side = /^\/(?:aside|btw)\s+(\S[\s\S]*)$/.exec(text.trim())
+                          if (side && !attachments?.length && chat.sessionId)
+                            // One side chat per thread: /btw continues it rather than starting another.
+                            return store
+                              .invoke(chat.computerId, 'aside.list', chat.sessionId)
+                              .then((asides) => {
+                                const latest = asides.find((aside) => aside.id === sideChat(asides).continueId)
+                                return store.invoke(
+                                  chat.computerId,
+                                  'aside.ask',
+                                  chat.sessionId!,
+                                  latest?.id ?? null,
+                                  latest?.quote ?? '',
+                                  latest?.quoteFrom ?? 'assistant',
+                                  side[1]!.trim(),
+                                )
+                              })
+                              .then(() => {
+                                router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id } })
+                              })
+                          // `@lead` goes to the main agent; `@name` talks to a teammate here or brings a model or custom
+                          // agent in; without a mention, a teammate chosen as the recipient gets it.
+                          const lead = /^@(?:lead|main)\s+/i.test(text.trim())
+                          if (lead) setRecipientId(null)
+                          const mention =
+                            chat.sessionId && chat.settings && !attachments?.length && !lead
+                              ? resolveMention(text, teammates, models, agents, abilityModels)
+                              : null
+                          const target =
+                            mention ??
+                            (recipient && !lead && !attachments?.length && text.trim() && !text.trim().startsWith('/')
+                              ? ({ kind: 'teammate', task: recipient, body: text.trim() } as const)
+                              : null)
+                          if (target && chat.sessionId && chat.settings) {
+                            const base = chat.settings
+                            const sessionId = chat.sessionId
+                            if (target.kind === 'teammate')
+                              return store
+                                .invoke(
+                                  chat.computerId,
+                                  'agent.messageTask',
+                                  sessionId,
+                                  target.task.agentId,
+                                  target.body,
+                                )
+                                .then(() => setRecipientId(target.task.agentId))
+                            // What the composer showed for this teammate is what it joins with.
+                            const start = joiningTeammate(target, base)
+                            const shown = joining?.key === start.key ? joining : null
+                            const chosen = shown?.model
+                            const settings: AgentSettings = chosen
+                              ? {
+                                  ...start.settings,
+                                  ...chosen.settings,
+                                  provider: chosen.provider,
+                                  model: chosen.model,
+                                  effort: (chosen.effort || null) as AgentSettings['effort'],
+                                }
+                              : start.settings
+                            return store
+                              .invoke(
+                                chat.computerId,
+                                'agent.addTeammate',
+                                sessionId,
+                                settings,
+                                shown?.mode ?? start.mode,
+                                target.kind === 'agent'
+                                  ? `${target.agent.instructions}\n\n${target.body}`
+                                  : target.body,
+                              )
+                              .then((joined) => setRecipientId(joined.agentId))
+                          }
+                          followSend()
+                          // The message queues behind the compaction and goes out once it finishes, as after a typed /compact.
+                          if (compactFirst) await store.send(chat.id, '/compact', 'queue')
+                          setKeepHistoryFor(null)
+                          return store.send(chat.id, text, mode, attachments, context)
+                        }}
+                        compaction={
+                          compactOffer !== null
+                            ? {
+                                tokens: compactOffer,
+                                compact: compactFirst,
+                                onChange: (compact) => setKeepHistoryFor(compact ? null : chat.id),
+                              }
+                            : undefined
+                        }
+                        taskId={chat.taskId || undefined}
+                        chatId={chat.id}
+                        onFindQuote={findQuote}
+                        teammate={composerTeammate}
+                        header={
+                          joining ? (
+                            // One row says who joins and how; × takes the mention out and the message goes to the thread again.
+                            // The composer's text inset, so the row lines up with what is typed below it.
+                            <View style={{ width: '100%', gap: 4, paddingLeft: space.s + 4, paddingVertical: 2 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+                                <ProviderIcon provider={joining.model.provider} size={14} />
+                                <T size={font.control} weight="500" numberOfLines={1} style={{ flexShrink: 1 }}>
+                                  {tr('{0} joins as', { 0: joining.name })}
+                                </T>
+                                <View style={{ flex: 1, minWidth: 140, maxWidth: 220, marginLeft: 'auto' }}>
+                                  <Segmented<TeammateMode>
+                                    small
+                                    value={joining.mode}
+                                    onChange={(mode) => setJoinEdits({ key: joining.key, model: joinOwn?.model, mode })}
+                                    options={[
+                                      { key: 'review', label: tr('Review') },
+                                      { key: 'take-over', label: tr('Take over') },
+                                    ]}
+                                  />
+                                </View>
+                                <IconButton
+                                  icon={X}
+                                  label={tr('Don’t add {0}', { 0: joining.name })}
+                                  size={32}
+                                  tone="muted"
+                                  onPress={() => writeDraft(draftText.replace(/^@\S+\s*/, ''))}
+                                />
+                              </View>
+                              <T size={font.caption} tone="muted" numberOfLines={1} style={{ paddingBottom: 4 }}>
+                                {joining.mode === 'review'
+                                  ? tr('Reads the changes and reports. Never edits.')
+                                  : tr('Edits while the lead waits, then hands back.')}
+                              </T>
+                            </View>
+                          ) : teammates.length && !viewer ? (
+                            <ScrollView
+                              horizontal
+                              showsHorizontalScrollIndicator={false}
+                              keyboardShouldPersistTaps="always"
+                            >
+                              {/* Who the next message goes to: a recipient, not a view, so the row says "To". */}
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+                                <T size={font.caption} tone="muted" style={{ paddingLeft: space.s, paddingRight: 2 }}>
+                                  {tr('To')}
+                                </T>
+                                <Chip
+                                  small
+                                  label={tr('Main agent')}
+                                  selected={!recipient}
+                                  onPress={() => setRecipientId(null)}
+                                />
+                                {teammates.map((task) => (
+                                  <Chip
+                                    key={task.agentId}
+                                    small
+                                    icon={Users}
+                                    label={task.name}
+                                    maxLabelWidth={140}
+                                    selected={recipient?.agentId === task.agentId}
+                                    accessibilityLabel={tr('To {0}', { 0: task.name })}
+                                    accessibilityHint={tr('Touch and hold to see its work')}
+                                    onPress={() => setRecipientId(task.agentId)}
+                                    onLongPress={() => setTeammateShown(task.agentId)}
+                                  />
+                                ))}
+                              </View>
+                            </ScrollView>
+                          ) : undefined
+                        }
+                        computerId={chat.computerId}
+                        draftKey={`${chat.computerId}:chat:${chat.taskId || chat.id}`}
+                        onStop={() => store.stop(chat.id)}
+                        goal={chat.goal}
+                        queue={chat.queue?.filter((message) => message.mode !== 'steer')}
+                        queuePaused={chat.queuePaused}
+                        onResumeQueue={
+                          chat.sessionId
+                            ? () =>
+                                void store
+                                  .invoke(chat.computerId, 'agent.resumeQueue', chat.sessionId!)
+                                  .then(() => store.refresh(chat.computerId))
+                                  .catch(() => {})
+                            : undefined
+                        }
+                        onToggleGoal={() => store.toggleGoal(chat.id)}
+                        onClearGoal={() => store.clearGoal(chat.id)}
+                        onVerifyGoal={chat.sessionId ? (command) => store.setGoalVerify(chat.id, command) : undefined}
+                        onRemoveQueued={(q) => store.removeQueued(chat.id, q)}
+                        onSendQueuedNow={offline ? undefined : (q) => store.sendQueuedNow(chat.id, q)}
+                        onSteerQueued={offline ? undefined : (q) => store.steerQueued(chat.id, q)}
+                        onEditQueued={offline ? undefined : editQueued}
+                        offline={offline}
+                        restore={restore}
+                        limited={!!limit && !running}
+                        resumeLabel={
+                          limit && !stopped ? (limit.action === 'resume' ? t.resume : t.tryAgain) : undefined
+                        }
+                        onResume={
+                          limit && !running && limit.primary && !stopped
+                            ? () => {
+                                followSend()
+                                void store.retryLimitNow(chat.id)
+                              }
+                            : stopped
+                              ? () => {
+                                  followSend()
+                                  void store.send(
+                                    chat.id,
+                                    '\n\n<ramu-context>\nContinue where you left off.\n</ramu-context>',
+                                    'steer',
+                                  )
+                                }
+                              : undefined
+                        }
+                        editing={
+                          editing ? { label: tr('Rewound to before your message. Change it and send.') } : undefined
+                        }
+                        onCancelEdit={() => {
+                          setEditing(null)
+                          setRestore((r) => ({ text: '', n: (r?.n ?? 0) + 1 }))
+                        }}
+                        placeholder={
+                          offline
+                            ? `Message · sends when ${computer?.name ?? 'it'} is back`
+                            : limit && !running
+                              ? fill(
+                                  t[limitPlaceholderKey(limit)],
+                                  limit.resetAt !== undefined
+                                    ? new Date(limit.resetAt).toLocaleTimeString([], {
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                      })
+                                    : '',
+                                )
+                              : joining
+                                ? tr('Tell {0} what to do', { 0: joining.name })
+                                : undefined
+                        }
+                      />
                     )}
-                  </Pressable>
-                </Presence>
-              </KeyboardLift>
-            </RowToggle.Provider>
-          </CancelPendingSettings.Provider>
-        </ChatMentions.Provider>
-      </MessageMenu.Provider>
-      {teammateShown ? (
-        <HelperDetails
-          task={chat.items
-            .flatMap((item) => (item.kind === 'agents' ? item.agents : []))
-            .findLast((agent) => agent.agentId === teammateShown)}
+                  </ComposerDock>
+                  <Presence
+                    visible={away}
+                    fade={false}
+                    // While the agent works it turns into a spinner, so a reader scrolled up still sees the turn is running.
+                    style={{
+                      position: 'absolute',
+                      alignSelf: 'center',
+                      bottom: composerHeight + (selection ? selectionBarHeight : 0) + space.s,
+                    }}
+                  >
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={tr('Scroll to latest')}
+                      // The send button's size, so the two round controls match; the slop keeps the target at 44 points.
+                      hitSlop={5}
+                      onPress={() => {
+                        tap()
+                        following.current = true
+                        userScrolling.current = false
+                        setAway(false)
+                        toEnd(true)
+                      }}
+                    >
+                      {({ pressed }) => (
+                        <PressGrow pressed={pressed}>
+                          {/* Not interactive glass: its press bulge balloons a button this small over the transcript. */}
+                          <Glass
+                            radius={radius.full}
+                            style={{
+                              width: 34,
+                              height: 34,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: floatingChrome ? undefined : c.raised,
+                            }}
+                          >
+                            {running ? (
+                              <ActivityIndicator size="small" color={c.text} style={{ transform: [{ scale: 0.75 }] }} />
+                            ) : (
+                              <ArrowDown size={18} color={c.text} strokeWidth={2.4} />
+                            )}
+                          </Glass>
+                        </PressGrow>
+                      )}
+                    </Pressable>
+                  </Presence>
+                </KeyboardLift>
+              </RowToggle.Provider>
+            </CancelPendingSettings.Provider>
+          </ChatMentions.Provider>
+        </MessageMenu.Provider>
+        {teammateShown ? (
+          <HelperDetails
+            task={chat.items
+              .flatMap((item) => (item.kind === 'agents' ? item.agents : []))
+              .findLast((agent) => agent.agentId === teammateShown)}
+            chat={chat}
+            onClose={() => setTeammateShown(null)}
+          />
+        ) : null}
+        <Presence
+          visible={Boolean(toast)}
+          style={{ position: 'absolute', left: space.l, right: space.l, top: belowHeader(insets.top) }}
+        >
+          <View pointerEvents="none">
+            <Glass
+              radius={radius.full}
+              style={{
+                paddingHorizontal: space.l,
+                paddingVertical: space.m,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.s,
+                backgroundColor: floatingChrome ? undefined : c.raised,
+              }}
+            >
+              <Check size={15} color={c.ok} />
+              <T size={font.control} weight="500" numberOfLines={2} style={{ flex: 1 }}>
+                {toast ?? lastToast.current}
+              </T>
+            </Glass>
+          </View>
+        </Presence>
+        {!chat.pending ? (
+          <ChatActionsSheet
+            chat={chat}
+            extras={chatExtras}
+            onGone={() => goBackOrHome(router)}
+            open={actions !== 'closed'}
+            rename={actions === 'rename'}
+            onClose={() => setActions('closed')}
+          />
+        ) : null}
+        <BrowserActivity
+          key={`browser:${chat.computerId}:${chat.taskId}`}
           chat={chat}
-          onClose={() => setTeammateShown(null)}
+          open={tool === 'browser'}
+          onClose={() => {
+            setTool(null)
+            setPageToOpen(null)
+          }}
+          openUrl={pageToOpen}
+          onOpened={() => setPageToOpen(null)}
         />
-      ) : null}
-      <Presence
-        visible={Boolean(toast)}
-        style={{ position: 'absolute', left: space.l, right: space.l, top: belowHeader(insets.top) }}
-      >
-        <View pointerEvents="none">
-          <Glass
-            radius={radius.full}
-            style={{
-              paddingHorizontal: space.l,
-              paddingVertical: space.m,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: space.s,
-              backgroundColor: floatingChrome ? undefined : c.raised,
-            }}
-          >
-            <Check size={15} color={c.ok} />
-            <T size={font.control} weight="500" numberOfLines={2} style={{ flex: 1 }}>
-              {toast ?? lastToast.current}
-            </T>
-          </Glass>
-        </View>
-      </Presence>
-      {!chat.pending ? (
-        <ChatActionsSheet
+        <ComputerActivity
+          key={`computer:${chat.computerId}:${chat.taskId}`}
           chat={chat}
-          extras={chatExtras}
-          onGone={() => goBackOrHome(router)}
-          open={actions !== 'closed'}
-          rename={actions === 'rename'}
-          onClose={() => setActions('closed')}
+          open={tool === 'computer'}
+          onClose={() => setTool(null)}
         />
-      ) : null}
-      <BrowserActivity
-        key={`browser:${chat.computerId}:${chat.taskId}`}
-        chat={chat}
-        open={tool === 'browser'}
-        onClose={() => {
-          setTool(null)
-          setPageToOpen(null)
-        }}
-        openUrl={pageToOpen}
-        onOpened={() => setPageToOpen(null)}
-      />
-      <ComputerActivity
-        key={`computer:${chat.computerId}:${chat.taskId}`}
-        chat={chat}
-        open={tool === 'computer'}
-        onClose={() => setTool(null)}
-      />
-      <Sheet open={sheet} onClose={() => setSheet(false)} title={branch || tr('Source control')}>
-        {(
-          [
+        <Sheet open={sheet} onClose={() => setSheet(false)} title={branch || tr('Source control')}>
+          {(
             [
-              {
-                icon: CircleCheck,
-                title: 'Commit',
-                sub: !live
-                  ? 'Open Source Control'
-                  : changed
-                    ? changed === 1
-                      ? '1 file changed'
-                      : `${changed} files changed`
-                    : 'No changes to commit',
-                run: openScm,
-              },
-              {
-                icon: CircleArrowUp,
-                title: 'Commit & push',
-                sub: changed ? 'AI message, commit all, push' : 'No changes to commit',
-                run: quickCommit,
-                off: !changed || busy,
-              },
-              { icon: CircleArrowUp, title: 'Push', sub: pushReason, run: push, off: !canPush || busy },
-            ],
-            [
-              {
-                icon: GitCompareArrows,
-                title: 'Review changes',
-                sub: 'Inspect turn diffs and worktree changes',
-                run: openChanges,
-              },
-              {
-                icon: GitBranch,
-                title: 'Branches and history',
-                sub: 'Switch, create, stash, and browse commits',
-                run: openScm,
-              },
-            ],
-          ] as const
-        ).map((group) => (
-          <SheetGroup key={group[0].title}>
-            {group.map((item) => (
-              <SheetOption
-                key={item.title}
-                icon={item.icon}
-                title={tr(item.title)}
-                help={tr(item.sub)}
-                disabled={'off' in item && item.off}
-                onPress={() => {
-                  setSheet(false)
-                  setTimeout(item.run, 300)
-                }}
-              />
-            ))}
-          </SheetGroup>
-        ))}
-      </Sheet>
-      <ContinueOnHostSheet chat={chat} targetId={continueHost} onClose={() => setContinueHost(null)} />
-      <SessionCheckpointSheet checkpoint={checkpoint} open={checkpointOpen} onClose={() => setCheckpointOpen(false)} />
-      {chat.sessionId ? (
-        <McpStatusSheet
-          open={mcpOpen}
-          onClose={() => setMcpOpen(false)}
-          computerId={chat.computerId}
-          sessionId={chat.sessionId}
-          readOnly={computer?.access === 'viewer'}
+              [
+                {
+                  icon: CircleCheck,
+                  title: 'Commit',
+                  sub: !live
+                    ? 'Open Source Control'
+                    : changed
+                      ? changed === 1
+                        ? '1 file changed'
+                        : `${changed} files changed`
+                      : 'No changes to commit',
+                  run: openScm,
+                },
+                {
+                  icon: CircleArrowUp,
+                  title: 'Commit & push',
+                  sub: changed ? 'AI message, commit all, push' : 'No changes to commit',
+                  run: quickCommit,
+                  off: !changed || busy,
+                },
+                { icon: CircleArrowUp, title: 'Push', sub: pushReason, run: push, off: !canPush || busy },
+              ],
+              [
+                {
+                  icon: GitCompareArrows,
+                  title: 'Review changes',
+                  sub: 'Inspect turn diffs and worktree changes',
+                  run: openChanges,
+                },
+                {
+                  icon: GitBranch,
+                  title: 'Branches and history',
+                  sub: 'Switch, create, stash, and browse commits',
+                  run: openScm,
+                },
+              ],
+            ] as const
+          ).map((group) => (
+            <SheetGroup key={group[0].title}>
+              {group.map((item) => (
+                <SheetOption
+                  key={item.title}
+                  icon={item.icon}
+                  title={tr(item.title)}
+                  help={tr(item.sub)}
+                  disabled={'off' in item && item.off}
+                  onPress={() => {
+                    setSheet(false)
+                    setTimeout(item.run, 300)
+                  }}
+                />
+              ))}
+            </SheetGroup>
+          ))}
+        </Sheet>
+        <ContinueOnHostSheet chat={chat} targetId={continueHost} onClose={() => setContinueHost(null)} />
+        <SessionCheckpointSheet
+          checkpoint={checkpoint}
+          open={checkpointOpen}
+          onClose={() => setCheckpointOpen(false)}
         />
-      ) : null}
-    </Screen>
+        {chat.sessionId ? (
+          <McpStatusSheet
+            open={mcpOpen}
+            onClose={() => setMcpOpen(false)}
+            computerId={chat.computerId}
+            sessionId={chat.sessionId}
+            readOnly={computer?.access === 'viewer'}
+          />
+        ) : null}
+      </Screen>
+    </RunCommandProvider>
   )
 }
 

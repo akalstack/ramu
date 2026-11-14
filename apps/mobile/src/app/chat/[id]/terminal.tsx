@@ -7,7 +7,7 @@ import { useSay } from '../../../i18n'
 /** The terminal for a chat's workspace; its sessions are shared with every chat in the same project or worktree. */
 export default function ChatTerminal() {
   const say = useSay()
-  const { id } = useLocalSearchParams<{ id: string }>()
+  const { id, focus } = useLocalSearchParams<{ id: string; focus?: string }>()
   const chat = useChat(id)
   const router = useRouter()
   if (!chat?.taskId)
@@ -20,6 +20,7 @@ export default function ChatTerminal() {
     <TerminalScreen
       computerId={chat.computerId}
       ctx={terminalCtx(chat)}
+      {...(focus ? { focus } : {})}
       onBack={() => router.dismissTo({ pathname: '/chat/[id]', params: { id } })}
     />
   )

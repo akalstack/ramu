@@ -75,6 +75,7 @@ import { parseAnswerMessage } from '@ramu/shared/chat/questions'
 import { notifyError } from '../chat/Notifications'
 import { draftKey, draftStore, loadDraft, saveDraft, useDraftPersistence } from '../composer/drafts'
 import { useHost } from '../workspace/HostProvider'
+import { RunCommandProvider } from '../chat/runCommand'
 import { outbox, useOutbox } from '../composer/outbox'
 import { useHostConnection } from '../workspace/HostProvider'
 import { HostWaitNote, ProviderWaitNote } from '../models/ProviderWait'
@@ -766,545 +767,551 @@ export const AgentView = memo(function AgentView({
   }
 
   return (
-    <div
-      ref={root}
-      className={`agent-view [&.dropping::after]:[content:'Drop_to_add_to_the_message'] [&.dropping::after]:absolute [&.dropping::after]:inset-1.5 [&.dropping::after]:z-20 [&.dropping::after]:grid [&.dropping::after]:place-items-center [&.dropping::after]:[border:1px_dashed_var(--line-strong)] [&.dropping::after]:rounded-(--radius-m) [&.dropping::after]:[background:color-mix(in_srgb,_var(--canvas)_78%,_transparent)] [&.dropping::after]:text-foreground [&.dropping::after]:text-control [&.dropping::after]:pointer-events-none flex flex-col flex-1 min-h-0 min-w-0 relative${dropping ? ' dropping' : ''}`}
-      data-state={session?.state}
-      data-chat-visible={visible || undefined}
-      onDragOver={(event) => {
-        if (event.dataTransfer.types.includes(FILE_DRAG_TYPE) || event.dataTransfer.types.includes('Files')) {
+    <RunCommandProvider taskId={session?.taskId}>
+      <div
+        ref={root}
+        className={`agent-view [&.dropping::after]:[content:'Drop_to_add_to_the_message'] [&.dropping::after]:absolute [&.dropping::after]:inset-1.5 [&.dropping::after]:z-20 [&.dropping::after]:grid [&.dropping::after]:place-items-center [&.dropping::after]:[border:1px_dashed_var(--line-strong)] [&.dropping::after]:rounded-(--radius-m) [&.dropping::after]:[background:color-mix(in_srgb,_var(--canvas)_78%,_transparent)] [&.dropping::after]:text-foreground [&.dropping::after]:text-control [&.dropping::after]:pointer-events-none flex flex-col flex-1 min-h-0 min-w-0 relative${dropping ? ' dropping' : ''}`}
+        data-state={session?.state}
+        data-chat-visible={visible || undefined}
+        onDragOver={(event) => {
+          if (event.dataTransfer.types.includes(FILE_DRAG_TYPE) || event.dataTransfer.types.includes('Files')) {
+            event.preventDefault()
+            setDropping(true)
+          }
+        }}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropping(false)
+        }}
+        onDrop={(event) => {
+          setDropping(false)
+          // A drop on the message box is already handled by the box itself.
+          if ((event.target as Element).closest?.('.composer')) return
+          const dragged = event.dataTransfer.getData(FILE_DRAG_TYPE),
+            files = [...event.dataTransfer.files]
+          if (!dragged && !files.length) return
           event.preventDefault()
-          setDropping(true)
-        }
-      }}
-      onDragLeave={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropping(false)
-      }}
-      onDrop={(event) => {
-        setDropping(false)
-        // A drop on the message box is already handled by the box itself.
-        if ((event.target as Element).closest?.('.composer')) return
-        const dragged = event.dataTransfer.getData(FILE_DRAG_TYPE),
-          files = [...event.dataTransfer.files]
-        if (!dragged && !files.length) return
-        event.preventDefault()
-        window.dispatchEvent(
-          new CustomEvent('ramu:chat-drop', { detail: { root: event.currentTarget, dragged, files } }),
-        )
-      }}
-    >
-      {session?.parentId && <HelperBreadcrumb parentId={session.parentId} />}
-      <AgentHeader
-        history={history}
-        sessionId={view.sessionId}
-        state={session?.state}
-        pendingQuestionCount={pendingQuestions.length}
-        showQuestions={showQuestions}
-        onToggleQuestions={() => setShowQuestions((open) => !open)}
-        asideOpen={openAside !== null}
-        asideCount={asides.length}
-        onToggleAside={toggleAside}
-        readOnly={viewOnly}
-        agentCount={helperSelection.selected.length}
-        onShowAgents={() => setOpenAgent('*')}
-        onFind={() => openFind()}
-        taskId={session?.taskId}
-        canContinue={!!session && events.length > 0}
-        continuing={continuing}
-        onContinue={() => setConfirmContinue(true)}
-        onContinueOnHost={setContinueHost}
-        onMakePage={() => void act(() => invoke('agent.submit', view.sessionId, MAKE_PAGE_PROMPT, 'queue', [], []))}
-        latestRequest={
-          events.findLast(
-            (event): event is Extract<typeof event, { kind: 'user' }> =>
-              event.kind === 'user' && !event.agentId && !event.from,
-          )?.text
-        }
-      />
-      <div className="agent-split [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex flex-1 min-h-0 min-w-0 [container:agent-split_/_inline-size]">
-        <div className="agent-main relative flex flex-col [flex:1_1_0] min-w-0 min-h-0">
-          {mcpOpen && (
-            <McpStatusDialog
-              key={`${host.id}:${view.sessionId}:${session?.provider}`}
-              sessionId={view.sessionId}
-              onClose={() => setMcpOpen(false)}
-            />
-          )}
-          {editing && (
-            <EditFromHereDialog
-              edit={editing}
-              readOnly={viewOnly}
-              sessionId={view.sessionId}
-              live={live || busyAgent}
-              offlineHost={hostOffline ? hostName : undefined}
-              onCancel={() => setEditing(null)}
-              onRewound={editRewound}
-            />
-          )}
-          {finding && (
-            <ChatFind root={scroller} focusRequest={findRequest} initialQuery={findQuery} onClose={closeFind} />
-          )}
-          {modelWarning && (
-            <ModelChangeDialog
-              dontWarn={dontWarn}
-              onDontWarnChange={setDontWarn}
-              onCancel={() => setModelWarning(null)}
-              onConfirm={() => {
-                const next = modelWarning
-                setModelWarning(null)
-                if (dontWarn)
-                  void save({ ...preferences, warnModelChange: false }).catch((error) =>
-                    notifyError(errorText(error), 'Settings'),
-                  )
-                applySettings(next)
-              }}
-            />
-          )}
-          {confirmContinue && (
-            <ContinueChatDialog
-              busy={continuing}
-              canUseWorktree={canUseWorktree}
-              onCancel={() => setConfirmContinue(false)}
-              onConfirm={(worktree) => void continueInNewChat(worktree)}
-            />
-          )}
-          {continueHost && session && (
-            <ContinueOnHostDialog
-              taskId={session.taskId}
-              targetId={continueHost}
-              onClose={() => setContinueHost(null)}
-            />
-          )}
-          {showQuestions && pendingQuestions.length > 0 && (
-            <PendingQuestionsBar
-              questions={pendingQuestions}
-              states={questionStates}
-              scroller={scroller}
-              onOpenQuestion={openQuestion}
-            />
-          )}
-          <ChatMentions.Provider value={composerTeammate.mentions}>
-            <ThreadAgents.Provider value={allTasks}>
-              <MessageScrollerProvider autoScroll defaultScrollPosition="end">
-                <TranscriptScrollApi apiRef={scrollToEnd} />
-                <TranscriptFollowState viewport={scroller} />
-                <div className="transcript-frame [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex-1 min-h-0 min-w-0 flex [container:transcript-frame_/_inline-size] flex-col">
-                  <MessageScroller
-                    className={`transcript min-h-0 min-w-0 flex-1 ${hydrating && !turns.length ? 'chat-loading' : ''}`}
-                  >
-                    <MessageScrollerViewport
-                      ref={scroller}
-                      onScroll={onScroll}
-                      data-working={working || undefined}
-                      aria-label={translate('Conversation')}
-                      className={`scroll-fade-y px-6 pt-3 pb-7 outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--line)] ${showingSubmission ? 'motion-safe:scroll-smooth' : ''}`}
-                    >
-                      {hiddenTurns > 0 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="mx-auto mb-2 flex text-muted-foreground"
-                          onClick={showEarlierTurns}
-                        >
-                          {hiddenTurns === 1
-                            ? translate('Show 1 earlier turn')
-                            : translate('Show {0} earlier turns', { '0': hiddenTurns })}
-                        </Button>
-                      )}
-                      <MessageScrollerContent
-                        className={`${hydrating && !turns.length ? 'justify-center' : ''} transcript-col mx-auto max-w-[var(--chat-column-width)] gap-3.5`}
-                      >
-                        {/* The window already carries the brand; a chat that opens at once shows nothing, a slow one a
-                            small spinner. */}
-                        {slowHydration && !turns.length && (
-                          <div className="flex items-center justify-center text-muted-foreground">
-                            <Spinner aria-label={translate('Loading conversation')} />
-                          </div>
-                        )}
-                        {pageTurns.map((turn, ti) => (
-                          <MessageScrollerItem
-                            key={turn.key}
-                            messageId={String(turn.key)}
-                            className="[content-visibility:visible]"
-                          >
-                            <TranscriptTurn
-                              turn={turn}
-                              isLast={ti === pageTurns.length - 1}
-                              dateSeparator={pageTurnDate(turnDates, hiddenTurns, ti)}
-                              dateNow={dateNow}
-                              reviews={turnReviews.get(turn.key)}
-                              completedGoals={completedGoals.get(turn.user?.kind === 'event' ? turn.user.event : null)}
-                              ctx={transcript}
-                            />
-                          </MessageScrollerItem>
-                        ))}
-                        {pendingSettings &&
-                          session &&
-                          !busyAgent &&
-                          !sameAgentSettings(pendingSettings, session.settings) && (
-                            <MessageScrollerItem messageId="pending-settings">
-                              <PendingSettingsChange
-                                next={pendingSettings}
-                                previous={session.settings}
-                                onCancel={() => setPendingSettings(null)}
-                              />
-                            </MessageScrollerItem>
-                          )}
-                        {steering.map((message) => (
-                          <MessageScrollerItem key={message.id} messageId={`steering-${message.id}`}>
-                            <SteeringMessage
-                              sessionId={view.sessionId}
-                              message={message}
-                              readOnly={viewOnly}
-                              act={act}
-                            />
-                          </MessageScrollerItem>
-                        ))}
-                        {showingSubmission && pendingSubmission && (
-                          <MessageScrollerItem messageId="pending-submission">
-                            <PendingSubmission submission={pendingSubmission} />
-                          </MessageScrollerItem>
-                        )}
-                        {activityLabel && (compacting || !statusGroup) && (
-                          <ChatStatus label={translate(activityLabel)} compacting={compacting} />
-                        )}
-                      </MessageScrollerContent>
-                    </MessageScrollerViewport>
-                    <ScrollToLatestButton working={working} />
-                  </MessageScroller>
-                  <SelectionActions
-                    scroller={scroller}
-                    readOnly={viewOnly}
-                    onQuote={quoteIntoDraft}
-                    onQuoteNew={quoteIntoNewChat}
-                    onAside={(quote, from) => setOpenAside({ id: null, quote, from })}
-                  />
-                </div>
-              </MessageScrollerProvider>
-            </ThreadAgents.Provider>
-          </ChatMentions.Provider>
-          <div className="composer-dock [&_.error]:mb-1.5 [&_.error]:text-control flex-none p-[0_calc(16px_+_var(--chat-scrollbar-width,_0px))_10px_16px]">
-            <ComposerStack>
-              {error && <ErrorNote message={error} title={translate('That didn’t work')} />}
-              <ComputerGrantDialog state={computerActivity} />
-              <ConfirmStopDialog
-                command={stopping ? stopping.name : null}
-                onCancel={() => setStopping(null)}
+          window.dispatchEvent(
+            new CustomEvent('ramu:chat-drop', { detail: { root: event.currentTarget, dragged, files } }),
+          )
+        }}
+      >
+        {session?.parentId && <HelperBreadcrumb parentId={session.parentId} />}
+        <AgentHeader
+          history={history}
+          sessionId={view.sessionId}
+          state={session?.state}
+          pendingQuestionCount={pendingQuestions.length}
+          showQuestions={showQuestions}
+          onToggleQuestions={() => setShowQuestions((open) => !open)}
+          asideOpen={openAside !== null}
+          asideCount={asides.length}
+          onToggleAside={toggleAside}
+          readOnly={viewOnly}
+          agentCount={helperSelection.selected.length}
+          onShowAgents={() => setOpenAgent('*')}
+          onFind={() => openFind()}
+          taskId={session?.taskId}
+          canContinue={!!session && events.length > 0}
+          continuing={continuing}
+          onContinue={() => setConfirmContinue(true)}
+          onContinueOnHost={setContinueHost}
+          onMakePage={() => void act(() => invoke('agent.submit', view.sessionId, MAKE_PAGE_PROMPT, 'queue', [], []))}
+          latestRequest={
+            events.findLast(
+              (event): event is Extract<typeof event, { kind: 'user' }> =>
+                event.kind === 'user' && !event.agentId && !event.from,
+            )?.text
+          }
+        />
+        <div className="agent-split [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex flex-1 min-h-0 min-w-0 [container:agent-split_/_inline-size]">
+          <div className="agent-main relative flex flex-col [flex:1_1_0] min-w-0 min-h-0">
+            {mcpOpen && (
+              <McpStatusDialog
+                key={`${host.id}:${view.sessionId}:${session?.provider}`}
+                sessionId={view.sessionId}
+                onClose={() => setMcpOpen(false)}
+              />
+            )}
+            {editing && (
+              <EditFromHereDialog
+                edit={editing}
+                readOnly={viewOnly}
+                sessionId={view.sessionId}
+                live={live || busyAgent}
+                offlineHost={hostOffline ? hostName : undefined}
+                onCancel={() => setEditing(null)}
+                onRewound={editRewound}
+              />
+            )}
+            {finding && (
+              <ChatFind root={scroller} focusRequest={findRequest} initialQuery={findQuery} onClose={closeFind} />
+            )}
+            {modelWarning && (
+              <ModelChangeDialog
+                dontWarn={dontWarn}
+                onDontWarnChange={setDontWarn}
+                onCancel={() => setModelWarning(null)}
                 onConfirm={() => {
-                  if (stopping) runStopTask(stopping)
-                  setStopping(null)
+                  const next = modelWarning
+                  setModelWarning(null)
+                  if (dontWarn)
+                    void save({ ...preferences, warnModelChange: false }).catch((error) =>
+                      notifyError(errorText(error), 'Settings'),
+                    )
+                  applySettings(next)
                 }}
               />
-              {(hostOffline ||
-                backgroundTerminals.terminals.length > 0 ||
-                commands.length > 0 ||
-                threadServers.servers.length > 0 ||
-                browserActivity.tabs.length > 0 ||
-                !!computerActivity.session ||
-                providerWait ||
-                liveGoal ||
-                trayQueued.length > 0 ||
-                pending.length > 0 ||
-                (!!session && trayAgents.length > 0) ||
-                dockQuestions.length > 0) && (
-                <ComposerTray className="chat-tray" stack>
-                  {dockQuestions.length > 0 && (
-                    <QuestionDock
-                      sessionId={view.sessionId}
-                      requests={dockQuestions}
-                      states={questionStates}
-                      open={questionDockOpen}
-                      onOpenChange={setQuestionDockOpen}
-                      focus={questionFocus}
-                    />
-                  )}
-                  {hostOffline && <HostWaitNote name={hostName} />}
-                  {providerWait && <ProviderWaitNote retry={limitRetry} autoResume={autoResume} readOnly={viewOnly} />}
-                  {/* Live work folds into a stack under its first card; what needs the person stays outside it. */}
-                  <TrayStack>
-                    {session && trayAgents.length > 0 && (
-                      <AgentsSection
-                        agents={trayAgents}
-                        readOnly={viewOnly}
-                        onOpen={(agentId) => setOpenAgent(agentId)}
-                        onOpenAll={helperSelection.selected.length > 0 ? () => setOpenAgent('*') : undefined}
-                        onStop={stopTask}
-                        onContinue={continueTeammates}
-                      />
-                    )}
-                    {browserActivity.tabs.length > 0 && <BrowserActivity state={browserActivity} />}
-                    {computerActivity.taskId && computerActivity.session && (
-                      <ComputerActivity state={computerActivity} />
-                    )}
-                    {threadServers.servers.length > 0 && <ThreadServersSection state={threadServers} />}
-                    {(backgroundTerminals.terminals.length > 0 || commands.length > 0) && (
-                      <BackgroundTerminalsSection
-                        state={backgroundTerminals}
-                        commands={commands}
-                        readOnly={viewOnly}
-                        onOpenCommand={(task) => setOpenAgent(task.agentId)}
-                        onStopCommand={stopTask}
-                      />
-                    )}
-                    {liveGoal && (
-                      <GoalBar
-                        goal={liveGoal}
-                        readOnly={viewOnly}
-                        onControl={(action) => {
-                          void act(() => invoke('agent.goal.control', view.sessionId, action))
-                        }}
-                        onVerify={(command) => {
-                          void act(() => invoke('agent.goal.verify', view.sessionId, command))
-                        }}
-                      />
-                    )}
-                  </TrayStack>
-                  {(trayQueued.length > 0 || pending.length > 0) && (
-                    <QueuedMessages
-                      sessionId={view.sessionId}
-                      queued={trayQueued}
-                      readOnly={viewOnly}
-                      pending={pending}
-                      paused={queuePaused}
-                      hostName={hostName}
-                      hostOffline={hostOffline}
-                      busyAgent={busyAgent}
-                      supportsSteering={supportsSteering}
-                      configuring={configuring}
-                      act={act}
-                      onRecall={recallIntoComposer}
-                    />
-                  )}
-                </ComposerTray>
-              )}
-              {threadArchived && !viewOnly ? (
-                // An archived thread takes no messages; it is unarchived first, which is offered here.
-                <div className="mx-auto mb-3 flex w-full max-w-(--chat-column-width) items-center gap-3 rounded-(--radius-l) border border-line bg-card px-4 py-3 text-control">
-                  <Archive size={16} className="text-muted-foreground" />
-                  <span className="flex-1 text-soft">{translate('This thread is archived.')}</span>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => void act(() => invoke('tasks.archive', session!.taskId, false))}
-                  >
-                    {translate('Unarchive')}
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  {threadDoneAt && !viewOnly && (
-                    // A done thread holds automatic turns; sending a message or Reopen continues it.
-                    <div className="mx-auto mb-2 flex w-full max-w-(--chat-column-width) items-center gap-2 px-1 text-control text-soft">
-                      <CheckCircle2 size={14} className="flex-none text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate">
-                        {translate('This thread is done.')}{' '}
-                        <span className="text-muted-foreground">{timeAgo(threadDoneAt)}</span>
-                        {queued.length > 0 && (
-                          <>
-                            {' · '}
-                            {translate('{count} queued messages held', { count: queued.length })}
-                          </>
-                        )}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => void act(() => invoke('tasks.done', session!.taskId, false))}
+            )}
+            {confirmContinue && (
+              <ContinueChatDialog
+                busy={continuing}
+                canUseWorktree={canUseWorktree}
+                onCancel={() => setConfirmContinue(false)}
+                onConfirm={(worktree) => void continueInNewChat(worktree)}
+              />
+            )}
+            {continueHost && session && (
+              <ContinueOnHostDialog
+                taskId={session.taskId}
+                targetId={continueHost}
+                onClose={() => setContinueHost(null)}
+              />
+            )}
+            {showQuestions && pendingQuestions.length > 0 && (
+              <PendingQuestionsBar
+                questions={pendingQuestions}
+                states={questionStates}
+                scroller={scroller}
+                onOpenQuestion={openQuestion}
+              />
+            )}
+            <ChatMentions.Provider value={composerTeammate.mentions}>
+              <ThreadAgents.Provider value={allTasks}>
+                <MessageScrollerProvider autoScroll defaultScrollPosition="end">
+                  <TranscriptScrollApi apiRef={scrollToEnd} />
+                  <TranscriptFollowState viewport={scroller} />
+                  <div className="transcript-frame [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:flex-none [&_>_.agent-panel]:w-[min(440px,_45%)] [&_>_.agent-panel]:h-auto [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] relative flex-1 min-h-0 min-w-0 flex [container:transcript-frame_/_inline-size] flex-col">
+                    <MessageScroller
+                      className={`transcript min-h-0 min-w-0 flex-1 ${hydrating && !turns.length ? 'chat-loading' : ''}`}
+                    >
+                      <MessageScrollerViewport
+                        ref={scroller}
+                        onScroll={onScroll}
+                        data-working={working || undefined}
+                        aria-label={translate('Conversation')}
+                        className={`scroll-fade-y px-6 pt-3 pb-7 outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--line)] ${showingSubmission ? 'motion-safe:scroll-smooth' : ''}`}
                       >
-                        <RotateCcw size={14} /> {translate('Reopen')}
-                      </Button>
-                    </div>
-                  )}
-                  <Composer
-                    attachments={attachments}
-                    onAttachmentsChange={setAttachments}
-                    stop={{
-                      active: live && busyAgent,
-                      onStop: () => {
-                        setInterrupted(true)
-                        void act(() => invoke('agent.interrupt', view.sessionId))
-                      },
-                    }}
-                    resume={{
-                      ...limitResume(limitView),
-                      active: !busyAgent && !!session && (stopped || limitResume(limitView).active),
-                      onResume: () => {
-                        if (limitResume(limitView).active) {
-                          stick.current = true
-                          limitRetry.tryNow()
-                          return
-                        }
-                        setInterrupted(false)
-                        stick.current = true
-                        void act(() => invoke('agent.submit', view.sessionId, RESUME_PROMPT, 'steer', [], []))
-                      },
-                    }}
-                    value={draft}
-                    allowEmpty={attached.length > 0}
-                    chips={
-                      <>
-                        {!viewOnly && (
-                          <RecipientChip teammates={teammates} recipient={recipient} onChange={setRecipientId} />
+                        {hiddenTurns > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="mx-auto mb-2 flex text-muted-foreground"
+                            onClick={showEarlierTurns}
+                          >
+                            {hiddenTurns === 1
+                              ? translate('Show 1 earlier turn')
+                              : translate('Show {0} earlier turns', { '0': hiddenTurns })}
+                          </Button>
                         )}
-                        {session && (
-                          <ProviderRouteChip
-                            sessionId={view.sessionId}
-                            settings={pendingSettings ?? session.settings}
-                            limited={!!providerWait}
-                            readOnly={viewOnly}
-                            autoResume={autoResume}
-                            onSession={setSession}
-                          />
-                        )}
-                        {contentAttachments.map((attachment) => (
-                          <InteractiveAttachmentChip
-                            key={`${attachment.id}:${attachment.version}`}
-                            attachment={attachment}
-                            onRemove={() =>
-                              setContentAttachments((current) => current.filter((item) => item !== attachment))
-                            }
-                          />
-                        ))}
-                        {attached.length > 0 && (
-                          <CommentsChip
-                            groups={attached}
-                            onRemove={() =>
-                              void act(async () => {
-                                for (const group of attached)
-                                  await invoke('reviews.select', group.review.id, group.ids, false)
-                              })
-                            }
-                          />
-                        )}
-                      </>
-                    }
-                    disabled={configuring || !session}
-                    controls={
-                      session &&
-                      (joining ? (
-                        <TeammateJoinControls joining={joining} disabled={viewOnly} />
-                      ) : (
-                        <>
-                          <AgentControls
-                            settings={pendingSettings ?? session.settings}
-                            current={session.settings}
-                            onChange={changeSettings}
-                            disabled={viewOnly}
-                            running={working}
-                            trailing={<ContextMeter context={context} />}
-                          />
-                        </>
-                      ))
-                    }
-                    onChange={setDraft}
-                    onShowQuote={showQuote}
-                    onArrowUpEmpty={editing || viewOnly ? undefined : editLast}
-                    chat
-                    teammate={composerTeammate}
-                    onSubmit={(context) => send(action, context)}
-                    onAlternateSubmit={
-                      busyAgent && supportsSteering && !hostOffline ? (context) => send(opposite, context) : undefined
-                    }
-                    alternateDisabled={configuring || !session}
-                    alternateLabel={opposite === 'queue' ? 'Queue' : 'Steer'}
-                    placeholder={
-                      hostOffline
-                        ? translate('Message · sends when {0} is back', { 0: hostName })
-                        : limitView
-                          ? limitPlaceholder(limitView, autoResume.effective.value)
-                          : joining
-                            ? translate('Tell {0} what to do', { 0: joining.name })
-                            : recipient
-                              ? translate('Message {0}', { 0: recipient.name })
-                              : live || busyAgent
-                                ? translate('Reply to the agent')
-                                : translate('Message the agent')
-                    }
-                    actions={
-                      compactOffer !== null && (
-                        <CompactBeforeSendToggle
-                          tokens={compactOffer}
-                          compact={compactFirst}
-                          disabled={configuring}
-                          onChange={(compact) => setKeepHistoryFor(compact ? null : view.sessionId)}
+                        <MessageScrollerContent
+                          className={`${hydrating && !turns.length ? 'justify-center' : ''} transcript-col mx-auto max-w-[var(--chat-column-width)] gap-3.5`}
+                        >
+                          {/* The window already carries the brand; a chat that opens at once shows nothing, a slow one a
+                            small spinner. */}
+                          {slowHydration && !turns.length && (
+                            <div className="flex items-center justify-center text-muted-foreground">
+                              <Spinner aria-label={translate('Loading conversation')} />
+                            </div>
+                          )}
+                          {pageTurns.map((turn, ti) => (
+                            <MessageScrollerItem
+                              key={turn.key}
+                              messageId={String(turn.key)}
+                              className="[content-visibility:visible]"
+                            >
+                              <TranscriptTurn
+                                turn={turn}
+                                isLast={ti === pageTurns.length - 1}
+                                dateSeparator={pageTurnDate(turnDates, hiddenTurns, ti)}
+                                dateNow={dateNow}
+                                reviews={turnReviews.get(turn.key)}
+                                completedGoals={completedGoals.get(
+                                  turn.user?.kind === 'event' ? turn.user.event : null,
+                                )}
+                                ctx={transcript}
+                              />
+                            </MessageScrollerItem>
+                          ))}
+                          {pendingSettings &&
+                            session &&
+                            !busyAgent &&
+                            !sameAgentSettings(pendingSettings, session.settings) && (
+                              <MessageScrollerItem messageId="pending-settings">
+                                <PendingSettingsChange
+                                  next={pendingSettings}
+                                  previous={session.settings}
+                                  onCancel={() => setPendingSettings(null)}
+                                />
+                              </MessageScrollerItem>
+                            )}
+                          {steering.map((message) => (
+                            <MessageScrollerItem key={message.id} messageId={`steering-${message.id}`}>
+                              <SteeringMessage
+                                sessionId={view.sessionId}
+                                message={message}
+                                readOnly={viewOnly}
+                                act={act}
+                              />
+                            </MessageScrollerItem>
+                          ))}
+                          {showingSubmission && pendingSubmission && (
+                            <MessageScrollerItem messageId="pending-submission">
+                              <PendingSubmission submission={pendingSubmission} />
+                            </MessageScrollerItem>
+                          )}
+                          {activityLabel && (compacting || !statusGroup) && (
+                            <ChatStatus label={translate(activityLabel)} compacting={compacting} />
+                          )}
+                        </MessageScrollerContent>
+                      </MessageScrollerViewport>
+                      <ScrollToLatestButton working={working} />
+                    </MessageScroller>
+                    <SelectionActions
+                      scroller={scroller}
+                      readOnly={viewOnly}
+                      onQuote={quoteIntoDraft}
+                      onQuoteNew={quoteIntoNewChat}
+                      onAside={(quote, from) => setOpenAside({ id: null, quote, from })}
+                    />
+                  </div>
+                </MessageScrollerProvider>
+              </ThreadAgents.Provider>
+            </ChatMentions.Provider>
+            <div className="composer-dock [&_.error]:mb-1.5 [&_.error]:text-control flex-none p-[0_calc(16px_+_var(--chat-scrollbar-width,_0px))_10px_16px]">
+              <ComposerStack>
+                {error && <ErrorNote message={error} title={translate('That didn’t work')} />}
+                <ComputerGrantDialog state={computerActivity} />
+                <ConfirmStopDialog
+                  command={stopping ? stopping.name : null}
+                  onCancel={() => setStopping(null)}
+                  onConfirm={() => {
+                    if (stopping) runStopTask(stopping)
+                    setStopping(null)
+                  }}
+                />
+                {(hostOffline ||
+                  backgroundTerminals.terminals.length > 0 ||
+                  commands.length > 0 ||
+                  threadServers.servers.length > 0 ||
+                  browserActivity.tabs.length > 0 ||
+                  !!computerActivity.session ||
+                  providerWait ||
+                  liveGoal ||
+                  trayQueued.length > 0 ||
+                  pending.length > 0 ||
+                  (!!session && trayAgents.length > 0) ||
+                  dockQuestions.length > 0) && (
+                  <ComposerTray className="chat-tray" stack>
+                    {dockQuestions.length > 0 && (
+                      <QuestionDock
+                        sessionId={view.sessionId}
+                        requests={dockQuestions}
+                        states={questionStates}
+                        open={questionDockOpen}
+                        onOpenChange={setQuestionDockOpen}
+                        focus={questionFocus}
+                      />
+                    )}
+                    {hostOffline && <HostWaitNote name={hostName} />}
+                    {providerWait && (
+                      <ProviderWaitNote retry={limitRetry} autoResume={autoResume} readOnly={viewOnly} />
+                    )}
+                    {/* Live work folds into a stack under its first card; what needs the person stays outside it. */}
+                    <TrayStack>
+                      {session && trayAgents.length > 0 && (
+                        <AgentsSection
+                          agents={trayAgents}
+                          readOnly={viewOnly}
+                          onOpen={(agentId) => setOpenAgent(agentId)}
+                          onOpenAll={helperSelection.selected.length > 0 ? () => setOpenAgent('*') : undefined}
+                          onStop={stopTask}
+                          onContinue={continueTeammates}
                         />
-                      )
-                    }
-                    submitLabel={
-                      hostOffline || limitView
-                        ? 'Queue'
-                        : busyAgent
-                          ? action === 'queue'
-                            ? 'Queue'
-                            : 'Steer'
-                          : compactFirst
-                            ? 'Compact and send'
-                            : 'Send'
-                    }
-                    submitTitle={
-                      compactFirst && compactOffer !== null
-                        ? translate('Summarize {0} tokens of history, then send', {
-                            0: contextTokensShort(compactOffer),
-                          })
-                        : undefined
-                    }
-                  />
-                </>
-              )}
-            </ComposerStack>
+                      )}
+                      {browserActivity.tabs.length > 0 && <BrowserActivity state={browserActivity} />}
+                      {computerActivity.taskId && computerActivity.session && (
+                        <ComputerActivity state={computerActivity} />
+                      )}
+                      {threadServers.servers.length > 0 && <ThreadServersSection state={threadServers} />}
+                      {(backgroundTerminals.terminals.length > 0 || commands.length > 0) && (
+                        <BackgroundTerminalsSection
+                          state={backgroundTerminals}
+                          commands={commands}
+                          readOnly={viewOnly}
+                          onOpenCommand={(task) => setOpenAgent(task.agentId)}
+                          onStopCommand={stopTask}
+                        />
+                      )}
+                      {liveGoal && (
+                        <GoalBar
+                          goal={liveGoal}
+                          readOnly={viewOnly}
+                          onControl={(action) => {
+                            void act(() => invoke('agent.goal.control', view.sessionId, action))
+                          }}
+                          onVerify={(command) => {
+                            void act(() => invoke('agent.goal.verify', view.sessionId, command))
+                          }}
+                        />
+                      )}
+                    </TrayStack>
+                    {(trayQueued.length > 0 || pending.length > 0) && (
+                      <QueuedMessages
+                        sessionId={view.sessionId}
+                        queued={trayQueued}
+                        readOnly={viewOnly}
+                        pending={pending}
+                        paused={queuePaused}
+                        hostName={hostName}
+                        hostOffline={hostOffline}
+                        busyAgent={busyAgent}
+                        supportsSteering={supportsSteering}
+                        configuring={configuring}
+                        act={act}
+                        onRecall={recallIntoComposer}
+                      />
+                    )}
+                  </ComposerTray>
+                )}
+                {threadArchived && !viewOnly ? (
+                  // An archived thread takes no messages; it is unarchived first, which is offered here.
+                  <div className="mx-auto mb-3 flex w-full max-w-(--chat-column-width) items-center gap-3 rounded-(--radius-l) border border-line bg-card px-4 py-3 text-control">
+                    <Archive size={16} className="text-muted-foreground" />
+                    <span className="flex-1 text-soft">{translate('This thread is archived.')}</span>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => void act(() => invoke('tasks.archive', session!.taskId, false))}
+                    >
+                      {translate('Unarchive')}
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    {threadDoneAt && !viewOnly && (
+                      // A done thread holds automatic turns; sending a message or Reopen continues it.
+                      <div className="mx-auto mb-2 flex w-full max-w-(--chat-column-width) items-center gap-2 px-1 text-control text-soft">
+                        <CheckCircle2 size={14} className="flex-none text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate">
+                          {translate('This thread is done.')}{' '}
+                          <span className="text-muted-foreground">{timeAgo(threadDoneAt)}</span>
+                          {queued.length > 0 && (
+                            <>
+                              {' · '}
+                              {translate('{count} queued messages held', { count: queued.length })}
+                            </>
+                          )}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => void act(() => invoke('tasks.done', session!.taskId, false))}
+                        >
+                          <RotateCcw size={14} /> {translate('Reopen')}
+                        </Button>
+                      </div>
+                    )}
+                    <Composer
+                      attachments={attachments}
+                      onAttachmentsChange={setAttachments}
+                      stop={{
+                        active: live && busyAgent,
+                        onStop: () => {
+                          setInterrupted(true)
+                          void act(() => invoke('agent.interrupt', view.sessionId))
+                        },
+                      }}
+                      resume={{
+                        ...limitResume(limitView),
+                        active: !busyAgent && !!session && (stopped || limitResume(limitView).active),
+                        onResume: () => {
+                          if (limitResume(limitView).active) {
+                            stick.current = true
+                            limitRetry.tryNow()
+                            return
+                          }
+                          setInterrupted(false)
+                          stick.current = true
+                          void act(() => invoke('agent.submit', view.sessionId, RESUME_PROMPT, 'steer', [], []))
+                        },
+                      }}
+                      value={draft}
+                      allowEmpty={attached.length > 0}
+                      chips={
+                        <>
+                          {!viewOnly && (
+                            <RecipientChip teammates={teammates} recipient={recipient} onChange={setRecipientId} />
+                          )}
+                          {session && (
+                            <ProviderRouteChip
+                              sessionId={view.sessionId}
+                              settings={pendingSettings ?? session.settings}
+                              limited={!!providerWait}
+                              readOnly={viewOnly}
+                              autoResume={autoResume}
+                              onSession={setSession}
+                            />
+                          )}
+                          {contentAttachments.map((attachment) => (
+                            <InteractiveAttachmentChip
+                              key={`${attachment.id}:${attachment.version}`}
+                              attachment={attachment}
+                              onRemove={() =>
+                                setContentAttachments((current) => current.filter((item) => item !== attachment))
+                              }
+                            />
+                          ))}
+                          {attached.length > 0 && (
+                            <CommentsChip
+                              groups={attached}
+                              onRemove={() =>
+                                void act(async () => {
+                                  for (const group of attached)
+                                    await invoke('reviews.select', group.review.id, group.ids, false)
+                                })
+                              }
+                            />
+                          )}
+                        </>
+                      }
+                      disabled={configuring || !session}
+                      controls={
+                        session &&
+                        (joining ? (
+                          <TeammateJoinControls joining={joining} disabled={viewOnly} />
+                        ) : (
+                          <>
+                            <AgentControls
+                              settings={pendingSettings ?? session.settings}
+                              current={session.settings}
+                              onChange={changeSettings}
+                              disabled={viewOnly}
+                              running={working}
+                              trailing={<ContextMeter context={context} />}
+                            />
+                          </>
+                        ))
+                      }
+                      onChange={setDraft}
+                      onShowQuote={showQuote}
+                      onArrowUpEmpty={editing || viewOnly ? undefined : editLast}
+                      chat
+                      teammate={composerTeammate}
+                      onSubmit={(context) => send(action, context)}
+                      onAlternateSubmit={
+                        busyAgent && supportsSteering && !hostOffline ? (context) => send(opposite, context) : undefined
+                      }
+                      alternateDisabled={configuring || !session}
+                      alternateLabel={opposite === 'queue' ? 'Queue' : 'Steer'}
+                      placeholder={
+                        hostOffline
+                          ? translate('Message · sends when {0} is back', { 0: hostName })
+                          : limitView
+                            ? limitPlaceholder(limitView, autoResume.effective.value)
+                            : joining
+                              ? translate('Tell {0} what to do', { 0: joining.name })
+                              : recipient
+                                ? translate('Message {0}', { 0: recipient.name })
+                                : live || busyAgent
+                                  ? translate('Reply to the agent')
+                                  : translate('Message the agent')
+                      }
+                      actions={
+                        compactOffer !== null && (
+                          <CompactBeforeSendToggle
+                            tokens={compactOffer}
+                            compact={compactFirst}
+                            disabled={configuring}
+                            onChange={(compact) => setKeepHistoryFor(compact ? null : view.sessionId)}
+                          />
+                        )
+                      }
+                      submitLabel={
+                        hostOffline || limitView
+                          ? 'Queue'
+                          : busyAgent
+                            ? action === 'queue'
+                              ? 'Queue'
+                              : 'Steer'
+                            : compactFirst
+                              ? 'Compact and send'
+                              : 'Send'
+                      }
+                      submitTitle={
+                        compactFirst && compactOffer !== null
+                          ? translate('Summarize {0} tokens of history, then send', {
+                              0: contextTokensShort(compactOffer),
+                            })
+                          : undefined
+                      }
+                    />
+                  </>
+                )}
+              </ComposerStack>
+            </div>
+          </div>
+          <div
+            ref={dock}
+            className={`agent-dock [&.open]:w-[min(440px,_45cqw)] [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:w-[min(440px,_45cqw)] [&_>_.agent-panel]:h-full [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] flex-none w-0 min-h-0 overflow-hidden ${panelOpen ? ' open' : ''}`}
+            inert={!panelOpen}
+            aria-hidden={!panelOpen}
+          >
+            {openAside && (
+              <AsidePanel
+                sessionId={view.sessionId}
+                asides={asides}
+                readOnly={viewOnly}
+                open={openAside}
+                taskId={session?.taskId}
+                onOpen={setOpenAside}
+                onClose={() => setOpenAside(null)}
+                onQuote={quoteIntoDraft}
+              />
+            )}
+            {openAgent && (
+              <AgentTaskPanel
+                tasks={tasks}
+                commands={commands}
+                selectedIds={helperSelection.selected.map((task) => task.agentId)}
+                openId={openAgent}
+                events={events}
+                results={results}
+                cwd={session?.cwd ?? ''}
+                live={live}
+                taskId={session?.taskId}
+                onSelect={setOpenAgent}
+                onClose={() => setOpenAgent(null)}
+                onStop={stopTask}
+                onDismiss={(task) => {
+                  setOpenAgent(null)
+                  void act(() => invoke('agent.dismissTeammate', view.sessionId, task.agentId))
+                }}
+                onContinue={continueTeammates}
+                onSave={setSavingTeammate}
+                readOnly={viewOnly}
+                onMessage={(task, text) => act(() => invoke('agent.messageTask', view.sessionId, task.agentId, text))}
+              />
+            )}
+            {savingTeammate && (
+              <SaveTeammateDialog
+                sessionId={view.sessionId}
+                task={savingTeammate}
+                onClose={() => setSavingTeammate(null)}
+              />
+            )}
           </div>
         </div>
-        <div
-          ref={dock}
-          className={`agent-dock [&.open]:w-[min(440px,_45cqw)] [&_>_.agent-panel]:relative [&_>_.agent-panel]:inset-auto [&_>_.agent-panel]:w-[min(440px,_45cqw)] [&_>_.agent-panel]:h-full [&_>_.agent-panel]:[box-shadow:none] [&_>_.agent-panel]:[animation:none] [&_>_.agent-panel]:[border-left:var(--pane-border-width)_solid_var(--pane-border-color)] flex-none w-0 min-h-0 overflow-hidden ${panelOpen ? ' open' : ''}`}
-          inert={!panelOpen}
-          aria-hidden={!panelOpen}
-        >
-          {openAside && (
-            <AsidePanel
-              sessionId={view.sessionId}
-              asides={asides}
-              readOnly={viewOnly}
-              open={openAside}
-              taskId={session?.taskId}
-              onOpen={setOpenAside}
-              onClose={() => setOpenAside(null)}
-              onQuote={quoteIntoDraft}
-            />
-          )}
-          {openAgent && (
-            <AgentTaskPanel
-              tasks={tasks}
-              commands={commands}
-              selectedIds={helperSelection.selected.map((task) => task.agentId)}
-              openId={openAgent}
-              events={events}
-              results={results}
-              cwd={session?.cwd ?? ''}
-              live={live}
-              taskId={session?.taskId}
-              onSelect={setOpenAgent}
-              onClose={() => setOpenAgent(null)}
-              onStop={stopTask}
-              onDismiss={(task) => {
-                setOpenAgent(null)
-                void act(() => invoke('agent.dismissTeammate', view.sessionId, task.agentId))
-              }}
-              onContinue={continueTeammates}
-              onSave={setSavingTeammate}
-              readOnly={viewOnly}
-              onMessage={(task, text) => act(() => invoke('agent.messageTask', view.sessionId, task.agentId, text))}
-            />
-          )}
-          {savingTeammate && (
-            <SaveTeammateDialog
-              sessionId={view.sessionId}
-              task={savingTeammate}
-              onClose={() => setSavingTeammate(null)}
-            />
-          )}
-        </div>
       </div>
-    </div>
+    </RunCommandProvider>
   )
 })

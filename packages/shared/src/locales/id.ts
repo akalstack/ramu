@@ -7179,4 +7179,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Checks start once your Git host records a production deploy, or once you save the address.': 'Pemeriksaan dimulai begitu host Git-mu mencatat deploy produksi, atau begitu kamu menyimpan alamatnya.',
   'Found from the production deployment on your Git host.': 'Ditemukan dari deployment produksi di host Git-mu.',
   'Found from the production deployment on your Git host. Type another address to use that instead.': 'Ditemukan dari deployment produksi di host Git-mu. Ketik alamat lain untuk memakainya.',
+  Run: 'Jalankan',
 }
