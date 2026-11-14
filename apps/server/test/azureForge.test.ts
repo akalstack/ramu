@@ -356,7 +356,7 @@ it('keeps hosting secrets in the credential store and only the shown field in st
   expect(bitbucket.saved()).toEqual({ email: 'a@b.co' })
 })
 
-it('lists the latest iteration’s files with renames and without diffs, and says when more follow', async () => {
+it('lists the latest iteration’s files with renames, without diffs when it names no commits, and says when more follow', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'ramu-azure-files-'))
   dirs.push(dir)
   execFileSync('git', ['init', '-q', '-b', 'fix/login'], { cwd: dir })
@@ -404,6 +404,87 @@ it('lists the latest iteration’s files with renames and without diffs, and say
     })
     nextTop = 100
     expect((await pullRequestFiles(dir, url)).more).toBe(true)
+  } finally {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  }
+})
+
+it('builds each file’s patch and counts from its versions at the merge base and the source commit', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-azure-patches-'))
+  dirs.push(dir)
+  execFileSync('git', ['init', '-q', '-b', 'fix/login'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'https://dev.azure.com/acme/Web%20App/_git/site'], { cwd: dir })
+  vi.stubEnv('AZURE_DEVOPS_EXT_PAT', 'pat')
+  const repo = 'https://dev.azure.com/acme/Web%20App/_apis/git/repositories/site'
+  const base = `${repo}/pullrequests/7/iterations`
+  const texts: Record<string, string> = {
+    'base:/src/a.ts': 'one\ntwo\nthree\n',
+    'head:/src/a.ts': 'one\n2\nthree\nfour\n',
+    'base:/src/old.ts': 'keep\n',
+    'head:/src/new.ts': 'keep\nmore\n',
+    'head:/README.md': '# Site\n',
+    'base:/gone.ts': 'bye\n',
+    'base:/logo.png': 'PNG\x00\x00',
+    'head:/logo.png': 'PNG\x00\x01',
+  }
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === `${base}?api-version=7.1`)
+        return new Response(
+          JSON.stringify({
+            value: [
+              { id: 1, sourceRefCommit: { commitId: 'old' }, commonRefCommit: { commitId: 'base' } },
+              { id: 2, sourceRefCommit: { commitId: 'head' }, commonRefCommit: { commitId: 'base' } },
+            ],
+          }),
+        )
+      if (url === `${base}/2/changes?$top=${FILES_PAGE}&api-version=7.1`)
+        return new Response(
+          JSON.stringify({
+            changeEntries: [
+              { item: { path: '/src/a.ts' }, changeType: 'edit' },
+              { item: { path: '/src/new.ts' }, changeType: 'edit, rename', originalPath: '/src/old.ts' },
+              { item: { path: '/README.md' }, changeType: 'add' },
+              { item: { path: '/gone.ts' }, changeType: 'delete' },
+              { item: { path: '/logo.png' }, changeType: 'edit' },
+              { item: { path: '/missing.ts' }, changeType: 'edit' },
+            ],
+          }),
+        )
+      const item = new URL(url)
+      if (item.pathname.endsWith('/site/items')) {
+        const text = texts[`${item.searchParams.get('versionDescriptor.version')}:${item.searchParams.get('path')}`]
+        return text === undefined ? new Response('', { status: 404 }) : new Response(text)
+      }
+      return new Response('', { status: 404 })
+    }),
+  )
+  try {
+    const { files } = await pullRequestFiles(dir, 'https://dev.azure.com/acme/Web%20App/_git/site/pullrequest/7')
+    expect(files).toEqual([
+      {
+        path: 'src/a.ts',
+        status: 'modified',
+        additions: 2,
+        deletions: 1,
+        patch: '@@ -1,3 +1,4 @@\n one\n-two\n+2\n three\n+four',
+      },
+      {
+        path: 'src/new.ts',
+        previousPath: 'src/old.ts',
+        status: 'renamed',
+        additions: 1,
+        deletions: 0,
+        patch: '@@ -1 +1,2 @@\n keep\n+more',
+      },
+      { path: 'README.md', status: 'added', additions: 1, deletions: 0, patch: '@@ -0,0 +1 @@\n+# Site' },
+      { path: 'gone.ts', status: 'removed', additions: 0, deletions: 1, patch: '@@ -1 +0,0 @@\n-bye' },
+      // A binary file, and one that cannot be read, stay listed without a patch.
+      { path: 'logo.png', status: 'modified', additions: 0, deletions: 0, patch: null },
+      { path: 'missing.ts', status: 'modified', additions: 0, deletions: 0, patch: null },
+    ])
   } finally {
     vi.unstubAllGlobals()
     vi.unstubAllEnvs()

@@ -34,7 +34,8 @@ import type {
 import { unsupportedPullRequestText } from '@ramu/shared/pullRequestSupport'
 import { redactSecrets } from '@ramu/shared/forgeRemote'
 import { currentBranch, git, publishRemote } from '../git'
-import { FILES_PAGE, TIMELINE_LENGTH, opening, registerForgeAdapter } from './adapter'
+import { FILES_PAGE, TIMELINE_LENGTH, boundedPatch, opening, registerForgeAdapter } from './adapter'
+import { textPatch } from './textPatch'
 import { enrichOpen } from './enrich'
 import { checksRollup } from '@ramu/shared/pullRequests'
 import { ForgeError, pullRequestDraft } from './github'
@@ -892,23 +893,60 @@ function changeStatus(changeType: string): PullRequestFile['status'] {
 
 const repoPath = (path: string) => path.replace(/^\//, '')
 
+/** A file larger than this is listed without a patch, as the other services do for files too large to diff. */
+const PATCH_FILE_LIMIT = 1_000_000
+/** Files read at once while building patches, so a large pull request does not open a request per file together. */
+const PATCH_READS = 6
+
+/** A file's text at one commit; null when it is binary or too large to diff. */
+async function fileAt(a: Access, path: string, commit: string): Promise<string | null> {
+  const text = await repoApi<string>(
+    a,
+    `/items?path=${q(`/${path}`)}&versionDescriptor.version=${q(commit)}&versionDescriptor.versionType=commit&includeContent=true`,
+    { text: true },
+  )
+  return text.length > PATCH_FILE_LIMIT || text.includes('\0') ? null : text
+}
+
 /**
- * The first page of files the latest iteration of `url` changes. Azure DevOps reports which files changed and how,
- * but has no API that returns a diff's text: its file diffs give only changed line ranges, and building a patch from
- * them means reading both versions of every file. So every patch is null and every count is zero rather than costing
- * requests per file.
+ * A changed file's patch and counts. Azure DevOps has no API that returns a diff's text, only changed line ranges, so
+ * both versions are read, from the merge base and the source commit, and diffed here. A file that cannot be read keeps
+ * its place in the list without a patch.
+ */
+async function withPatch(a: Access, file: PullRequestFile, base: string, source: string): Promise<PullRequestFile> {
+  try {
+    const [before, after] = await Promise.all([
+      file.status === 'added' ? '' : fileAt(a, file.previousPath ?? file.path, base),
+      file.status === 'removed' ? '' : fileAt(a, file.path, source),
+    ])
+    if (before === null || after === null) return file
+    const { patch, additions, deletions } = await textPatch(before, after)
+    return { ...file, additions, deletions, ...boundedPatch(patch) }
+  } catch {
+    return file
+  }
+}
+
+/**
+ * The first page of files the latest iteration of `url` changes, with each patch built from the file's two versions
+ * (see {@link withPatch}).
  */
 export async function pullRequestFiles(cwd: string, url: string): Promise<{ files: PullRequestFile[]; more: boolean }> {
   const a = await access(cwd)
   const path = `/pullrequests/${idOf(url)}/iterations`
-  const iterations = await repoApi<{ value: { id: number }[] }>(a, path)
-  const latest = Math.max(0, ...iterations.value.map((iteration) => iteration.id))
-  if (!latest) return { files: [], more: false }
+  const iterations = await repoApi<{
+    value: { id: number; sourceRefCommit?: { commitId?: string }; commonRefCommit?: { commitId?: string } }[]
+  }>(a, path)
+  const latest = iterations.value.reduce<(typeof iterations.value)[number] | undefined>(
+    (best, iteration) => (!best || iteration.id > best.id ? iteration : best),
+    undefined,
+  )
+  if (!latest?.id) return { files: [], more: false }
   const page = await repoApi<{ changeEntries?: RawChange[]; nextTop?: number }>(
     a,
-    `${path}/${latest}/changes?$top=${FILES_PAGE}`,
+    `${path}/${latest.id}/changes?$top=${FILES_PAGE}`,
   )
-  const files = (page.changeEntries ?? []).flatMap((change): PullRequestFile[] => {
+  const listed = (page.changeEntries ?? []).flatMap((change): PullRequestFile[] => {
     // Folders appear as changes of their own; the view lists files.
     if (!change.item?.path || change.item.gitObjectType === 'tree') return []
     const status = changeStatus(change.changeType ?? '')
@@ -924,6 +962,19 @@ export async function pullRequestFiles(cwd: string, url: string): Promise<{ file
       },
     ]
   })
+  const base = latest.commonRefCommit?.commitId
+  const source = latest.sourceRefCommit?.commitId
+  const files = [...listed]
+  if (base && source) {
+    let next = 0
+    const reader = async () => {
+      while (next < listed.length) {
+        const index = next++
+        files[index] = await withPatch(a, listed[index]!, base, source)
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(PATCH_READS, listed.length) }, reader))
+  }
   return { files, more: (page.nextTop ?? 0) > 0 }
 }
 
