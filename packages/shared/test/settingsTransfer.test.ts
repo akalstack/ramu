@@ -15,7 +15,7 @@ describe('moving settings between hosts', () => {
   it('lists every value that would change, and nothing that would not', () => {
     const file: SettingsExport = {
       format: 'ramu-settings',
-      version: 1,
+      version: 2,
       exportedAt: 1,
       host: 'mac',
       groups: ['appearance', 'rules', 'memories'],

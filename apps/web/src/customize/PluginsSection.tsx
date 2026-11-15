@@ -8,6 +8,7 @@ import {
   type PluginReview,
   type PluginScope,
 } from '@ramu/shared/plugins'
+import type { PortablePlugin, WaitingTool } from '@ramu/shared/toolSync'
 import type { Project } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +24,8 @@ import { t, useLanguage } from '../i18n'
 import { CustomizeHeader, displayName, ExtensionGrid, ExtensionItem, Quiet, SectionTitle } from './parts'
 import { PluginHeading, PluginParts, PluginSource } from './PluginParts'
 import { openCustomize } from './openCustomize'
+import { AvailableOn, mcpLogins, useToolSync, WaitingTools } from './toolSync'
+import { useAppSettings } from '../settings/AppSettings'
 
 const matches = (plugin: InstalledPlugin, query: string) =>
   !query.trim() ||
@@ -77,6 +80,10 @@ export function PluginsSection({
   const [installedPair, setInstalledPair] = useState<InstalledPlugin[]>([])
   const [openId, setOpenId] = useState<string | null>(null)
   const [adding, setAdding] = useState<'source' | 'index' | null>(null)
+  const { status: sync } = useToolSync()
+  const { preferences } = useAppSettings()
+  // A plugin another host sent: once installed here, its servers' tools are turned on as they are there.
+  const [fromHost, setFromHost] = useState<PortablePlugin | null>(null)
   useEffect(() => {
     if (requested) setOpenId(requested.id)
   }, [requested])
@@ -121,6 +128,42 @@ export function PluginsSection({
     const listing = listings?.find((entry) => entry.name === staged.contents.name)
     const companion = listing?.companion
     return companion && !installed?.some((plugin) => plugin.name === companion.name) ? companion : null
+  }
+  /** The same review an install from here opens: through its index when this host has it, else from its commit. */
+  const reviewWaiting = (entry: WaitingTool) => {
+    const tool = entry.tool as PortablePlugin
+    const here = installed?.find((plugin) => plugin.name === tool.name)
+    const listing = listings?.find((item) => item.name === tool.name && item.index === tool.index)
+    setFromHost(tool)
+    setReviewing(listing ?? null)
+    void act(entry.key, async () =>
+      setReview(
+        here
+          ? await invoke('plugins.updateReview', here.id)
+          : await invoke(
+              'plugins.stage',
+              listing
+                ? { source: listing.name, index: listing.index }
+                : {
+                    source: tool.location,
+                    ...(tool.commit ? { ref: tool.commit } : {}),
+                    ...(tool.path ? { path: tool.path } : {}),
+                  },
+            ),
+      ),
+    )
+  }
+  /** Turns on a received plugin's servers with the tools its other host has on, the rest off. */
+  const turnOnAsThere = async (plugin: InstalledPlugin, tool: PortablePlugin) => {
+    const servers = plugin.mcpConnections.filter((server) => tool.servers[server.name])
+    if (!servers.length) return
+    const status = await invoke('mcp.status')
+    for (const server of servers) {
+      const connection = status.connections.find((entry) => entry.connection.id === server.id)?.connection
+      const logins = connection ? mcpLogins(preferences, connection) : []
+      // A server that needs its key or a sign-in first is turned on from its card once that is done.
+      if (logins.length) await invoke('mcp.turnOn', server.id, logins, tool.servers[server.name], 'off').catch(() => {})
+    }
   }
   const openListing = (listing: PluginListing) => {
     setReviewing(listing)
@@ -252,6 +295,7 @@ export function PluginsSection({
         <Quiet>{t('Loading plugins…')}</Quiet>
       ) : (
         <>
+          <WaitingTools kind="plugin" status={sync} busy={busy} onReview={reviewWaiting} />
           {needsSetup.length > 0 && (
             <>
               <SectionTitle title={t('Needs setup')} help={t('Add the key each one asks for and it is ready.')} />
@@ -338,12 +382,15 @@ export function PluginsSection({
           onCancel={() => {
             void invoke('plugins.cancel', review.stageId).catch(() => {})
             setReview(null)
+            setFromHost(null)
             nextStep(installedPair)
           }}
           onConfirm={(options, withCompanion) =>
             void act('confirm', async () => {
               const plugin = await invoke('plugins.confirm', review.stageId, options)
               setReview(null)
+              if (fromHost?.name === plugin.name) await turnOnAsThere(plugin, fromHost)
+              setFromHost(null)
               load()
               const companion = companionFor(review)
               if (withCompanion && companion) {
@@ -358,6 +405,7 @@ export function PluginsSection({
       {open && (
         <PluginDetail
           plugin={open}
+          sync={sync}
           projects={projects}
           busy={busy}
           onChanged={load}
@@ -528,6 +576,7 @@ function InstallReview({
 /** An installed plugin: its sign-in first when it still needs one, then what it adds and how to change it. */
 function PluginDetail({
   plugin,
+  sync,
   projects,
   busy,
   onChanged,
@@ -539,6 +588,7 @@ function PluginDetail({
   onCompanion,
 }: {
   plugin: InstalledPlugin
+  sync: ReturnType<typeof useToolSync>['status']
   projects: Project[]
   busy: string | null
   onChanged: () => void
@@ -653,6 +703,7 @@ function PluginDetail({
             ))}
           </ul>
         )}
+        <AvailableOn toolKey={`plugin:${plugin.name}`} status={sync} />
         <PluginParts contents={plugin.contents} />
         <div className="flex items-center justify-between gap-2">
           <PluginSource source={plugin.source} />

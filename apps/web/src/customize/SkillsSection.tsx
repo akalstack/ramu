@@ -14,7 +14,9 @@ import { errorText } from '../lib/errors'
 import { formatLocale, t, useLanguage } from '../i18n'
 import { InstalledSkills } from '../settings/InstalledSkills'
 import { SkillFiles } from './SkillFiles'
+import type { WaitingTool } from '@ramu/shared/toolSync'
 import { Advanced, CustomizeHeader, ExtensionGrid, ExtensionItem, Quiet, SectionTitle } from './parts'
+import { AvailableOn, useToolSync, WaitingTools } from './toolSync'
 
 const fromPlugin = (skill: ManagedSkill) => skill.installation?.source.startsWith('plugin:') === true
 const words = (query: string) => query.toLowerCase().split(/\s+/).filter(Boolean)
@@ -45,12 +47,14 @@ export function SkillsSection({ onOpenPlugins }: { onOpenPlugins: () => void }) 
   const [openId, setOpenId] = useState<string | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [adding, setAdding] = useState(false)
+  const { status: sync, reload: reloadSync } = useToolSync()
   const load = useCallback(async () => {
     const snapshot = await invoke('learning.get')
     setSkills(
       snapshot.skills.filter((skill) => skill.installation || (skill.changedBy === 'user' && !skill.sourceSessionId)),
     )
-  }, [invoke])
+    reloadSync()
+  }, [invoke, reloadSync])
   useEffect(() => {
     load().catch((reason) => setError(errorText(reason)))
     void invoke('projects.list').then(setProjects, () => {})
@@ -93,8 +97,27 @@ export function SkillsSection({ onOpenPlugins }: { onOpenPlugins: () => void }) 
       setBusy(null)
     }
   }
-  const install = (key: string, source: string, skill?: string) =>
-    act(key, async () => setPreview(await invoke('skills.stage', { source, skill, projectId: null })))
+  const install = (key: string, source: string, skill?: string, updatingId?: string) =>
+    act(key, async () =>
+      setPreview(
+        await invoke('skills.stage', { source, skill, projectId: null, ...(updatingId ? { updatingId } : {}) }),
+      ),
+    )
+  /** A skill another host sent: an installed one is fetched from its source again, a written one opens in the editor. */
+  const reviewWaiting = (entry: WaitingTool) => {
+    if (entry.tool.kind !== 'skill') return
+    const tool = entry.tool
+    const here = (skills ?? []).find((skill) => skill.name === tool.name && !skill.projectId)
+    if (tool.source) void install(entry.key, tool.source, tool.name, here?.installation ? here.id : undefined)
+    else
+      setDraft({
+        ...(here && !here.installation ? { id: here.id, revision: here.revision } : {}),
+        name: tool.name,
+        description: tool.description,
+        content: tool.content ?? '',
+        projectId: '',
+      })
+  }
   const all = skills ?? []
   const own = all.filter((skill) => !skill.installation && matches(skill, query))
   const installed = all.filter((skill) => skill.installation && matches(skill, query))
@@ -178,6 +201,7 @@ export function SkillsSection({ onOpenPlugins }: { onOpenPlugins: () => void }) 
         <Quiet>{t('Loading skills…')}</Quiet>
       ) : (
         <>
+          <WaitingTools kind="skill" status={sync} busy={busy} onReview={reviewWaiting} />
           {own.length > 0 && (
             <>
               <SectionTitle title={t('Your skills')} count={own.length} help={t('Learning never changes them.')} />
@@ -227,6 +251,7 @@ export function SkillsSection({ onOpenPlugins }: { onOpenPlugins: () => void }) 
       {open && (
         <SkillDetail
           skill={open}
+          sync={sync}
           projects={projects}
           busy={busy}
           onClose={() => setOpenId(null)}
@@ -294,6 +319,7 @@ export function SkillsSection({ onOpenPlugins }: { onOpenPlugins: () => void }) 
 /** An installed or written skill: who uses it and where, and what to do with it. */
 function SkillDetail({
   skill,
+  sync,
   projects,
   busy,
   onClose,
@@ -303,6 +329,7 @@ function SkillDetail({
   onUpdate,
 }: {
   skill: ManagedSkill
+  sync: ReturnType<typeof useToolSync>['status']
   projects: Project[]
   busy: string | null
   onClose: () => void
@@ -431,6 +458,7 @@ function SkillDetail({
             disabled={busy !== null}
           />
         )}
+        {!plugin && <AvailableOn toolKey={`skill:${skill.name}`} status={sync} />}
         <div className="flex flex-wrap gap-1.5">
           {plugin ? (
             <Button

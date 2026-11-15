@@ -76,7 +76,9 @@ import { readText } from './workspace/files'
 import { appliedDesignSystem, designTokensOf } from '@ramu/shared/artifacts'
 import { ProductionMigrations } from './workspace/deploy/migrations'
 import { registerPluginCliTools } from './plugins/cli'
-import { registerPluginTools } from './plugins/tools'
+import { draftPluginsFolder, registerPluginTools } from './plugins/tools'
+import { setToolAvailability } from './toolSync'
+import { toolKey } from '@ramu/shared/toolSync'
 import { registerCiTools } from './workspace/ci/tools'
 import { setAcpTerminalService } from './providers/acpTerminals'
 import { SqliteBackgroundTerminalHistory } from './workspace/backgroundTerminalHistory'
@@ -803,6 +805,7 @@ learning.sameIdentity = (projectId) => {
     .map((entry) => entry.projectId)
 }
 const externalSkills = new ExternalSkills(learning, workspace)
+externalSkills.toolsChanged = () => send('toolSync:changed', null)
 // Skills a person shares from their own provider folders reach every provider and account through the same export.
 learning.sharedSkills = ({ projectId, provider, accountId, cwd }) => {
   const sharing = workspace.getAppState<SkillSharing>(SKILL_SHARING_KEY, {})
@@ -1226,6 +1229,7 @@ const account: AccountService = new AccountService({
         getSharedMcp,
         plugins,
         hostBrowser,
+        learning,
       },
       TRANSFER_GROUP_IDS.filter((group) => group !== 'memories'),
     ),
@@ -1862,6 +1866,11 @@ const mcpHttp = createServer(async (req, res) => {
       plugins,
       (detail, signal) => agents.requestPermission(source.id, 'Plugin', detail, signal),
       () => send('plugins:changed', null),
+      draftPluginsFolder,
+      (name) => {
+        setToolAvailability(workspace, toolKey({ kind: 'plugin', name }), { all: true })
+        send('toolSync:changed', null)
+      },
     )
   }
   if (!review) registerCiTools(server, source, () => agents.get(source.id))

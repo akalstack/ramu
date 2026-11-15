@@ -22,6 +22,7 @@ Every proposal is checked for credentials before it can be saved. Model-written 
 - **Ramu's skills** are the ones Ramu learns or you write; each shows the projects and providers it applies to. They load through each provider's own skill system for that thread, without touching your provider folders. Pin a skill to keep it from being archived.
 - **Installed skills** come from skills.sh, a repository, URL or folder (**Customize → Skills**, or ask the agent). You approve the files first, and scripts need a second approval. Each card names its source; **Update** brings in changes from there.
 - **Your skills** are ones you write by hand. Learning never changes them. **Edit a copy** makes an editable copy of an installed skill; the copy says what it came from, and changes to that source reach it only after you review them.
+- **On your other hosts:** **Available on** in a skill's details sends an installed skill, or one you wrote, to your other hosts for review there ([On your other hosts](plugins.md#on-your-other-hosts)). Learned skills stay with the host that learned them.
 - **Skills in your provider folders and projects** are listed under **Settings → Agent setup** (desktop and phone) with which providers load each one and the files it comes from. Two places holding different content under one name are flagged.
 
 ## What Ramu learned

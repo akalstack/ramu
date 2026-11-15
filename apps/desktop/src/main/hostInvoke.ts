@@ -28,6 +28,7 @@ const DOMAINS = new Set([
   'plugins',
   'identities',
   'settingsTransfer',
+  'toolSync',
   'account',
   'memory',
   'learning',

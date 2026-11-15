@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { PortableTool } from '@ramu/shared/toolSync'
 import {
   CONTINUE_HOSTS,
   prepareTargets,
@@ -35,6 +36,61 @@ const problemText = (problem: ContinuationPackage['problem']) =>
 
 const ids = () => ({ key: crypto.randomUUID(), cloneId: crypto.randomUUID() })
 
+/**
+ * The plugins and MCP servers this thread used that the other host lacks, before the thread moves there, with one way
+ * to send them for review on that host.
+ */
+function MissingTools({
+  used,
+  targetId,
+  targetName,
+  from,
+}: {
+  used: PortableTool[]
+  targetId: string
+  targetName: string
+  from: string
+}) {
+  useLanguage()
+  const [missing, setMissing] = useState<PortableTool[] | null>(null)
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!used.length) return
+    let live = true
+    void invokeOn(targetId, 'toolSync.compare', used).then(
+      (states) => live && setMissing(used.filter((_tool, index) => states[index]?.state !== 'same')),
+      () => live && setMissing([]),
+    )
+    return () => {
+      live = false
+    }
+  }, [used, targetId])
+  if (!missing?.length) return null
+  return (
+    <p className="m-0 flex flex-wrap items-center gap-2 text-warn">
+      {sent
+        ? t('Waiting for review on {0}: {1}', { 0: targetName, 1: missing.map((tool) => tool.name).join(', ') })
+        : t('Not on {0}: {1}', { 0: targetName, 1: missing.map((tool) => tool.name).join(', ') })}
+      {!sent && (
+        <Button
+          size="xs"
+          variant="secondary"
+          onClick={() =>
+            void invokeOn(targetId, 'toolSync.receive', missing, from).then(
+              () => setSent(true),
+              (cause) => setError(errorText(cause)),
+            )
+          }
+        >
+          {t('Install there')}
+        </Button>
+      )}
+      {error && <span className="text-bad">{error}</span>}
+    </p>
+  )
+}
+
 /** Shows what will travel and what stays, sets the project up where it is missing, and starts after one confirmation. */
 export function ContinueOnHostDialog({
   taskId,
@@ -63,7 +119,19 @@ export function ContinueOnHostDialog({
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
+  const [used, setUsed] = useState<PortableTool[]>([])
   const key = targets.join(',')
+
+  useEffect(() => {
+    let live = true
+    void invokeOn(host.id, 'toolSync.usedBy', taskId).then(
+      (tools) => live && setUsed(tools),
+      () => {},
+    )
+    return () => {
+      live = false
+    }
+  }, [host.id, taskId])
 
   useEffect(() => {
     let live = true
@@ -209,6 +277,7 @@ export function ContinueOnHostDialog({
                     <p className="m-0 text-muted-foreground">
                       {t('Runs {0} with Allow edits', { 0: plan.settings.model || plan.settings.provider })}
                     </p>
+                    <MissingTools used={used} targetId={id} targetName={name(id)} from={here?.name ?? ''} />
                     {warning(id) && (
                       <p className="m-0 text-warn">
                         {warning(id)}{' '}

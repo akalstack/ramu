@@ -2,6 +2,7 @@ import { hostname } from 'node:os'
 import { z } from 'zod'
 import { accountKindOf, normalizeIdentities, type IdentitySettings } from '@ramu/shared/identities'
 import {
+  TOOL_GROUP,
   TRANSFER_GROUP_IDS,
   portablePreferences,
   settingsExportSchema,
@@ -10,6 +11,8 @@ import {
   type TransferGroup,
 } from '@ramu/shared/settingsTransfer'
 import type { AgentProvider, ModelPreferences } from '@ramu/shared/types'
+import { TOOL_KINDS } from '@ramu/shared/toolSync'
+import { portableTools, receiveTools, toolsHere } from '../../toolSync'
 import { identityAccounts } from './identities'
 import type { HandlerContext, RegisterHandlers } from '../types'
 
@@ -27,6 +30,7 @@ export type TransferSources = Pick<
   | 'getSharedMcp'
   | 'plugins'
   | 'hostBrowser'
+  | 'learning'
 >
 
 const models = (ctx: Pick<HandlerContext, 'workspace'>) =>
@@ -36,7 +40,7 @@ const models = (ctx: Pick<HandlerContext, 'workspace'>) =>
 export async function exportSettings(ctx: TransferSources, chosen: TransferGroup[]): Promise<SettingsExport> {
   const file: SettingsExport = {
     format: 'ramu-settings',
-    version: 1,
+    version: 2,
     exportedAt: Date.now(),
     host: hostname(),
     groups: chosen,
@@ -80,6 +84,12 @@ export async function exportSettings(ctx: TransferSources, chosen: TransferGroup
         tags: entry.tags,
         importance: entry.importance,
       }))
+  const kinds = TOOL_KINDS.filter((kind) => chosen.includes(TOOL_GROUP[kind]))
+  if (kinds.length) {
+    const { tools, skipped } = portableTools(ctx, kinds)
+    file.tools = tools
+    file.skippedTools = skipped
+  }
   return settingsExportSchema.parse(file)
 }
 
@@ -93,6 +103,7 @@ async function preview(ctx: HandlerContext, file: SettingsExport, chosen: Transf
       rules: ctx.rules?.list() ?? [],
       identities,
       notes: ctx.memory?.active(null).filter((entry) => entry.projectId === null) ?? [],
+      tools: toolsHere(ctx),
     },
     file,
     chosen,
@@ -188,6 +199,9 @@ export const registerSettingsTransferHandlers: RegisterHandlers = (ctx) => ({
       }
       if (chosen.includes('memories') && ctx.memory)
         for (const entry of file.memories ?? []) ctx.memory.save({ projectId: null, ...entry }, { actor: 'user' })
+      // Plugins, skills and servers are not installed here: each waits in Customize for its own review on this host.
+      const tools = (file.tools ?? []).filter((tool) => chosen.includes(TOOL_GROUP[tool.kind]))
+      if (tools.length && receiveTools(ctx, tools, file.host)) ctx.host.send('toolSync:changed', null)
       return { changed: changes.length, connectHere }
     },
   },

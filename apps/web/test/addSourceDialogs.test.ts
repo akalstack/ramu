@@ -37,6 +37,13 @@ vi.mock('../src/Menu', () => ({ Dialog: 'dialog', Dropdown: 'dropdown', Menu: 'm
 vi.mock('../src/settings/InstalledSkills', () => ({ InstalledSkills: 'installed-skills' }))
 vi.mock('../src/settings/Plugins', () => ({ Credential: 'credential' }))
 vi.mock('../src/customize/SkillFiles', () => ({ SkillFiles: 'skill-files' }))
+vi.mock('../src/customize/toolSync', () => ({
+  useToolSync: () => ({ status: null, reload() {} }),
+  WaitingTools: 'waiting-tools',
+  AvailableOn: 'available-on',
+  mcpLogins: () => [],
+}))
+vi.mock('../src/settings/AppSettings', () => ({ useAppSettings: () => ({ preferences: {} }) }))
 
 import { SkillsSection } from '../src/customize/SkillsSection'
 import { PluginsSection } from '../src/customize/PluginsSection'

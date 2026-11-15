@@ -11,6 +11,8 @@ import type { Workspace } from '../workspace/workspace'
 import type { AgentService } from '../agent'
 import { findExecutable } from '../providers/providerBinaries'
 import { readSkillFolder, skillMetadata } from './skillFiles'
+import { toolKey } from '@ramu/shared/toolSync'
+import { setToolAvailability } from '../toolSync'
 
 export const SKILLS_CLI_VERSION = '1.7.2'
 export const skillInstallInput = z.object({
@@ -42,6 +44,8 @@ type Staged = {
 
 export class ExternalSkills {
   private staged = new Map<string, Staged>()
+  /** Called after a skill is kept on all hosts, so connected devices send it to the others for review. */
+  toolsChanged?: () => void
   constructor(
     private learning: LearningService,
     private workspace: Workspace,
@@ -536,11 +540,11 @@ export class ExternalSkills {
       )
       return reply.answers.choice
     }
-    const approve = async (preview: SkillInstallPreview, signal?: AbortSignal) => {
+    const approve = async (preview: SkillInstallPreview, signal?: AbortSignal, everywhere = false) => {
       try {
         if (
           (await ask(
-            `Install ${preview.name}?\n${preview.description}\nSource: ${preview.source}\nScope: ${preview.projectId ? 'project' : 'user'}\nFiles:\n${preview.files.map((f) => `${f.path}${f.script ? ' [script, separate approval]' : ''}`).join('\n')}\nChanges: ${JSON.stringify(preview.changes)}`,
+            `Install ${preview.name}?\n${preview.description}\nSource: ${preview.source}\nScope: ${preview.projectId ? 'project' : 'user'}${everywhere ? '\nAlso on all your hosts: each one reviews it there.' : ''}\nFiles:\n${preview.files.map((f) => `${f.path}${f.script ? ' [script, separate approval]' : ''}`).join('\n')}\nChanges: ${JSON.stringify(preview.changes)}`,
             ['Install', 'Cancel'],
             signal,
           )) !== 'Install'
@@ -555,6 +559,10 @@ export class ExternalSkills {
             signal,
           )) === 'Include scripts'
         const skill = this.confirm(preview.id, include, sessionId)
+        if (everywhere) {
+          setToolAvailability(this.workspace, toolKey({ kind: 'skill', name: skill.name }), { all: true })
+          this.toolsChanged?.()
+        }
         return {
           id: skill.id,
           name: skill.name,
@@ -616,6 +624,10 @@ export class ExternalSkills {
           source: skillInstallInput.shape.source,
           skill: skillInstallInput.shape.skill,
           scope: z.enum(['user', 'project']).optional(),
+          hosts: z
+            .enum(['this', 'all'])
+            .optional()
+            .describe('"all" when the person asked for it on all their hosts; only for skills for all projects.'),
         },
       },
       (input, extra) =>
@@ -632,6 +644,7 @@ export class ExternalSkills {
             throw new Error('Choose user or project scope explicitly.')
           const user = scope === 'user' || scope === 'All projects'
           if (!user && project === NO_PROJECT) throw new Error('Open a project thread to install project skills.')
+          if (input.hosts === 'all' && !user) throw new Error('Only skills for all projects can be kept on all hosts.')
           return approve(
             await this.stage(
               {
@@ -642,6 +655,7 @@ export class ExternalSkills {
               sessionId,
             ),
             extra.signal,
+            input.hosts === 'all',
           )
         }),
     )

@@ -9,7 +9,8 @@ import {
   type SharedMcpManagement,
   type SharedMcpToolChoice,
 } from '@ramu/shared/mcp'
-import { AGENT_PROVIDERS, providerAccountRows, providerEnabled, providerName } from '@ramu/shared/providers/providers'
+import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
+import type { PortableMcpServer, WaitingTool } from '@ramu/shared/toolSync'
 import type { AgentProvider, Project } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +24,7 @@ import { useAppSettings } from '../settings/AppSettings'
 import { ConnectionEditor, McpSettings, type Definition } from '../settings/McpSettings'
 import { errorText } from '../lib/errors'
 import { openCustomize, reviewPluginInstall } from './openCustomize'
+import { AvailableOn, mcpLogins, useToolSync, WaitingTools } from './toolSync'
 import { t, useLanguage } from '../i18n'
 import {
   Advanced,
@@ -58,6 +60,10 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
   const [openId, setOpenId] = useState<string | null>(null)
   const [editing, setEditing] = useState<SharedMcpConnection | 'new' | null>(null)
   const [signingIn, setSigningIn] = useState<string | null>(null)
+  const { status: sync } = useToolSync()
+  const [received, setReceived] = useState<WaitingTool | null>(null)
+  // A received server that needed a secret first is turned on later with the tools its other host has on.
+  const [asThere, setAsThere] = useState<Record<string, Record<string, SharedMcpToolChoice>>>({})
   useEffect(() => {
     if (requested) setOpenId(requested.id)
   }, [requested])
@@ -73,12 +79,7 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
     })
   }, [load, invoke, on])
   /** Every signed-in login of each agent the server is offered to. */
-  const loginsFor = (connection: SharedMcpConnection) =>
-    connection.providers
-      .filter((provider) => providerEnabled(preferences.providerBinaries, provider))
-      .flatMap((provider) =>
-        providerAccountRows(preferences.providerBinaries, provider).map((accountId) => ({ provider, accountId })),
-      )
+  const loginsFor = (connection: SharedMcpConnection) => mcpLogins(preferences, connection)
   const act = async (id: string, work: () => Promise<unknown>) => {
     setBusy(id)
     setError(null)
@@ -92,7 +93,11 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
     }
   }
   const turnOn = (connection: SharedMcpConnection, choices?: Record<string, SharedMcpToolChoice>) =>
-    act(connection.id, () => invoke('mcp.turnOn', connection.id, loginsFor(connection), choices))
+    act(connection.id, () =>
+      choices || !asThere[connection.id]
+        ? invoke('mcp.turnOn', connection.id, loginsFor(connection), choices)
+        : invoke('mcp.turnOn', connection.id, loginsFor(connection), asThere[connection.id], 'off'),
+    )
   const signIn = (connection: SharedMcpConnection) =>
     act(connection.id, async () => {
       const started = await invoke('mcp.signIn', connection.id)
@@ -108,6 +113,23 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
       // A server is useful only once it is on; a sign-in it needs is asked for next.
       await invoke('mcp.turnOn', saved.id, loginsFor(saved)).catch(() => {})
       setOpenId(saved.id)
+    })
+  /**
+   * A server another host sent: added as it is there, then turned on with the same tools on, unless it needs a secret
+   * or a command this host lacks, which open next.
+   */
+  const addReceived = (entry: WaitingTool) =>
+    act(entry.key, async () => {
+      const added = await invoke('toolSync.addServer', entry.key)
+      setReceived(null)
+      if (added.connectHere || added.secrets.length) {
+        setAsThere((current) => ({ ...current, [added.connection.id]: added.choices }))
+        setEditing(added.connection)
+        return
+      }
+      const logins = loginsFor(added.connection)
+      if (logins.length) await invoke('mcp.turnOn', added.connection.id, logins, added.choices, 'off').catch(() => {})
+      setOpenId(added.connection.id)
     })
   const addRecommended = (server: RecommendedMcpServer) =>
     add({
@@ -197,6 +219,7 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
         <Quiet>{t('Loading MCP servers…')}</Quiet>
       ) : (
         <>
+          <WaitingTools kind="mcp" status={sync} busy={busy} onReview={setReceived} />
           <SectionTitle title={t('Your servers')} count={connections.length} />
           {connections.length ? (
             <ExtensionGrid label={t('Your servers')}>
@@ -286,9 +309,21 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
       <Advanced title={t('Advanced: accounts per identity, sign-in by address, and every server setting')}>
         <McpSettings />
       </Advanced>
+      {received && received.tool.kind === 'mcp' && (
+        <ReceivedServer
+          entry={received}
+          server={received.tool}
+          busy={busy === received.key}
+          error={error?.id === received.key ? error.text : null}
+          canAdminister={canAdminister}
+          onCancel={() => setReceived(null)}
+          onAdd={() => void addReceived(received)}
+        />
+      )}
       {open && (
         <ServerDetail
           entry={open}
+          sync={sync}
           busy={busy}
           error={error?.id === open.connection.id ? error.text : null}
           canAdminister={canAdminister}
@@ -346,8 +381,75 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
  * One server: whether it is on and for whom, and its tools, each asking before it runs, running without asking, or
  * left off. Check connection reads the tools again from the server.
  */
+/** A server another host sent, before it is added here: what it runs, which tools are on there, and what it needs. */
+function ReceivedServer({
+  entry,
+  server,
+  busy,
+  error,
+  canAdminister,
+  onCancel,
+  onAdd,
+}: {
+  entry: WaitingTool
+  server: PortableMcpServer
+  busy: boolean
+  error: string | null
+  canAdminister: boolean
+  onCancel: () => void
+  onAdd: () => void
+}) {
+  useLanguage()
+  const { transport } = server
+  const secrets = transport.type === 'http' ? transport.headers : transport.env
+  const on = Object.entries(server.tools).filter(([, choice]) => choice !== 'off')
+  return (
+    <Dialog
+      title={t('Add {name}', { name: displayName(server.name) })}
+      confirmLabel={t('Add')}
+      confirmDisabled={!canAdminister}
+      busy={busy}
+      error={error ?? (canAdminister ? null : t('Add MCP servers on the computer running Ramu.'))}
+      onConfirm={onAdd}
+      onCancel={onCancel}
+    >
+      <div className="flex min-w-0 flex-col gap-2 text-control">
+        <p className="m-0 text-muted-foreground">{t('From {0}', { 0: entry.from })}</p>
+        <code className="block rounded-(--radius-s) bg-fill px-3 py-2 text-caption break-all">
+          {transport.type === 'http' ? transport.url : [transport.command, ...transport.args].join(' ')}
+        </code>
+        {transport.type === 'stdio' && transport.cwd !== '~' && (
+          <p className="m-0 text-caption text-muted-foreground">{t('Runs in {0}', { 0: transport.cwd })}</p>
+        )}
+        {entry.state === 'connect-here' && transport.type === 'stdio' && (
+          <p className="m-0 text-caption text-bad">
+            {t('{0} is not on this host. It is added turned off; install it, then turn the server on.', {
+              0: transport.command,
+            })}
+          </p>
+        )}
+        <p className="m-0">
+          {on.length
+            ? t('Turned on with the same tools as there: {0}', {
+                0: on.map(([name, choice]) => (choice === 'allow' ? name : `${name} (${t('asks')})`)).join(', '),
+              })
+            : t('Its tools are chosen here once it connects.')}
+        </p>
+        {secrets.length > 0 && (
+          <p className="m-0 text-caption text-muted-foreground">
+            {t('Enter {0} on this host next. Secrets never leave the host they were entered on.', {
+              0: secrets.join(', '),
+            })}
+          </p>
+        )}
+      </div>
+    </Dialog>
+  )
+}
+
 function ServerDetail({
   entry,
+  sync,
   busy,
   error,
   canAdminister,
@@ -360,6 +462,7 @@ function ServerDetail({
   onRemove,
 }: {
   entry: Entry
+  sync: ReturnType<typeof useToolSync>['status']
   busy: string | null
   error: string | null
   canAdminister: boolean
@@ -463,6 +566,7 @@ function ServerDetail({
       }
     >
       <div className="flex min-w-0 flex-col gap-3">
+        {!entry.plugin && !connection.split && <AvailableOn toolKey={`mcp:${connection.name}`} status={sync} />}
         {(() => {
           const full =
             connection.transport.type === 'http'

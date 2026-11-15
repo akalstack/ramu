@@ -36,9 +36,19 @@ An agent that needs a service Ramu does not know ("deploy this to Render") can c
 
 For a service no index lists ("connect Rodin for 3D models"), the agent offers `plugin_create`: it starts a folder in `~/Ramu Plugins/<name>`, writes the manifest, the MCP server and a skill from the service's own documentation, runs the same check as `ramu plugin check` until it passes, and then shows you the usual review card. Approving installs it as a Development plugin whose abilities are used at once. The agent never sees the key: you paste it on the plugin's card.
 
+### On your other hosts
+
+A plugin, skill or MCP server you set up once can be on every host you use. **Available on** in its details (**Customize → Plugins**, **Skills** or **MCP servers**) lists your other connected hosts with whether each has it (**Installed**, **Waiting for review there**, **Not there**). Ticking a host sends it the setup, and **All your hosts** also reaches hosts you connect later, including those listed in your [Ramu account](account.md#your-hosts), whenever the desktop app is connected to both. No account is needed: paired hosts work the same.
+
+What travels is the setup: a plugin's source and pinned commit, an installed skill's source (or the text of one you wrote), a server's address or command, and which tools are on and which ask before they run. Keys, sign-ins, header and variable values, and folders never travel. A plugin from a folder, or one for a single project, stays on its host and says so.
+
+On the receiving host the item waits under **From your other hosts** at the top of its Customize section, and Home shows a notice. **Review** opens the same review as an install from there; a plugin installs through its index when that host has it, else from the same commit. Once installed, its servers' tools are turned on as they are on the other host, and the plugin card asks for its key, which you add on that host. A server that needs a header or variable opens its editor first; one whose command that host lacks is added turned off, marked with the command to install. **Dismiss** drops an item until a newer version is sent. Installing still happens on the computer running the host, as any install does.
+
+An agent can do the same: `plugin_install` and `skill_install` take `hosts: "all"` when you ask for a tool on all your hosts, and the approval card says so. **Copy settings from…** and **Export settings** also carry Plugins, Skills and MCP servers groups ([Moving settings](identities.md#moving-settings)).
+
 ### On the phone
 
-**Customize → Plugins** on the phone lists each host's plugins with what each still needs. Installing, credentials and removal stay on the host; an agent's install card and every CLI command card reach the phone like any approval.
+**Customize → Plugins** on the phone lists each host's plugins with what each still needs, and what other hosts sent it to review. Installing, credentials and removal stay on the host; an agent's install card and every CLI command card reach the phone like any approval.
 
 ## Where plugins come from
 

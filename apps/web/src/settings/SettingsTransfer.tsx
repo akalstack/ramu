@@ -19,6 +19,8 @@ import { useComputers } from '../workspace/computers'
 import { useHost } from '../workspace/HostProvider'
 import { SettingsSectionHead } from './cards'
 
+const TOOL_GROUPS = new Set<TransferGroup>(['plugins', 'skills', 'mcp'])
+
 interface Review {
   file: SettingsExport
   groups: TransferGroup[]
@@ -29,8 +31,9 @@ interface Review {
 
 /**
  * Copy settings from a paired host, or export and import them as a file: appearance, models and abilities, agent
- * defaults, Git and commit style, notifications, rules, identities and everywhere notes. Paths, credentials, account
- * tokens and workspace state never move. Every value that would change is listed before **Copy**.
+ * defaults, Git and commit style, notifications, rules, identities, everywhere notes, and plugins, skills and MCP
+ * servers as their setup. Paths, credentials, account tokens and workspace state never move. Every value that would
+ * change is listed before **Copy**; tools then wait in Customize for their own review here.
  */
 export function SettingsTransfer() {
   useLanguage()
@@ -76,7 +79,7 @@ export function SettingsTransfer() {
       <SettingsSectionHead
         title={t('Copy settings')}
         help={t(
-          'Bring theme, models, rules, commit style and identities to this host from another, or move them with a file. Credentials and paths never move.',
+          'Bring theme, models, rules, commit style, identities, plugins, skills and MCP servers to this host from another, or move them with a file. Credentials and paths never move.',
         )}
       />
       <div className="flex flex-wrap items-center gap-2">
@@ -175,13 +178,19 @@ export function SettingsTransfer() {
               )
               setReview(null)
               setSource('')
+              const tools = review.changes.filter((change) => TOOL_GROUPS.has(change.group)).length
               setDone(
-                applied.connectHere.length
-                  ? t('Copied {0} settings. Connect on this host: {1}', {
-                      0: applied.changed,
-                      1: applied.connectHere.join(', '),
+                tools
+                  ? t('Copied {0} settings. {1} plugins, skills and servers wait for your review in Customize.', {
+                      0: applied.changed - tools,
+                      1: tools,
                     })
-                  : t('Copied {0} settings.', { 0: applied.changed }),
+                  : applied.connectHere.length
+                    ? t('Copied {0} settings. Connect on this host: {1}', {
+                        0: applied.changed,
+                        1: applied.connectHere.join(', '),
+                      })
+                    : t('Copied {0} settings.', { 0: applied.changed }),
               )
             })
           }
@@ -210,6 +219,13 @@ export function SettingsTransfer() {
               </ul>
             ) : (
               <p className="m-0 text-muted-foreground">{t('Nothing would change.')}</p>
+            )}
+            {review.changes.some((change) => TOOL_GROUPS.has(change.group)) && (
+              <p className="m-0 text-caption text-muted-foreground">
+                {t(
+                  'Plugins, skills and MCP servers are not installed yet: each waits in Customize for its review here, where you add its key.',
+                )}
+              </p>
             )}
             {review.connectHere.length > 0 && (
               <p className="m-0 text-caption text-muted-foreground">

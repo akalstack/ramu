@@ -16,6 +16,7 @@ import { registerMemoryHandlers } from './handlers/memory'
 import { registerPluginHandlers } from './handlers/plugins'
 import { registerIdentityHandlers } from './handlers/identities'
 import { registerSettingsTransferHandlers } from './handlers/settingsTransfer'
+import { registerToolSyncHandlers } from './handlers/toolSync'
 import { registerAccountHandlers } from './handlers/account'
 import { registerProviderHandlers } from './handlers/providers'
 import { registerSharedMcpHandlers } from './handlers/mcp'
@@ -106,6 +107,7 @@ export const registerHandlers = (ctx: HandlerContext): MethodTable => {
     registerPluginHandlers(ctx),
     registerIdentityHandlers(ctx),
     registerSettingsTransferHandlers(ctx),
+    registerToolSyncHandlers(ctx),
     registerAccountHandlers(ctx),
     registerSummaryHandlers(ctx),
     registerRuleHandlers(ctx),

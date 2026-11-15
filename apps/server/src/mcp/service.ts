@@ -230,6 +230,18 @@ export class SharedMcpService {
   }
 
   /** Check every connection a login could use again, one at a time; a failure is kept as that connection's status. */
+  /** The connections a thread called, from the recorded call outcomes (which hold no arguments or results). */
+  connectionsUsedBy(sessionId: string): string[] {
+    return [
+      ...new Set(
+        this.storage
+          .outcomes()
+          .filter((call) => call.sessionId === sessionId)
+          .map((call) => call.connectionId),
+      ),
+    ]
+  }
+
   async recheckAccount(provider: SharedMcpProviderAccount['provider'], accountId: string, projectId: string | null) {
     const state = this.policy.snapshot()
     if (!state.accounts.some((entry) => entry.provider === provider && entry.accountId === accountId))

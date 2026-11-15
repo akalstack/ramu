@@ -84,7 +84,7 @@ function fakeService() {
 
 const file: SettingsExport = {
   format: 'ramu-settings',
-  version: 1,
+  version: 2,
   exportedAt: 1,
   host: 'ada-mac',
   groups: ['appearance'],

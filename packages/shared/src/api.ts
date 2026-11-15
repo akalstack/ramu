@@ -731,6 +731,25 @@ export interface RamuMethods extends ArtifactMethods {
     groups: import('./settingsTransfer').TransferGroup[],
     expected: number,
   ): { changed: number; connectHere: string[] }
+  /** Tools other hosts sent for review here, which hosts each of this host's tools is kept on, and what can travel. */
+  'toolSync.status'(): import('./toolSync').ToolSyncStatus
+  /** Keeps tools another host sent, to review here; returns how many now wait. */
+  'toolSync.receive'(tools: import('./toolSync').PortableTool[], from: string): { waiting: number }
+  'toolSync.dismiss'(key: string): void
+  /** Adds a waiting MCP server as it is on its other host, with no secret; returns what to finish here. */
+  'toolSync.addServer'(key: string): {
+    connection: import('./mcp').SharedMcpConnection
+    choices: Record<string, import('./mcp').SharedMcpToolChoice>
+    secrets: string[]
+    connectHere: boolean
+  }
+  /** Which hosts one of this host's tools is kept on; null is this host only. */
+  'toolSync.setAvailability'(key: string, availability: import('./toolSync').ToolAvailability | null): void
+  'toolSync.compare'(
+    tools: import('./toolSync').PortableTool[],
+  ): { key: string; state: import('./toolSync').ToolState }[]
+  /** The plugins and MCP servers a thread on this host called, as setup another host can install. */
+  'toolSync.usedBy'(taskId: string): import('./toolSync').PortableTool[]
   'account.status'(): import('./account').AccountStatus
   /** Starts signing in with a code confirmed in the browser; the host waits for it and says so on `account:changed`. */
   'account.signIn'(): import('./account').AccountSignIn
@@ -925,6 +944,8 @@ export interface RamuMethods extends ArtifactMethods {
     permission: import('./devicePermissions').DevicePermission,
     setting: import('./devicePermissions').PermissionSetting,
   ): NetworkStatus
+  /** Answers a device's request for a permission: for how long, or declined. Host-only. */
+  'network.decidePermission'(requestId: string, answer: import('./devicePermissions').PermissionAnswer): NetworkStatus
   /** What newly paired full-access devices hold. Host-only. */
   'network.setDefaultPermissions'(permissions: import('./devicePermissions').DevicePermission[]): NetworkStatus
   /** What the calling device holds on this host. This computer itself holds everything. */
@@ -944,8 +965,6 @@ export interface RamuMethods extends ArtifactMethods {
   'network.setDeviceLifetime'(days: number | 'never' | null): NetworkStatus
   /** A tunnel's https:// address for this host, or null to remove it. */
   'network.setPublicUrl'(url: string | null): NetworkStatus
-  /** Answers a device's request for a permission: for how long, or declined. Host-only. */
-  'network.decidePermission'(requestId: string, answer: import('./devicePermissions').PermissionAnswer): NetworkStatus
   /** Runs a tunnel for this host (turning on access for this computer only if it is off), or stops it with null. */
   'network.setTunnel'(choice: TunnelChoice | null): NetworkStatus
   /** One device's pairing lifetime: days, never, or back to this host's default. Host only. */
@@ -1205,6 +1224,8 @@ export interface RamuMethods extends ArtifactMethods {
     connectionId: string,
     logins: { provider: import('./types').AgentProvider; accountId: string }[],
     choices?: Record<string, import('./mcp').SharedMcpToolChoice>,
+    /** `off` leaves every tool `choices` does not name off, as on the host the server was copied from. */
+    others?: 'default' | 'off',
   ): Promise<SharedMcpInspection>
   /** Checks every shared connection a login could use again and returns its readiness. */
   'mcp.recheckAccount'(
@@ -1897,6 +1918,8 @@ export type PushEvents = {
   'summaries:changed': { created: string | null }
   'rules:changed': Record<string, never>
   'plugins:changed': null
+  /** Tools another host sent for review here, or which hosts a tool is kept on, changed. */
+  'toolSync:changed': null
   'identities:changed': null
   'account:changed': null
   /** The guardrail stopped an action that would act as another identity than the project's. */

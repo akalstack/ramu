@@ -53,6 +53,8 @@ export function registerPluginTools(
   requestApproval: (detail: string, signal?: AbortSignal) => Promise<boolean>,
   installed: (pluginId: string) => void,
   drafts: () => string = draftPluginsFolder,
+  /** Keeps a plugin on every host the person connects, as **Available on → All your hosts** does. */
+  keepOnAllHosts?: (name: string) => void,
 ) {
   const result = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] })
   server.registerTool(
@@ -81,16 +83,40 @@ export function registerPluginTools(
     {
       description:
         'Ask the person to install a plugin found with plugin_search. They see the full review (skills, MCP servers and the commands they run, the credential asked for, commands that run without asking) and decide; you cannot approve it, and a refusal is final for this request. A credential the plugin needs is pasted by the person in Customize → Plugins on the host, never through you. New tools from it reach threads started after the install.',
-      inputSchema: { name: z.string().trim().min(1).max(64) },
+      inputSchema: {
+        name: z.string().trim().min(1).max(64),
+        hosts: z
+          .enum(['this', 'all'])
+          .optional()
+          .describe(
+            '"all" when the person asked for it on all their hosts: each other host gets it to review there, and adds its own key.',
+          ),
+      },
     },
-    async ({ name }: { name: string }, extra) => {
-      if (plugins.list().some((plugin) => plugin.name === name)) return result({ installed: true, name })
+    async ({ name, hosts }: { name: string; hosts?: 'this' | 'all' }, extra) => {
+      const everywhere = hosts === 'all' && !!keepOnAllHosts
+      if (plugins.list().some((plugin) => plugin.name === name)) {
+        if (everywhere) {
+          if (
+            !(await requestApproval(
+              `Keep the ${name} plugin on all your hosts? Each host reviews it and adds its own key.`,
+              extra.signal,
+            ))
+          )
+            throw new Error('The person declined. Do not retry it without a new request.')
+          keepOnAllHosts(name)
+        }
+        return result({ installed: true, name, ...(everywhere ? { hosts: 'all' } : {}) })
+      }
       const listing = (await plugins.browse(name)).find((entry) => entry.name === name)
       if (!listing) throw new Error(`${name} is not listed in any plugin index. Call plugin_search first.`)
       const review = await plugins.stage({ source: listing.name, index: listing.index })
       try {
         if (review.blocked) throw new Error(review.blocked)
-        if (!(await requestApproval(reviewText(review), extra.signal)))
+        const card = everywhere
+          ? `${reviewText(review)}\nAlso on all your hosts: each one reviews it there and adds its own key.`
+          : reviewText(review)
+        if (!(await requestApproval(card, extra.signal)))
           throw new Error('The person declined the install. Do not retry it without a new request.')
         const scripts = review.contents.skills.some((skill) => skill.scripts.length)
           ? await requestApproval(
@@ -102,10 +128,12 @@ export function registerPluginTools(
           : false
         const plugin = await plugins.confirm(review.stageId, { scope: { kind: 'all' }, includeScripts: scripts })
         installed(plugin.id)
+        if (everywhere) keepOnAllHosts(plugin.name)
         const missing = plugin.credentials.filter((slot) => slot.state !== 'saved').map((slot) => slot.label)
         return result({
           installed: true,
           name,
+          ...(everywhere ? { hosts: 'all' } : {}),
           next: missing.length
             ? `Ask the person to add ${missing.join(' and ')} for ${name} in Customize → Plugins on the host.`
             : null,

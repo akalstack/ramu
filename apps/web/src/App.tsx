@@ -1,6 +1,7 @@
 import { ResourcesStatus } from './chat/ResourcesStatus'
 import { receivePluginLink } from './settings/pluginLinks'
 import { PendingThreadDelivery } from './composer/WaitingThreads'
+import { ToolSyncDelivery } from './customize/toolSync'
 import { useHostWriteAccess } from './composer/useHostWriteAccess'
 import { ownHostId } from './hosts'
 import { openBrowser, presentBrowser } from './views/browserPane'
@@ -877,6 +878,7 @@ function Shell() {
       <Notifications />
       <PageNotices />
       <PendingThreadDelivery />
+      <ToolSyncDelivery />
       <PairingRequestDialog />
       <PermissionRequestDialog />
       <PairBackDialog />

@@ -118,11 +118,13 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
           .min(1)
           .max(40),
         z.record(z.string().max(200), z.enum(['ask', 'allow', 'off'])).optional(),
+        z.enum(['default', 'off']).optional(),
       ]),
       run: async (
         connectionId: string,
         logins: { provider: AgentProvider; accountId: string }[],
         choices: Record<string, SharedMcpToolChoice> = {},
+        others: 'default' | 'off' = 'default',
       ) => {
         const manager = admin()
         const connection = manager.policy.snapshot().connections.find((entry) => entry.id === connectionId)
@@ -138,7 +140,7 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
           projectId: connection.scope.hostWide ? null : (connection.scope.projectIds[0] ?? null),
         })
         const tools = inspection.tools.flatMap((tool) => {
-          const choice = choices[tool.name] ?? defaultToolChoice(tool)
+          const choice = choices[tool.name] ?? (others === 'off' ? 'off' : defaultToolChoice(tool))
           return choice === 'off'
             ? []
             : [

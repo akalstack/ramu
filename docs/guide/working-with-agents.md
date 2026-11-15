@@ -113,7 +113,7 @@ Threads on the same checkout take turns: a message to one waits in its queue whi
 
 ## Continue on another host
 
-**Continue on ‹host›** (thread menu) copies a stopped thread to another connected host, or up to four with **Also on**. The sheet shows the branch it starts from, what stays behind (uncommitted files, unpushed commits), the project there and the model. It matches the project by Git remote, or clones it there; **Change…** picks the folder the clone goes in. The conversation travels with secrets removed; files never do. Both threads stay linked, and **Bring back result** queues the other thread's latest reply in the original.
+**Continue on ‹host›** (thread menu) copies a stopped thread to another connected host, or up to four with **Also on**. The sheet shows the branch it starts from, what stays behind (uncommitted files, unpushed commits), the project there and the model. It matches the project by Git remote, or clones it there; **Change…** picks the folder the clone goes in. The conversation travels with secrets removed; files never do. Plugins and MCP servers the thread used that the other host lacks are listed as **Not on ‹host›**, and **Install there** sends them for review on that host ([On your other hosts](plugins.md#on-your-other-hosts)). Both threads stay linked, and **Bring back result** queues the other thread's latest reply in the original.
 
 Hosts whose platform or description (**Settings → Threads → Describe this host**) the request mentions are listed first.
 

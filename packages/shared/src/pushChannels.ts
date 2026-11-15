@@ -25,6 +25,7 @@ export const HOST_PUSH_CHANNELS = [
   'summaries:changed',
   'rules:changed',
   'plugins:changed',
+  'toolSync:changed',
   'identities:changed',
   'identities:mismatch',
   'account:changed',

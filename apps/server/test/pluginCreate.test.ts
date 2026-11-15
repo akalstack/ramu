@@ -93,3 +93,19 @@ describe('plugin_create', () => {
     expect(plugins.cancel).toHaveBeenCalledWith('stage-1')
   })
 })
+
+describe('plugin_install on all hosts', () => {
+  it('names every host on the card and keeps the plugin on all of them once approved', async () => {
+    const { plugins, approval } = setup()
+    plugins.browse.mockResolvedValue([{ name: 'rodin-3d', index: 'https://example.com/index' }] as never)
+    plugins.confirm.mockResolvedValue({ id: 'p1', name: 'rodin-3d', credentials: [] } as unknown as InstalledPlugin)
+    const kept = vi.fn()
+    const registry = new ToolRegistry(new McpServer({ name: 'test', version: '1' }), true)
+    registerPluginTools(registry.server, plugins, approval, vi.fn(), undefined, kept)
+    const extra = { signal: new AbortController().signal } as Parameters<typeof registry.invoke>[2]
+    const result = await registry.invoke('plugin_install', { name: 'rodin-3d', hosts: 'all' }, extra)
+    expect(JSON.parse((result.content as { text: string }[])[0]!.text)).toMatchObject({ installed: true, hosts: 'all' })
+    expect(approval.mock.calls[0]![0]).toContain('Also on all your hosts')
+    expect(kept).toHaveBeenCalledWith('rodin-3d')
+  })
+})

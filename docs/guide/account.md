@@ -13,7 +13,7 @@ The Ramu account is optional. Everything works without it; signing in adds setti
 - **To my Ramu account:** one slot per host, its name sealed like the backup, keeping the last 30 versions of at most 256 KB each; a host uploads at most once a minute, a few seconds after a setting changes.
 - **To a private gist on my GitHub:** the same sealed file in a private gist of the GitHub account this host is signed in to, with no Ramu account needed. The gist's history keeps versions.
 
-A backup is the same portable export as **Export settings** ([Moving settings](identities.md#moving-settings)): appearance, models and abilities, agent defaults, Git and commit style, notifications, rules and identities. Paths, credentials, account tokens and workspace state are never included.
+A backup is the same portable export as **Export settings** ([Moving settings](identities.md#moving-settings)): appearance, models and abilities, agent defaults, Git and commit style, notifications, rules, identities, and plugins, skills and MCP servers as their setup. Paths, credentials, account tokens and workspace state are never included, so restoring a new machine lists its tools to review there and asks only for their keys.
 
 The first time a destination is turned on, the host makes a random 256-bit backup key, kept in its credential store, and seals each backup with XChaCha20-Poly1305 under it before it leaves the host. It also shows a **recovery code** once, with **Copy** and **Save to a file**: keep it in a password manager. A copy of the backup key sealed under the code is kept beside the backups, so the code alone opens them on a new machine. Without any device and without the code, the backups cannot be opened. **New recovery code** makes another and retires the old one.
 

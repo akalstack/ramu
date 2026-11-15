@@ -1,0 +1,255 @@
+// This host's plugins, skills and Shared MCP servers as setup another host can install, what other hosts sent here, and
+// which hosts each tool is kept on. Nothing here installs: a tool another host sent waits for the same review an
+// install from Customize has, on this host.
+import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
+import { hostname } from 'node:os'
+import { isAbsolute } from 'node:path'
+import type { SharedMcpManagement, SharedMcpToolChoice } from '@ramu/shared/mcp'
+import type { InstalledPlugin } from '@ramu/shared/plugins'
+import {
+  connectionAddress,
+  toolKey,
+  toolState,
+  waitingToolsSchema,
+  type PortableTool,
+  type SkippedTool,
+  type ToolAvailability,
+  type ToolKind,
+  type ToolSyncStatus,
+  type ToolsHere,
+  type WaitingTool,
+} from '@ramu/shared/toolSync'
+import type { ManagedSkill } from '@ramu/shared/types'
+import { findExecutable } from './providers/providerBinaries'
+import type { Workspace } from './workspace/workspace'
+
+const WAITING_KEY = 'tool-sync-waiting'
+const AVAILABILITY_KEY = 'tool-sync-availability'
+const HOST_KEY = 'tool-sync-host'
+const DISMISSED_KEY = 'tool-sync-dismissed'
+/** A tool sent here and never reviewed is dropped after this long, so the list stays about what people still want. */
+const WAITING_MS = 30 * 24 * 60 * 60_000
+
+export interface ToolSources {
+  workspace: Workspace
+  plugins?: { list(): InstalledPlugin[] }
+  getSharedMcp?: () => { list(): SharedMcpManagement }
+  learning?: { skills(): ManagedSkill[] }
+}
+
+/** A login's grant as the three choices Customize shows: run without asking, ask each time, or (absent) off. */
+const choicesOf = (entry: SharedMcpManagement['connections'][number] | undefined) =>
+  Object.fromEntries(
+    (entry?.granted?.[0]?.tools ?? []).map((tool) => [
+      tool.name,
+      (tool.approval === 'connection' ? 'allow' : 'ask') as SharedMcpToolChoice,
+    ]),
+  )
+
+/** Skills people installed or wrote; learned ones stay with the host that learned them, and a plugin's go with it. */
+const sharedSkill = (skill: ManagedSkill) =>
+  skill.status === 'active' &&
+  (skill.installation
+    ? !skill.installation.source.startsWith('plugin:')
+    : skill.changedBy === 'user' && !skill.sourceSessionId)
+
+/** A folder under the home folder as `~/…`, or null for any other folder. */
+const homeRelative = (folder: string) => {
+  const home = process.env.HOME
+  if (!home) return null
+  if (folder === home) return '~'
+  return folder.startsWith(`${home}/`) ? `~/${folder.slice(home.length + 1)}` : null
+}
+
+const localSource = (source: string) => isAbsolute(source) || source.startsWith('.') || source.startsWith('~')
+
+/** Every tool on this host that can travel, and the ones that stay with why. */
+export function portableTools(sources: ToolSources, kinds: readonly ToolKind[] = ['plugin', 'skill', 'mcp']) {
+  const tools: PortableTool[] = []
+  const skipped: SkippedTool[] = []
+  const mcp = sources.getSharedMcp?.().list().connections ?? []
+  const plugins = sources.plugins?.list() ?? []
+  const fromPlugins = new Set(plugins.flatMap((plugin) => plugin.mcpConnections.map((server) => server.id)))
+  if (kinds.includes('plugin'))
+    for (const plugin of plugins) {
+      if (plugin.source.kind !== 'git') skipped.push({ kind: 'plugin', name: plugin.name, reason: 'folder' })
+      else if (plugin.scope.kind === 'project') skipped.push({ kind: 'plugin', name: plugin.name, reason: 'project' })
+      else
+        tools.push({
+          kind: 'plugin',
+          name: plugin.name,
+          index: plugin.source.index,
+          location: plugin.source.location,
+          path: plugin.source.path,
+          commit: plugin.source.commit,
+          identityId: plugin.scope.kind === 'identity' ? plugin.scope.identityId : null,
+          servers: Object.fromEntries(
+            plugin.mcpConnections
+              .map(
+                (server) => [server.name, choicesOf(mcp.find((entry) => entry.connection.id === server.id))] as const,
+              )
+              .filter(([, choices]) => Object.keys(choices).length),
+          ),
+        })
+    }
+  if (kinds.includes('skill'))
+    for (const skill of sources.learning?.skills() ?? []) {
+      if (!sharedSkill(skill)) continue
+      if (skill.projectId) skipped.push({ kind: 'skill', name: skill.name, reason: 'project' })
+      else if (skill.installation && localSource(skill.installation.source))
+        skipped.push({ kind: 'skill', name: skill.name, reason: 'folder' })
+      else
+        tools.push({
+          kind: 'skill',
+          name: skill.name,
+          description: skill.description,
+          source: skill.installation?.source ?? null,
+          content: skill.installation ? null : skill.content,
+        })
+    }
+  if (kinds.includes('mcp'))
+    for (const entry of mcp) {
+      const { connection } = entry
+      if (connection.split || fromPlugins.has(connection.id)) continue
+      if (!connection.scope.hostWide) {
+        skipped.push({ kind: 'mcp', name: connection.name, reason: 'project' })
+        continue
+      }
+      const { transport } = connection
+      // A server started from a file or folder of this host only runs here; one under the home folder runs in the same
+      // folder of the other host's home.
+      const folder = transport.type === 'stdio' ? homeRelative(transport.cwd) : null
+      if (transport.type === 'stdio' && (localSource(transport.command) || folder === null)) {
+        skipped.push({ kind: 'mcp', name: connection.name, reason: 'folder' })
+        continue
+      }
+      tools.push({
+        kind: 'mcp',
+        name: connection.name,
+        transport:
+          transport.type === 'http'
+            ? {
+                type: 'http',
+                url: transport.url,
+                headers: Object.keys(transport.headerSecretRefs),
+                ...(transport.allowPrivateNetwork ? { allowPrivateNetwork: true } : {}),
+              }
+            : {
+                type: 'stdio',
+                command: transport.command,
+                args: transport.args,
+                cwd: folder ?? '~',
+                env: Object.keys(transport.envSecretRefs),
+              },
+        providers: connection.providers,
+        tools: choicesOf(entry),
+      })
+    }
+  return { tools, skipped }
+}
+
+const hasCommand = (command: string) => (isAbsolute(command) ? existsSync(command) : !!findExecutable(command))
+
+/** This host's tools by what they mean on any host, to compare another host's tools with. */
+export function toolsHere(sources: ToolSources): ToolsHere {
+  return {
+    plugins: (sources.plugins?.list() ?? []).map((plugin) => ({ name: plugin.name, commit: plugin.source.commit })),
+    skills: (sources.learning?.skills() ?? [])
+      .filter((skill) => !skill.projectId && skill.status !== 'archived')
+      .map((skill) => ({ name: skill.name, source: skill.installation?.source ?? null, content: skill.content })),
+    mcp: (sources.getSharedMcp?.().list().connections ?? [])
+      .filter((entry) => !entry.connection.split)
+      .map((entry) => ({ name: entry.connection.name, address: connectionAddress(entry.connection.transport) })),
+    hasCommand,
+  }
+}
+
+type Stored = Omit<WaitingTool, 'state'>
+
+function stored(workspace: Workspace): Stored[] {
+  const parsed = waitingToolsSchema.safeParse(workspace.getAppState<unknown>(WAITING_KEY, []))
+  return parsed.success ? parsed.data.filter((entry) => entry.receivedAt > Date.now() - WAITING_MS) : []
+}
+
+/** Tools other hosts sent, newest first, each compared with this host; one this host already has is dropped. */
+export function waitingTools(sources: ToolSources): WaitingTool[] {
+  const here = toolsHere(sources)
+  const entries = stored(sources.workspace)
+  const waiting = entries.flatMap((entry) => {
+    const state = toolState(entry.tool, here)
+    return state === 'same' ? [] : [{ ...entry, state }]
+  })
+  if (waiting.length !== entries.length)
+    sources.workspace.setAppState(
+      WAITING_KEY,
+      entries.filter((entry) => waiting.some((kept) => kept.key === entry.key)),
+    )
+  return waiting.sort((a, b) => b.receivedAt - a.receivedAt)
+}
+
+/**
+ * Keeps tools another host sent for review here. A tool this host already has the same is not kept; one sent again
+ * replaces the earlier copy. Returns how many now wait.
+ */
+export function receiveTools(sources: ToolSources, tools: PortableTool[], from: string): number {
+  const here = toolsHere(sources)
+  const now = Date.now()
+  const dismissed = new Set(sources.workspace.getAppState<string[]>(DISMISSED_KEY, []))
+  const incoming = tools
+    .filter((tool) => toolState(tool, here) !== 'same' && !dismissed.has(JSON.stringify(tool)))
+    .map((tool) => ({ key: toolKey(tool), tool, from: from.slice(0, 200), receivedAt: now }))
+  const kept = stored(sources.workspace).filter((entry) => !incoming.some((next) => next.key === entry.key))
+  sources.workspace.setAppState(WAITING_KEY, [...incoming, ...kept].slice(0, 300))
+  return incoming.length
+}
+
+/** Drops a tool from the list; the same version sent again stays dropped, and a newer one comes back. */
+export function dismissTool(workspace: Workspace, key: string) {
+  const entries = stored(workspace)
+  const dropped = entries.find((entry) => entry.key === key)
+  workspace.setAppState(
+    WAITING_KEY,
+    entries.filter((entry) => entry.key !== key),
+  )
+  if (dropped)
+    workspace.setAppState(
+      DISMISSED_KEY,
+      [JSON.stringify(dropped.tool), ...workspace.getAppState<string[]>(DISMISSED_KEY, [])].slice(0, 300),
+    )
+}
+
+export const toolAvailability = (workspace: Workspace) =>
+  workspace.getAppState<Record<string, ToolAvailability>>(AVAILABILITY_KEY, {})
+
+/** Which hosts a tool is kept on; null keeps it on this host only. */
+export function setToolAvailability(workspace: Workspace, key: string, availability: ToolAvailability | null) {
+  const { [key]: _previous, ...rest } = toolAvailability(workspace)
+  workspace.setAppState(AVAILABILITY_KEY, availability ? { ...rest, [key]: availability } : rest)
+}
+
+/** This host's id in tool choices: the same from every device, unlike the id a device gives a host it connects to. */
+function syncHostId(workspace: Workspace) {
+  const saved = workspace.getAppState<string | null>(HOST_KEY, null)
+  if (saved) return saved
+  const created = randomUUID()
+  workspace.setAppState(HOST_KEY, created)
+  return created
+}
+
+export function toolSyncStatus(sources: ToolSources): ToolSyncStatus {
+  const { tools, skipped } = portableTools(sources)
+  const portable = Object.fromEntries(tools.map((tool) => [toolKey(tool), tool]))
+  // A choice for a tool removed since is dropped, so a later install of the same name starts on this host only.
+  const availability = Object.fromEntries(
+    Object.entries(toolAvailability(sources.workspace)).filter(([key]) => key in portable),
+  )
+  return {
+    hostId: syncHostId(sources.workspace),
+    hostName: hostname().replace(/\.local$/, ''),
+    waiting: waitingTools(sources),
+    availability,
+    portable,
+    skipped,
+  }
+}

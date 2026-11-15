@@ -2,14 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, View } from 'react-native'
 import { translate } from '@ramu/shared/i18n'
 import type { InstalledPlugin } from '@ramu/shared/plugins'
+import type { WaitingTool } from '@ramu/shared/toolSync'
 import { useStore } from '../runtime/store'
 import { space, useTheme } from '../theme'
 import { RowLabel } from './SettingRows'
 import { Card, Divider, Row, SectionLabel, T } from './ui'
 
 /**
- * A host's installed plugins and what each still needs, read-only: installing, pasting a credential and removing stay
- * on the host, which keeps the credentials. An agent's install card still reaches the phone like any approval.
+ * A host's installed plugins and what each still needs, and the plugins, skills and servers other hosts sent it to
+ * review, read-only: installing, pasting a credential and removing stay on the host, which keeps the credentials. An
+ * agent's install card still reaches the phone like any approval.
  */
 export function PluginSettings({ hostId }: { hostId: string }) {
   const store = useStore()
@@ -17,6 +19,7 @@ export function PluginSettings({ hostId }: { hostId: string }) {
   const t = (text: string, values?: Record<string, string | number>) => translate(store.language, text, values)
   const online = store.isOnline(hostId)
   const [plugins, setPlugins] = useState<InstalledPlugin[] | null>(null)
+  const [waiting, setWaiting] = useState<WaitingTool[]>([])
   const [error, setError] = useState('')
   const runtime = useRef(store)
   runtime.current = store
@@ -28,9 +31,16 @@ export function PluginSettings({ hostId }: { hostId: string }) {
         (next) => active && setPlugins(next),
         (reason: unknown) => active && setError(reason instanceof Error ? reason.message : String(reason)),
       )
+    const readWaiting = () =>
+      void runtime.current.invoke(hostId, 'toolSync.status').then(
+        (next) => active && setWaiting(next.waiting),
+        () => {},
+      )
     read()
+    readWaiting()
     const unsubscribe = runtime.current.subscribe(hostId, (...[channel]) => {
       if (channel === 'plugins:changed') read()
+      if (channel === 'plugins:changed' || channel === 'toolSync:changed' || channel === 'mcp:changed') readWaiting()
     })
     return () => {
       active = false
@@ -39,6 +49,24 @@ export function PluginSettings({ hostId }: { hostId: string }) {
   }, [hostId, online])
   return (
     <View>
+      {waiting.length ? (
+        <>
+          <SectionLabel>{t('From your other hosts')}</SectionLabel>
+          <Card style={{ marginHorizontal: space.l }}>
+            {waiting.map((entry, index) => (
+              <View key={entry.key}>
+                {index ? <Divider inset={space.l} /> : null}
+                <Row style={{ paddingVertical: space.m }}>
+                  <RowLabel
+                    title={entry.tool.name}
+                    help={t('From {0} · review it in Customize on the host', { 0: entry.from })}
+                  />
+                </Row>
+              </View>
+            ))}
+          </Card>
+        </>
+      ) : null}
       <SectionLabel>{t('Installed plugins')}</SectionLabel>
       {error ? (
         <T tone="bad" style={{ paddingHorizontal: space.l }}>

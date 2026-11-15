@@ -1,8 +1,17 @@
 // Moving settings between hosts: **Copy settings from…** a paired host, and **Export settings** / **Import settings**
 // as a file for a machine with no paired host. Only portable groups move; executable paths, credentials, account
-// tokens, workspace state and device permissions never do. Every import is reviewed value by value first.
+// tokens, workspace state and device permissions never do. Every import is reviewed value by value first. Plugins,
+// skills and MCP servers move as their setup and wait on the receiving host for their own install review.
 import { z } from 'zod'
 import { identitySchema, type IdentitySettings } from './identities'
+import {
+  portableToolSchema,
+  skippedToolSchema,
+  toolState,
+  type PortableTool,
+  type ToolKind,
+  type ToolsHere,
+} from './toolSync'
 import type { AppPreferences, ModelPreferences } from './types'
 
 export const TRANSFER_GROUPS = [
@@ -81,9 +90,17 @@ export const TRANSFER_GROUPS = [
   { id: 'rules', label: 'Rules', keys: [] },
   { id: 'identities', label: 'Identities', keys: [] },
   { id: 'memories', label: 'Everywhere notes', keys: [] },
+  { id: 'plugins', label: 'Plugins', keys: [] },
+  { id: 'skills', label: 'Skills', keys: [] },
+  { id: 'mcp', label: 'MCP servers', keys: [] },
 ] as const
 export type TransferGroup = (typeof TRANSFER_GROUPS)[number]['id']
 export const TRANSFER_GROUP_IDS = TRANSFER_GROUPS.map((group) => group.id) as TransferGroup[]
+
+const TOOL_LABEL: Record<ToolKind, string> = { plugin: 'Plugin', skill: 'Skill', mcp: 'MCP server' }
+
+/** The group each kind of tool travels in. */
+export const TOOL_GROUP: Record<ToolKind, TransferGroup> = { plugin: 'plugins', skill: 'skills', mcp: 'mcp' }
 
 /** Groups checked by default; identities only when the source has more than its default, and notes never. */
 export function defaultGroups(file: Pick<SettingsExport, 'identities'>): TransferGroup[] {
@@ -119,7 +136,7 @@ const portableAccount = z.object({
 
 export const settingsExportSchema = z.object({
   format: z.literal('ramu-settings'),
-  version: z.literal(1),
+  version: z.literal(2),
   exportedAt: z.number().int(),
   host: z.string().max(200),
   groups: z.array(z.enum(TRANSFER_GROUP_IDS as [TransferGroup, ...TransferGroup[]])).max(TRANSFER_GROUPS.length),
@@ -133,6 +150,10 @@ export const settingsExportSchema = z.object({
     })
     .optional(),
   memories: z.array(note).max(2000).optional(),
+  /** Plugins, skills and MCP servers as their setup, never a key or a path; each is reviewed again where it lands. */
+  tools: z.array(portableToolSchema).max(300).optional(),
+  /** Tools that stay on the source host, so the review says so. */
+  skippedTools: z.array(skippedToolSchema).max(300).optional(),
 })
 export type SettingsExport = z.infer<typeof settingsExportSchema>
 export type PortableRule = z.infer<typeof rule>
@@ -152,7 +173,7 @@ export function portablePreferences(
 
 export interface TransferChange {
   group: TransferGroup
-  /** A setting's path, `Rule: <name>`, `Identity: <name>` or `Note: <title>`. */
+  /** A setting's path, `Rule: <name>`, `Identity: <name>`, `Note: <title>`, or a plugin, skill or server's name. */
   label: string
   before: string | null
   after: string
@@ -176,6 +197,7 @@ export function transferChanges(
     rules: { name: string; body: string }[]
     identities: IdentitySettings
     notes: { title: string }[]
+    tools?: ToolsHere
   },
   file: SettingsExport,
   groups: readonly TransferGroup[],
@@ -234,5 +256,27 @@ export function transferChanges(
     for (const entry of file.memories ?? [])
       if (!current.notes.some((existing) => existing.title === entry.title))
         changes.push({ group: 'memories', label: `Note: ${entry.title}`, before: null, after: shown(entry.content) })
+  if (current.tools) changes.push(...toolChanges(file.tools ?? [], current.tools, groups))
+  return changes
+}
+
+/** What each tool from the file would become here: new, an update, or one to connect on this host first. */
+export function toolChanges(tools: PortableTool[], here: ToolsHere, groups: readonly TransferGroup[]) {
+  const changes: TransferChange[] = []
+  for (const tool of tools) {
+    const group = TOOL_GROUP[tool.kind]
+    if (!groups.includes(group)) continue
+    const state = toolState(tool, here)
+    if (state === 'same') continue
+    changes.push({
+      group,
+      label: `${TOOL_LABEL[tool.kind]}: ${tool.name}`,
+      before: state === 'new' ? null : state === 'update' ? 'Another version' : 'Not set up here',
+      after:
+        state === 'connect-here' && tool.kind === 'mcp' && tool.transport.type === 'stdio'
+          ? `Waits for review; needs ${tool.transport.command} on this host`
+          : 'Waits for review here',
+    })
+  }
   return changes
 }
