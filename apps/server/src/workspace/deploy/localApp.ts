@@ -313,7 +313,7 @@ export class LocalApps {
         if (this.apps.get(projectId) !== app) return
         app.state = 'failed'
         app.error = output.trim() || 'The app stopped.'
-        app.tunnel.stop()
+        void app.tunnel.stop()
         this.deps.changed?.(projectId)
       })
       await Promise.race([
@@ -357,10 +357,11 @@ export class LocalApps {
   async stop(projectId: string) {
     const app = this.apps.get(projectId)
     this.apps.delete(projectId)
-    app?.tunnel.stop()
     const saved = this.deps.saved.read()
     delete saved[projectId]
     this.deps.saved.write(saved)
+    // Until the tunnel tool has exited the edge still sends requests, which would reach a stopped app.
+    await app?.tunnel.stop()
     if (app?.process) app.process.stop()
     else await this.run(['docker', 'rm', '--force', localAppName(projectId)]).catch(() => {})
     this.deps.changed?.(projectId)
@@ -383,7 +384,7 @@ export class LocalApps {
 
   close() {
     for (const [projectId, app] of this.apps) {
-      app.tunnel.stop()
+      void app.tunnel.stop()
       if (app.process) app.process.stop()
       else void this.run(['docker', 'stop', localAppName(projectId)]).catch(() => {})
     }

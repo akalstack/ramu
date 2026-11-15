@@ -573,6 +573,9 @@ export class OpenCodeSession implements AgentRunner {
         return this.grow(this.text, d, 'text')
       case 'session.text.ended':
         return this.grow(this.text, d, 'text', d.text)
+      // OpenCode names a new session from its first prompt; a sub-agent's session never gets here (`own` above).
+      case 'session.renamed':
+        return typeof d.title === 'string' && d.title.trim() ? this.emit({ kind: 'title', title: d.title }) : undefined
       case 'session.reasoning.delta':
         return this.grow(this.thinking, d, 'thinking')
       case 'session.reasoning.ended':

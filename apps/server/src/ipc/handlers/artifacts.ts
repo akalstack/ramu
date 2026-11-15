@@ -774,8 +774,8 @@ export const registerArtifactHandlers: RegisterHandlers = (ctx) => {
     },
     'artifacts.delete': {
       args: z.tuple([id]),
-      run: (artifactId: string) => {
-        ctx.publicPages?.stop(artifactId)
+      run: async (artifactId: string) => {
+        await ctx.publicPages?.stop(artifactId)
         need().pages.delete(artifactId)
       },
     },

@@ -94,3 +94,28 @@ it('says which tool to install instead of failing to start it', () => {
     tools: { cloudflared: false, tailscale: false, ngrok: false },
   })
 })
+
+it('resolves Stop once the tool has exited, and kills a tool that does not exit', async () => {
+  vi.useFakeTimers()
+  const child = new EventEmitter() as ChildProcess & EventEmitter
+  Object.assign(child, {
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    exitCode: null,
+    signalCode: null,
+    kill: vi.fn(() => true),
+  })
+  const tunnels = new TunnelManager({ find: (command) => `/usr/local/bin/${command}`, run: () => child })
+  tunnels.use({ kind: 'quick' }, 'http://127.0.0.1:7788')
+  let stopped = false
+  const stopping = tunnels.stop().then(() => (stopped = true))
+  expect(child.kill).toHaveBeenCalledWith()
+  await vi.advanceTimersByTimeAsync(4_999)
+  expect(stopped).toBe(false)
+  await vi.advanceTimersByTimeAsync(1)
+  expect(child.kill).toHaveBeenLastCalledWith('SIGKILL')
+  child.emit('exit', null, 'SIGKILL')
+  await stopping
+  expect(stopped).toBe(true)
+  expect(tunnels.status().state).toBe('off')
+})

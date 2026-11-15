@@ -617,10 +617,11 @@ it('opens a page to people without Ramu on its own listener that serves only tha
   const { PublicPages } = await import('../src/interactive/publicPages')
   const { interactive, pages, page } = await setup()
   const used: unknown[] = []
+  let exited = () => {}
   const tunnel = () =>
     ({
       use: (choice: unknown, target: unknown) => used.push([choice, target]),
-      stop: () => used.push('stopped'),
+      stop: () => new Promise<void>((resolve) => (exited = resolve)),
       status: () => ({ state: 'running', error: null }),
       address: () => 'https://abc.trycloudflare.com',
     }) as never
@@ -641,9 +642,14 @@ it('opens a page to people without Ramu on its own listener that serves only tha
   expect(await home.text()).toContain('<p>Trip</p>')
   expect((await fetch(`http://127.0.0.1:${port}/socket`)).status).toBe(404)
   expect((await fetch(`http://127.0.0.1:${port}/`, { method: 'POST' })).status).toBe(405)
-  open.stop(trip.id)
+  const stopped = open.stop(trip.id)
   expect(saved).toEqual([])
   expect(open.status(trip.id).state).toBe('off')
+  // The edge may still route here until the tunnel tool exits, so the listener answers until then.
+  expect((await fetch(`http://127.0.0.1:${port}/`)).status).toBe(200)
+  exited()
+  await stopped
+  await expect(fetch(`http://127.0.0.1:${port}/`)).rejects.toThrow()
 })
 
 it('fills an artifact file from an image attachment the thread holds, and refuses without a way to read one', async () => {

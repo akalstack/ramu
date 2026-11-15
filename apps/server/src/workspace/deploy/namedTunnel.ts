@@ -7,6 +7,7 @@ import { createServer, type AddressInfo } from 'node:net'
 import { apexOf } from '@ramu/shared/domains'
 import { HostCredentialStore } from '../../credentials/store'
 import { findExecutable } from '../../providers/providerBinaries'
+import { endTool } from '../../remote/tunnel'
 import { SavedCredential } from '../forge/savedCredential'
 
 const HOSTNAME = /^(?!-)[a-z0-9-]{1,63}(?:\.(?!-)[a-z0-9-]{1,63})+$/
@@ -203,9 +204,11 @@ export class NamedTunnel {
     })
   }
 
-  stop(): void {
-    this.child?.kill()
+  /** Resolves once cloudflared has exited and the hostname no longer reaches the app. */
+  stop(): Promise<void> {
+    const child = this.child
     this.child = undefined
+    return child ? endTool(child) : Promise.resolve()
   }
 
   status(): { state: 'running' | 'failed'; error: string | null } {

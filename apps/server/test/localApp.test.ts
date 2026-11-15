@@ -16,8 +16,13 @@ import type { TunnelManager } from '../src/remote/tunnel'
 function setup(choice: TunnelChoice = { kind: 'quick' }, docker = true, listens = true) {
   const started: { argv: string[]; cwd: string; env: Record<string, string> }[] = []
   let exit: (output: string) => void = () => {}
-  const program: LocalProcess = { stop: vi.fn(), exited: new Promise((resolve) => (exit = resolve)) }
   const order: string[] = []
+  const program: LocalProcess = {
+    stop: vi.fn(() => void order.push('program stop')),
+    exited: new Promise((resolve) => (exit = resolve)),
+  }
+  // The tunnel tool exits when the test says so, as cloudflared does a moment after it is asked to stop.
+  let tunnelExited: () => void = () => {}
   const calls: { argv: string[]; input?: string; env?: Record<string, string> }[] = []
   const run = vi.fn<LocalRun>(async (argv, options) => {
     calls.push({
@@ -32,7 +37,10 @@ function setup(choice: TunnelChoice = { kind: 'quick' }, docker = true, listens 
   const use = vi.fn()
   const tunnel = {
     use,
-    stop: vi.fn(() => order.push('tunnel stop')),
+    stop: vi.fn(() => {
+      order.push('tunnel stop')
+      return new Promise<void>((resolve) => (tunnelExited = resolve))
+    }),
     status: () => ({ state: 'running', url: 'https://app.trycloudflare.com', error: null }),
     address: () => 'https://app.trycloudflare.com',
   } as unknown as TunnelManager
@@ -51,7 +59,7 @@ function setup(choice: TunnelChoice = { kind: 'quick' }, docker = true, listens 
       if (!listens) throw new Error('The app did not start listening on port 41234.')
     },
   })
-  return { apps, calls, use, order, saved: () => saved, started, program, exit }
+  return { apps, calls, use, order, saved: () => saved, started, program, exit, tunnelExited: () => tunnelExited() }
 }
 
 const project = () => {
@@ -120,14 +128,33 @@ describe('apps published from this computer', () => {
     expect(started.env).toEqual({ DATABASE_URL: 'postgres://secret' })
   })
 
-  it('takes the app off the internet before stopping its container', async () => {
-    const { apps, order, saved } = setup()
+  it('stops the container only once the tunnel has exited, so no request reaches a stopped app', async () => {
+    const { apps, order, saved, tunnelExited } = setup()
     await apps.publish('demo', project())
     order.length = 0
-    await apps.stop('demo')
+    const stopped = apps.stop('demo')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(order).toEqual(['tunnel stop'])
+    expect(apps.status('demo').state).toBe('off')
+    tunnelExited()
+    await stopped
     expect(order).toEqual(['tunnel stop', 'docker rm'])
     expect(saved()).toEqual({})
-    expect(apps.status('demo').state).toBe('off')
+  })
+
+  it('ends a program run without Docker only once the tunnel has exited', async () => {
+    const { apps, order, tunnelExited } = setup({ kind: 'quick' }, false)
+    const root = project()
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ scripts: { start: 'next start' } }))
+    writeFileSync(join(root, 'pnpm-lock.yaml'), '')
+    await apps.publish('demo', root, 'process')
+    order.length = 0
+    const stopped = apps.stop('demo')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(order).toEqual(['tunnel stop'])
+    tunnelExited()
+    await stopped
+    expect(order).toEqual(['tunnel stop', 'program stop'])
   })
 
   it('refuses without Docker, and refuses tunnels that would serve under this computer’s own name', async () => {
@@ -139,7 +166,7 @@ describe('apps published from this computer', () => {
   })
 
   it('runs a Node app without Docker as a program on a loopback port, with only its own variables, when asked', async () => {
-    const { apps, calls, use, started, program, saved, exit } = setup({ kind: 'quick' }, false)
+    const { apps, calls, use, started, program, saved, exit, tunnelExited } = setup({ kind: 'quick' }, false)
     const root = project()
     writeFileSync(join(root, 'package.json'), JSON.stringify({ scripts: { build: 'next build', start: 'next start' } }))
     writeFileSync(join(root, 'pnpm-lock.yaml'), '')
@@ -163,7 +190,9 @@ describe('apps published from this computer', () => {
     exit('Error: listen EADDRINUSE')
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(apps.status('demo')).toMatchObject({ state: 'failed', error: 'Error: listen EADDRINUSE' })
-    await apps.stop('demo')
+    const stopped = apps.stop('demo')
+    tunnelExited()
+    await stopped
     expect(program.stop).toHaveBeenCalled()
     expect(saved()).toEqual({})
   })

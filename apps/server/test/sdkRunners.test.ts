@@ -565,6 +565,38 @@ describe('OpenCode tool results', () => {
   })
 })
 
+it("passes on the title OpenCode gives its own session, not a sub-agent's", async () => {
+  const { client } = fakeOpenCode('bash')
+  const push = (client as any).event.subscribe
+  ;(client as any).event.subscribe = async function* (options: { signal: AbortSignal }) {
+    const inner = push(options)
+    yield (await inner.next()).value
+    await promptSent
+    yield { type: 'session.renamed', data: { sessionID: 'child-1', title: 'Sub-agent work' } }
+    yield { type: 'session.renamed', data: { sessionID: 'session-1', title: 'Single word ok' } }
+    yield { type: 'session.execution.succeeded', data: { sessionID: 'session-1' } }
+    yield* inner
+  }
+  let sent!: () => void
+  const promptSent = new Promise<void>((resolve) => (sent = resolve))
+  ;(client as any).session.prompt = async () => sent()
+  const events: AgentEvent[] = []
+  const runner = new OpenCodeSession(
+    scope,
+    { ...DEFAULT_AGENT_SETTINGS, provider: 'opencode' },
+    (event) => events.push(event),
+    false,
+    async () => client as never,
+  )
+  try {
+    await runner.start('Reply with ok', null)
+    await settle(events)
+    expect(events.filter((event) => event.kind === 'title')).toEqual([{ kind: 'title', title: 'Single word ok' }])
+  } finally {
+    await runner.stop()
+  }
+})
+
 describe('OpenCode Auto permissions', () => {
   it.each([
     ['bash', null],

@@ -95,13 +95,14 @@ export class PublicPages {
     return this.status(artifactId)
   }
 
-  stop(artifactId: string) {
+  async stop(artifactId: string) {
     const open = this.open.get(artifactId)
     this.open.delete(artifactId)
-    open?.tunnel.stop()
-    open?.server.close()
     this.saved.write(this.saved.read().filter((id) => id !== artifactId))
     this.changed(artifactId)
+    // Until the tunnel tool has exited the edge still sends requests, which would reach a closed listener.
+    await open?.tunnel.stop()
+    open?.server.close()
   }
 
   status(artifactId: string): PublicArtifactStatus {
@@ -119,7 +120,7 @@ export class PublicPages {
 
   close() {
     for (const [id, open] of this.open) {
-      open.tunnel.stop()
+      void open.tunnel.stop()
       open.server.close()
       this.open.delete(id)
     }

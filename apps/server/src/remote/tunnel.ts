@@ -75,6 +75,29 @@ function failureOf(kind: TunnelKind, line: string): string | null {
   return /\b(error|failed|not enabled|denied|unauthori[sz]ed)\b/i.test(line) ? line.trim().slice(0, 300) : null
 }
 
+/** How long a tunnel tool gets to close its connections before it is killed; cloudflared would wait 30 seconds. */
+const END_GRACE_MS = 5_000
+
+/**
+ * Asks a tunnel tool to stop and resolves once it has exited. The edge keeps routing to the target until the tool has
+ * closed its connections, so whatever the tunnel reached is stopped only after this.
+ */
+export function endTool(child: ChildProcess): Promise<void> {
+  if (child.exitCode != null || child.signalCode != null) return Promise.resolve()
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => child.kill('SIGKILL'), END_GRACE_MS)
+    timer.unref?.()
+    child.once('exit', () => {
+      clearTimeout(timer)
+      resolve()
+    })
+    if (!child.kill()) {
+      clearTimeout(timer)
+      resolve()
+    }
+  })
+}
+
 export class TunnelManager {
   private choice: TunnelChoice | null = null
   private target = ''
@@ -131,10 +154,12 @@ export class TunnelManager {
     return this.state === 'running' ? this.url : null
   }
 
-  stop(): void {
-    this.halt()
+  /** Stops the tunnel; resolves once its tool has exited, when the edge no longer sends anything to the target. */
+  stop(): Promise<void> {
+    const exited = this.halt()
     this.choice = null
     this.state = 'off'
+    return exited
   }
 
   private setUrl(url: string | null) {
@@ -149,8 +174,8 @@ export class TunnelManager {
     const child = this.child
     this.child = undefined
     child?.removeAllListeners('exit')
-    child?.kill()
     this.setUrl(null)
+    return child ? endTool(child) : Promise.resolve()
   }
 
   private launch() {
