@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_AGENT_SETTINGS, type AgentEvent, type AgentScope } from '@ramu/shared/types'
-import { CursorSession, cursorModel, cursorModels } from '../src/providers/cursor'
+import { CursorSession, cursorModel, cursorModels, cursorTurnTokens } from '../src/providers/cursor'
 import {
   formAnswer,
   formQuestions,
@@ -99,6 +99,42 @@ describe('Cursor SDK runner', () => {
     expect(events.find((e) => e.kind === 'tool-result')).toMatchObject({ isError: false, summary: 'a.txt' })
     expect(events.find((e) => e.kind === 'result')).toMatchObject({ isError: false, text: 'end_turn' })
     expect(events.some((event) => event.kind === 'permission-request')).toBe(false)
+  })
+
+  it('records the turn tokens from Cursor usage, from its message or else the run result', async () => {
+    const usage = {
+      inputTokens: 1200,
+      outputTokens: 80,
+      cacheReadTokens: 300,
+      cacheWriteTokens: 0,
+      totalTokens: 1580,
+      reasoningTokens: 20,
+    }
+    for (const [messages, result] of [
+      [
+        [
+          { type: 'assistant', message: { content: [{ type: 'text', text: 'ok' }] } },
+          { type: 'usage', agent_id: 'agent-1', run_id: 'run-1', usage },
+        ],
+        { status: 'finished' },
+      ],
+      [[{ type: 'assistant', message: { content: [{ type: 'text', text: 'ok' }] } }], { status: 'finished', usage }],
+    ] as const) {
+      const { sdk } = fakeCursor([...messages], { ...result })
+      const events: AgentEvent[] = []
+      const runner = new CursorSession(
+        scope,
+        { ...DEFAULT_AGENT_SETTINGS, provider: 'cursor', access: 'auto' },
+        (e) => events.push(e),
+        false,
+        sdk,
+      )
+      await runner.start('hi', null)
+      await settle(events)
+      // Cached reads count as input and reasoning as output, as for Claude and Codex.
+      expect(events.find((e) => e.kind === 'result')).toMatchObject({ tokens: { input: 1500, output: 100 } })
+    }
+    expect(cursorTurnTokens({ inputTokens: 'x', outputTokens: 1 })).toBeNull()
   })
 
   it('enables native Auto-review for Auto on both create and resume', async () => {

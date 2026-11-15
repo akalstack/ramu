@@ -75,6 +75,25 @@ const modelParameters = new Map<string, { effort?: string; fast: boolean }>()
  * Ramu's model and its effort and Fast choice as the SDK's selection. Cursor's router needs `optimize_for`, so "auto"
  * asks for a balanced pick. Effort and Fast go only to a model whose catalog offers them.
  */
+/**
+ * A Cursor turn's tokens, from the SDK's per-turn `usage` message or the run's result, as Ramu records Claude and Codex
+ * turns: cached reads count as input and reasoning as output. A turn without usable counts records none.
+ */
+export function cursorTurnTokens(usage: unknown): { input: number; output: number } | null {
+  if (!usage || typeof usage !== 'object') return null
+  const u = usage as {
+    inputTokens?: unknown
+    outputTokens?: unknown
+    cacheReadTokens?: unknown
+    reasoningTokens?: unknown
+  }
+  const count = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null)
+  const input = count(u.inputTokens),
+    output = count(u.outputTokens)
+  if (input === null || output === null) return null
+  return { input: input + (count(u.cacheReadTokens) ?? 0), output: output + (count(u.reasoningTokens) ?? 0) }
+}
+
 export function cursorModel(id: string | undefined, effort?: ReasoningEffort | null, fast = false): ModelSelection {
   if (!id || id === 'auto' || id === 'auto-smart')
     return { id: 'auto-smart', params: [{ id: 'optimize_for', value: 'balanced' }] }
@@ -165,6 +184,7 @@ export class CursorSession implements AgentRunner {
   private segment = 0
   private lastKind: 'text' | 'thinking' | 'tool' | undefined
   private tools = 0
+  private tokens: { input: number; output: number } | null = null
 
   constructor(
     private scope: AgentScope,
@@ -256,6 +276,7 @@ export class CursorSession implements AgentRunner {
     this.segment = 0
     this.lastKind = undefined
     this.tools = 0
+    this.tokens = null
     this.cancelled = false
     this.emit({ kind: 'state', state: 'running' })
     const mcpServers = this.mcpServers()
@@ -317,12 +338,14 @@ export class CursorSession implements AgentRunner {
         : classifyLimit(reply, { provider: 'cursor', channel: 'reply', toolCalls: this.tools })
     if (match?.confidence === 'high')
       this.emit({ kind: 'usage', readings: [limitedReading(this.settings, failed ?? reply)] })
+    const tokens = this.tokens ?? cursorTurnTokens(result?.usage)
     this.emit(
       {
         kind: 'result',
         isError: !!failed || !!match,
         text: failed ?? (match ? reply : cancelled ? 'cancelled' : 'end_turn'),
         costUsd: null,
+        ...(tokens ? { tokens } : {}),
       },
       limitSignal(match),
     )
@@ -339,6 +362,10 @@ export class CursorSession implements AgentRunner {
   }
 
   private handle(message: SDKMessage): void {
+    if (message.type === 'usage') {
+      this.tokens = cursorTurnTokens(message.usage) ?? this.tokens
+      return
+    }
     if (message.type === 'assistant') {
       for (const block of message.message.content)
         if (block.type === 'text' && block.text) this.grow('text', block.text)
