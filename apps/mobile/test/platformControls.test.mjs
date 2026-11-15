@@ -6990,6 +6990,7 @@ for (const os of ['ios', 'android']) {
       '../../runtime/store': { useStore: () => store },
       '../../runtime/useHostSettings': { useHostSettings: () => host },
       '../../runtime/busyMode': phoneBehavior,
+      '../../runtime/threadGroups': threadGroups,
       '../../runtime/useScopedChoice': load('runtime/useScopedChoice.ts', os, {
         react: hooks.react,
         './store': { useStore: () => store },
@@ -7015,11 +7016,17 @@ for (const os of ['ios', 'android']) {
             return { scope, value, tree }
           })
       })
-    let [busy, warning] = render()
+    let [busy, warning, threadList] = render()
     // The computer's own setting is in effect, so each row opens on All devices with its value.
     assert.equal(busy.scope.props.value, 'all')
     assert.equal(busy.value.props.value, 'queue')
     assert.equal(warning.value.props.value, 'off')
+    // The thread list matches the desktop's Sidebar shows, which this host leaves on Projects.
+    assert.equal(threadList.value.props.value, 'projects')
+    threadList.scope.props.onChange('device')
+    ;[, , threadList] = render()
+    threadList.value.props.onChange('recent')
+    assert.equal(drafts[threadGroups.THREAD_LIST_KEY], 'recent')
     assert.ok(nodes(busy.tree).some((node) => node.props?.children === 'scopeOfflineBlocked'))
 
     busy.scope.props.onChange('device')
@@ -7582,6 +7589,7 @@ test('Threads uses native toolbar buttons and its usage action opens the shared 
   })
   const { default: Threads } = load('app/(tabs)/(threads)/index.tsx', 'ios', {
     '../../../runtime/identities': { useHostIdentities: () => null, projectIdentity: () => null },
+    '../../../runtime/busyMode': phoneBehavior,
     react,
     '../../../runtime/store': {
       useStore: () => ({

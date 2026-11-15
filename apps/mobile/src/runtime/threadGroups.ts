@@ -15,8 +15,15 @@ export function splitDone<T extends { doneAt?: number | null }>(threads: readonl
 /** Projects are qualified by host: two hosts can both have a standalone bucket or a colliding project ID. */
 export const groupKey = (computerId: string, projectId: string) => `${computerId}\u0000${projectId}`
 
-/** Where this phone remembers how the thread list is drawn: by project (default) or `recent` activity. */
+/** Projects groups threads under their project; Recent threads is one list by latest activity (the desktop's "Sidebar shows"). */
+export type ThreadListMode = 'projects' | 'recent'
+
+/** This phone's own choice, kept with the other phone-only drafts; never sent to a host. */
 export const THREAD_LIST_KEY = 'pref-device:threadList'
+
+/** A value from this phone, all your phones (a boolean) or the host's `recentChatMode`; anything else is not set. */
+export const readThreadList = (value: unknown): ThreadListMode | undefined =>
+  value === 'recent' || value === true ? 'recent' : value === 'projects' || value === false ? 'projects' : undefined
 
 export type ThreadGroup<T, P> = {
   key: string

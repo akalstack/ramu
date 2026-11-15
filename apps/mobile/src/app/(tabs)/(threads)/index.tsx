@@ -1,7 +1,16 @@
 import { translate } from '@ramu/shared/i18n'
 import { projectIdentity, useHostIdentities } from '../../../runtime/identities'
 import { recentThreads } from '../../../runtime/recentThreads'
-import { THREAD_LIST_KEY, groupKey, groupThreads, splitDone, type ThreadGroup } from '../../../runtime/threadGroups'
+import {
+  THREAD_LIST_KEY,
+  groupKey,
+  groupThreads,
+  readThreadList,
+  splitDone,
+  type ThreadGroup,
+} from '../../../runtime/threadGroups'
+import { resolveLayered } from '../../../runtime/busyMode'
+import { sharedValue } from '@ramu/shared/sharedFields'
 import { collapseScheduleRuns } from '@ramu/shared/chat/scheduleRuns'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BackHandler, Platform, Pressable, ScrollView as HScroll, StyleSheet, View } from 'react-native'
@@ -140,8 +149,16 @@ export default function Threads() {
       .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   }, [scoped, filter])
   const filtering = filter !== 'all'
-  // Settings → Appearance picks it, like the desktop's sidebar switch: threads grouped by project, or one list by recent activity.
-  const recentMode = store.drafts?.[THREAD_LIST_KEY] === 'recent'
+  // Settings → Threads picks it as on the desktop: this phone's choice, then all your phones, then the host's own setting.
+  const recentMode =
+    resolveLayered(
+      {
+        device: readThreadList(store.drafts?.[THREAD_LIST_KEY]),
+        mobile: readThreadList(sharedValue(store.mobileLayers?.[selected], 'recentChatMode')),
+        all: readThreadList(store.appPreferences?.[selected]?.recentChatMode),
+      },
+      'projects',
+    ).value === 'recent'
   // Grouping and narrowing by identity, once the shown host has two or more; search still finds every thread.
   const identities = useHostIdentities(merged ? undefined : selected)
   const identityList = identities && identities.settings.identities.length >= 2 ? identities.settings.identities : null

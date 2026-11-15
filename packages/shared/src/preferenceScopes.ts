@@ -53,6 +53,7 @@ export const PREFERENCE_FIELDS = [
   { id: 'favoriteModels', scopes: ['all', 'mobile', 'device'], fallback: [] },
   { id: 'queueWhileBusy', scopes: ['all', 'mobile', 'device'], fallback: null },
   { id: 'modelChangeWarning', scopes: ['all', 'mobile', 'device'], fallback: true },
+  { id: 'recentChatMode', scopes: ['all', 'mobile', 'device'], fallback: false },
   { id: 'notifyCompletion', scopes: ['all', 'mobile', 'device'], fallback: true },
   { id: 'notifyInput', scopes: ['all', 'mobile', 'device'], fallback: true },
   { id: 'notifyFailure', scopes: ['all', 'mobile', 'device'], fallback: true },

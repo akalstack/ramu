@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { groupKey, groupThreads, splitDone } from '../src/runtime/threadGroups.ts'
+import { groupKey, groupThreads, readThreadList, splitDone } from '../src/runtime/threadGroups.ts'
+import { resolveLayered } from '../src/runtime/busyMode.ts'
 
 const thread = (id, projectId, lastActiveAt, status = 'idle', computerId = 'a') => ({
   id,
@@ -93,4 +94,18 @@ test('threads marked done leave their projects for one Done list, most recently 
     done.map((thread) => thread.id),
     ['c', 'b'],
   )
+})
+
+test("the thread list follows this phone, then all your phones, then the host's Sidebar shows", () => {
+  const mode = (device, mobile, all) =>
+    resolveLayered(
+      { device: readThreadList(device), mobile: readThreadList(mobile), all: readThreadList(all) },
+      'projects',
+    ).value
+  assert.equal(mode(undefined, undefined, true), 'recent')
+  assert.equal(mode(undefined, false, true), 'projects')
+  assert.equal(mode('recent', false, false), 'recent')
+  // A cleared phone choice is stored as '' and falls through to the host.
+  assert.equal(mode('', undefined, true), 'recent')
+  assert.equal(mode(undefined, 'yes', undefined), 'projects')
 })

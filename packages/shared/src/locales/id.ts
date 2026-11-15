@@ -1421,11 +1421,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Interface font': 'Font aplikasi',
   'Interface font size': 'Ukuran font aplikasi',
   'Crisper text': 'Teks lebih tajam',
-  'Thread list': 'Daftar thread',
-  'By project': 'Per proyek',
-  'By recent activity': 'Menurut aktivitas terbaru',
-  'By project groups threads under each project. By recent activity shows one list, newest first.':
-    'Per proyek mengelompokkan thread di bawah tiap proyek. Menurut aktivitas terbaru menampilkan satu daftar, yang terbaru di atas.',
+  'Thread list shows': 'Daftar thread menampilkan',
   'Use lighter text rendering on macOS.': 'Pakai rendering teks yang lebih tipis di macOS.',
   'Layout sizes': 'Ukuran tata letak',
   'Ramu · This device': 'Ramu · Perangkat ini',

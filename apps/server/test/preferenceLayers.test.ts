@@ -45,7 +45,9 @@ it('carries the composer fields on the same layer, each with its own values and 
   const set = (edit: object) => d.invoke('preferences.layers.set', [edit]) as Promise<{ applied: boolean }>
   expect((await set({ id: 'queueWhileBusy', value: 'queue', at: 100, by: 'phone-a' })).applied).toBe(true)
   expect((await set({ id: 'modelChangeWarning', value: false, at: 100, by: 'phone-a' })).applied).toBe(true)
+  expect((await set({ id: 'recentChatMode', value: true, at: 100, by: 'phone-a' })).applied).toBe(true)
   const fields = (await get()).mobile.fields
+  expect(fields.recentChatMode?.value).toBe(true)
   expect(fields.queueWhileBusy?.value).toBe('queue')
   expect(fields.modelChangeWarning?.value).toBe(false)
   // Revisions are per field: an old write to one field leaves the other alone, and a stale write is dropped.
@@ -58,6 +60,7 @@ it('carries the composer fields on the same layer, each with its own values and 
   expect(() => set({ id: 'queueWhileBusy', value: 'effort', at: 300, by: 'x' })).toThrow()
   expect(() => set({ id: 'queueWhileBusy', value: true, at: 300, by: 'x' })).toThrow()
   expect(() => set({ id: 'modelChangeWarning', value: 'yes', at: 300, by: 'x' })).toThrow()
+  expect(() => set({ id: 'recentChatMode', value: 'recent', at: 300, by: 'x' })).toThrow()
 })
 
 it('lets a viewer phone read but not change the shared setting', () => {

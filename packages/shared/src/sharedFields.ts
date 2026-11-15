@@ -7,6 +7,7 @@ export const SHARED_MOBILE_FIELDS = {
   modelFlow: (value: unknown): value is 'model' | 'effort' => value === 'model' || value === 'effort',
   queueWhileBusy: (value: unknown): value is 'steer' | 'queue' => value === 'steer' || value === 'queue',
   modelChangeWarning: (value: unknown): value is boolean => typeof value === 'boolean',
+  recentChatMode: (value: unknown): value is boolean => typeof value === 'boolean',
 } as const
 
 export type SharedMobileField = keyof typeof SHARED_MOBILE_FIELDS

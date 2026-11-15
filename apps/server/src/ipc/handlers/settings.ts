@@ -95,6 +95,12 @@ export const registerSettingsHandlers: RegisterHandlers = ({
             at: z.number().finite(),
             by: z.string().min(1).max(80),
           }),
+          z.object({
+            id: z.literal('recentChatMode'),
+            value: z.boolean().optional(),
+            at: z.number().finite(),
+            by: z.string().min(1).max(80),
+          }),
         ]),
       ]),
       run: (edit: { id: SharedMobileField; value?: string | boolean; at: number; by: string }) => {
