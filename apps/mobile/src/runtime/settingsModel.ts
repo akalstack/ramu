@@ -808,6 +808,11 @@ const PHONE_ENTRIES: { section: SettingsSection; title: string; words: string }[
   { section: 'appearance', title: 'Theme', words: 'light dark system appearance mode' },
   { section: 'appearance', title: 'Language', words: 'bahasa indonesia english' },
   { section: 'appearance', title: 'Haptic feedback', words: 'vibration taps feel' },
+  {
+    section: 'appearance',
+    title: 'Thread list',
+    words: 'threads projects group grouped recent activity newest sort order view layout',
+  },
   { section: 'appearance', title: 'Voice input', words: 'microphone dictation speech voice dictate language' },
   { section: 'notifications', title: 'Background alerts', words: 'push notifications needs attention' },
   { section: 'notifications', title: 'Live Activities', words: 'lock screen dynamic island ongoing work ios' },

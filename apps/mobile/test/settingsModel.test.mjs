@@ -154,6 +154,8 @@ test('search finds host and phone settings by title, words and section', () => {
   const hit = (query, settings = null) => searchSettings(query, settings).map((entry) => entry.title)
   assert.ok(hit('pull').includes('Automatic pull'))
   assert.ok(hit('haptic').includes('Haptic feedback'))
+  assert.ok(hit('recent activity').includes('Thread list'))
+  assert.ok(hit('grouped').includes('Thread list'))
   assert.ok(hit('dynamic island').includes('Live Activities'))
   assert.ok(hit('git commit').includes('Style'))
   assert.deepEqual(hit('   '), [])

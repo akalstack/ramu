@@ -12,6 +12,7 @@ import { Check, ChevronRight, Plus, RefreshCw } from 'lucide-react-native'
 import { font, space, useTheme, type Appearance, type TextSize } from '../../theme'
 import { useStore, type Language } from '../../runtime/store'
 import { sectionById, type SettingsSection } from '../../runtime/settingsModel'
+import { THREAD_LIST_KEY } from '../../runtime/threadGroups'
 import { useHostSettings } from '../../runtime/useHostSettings'
 import { translate } from '@ramu/shared/i18n'
 import {
@@ -116,6 +117,21 @@ function AppearancePage() {
         />
       </Card>
       <Hint>{say('Only changes this phone. Each computer keeps its own language.')}</Hint>
+      <SectionLabel>{say('Thread list')}</SectionLabel>
+      <Card style={{ marginHorizontal: space.l }}>
+        <Segmented<'projects' | 'recent'>
+          style={{ margin: space.m }}
+          value={drafts[THREAD_LIST_KEY] === 'recent' ? 'recent' : 'projects'}
+          onChange={(value) => setDraft(THREAD_LIST_KEY, value)}
+          options={[
+            { key: 'projects', label: say('By project') },
+            { key: 'recent', label: say('By recent activity') },
+          ]}
+        />
+      </Card>
+      <Hint>
+        {say('By project groups threads under each project. By recent activity shows one list, newest first.')}
+      </Hint>
       <SectionLabel>{say('Feedback')}</SectionLabel>
       <Card style={{ marginHorizontal: space.l }}>
         <ToggleRow

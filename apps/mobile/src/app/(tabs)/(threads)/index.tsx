@@ -1,7 +1,7 @@
 import { translate } from '@ramu/shared/i18n'
 import { projectIdentity, useHostIdentities } from '../../../runtime/identities'
 import { recentThreads } from '../../../runtime/recentThreads'
-import { groupKey, groupThreads, splitDone, type ThreadGroup } from '../../../runtime/threadGroups'
+import { THREAD_LIST_KEY, groupKey, groupThreads, splitDone, type ThreadGroup } from '../../../runtime/threadGroups'
 import { collapseScheduleRuns } from '@ramu/shared/chat/scheduleRuns'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BackHandler, Platform, Pressable, ScrollView as HScroll, StyleSheet, View } from 'react-native'
@@ -9,8 +9,6 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Folder,
   FolderGit2,
-  History,
-  Folders,
   MessagesSquare,
   Search,
   Gauge,
@@ -61,8 +59,6 @@ const PER_PROJECT = 3
 const DONE_PAGE = 10
 const DONE_KEY = 'section:done'
 
-/** Where this phone remembers how the thread list is drawn: by project (default) or by recent activity. */
-const THREAD_LIST_KEY = 'pref-device:threadList'
 /** How this phone arranges projects by identity: all (default), grouped, or `only:<id>`. */
 const IDENTITY_VIEW_KEY = 'pref-device:identityView'
 
@@ -144,7 +140,7 @@ export default function Threads() {
       .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   }, [scoped, filter])
   const filtering = filter !== 'all'
-  // The desktop's sidebar switch, kept on this phone: threads grouped by project, or one list by recent activity.
+  // Settings → Appearance picks it, like the desktop's sidebar switch: threads grouped by project, or one list by recent activity.
   const recentMode = store.drafts?.[THREAD_LIST_KEY] === 'recent'
   // Grouping and narrowing by identity, once the shown host has two or more; search still finds every thread.
   const identities = useHostIdentities(merged ? undefined : selected)
@@ -677,14 +673,6 @@ export default function Threads() {
                   ))}
                 </>
               ) : null}
-              <Chip
-                label={recentMode ? say('Recent') : t.projects}
-                icon={recentMode ? History : Folders}
-                accessibilityLabel={
-                  recentMode ? say('Group threads by project') : say('Show threads by recent activity')
-                }
-                onPress={() => store.setDraft(THREAD_LIST_KEY, recentMode ? 'projects' : 'recent')}
-              />
               {chips
                 .filter((chip) => chip.key === 'all' || chip.key === filter || chip.count > 0)
                 .map((chip) => (

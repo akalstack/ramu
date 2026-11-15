@@ -15,6 +15,9 @@ export function splitDone<T extends { doneAt?: number | null }>(threads: readonl
 /** Projects are qualified by host: two hosts can both have a standalone bucket or a colliding project ID. */
 export const groupKey = (computerId: string, projectId: string) => `${computerId}\u0000${projectId}`
 
+/** Where this phone remembers how the thread list is drawn: by project (default) or `recent` activity. */
+export const THREAD_LIST_KEY = 'pref-device:threadList'
+
 export type ThreadGroup<T, P> = {
   key: string
   computerId: string
