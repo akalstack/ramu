@@ -174,7 +174,7 @@ function setupOf(toolchain: CiToolchain, facts: CiFacts, files: ReadonlySet<stri
       ? ['          node-version-file: .node-version']
       : ['          node-version: lts/*']
   const setupNode = (cache: string | null) => [
-    '      - uses: actions/setup-node@v4',
+    '      - uses: actions/setup-node@v7',
     '        with:',
     ...nodeVersion,
     ...(cache ? [`          cache: ${cache}`] : []),
@@ -185,7 +185,7 @@ function setupOf(toolchain: CiToolchain, facts: CiFacts, files: ReadonlySet<stri
       return {
         // Without a packageManager field the action needs a version; with one, naming it again is an error.
         actions: [
-          '      - uses: pnpm/action-setup@v4',
+          '      - uses: pnpm/action-setup@v6',
           ...(packageManagerOf(facts.manifests['package.json'])?.startsWith('pnpm@')
             ? []
             : ['        with:', '          version: 10']),
@@ -219,7 +219,7 @@ function setupOf(toolchain: CiToolchain, facts: CiFacts, files: ReadonlySet<stri
       return {
         actions: [
           '      - uses: oven-sh/setup-bun@v2',
-          '      - uses: actions/cache@v4',
+          '      - uses: actions/cache@v6',
           '        with:',
           '          path: ~/.bun/install/cache',
           `          key: bun-\${{ runner.os }}-\${{ hashFiles('${lock}') }}`,
@@ -250,7 +250,7 @@ function setupOf(toolchain: CiToolchain, facts: CiFacts, files: ReadonlySet<stri
     }
     case 'uv':
       return {
-        actions: ['      - uses: astral-sh/setup-uv@v6', '        with:', '          enable-cache: true'],
+        actions: ['      - uses: astral-sh/setup-uv@v10', '        with:', '          enable-cache: true'],
         install: 'uv sync --locked',
         gitlab: {
           image: 'python:3',
@@ -264,7 +264,7 @@ function setupOf(toolchain: CiToolchain, facts: CiFacts, files: ReadonlySet<stri
       const requirements = files.has('requirements.txt')
       return {
         actions: [
-          '      - uses: actions/setup-python@v5',
+          '      - uses: actions/setup-python@v7',
           '        with:',
           files.has('.python-version')
             ? '          python-version-file: .python-version'
@@ -301,7 +301,7 @@ function setupOf(toolchain: CiToolchain, facts: CiFacts, files: ReadonlySet<stri
       }
     case 'go':
       return {
-        actions: ['      - uses: actions/setup-go@v5', '        with:', '          go-version-file: go.mod'],
+        actions: ['      - uses: actions/setup-go@v7', '        with:', '          go-version-file: go.mod'],
         install: 'go mod download',
         gitlab: {
           image: 'golang:1',
@@ -335,7 +335,7 @@ function githubWorkflow(facts: CiFacts, setup: Setup, steps: CiStep[]): string {
     `    name: ${CI_CHECK}`,
     '    runs-on: ubuntu-latest',
     '    steps:',
-    '      - uses: actions/checkout@v4',
+    '      - uses: actions/checkout@v7',
     ...setup.actions,
     ...(setup.install ? ['      - name: Install', `        run: ${scalar(setup.install)}`] : []),
     ...steps.flatMap((step) => [`      - name: ${step.name}`, `        run: ${scalar(step.run)}`]),

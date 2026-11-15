@@ -29,9 +29,9 @@ describe('ciWorkflow', () => {
     const { content } = workflow
     expect(content).toContain('  pull_request:\n  push:\n    branches: [main]')
     expect(content).toContain('permissions:\n  contents: read')
-    expect(content).toContain('uses: actions/checkout@v4')
+    expect(content).toContain('uses: actions/checkout@v7')
     // pnpm must be on the path before setup-node can cache its store.
-    expect(content.indexOf('pnpm/action-setup@v4')).toBeLessThan(content.indexOf('actions/setup-node@v4'))
+    expect(content.indexOf('pnpm/action-setup@v6')).toBeLessThan(content.indexOf('actions/setup-node@v7'))
     expect(content).toContain('version: 10')
     expect(content).toContain('node-version-file: .nvmrc')
     expect(content).toContain('cache: pnpm')
@@ -88,7 +88,7 @@ describe('ciWorkflow', () => {
     const pyproject = '[dependency-groups]\ndev = ["pytest>=8", "ruff", "mypy"]\n'
     const workflow = ciWorkflow('github', facts(['pyproject.toml', 'uv.lock'], { 'pyproject.toml': pyproject }))!
     expect(workflow.toolchain).toBe('uv')
-    expect(workflow.content).toContain('astral-sh/setup-uv@v6')
+    expect(workflow.content).toContain('astral-sh/setup-uv@v10')
     expect(workflow.content).toContain('enable-cache: true')
     expect(workflow.content).toContain('uv sync --locked')
     expect(workflow.steps.map((step) => step.run)).toEqual(['uv run ruff check .', 'uv run mypy .', 'uv run pytest'])
@@ -100,7 +100,7 @@ describe('ciWorkflow', () => {
       facts(['requirements.txt', 'manage.py'], { 'requirements.txt': 'Django==5.1\npytest-django-helpers\n' }),
     )!
     expect(workflow.toolchain).toBe('pip')
-    expect(workflow.content).toContain('actions/setup-python@v5')
+    expect(workflow.content).toContain('actions/setup-python@v7')
     expect(workflow.content).toContain("python-version: '3.x'")
     expect(workflow.content).toContain('cache: pip')
     expect(workflow.content).toContain('pip install -r requirements.txt')
