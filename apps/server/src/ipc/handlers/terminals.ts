@@ -3,6 +3,9 @@ import { z } from 'zod'
 import { id } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
+/** Ctrl-E, Ctrl-U: end of line, then erase it, in bash's and zsh's line editors. */
+const CLEAR_LINE = '\x05\x15'
+
 const dimension = z.number().int().min(2).max(1000)
 
 /** Terminals (pty sessions). */
@@ -43,7 +46,8 @@ export const registerTerminalHandlers: RegisterHandlers = ({ workspace, terminal
         .reverse()
         .find((terminal) => !terminals.busy(terminal.id))
       const terminal = idle ?? terminals.open(ctx, null, workspace.agentScope(ctx).cwd, 120, 32)
-      terminals.write(terminal.id, `${command.replace(/\r?\n/g, '\r')}\r`)
+      // An idle shell can hold a half-typed line; end-of-line then kill-line clears it so only the command runs.
+      terminals.write(terminal.id, `${idle ? CLEAR_LINE : ''}${command.replace(/\r?\n/g, '\r')}\r`)
       return terminal
     },
   },

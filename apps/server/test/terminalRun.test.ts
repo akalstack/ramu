@@ -26,7 +26,8 @@ it('types into the newest shell that is not running anything', () => {
     ['newer'],
   )
   expect(run('vercel login').id).toBe('old')
-  expect(terminals.write).toHaveBeenCalledWith('old', 'vercel login\r')
+  // A shell that was typed into may hold a partial line; it is cleared before the command.
+  expect(terminals.write).toHaveBeenCalledWith('old', '\x05\x15vercel login\r')
   expect(terminals.open).not.toHaveBeenCalled()
 })
 
