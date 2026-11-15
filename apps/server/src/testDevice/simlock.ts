@@ -330,7 +330,15 @@ export interface SimlockDevice {
 export interface SimlockStatus {
   devices: SimlockDevice[]
   leases: SimlockLease[]
-  waiting: { requesterId?: string; requester?: string; platform?: string; position?: number }[]
+  /** Requests not yet holding a device, as Simlock 0.6.0 reports them: `queuePosition` once `stage` is `queued`. */
+  waiting: {
+    requesterId?: string
+    spec?: { platform?: string }
+    createdAt?: number
+    stage?: string
+    queuePosition?: number
+    reason?: string
+  }[]
   capacity: Record<'ios' | 'android', { running: number; maxRunning: number; limit: number }>
 }
 

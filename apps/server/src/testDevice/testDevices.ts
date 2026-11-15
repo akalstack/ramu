@@ -370,10 +370,10 @@ export class TestDevices {
         .filter((entry) => entry.platform === platform)
         .sort((a, b) => a.startedAt - b.startedAt)
       const requests = queue
-        .filter((entry) => (entry as { spec?: { platform?: string } }).spec?.platform === platform)
-        .sort((a, b) => ((a as { createdAt?: number }).createdAt ?? 0) - ((b as { createdAt?: number }).createdAt ?? 0))
+        .filter((entry) => entry.spec?.platform === platform)
+        .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0))
       threads.forEach((thread, index) => {
-        const request = requests[index] as { stage?: string; queuePosition?: number } | undefined
+        const request = requests[index]
         result.push({
           taskId: thread.taskId,
           platform,
