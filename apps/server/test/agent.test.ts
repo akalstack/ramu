@@ -4379,6 +4379,21 @@ describe('questions while work continues', () => {
     expect(svc.queued(chat.id)).toHaveLength(0)
     svc.stopAll()
   })
+
+  it('says which thread a queued message waits for in the shared checkout', async () => {
+    const { svc, start, outputs, starts } = fixture(),
+      chat = start()
+    outputs.get('1')!({ kind: 'result', isError: false, text: 'Done', costUsd: null })
+    start('t2')
+    await svc.submit(chat.id, 'next step', 'queue')
+    const queue = () => svc.events(chat.id).findLast((e) => e.kind === 'queue')
+    expect(queue()).toMatchObject({ messages: [{ text: 'next step' }], waitingFor: 't2' })
+    outputs.get('2')!({ kind: 'result', isError: false, text: 'Done', costUsd: null })
+    await until(() => starts.length === 3)
+    expect(queue()).toMatchObject({ messages: [] })
+    expect(queue()).not.toHaveProperty('waitingFor')
+    svc.stopAll()
+  })
 })
 
 it('allows scoped Claude question tools without extra approval while preserving native questions and command approvals', async () => {

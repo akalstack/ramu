@@ -1966,6 +1966,14 @@ export default function ChatScreen() {
                         goal={chat.goal}
                         queue={chat.queue?.filter((message) => message.mode !== 'steer')}
                         queuePaused={chat.queuePaused}
+                        queueWaitingFor={
+                          chat.queueWaitingFor
+                            ? store.chats.find(
+                                (other) =>
+                                  other.computerId === chat.computerId && other.taskId === chat.queueWaitingFor,
+                              )?.title
+                            : undefined
+                        }
                         onResumeQueue={
                           chat.sessionId
                             ? () =>

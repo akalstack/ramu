@@ -276,6 +276,7 @@ export function QueuedMessages({
   queued,
   pending,
   paused,
+  waitingFor = null,
   hostName,
   hostOffline,
   busyAgent,
@@ -289,6 +290,8 @@ export function QueuedMessages({
   queued: QueuedMessage[]
   pending: OutboxItem[]
   paused: boolean
+  /** The title of the thread whose turn in the same checkout these messages wait for. */
+  waitingFor?: string | null
   hostName: string
   hostOffline: boolean
   busyAgent: boolean
@@ -320,21 +323,27 @@ export function QueuedMessages({
       count={queued.length + pending.length}
       icon={<ListOrdered />}
       actions={
-        paused && (
-          <>
-            <span className="text-muted-foreground text-caption">{translate('Paused')}</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className={GHOST_TEXT_BUTTON_CLASS}
-              disabled={readOnly || configuring}
-              onClick={() => {
-                if (!readOnly) void act(() => invoke('agent.resumeQueue', sessionId))
-              }}
-            >
-              {translate('Resume messages')}
-            </Button>
-          </>
+        !paused && waitingFor ? (
+          <span className="text-muted-foreground text-caption">
+            {translate('Waiting for “{0}” in the same checkout', { '0': waitingFor })}
+          </span>
+        ) : (
+          paused && (
+            <>
+              <span className="text-muted-foreground text-caption">{translate('Paused')}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={GHOST_TEXT_BUTTON_CLASS}
+                disabled={readOnly || configuring}
+                onClick={() => {
+                  if (!readOnly) void act(() => invoke('agent.resumeQueue', sessionId))
+                }}
+              >
+                {translate('Resume messages')}
+              </Button>
+            </>
+          )
         )
       }
     >

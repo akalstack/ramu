@@ -174,6 +174,7 @@ export const AgentView = memo(function AgentView({
     liveText,
     queued,
     queuePaused,
+    queueWaitingFor,
     hydrating,
     error,
     setError,
@@ -443,7 +444,8 @@ export const AgentView = memo(function AgentView({
   }, [working])
   const ws = useWorkspaceActions()
   // Read from the live store, so unarchiving brings the composer back at once.
-  const thread = useWorkspace().task(session?.taskId ?? '')
+  const workspace = useWorkspace()
+  const thread = workspace.task(session?.taskId ?? '')
   const threadArchived = thread?.status === 'archived'
   const threadDoneAt = thread?.doneAt ?? null
   const { offline: hostOffline, name: hostName } = useHostConnection()
@@ -1072,6 +1074,7 @@ export const AgentView = memo(function AgentView({
                         readOnly={viewOnly}
                         pending={pending}
                         paused={queuePaused}
+                        waitingFor={queueWaitingFor ? (workspace.task(queueWaitingFor)?.title ?? null) : null}
                         hostName={hostName}
                         hostOffline={hostOffline}
                         busyAgent={busyAgent}

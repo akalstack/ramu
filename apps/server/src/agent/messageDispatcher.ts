@@ -222,7 +222,11 @@ export class MessageDispatcher {
   }
 
   updateQueue(id: string, messages: QueuedMessage[], paused = this.host.queuePaused(id)): void {
-    this.host.record(id, { kind: 'queue', messages, paused })
+    // An idle thread's messages that wait on another thread's turn in the same checkout say whose, so the wait is not a mystery.
+    const session = messages.length && !paused ? this.host.get(id) : null
+    const writer =
+      session && !WRITING_STATES.includes(session.state) ? this.host.activeWriter(session.covers, id) : null
+    this.host.record(id, { kind: 'queue', messages, paused, ...(writer ? { waitingFor: writer.taskId } : {}) })
   }
 
   /** Durable background input; preserve a user's paused queue and never steer a running turn. */

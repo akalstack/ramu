@@ -50,7 +50,8 @@ export function updateThreadMetadata(chat: import('./types').Chat, event: AgentE
                 ? 'ready-for-review'
                 : 'idle',
     }
-  if (event.kind === 'queue') return { ...chat, queue: event.messages, queuePaused: !!event.paused }
+  if (event.kind === 'queue')
+    return { ...chat, queue: event.messages, queuePaused: !!event.paused, queueWaitingFor: event.waitingFor }
   if (event.kind === 'goal') return { ...chat, goal: event.goal }
   if (event.kind === 'settings')
     return {

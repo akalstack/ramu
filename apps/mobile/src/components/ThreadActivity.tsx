@@ -48,6 +48,9 @@ export function ThreadActivity({
   actions?: { label: string; icon: Icon; onPress(): void }[]
 }) {
   const store = useStore()
+  const waitingFor = chat.queueWaitingFor
+    ? store.chats.find((other) => other.computerId === chat.computerId && other.taskId === chat.queueWaitingFor)?.title
+    : undefined
   const say = useSay()
   const online = store.isOnline(chat.computerId)
   const activity = mobileThreadActivity(chat, online)
@@ -90,7 +93,9 @@ export function ThreadActivity({
     kind === 'goal'
       ? (chat.goal?.objective ?? null)
       : kind === 'queue'
-        ? (chat.queue[0]?.text ?? null)
+        ? waitingFor && !chat.queuePaused
+          ? say('Waiting for “{0}” in the same checkout', { 0: waitingFor })
+          : (chat.queue[0]?.text ?? null)
         : kind === 'input'
           ? say('Answer so the agent can continue')
           : kind === 'provider'
@@ -233,6 +238,7 @@ export function ThreadActivity({
             goal={opened === 'goal' ? chat.goal : null}
             queue={opened === 'queue' ? chat.queue : []}
             paused={chat.queuePaused}
+            waitingFor={waitingFor}
             onToggleGoal={online ? () => store.toggleGoal(chat.id) : undefined}
             onClearGoal={online ? () => store.clearGoal(chat.id) : undefined}
             onVerifyGoal={online ? (command) => store.setGoalVerify(chat.id, command) : undefined}

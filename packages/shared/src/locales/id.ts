@@ -7539,4 +7539,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Nothing to paste.': 'Tidak ada yang bisa ditempel.',
   'Nothing to paste. If the clipboard has text, allow Ramu to paste in Settings → Ramu → Paste from Other Apps.': 'Tidak ada yang bisa ditempel. Kalau clipboard berisi teks, izinkan Ramu menempel di Pengaturan → Ramu → Tempel dari App Lain.',
   '… {0} unchanged lines …': '… {0} baris tidak berubah …',
+  'Waiting for “{0}” in the same checkout': 'Menunggu “{0}” di checkout yang sama',
 }

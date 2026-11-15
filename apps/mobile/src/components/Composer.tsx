@@ -466,6 +466,7 @@ export function GoalQueueTray({
   goal,
   queue,
   paused: queuePaused,
+  waitingFor,
   onResumeQueue,
   onToggleGoal,
   onClearGoal,
@@ -480,6 +481,8 @@ export function GoalQueueTray({
   goal: ChatGoal | null
   queue: QueuedMessage[]
   paused?: boolean
+  /** The title of the thread whose turn in the same checkout the queue waits for. */
+  waitingFor?: string
   onResumeQueue?: () => void
   onToggleGoal?: () => void
   onClearGoal?: () => void
@@ -543,6 +546,14 @@ export function GoalQueueTray({
       ) : null}
       {goal && onVerifyGoal ? (
         <GoalVerifySheet open={verifying} goal={goal} onClose={() => setVerifying(false)} onSave={onVerifyGoal} />
+      ) : null}
+      {!queuePaused && waitingFor && queue.length ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}>
+          <Clock size={14} color={c.soft} strokeWidth={1.8} />
+          <T size={font.control} tone="soft" style={{ flex: 1 }}>
+            {say('Waiting for “{0}” in the same checkout', { 0: waitingFor })}
+          </T>
+        </View>
       ) : null}
       {queuePaused && queue.length ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}>
@@ -648,6 +659,7 @@ export function Composer({
   onSend,
   onStop,
   queuePaused,
+  queueWaitingFor,
   onResumeQueue,
   goal = null,
   queue = [],
@@ -705,6 +717,7 @@ export function Composer({
   goal?: ChatGoal | null
   queue?: QueuedMessage[]
   queuePaused?: boolean
+  queueWaitingFor?: string
   onResumeQueue?: () => void
   onToggleGoal?: () => void
   onClearGoal?: () => void
@@ -1143,6 +1156,7 @@ export function Composer({
           goal={goal}
           queue={queue}
           paused={queuePaused}
+          waitingFor={queueWaitingFor}
           onResumeQueue={onResumeQueue}
           onToggleGoal={onToggleGoal}
           onClearGoal={onClearGoal}

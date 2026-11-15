@@ -415,7 +415,13 @@ type AgentEventBody =
   /** One ability call (an image, a web search, a long read) that Ramu ran on a provider that has the ability. */
   | { kind: 'ability'; call: import('../providers/abilities').AbilityCall }
   | ({ kind: 'provider-wait' } & ProviderWaitFields)
-  | { kind: 'queue'; messages: QueuedMessage[]; paused?: boolean }
+  | {
+      kind: 'queue'
+      messages: QueuedMessage[]
+      paused?: boolean
+      /** The thread whose turn holds the shared checkout, while these messages wait for it to finish. */
+      waitingFor?: string
+    }
   | { kind: 'user'; text: string; attachments?: Attachment[]; from?: MessageOrigin }
   | { kind: 'file-restore'; userSeq: number; fileCount: number }
   /** Recorded on a teammate's own session: how it works beside the lead. Review is read-only whatever the thread allows. */
