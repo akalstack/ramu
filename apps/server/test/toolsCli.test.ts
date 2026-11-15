@@ -85,4 +85,19 @@ describe('ramu tools', () => {
     const { call, io } = host({ 'toolSync.status': status([docs]) })
     await expect(toolsCommand('install', 'nope', call, io)).rejects.toThrow('ramu tools lists what is')
   })
+
+  it('signs a headless host in with the page opened on a phone and its final address pasted here', async () => {
+    const server = { connection: { id: 'c1', name: 'docs', transport: { type: 'http' } } }
+    const { call, calls, lines, io } = host({
+      'mcp.status': { connections: [server] },
+      'mcp.signIn': { url: 'https://auth.example.com/authorize?redirect_uri=http%3A%2F%2F127.0.0.1%3A5123%2Fcallback' },
+      'mcp.completeSignIn': true,
+    })
+    io.secret.mockResolvedValueOnce('http://127.0.0.1:5123/callback?code=abc&state=xyz')
+    await toolsCommand('sign-in', 'docs', call, io)
+    expect(lines[0]).toContain('https://auth.example.com/authorize')
+    expect(calls).toContainEqual(['mcp.completeSignIn', ['c1', 'http://127.0.0.1:5123/callback?code=abc&state=xyz']])
+    expect(lines.at(-1)).toBe('Signed in to docs.')
+    expect(lines.join('\n')).not.toContain('code=abc')
+  })
 })

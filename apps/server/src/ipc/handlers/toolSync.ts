@@ -16,6 +16,7 @@ import {
   setToolAvailability,
   toolSyncStatus,
   toolsHere,
+  toolsUsedIn,
   rememberChoices,
   removeEverywhere,
   waitingTools,
@@ -77,6 +78,11 @@ export const registerToolSyncHandlers: RegisterHandlers = (ctx) => {
         const { tool } = entry
         const transport = tool.transport
         const manager = ctx.getSharedMcp()
+        // A project's server is that project's here too, and runs in its folder.
+        const project = entry.projectId
+          ? ctx.workspace.listProjects().find((item) => item.id === entry.projectId)
+          : null
+        if (entry.projectId && !project?.root) throw new Error('That project has no folder on this host.')
         // A server of the same name here is the one to change, not a second copy beside it; a plugin's stays its own.
         const fromPlugins = new Set(
           (ctx.plugins?.list() ?? []).flatMap((plugin) => plugin.mcpConnections.map((server) => server.id)),
@@ -84,7 +90,13 @@ export const registerToolSyncHandlers: RegisterHandlers = (ctx) => {
         const same = manager
           .list()
           .connections.map((item) => item.connection)
-          .find((connection) => connection.name === tool.name && !connection.split && !fromPlugins.has(connection.id))
+          .find(
+            (connection) =>
+              connection.name === tool.name &&
+              !connection.split &&
+              !fromPlugins.has(connection.id) &&
+              (project ? connection.scope.projectIds.includes(project.id) : connection.scope.hostWide),
+          )
         // Secrets this host already holds for that server stay, for the names the server still needs.
         const held: Record<string, string> = !same
           ? {}
@@ -98,7 +110,7 @@ export const registerToolSyncHandlers: RegisterHandlers = (ctx) => {
             name: tool.name,
             serviceAccountId: same?.serviceAccountId ?? 'public',
             enabled: entry.state !== 'connect-here',
-            scope: { hostWide: true, projectIds: [] },
+            scope: project ? { hostWide: false, projectIds: [project.id] } : { hostWide: true, projectIds: [] },
             providers: tool.providers,
             transport:
               transport.type === 'http'
@@ -112,7 +124,11 @@ export const registerToolSyncHandlers: RegisterHandlers = (ctx) => {
                     type: 'stdio',
                     command: transport.command,
                     args: transport.args,
-                    cwd: transport.cwd === '~' ? homedir() : join(homedir(), transport.cwd.slice(2)),
+                    cwd: project?.root
+                      ? project.root
+                      : transport.cwd === '~'
+                        ? homedir()
+                        : join(homedir(), transport.cwd.slice(2)),
                     envSecretRefs: kept(transport.env),
                   },
           },
@@ -136,30 +152,35 @@ export const registerToolSyncHandlers: RegisterHandlers = (ctx) => {
         return incoming.map((tool) => ({ key: toolKey(tool), state: toolState(tool, here) }))
       },
     },
-    /** The plugins and MCP servers a thread here called, its helpers included, as setup another host can install. */
+    /**
+     * The plugins, skills and MCP servers a thread here used, its helpers included, as setup another host can install:
+     * the servers it called, the skills its agent opened and the plugin command lines it ran.
+     */
     'toolSync.usedBy': {
       args: z.tuple([z.string().min(1).max(200)]),
       run: (taskId: string) => {
         const mcp = ctx.getSharedMcp?.()
-        const used = new Set(
-          ctx.agents
-            .all()
-            .filter((session) => session.taskId === taskId)
-            .flatMap((session) => mcp?.connectionsUsedBy(session.id) ?? []),
+        const sessions = ctx.agents.all().filter((session) => session.taskId === taskId)
+        const called = new Set(sessions.flatMap((session) => mcp?.connectionsUsedBy(session.id) ?? []))
+        const installed = ctx.plugins?.list() ?? []
+        const used = toolsUsedIn(
+          sessions.flatMap((session) => ctx.agents.events(session.id)),
+          installed,
+          ctx.learning?.skills() ?? [],
         )
-        if (!used.size) return []
-        const plugins = new Set(
-          (ctx.plugins?.list() ?? [])
-            .filter((plugin) => plugin.mcpConnections.some((server) => used.has(server.id)))
-            .map((plugin) => plugin.name),
-        )
+        for (const plugin of installed)
+          if (plugin.mcpConnections.some((server) => called.has(server.id))) used.plugins.add(plugin.name)
         const servers = new Set(
-          (ctx.getSharedMcp?.().list().connections ?? [])
-            .filter((entry) => used.has(entry.connection.id))
+          (mcp?.list().connections ?? [])
+            .filter((entry) => called.has(entry.connection.id))
             .map((entry) => entry.connection.name),
         )
-        return portableTools(ctx, ['plugin', 'mcp']).tools.filter((tool) =>
-          tool.kind === 'plugin' ? plugins.has(tool.name) : servers.has(tool.name),
+        return portableTools(ctx).tools.filter((tool) =>
+          tool.kind === 'plugin'
+            ? used.plugins.has(tool.name)
+            : tool.kind === 'skill'
+              ? used.skills.has(tool.name)
+              : servers.has(tool.name),
         )
       },
     },

@@ -97,25 +97,26 @@ export function SkillsSection({ onOpenPlugins }: { onOpenPlugins: () => void }) 
       setBusy(null)
     }
   }
-  const install = (key: string, source: string, skill?: string, updatingId?: string) =>
+  const install = (key: string, source: string, skill?: string, updatingId?: string, projectId: string | null = null) =>
     act(key, async () =>
-      setPreview(
-        await invoke('skills.stage', { source, skill, projectId: null, ...(updatingId ? { updatingId } : {}) }),
-      ),
+      setPreview(await invoke('skills.stage', { source, skill, projectId, ...(updatingId ? { updatingId } : {}) })),
     )
   /** A skill another host sent: an installed one is fetched from its source again, a written one opens in the editor. */
   const reviewWaiting = (entry: WaitingTool) => {
     if (entry.tool.kind !== 'skill') return
     const tool = entry.tool
-    const here = (skills ?? []).find((skill) => skill.name === tool.name && !skill.projectId)
-    if (tool.source) void install(entry.key, tool.source, tool.name, here?.installation ? here.id : undefined)
+    // A project's skill goes to the project here on the same remote.
+    const projectId = entry.projectId ?? null
+    const here = (skills ?? []).find((skill) => skill.name === tool.name && (skill.projectId ?? null) === projectId)
+    if (tool.source)
+      void install(entry.key, tool.source, tool.name, here?.installation ? here.id : undefined, projectId)
     else
       setDraft({
         ...(here && !here.installation ? { id: here.id, revision: here.revision } : {}),
         name: tool.name,
         description: tool.description,
         content: tool.content ?? '',
-        projectId: '',
+        projectId: projectId ?? '',
       })
   }
   const all = skills ?? []
@@ -207,7 +208,12 @@ export function SkillsSection({ onOpenPlugins }: { onOpenPlugins: () => void }) 
             busy={busy}
             onReview={reviewWaiting}
             onRemove={(entry) => {
-              const here = all.find((skill) => skill.name === entry.tool.name && !skill.projectId && !fromPlugin(skill))
+              const here = all.find(
+                (skill) =>
+                  skill.name === entry.tool.name &&
+                  (skill.projectId ?? null) === (entry.projectId ?? null) &&
+                  !fromPlugin(skill),
+              )
               if (here) void act(entry.key, () => invoke('skills.remove', here.id))
             }}
           />

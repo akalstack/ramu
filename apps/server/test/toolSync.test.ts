@@ -1,28 +1,48 @@
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import type { AgentEvent } from '@ramu/shared/types'
 import type { SharedMcpManagement } from '@ramu/shared/mcp'
 import type { InstalledPlugin } from '@ramu/shared/plugins'
 import type { ManagedSkill } from '@ramu/shared/types'
+import { toolKey } from '@ramu/shared/toolSync'
 import { registerToolSyncHandlers } from '../src/ipc/handlers/toolSync'
 import {
+  acceptOffer,
   dismissTool,
   pendingChoices,
   portableTools,
   receiveTools,
   rememberChoices,
   removeEverywhere,
+  setToolAvailability,
   takeChoices,
+  toolOffer,
   toolSyncStatus,
+  toolsUsedIn,
   waitingTools,
   type ToolSources,
 } from '../src/toolSync'
 import type { Workspace } from '../src/workspace/workspace'
 
-const appState = () => {
+const appState = (projects: { id: string; name: string; root: string }[] = []) => {
   const state = new Map<string, unknown>()
   return {
     getAppState: <T>(key: string, fallback: T) => (state.has(key) ? (state.get(key) as T) : fallback),
     setAppState: (key: string, value: unknown) => void state.set(key, value),
+    listProjects: () => projects,
+    listRepositories: (id: string) => projects.filter((project) => project.id === id),
   } as unknown as Workspace
+}
+
+/** A project folder that is a Git repository with one remote. */
+const repository = (remote: string) => {
+  const root = mkdtempSync(join(tmpdir(), 'ramu-tools-'))
+  execFileSync('git', ['init', '-q', root])
+  execFileSync('git', ['-C', root, 'remote', 'add', 'origin', remote])
+  return root
 }
 
 const plugin = (overrides: Partial<InstalledPlugin> = {}): InstalledPlugin =>
@@ -150,10 +170,10 @@ describe('tools across hosts on the server', () => {
     ])
     dismissTool(workspace, 'skill:written')
     expect(waitingTools(empty)).toHaveLength(2)
-    // Sent again unchanged, a dismissed tool stays dismissed; a changed one comes back.
-    expect(receiveTools(empty, laptop, 'laptop')).toBe(2)
+    // Sent again unchanged, a dismissed tool stays dismissed and waiting ones are not news; a changed one comes back.
+    expect(receiveTools(empty, laptop, 'laptop')).toBe(0)
     const edited = laptop.map((tool) => (tool.kind === 'skill' ? { ...tool, content: 'New steps' } : tool))
-    expect(receiveTools(empty, edited, 'laptop')).toBe(3)
+    expect(receiveTools(empty, edited, 'laptop')).toBe(1)
     // Once the same tools are installed here only the changed skill waits, as an update.
     expect(waitingTools(sources(workspace)).map((entry) => [entry.key, entry.state])).toEqual([
       ['skill:written', 'update'],
@@ -232,5 +252,65 @@ describe('tools across hosts on the server', () => {
     expect(saves[0]![0]).toMatchObject({ transport: { headerSecretRefs: { Authorization: 'ref-1' } } })
     expect(added.secrets).toEqual([])
     expect(pendingChoices(workspace, 'docs')).toEqual({ search: 'allow' })
+  })
+
+  it('takes from another host only what is meant for this one, and tells it nothing about this host', () => {
+    const laptop = sources()
+    const workspace = appState()
+    setToolAvailability(laptop.workspace, 'plugin:linear', { all: true })
+    setToolAvailability(laptop.workspace, 'skill:written', { hosts: ['someone-else'] })
+    const offer = toolOffer(laptop)!
+    expect(offer.tools.map((entry) => toolKey(entry.tool))).toEqual(['plugin:linear', 'skill:written'])
+    const reply = acceptOffer({ workspace }, offer)
+    expect(reply).toEqual({ hostId: expect.any(String), hostName: expect.any(String), received: 1 })
+    expect(waitingTools({ workspace }).map((entry) => entry.key)).toEqual(['plugin:linear'])
+    expect(acceptOffer({ workspace }, offer).received).toBe(0)
+    // An identity's plugin on All your hosts waits only where that identity is.
+    const work = { ...offer, tools: [{ ...offer.tools[0]!, tool: { ...offer.tools[0]!.tool, identityId: 'work' } }] }
+    const other = appState()
+    expect(acceptOffer({ workspace: other }, work).received).toBe(0)
+    const withWork = { workspace: other, identities: { settings: () => ({ identities: [{ id: 'work' }] }) } }
+    expect(acceptOffer(withWork, work).received).toBe(1)
+  })
+
+  it('sends a project’s skill to the host with a project on the same remote, for that project', () => {
+    const here = appState([{ id: 'p', name: 'api', root: repository('git@github.com:acme/api.git') }])
+    const { tools } = portableTools(sources(here))
+    const project = tools.find((tool) => tool.name === 'per-project')
+    expect(project?.project).toEqual({ remote: 'github.com/acme/api', name: 'api' })
+    const there = appState([{ id: 'q', name: 'api', root: repository('https://github.com/acme/api') }])
+    expect(receiveTools({ workspace: there }, [project!], 'laptop')).toBe(1)
+    expect(waitingTools({ workspace: there })[0]).toMatchObject({ key: 'skill:per-project', projectId: 'q' })
+    // A host without that project never keeps it.
+    expect(receiveTools({ workspace: appState() }, [project!], 'laptop')).toBe(0)
+  })
+
+  it('finds the skills a thread opened and the plugin command lines it ran', () => {
+    const events = [
+      { kind: 'tool-use', toolUseId: '1', name: 'Skill', summary: '', input: '{"skill":"ramu-written"}' },
+      {
+        kind: 'tool-use',
+        toolUseId: '2',
+        name: 'Bash',
+        summary: '',
+        toolKind: 'execute',
+        input: '{"command":"linear issue list"}',
+      },
+      {
+        kind: 'tool-use',
+        toolUseId: '3',
+        name: 'Bash',
+        summary: '',
+        toolKind: 'execute',
+        input: '{"command":"echo linearity"}',
+      },
+    ] as AgentEvent[]
+    const used = toolsUsedIn(
+      events,
+      [{ id: 'p1', name: 'linear', contents: { cli: { binaries: ['linear'], npx: null, reads: [] } } as never }],
+      [skill({ name: 'written' }), skill({ name: 'writ' })],
+    )
+    expect([...used.skills]).toEqual(['written'])
+    expect([...used.plugins]).toEqual(['linear'])
   })
 })

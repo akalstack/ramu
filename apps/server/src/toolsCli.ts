@@ -41,8 +41,44 @@ function pick(waiting: WaitingTool[], name: string | undefined, removal: boolean
   return matching[0]
 }
 
-/** Runs `ramu tools [list|install|remove|dismiss] [name]` against the running host. */
+/**
+ * Signs this host in to a server that uses OAuth, with the sign-in page opened on any device, such as a phone. A host
+ * with an HTTPS address finishes by itself; otherwise the page the service redirects to does not load on that device,
+ * and its address is pasted here, where the same one-time checks apply as on the host.
+ */
+async function signIn(serverName: string | undefined, call: ToolsCall, io: ToolsTerminal) {
+  if (!serverName) throw new Error('Name the server: ramu tools sign-in <name>.')
+  const server = (await call<SharedMcpManagement>('mcp.status')).connections.find(
+    (entry) => entry.connection.name === serverName,
+  )
+  if (!server) throw new Error(`No MCP server named ${serverName} is on this host.`)
+  if (server.connection.transport.type !== 'http') throw new Error(`${serverName} runs here and has no sign-in.`)
+  const started = await call<{ url: string } | null>('mcp.signIn', [server.connection.id])
+  if (!started) {
+    io.print(`${serverName} is signed in.`)
+    return
+  }
+  io.print(`Open this page on any device, such as your phone, and sign in:\n${started.url}`)
+  const redirect = new URL(started.url).searchParams.get('redirect_uri') ?? ''
+  if (redirect.startsWith('https://')) {
+    io.print(`Ramu finishes the sign-in when the page says so. Then: ramu tools list.`)
+    return
+  }
+  const address = await io.secret(
+    'After signing in, the page fails to load. Paste its address from the address bar (leave empty to stop): ',
+  )
+  if (!address) {
+    await call('mcp.cancelSignIn', [server.connection.id])
+    return
+  }
+  const done = await call<boolean>('mcp.completeSignIn', [server.connection.id, address])
+  if (!done) throw new Error('That address does not finish this sign-in. Start again with ramu tools sign-in.')
+  io.print(`Signed in to ${serverName}.`)
+}
+
+/** Runs `ramu tools [list|install|remove|dismiss|sign-in] [name]` against the running host. */
 export async function toolsCommand(action: string, name: string | undefined, call: ToolsCall, io: ToolsTerminal) {
+  if (action === 'sign-in') return signIn(name, call, io)
   const status = await call<ToolSyncStatus>('toolSync.status')
   if (action === 'list') {
     if (!status.waiting.length) {
@@ -62,24 +98,27 @@ export async function toolsCommand(action: string, name: string | undefined, cal
   if (action === 'remove') {
     const entry = pick(status.waiting, name, true)
     if (!(await io.confirm(`Remove ${entry.tool.name} (${KIND[entry.tool.kind]}) here, as on ${entry.from}?`))) return
-    await removeHere(entry.tool, call)
+    await removeHere(entry.tool, entry.projectId ?? null, call)
     io.print(`Removed ${entry.tool.name}.`)
     return
   }
-  if (action !== 'install') throw new Error('Use ramu tools, ramu tools install|remove|dismiss <name>.')
+  if (action !== 'install') throw new Error('Use ramu tools, ramu tools install|remove|dismiss|sign-in <name>.')
   const entry = pick(status.waiting, name, false)
   if (entry.tool.kind === 'plugin') await installPlugin(entry, entry.tool, call, io)
-  else if (entry.tool.kind === 'skill') await installSkill(entry.tool, call, io)
+  else if (entry.tool.kind === 'skill') await installSkill(entry.tool, entry.projectId ?? null, call, io)
   else await addServer(entry, call, io)
 }
 
-async function removeHere(tool: PortableTool, call: ToolsCall) {
+async function removeHere(tool: PortableTool, projectId: string | null, call: ToolsCall) {
   if (tool.kind === 'plugin') {
     const plugin = (await call<InstalledPlugin[]>('plugins.list')).find((item) => item.name === tool.name)
     if (plugin) await call('plugins.remove', [plugin.id])
   } else if (tool.kind === 'skill') {
     const skill = (await call<LearningSnapshot>('learning.get')).skills.find(
-      (item) => item.name === tool.name && !item.projectId && !item.installation?.source.startsWith('plugin:'),
+      (item) =>
+        item.name === tool.name &&
+        (item.projectId ?? null) === projectId &&
+        !item.installation?.source.startsWith('plugin:'),
     )
     if (skill) await call('skills.remove', [skill.id])
   } else {
@@ -111,10 +150,10 @@ async function installPlugin(
     (item) => item.name === tool.name && item.index === tool.index,
   )
   const review = installed
-    ? await call<PluginReview>('plugins.updateReview', [installed.id])
+    ? await call<PluginReview>('plugins.updateReview', [installed.id, ...(tool.commit ? [tool.commit] : [])])
     : await call<PluginReview>('plugins.stage', [
         listing
-          ? { source: listing.name, index: listing.index }
+          ? { source: listing.name, index: listing.index, ...(tool.commit ? { commit: tool.commit } : {}) }
           : {
               source: tool.location,
               ...(tool.commit ? { ref: tool.commit } : {}),
@@ -136,9 +175,18 @@ async function installPlugin(
       : undefined
     const plugin = await call<InstalledPlugin>('plugins.confirm', [
       review.stageId,
-      { scope: identity ? { kind: 'identity', identityId: identity.id } : { kind: 'all' }, includeScripts },
+      {
+        scope: identity
+          ? { kind: 'identity', identityId: identity.id }
+          : entry.projectId
+            ? { kind: 'project', projectId: entry.projectId }
+            : { kind: 'all' },
+        includeScripts,
+      },
     ])
-    io.print(`Installed ${plugin.name}${identity ? ` for ${identity.name} projects` : ''}.`)
+    io.print(
+      `Installed ${plugin.name}${identity ? ` for ${identity.name} projects` : entry.projectId && tool.project ? ` for ${tool.project.name}` : ''}.`,
+    )
     for (const slot of plugin.credentials.filter((item) => item.state !== 'saved')) {
       const value = await io.secret(`${slot.label} for ${plugin.name} (leave empty to add it later): `)
       if (value)
@@ -164,9 +212,14 @@ async function installPlugin(
   }
 }
 
-async function installSkill(tool: Extract<PortableTool, { kind: 'skill' }>, call: ToolsCall, io: ToolsTerminal) {
+async function installSkill(
+  tool: Extract<PortableTool, { kind: 'skill' }>,
+  projectId: string | null,
+  call: ToolsCall,
+  io: ToolsTerminal,
+) {
   const here = (await call<LearningSnapshot>('learning.get')).skills.find(
-    (skill) => skill.name === tool.name && !skill.projectId,
+    (skill) => skill.name === tool.name && (skill.projectId ?? null) === projectId,
   )
   if (!tool.source) {
     io.print(`${tool.name}: ${tool.description}\n\n${tool.content ?? ''}`)
@@ -179,7 +232,7 @@ async function installSkill(tool: Extract<PortableTool, { kind: 'skill' }>, call
       ])
     else
       await call('skills.create', [
-        { name: tool.name, description: tool.description, content: tool.content ?? '', projectId: null },
+        { name: tool.name, description: tool.description, content: tool.content ?? '', projectId },
       ])
     io.print(`Saved ${tool.name}.`)
     return
@@ -188,7 +241,7 @@ async function installSkill(tool: Extract<PortableTool, { kind: 'skill' }>, call
     {
       source: tool.source,
       skill: tool.name,
-      projectId: null,
+      projectId,
       ...(here?.installation ? { updatingId: here.id } : {}),
     },
   ])
@@ -239,6 +292,13 @@ async function addServer(entry: WaitingTool, call: ToolsCall, io: ToolsTerminal)
     io.print(`Added ${tool.name}; it could not turn on yet: ${error.message}`)
     return null
   })
+  if (transport.type === 'http' && turned !== null) {
+    const check = (await call<SharedMcpManagement | undefined>('mcp.status'))?.connections.find(
+      (item) => item.connection.id === added.connection.id,
+    )
+    if (check?.status === 'sign-in-required' && (await io.confirm(`${tool.name} needs a sign-in. Sign in now?`)))
+      await signIn(tool.name, call, io)
+  }
   if (turned) io.print(`Added ${tool.name} and turned it on with the same tools as on ${entry.from}.`)
   else if (turned === false) io.print(`Added ${tool.name}. Sign in to a provider here, then turn it on.`)
 }

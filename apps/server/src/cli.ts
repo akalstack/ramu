@@ -66,6 +66,7 @@ Usage:
   ramu tools install <name>      Review one and install it here; keys it needs are typed here and never shown
   ramu tools remove <name>       Remove one here that its other host removed
   ramu tools dismiss <name>      Drop one from the list until a newer version is sent
+  ramu tools sign-in <server>    Sign this host in to an MCP server, with the sign-in page opened on any device
   ramu up [--private-network] [--no-private-network] [--yes]
                                  Set up how other devices reach this host, keep it running as a service, and pair one.
                                  Without a terminal it never asks; pass --private-network (or --yes).

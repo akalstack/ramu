@@ -824,13 +824,16 @@ export interface RamuMethods extends ArtifactMethods {
     ref?: string
     path?: string
     index?: string
+    /** An exact commit, such as the one another host has; an index's signing key still has to sign it. */
+    commit?: string
   }): import('./plugins').PluginReview
   'plugins.cancel'(stageId: string): void
   'plugins.confirm'(
     stageId: string,
     options: { scope: import('./plugins').PluginScope; includeScripts: boolean },
   ): import('./plugins').InstalledPlugin
-  'plugins.updateReview'(id: string): import('./plugins').PluginReview
+  /** `commit` updates to that exact commit, such as the one another host has, instead of the newest. */
+  'plugins.updateReview'(id: string, commit?: string): import('./plugins').PluginReview
   'plugins.checkUpdates'(): import('./plugins').InstalledPlugin[]
   'plugins.remove'(id: string): void
   'plugins.setEnabled'(id: string, enabled: boolean): import('./plugins').InstalledPlugin

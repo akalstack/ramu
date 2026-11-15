@@ -86,6 +86,8 @@ export function PluginsSection({
   const [fromHost, setFromHost] = useState<PortablePlugin | null>(null)
   // The identity a received plugin belongs to on its other host, when this host has that identity too.
   const [identity, setIdentity] = useState<{ id: string; name: string } | null>(null)
+  // The project here on the same remote as a received project plugin's project there.
+  const [projectScope, setProjectScope] = useState<string | null>(null)
   useEffect(() => {
     if (requested) setOpenId(requested.id)
   }, [requested])
@@ -137,6 +139,7 @@ export function PluginsSection({
     const here = installed?.find((plugin) => plugin.name === tool.name)
     const listing = listings?.find((item) => item.name === tool.name && item.index === tool.index)
     setFromHost(tool)
+    setProjectScope(entry.projectId ?? null)
     setReviewing(listing ?? null)
     void act(entry.key, async () => {
       const owner = tool.identityId
@@ -145,11 +148,11 @@ export function PluginsSection({
       setIdentity(owner ? { id: owner.id, name: owner.name } : null)
       setReview(
         here
-          ? await invoke('plugins.updateReview', here.id)
+          ? await invoke('plugins.updateReview', here.id, tool.commit ?? undefined)
           : await invoke(
               'plugins.stage',
               listing
-                ? { source: listing.name, index: listing.index }
+                ? { source: listing.name, index: listing.index, ...(tool.commit ? { commit: tool.commit } : {}) }
                 : {
                     source: tool.location,
                     ...(tool.commit ? { ref: tool.commit } : {}),
@@ -393,6 +396,7 @@ export function PluginsSection({
           }}
           projects={projects}
           identity={fromHost?.name === review.contents.name ? identity : null}
+          projectId={fromHost?.name === review.contents.name ? projectScope : null}
           busy={busy === 'confirm'}
           companion={companionFor(review)}
           onCancel={() => {
@@ -476,6 +480,7 @@ function InstallReview({
   companion,
   projects,
   identity,
+  projectId,
   busy,
   onConfirm,
   onCancel,
@@ -489,13 +494,15 @@ function InstallReview({
   projects: Project[]
   /** The identity a plugin from another host belongs to there, chosen first when this host has it. */
   identity?: { id: string; name: string } | null
+  /** The project a plugin from another host is for there, as the project on the same remote here. */
+  projectId?: string | null
   busy: boolean
   onConfirm: (options: { scope: PluginScope; includeScripts: boolean }, withCompanion: boolean) => void
   onCancel: () => void
 }) {
   useLanguage()
   const { contents, source } = review
-  const [scope, setScope] = useState(identity ? `identity:${identity.id}` : '')
+  const [scope, setScope] = useState(identity ? `identity:${identity.id}` : (projectId ?? ''))
   const [scripts, setScripts] = useState(false)
   const [withCompanion, setWithCompanion] = useState(true)
   const scriptFiles = contents.skills.flatMap((skill) => skill.scripts.map((path) => `${skill.name}/${path}`))

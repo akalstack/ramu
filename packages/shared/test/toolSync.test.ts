@@ -1,13 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import { transferChanges, settingsExportSchema, type SettingsExport } from '../src/settingsTransfer'
 import { DEFAULT_APP_PREFERENCES } from '../src/types'
-import { availableOn, portableToolSchema, toolKey, toolState, type PortableTool, type ToolsHere } from '../src/toolSync'
+import {
+  availableOn,
+  keptOn,
+  portableToolSchema,
+  rehosted,
+  toolKey,
+  toolState,
+  type PortableTool,
+  type ToolHost,
+  type ToolsHere,
+} from '../src/toolSync'
 
 const here = (overrides: Partial<ToolsHere> = {}): ToolsHere => ({
   plugins: [],
   skills: [],
   mcp: [],
   hasCommand: () => true,
+  projectFor: () => null,
   ...overrides,
 })
 
@@ -45,13 +56,19 @@ describe('tools across hosts', () => {
       source: 'acme/skills',
       content: null,
     }
-    expect(toolState(installed, here({ skills: [{ name: 'review', source: 'acme/skills', content: 'x' }] }))).toBe(
-      'same',
-    )
+    expect(
+      toolState(
+        installed,
+        here({ skills: [{ name: 'review', source: 'acme/skills', content: 'x', projectId: null }] }),
+      ),
+    ).toBe('same')
     const written: PortableTool = { ...installed, source: null, content: 'Check tests first.' }
-    expect(toolState(written, here({ skills: [{ name: 'review', source: null, content: 'Something else' }] }))).toBe(
-      'update',
-    )
+    expect(
+      toolState(
+        written,
+        here({ skills: [{ name: 'review', source: null, content: 'Something else', projectId: null }] }),
+      ),
+    ).toBe('update')
   })
 
   it('matches a server by its address, and asks to connect one whose command this host lacks', () => {
@@ -101,5 +118,41 @@ describe('tools across hosts', () => {
       ['MCP server: Docs', 'Not set up here'],
     ])
     expect(transferChanges(current, file, ['mcp'])).toHaveLength(1)
+  })
+})
+
+describe('which hosts a tool goes to', () => {
+  const home: ToolHost = { hostId: 'h2', hostName: 'home-server', identities: [], remotes: [] }
+  it('keeps an identity plugin on All your hosts to hosts with that identity, and a chosen host gets it anyway', () => {
+    const work: PortableTool = { ...linear, identityId: 'work' }
+    expect(keptOn(work, { all: true }, home)).toBe(false)
+    expect(keptOn(work, { all: true }, { ...home, identities: ['work'] })).toBe(true)
+    expect(keptOn(work, { hosts: ['h2'] }, home)).toBe(true)
+    expect(keptOn(linear, { all: true }, home)).toBe(true)
+  })
+  it('sends a project tool only to hosts with a project on its remote', () => {
+    const tool: PortableTool = { ...linear, project: { remote: 'https://github.com/acme/api', name: 'api' } }
+    expect(keptOn(tool, { all: true }, home)).toBe(false)
+    expect(keptOn(tool, { all: true }, { ...home, remotes: ['https://github.com/acme/api'] })).toBe(true)
+  })
+  it('recognises a wiped host by its name and moves the choice to its new id', () => {
+    const chosen = { hosts: ['old', 'h3'], names: { old: 'home-server', h3: 'laptop' } }
+    expect(keptOn(linear, chosen, home)).toBe(true)
+    expect(rehosted(chosen, home)).toEqual({ hosts: ['h2', 'h3'], names: { h3: 'laptop', h2: 'home-server' } })
+    expect(rehosted(chosen, { ...home, hostName: 'other' })).toBeNull()
+    expect(rehosted({ all: true }, home)).toBeNull()
+  })
+  it('compares a project skill with the skill of the same project here', () => {
+    const skill: PortableTool = {
+      kind: 'skill',
+      name: 'deploy',
+      description: '',
+      source: null,
+      content: 'Run make deploy.',
+      project: { remote: 'https://github.com/acme/api', name: 'api' },
+    }
+    const skills = [{ name: 'deploy', source: null, content: 'Run make deploy.', projectId: 'p1' }]
+    expect(toolState(skill, here({ skills, projectFor: () => 'p1' }))).toBe('same')
+    expect(toolState(skill, here({ skills, projectFor: () => 'p2' }))).toBe('new')
   })
 })

@@ -32,6 +32,8 @@ import {
   ruleWritesClaudeFile,
 } from '@ramu/shared/rules'
 import { NativeInstructions } from './NativeInstructions'
+import { RuleOnHosts } from './RuleOnHosts'
+import { useHost } from '../workspace/HostProvider'
 import { activationLabel, claudeCopyNote, duplicateNote, ruleReach, ruleTokens, scopeCostLine } from './rulesView'
 import { SettingsScopeContext, useSettingsEvents, useSettingsInvoke } from './SettingsScope'
 
@@ -79,6 +81,7 @@ function RuleEditor({
   const invoke = useSettingsInvoke()
   const settingsScope = useContext(SettingsScopeContext)
   const hostKey = settingsScope?.primaryId ?? ''
+  const host = useHost()
   const access = useRef(readOnly)
   access.current = readOnly
   const [name, setName] = useState(rule?.name ?? '')
@@ -285,6 +288,7 @@ function RuleEditor({
           </Field>
         </fieldset>
       </form>
+      {rule?.projectId === null && <RuleOnHosts rule={rule} hostId={hostKey || host.id} readOnly={readOnly} />}
       {rule && (history.data?.length ?? 0) > 1 && (
         <details className={CAPTION}>
           <summary className="cursor-pointer select-none">{t('History')}</summary>

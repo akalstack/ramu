@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { RefreshCw, X } from 'lucide-react'
 import {
   availableOn,
+  keptOn,
+  rehosted,
   type PortableTool,
   type ToolAvailability,
   type ToolKind,
@@ -130,6 +132,8 @@ interface OtherHost {
   name: string
   /** The host's own id in tool choices. */
   syncId: string
+  /** The name the host gives itself, kept with a choice to recognise the host again after it is wiped. */
+  hostName: string
   state: ToolState | 'waiting'
 }
 
@@ -145,7 +149,7 @@ async function hostState(id: string, tool: PortableTool, key: string) {
   const state: OtherHost['state'] = status.waiting.some((entry) => entry.key === key)
     ? 'waiting'
     : (compared[0]?.state ?? 'new')
-  return { syncId: status.hostId, state }
+  return { syncId: status.hostId, hostName: status.hostName, state }
 }
 
 const hostStateText = (state: OtherHost['state']) =>
@@ -196,7 +200,7 @@ export function AvailableOn({ toolKey, status }: { toolKey: string; status: Tool
       <p className="m-0 text-caption text-muted-foreground">
         {skipped.reason === 'folder'
           ? t('Stays on this host: it runs from a folder here. Publish it to Git to use it on other hosts.')
-          : t('Stays on this host: it belongs to one project here.')}
+          : t('Stays on this host: its project here has no Git remote, or it is for several projects.')}
       </p>
     ) : null
   }
@@ -233,7 +237,12 @@ export function AvailableOn({ toolKey, status }: { toolKey: string; status: Tool
         ? availability.hosts
         : []
     const next = on ? [...new Set([...current, entry.syncId])] : current.filter((id) => id !== entry.syncId)
-    void save(next.length ? { hosts: next } : null, on ? [entry] : [])
+    const known = {
+      ...(availability && 'hosts' in availability ? availability.names : {}),
+      ...Object.fromEntries((hosts ?? []).map((other) => [other.syncId, other.hostName])),
+    }
+    const names = Object.fromEntries(next.flatMap((id) => (known[id] ? [[id, known[id]] as const] : [])))
+    void save(next.length ? { hosts: next, names } : null, on ? [entry] : [])
   }
   return (
     <section className="flex flex-col gap-1.5 rounded-(--radius-s) bg-fill px-3 py-2" aria-label={t('Available on')}>
@@ -367,10 +376,15 @@ export function ToolSyncDelivery() {
                 () => {},
               )
           }
+          // A chosen host that was wiped answers under a new id: keep its tools chosen for it under that id.
+          for (const [key, availability] of Object.entries(source.status.availability)) {
+            const next = rehosted(availability, target.status)
+            if (next) await invokeOn(source.computer.id, 'toolSync.setAvailability', key, next).catch(() => {})
+          }
           const wanted = Object.entries(source.status.portable)
             .filter(
-              ([key]) =>
-                availableOn(source.status.availability[key], target.status.hostId) &&
+              ([key, tool]) =>
+                keptOn(tool, source.status.availability[key], target.status) &&
                 !target.status.waiting.some((entry) => entry.key === key),
             )
             .map(([, tool]) => tool)

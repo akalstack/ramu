@@ -77,7 +77,9 @@ import { appliedDesignSystem, designTokensOf } from '@ramu/shared/artifacts'
 import { ProductionMigrations } from './workspace/deploy/migrations'
 import { registerPluginCliTools } from './plugins/cli'
 import { draftPluginsFolder, registerPluginTools } from './plugins/tools'
-import { setToolAvailability } from './toolSync'
+import { acceptOffer, setToolAvailability } from './toolSync'
+import { startToolDelivery } from './toolDelivery'
+import { toolOfferSchema } from '@ramu/shared/toolSync'
 import { toolKey } from '@ramu/shared/toolSync'
 import { registerCiTools } from './workspace/ci/tools'
 import { setAcpTerminalService } from './providers/acpTerminals'
@@ -396,7 +398,11 @@ const nativeRequests = new Map<
   string,
   { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }
 >()
+/** Changes that alter which tools travel to the hosts this host added for agents. */
+const TOOL_CHANNELS = new Set(['toolSync:changed', 'plugins:changed', 'mcp:changed', 'memory:changed'])
+const toolDelivery: { changed?: () => void } = {}
 const send = (channel: string, payload: unknown) => {
+  if (TOOL_CHANNELS.has(channel)) toolDelivery.changed?.()
   const message = `data: ${JSON.stringify({ channel, payload })}\n\n`
   for (const client of clients) {
     if (client.writableLength > 8 * 1024 * 1024) {
@@ -1321,6 +1327,9 @@ agents.setupOmissions = (session, settings) => {
 // Agent-started threads go through the same methods a person's client calls, with the host's own authority. The
 // dispatcher is read only when a thread starts, after it exists.
 const agentHosts = new AgentHostService(workspace)
+toolDelivery.changed = startToolDelivery({ workspace, plugins, getSharedMcp, learning, identities }, agentHosts, () =>
+  send('toolSync:changed', null),
+).changed
 const agentThreads = new AgentThreadService(
   db,
   workspace,
@@ -1552,8 +1561,8 @@ async function performInvoke(
   if (remote && !deviceMayInvoke(device, method))
     throw new InvokeRefused(
       device?.kind === 'host'
-        ? 'A paired host may only start, check and message the threads it starts here.'
-        : method.startsWith('hostThreads.')
+        ? 'A paired host may only start, check and message the threads it starts here, and offer its tools.'
+        : method.startsWith('hostThreads.') || method.startsWith('hostTools.')
           ? 'Only a paired host can make this call.'
           : 'This device is a viewer. This action requires full access.',
     )
@@ -1651,6 +1660,14 @@ async function performInvoke(
       const [taskId, text] = z.tuple([z.string().min(1).max(100), z.string().min(1).max(20_000)]).parse(args)
       value = await agentThreads.messageForTerminal(taskId, text)
     } else throw new Error(`Unknown method ${method}`)
+  } else if (method === 'hostTools.offer') {
+    // Another host's tools only wait here for a review by the person on this host; nothing installs or is removed.
+    if (!remote || device?.kind !== 'host') throw new InvokeRefused('Only a paired host can make this call.')
+    const parsed = toolOfferSchema.safeParse(args?.[0])
+    if (!parsed.success) throw new Error(describeValidationError(parsed.error))
+    const accepted = acceptOffer({ workspace, plugins, getSharedMcp, learning, identities }, parsed.data)
+    if (accepted.received) send('toolSync:changed', null)
+    value = accepted
   } else if (method.startsWith('hostThreads.')) {
     // A paired host's calls reach the thread service directly, with that host's own identity and limits; they never
     // run with this host's local authority.

@@ -54,6 +54,8 @@ vi.mock('@tanstack/react-query', () => ({
 vi.mock('../src/i18n', () => ({ t: (text: string) => text, useLanguage() {} }))
 vi.mock('../src/Menu', () => ({ Dialog: 'Dialog', Dropdown: 'Dropdown', timeAgo: () => '' }))
 vi.mock('../src/settings/NativeInstructions', () => ({ NativeInstructions: () => null }))
+vi.mock('../src/settings/RuleOnHosts', () => ({ RuleOnHosts: () => null }))
+vi.mock('../src/workspace/HostProvider', () => ({ useHost: () => ({ id: 'local' }) }))
 vi.mock('@/components/settings-row', () => ({ SettingsGroupTitle: 'h4' }))
 vi.mock('@/components/desktop-button', () => ({ Button: 'Button' }))
 vi.mock('@/components/desktop-input', () => ({ Input: 'Input' }))

@@ -5,6 +5,8 @@ import type { PluginService } from '../../plugins/service'
 import type { RegisterHandlers } from '../types'
 
 const id = z.uuid()
+/** A full or short Git commit. */
+const commit = z.string().regex(/^[0-9a-f]{7,64}$/)
 const slotId = z.string().regex(/^[a-z][a-z0-9_-]{0,39}$/)
 const source = z
   .string()
@@ -44,9 +46,11 @@ export const registerPluginHandlers: RegisterHandlers = (ctx) => {
           ref: z.string().max(200).optional(),
           path: z.string().max(300).optional(),
           index: z.string().max(1000).optional(),
+          commit: commit.optional(),
         }),
       ]),
-      run: (input: { source: string; ref?: string; path?: string; index?: string }) => admin().stage(input),
+      run: (input: { source: string; ref?: string; path?: string; index?: string; commit?: string }) =>
+        admin().stage(input),
     },
     'plugins.cancel': { args: z.tuple([id]), run: (stageId: string) => service().cancel(stageId) },
     'plugins.confirm': {
@@ -57,7 +61,10 @@ export const registerPluginHandlers: RegisterHandlers = (ctx) => {
         return installed
       },
     },
-    'plugins.updateReview': { args: z.tuple([id]), run: (pluginId: string) => admin().updateReview(pluginId) },
+    'plugins.updateReview': {
+      args: z.tuple([id, commit.optional()]),
+      run: (pluginId: string, pinned?: string) => admin().updateReview(pluginId, pinned),
+    },
     'plugins.checkUpdates': {
       args: z.tuple([]),
       run: async () => {

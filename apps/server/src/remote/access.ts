@@ -7,20 +7,23 @@ import { PAIR_REQUEST_PATH, PAIR_REVEAL_PATH, PAIR_WAIT_PATH } from '@ramu/share
 import { PairingError, type PairingRequests } from './pairingRequests'
 
 /**
- * Everything a paired host may call here: start, check and message the threads it started, and list projects to name
- * them by name. Nothing that reads files, paths, Git, terminals, settings or other threads.
+ * Everything a paired host may call here: start, check and message the threads it started, list projects to name
+ * them by name, and offer its tools for a review here. Nothing that reads files, paths, Git, terminals, settings or
+ * other threads, and nothing that installs.
  */
 export const HOST_METHODS: ReadonlySet<string> = new Set([
   'hostThreads.start',
   'hostThreads.status',
   'hostThreads.message',
   'hostThreads.projects',
+  'hostTools.offer',
 ])
 
 export const deviceMayInvoke = (device: DeviceInfo | undefined, method: string): boolean =>
   device?.kind === 'host'
     ? HOST_METHODS.has(method)
     : !method.startsWith('hostThreads.') &&
+      !method.startsWith('hostTools.') &&
       !method.startsWith('terminalThreads.') &&
       (device?.role !== 'viewer' || viewerMayInvoke(method))
 /** What this device is told about its own access so clients can hide actions the server would refuse. Advisory only. */

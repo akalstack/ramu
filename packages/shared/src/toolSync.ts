@@ -13,6 +13,14 @@ const toolChoice = z.enum(['ask', 'allow', 'off'])
 /** Tool choices by tool name: what the source host turned on, and whether each asks before it runs. */
 const toolChoices = z.record(z.string().max(200), toolChoice).refine((value) => Object.keys(value).length <= 500)
 const providers = z.array(z.enum(AGENT_PROVIDERS)).max(AGENT_PROVIDERS.length)
+/**
+ * The project a tool belongs to, by its repository's remote: it goes only to hosts with a project on the same remote,
+ * and installs there for that project. Absent for a tool every project has.
+ */
+const project = z
+  .object({ remote: z.string().min(1).max(500), name: z.string().max(200) })
+  .nullable()
+  .optional()
 
 const portablePlugin = z.object({
   kind: z.literal('plugin'),
@@ -30,6 +38,7 @@ const portablePlugin = z.object({
   identityId: z.string().max(100).nullable(),
   /** Tool choices for each of its MCP servers, by the server's name in the plugin. */
   servers: z.record(z.string().max(200), toolChoices).refine((value) => Object.keys(value).length <= 20),
+  project,
 })
 
 const portableSkill = z.object({
@@ -40,6 +49,7 @@ const portableSkill = z.object({
   source: z.string().max(2000).nullable(),
   /** A written skill's instructions; an installed one is fetched from its source again. */
   content: z.string().max(24_000).nullable(),
+  project,
 })
 
 const portableMcp = z.object({
@@ -72,6 +82,8 @@ const portableMcp = z.object({
   ]),
   providers,
   tools: toolChoices,
+  /** A project's `stdio` server runs in that project's folder on the receiving host. */
+  project,
 })
 
 export const portableToolSchema = z.discriminatedUnion('kind', [portablePlugin, portableSkill, portableMcp])
@@ -90,10 +102,19 @@ export type SkippedTool = z.infer<typeof skippedToolSchema>
 
 export const toolKey = (tool: Pick<PortableTool, 'kind' | 'name'>) => `${tool.kind}:${tool.name}`
 
-/** Which hosts a tool is kept on, by the host it was installed on: this host only, chosen hosts, or every host. */
+/**
+ * Which hosts a tool is kept on, by the host it was installed on: this host only, chosen hosts, or every host. A chosen
+ * host's name is kept with its id, so a host that was wiped and got a new id is recognised again by its name.
+ */
 export const toolAvailabilitySchema = z.union([
   z.object({ all: z.literal(true) }),
-  z.object({ hosts: z.array(z.string().min(1).max(200)).max(50) }),
+  z.object({
+    hosts: z.array(z.string().min(1).max(200)).max(50),
+    names: z
+      .record(z.string().max(200), z.string().max(200))
+      .refine((value) => Object.keys(value).length <= 50)
+      .optional(),
+  }),
 ])
 export type ToolAvailability = z.infer<typeof toolAvailabilitySchema>
 
@@ -106,7 +127,10 @@ export type ToolState = 'new' | 'update' | 'same' | 'connect-here'
 /** What a host has, by what it means on any host, to compare a tool from another host with. */
 export interface ToolsHere {
   plugins: { name: string; commit: string | null }[]
-  skills: { name: string; source: string | null; content: string }[]
+  /** Skills for every project (`projectId` null) and each project's own. */
+  skills: { name: string; source: string | null; content: string; projectId: string | null }[]
+  /** This host's project on a remote, by `remoteKey`, or null when it has none. */
+  projectFor: (remote: string) => string | null
   mcp: { name: string; address: string }[]
   /** Whether a server's command can run here: on the PATH, or an existing absolute path. */
   hasCommand: (command: string) => boolean
@@ -119,7 +143,8 @@ export function toolState(tool: PortableTool, here: ToolsHere): ToolState {
     return tool.commit && installed.commit !== tool.commit ? 'update' : 'same'
   }
   if (tool.kind === 'skill') {
-    const installed = here.skills.find((skill) => skill.name === tool.name)
+    const projectId = tool.project ? here.projectFor(tool.project.remote) : null
+    const installed = here.skills.find((skill) => skill.name === tool.name && skill.projectId === projectId)
     if (!installed) return 'new'
     if (tool.source !== null) return installed.source === tool.source ? 'same' : 'update'
     return installed.content.trim() === (tool.content ?? '').trim() ? 'same' : 'update'
@@ -148,6 +173,8 @@ export interface WaitingTool {
   /** `remove`: its other host removed it and asks this one to remove it too. */
   state: Exclude<ToolState, 'same'> | 'remove'
   remove?: boolean
+  /** The project here a project's tool installs for: the one on the same remote. */
+  projectId?: string
 }
 
 export const waitingToolsSchema = z
@@ -181,11 +208,69 @@ export interface ToolSyncStatus {
   asThere: Record<string, Record<string, 'ask' | 'allow' | 'off'>>
   /** This host's tools that stay here, with why. */
   skipped: SkippedTool[]
+  /** The identities this host has, by id, for tools meant only for one identity's hosts. */
+  identities: string[]
+  /** The remotes of this host's projects, by `remoteKey`, for tools that follow a project. */
+  remotes: string[]
 }
 
 /** Whether a tool kept on these hosts should be on `hostId`. */
 export const availableOn = (availability: ToolAvailability | undefined, hostId: string) =>
   !!availability && ('all' in availability || availability.hosts.includes(hostId))
+
+/** A host as tool delivery sees it: its own id, its name, and the identities it has. */
+export interface ToolHost {
+  hostId: string
+  hostName: string
+  identities: string[]
+  /** The remotes of this host's projects, by `remoteKey`, for tools that follow a project. */
+  remotes: string[]
+}
+
+type NamedHost = Pick<ToolHost, 'hostId' | 'hostName'>
+
+/** The id a chosen host had before it was wiped: a chosen host's recorded name is this host's, under another id. */
+export function formerHostId(availability: ToolAvailability | undefined, host: NamedHost) {
+  if (!availability || 'all' in availability || availability.hosts.includes(host.hostId)) return null
+  const names = availability.names ?? {}
+  return availability.hosts.find((id) => names[id] === host.hostName) ?? null
+}
+
+/** The same choice with a wiped host's old id replaced by its new one, or null when nothing changes. */
+export function rehosted(availability: ToolAvailability | undefined, host: NamedHost): ToolAvailability | null {
+  const old = formerHostId(availability, host)
+  if (!old || !availability || 'all' in availability) return null
+  const { [old]: _old, ...names } = availability.names ?? {}
+  return {
+    hosts: availability.hosts.map((id) => (id === old ? host.hostId : id)),
+    names: { ...names, [host.hostId]: host.hostName },
+  }
+}
+
+/**
+ * Whether a tool kept on these hosts belongs on `host`. On **All your hosts**, an identity's plugin reaches only hosts
+ * that have that identity; a host chosen by name gets it either way, and a wiped host is still the host it was. A
+ * project's tool reaches only hosts with a project on its remote.
+ */
+export function keptOn(tool: PortableTool, availability: ToolAvailability | undefined, host: ToolHost) {
+  if (!availability) return false
+  // A project's tool is only of use where that project is.
+  if (tool.project && !host.remotes.includes(tool.project.remote)) return false
+  if ('all' in availability)
+    return tool.kind !== 'plugin' || !tool.identityId || host.identities.includes(tool.identityId)
+  return availability.hosts.includes(host.hostId) || formerHostId(availability, host) !== null
+}
+
+/**
+ * What one host offers another without a desktop app in between: the tools it keeps on other hosts, with which ones,
+ * and the ones it removed. The receiving host keeps only what is meant for it, for review there.
+ */
+export const toolOfferSchema = z.object({
+  from: z.string().min(1).max(200),
+  tools: z.array(z.object({ tool: portableToolSchema, availability: toolAvailabilitySchema })).max(300),
+  removed: z.array(portableToolSchema).max(300),
+})
+export type ToolOffer = z.infer<typeof toolOfferSchema>
 
 /** Every signed-in login of each agent a server is offered to: who a server is turned on for in one step. */
 export const mcpLogins = (

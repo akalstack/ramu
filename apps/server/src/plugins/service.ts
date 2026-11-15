@@ -263,13 +263,15 @@ export class PluginService {
     path?: string
     index?: string
     replaces?: string
+    /** An exact commit to install instead of the index's newest; its signature is checked the same way. */
+    commit?: string
   }): Promise<PluginReview> {
     this.sweep()
     if (this.staged.size >= 20) throw new Error('Too many plugin reviews are open. Finish or cancel one first.')
     const listing = input.index ? await this.listing(input.index, input.source) : null
     const location = listing?.url ?? input.source
     const path = listing?.path ?? input.path ?? ''
-    const ref = listing?.sha ?? listing?.ref ?? input.ref
+    const ref = input.commit ?? listing?.sha ?? listing?.ref ?? input.ref
     const folder = !listing && (location.startsWith('/') || location.startsWith('~')) && !location.endsWith('.git')
     let dir: string
     let commit: string | null = null
@@ -1036,7 +1038,7 @@ export class PluginService {
   }
 
   /** A review of the update the daily check found: the same review as an install, naming what changed. */
-  updateReview(id: string) {
+  updateReview(id: string, commit?: string) {
     const plugin = this.record(id)
     if (plugin.source.kind !== 'git') throw new Error('Only plugins installed from Git update.')
     return this.stage({
@@ -1045,6 +1047,7 @@ export class PluginService {
       ref: plugin.update?.commit ?? plugin.ref ?? undefined,
       path: plugin.source.path,
       replaces: plugin.id,
+      ...(commit ? { commit } : {}),
     })
   }
 

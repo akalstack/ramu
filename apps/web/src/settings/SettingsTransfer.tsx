@@ -49,6 +49,15 @@ export function SettingsTransfer() {
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
   const file = useRef<HTMLInputElement>(null)
+  /** A file someone imports with Import settings: tools in it wait in Customize for a review, as from a host. */
+  const download = async (groups: TransferGroup[], kind: 'settings' | 'tools') => {
+    const exported = await host.invoke('settingsTransfer.export', groups)
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' }))
+    link.download = `ramu-${kind}-${exported.host}.json`
+    link.click()
+    URL.revokeObjectURL(link.href)
+  }
   const act = async (run: () => Promise<void>) => {
     setBusy(true)
     setError(null)
@@ -108,23 +117,26 @@ export function SettingsTransfer() {
           variant="secondary"
           disabled={busy}
           onClick={() =>
-            void act(async () => {
-              const exported = await host.invoke(
-                'settingsTransfer.export',
+            void act(() =>
+              download(
                 TRANSFER_GROUPS.map((group) => group.id).filter((group) => group !== 'memories'),
-              )
-              const link = document.createElement('a')
-              link.href = URL.createObjectURL(
-                new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' }),
-              )
-              link.download = `ramu-settings-${exported.host}.json`
-              link.click()
-              URL.revokeObjectURL(link.href)
-            })
+                'settings',
+              ),
+            )
           }
         >
           <Download size={13} />
           {t('Export settings')}
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={busy}
+          title={t('Only plugins, skills and MCP servers, to share with a teammate. Keys and paths stay here.')}
+          onClick={() => void act(() => download([...TOOL_GROUPS], 'tools'))}
+        >
+          <Download size={13} />
+          {t('Export tools')}
         </Button>
         <Button size="sm" variant="secondary" disabled={viewOnly || busy} onClick={() => file.current?.click()}>
           <Upload size={13} />

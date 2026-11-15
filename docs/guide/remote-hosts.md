@@ -43,6 +43,7 @@ ramu pair
 | `ramu hosts add <address> <code>` | Let this host's agents start threads on another host |
 | `ramu thread start\|status\|message\|list` | Start and follow threads from a terminal |
 | `ramu tools [install\|remove\|dismiss <name>]` | Review plugins, skills and MCP servers your other hosts sent here ([On your other hosts](plugins.md#on-your-other-hosts)) |
+| `ramu tools sign-in <server>` | Sign this host in to an MCP server that uses OAuth, with the sign-in page opened on any device, such as your phone |
 | `ramu browser status\|setup\|stop` | Manage the host's browser |
 
 A bare port (`--listen 7788`) listens on this computer only. Any other address needs HTTPS (`--tls-cert`, `--tls-key`) or `--private-network` for a VPN or LAN you trust. By default the server shares its data folder with the desktop app, so both see the same threads.
