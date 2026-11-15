@@ -61,7 +61,6 @@ const render = ({ ended = false, working = true, needsInput = false, isLast = tr
     needsInput,
     busyAgent: working || needsInput,
     statusGroup: tools,
-    activityLabel: null,
     stopped: false,
     elapsed: 1000,
     latestAssistant: answer,

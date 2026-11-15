@@ -46,9 +46,8 @@ export interface TranscriptContext {
   needsInput: boolean
   /** Working, or waiting on your input. */
   busyAgent: boolean
-  /** The tools row that carries the live activity label while the agent works. */
+  /** The latest tools row of a running turn; its headline follows the newest call. */
   statusGroup: Block | undefined
-  activityLabel: string | null | undefined
   /** Whether the last turn was stopped by you or reported as interrupted. */
   stopped: boolean
   /** Time since the last message, while the agent works. */

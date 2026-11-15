@@ -744,7 +744,6 @@ export const AgentView = memo(function AgentView({
     needsInput: session?.state === 'needs-input',
     busyAgent,
     statusGroup,
-    activityLabel,
     stopped,
     elapsed,
     latestAssistant,

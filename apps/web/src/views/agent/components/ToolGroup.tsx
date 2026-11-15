@@ -45,14 +45,17 @@ const TOOL_VERB: Record<string, string> = {
   WebSearch: 'Searched',
 }
 
-/** A run of consecutive tool calls as one collapsible row; open it for each call and its output. */
+/**
+ * A run of consecutive tool calls as one collapsible row; open it for each call and its output. While it is the live
+ * group of a running turn its headline names the newest call, so what the agent is doing now reads in place.
+ */
 export function ToolGroup({
   tools,
   entries = tools,
   results,
   cwd,
   active,
-  activity,
+  live = false,
   onBackground,
   taskId,
 }: {
@@ -61,7 +64,7 @@ export function ToolGroup({
   results: Map<string, ToolResult>
   cwd: string
   active: boolean
-  activity?: string
+  live?: boolean
   taskId?: string
   onBackground?: (toolUseId: string) => void
 }) {
@@ -77,10 +80,13 @@ export function ToolGroup({
         : 'done'
   })
   const running = status.running > 0
-  const primaryTool = status.current ?? tools[0]!
-  const headline = running
-    ? primaryTool.title?.trim() || toolFallbackTitle(primaryTool, true) || describeTools([primaryTool], results, active)
-    : describeTools(tools, results, active)
+  const primaryTool = status.current ?? (live ? tools.at(-1)! : tools[0]!)
+  const headline =
+    running || live
+      ? primaryTool.title?.trim() ||
+        toolFallbackTitle(primaryTool, running) ||
+        describeTools([primaryTool], results, active)
+      : describeTools(tools, results, active)
   return (
     <>
       <Collapsible
@@ -102,8 +108,8 @@ export function ToolGroup({
               content={results.get(primaryTool.toolUseId)?.content}
               className={TOOL_ICON_CLASS}
             />
-            <ActivityText active={running} className="tool-group-label truncate text-left">
-              {activity && !running ? activity : headline}
+            <ActivityText active={running || live} className="tool-group-label truncate text-left">
+              {headline}
             </ActivityText>
             {status.failed > 0 && (
               <span className="text-bad text-caption flex-none">

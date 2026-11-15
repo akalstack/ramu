@@ -726,14 +726,10 @@ export default function ChatScreen() {
         chat={chat!}
         date={itemMeta.get(item.id)?.date}
         footer={itemMeta.get(item.id)?.footer}
-        // The newest reasoning or reply of a running turn is live: reasoning streams (also as the last step of a tool
-        // group), and a reply fades in block by block.
+        // The newest row of a running turn is live: reasoning streams, a tool group's headline follows its latest
+        // call, and a reply fades in block by block.
         streaming={
-          (item.kind === 'thinking' ||
-            item.kind === 'text' ||
-            (item.kind === 'tools' && item.entries.at(-1)?.kind === 'thinking')) &&
-          running &&
-          item === rows.at(-1)
+          (item.kind === 'thinking' || item.kind === 'text' || item.kind === 'tools') && running && item === rows.at(-1)
         }
         fresh={fresh && item.kind !== 'user'}
         visible={contentScreenFocused && visibleContentRows.has(item.id)}

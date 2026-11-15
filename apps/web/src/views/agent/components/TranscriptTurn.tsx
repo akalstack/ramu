@@ -15,7 +15,6 @@ import { EventRow } from './EventRow'
 import { ToolGroup } from './ToolGroup'
 import { Marker, MarkerContent } from '@/components/ui/marker'
 import { TurnSummary } from './TurnSummary'
-import { ThinkingRow } from './ThinkingRow'
 import { turnThinking } from '../lib/turnThinking'
 import { groupToolThinking, type ToolEntry } from '../lib/toolThinking'
 import { useLayoutEffect, useRef } from 'react'
@@ -62,11 +61,9 @@ function TranscriptBlock({
             results={ctx.results}
             cwd={ctx.cwd}
             active={ctx.busyAgent && !finished}
-            activity={
+            live={
               b === ctx.statusGroup ||
               (ctx.statusGroup?.kind === 'tools' && ctx.statusGroup.tools.some((tool) => b.tools.includes(tool)))
-                ? translate(ctx.activityLabel ?? 'Working')
-                : undefined
             }
             taskId={ctx.taskId}
             onBackground={ctx.onBackground}
@@ -156,7 +153,7 @@ export function TranscriptTurn({
   const { blocks, working, needsInput } = ctx
   // A turn is done when the agent reported a result, a later message exists, or nothing is running any more.
   const finished = turn.ended || !isLast || (!working && !needsInput)
-  const { folded, kept, answer, thinking } = turnThinking(turn.items, finished, ctx.outcomes, ctx.results)
+  const { folded, kept, answer } = turnThinking(turn.items, finished, ctx.outcomes, ctx.results)
   const renderBlock = (b: Block, latest = false, toolEntries?: ToolEntry[]) => (
     <TranscriptBlock
       key={blockIndex(b, blocks)}
@@ -254,20 +251,6 @@ export function TranscriptTurn({
         <GoalDone key={done.id} goal={done} />
       ))}
       {isLast && !!completedGoals?.length && !ctx.readOnly && <GoalDeploy taskId={ctx.taskId} />}
-      {/* The latest thought closes the turn, beside the composer, so what the agent is doing now is what you see. */}
-      {thinking && (
-        <ThinkingRow
-          preview
-          text={thinking.text}
-          active={
-            !finished &&
-            working &&
-            turn.items.some(
-              (block) => block === turn.items.at(-1) && block.kind === 'event' && block.event === thinking,
-            )
-          }
-        />
-      )}
     </div>
   )
 }

@@ -46,6 +46,5 @@ it('retains reasoning inside tool groups during work and after completion', () =
     expect(groupToolThinking(finished ? turn.folded : turn.kept.filter((block) => block !== message))).toEqual([
       { kind: 'work', block: tools, entries: [first.event, call, next.event] },
     ])
-    expect(turn.thinking?.text).toBe(finished ? undefined : 'Check the diff')
   }
 })

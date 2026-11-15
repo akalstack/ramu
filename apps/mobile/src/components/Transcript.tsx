@@ -3,6 +3,7 @@ import { MessageSelectionMenuContext, TextMarkContext, nativeMarkdown } from './
 import { markSource } from '../runtime/textMark'
 import { ContinuedCard } from './ContinueOnHost'
 import { toolActivity } from '@ramu/shared/chat/toolActivity'
+import { thoughtLine } from '@ramu/shared/chat/thoughtLine'
 import { FileIcon } from './FileIcon'
 import { isModelFile, ModelTile } from './ModelViewer'
 import { translate, type Language } from '@ramu/shared/i18n'
@@ -804,7 +805,7 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
     case 'tool':
       return <ToolRow item={item} />
     case 'tools':
-      return <ToolGroup item={item} thinking={Boolean(meta?.streaming)} />
+      return <ToolGroup item={item} live={Boolean(meta?.streaming)} />
     case 'plan':
       return <PlanCard item={item} />
     case 'agents':
@@ -1317,8 +1318,8 @@ function toolWords(item: ToolItem, language: Language, running: boolean): { verb
   return { verb: item.file ? translate(language, toolVerb(item.verb, running)) : item.verb, subject: item.subject }
 }
 
-/** `thinking`: the group's last step is reasoning still streaming, so the headline says so instead of the last tool. */
-function ToolGroup({ item, thinking }: { item: Extract<TranscriptItem, { kind: 'tools' }>; thinking: boolean }) {
+/** `live`: the newest group of a running turn, so its headline names the latest call, as the desktop's does. */
+function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tools' }>; live: boolean }) {
   const { c } = useTheme()
   const { language } = useStore()
   const say = useSay()
@@ -1332,15 +1333,15 @@ function ToolGroup({ item, thinking }: { item: Extract<TranscriptItem, { kind: '
     const verb = toolWords(tool, language, false).verb || translate(language, 'Commands')
     counts.set(verb, (counts.get(verb) ?? 0) + 1)
   }
-  const words = current ? toolWords(current, language, current.status === 'in_progress') : null
-  const headline = thinking
-    ? say('Thinking')
-    : running || failed
+  const shown = live && !running ? (item.tools.at(-1) ?? current) : current
+  const words = shown ? toolWords(shown, language, shown.status === 'in_progress') : null
+  const headline =
+    live || running || failed
       ? `${words?.verb ?? ''} ${words?.subject ?? ''}`.trim()
       : [...counts].map(([verb, count]) => `${verb}${count > 1 ? ` ×${count}` : ''}`).join(' · ')
   // A group of Ramu's own tools wears its mark, as each of its rows does.
   const ramuGroup = item.tools.every((tool) => tool.ramu)
-  const Icon = thinking ? Brain : current ? toolIcons[current.tool] : Wrench
+  const Icon = shown ? toolIcons[shown.tool] : Wrench
   // While working, only the words shimmer; the icon stays still, as on the desktop.
   const tint = failed ? c.bad : c.muted
   // Tools already here when the group appeared stay still; ones that arrive later fade in.
@@ -1357,15 +1358,11 @@ function ToolGroup({ item, thinking }: { item: Extract<TranscriptItem, { kind: '
         }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
       >
-        {!thinking && (ramuGroup || current?.ramu) ? (
-          <RamuGlyph size={14} color={tint} />
-        ) : (
-          <Icon size={14} color={tint} />
-        )}
+        {ramuGroup || shown?.ramu ? <RamuGlyph size={14} color={tint} /> : <Icon size={14} color={tint} />}
         <View style={{ flex: 1, minWidth: 0 }}>
           {/* The headline follows the current tool; each change fades instead of jumping. */}
           <Arrive animate={false} identity={headline}>
-            <ActivityText active={running > 0 || thinking}>{headline}</ActivityText>
+            <ActivityText active={running > 0 || live}>{headline}</ActivityText>
           </Arrive>
         </View>
         {failed > 0 ? (
@@ -1379,7 +1376,7 @@ function ToolGroup({ item, thinking }: { item: Extract<TranscriptItem, { kind: '
         <View style={{ gap: space.xs }}>
           {item.entries.map((entry, index) =>
             entry.kind === 'thinking' ? (
-              <ThinkingRow key={entry.id} text={entry.text} live={thinking && index === item.entries.length - 1} />
+              <ThinkingRow key={entry.id} text={entry.text} live={live && index === item.entries.length - 1} />
             ) : (
               <Arrive key={entry.id} animate={!initial.has(entry.id)}>
                 <ToolRow item={entry} />
@@ -2462,26 +2459,16 @@ function InteractiveVersionRow({
 }
 
 /**
- * Reasoning the provider shared, as the desktop's ThinkingRow: while it streams its newest lines show under a
- * shimmering "Thinking"; once the agent moves on it folds to "Thought" and opens on a tap.
+ * Reasoning the provider shared, as the desktop's ThinkingRow: closed, "Thinking" (shimmering while it streams) or
+ * "Thought" is followed by the thought on one line ending in an ellipsis, its newest paragraph while it streams; a tap
+ * opens the whole thought.
  */
 function ThinkingRow({ text, live }: { text: string; live: boolean }) {
   const { c } = useTheme()
   const say = useSay()
   const [open, setOpen] = useState(false)
   const toggled = useContext(RowToggle)
-  if (live)
-    return (
-      <View style={{ gap: space.xs }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
-          <Brain size={14} color={c.muted} />
-          <Shimmer size={font.control}>{say('Thinking')}</Shimmer>
-        </View>
-        <T size={font.caption} tone="muted" style={{ lineHeight: 18 }}>
-          {text.length > 600 ? `…${text.slice(-600)}` : text}
-        </T>
-      </View>
-    )
+  const line = useMemo(() => thoughtLine(text, live), [text, live])
   return (
     <View>
       <Pressable
@@ -2496,8 +2483,15 @@ function ThinkingRow({ text, live }: { text: string; live: boolean }) {
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingVertical: 4 }}
       >
         <Brain size={14} color={c.muted} />
-        <T size={font.control} tone="muted" style={{ flex: 1 }}>
-          {say('Thought')}
+        {live ? (
+          <Shimmer size={font.control}>{say('Thinking')}</Shimmer>
+        ) : (
+          <T size={font.control} tone="muted">
+            {say('Thought')}
+          </T>
+        )}
+        <T size={font.control} tone="muted" numberOfLines={1} style={{ flex: 1, minWidth: 0 }}>
+          {open ? '' : line}
         </T>
         <Disclosure open={open} color={c.muted} />
       </Pressable>
