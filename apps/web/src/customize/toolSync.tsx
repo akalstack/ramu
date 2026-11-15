@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RefreshCw, X } from 'lucide-react'
-import type { SharedMcpConnection } from '@ramu/shared/mcp'
-import { providerAccountRows, providerEnabled } from '@ramu/shared/providers/providers'
 import {
   availableOn,
   type PortableTool,
@@ -11,7 +9,7 @@ import {
   type ToolSyncStatus,
   type WaitingTool,
 } from '@ramu/shared/toolSync'
-import type { AppPreferences } from '@ramu/shared/types'
+import { refusedPermission } from '@ramu/shared/devicePermissions'
 import { Button } from '@/components/desktop-button'
 import { Checkbox } from '@/components/desktop-checkbox'
 import { notices } from '../chat/notificationCenter'
@@ -24,13 +22,7 @@ import { onHostEvent, useHostRuntime } from '../workspace/workspace'
 import { openCustomize } from './openCustomize'
 import { ExtensionGrid, ExtensionItem, SectionTitle } from './parts'
 
-/** Every signed-in login of each agent a server is offered to: who a server is turned on for in one step. */
-export const mcpLogins = (preferences: AppPreferences, connection: Pick<SharedMcpConnection, 'providers'>) =>
-  connection.providers
-    .filter((provider) => providerEnabled(preferences.providerBinaries, provider))
-    .flatMap((provider) =>
-      providerAccountRows(preferences.providerBinaries, provider).map((accountId) => ({ provider, accountId })),
-    )
+export { mcpLogins } from '@ramu/shared/toolSync'
 
 /** The tools this host can send, what other hosts sent here, and which hosts each tool is kept on. */
 export function useToolSync() {
@@ -42,13 +34,16 @@ export function useToolSync() {
   }, [invoke])
   useEffect(() => {
     load()
-    const stops = (['toolSync:changed', 'plugins:changed', 'mcp:changed'] as const).map((channel) => on(channel, load))
+    const stops = (['toolSync:changed', 'plugins:changed', 'mcp:changed', 'memory:changed'] as const).map((channel) =>
+      on(channel, load),
+    )
     return () => stops.forEach((stop) => stop())
   }, [load, on])
   return { status, reload: load }
 }
 
 const stateText = (entry: WaitingTool) => {
+  if (entry.state === 'remove') return t('Removed on {0}', { 0: entry.from })
   if (entry.state === 'update') return t('From {0} · another version than here', { 0: entry.from })
   if (entry.state === 'connect-here' && entry.tool.kind === 'mcp' && entry.tool.transport.type === 'stdio')
     return t('From {0} · needs {1} on this host', { 0: entry.from, 1: entry.tool.transport.command })
@@ -57,18 +52,21 @@ const stateText = (entry: WaitingTool) => {
 
 /**
  * Tools another host sent, at the top of their Customize section: each opens the same review an install from here
- * does, and nothing is installed until it is approved.
+ * does, and nothing is installed until it is approved. One the other host removed asks to be removed here too.
  */
 export function WaitingTools({
   kind,
   status,
   busy,
   onReview,
+  onRemove,
 }: {
   kind: ToolKind
   status: ToolSyncStatus | null
   busy: string | null
   onReview: (entry: WaitingTool) => void
+  /** Removes this host's copy of a tool its other host removed. */
+  onRemove: (entry: WaitingTool) => void
 }) {
   useLanguage()
   const { invoke } = useHost()
@@ -87,18 +85,31 @@ export function WaitingTools({
             key={entry.key}
             name={entry.tool.name}
             subtitle={stateText(entry)}
-            onOpen={() => onReview(entry)}
+            onOpen={entry.state === 'remove' ? undefined : () => onReview(entry)}
             action={
               <>
-                <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => onReview(entry)}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={busy !== null}
+                  onClick={() => (entry.state === 'remove' ? onRemove(entry) : onReview(entry))}
+                >
                   {busy === entry.key ? <RefreshCw size={13} className="animate-spin" /> : null}
-                  {entry.state === 'update' ? t('Review update') : t('Review')}
+                  {entry.state === 'remove'
+                    ? t('Remove here')
+                    : entry.state === 'update'
+                      ? t('Review update')
+                      : t('Review')}
                 </Button>
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  aria-label={t('Dismiss {name}', { name: entry.tool.name })}
-                  title={t('Dismiss')}
+                  aria-label={
+                    entry.state === 'remove'
+                      ? t('Keep {name} here', { name: entry.tool.name })
+                      : t('Dismiss {name}', { name: entry.tool.name })
+                  }
+                  title={entry.state === 'remove' ? t('Keep it here') : t('Dismiss')}
                   disabled={busy !== null}
                   onClick={() => void invoke('toolSync.dismiss', entry.key)}
                 >
@@ -263,6 +274,39 @@ export function AvailableOn({ toolKey, status }: { toolKey: string; status: Tool
   )
 }
 
+/**
+ * Removing a tool here, and asking this host's other hosts to remove it too: each of them confirms on its own Customize
+ * page, and a host that connects later is asked then. Checked when the tool is kept on other hosts.
+ */
+export function useRemoveElsewhere(toolKey: string, status: ToolSyncStatus | null) {
+  const host = useHost()
+  const computers = useComputers()
+  const kept = !!status?.availability[toolKey]
+  const offered = !!status?.portable[toolKey] && (kept || other(computers, host.id).length > 0)
+  const [on, setOn] = useState(kept)
+  return {
+    offered,
+    on,
+    setOn,
+    /** Runs before the removal itself, while this host can still describe the tool. */
+    before: async () => {
+      // Asking the other hosts never stands in the way of removing it here.
+      if (offered && on) await host.invoke('toolSync.removeEverywhere', toolKey).catch(() => {})
+    },
+  }
+}
+
+export function RemoveElsewhere({ control }: { control: ReturnType<typeof useRemoveElsewhere> }) {
+  useLanguage()
+  if (!control.offered) return null
+  return (
+    <label className="flex items-center gap-2 text-control">
+      <Checkbox checked={control.on} onCheckedChange={(value) => control.setOn(value === true)} />
+      {t('Also ask your other hosts to remove it')}
+    </label>
+  )
+}
+
 const SECTION: Record<ToolKind, 'plugins' | 'skills' | 'mcp'> = { plugin: 'plugins', skill: 'skills', mcp: 'mcp' }
 
 /**
@@ -274,12 +318,13 @@ export function ToolSyncDelivery() {
   const computers = useComputers()
   const running = useRef(false)
   const again = useRef(false)
+  const warned = useRef(new Set<string>())
   const [tick, setTick] = useState(0)
   const connected = (computers?.computers ?? []).filter((computer) => computer.status === 'connected')
   const connectedKey = connected.map((computer) => computer.id).join(',')
   useEffect(() => {
     const stops = connected.flatMap((computer) =>
-      (['toolSync:changed', 'plugins:changed', 'mcp:changed'] as const).map((channel) =>
+      (['toolSync:changed', 'plugins:changed', 'mcp:changed', 'memory:changed'] as const).map((channel) =>
         onHostEvent(computer.id, channel, () => setTick((value) => value + 1)),
       ),
     )
@@ -308,6 +353,20 @@ export function ToolSyncDelivery() {
       for (const target of statuses)
         for (const source of statuses) {
           if (source === target) continue
+          const removals = Object.entries(source.status.removed)
+            .filter(([key]) => !target.status.waiting.some((entry) => entry.key === key && entry.remove))
+            .map(([, tool]) => tool)
+          if (removals.length) {
+            const states = await invokeOn(target.computer.id, 'toolSync.compare', removals).catch(() => [])
+            const present = removals.filter(
+              (_tool, index) =>
+                states[index] && states[index].state !== 'new' && states[index].state !== 'connect-here',
+            )
+            if (present.length)
+              await invokeOn(target.computer.id, 'toolSync.receive', present, source.status.hostName, true).catch(
+                () => {},
+              )
+          }
           const wanted = Object.entries(source.status.portable)
             .filter(
               ([key]) =>
@@ -324,7 +383,24 @@ export function ToolSyncDelivery() {
             'toolSync.receive',
             missing,
             source.status.hostName,
-          ).catch(() => ({ waiting: 0 }))
+          ).catch((cause: unknown) => {
+            // Background sending has no screen of its own: say once why a host gets nothing, and what to change.
+            if (!warned.current.has(target.computer.id)) {
+              warned.current.add(target.computer.id)
+              notices.add({
+                id: `tool-sync-refused:${target.computer.id}`,
+                type: 'error',
+                title: t('Could not send tools to {0}', { 0: target.computer.name }),
+                description:
+                  refusedPermission(errorText(cause)) === 'settings'
+                    ? t('Allow Change settings for this device on {0}, then it gets them.', {
+                        0: target.computer.name,
+                      })
+                    : errorText(cause),
+              })
+            }
+            return { waiting: 0 }
+          })
           if (waiting && target.computer.id === own) {
             const first = missing[0]!
             notices.add({

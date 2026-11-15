@@ -24,7 +24,7 @@ import { t, useLanguage } from '../i18n'
 import { CustomizeHeader, displayName, ExtensionGrid, ExtensionItem, Quiet, SectionTitle } from './parts'
 import { PluginHeading, PluginParts, PluginSource } from './PluginParts'
 import { openCustomize } from './openCustomize'
-import { AvailableOn, mcpLogins, useToolSync, WaitingTools } from './toolSync'
+import { AvailableOn, mcpLogins, RemoveElsewhere, useRemoveElsewhere, useToolSync, WaitingTools } from './toolSync'
 import { useAppSettings } from '../settings/AppSettings'
 
 const matches = (plugin: InstalledPlugin, query: string) =>
@@ -84,6 +84,8 @@ export function PluginsSection({
   const { preferences } = useAppSettings()
   // A plugin another host sent: once installed here, its servers' tools are turned on as they are there.
   const [fromHost, setFromHost] = useState<PortablePlugin | null>(null)
+  // The identity a received plugin belongs to on its other host, when this host has that identity too.
+  const [identity, setIdentity] = useState<{ id: string; name: string } | null>(null)
   useEffect(() => {
     if (requested) setOpenId(requested.id)
   }, [requested])
@@ -136,7 +138,11 @@ export function PluginsSection({
     const listing = listings?.find((item) => item.name === tool.name && item.index === tool.index)
     setFromHost(tool)
     setReviewing(listing ?? null)
-    void act(entry.key, async () =>
+    void act(entry.key, async () => {
+      const owner = tool.identityId
+        ? (await invoke('identities.get')).settings.identities.find((item) => item.id === tool.identityId)
+        : undefined
+      setIdentity(owner ? { id: owner.id, name: owner.name } : null)
       setReview(
         here
           ? await invoke('plugins.updateReview', here.id)
@@ -150,8 +156,8 @@ export function PluginsSection({
                     ...(tool.path ? { path: tool.path } : {}),
                   },
             ),
-      ),
-    )
+      )
+    })
   }
   /** Turns on a received plugin's servers with the tools its other host has on, the rest off. */
   const turnOnAsThere = async (plugin: InstalledPlugin, tool: PortablePlugin) => {
@@ -295,7 +301,16 @@ export function PluginsSection({
         <Quiet>{t('Loading plugins…')}</Quiet>
       ) : (
         <>
-          <WaitingTools kind="plugin" status={sync} busy={busy} onReview={reviewWaiting} />
+          <WaitingTools
+            kind="plugin"
+            status={sync}
+            busy={busy}
+            onReview={reviewWaiting}
+            onRemove={(entry) => {
+              const here = installed.find((plugin) => plugin.name === entry.tool.name)
+              if (here) void act(entry.key, () => invoke('plugins.remove', here.id).then(load))
+            }}
+          />
           {needsSetup.length > 0 && (
             <>
               <SectionTitle title={t('Needs setup')} help={t('Add the key each one asks for and it is ready.')} />
@@ -377,12 +392,14 @@ export function PluginsSection({
             void stage(`listing:${review.contents.name}`, { source: review.contents.name, index: entry.index })
           }}
           projects={projects}
+          identity={fromHost?.name === review.contents.name ? identity : null}
           busy={busy === 'confirm'}
           companion={companionFor(review)}
           onCancel={() => {
             void invoke('plugins.cancel', review.stageId).catch(() => {})
             setReview(null)
             setFromHost(null)
+            setIdentity(null)
             nextStep(installedPair)
           }}
           onConfirm={(options, withCompanion) =>
@@ -391,6 +408,7 @@ export function PluginsSection({
               setReview(null)
               if (fromHost?.name === plugin.name) await turnOnAsThere(plugin, fromHost)
               setFromHost(null)
+              setIdentity(null)
               load()
               const companion = companionFor(review)
               if (withCompanion && companion) {
@@ -457,6 +475,7 @@ function InstallReview({
   onAlternative,
   companion,
   projects,
+  identity,
   busy,
   onConfirm,
   onCancel,
@@ -468,13 +487,15 @@ function InstallReview({
   /** The plugin this one pairs with, offered for review straight after. */
   companion: { index: string; name: string } | null
   projects: Project[]
+  /** The identity a plugin from another host belongs to there, chosen first when this host has it. */
+  identity?: { id: string; name: string } | null
   busy: boolean
   onConfirm: (options: { scope: PluginScope; includeScripts: boolean }, withCompanion: boolean) => void
   onCancel: () => void
 }) {
   useLanguage()
   const { contents, source } = review
-  const [scope, setScope] = useState('')
+  const [scope, setScope] = useState(identity ? `identity:${identity.id}` : '')
   const [scripts, setScripts] = useState(false)
   const [withCompanion, setWithCompanion] = useState(true)
   const scriptFiles = contents.skills.flatMap((skill) => skill.scripts.map((path) => `${skill.name}/${path}`))
@@ -492,7 +513,14 @@ function InstallReview({
       onCancel={onCancel}
       onConfirm={() =>
         onConfirm(
-          { scope: scope ? { kind: 'project', projectId: scope } : { kind: 'all' }, includeScripts: scripts },
+          {
+            scope: scope.startsWith('identity:')
+              ? { kind: 'identity', identityId: scope.slice(9) }
+              : scope
+                ? { kind: 'project', projectId: scope }
+                : { kind: 'all' },
+            includeScripts: scripts,
+          },
           withCompanion,
         )
       }
@@ -547,12 +575,15 @@ function InstallReview({
             {problem.file}: {problem.message}
           </p>
         ))}
-        {!review.replaces && projects.length > 0 && (
+        {!review.replaces && (projects.length > 0 || identity) && (
           <Dropdown
             label={t('Use in')}
             value={scope}
             options={[
               { value: '', label: t('All projects') },
+              ...(identity
+                ? [{ value: `identity:${identity.id}`, label: t('{0} projects', { 0: identity.name }) }]
+                : []),
               ...projects.map((project) => ({ value: project.id, label: project.name })),
             ]}
             onChange={setScope}
@@ -601,6 +632,7 @@ function PluginDetail({
 }) {
   useLanguage()
   const [confirmRemove, setConfirmRemove] = useState(false)
+  const elsewhere = useRemoveElsewhere(`plugin:${plugin.name}`, sync)
   const scopeName =
     plugin.scope.kind === 'project'
       ? (projects.find((project) => project.id === (plugin.scope as { projectId: string }).projectId)?.name ??
@@ -614,11 +646,12 @@ function PluginDetail({
         danger
         busy={busy === 'remove'}
         onCancel={() => setConfirmRemove(false)}
-        onConfirm={onRemove}
+        onConfirm={() => void elsewhere.before().then(onRemove)}
       >
         <p className="m-0 text-control">
           {t('Its skills, MCP servers, rule and saved key go with it. Threads already running keep what they had.')}
         </p>
+        <RemoveElsewhere control={elsewhere} />
       </Dialog>
     )
   return (

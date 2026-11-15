@@ -9,6 +9,7 @@ import type { SharedMcpManagement, SharedMcpToolChoice } from '@ramu/shared/mcp'
 import type { InstalledPlugin } from '@ramu/shared/plugins'
 import {
   connectionAddress,
+  removedToolsSchema,
   toolKey,
   toolState,
   waitingToolsSchema,
@@ -28,6 +29,8 @@ const WAITING_KEY = 'tool-sync-waiting'
 const AVAILABILITY_KEY = 'tool-sync-availability'
 const HOST_KEY = 'tool-sync-host'
 const DISMISSED_KEY = 'tool-sync-dismissed'
+const CHOICES_KEY = 'tool-sync-choices'
+const REMOVED_KEY = 'tool-sync-removed'
 /** A tool sent here and never reviewed is dropped after this long, so the list stays about what people still want. */
 const WAITING_MS = 30 * 24 * 60 * 60_000
 
@@ -167,6 +170,27 @@ export function toolsHere(sources: ToolSources): ToolsHere {
 
 type Stored = Omit<WaitingTool, 'state'>
 
+/** What a dismissal remembers: this version of the tool, and whether it was an install or a removal. */
+const fingerprint = (tool: PortableTool, remove: boolean) => `${remove ? 'remove:' : ''}${JSON.stringify(tool)}`
+
+const removed = (workspace: Workspace) => {
+  const parsed = removedToolsSchema.safeParse(workspace.getAppState<unknown>(REMOVED_KEY, []))
+  return parsed.success ? parsed.data.filter((entry) => entry.at > Date.now() - WAITING_MS) : []
+}
+
+/**
+ * Remembers a tool about to be removed here so this host's other hosts are asked to remove it too, including ones that
+ * connect later; it no longer travels to them as one to install.
+ */
+export function removeEverywhere(sources: ToolSources, key: string) {
+  const tool = portableTools(sources).tools.find((entry) => toolKey(entry) === key)
+  if (!tool) return false
+  const kept = removed(sources.workspace).filter((entry) => toolKey(entry.tool) !== key)
+  sources.workspace.setAppState(REMOVED_KEY, [{ tool, at: Date.now() }, ...kept].slice(0, 300))
+  setToolAvailability(sources.workspace, key, null)
+  return true
+}
+
 function stored(workspace: Workspace): Stored[] {
   const parsed = waitingToolsSchema.safeParse(workspace.getAppState<unknown>(WAITING_KEY, []))
   return parsed.success ? parsed.data.filter((entry) => entry.receivedAt > Date.now() - WAITING_MS) : []
@@ -176,8 +200,10 @@ function stored(workspace: Workspace): Stored[] {
 export function waitingTools(sources: ToolSources): WaitingTool[] {
   const here = toolsHere(sources)
   const entries = stored(sources.workspace)
-  const waiting = entries.flatMap((entry) => {
+  const waiting = entries.flatMap((entry): WaitingTool[] => {
     const state = toolState(entry.tool, here)
+    // A removal asks only while the tool is here; an install waits only while it is not.
+    if (entry.remove) return state === 'new' || state === 'connect-here' ? [] : [{ ...entry, state: 'remove' }]
     return state === 'same' ? [] : [{ ...entry, state }]
   })
   if (waiting.length !== entries.length)
@@ -192,13 +218,23 @@ export function waitingTools(sources: ToolSources): WaitingTool[] {
  * Keeps tools another host sent for review here. A tool this host already has the same is not kept; one sent again
  * replaces the earlier copy. Returns how many now wait.
  */
-export function receiveTools(sources: ToolSources, tools: PortableTool[], from: string): number {
+export function receiveTools(sources: ToolSources, tools: PortableTool[], from: string, remove = false): number {
   const here = toolsHere(sources)
   const now = Date.now()
   const dismissed = new Set(sources.workspace.getAppState<string[]>(DISMISSED_KEY, []))
+  const wanted = (tool: PortableTool) => {
+    const state = toolState(tool, here)
+    return remove ? state !== 'new' && state !== 'connect-here' : state !== 'same'
+  }
   const incoming = tools
-    .filter((tool) => toolState(tool, here) !== 'same' && !dismissed.has(JSON.stringify(tool)))
-    .map((tool) => ({ key: toolKey(tool), tool, from: from.slice(0, 200), receivedAt: now }))
+    .filter((tool) => wanted(tool) && !dismissed.has(fingerprint(tool, remove)))
+    .map((tool) => ({
+      key: toolKey(tool),
+      tool,
+      from: from.slice(0, 200),
+      receivedAt: now,
+      ...(remove ? { remove: true } : {}),
+    }))
   const kept = stored(sources.workspace).filter((entry) => !incoming.some((next) => next.key === entry.key))
   sources.workspace.setAppState(WAITING_KEY, [...incoming, ...kept].slice(0, 300))
   return incoming.length
@@ -215,9 +251,36 @@ export function dismissTool(workspace: Workspace, key: string) {
   if (dropped)
     workspace.setAppState(
       DISMISSED_KEY,
-      [JSON.stringify(dropped.tool), ...workspace.getAppState<string[]>(DISMISSED_KEY, [])].slice(0, 300),
+      [fingerprint(dropped.tool, !!dropped.remove), ...workspace.getAppState<string[]>(DISMISSED_KEY, [])].slice(
+        0,
+        300,
+      ),
     )
 }
+
+/**
+ * The tools a received server had on at its other host, kept until it is turned on here: one that needs a secret first
+ * is turned on later, from Customize or `ramu tools`, with the same choices.
+ */
+export function rememberChoices(
+  workspace: Workspace,
+  connectionId: string,
+  choices: Record<string, SharedMcpToolChoice>,
+) {
+  const saved = workspace.getAppState<Record<string, Record<string, SharedMcpToolChoice>>>(CHOICES_KEY, {})
+  workspace.setAppState(CHOICES_KEY, { ...saved, [connectionId]: choices })
+}
+
+export function takeChoices(workspace: Workspace, connectionId: string) {
+  const { [connectionId]: choices, ...rest } = workspace.getAppState<
+    Record<string, Record<string, SharedMcpToolChoice>>
+  >(CHOICES_KEY, {})
+  if (choices) workspace.setAppState(CHOICES_KEY, rest)
+  return choices ?? null
+}
+
+export const pendingChoices = (workspace: Workspace, connectionId: string) =>
+  workspace.getAppState<Record<string, Record<string, SharedMcpToolChoice>>>(CHOICES_KEY, {})[connectionId] ?? null
 
 export const toolAvailability = (workspace: Workspace) =>
   workspace.getAppState<Record<string, ToolAvailability>>(AVAILABILITY_KEY, {})
@@ -251,5 +314,11 @@ export function toolSyncStatus(sources: ToolSources): ToolSyncStatus {
     availability,
     portable,
     skipped,
+    removed: Object.fromEntries(
+      removed(sources.workspace)
+        .filter((entry) => !(toolKey(entry.tool) in portable))
+        .map((entry) => [toolKey(entry.tool), entry.tool]),
+    ),
+    asThere: sources.workspace.getAppState<ToolSyncStatus['asThere']>(CHOICES_KEY, {}),
   }
 }

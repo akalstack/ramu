@@ -2,10 +2,15 @@ import { describe, expect, it } from 'vitest'
 import type { SharedMcpManagement } from '@ramu/shared/mcp'
 import type { InstalledPlugin } from '@ramu/shared/plugins'
 import type { ManagedSkill } from '@ramu/shared/types'
+import { registerToolSyncHandlers } from '../src/ipc/handlers/toolSync'
 import {
   dismissTool,
+  pendingChoices,
   portableTools,
   receiveTools,
+  rememberChoices,
+  removeEverywhere,
+  takeChoices,
   toolSyncStatus,
   waitingTools,
   type ToolSources,
@@ -160,5 +165,72 @@ describe('tools across hosts on the server', () => {
     const workspace = appState()
     workspace.setAppState('tool-sync-availability', { 'plugin:linear': { all: true }, 'plugin:gone': { all: true } })
     expect(toolSyncStatus(sources(workspace)).availability).toEqual({ 'plugin:linear': { all: true } })
+  })
+
+  it('asks to remove a tool only while this host has it, and tells hosts that connect later', () => {
+    const laptop = sources()
+    const tools = portableTools(laptop).tools
+    const home = sources()
+    expect(receiveTools(home, tools, 'laptop', true)).toBe(3)
+    expect(waitingTools(home).map((entry) => entry.state)).toEqual(['remove', 'remove', 'remove'])
+    // A host without the tool has nothing to remove.
+    expect(receiveTools({ workspace: appState() }, tools, 'laptop', true)).toBe(0)
+    laptop.workspace.setAppState('tool-sync-availability', { 'plugin:linear': { all: true } })
+    expect(removeEverywhere(laptop, 'plugin:linear')).toBe(true)
+    const status = toolSyncStatus({ ...laptop, plugins: { list: () => [] } })
+    expect(Object.keys(status.removed)).toEqual(['plugin:linear'])
+    expect(status.availability).toEqual({})
+    // Installed here again, it is no longer asked to be removed elsewhere.
+    expect(toolSyncStatus(laptop).removed).toEqual({})
+  })
+
+  it('keeps a copied server’s tool choices until it is turned on', () => {
+    const workspace = appState()
+    rememberChoices(workspace, 'c1', { search: 'allow' })
+    expect(toolSyncStatus({ workspace }).asThere).toEqual({ c1: { search: 'allow' } })
+    expect(pendingChoices(workspace, 'c1')).toEqual({ search: 'allow' })
+    expect(takeChoices(workspace, 'c1')).toEqual({ search: 'allow' })
+    expect(pendingChoices(workspace, 'c1')).toBeNull()
+  })
+
+  it('changes a server of the same name instead of adding a second, keeping the secrets it still needs', () => {
+    const workspace = appState()
+    const existing = connection('docs', {
+      type: 'http',
+      url: 'https://old.example.com/mcp',
+      headerSecretRefs: { Authorization: 'ref-1', Other: 'ref-2' },
+    })
+    const save = (input: unknown, id?: string) => ({ ...(input as object), id: id ?? 'new' })
+    const saves: [unknown, string | undefined][] = []
+    const ctx = {
+      workspace,
+      host: { canAdministerIntegrations: () => true, send() {} },
+      getSharedMcp: () => ({
+        list: () => ({ connections: [existing] }) as unknown as SharedMcpManagement,
+        save: (input: unknown, id?: string) => {
+          saves.push([input, id])
+          return save(input, id)
+        },
+      }),
+    }
+    receiveTools(
+      { workspace },
+      [
+        {
+          kind: 'mcp',
+          name: 'docs',
+          transport: { type: 'http', url: 'https://docs.example.com/mcp', headers: ['Authorization'] },
+          providers: ['claude-code'],
+          tools: { search: 'allow' },
+        },
+      ],
+      'laptop',
+    )
+    const handlers = registerToolSyncHandlers(ctx as never) as Record<string, { run: (...args: unknown[]) => unknown }>
+    const added = handlers['toolSync.addServer']!.run('mcp:docs') as { secrets: string[] }
+    expect(saves[0]![1]).toBe('docs')
+    expect(saves[0]![0]).toMatchObject({ transport: { headerSecretRefs: { Authorization: 'ref-1' } } })
+    expect(added.secrets).toEqual([])
+    expect(pendingChoices(workspace, 'docs')).toEqual({ search: 'allow' })
   })
 })

@@ -7765,4 +7765,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   "{0} from {1} is ready to review": "{0} dari {1} siap ditinjau",
   "{0} is not on this host. It is added turned off; install it, then turn the server on.": "{0} tidak ada di host ini. Server ditambahkan dalam keadaan mati; pasang perintahnya, lalu nyalakan servernya.",
   "{0} tools from {1} are ready to review": "{0} alat dari {1} siap ditinjau",
+  "Allow Change settings for this device on {0}, then it gets them.": "Izinkan Ubah pengaturan untuk perangkat ini di {0}, lalu host itu menerimanya.",
+  "Also ask your other hosts to remove it": "Minta juga host Anda yang lain menghapusnya",
+  "Could not send tools to {0}": "Tidak bisa mengirim alat ke {0}",
+  "Keep it here": "Simpan di sini",
+  "Keep {name} here": "Simpan {name} di sini",
+  "Remove here": "Hapus di sini",
+  "Removed on {0}": "Dihapus di {0}",
+  "{0} projects": "Proyek {0}",
 }

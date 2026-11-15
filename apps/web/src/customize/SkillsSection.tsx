@@ -16,7 +16,7 @@ import { InstalledSkills } from '../settings/InstalledSkills'
 import { SkillFiles } from './SkillFiles'
 import type { WaitingTool } from '@ramu/shared/toolSync'
 import { Advanced, CustomizeHeader, ExtensionGrid, ExtensionItem, Quiet, SectionTitle } from './parts'
-import { AvailableOn, useToolSync, WaitingTools } from './toolSync'
+import { AvailableOn, RemoveElsewhere, useRemoveElsewhere, useToolSync, WaitingTools } from './toolSync'
 
 const fromPlugin = (skill: ManagedSkill) => skill.installation?.source.startsWith('plugin:') === true
 const words = (query: string) => query.toLowerCase().split(/\s+/).filter(Boolean)
@@ -201,7 +201,16 @@ export function SkillsSection({ onOpenPlugins }: { onOpenPlugins: () => void }) 
         <Quiet>{t('Loading skills…')}</Quiet>
       ) : (
         <>
-          <WaitingTools kind="skill" status={sync} busy={busy} onReview={reviewWaiting} />
+          <WaitingTools
+            kind="skill"
+            status={sync}
+            busy={busy}
+            onReview={reviewWaiting}
+            onRemove={(entry) => {
+              const here = all.find((skill) => skill.name === entry.tool.name && !skill.projectId && !fromPlugin(skill))
+              if (here) void act(entry.key, () => invoke('skills.remove', here.id))
+            }}
+          />
           {own.length > 0 && (
             <>
               <SectionTitle title={t('Your skills')} count={own.length} help={t('Learning never changes them.')} />
@@ -342,6 +351,7 @@ function SkillDetail({
   const { invoke } = useHost()
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [showFiles, setShowFiles] = useState(false)
+  const elsewhere = useRemoveElsewhere(`skill:${skill.name}`, sync)
   const read = useCallback((path: string) => invoke('skills.fileText', { skillId: skill.id }, path), [invoke, skill.id])
   const bundle = skill.installation ?? skill.bundle
   const plugin = fromPlugin(skill)
@@ -356,12 +366,14 @@ function SkillDetail({
         onCancel={() => setConfirmRemove(false)}
         onConfirm={() =>
           void act('remove', async () => {
+            await elsewhere.before()
             await invoke('skills.remove', skill.id)
             onClose()
           })
         }
       >
         <p className="m-0 text-control">{t('Agents stop using it in new turns.')}</p>
+        <RemoveElsewhere control={elsewhere} />
       </Dialog>
     )
   return (

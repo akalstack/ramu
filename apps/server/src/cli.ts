@@ -62,6 +62,10 @@ Usage:
   ramu plugin check [folder] [--json]
                                  Validate a plugin: manifest, skills, MCP servers and their tools, ability mappings
   ramu plugin dev [folder]       Install a folder as a Development plugin here; it reloads when its files change
+  ramu tools                     List plugins, skills and MCP servers your other hosts sent here to review
+  ramu tools install <name>      Review one and install it here; keys it needs are typed here and never shown
+  ramu tools remove <name>       Remove one here that its other host removed
+  ramu tools dismiss <name>      Drop one from the list until a newer version is sent
   ramu up [--private-network] [--no-private-network] [--yes]
                                  Set up how other devices reach this host, keep it running as a service, and pair one.
                                  Without a terminal it never asks; pass --private-network (or --yes).
@@ -620,6 +624,26 @@ if (command === 'start') {
       `${plugin.name} is installed here as a Development plugin and reloads when a file changes.${missing.length ? ` Add ${missing.join(', ')} in Customize → Plugins.` : ''}`,
     )
   } else fail('Use ramu plugin new <name>, ramu plugin check [folder] or ramu plugin dev [folder].')
+} else if (command === 'tools') {
+  const { toolsCommand } = await import('./toolsCli')
+  const { createInterface } = await import('node:readline/promises')
+  const ask = async (question: string) => {
+    const prompt = createInterface({ input: process.stdin, output: process.stdout })
+    try {
+      return await prompt.question(question)
+    } finally {
+      prompt.close()
+    }
+  }
+  try {
+    await toolsCommand(positional[1] ?? 'list', positional[2], call, {
+      print: (line) => console.log(line),
+      confirm: async (question) => /^y(es)?$/i.test((await ask(`${question} [y/N] `)).trim()),
+      secret: (question) => (process.stdin.isTTY ? readHidden(question) : ask(question).then((value) => value.trim())),
+    })
+  } catch (error) {
+    fail((error as Error).message)
+  }
 } else if (command === 'up') {
   await up()
 } else fail(`unknown command "${command}". Run ramu --help.`)
@@ -632,6 +656,40 @@ function reachLines(network: NetworkStatus): string[] {
 }
 
 // Function declarations, so the command branches above can use them before this point is reached.
+/** Reads one line from the terminal without echoing it, for a key typed on the host. Ctrl-C stops the command. */
+function readHidden(question: string): Promise<string> {
+  process.stdout.write(question)
+  const stdin = process.stdin
+  stdin.setRawMode(true)
+  stdin.resume()
+  stdin.setEncoding('utf8')
+  let value = ''
+  return new Promise((resolve) => {
+    const done = () => {
+      stdin.off('data', read)
+      stdin.setRawMode(false)
+      stdin.pause()
+      process.stdout.write('\n')
+    }
+    const read = (chunk: string) => {
+      for (const char of chunk) {
+        if (char === '\u0003') {
+          done()
+          process.exit(130)
+        }
+        if (char === '\r' || char === '\n') {
+          done()
+          resolve(value.trim())
+          return
+        }
+        if (char === '\u007f' || char === '\b') value = value.slice(0, -1)
+        else value += char
+      }
+    }
+    stdin.on('data', read)
+  })
+}
+
 function call<T>(method: string, args: unknown[] = []): Promise<T> {
   return runtimeInvoke(config.socketPath, method, args).catch((error: Error) =>
     fail(

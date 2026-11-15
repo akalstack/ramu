@@ -16,6 +16,7 @@ import {
   type McpImports,
   type ProviderManaged,
 } from '../../agent/projectSetup'
+import { pendingChoices, takeChoices } from '../../toolSync'
 import type { RegisterHandlers } from '../types'
 
 const id = z.string().min(1).max(200)
@@ -129,6 +130,12 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
         const manager = admin()
         const connection = manager.policy.snapshot().connections.find((entry) => entry.id === connectionId)
         if (!connection) throw new Error('That MCP server is no longer here.')
+        // A server copied from another host is turned on with the tools that host has on, the rest off.
+        const asThere = Object.keys(choices).length ? null : pendingChoices(ctx.workspace, connectionId)
+        if (asThere) {
+          choices = asThere
+          others = 'off'
+        }
         // Each login is known to Shared MCP before it is given access, as one added by hand would be.
         const known = manager.policy.snapshot().accounts
         for (const login of logins)
@@ -173,6 +180,7 @@ export const registerSharedMcpHandlers: RegisterHandlers = (ctx) => {
           })
         }
         importApplied(connectionId)
+        takeChoices(ctx.workspace, connectionId)
         return inspection
       },
     },

@@ -2,7 +2,8 @@
 // which tools are on and which ask) and each host installs it from there after its own review. Keys, sign-ins, OAuth
 // clients, local paths and workspace state never travel.
 import { z } from 'zod'
-import { AGENT_PROVIDERS } from './providers/providers'
+import { AGENT_PROVIDERS, providerAccountRows, providerEnabled } from './providers/providers'
+import type { AgentProvider, AppPreferences } from './types'
 
 export const TOOL_KINDS = ['plugin', 'skill', 'mcp'] as const
 export type ToolKind = (typeof TOOL_KINDS)[number]
@@ -144,7 +145,9 @@ export interface WaitingTool {
   /** The host it came from, by name. */
   from: string
   receivedAt: number
-  state: Exclude<ToolState, 'same'>
+  /** `remove`: its other host removed it and asks this one to remove it too. */
+  state: Exclude<ToolState, 'same'> | 'remove'
+  remove?: boolean
 }
 
 export const waitingToolsSchema = z
@@ -154,9 +157,13 @@ export const waitingToolsSchema = z
       tool: portableToolSchema,
       from: z.string().max(200),
       receivedAt: z.number().int(),
+      remove: z.boolean().optional(),
     }),
   )
   .max(300)
+
+/** Tools this host removed and asked its other hosts to remove too, kept while those hosts catch up. */
+export const removedToolsSchema = z.array(z.object({ tool: portableToolSchema, at: z.number().int() })).max(300)
 
 export interface ToolSyncStatus {
   /** This host's id in tool choices, the same whichever device asks. */
@@ -168,6 +175,10 @@ export interface ToolSyncStatus {
   availability: Record<string, ToolAvailability>
   /** Every tool on this host that can travel, by `toolKey`, for sending to another host. */
   portable: Record<string, PortableTool>
+  /** Tools removed here that other hosts are asked to remove too, by `toolKey`. */
+  removed: Record<string, PortableTool>
+  /** Tool choices of servers copied from another host and not turned on here yet, by connection id. */
+  asThere: Record<string, Record<string, 'ask' | 'allow' | 'off'>>
   /** This host's tools that stay here, with why. */
   skipped: SkippedTool[]
 }
@@ -175,3 +186,14 @@ export interface ToolSyncStatus {
 /** Whether a tool kept on these hosts should be on `hostId`. */
 export const availableOn = (availability: ToolAvailability | undefined, hostId: string) =>
   !!availability && ('all' in availability || availability.hosts.includes(hostId))
+
+/** Every signed-in login of each agent a server is offered to: who a server is turned on for in one step. */
+export const mcpLogins = (
+  preferences: Pick<AppPreferences, 'providerBinaries'>,
+  connection: { providers: AgentProvider[] },
+) =>
+  connection.providers
+    .filter((provider) => providerEnabled(preferences.providerBinaries, provider))
+    .flatMap((provider) =>
+      providerAccountRows(preferences.providerBinaries, provider).map((accountId) => ({ provider, accountId })),
+    )

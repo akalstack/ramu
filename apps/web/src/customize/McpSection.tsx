@@ -24,7 +24,7 @@ import { useAppSettings } from '../settings/AppSettings'
 import { ConnectionEditor, McpSettings, type Definition } from '../settings/McpSettings'
 import { errorText } from '../lib/errors'
 import { openCustomize, reviewPluginInstall } from './openCustomize'
-import { AvailableOn, mcpLogins, useToolSync, WaitingTools } from './toolSync'
+import { AvailableOn, mcpLogins, RemoveElsewhere, useRemoveElsewhere, useToolSync, WaitingTools } from './toolSync'
 import { t, useLanguage } from '../i18n'
 import {
   Advanced,
@@ -62,8 +62,6 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
   const [signingIn, setSigningIn] = useState<string | null>(null)
   const { status: sync } = useToolSync()
   const [received, setReceived] = useState<WaitingTool | null>(null)
-  // A received server that needed a secret first is turned on later with the tools its other host has on.
-  const [asThere, setAsThere] = useState<Record<string, Record<string, SharedMcpToolChoice>>>({})
   useEffect(() => {
     if (requested) setOpenId(requested.id)
   }, [requested])
@@ -92,12 +90,9 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
       load()
     }
   }
+  // A server copied from another host turns on with that host's tools on: the host kept its choices.
   const turnOn = (connection: SharedMcpConnection, choices?: Record<string, SharedMcpToolChoice>) =>
-    act(connection.id, () =>
-      choices || !asThere[connection.id]
-        ? invoke('mcp.turnOn', connection.id, loginsFor(connection), choices)
-        : invoke('mcp.turnOn', connection.id, loginsFor(connection), asThere[connection.id], 'off'),
-    )
+    act(connection.id, () => invoke('mcp.turnOn', connection.id, loginsFor(connection), choices))
   const signIn = (connection: SharedMcpConnection) =>
     act(connection.id, async () => {
       const started = await invoke('mcp.signIn', connection.id)
@@ -123,12 +118,11 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
       const added = await invoke('toolSync.addServer', entry.key)
       setReceived(null)
       if (added.connectHere || added.secrets.length) {
-        setAsThere((current) => ({ ...current, [added.connection.id]: added.choices }))
         setEditing(added.connection)
         return
       }
       const logins = loginsFor(added.connection)
-      if (logins.length) await invoke('mcp.turnOn', added.connection.id, logins, added.choices, 'off').catch(() => {})
+      if (logins.length) await invoke('mcp.turnOn', added.connection.id, logins).catch(() => {})
       setOpenId(added.connection.id)
     })
   const addRecommended = (server: RecommendedMcpServer) =>
@@ -219,7 +213,18 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
         <Quiet>{t('Loading MCP servers…')}</Quiet>
       ) : (
         <>
-          <WaitingTools kind="mcp" status={sync} busy={busy} onReview={setReceived} />
+          <WaitingTools
+            kind="mcp"
+            status={sync}
+            busy={busy}
+            onReview={setReceived}
+            onRemove={(entry) => {
+              const here = (status?.connections ?? []).find(
+                (item) => item.connection.name === entry.tool.name && !item.connection.split && !item.plugin,
+              )
+              if (here) void act(entry.key, () => invoke('mcp.remove', here.connection.id))
+            }}
+          />
           <SectionTitle title={t('Your servers')} count={connections.length} />
           {connections.length ? (
             <ExtensionGrid label={t('Your servers')}>
@@ -477,6 +482,7 @@ function ServerDetail({
   useLanguage()
   const { invoke } = useHost()
   const { connection } = entry
+  const elsewhere = useRemoveElsewhere(`mcp:${connection.name}`, sync)
   const [tools, setTools] = useState<SharedMcpInspection['tools'] | null>(null)
   const [checking, setChecking] = useState(false)
   const [checkError, setCheckError] = useState<string | null>(null)
@@ -507,6 +513,8 @@ function ServerDetail({
     if (connection.enabled && entry.status !== 'sign-in-required') void check()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- checks once when the server's details open
   }, [connection.id])
+  // A server copied from another host starts on that host's choices, the rest off.
+  const asThere = sync?.asThere[connection.id]
   const current = (name: string, tool: SharedMcpInspection['tools'][number]): SharedMcpToolChoice =>
     choices[name] ??
     (granted
@@ -514,7 +522,9 @@ function ServerDetail({
           const kept = granted.tools.find((entry) => entry.name === name)
           return kept ? (kept.approval === 'connection' ? 'allow' : 'ask') : 'off'
         })()
-      : defaultToolChoice(tool))
+      : asThere
+        ? (asThere[name] ?? 'off')
+        : defaultToolChoice(tool))
   const agents = [...new Set((entry.granted ?? []).map((login) => login.provider))]
   if (confirmRemove)
     return (
@@ -524,11 +534,12 @@ function ServerDetail({
         danger
         busy={busy === connection.id}
         onCancel={() => setConfirmRemove(false)}
-        onConfirm={onRemove}
+        onConfirm={() => void elsewhere.before().then(onRemove)}
       >
         <p className="m-0 text-control">
           {t('Agents lose its tools, and its saved sign-in is deleted from this host.')}
         </p>
+        <RemoveElsewhere control={elsewhere} />
       </Dialog>
     )
   return (

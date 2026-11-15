@@ -16,6 +16,8 @@ import {
   setToolAvailability,
   toolSyncStatus,
   toolsHere,
+  rememberChoices,
+  removeEverywhere,
   waitingTools,
 } from '../../toolSync'
 import type { RegisterHandlers } from '../types'
@@ -32,9 +34,9 @@ export const registerToolSyncHandlers: RegisterHandlers = (ctx) => {
   return {
     'toolSync.status': { args: z.tuple([]), run: () => toolSyncStatus(ctx) },
     'toolSync.receive': {
-      args: z.tuple([tools, z.string().min(1).max(200)]),
-      run: (incoming: PortableTool[], from: string) => {
-        const waiting = receiveTools(ctx, incoming, from)
+      args: z.tuple([tools, z.string().min(1).max(200), z.boolean().optional()]),
+      run: (incoming: PortableTool[], from: string, remove?: boolean) => {
+        const waiting = receiveTools(ctx, incoming, from, remove === true)
         if (waiting) changed()
         return { waiting }
       },
@@ -44,6 +46,13 @@ export const registerToolSyncHandlers: RegisterHandlers = (ctx) => {
       run: (dismissed: string) => {
         dismissTool(ctx.workspace, dismissed)
         changed()
+      },
+    },
+    /** Before a tool is removed here: ask this host's other hosts to remove it too, now and when they connect. */
+    'toolSync.removeEverywhere': {
+      args: z.tuple([key]),
+      run: (removing: string) => {
+        if (removeEverywhere(ctx, removing)) changed()
       },
     },
     'toolSync.setAvailability': {
@@ -67,33 +76,54 @@ export const registerToolSyncHandlers: RegisterHandlers = (ctx) => {
         if (!entry || entry.tool.kind !== 'mcp') throw new Error('That server is no longer waiting here.')
         const { tool } = entry
         const transport = tool.transport
-        const saved = ctx.getSharedMcp().save({
-          name: tool.name,
-          serviceAccountId: 'public',
-          enabled: entry.state !== 'connect-here',
-          scope: { hostWide: true, projectIds: [] },
-          providers: tool.providers,
-          transport:
-            transport.type === 'http'
-              ? {
-                  type: 'http',
-                  url: transport.url,
-                  headerSecretRefs: {},
-                  ...(transport.allowPrivateNetwork ? { allowPrivateNetwork: true } : {}),
-                }
-              : {
-                  type: 'stdio',
-                  command: transport.command,
-                  args: transport.args,
-                  cwd: transport.cwd === '~' ? homedir() : join(homedir(), transport.cwd.slice(2)),
-                  envSecretRefs: {},
-                },
-        })
+        const manager = ctx.getSharedMcp()
+        // A server of the same name here is the one to change, not a second copy beside it; a plugin's stays its own.
+        const fromPlugins = new Set(
+          (ctx.plugins?.list() ?? []).flatMap((plugin) => plugin.mcpConnections.map((server) => server.id)),
+        )
+        const same = manager
+          .list()
+          .connections.map((item) => item.connection)
+          .find((connection) => connection.name === tool.name && !connection.split && !fromPlugins.has(connection.id))
+        // Secrets this host already holds for that server stay, for the names the server still needs.
+        const held: Record<string, string> = !same
+          ? {}
+          : same.transport.type === 'http'
+            ? same.transport.headerSecretRefs
+            : same.transport.envSecretRefs
+        const kept = (names: string[]) =>
+          Object.fromEntries(Object.entries(held).filter(([name]) => names.includes(name)))
+        const saved = manager.save(
+          {
+            name: tool.name,
+            serviceAccountId: same?.serviceAccountId ?? 'public',
+            enabled: entry.state !== 'connect-here',
+            scope: { hostWide: true, projectIds: [] },
+            providers: tool.providers,
+            transport:
+              transport.type === 'http'
+                ? {
+                    type: 'http',
+                    url: transport.url,
+                    headerSecretRefs: kept(transport.headers),
+                    ...(transport.allowPrivateNetwork ? { allowPrivateNetwork: true } : {}),
+                  }
+                : {
+                    type: 'stdio',
+                    command: transport.command,
+                    args: transport.args,
+                    cwd: transport.cwd === '~' ? homedir() : join(homedir(), transport.cwd.slice(2)),
+                    envSecretRefs: kept(transport.env),
+                  },
+          },
+          same?.id,
+        )
+        if (Object.keys(tool.tools).length) rememberChoices(ctx.workspace, saved.id, tool.tools)
         changed()
         return {
           connection: saved,
           choices: tool.tools,
-          secrets: transport.type === 'http' ? transport.headers : transport.env,
+          secrets: (transport.type === 'http' ? transport.headers : transport.env).filter((name) => !(name in held)),
           connectHere: entry.state === 'connect-here',
         }
       },

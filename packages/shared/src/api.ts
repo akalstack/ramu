@@ -734,7 +734,10 @@ export interface RamuMethods extends ArtifactMethods {
   /** Tools other hosts sent for review here, which hosts each of this host's tools is kept on, and what can travel. */
   'toolSync.status'(): import('./toolSync').ToolSyncStatus
   /** Keeps tools another host sent, to review here; returns how many now wait. */
-  'toolSync.receive'(tools: import('./toolSync').PortableTool[], from: string): { waiting: number }
+  /** `remove`: the other host removed them and asks this one to remove them too, after a review here. */
+  'toolSync.receive'(tools: import('./toolSync').PortableTool[], from: string, remove?: boolean): { waiting: number }
+  /** Before removing a tool here: asks this host's other hosts to remove it too, now and when they connect. */
+  'toolSync.removeEverywhere'(key: string): void
   'toolSync.dismiss'(key: string): void
   /** Adds a waiting MCP server as it is on its other host, with no secret; returns what to finish here. */
   'toolSync.addServer'(key: string): {
