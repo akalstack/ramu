@@ -30,7 +30,7 @@ export function createAuth(pool: Pool, config: AccountConfig) {
     // No passwords: an account is a GitHub or Google sign-in, or a passkey added to one.
     emailAndPassword: { enabled: false },
     socialProviders: {
-      ...(config.github ? { github: { ...config.github, scope: ['read:user', 'user:email'] } } : {}),
+      ...(config.github ? { github: config.github } : {}),
       ...(config.google ? { google: config.google } : {}),
     },
     account: {
