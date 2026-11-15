@@ -88,7 +88,7 @@ describe('ciWorkflow', () => {
     const pyproject = '[dependency-groups]\ndev = ["pytest>=8", "ruff", "mypy"]\n'
     const workflow = ciWorkflow('github', facts(['pyproject.toml', 'uv.lock'], { 'pyproject.toml': pyproject }))!
     expect(workflow.toolchain).toBe('uv')
-    expect(workflow.content).toContain('astral-sh/setup-uv@v10')
+    expect(workflow.content).toContain('astral-sh/setup-uv@v10.3.3')
     expect(workflow.content).toContain('enable-cache: true')
     expect(workflow.content).toContain('uv sync --locked')
     expect(workflow.steps.map((step) => step.run)).toEqual(['uv run ruff check .', 'uv run mypy .', 'uv run pytest'])

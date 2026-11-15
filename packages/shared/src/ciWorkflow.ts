@@ -250,7 +250,8 @@ function setupOf(toolchain: CiToolchain, facts: CiFacts, files: ReadonlySet<stri
     }
     case 'uv':
       return {
-        actions: ['      - uses: astral-sh/setup-uv@v10', '        with:', '          enable-cache: true'],
+        // setup-uv publishes no moving major tag after v7, so the release is pinned whole.
+        actions: ['      - uses: astral-sh/setup-uv@v10.3.3', '        with:', '          enable-cache: true'],
         install: 'uv sync --locked',
         gitlab: {
           image: 'python:3',
