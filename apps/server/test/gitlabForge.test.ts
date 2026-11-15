@@ -7,7 +7,9 @@ import { HostCredentialStore } from '../src/credentials/store'
 import { GitlabCredentials, configureGitlabCredentials } from '../src/workspace/forge/gitlabCredentials'
 import { FILES_PAGE, PATCH_LIMIT } from '../src/workspace/forge/adapter'
 import {
+  approvedBySomeone,
   diffLine,
+  gitlabJobLog,
   noteBody,
   notePosition,
   react,
@@ -83,6 +85,40 @@ it('maps a merge request onto the shared pull request shape', () => {
   expect(parseMergeRequest({ ...raw, detailed_merge_status: 'requested_changes' }, true, []).reviewDecision).toBe(
     'changes-requested',
   )
+})
+
+it('reads a gitlab.com job trace as the plain log', () => {
+  const esc = String.fromCharCode(27)
+  const trace = [
+    `2026-11-15T03:17:20.275282Z 00O ${esc}[0KRunning with gitlab-runner 19.6.0${esc}[0;m`,
+    `2026-11-15T03:17:20.275358Z 00O section_start:1794712640:prepare_executor\r${esc}[0K`,
+    `2026-11-15T03:17:20.275360Z 00O+${esc}[0K${esc}[36;1mPreparing the "docker+machine" executor${esc}[0;m`,
+    '2026-11-15T03:17:49.100000Z 00O section_end:1794712669:prepare_executor',
+    `${esc}[0Ksection_start:1794712670:step_script[collapsed=true]\r${esc}[0KExecuting "step_script"`,
+    '2026-11-15T03:18:04.000000Z 01O $ uv run pytest',
+    '2026-11-15T03:18:04.100000Z 01O     def test_broken_on_purpose():',
+    '2026-11-15T03:18:04.200000Z 01E ',
+    `2026-11-15T03:18:04.300000Z 00O ${esc}[31;1mERROR: Job failed: exit code 1${esc}[0;m`,
+  ].join('\n')
+  expect(gitlabJobLog(trace)).toBe(
+    [
+      'Running with gitlab-runner 19.6.0',
+      'Preparing the "docker+machine" executor',
+      'Executing "step_script"',
+      '$ uv run pytest',
+      '    def test_broken_on_purpose():',
+      '',
+      'ERROR: Job failed: exit code 1',
+    ].join('\n'),
+  )
+})
+
+it('counts a merge request approved only once someone has approved it', () => {
+  // A project with no approval rules answers `approved: true` before anyone has looked at the merge request.
+  expect(approvedBySomeone({ approved: true, approved_by: [] })).toBe(false)
+  expect(approvedBySomeone({ approved: true, approved_by: [{ user: { username: 'bo' } }] })).toBe(true)
+  expect(approvedBySomeone({ approved: false, approved_by: [{ user: { username: 'bo' } }] })).toBe(false)
+  expect(approvedBySomeone(null)).toBe(false)
 })
 
 it('lists merge requests with their author, reviewers and the viewer’s part in them', () => {

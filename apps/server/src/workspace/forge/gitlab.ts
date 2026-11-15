@@ -339,6 +339,18 @@ export function parseJobs(jobs: RawJob[]): ForgeCheck[] {
     .map((job) => ({ name: job.name, state: jobState(job), url: job.web_url ?? null }))
 }
 
+interface RawApprovals {
+  approved?: boolean
+  approved_by?: unknown[]
+}
+
+/**
+ * Whether someone approved the merge request. GitLab's `approved` only says the approval rules are met, which a
+ * project with no rules (gitlab.com's free default) answers true for every merge request nobody has reviewed.
+ */
+export const approvedBySomeone = (approvals: RawApprovals | null) =>
+  approvals?.approved === true && (approvals.approved_by?.length ?? 0) > 0
+
 function reviewDecision(status: string | undefined, approved: boolean): PullRequestReviewDecision {
   if (status === 'requested_changes') return 'changes-requested'
   if (approved) return 'approved'
@@ -395,15 +407,13 @@ export async function pullRequestStatus(cwd: string, url?: string): Promise<Forg
   const raw = await mergeRequest(a, url)
   if (!raw) return { availability: 'ready', service: 'gitlab', pullRequest: null }
   const [approvals, checks] = await Promise.all([
-    (projectApi(a, `/merge_requests/${raw.iid}/approvals`) as Promise<{ approved?: boolean }>).catch(() => ({
-      approved: false,
-    })),
+    projectApi<RawApprovals>(a, `/merge_requests/${raw.iid}/approvals`).catch(() => null),
     checksOf(a, raw.iid).catch(() => []),
   ])
   return {
     availability: 'ready',
     service: 'gitlab',
-    pullRequest: parseMergeRequest(raw, approvals.approved === true, checks),
+    pullRequest: parseMergeRequest(raw, approvedBySomeone(approvals), checks),
   }
 }
 
@@ -426,6 +436,28 @@ export async function createPullRequest(cwd: string, input: PullRequestInput): P
   return pullRequestStatus(cwd)
 }
 
+/**
+ * A job trace as plain log lines. Besides timestamps, gitlab.com's runners start each line with its stream (`00O`,
+ * `01E`, `+` for a continued line) and mark collapsible sections with lines of their own; none of it is the log.
+ */
+export function gitlabJobLog(trace: string): string {
+  return failureExcerpt(
+    trace
+      // eslint-disable-next-line no-control-regex
+      .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
+      .split(/\r?\n/)
+      .flatMap((line) => {
+        const text = line.replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z /, '').replace(/^\d{2}[OE]\+? ?/, '')
+        const marker = /^section_(?:start|end):\d+:[\w.-]+(?:\[[^\]]*\])?\r?/.exec(text)
+        if (!marker) return [text]
+        // Older runners put the section's first line after its marker; a marker on its own is dropped.
+        const rest = text.slice(marker[0].length)
+        return rest ? [rest] : []
+      })
+      .join('\n'),
+  )
+}
+
 /** One section per failed job, with the end of its trace. */
 async function failedJobSections(a: Access, failed: ForgeCheck[]): Promise<string[]> {
   const sections: string[] = []
@@ -440,7 +472,10 @@ async function failedJobSections(a: Access, failed: ForgeCheck[]): Promise<strin
           .then((text) => (typeof text === 'string' ? text : ''))
           .catch(() => '')
       : ''
-    sections.push(`### ${check.name}\n${log ? failureExcerpt(log) : 'No log available.'}`)
+    const excerpt = log ? gitlabJobLog(log) : ''
+    sections.push(
+      `### ${check.name}${check.url ? ` (${check.url})` : ''}\n${excerpt ? ['```', excerpt, '```'].join('\n') : 'No log available.'}`,
+    )
   }
   return sections
 }
@@ -744,13 +779,13 @@ export async function mergeRequestDetails(a: Access, iid: number): Promise<Parti
       a,
       `/merge_requests/${iid}`,
     ),
-    projectApi<{ approved?: boolean }>(a, `/merge_requests/${iid}/approvals`).catch(() => null),
+    projectApi<RawApprovals>(a, `/merge_requests/${iid}/approvals`).catch(() => null),
     projectApi<RawDiscussion[]>(a, `/merge_requests/${iid}/discussions?per_page=100`).catch(() => null),
   ])
   const pipeline = one.head_pipeline?.status
   return {
     checks: pipeline ? checksRollup([{ state: jobState({ status: pipeline, allow_failure: false }) }]) : null,
-    reviewDecision: reviewDecision(one.detailed_merge_status, approvals?.approved === true),
+    reviewDecision: reviewDecision(one.detailed_merge_status, approvedBySomeone(approvals)),
     ...(discussions
       ? {
           openThreads: discussions.filter((discussion) => {
