@@ -292,7 +292,7 @@ function Notifications({ host, name }: { host: ReturnType<typeof useHostSettings
         </>
       ) : null}
       <HostGroups section="notifications" host={host} name={name} />
-      <Hint>Alerts only reach you if “Background alerts” is on and this computer is paired.</Hint>
+      <Hint>{say('Alerts only reach you if “Background alerts” is on and this computer is paired.')}</Hint>
     </>
   )
 }

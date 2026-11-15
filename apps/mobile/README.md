@@ -43,7 +43,7 @@ Official builds (`com.akalstack.ramu`) use the `@akalstack/ramu` Expo project an
 - `pnpm dev:mobile` starts Metro on every interface and prints a launch link per LAN or VPN address. `pnpm --filter @ramu/mobile dev:go` previews the layout in Expo Go, without pairing or native features.
 - Add native modules with `pnpm --filter @ramu/mobile exec expo install …`, and rebuild the development client after native changes.
 - Keep `react-native-reanimated`, `react-native-worklets` and `react-native-gesture-handler` aligned with the Expo SDK.
-- Android needs JDK 21. WebRTC 155.0.1 needs a narrow R8 exclusion, applied at prebuild; recheck it when upgrading WebRTC.
+- Android needs JDK 21, and prebuild gives Gradle a 6 GB heap because the development client's dex merge runs out of memory in less. WebRTC 155.0.1 needs a narrow R8 exclusion, applied at prebuild; recheck it when upgrading WebRTC.
 - iOS uses a small `react-native-screens` patch for the native scroll-edge header.
 
 ```sh

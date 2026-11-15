@@ -106,7 +106,7 @@ export function ComputerUseSettings({ hostId }: { hostId: string }) {
           <>
             <Divider inset={space.l} />
             <ToggleRow
-              title={say('Let app drags use the real pointer')}
+              title={say('Let app drags use your real pointer')}
               help={say(
                 status.globalPointer
                   ? 'On. Dragging in an app can move windows and select text, and it may move the pointer while the agent works.'

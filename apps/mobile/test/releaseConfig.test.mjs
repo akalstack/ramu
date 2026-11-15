@@ -42,3 +42,34 @@ test('Android prebuild retains custom shrinker rules and adds only the orphan We
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+test('Android prebuild gives Gradle a heap large enough for the development client, once', async () => {
+  let apply
+  const module = { exports: {} }
+  runInNewContext(await readFile(new URL('../plugins/withGradleHeap.cjs', import.meta.url), 'utf8'), {
+    module,
+    require: (name) =>
+      name === 'expo/config-plugins'
+        ? {
+            withGradleProperties: (config, callback) => {
+              apply = callback
+              return config
+            },
+          }
+        : require(name),
+  })
+  const config = {
+    modResults: [
+      { type: 'property', key: 'org.gradle.jvmargs', value: '-Xmx2048m -XX:MaxMetaspaceSize=512m' },
+      { type: 'property', key: 'android.useAndroidX', value: 'true' },
+    ],
+  }
+  module.exports(config)
+  apply(config)
+  apply(config)
+  assert.deepEqual(
+    config.modResults.filter((item) => item.key === 'org.gradle.jvmargs').map((item) => item.value),
+    ['-Xmx6g -XX:MaxMetaspaceSize=1g'],
+  )
+  assert.ok(config.modResults.some((item) => item.key === 'android.useAndroidX'))
+})

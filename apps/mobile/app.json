@@ -61,6 +61,7 @@
       "expo-notifications",
       "./plugins/withTrustedHttp.cjs",
       "./plugins/withWebRtcProguard.cjs",
+      "./plugins/withGradleHeap.cjs",
       [
         "@config-plugins/react-native-webrtc",
         {
