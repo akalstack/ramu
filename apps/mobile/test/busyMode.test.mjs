@@ -1,7 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  otherBusyMode,
   readBusyMode,
   readModelWarning,
   resolveBusyMode,
@@ -20,11 +19,6 @@ test('this phone wins, then all your phones, then the computer, then Steer', () 
 test('an unreadable stored, shared or host value is ignored, not trusted', () => {
   assert.deepEqual(resolveBusyMode('interrupt', 'later', 'queue'), { mode: 'queue', source: 'all' })
   assert.deepEqual(resolveBusyMode('{"mode":"queue"}', true, 42), { mode: 'steer', source: 'default' })
-})
-
-test('the other action is the one offered beside Send', () => {
-  assert.equal(otherBusyMode('steer'), 'queue')
-  assert.equal(otherBusyMode('queue'), 'steer')
 })
 
 test('the model-change warning follows this phone, then all your phones, then the computer, then warns', () => {

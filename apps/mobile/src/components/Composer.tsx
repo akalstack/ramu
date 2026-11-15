@@ -10,7 +10,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  UIManager,
+  ActionSheetIOS,
   type TextStyle,
   View,
 } from 'react-native'
@@ -57,7 +57,7 @@ import type { AgentProvider, AgentSettings, ChatGoal, FileContext, QueuedMessage
 import { font, radius, space, useTheme } from '../theme'
 import { providerNames } from '../runtime/types'
 import { useStore } from '../runtime/store'
-import { BUSY_MODE_DEVICE_KEY, otherBusyMode, resolveBusyMode } from '../runtime/busyMode'
+import { BUSY_MODE_DEVICE_KEY, resolveBusyMode } from '../runtime/busyMode'
 import { sharedValue } from '@ramu/shared/sharedFields'
 import { useModelFlow } from '../runtime/useModelFlow'
 import { fill, useT, useSay } from '../i18n'
@@ -1051,7 +1051,6 @@ export function Composer({
     sharedValue(store.mobileLayers?.[pc], 'queueWhileBusy'),
     store.appPreferences?.[pc]?.busyMessageAction,
   )
-  const otherMode = otherBusyMode(mode)
   // Applied when a restore arrives, keyed by its count and text: a caller that rebuilds the same restore on every render
   // must not keep putting back what the person just removed.
   useEffect(() => {
@@ -1134,6 +1133,22 @@ export function Composer({
     }
   }
 
+  const holdToChoose = sendChoice(
+    running && has && !offline && !limited && !viewOnly && !busy && !uploading && !dictating,
+    mode,
+    {
+      queue: t.queue,
+      steer: t.steer,
+      queueHelp: say('Send when the agent finishes its turn'),
+      steerHelp: say('Send after active tools finish'),
+      menu: say('Choose how to send this message'),
+      cancel: say('Cancel'),
+    },
+    (chosen) => {
+      tap()
+      void submit(chosen)
+    },
+  )
   return (
     <Glass radius={radius.xl} style={{ marginHorizontal: space.s + 2 }}>
       {header ? (
@@ -1387,16 +1402,6 @@ export function Composer({
           <ModelChip value={model} onChange={onModel} computerId={computerId} limited={limited} />
 
           <View style={{ flex: 1 }} />
-          {running && has && !offline && !nativeMenu ? (
-            <IconButton
-              icon={otherMode === 'queue' ? ListPlus : CornerDownRight}
-              label={otherMode === 'queue' ? t.queue : t.steer}
-              size={34}
-              tone="muted"
-              onPress={() => void submit(otherMode)}
-              disabled={busy || uploading || viewOnly || dictating}
-            />
-          ) : null}
           {/* Dictation sits beside sending, where the words it writes go next. */}
           {mic.kind !== 'hidden' ? (
             <MicButton
@@ -1469,61 +1474,47 @@ export function Composer({
               <Play size={15} color={c.text} fill={c.text} />
             </Pressable>
           ) : (
-            <SendChoice
-              enabled={running && has && !offline && !limited && !viewOnly && !busy && !uploading && !dictating}
-              mode={mode}
-              labels={{
-                queue: t.queue,
-                steer: t.steer,
-                queueHelp: say('Send when the agent finishes its turn'),
-                steerHelp: say('Send after active tools finish'),
-                menu: say('Choose how to send this message'),
-              }}
-              onChoose={(chosen) => {
+            <Pressable
+              accessibilityRole="button"
+              accessibilityHint={holdToChoose ? say('Hold to choose how to send') : undefined}
+              accessibilityLabel={
+                offline
+                  ? say('Add to outbox')
+                  : limited
+                    ? t.queue
+                    : running
+                      ? mode === 'queue'
+                        ? t.queue
+                        : t.steer
+                      : compaction?.compact
+                        ? say('Compact and send')
+                        : say('Send')
+              }
+              disabled={!has || viewOnly || busy || uploading || dictating}
+              // A 34-point button beside the keyboard is easy to miss; the touch area reaches past it.
+              hitSlop={10}
+              onPress={() => {
                 tap()
-                void submit(chosen)
+                void submit()
+              }}
+              onLongPress={holdToChoose}
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: radius.full,
+                backgroundColor: has ? c.primary : c.fill,
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={
-                  offline
-                    ? say('Add to outbox')
-                    : limited
-                      ? t.queue
-                      : running
-                        ? mode === 'queue'
-                          ? t.queue
-                          : t.steer
-                        : compaction?.compact
-                          ? say('Compact and send')
-                          : say('Send')
-                }
-                disabled={!has || viewOnly || busy || uploading || dictating}
-                // A 34-point button beside the keyboard is easy to miss; the touch area reaches past it.
-                hitSlop={10}
-                onPress={() => {
-                  tap()
-                  void submit()
-                }}
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: radius.full,
-                  backgroundColor: has ? c.primary : c.fill,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                {offline ? (
-                  <Clock size={16} color={has ? c.primaryInk : c.placeholder} strokeWidth={2.4} />
-                ) : running ? (
-                  <CornerDownRight size={18} color={has ? c.primaryInk : c.placeholder} />
-                ) : (
-                  <ArrowUp size={18} color={has ? c.primaryInk : c.placeholder} strokeWidth={2.4} />
-                )}
-              </Pressable>
-            </SendChoice>
+              {offline ? (
+                <Clock size={16} color={has ? c.primaryInk : c.placeholder} strokeWidth={2.4} />
+              ) : running ? (
+                <CornerDownRight size={18} color={has ? c.primaryInk : c.placeholder} />
+              ) : (
+                <ArrowUp size={18} color={has ? c.primaryInk : c.placeholder} strokeWidth={2.4} />
+              )}
+            </Pressable>
           )}
         </View>
       </View>
@@ -2040,54 +2031,41 @@ function QuickSteps({
 }
 
 /**
- * Whether this app binary has the native menu. Builds made before it was added do not, and drawing it there fails, so
- * those keep the separate button for the other way of sending.
+ * While the agent works, holding Send offers both ways to send in the system action sheet, as T3 Code does; a tap still
+ * sends the usual way. A menu view wrapped around the button swallowed taps on iOS, so the button itself takes the hold.
  */
-const nativeMenu = (() => {
-  if (Platform.OS === 'web') return false
-  try {
-    return UIManager.hasViewManagerConfig('MenuView')
-  } catch {
-    return false
+function sendChoice(
+  enabled: boolean,
+  mode: 'queue' | 'steer',
+  labels: { queue: string; steer: string; queueHelp: string; steerHelp: string; menu: string; cancel: string },
+  onChoose: (mode: 'queue' | 'steer') => void,
+): (() => void) | undefined {
+  if (!enabled) return undefined
+  // The usual way comes first, so the sheet reads the same as the tap.
+  const choices = mode === 'steer' ? (['steer', 'queue'] as const) : (['queue', 'steer'] as const)
+  const message = choices.map((choice) => `${labels[choice]}: ${labels[`${choice}Help`]}`).join('\n')
+  const open = () => {
+    tap()
+    if (Platform.OS === 'ios')
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title: labels.menu,
+          message,
+          options: [...choices.map((choice) => labels[choice]), labels.cancel],
+          cancelButtonIndex: 2,
+        },
+        (index) => {
+          const choice = choices[index]
+          if (choice) onChoose(choice)
+        },
+      )
+    else
+      Alert.alert(labels.menu, message, [
+        { text: labels.cancel, style: 'cancel' },
+        ...choices.map((choice) => ({ text: labels[choice], onPress: () => onChoose(choice) })),
+      ])
   }
-})()
-
-/**
- * While the agent works, holding Send opens the system menu with both ways to send, the usual one checked, as T3 Code
- * does; a tap still sends the usual way.
- */
-function SendChoice({
-  enabled,
-  mode,
-  labels,
-  onChoose,
-  children,
-}: {
-  enabled: boolean
-  mode: 'queue' | 'steer'
-  labels: { queue: string; steer: string; queueHelp: string; steerHelp: string; menu: string }
-  onChoose(mode: 'queue' | 'steer'): void
-  children: ReactNode
-}) {
-  if (!enabled || !nativeMenu) return <>{children}</>
-  return (
-    <MenuView
-      title={labels.menu}
-      shouldOpenOnLongPress
-      actions={(['steer', 'queue'] as const).map((choice) => ({
-        id: choice,
-        title: labels[choice],
-        subtitle: choice === 'steer' ? labels.steerHelp : labels.queueHelp,
-        image: Platform.OS === 'ios' ? (choice === 'steer' ? 'arrow.turn.down.right' : 'text.append') : undefined,
-        state: choice === mode ? ('on' as const) : ('off' as const),
-      }))}
-      onPressAction={({ nativeEvent }) => {
-        if (nativeEvent.event === 'queue' || nativeEvent.event === 'steer') onChoose(nativeEvent.event)
-      }}
-    >
-      {children}
-    </MenuView>
-  )
+  return open
 }
 
 function IconOf({ icon: I, color }: { icon: typeof FileText; color: string }) {

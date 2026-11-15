@@ -50,8 +50,6 @@ export function resolveBusyMode(
   return { mode: value, source }
 }
 
-export const otherBusyMode = (mode: BusyMode): BusyMode => (mode === 'steer' ? 'queue' : 'steer')
-
 /** The warning choice as Settings shows it: this phone stores 'on'/'off', the shared layer and the computer a boolean. */
 export type ModelWarning = 'on' | 'off'
 

@@ -127,7 +127,6 @@ function load(file, os, overrides = {}, globals = {}) {
     '../runtime/busyMode': {
       BUSY_MODE_DEVICE_KEY: 'pref-device:queueWhileBusy',
       resolveBusyMode: () => ({ mode: 'steer', source: 'default' }),
-      otherBusyMode: () => 'queue',
     },
     '../runtime/computerUse': { useComputerUse: () => ({ session: undefined, refresh() {} }) },
     '../runtime/threadSelection': threadSelectionStub,
@@ -5082,7 +5081,9 @@ for (const accepted of [true, false]) {
     }
     const steer = nodes(tree).find((node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Steer')
     assert.ok(steer)
-    assert.ok(nodes(tree).some((node) => node.type === 'IconButton' && node.props.label === 'Queue'))
+    // The other way to send is offered by holding Send, not a second button beside it.
+    assert.equal(typeof steer.props.onLongPress, 'function')
+    assert.ok(!nodes(tree).some((node) => node.type === 'IconButton' && node.props.label === 'Queue'))
     assert.ok(!nodes(tree).some((node) => node.type === 'ThreadUsageChip'))
     steer.props.onPress()
     await settle()
@@ -5302,7 +5303,6 @@ test('computer-use stop revokes only the displayed thread and refreshes the shar
     '../runtime/busyMode': {
       BUSY_MODE_DEVICE_KEY: 'pref-device:queueWhileBusy',
       resolveBusyMode: () => ({ mode: 'steer', source: 'default' }),
-      otherBusyMode: () => 'queue',
     },
     '../runtime/computerUse': {
       useComputerUse: () => ({
