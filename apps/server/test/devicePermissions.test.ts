@@ -86,6 +86,22 @@ it('remembers a “never” until the host allows the permission itself', () => 
   expect(devices.allows(phone.id, 'computer')).toBe(true)
 })
 
+it('sets a lasting state from Settings: allowed, ask first (which lifts a block) or blocked', () => {
+  const devices = store()
+  devices.setDefaultPermissions([])
+  const phone = pair(devices)
+  const now = Date.now()
+  devices.setPermission(phone.id, 'terminal', grantFor('hour', now), now)
+  devices.setState(phone.id, 'terminal', 'allowed', now)
+  expect(devices.permissionsOf(phone.id, now).terminal).toEqual({ until: null })
+  devices.setState(phone.id, 'terminal', 'blocked')
+  expect(devices.allows(phone.id, 'terminal')).toBe(false)
+  expect(devices.blocked(phone.id)).toEqual(['terminal'])
+  devices.setState(phone.id, 'terminal', 'ask')
+  expect(devices.allows(phone.id, 'terminal')).toBe(false)
+  expect(devices.blocked(phone.id)).toEqual([])
+})
+
 it('never gives Agents without a person choosing it', () => {
   const devices = store()
   const device = pair(devices)

@@ -2,14 +2,7 @@
 // `ramu` (also `ramu-server`): runs the Ramu workspace server without the desktop app and controls a running one.
 import { runtimeInvoke } from '@ramu/client-runtime'
 import type { AgentHostSummary, NetworkStatus } from '@ramu/shared/types/remote'
-import {
-  DEVICE_PERMISSIONS,
-  PERMISSION_DURATIONS,
-  PERMISSION_LABEL,
-  grantFor,
-  isDevicePermission,
-  type PermissionDuration,
-} from '@ramu/shared/devicePermissions'
+import { DEVICE_PERMISSIONS, PERMISSION_LABEL, isDevicePermission } from '@ramu/shared/devicePermissions'
 import { loadConfig, parseListen } from './config'
 import { runtimeVersion } from './build'
 import { DeviceStore, isHostAccess, PAIRING_TTL_MS } from './remote/devices'
@@ -37,12 +30,12 @@ Usage:
                                  Answer a nearby device's request; the server prints each one with its six-digit code.
   ramu devices                   List paired devices
   ramu devices revoke <id|all>   Revoke one paired device, or all of them
-  ramu devices allow <id> <permission> [once|hour|day|always]
-                                 Let a device use computer, browser, terminal or settings
-  ramu devices deny <id> <permission>
-                                 Take a permission away
-  ramu devices never <id> <permission>
-                                 Take it away and refuse that device's requests for it until you allow it again
+  ramu devices allow <id> <permission>
+                                 Let a device use computer, browser, terminal, settings or agents
+  ramu devices ask <id> <permission>
+                                 Take a permission away; the device can ask for it again
+  ramu devices block <id> <permission>
+                                 Take it away and decline that device's requests for it
   ramu devices access <id> <edits|auto|full>
                                  The most access threads a paired host starts here may have (default edits)
   ramu devices offers            List unused pairing offers (never their codes)
@@ -371,35 +364,25 @@ if (command === 'start') {
     }
     if (!revoked.length) fail(`No paired device matches "${positional[2]}". Run ramu devices.`)
     for (const device of revoked) console.log(`Revoked ${device.id}  ${device.name}`)
-  } else if (positional[1] === 'allow' || positional[1] === 'deny' || positional[1] === 'never') {
-    // Headless hosts answer permission requests here; Settings → Remote access does the same on a desktop.
-    const [, action, deviceId, permission, duration = 'always'] = positional
-    if (!deviceId || !isDevicePermission(permission) || !PERMISSION_DURATIONS.includes(duration as PermissionDuration))
-      fail(
-        `Usage: ramu devices ${action} <id> <${DEVICE_PERMISSIONS.join('|')}>${action === 'allow' ? ' [once|hour|day|always]' : ''}`,
-      )
-    const choice = action === 'deny' ? 'revoke' : action === 'never' ? 'never' : duration
+  } else if (positional[1] === 'allow' || positional[1] === 'ask' || positional[1] === 'block') {
+    // Headless hosts set permissions here; Settings → Remote access does the same on a desktop.
+    const [, action, deviceId, permission] = positional
+    if (!deviceId || !isDevicePermission(permission))
+      fail(`Usage: ramu devices ${action} <id> <${DEVICE_PERMISSIONS.join('|')}>`)
+    const setting = action === 'allow' ? 'allowed' : action === 'block' ? 'blocked' : 'ask'
     const running = await runtimeInvoke(config.socketPath, 'network.setDevicePermission', [
       deviceId,
       permission,
-      choice,
+      setting,
     ]).catch(() => null)
-    if (!running) {
-      if (choice === 'once') fail('“once” lasts until the device disconnects, so it needs the server running.')
+    if (!running)
       try {
-        if (choice === 'never') store.block(deviceId, permission)
-        else
-          store.setPermission(
-            deviceId,
-            permission,
-            choice === 'revoke' ? null : grantFor(choice as PermissionDuration, Date.now()),
-          )
+        store.setState(deviceId, permission, setting)
       } catch (error) {
         fail((error as Error).message)
       }
-    }
     console.log(
-      `${action === 'allow' ? 'Allowed' : action === 'never' ? 'Blocked' : 'Removed'} ${PERMISSION_LABEL[permission]} for ${deviceId}.`,
+      `${PERMISSION_LABEL[permission]} for ${deviceId}: ${setting === 'allowed' ? 'allowed' : setting === 'blocked' ? 'blocked, requests are declined' : 'ask first'}.`,
     )
   } else if (positional[1] === 'access') {
     const [, , deviceId, access] = positional
@@ -429,7 +412,7 @@ if (command === 'start') {
     console.log(`Cancelled offer ${positional[2]}`)
   } else if (positional[1])
     fail(
-      `unknown devices command "${positional[1]}". Use ramu devices, ramu devices revoke <id|all>, allow, deny, offers or cancel <offer>.`,
+      `unknown devices command "${positional[1]}". Use ramu devices, ramu devices revoke <id|all>, allow, ask, block, offers or cancel <offer>.`,
     )
   else {
     const devices = store.list()
@@ -452,7 +435,7 @@ if (command === 'start') {
     const status = (await runtimeInvoke(config.socketPath, 'network.status').catch(() => null)) as NetworkStatus | null
     for (const request of status?.permissionRequests ?? [])
       console.log(
-        `\n${request.deviceName} (${request.deviceId}) asks for ${request.permission}. Allow it with: ramu devices allow ${request.deviceId} ${request.permission} [once|hour|day|always]`,
+        `\n${request.deviceName} (${request.deviceId}) asks for ${request.permission}. Allow it with: ramu devices allow ${request.deviceId} ${request.permission}`,
       )
   }
 } else if (command === 'thread') {

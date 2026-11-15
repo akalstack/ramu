@@ -1,12 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { NetworkStatus } from '@ramu/shared/types'
-import {
-  DURATION_LABEL,
-  PERMISSION_DURATIONS,
-  PERMISSION_HELP,
-  PERMISSION_LABEL,
-  type PermissionDuration,
-} from '@ramu/shared/devicePermissions'
+import { PERMISSION_HELP, PERMISSION_LABEL, type PermissionAnswer } from '@ramu/shared/devicePermissions'
 import {
   Dialog,
   DialogContent,
@@ -15,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Button } from '@/components/desktop-button'
+import { RequestAnswers } from './DevicePermissions'
 import { invoke, ramu } from '../ipc'
 import { errorText } from '../lib/errors'
 import { t, useLanguage } from '../i18n'
@@ -52,10 +46,10 @@ export function PermissionRequestDialog() {
     setBusy(false)
   }, [requestId])
   if (!request) return null
-  const decide = (duration: PermissionDuration | 'deny' | 'never') => {
+  const decide = (answer: PermissionAnswer) => {
     setBusy(true)
     setError(null)
-    void Promise.resolve(invoke('network.decidePermission', request.id, duration)).then(
+    void Promise.resolve(invoke('network.decidePermission', request.id, answer)).then(
       () => setRequests((current) => current.filter((entry) => entry.id !== request.id)),
       (reason) => {
         setBusy(false)
@@ -78,22 +72,7 @@ export function PermissionRequestDialog() {
           </p>
         )}
         <DialogFooter className="flex-wrap">
-          <Button variant="ghost" disabled={busy} onClick={() => decide('never')}>
-            {t('Never')}
-          </Button>
-          <Button variant="secondary" disabled={busy} onClick={() => decide('deny')}>
-            {t('Deny')}
-          </Button>
-          {PERMISSION_DURATIONS.map((duration) => (
-            <Button
-              key={duration}
-              variant={duration === 'once' ? 'default' : 'secondary'}
-              disabled={busy}
-              onClick={() => decide(duration)}
-            >
-              {t(DURATION_LABEL[duration])}
-            </Button>
-          ))}
+          <RequestAnswers decide={decide} disabled={busy} />
         </DialogFooter>
       </DialogContent>
     </Dialog>

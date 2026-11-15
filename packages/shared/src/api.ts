@@ -919,16 +919,11 @@ export interface RamuMethods extends ArtifactMethods {
   /** Pairs a device that asked, spending the given open offer (and its access). Host-only, like the rest of `network.*`. */
   'network.approveRequest'(requestId: string, access: 'owner' | 'viewer'): NetworkStatus
   'network.denyRequest'(requestId: string): NetworkStatus
-  /** Grants a paired device a permission once, for a while or always, or revokes it. Host-only. */
+  /** Sets where a paired device's permission stands: allowed, ask first or blocked. Host-only. */
   'network.setDevicePermission'(
     deviceId: string,
     permission: import('./devicePermissions').DevicePermission,
-    duration: import('./devicePermissions').PermissionDuration | 'revoke' | 'never',
-  ): NetworkStatus
-  /** Answers a device's request for a permission. Host-only. */
-  'network.decidePermission'(
-    requestId: string,
-    duration: import('./devicePermissions').PermissionDuration | 'deny' | 'never',
+    setting: import('./devicePermissions').PermissionSetting,
   ): NetworkStatus
   /** What newly paired full-access devices hold. Host-only. */
   'network.setDefaultPermissions'(permissions: import('./devicePermissions').DevicePermission[]): NetworkStatus
@@ -949,6 +944,8 @@ export interface RamuMethods extends ArtifactMethods {
   'network.setDeviceLifetime'(days: number | 'never' | null): NetworkStatus
   /** A tunnel's https:// address for this host, or null to remove it. */
   'network.setPublicUrl'(url: string | null): NetworkStatus
+  /** Answers a device's request for a permission: for how long, or declined. Host-only. */
+  'network.decidePermission'(requestId: string, answer: import('./devicePermissions').PermissionAnswer): NetworkStatus
   /** Runs a tunnel for this host (turning on access for this computer only if it is off), or stops it with null. */
   'network.setTunnel'(choice: TunnelChoice | null): NetworkStatus
   /** One device's pairing lifetime: days, never, or back to this host's default. Host only. */

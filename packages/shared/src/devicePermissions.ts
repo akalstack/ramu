@@ -1,6 +1,6 @@
-// What a paired full-access device may do beyond threads and files. Each permission is granted per device on the host:
-// permanently, for a while, or once (until that device's last connection closes). The host enforces them; clients only
-// read them to offer a request instead of a dead end.
+// What a paired full-access device may do beyond threads and files. Each permission is set per device on the host:
+// allowed, ask first or blocked. Answering a device's request can also allow it for an hour or until that device's last
+// connection closes. The host enforces them; clients only read them to offer a request instead of a dead end.
 
 export const DEVICE_PERMISSIONS = ['computer', 'browser', 'terminal', 'settings', 'agents'] as const
 export type DevicePermission = (typeof DEVICE_PERMISSIONS)[number]
@@ -38,20 +38,45 @@ export interface PermissionGrant {
   session?: true
 }
 
-export type PermissionDuration = 'once' | 'hour' | 'day' | 'always'
-export const PERMISSION_DURATIONS: readonly PermissionDuration[] = ['once', 'hour', 'day', 'always']
+/** How long the host allows a request it is answering. Only a request asks this; Settings sets a lasting state. */
+export const PERMISSION_DURATIONS = ['once', 'hour', 'always'] as const
+export type PermissionDuration = (typeof PERMISSION_DURATIONS)[number]
+/** Every answer to a request: a duration, deny this once, or never (block further requests). */
+export const PERMISSION_ANSWERS = [...PERMISSION_DURATIONS, 'deny', 'never'] as const
+export type PermissionAnswer = (typeof PERMISSION_ANSWERS)[number]
 export const DURATION_LABEL: Record<PermissionDuration, string> = {
-  once: 'This time',
-  hour: 'For 1 hour',
-  day: 'For 1 day',
-  always: 'Always',
+  once: 'Allow this time',
+  hour: 'Allow for 1 hour',
+  always: 'Always allow',
 }
 
 export function grantFor(duration: PermissionDuration, now: number): PermissionGrant {
   if (duration === 'once') return { until: null, session: true }
   if (duration === 'hour') return { until: now + 60 * 60_000 }
-  if (duration === 'day') return { until: now + 24 * 60 * 60_000 }
   return { until: null }
+}
+
+/**
+ * Where a permission stands for one device, as Settings sets it: allowed until revoked, asked for when needed, or
+ * blocked so requests are declined without asking. A request answered for a while shows as `temporary`.
+ */
+export type PermissionState = 'allowed' | 'temporary' | 'ask' | 'blocked'
+/** The states a person sets in Settings; `temporary` only comes from answering a request. */
+export const PERMISSION_SETTINGS = ['allowed', 'ask', 'blocked'] as const
+export type PermissionSetting = (typeof PERMISSION_SETTINGS)[number]
+export const PERMISSION_SETTING_LABEL: Record<PermissionSetting, string> = {
+  allowed: 'Allowed',
+  ask: 'Ask first',
+  blocked: 'Blocked',
+}
+
+export function permissionState(
+  grant: PermissionGrant | null | undefined,
+  blocked: boolean,
+  now: number,
+): PermissionState {
+  if (grantActive(grant ?? undefined, now)) return grant!.session || grant!.until !== null ? 'temporary' : 'allowed'
+  return blocked ? 'blocked' : 'ask'
 }
 
 export const grantActive = (grant: PermissionGrant | undefined, now: number): boolean =>
@@ -82,6 +107,7 @@ const SETTINGS_DOMAINS = new Set([
   'plugins',
   'identities',
   'settingsTransfer',
+  'toolSync',
   'account',
   'codex',
   'updates',

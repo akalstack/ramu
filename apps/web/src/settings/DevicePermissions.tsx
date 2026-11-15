@@ -7,11 +7,14 @@ import {
   PERMISSION_DURATIONS,
   PERMISSION_HELP,
   PERMISSION_LABEL,
+  PERMISSION_SETTINGS,
+  PERMISSION_SETTING_LABEL,
   grantActive,
   mayUse,
+  permissionState,
   type DevicePermission,
-  type PermissionDuration,
   type DevicePermissionsView,
+  type PermissionAnswer,
   type PermissionGrant,
 } from '@ramu/shared/devicePermissions'
 import type { AgentHostSummary, Computer, NetworkDevice, NetworkStatus } from '@ramu/shared/types'
@@ -20,7 +23,7 @@ import { Dropdown } from '../Menu'
 import { SETTINGS_CARD_LINE } from './cards'
 import { invoke, invokeOn } from '../ipc'
 import { useHost } from '../workspace/HostProvider'
-import { useHostRuntime } from '../workspace/workspace'
+import { onHostEvent, useHostRuntime } from '../workspace/workspace'
 import { errorText } from '../lib/errors'
 import { notifyError } from '../chat/Notifications'
 import { sameAddress } from './agentHostLinks'
@@ -38,17 +41,49 @@ export type PermissionInvoke = (
   ...args: unknown[]
 ) => Promise<void>
 
-/** How long a grant lasts, in a few words. */
-export function grantText(grant: PermissionGrant | null | undefined): string {
-  if (!grant || !grantActive(grant, Date.now())) return t('Off')
-  if (grant.session) return t('This time')
-  if (grant.until === null) return t('Always')
-  return t('Until {0}', {
+/** How long an active grant lasts, in a few words; null when it is not active. */
+export function grantText(grant: PermissionGrant | null | undefined): string | null {
+  if (!grant || !grantActive(grant, Date.now())) return null
+  if (grant.session) return t('Allowed while connected')
+  if (grant.until === null) return t('Allowed')
+  return t('Allowed until {0}', {
     0: new Date(grant.until).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }),
   })
 }
 
-/** Devices asking for a permission: allow it this time, for a while or always, or deny. */
+/** The answers to a request, most limited first: the person picks how long, or declines. */
+export function RequestAnswers({
+  decide,
+  disabled,
+  size,
+}: {
+  decide: (answer: PermissionAnswer) => void
+  disabled?: boolean
+  size?: 'sm'
+}) {
+  return (
+    <>
+      <Button size={size} variant="ghost" disabled={disabled} onClick={() => decide('never')}>
+        {t('Don’t ask again')}
+      </Button>
+      <Button size={size} variant="ghost" disabled={disabled} onClick={() => decide('deny')}>
+        {t('Deny')}
+      </Button>
+      {PERMISSION_DURATIONS.map((duration) => (
+        <Button
+          key={duration}
+          size={size}
+          variant={duration === 'once' ? 'default' : 'secondary'}
+          disabled={disabled}
+          onClick={() => decide(duration)}
+        >
+          {t(DURATION_LABEL[duration])}
+        </Button>
+      ))}
+    </>
+  )
+}
+/** Devices asking for a permission: allow it this time, for an hour or always, or decline. */
 export function PermissionRequests({ status, invoke }: { status: NetworkStatus; invoke: PermissionInvoke }) {
   if (!status.permissionRequests?.length) return null
   return (
@@ -63,31 +98,11 @@ export function PermissionRequests({ status, invoke }: { status: NetworkStatus; 
             {t('{0} asks for {1}', { 0: request.deviceName, 1: t(PERMISSION_LABEL[request.permission]) })}
           </strong>
           <span className="text-caption text-muted-foreground">{t(PERMISSION_HELP[request.permission])}</span>
-          <div className="flex flex-wrap gap-2">
-            {PERMISSION_DURATIONS.map((duration) => (
-              <Button
-                key={duration}
-                size="sm"
-                variant={duration === 'once' ? 'default' : 'secondary'}
-                onClick={() => void invoke('network.decidePermission', request.id, duration)}
-              >
-                {t(DURATION_LABEL[duration])}
-              </Button>
-            ))}
-            <Button
+          <div className="flex flex-wrap justify-end gap-2">
+            <RequestAnswers
               size="sm"
-              variant="ghost"
-              onClick={() => void invoke('network.decidePermission', request.id, 'deny')}
-            >
-              {t('Deny')}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => void invoke('network.decidePermission', request.id, 'never')}
-            >
-              {t('Never')}
-            </Button>
+              decide={(answer) => void invoke('network.decidePermission', request.id, answer)}
+            />
           </div>
         </div>
       ))}
@@ -126,12 +141,6 @@ export function DefaultPermissions({ status, invoke }: { status: NetworkStatus; 
   )
 }
 
-const PERMISSION_CHOICES = () => [
-  ...PERMISSION_DURATIONS.map((duration) => ({ value: duration as string, label: t(DURATION_LABEL[duration]) })),
-  { value: 'revoke', label: t('Off') },
-  { value: 'never', label: t('Never (no more requests)') },
-]
-
 function PermissionLine({
   device,
   permission,
@@ -141,28 +150,27 @@ function PermissionLine({
   permission: DevicePermission
   invoke: PermissionInvoke
 }) {
+  // A device from before permissions holds every one of them.
   const grant = device.permissions ? (device.permissions[permission] ?? null) : { until: null }
-  const state = device.blocked?.includes(permission) ? t('Never') : grantText(grant)
-  // A choice has no saved value of its own: the grant it makes is what is stored, and it may be time-limited.
-  const [choice, choose] = useStagedValue(`permission:${device.id}:${permission}`, '', (value) =>
-    invoke('network.setDevicePermission', device.id, permission, value as PermissionDuration | 'revoke' | 'never'),
+  const state = permissionState(grant, !!device.blocked?.includes(permission), Date.now())
+  const [choice, choose] = useStagedValue<string>(`permission:${device.id}:${permission}`, state, (value) =>
+    invoke('network.setDevicePermission', device.id, permission, value),
   )
   const label = t(PERMISSION_LABEL[permission])
+  const options = [
+    // An answered request lasts a while; it shows as it is until a lasting state replaces it.
+    ...(state === 'temporary' ? [{ value: 'temporary', label: grantText(grant) ?? t('Allowed') }] : []),
+    ...PERMISSION_SETTINGS.map((setting) => ({ value: setting, label: t(PERMISSION_SETTING_LABEL[setting]) })),
+  ]
   return (
     <div className={SETTINGS_CARD_LINE}>
       <span className="min-w-0 flex-1 truncate text-control">{label}</span>
-      <Dropdown
-        label={`${label}: ${state}`}
-        value={choice}
-        placeholder={state}
-        options={PERMISSION_CHOICES()}
-        onChange={choose}
-      />
+      <Dropdown label={label} value={choice} options={options} onChange={choose} />
     </div>
   )
 }
 
-/** One paired device's permissions, each changeable: off, this time, for a while or always. */
+/** One paired device's permissions, each allowed, ask first or blocked. */
 export function DevicePermissionList({ device, invoke }: { device: NetworkDevice; invoke: PermissionInvoke }) {
   if (device.role === 'viewer') return null
   return (
@@ -244,7 +252,9 @@ function useHostPermissions(host: string) {
   )
   useEffect(() => {
     void load()
-  }, [load])
+    return onHostEvent(host, 'device:permissions', () => void load())
+  }, [host, load])
+  // A host this window does not stream events from still answers: look again while a request waits.
   const waiting = !!view?.pending.length
   useEffect(() => {
     if (!waiting) return
@@ -410,7 +420,7 @@ export function HostPermissionList({ computer }: { computer: Computer }) {
           <div key={permission} className={SETTINGS_CARD_LINE}>
             <span className="min-w-0 flex-1 truncate text-control">{t(PERMISSION_LABEL[permission])}</span>
             <span className="flex-none text-caption text-muted-foreground">
-              {declined ? t('Declined by the host') : grantText(grant)}
+              {declined ? t('Declined by the host') : (grantText(grant) ?? t('Not allowed'))}
             </span>
             {!grant && !declined && (
               <Button size="sm" variant="secondary" disabled={asked} onClick={() => void request([permission])}>

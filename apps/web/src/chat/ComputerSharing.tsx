@@ -9,8 +9,8 @@ import { useHost } from '../workspace/HostProvider'
 
 /**
  * Which of this computer's paired devices can watch and control it from Ramu: those holding the Computer use permission,
- * the same one Remote access manages. A device without it can be allowed here for a day; anything longer is in Remote
- * access. Viewer devices hold no permissions, so they are not listed.
+ * the same one Remote access manages. A device without it can be allowed here; Remote access takes it back or blocks it.
+ * Viewer devices hold no permissions, so they are not listed.
  */
 export function ComputerSharing() {
   const { isLocal } = useHost()
@@ -31,7 +31,7 @@ export function ComputerSharing() {
   if (!isLocal || (!devices.length && !error)) return null
   const allow = async (device: NetworkDevice) => {
     try {
-      await ramu.invoke('network.setDevicePermission', device.id, 'computer', 'day')
+      await ramu.invoke('network.setDevicePermission', device.id, 'computer', 'allowed')
     } catch (reason) {
       setError(t(errorText(reason)))
     }
@@ -53,13 +53,13 @@ export function ComputerSharing() {
                 {allowed
                   ? t('Can watch and control this from Ramu')
                   : never
-                    ? t('Computer use is set to Never')
+                    ? t('Computer use is blocked')
                     : t('Needs Computer use to watch')}
               </span>
             </span>
             {!allowed && !never && (
               <Button size="sm" variant="secondary" onClick={() => void allow(device)}>
-                {t('Allow for 1 day')}
+                {t('Allow')}
               </Button>
             )}
             {!allowed && (

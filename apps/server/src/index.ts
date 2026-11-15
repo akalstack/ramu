@@ -128,12 +128,12 @@ import { PairBackInvites } from './remote/pairBackInvites'
 import { deviceOsSchema, readHostOs } from './remote/hostOs'
 import {
   DEVICE_PERMISSIONS,
-  PERMISSION_DURATIONS,
+  PERMISSION_ANSWERS,
+  PERMISSION_SETTINGS,
   grantFor,
   isDevicePermission,
   permissionFor,
   permissionRefusal,
-  type PermissionDuration,
 } from '@ramu/shared/devicePermissions'
 import { PairingError, PairingRequests } from './remote/pairingRequests'
 import { createPairingNotice } from './remote/pairingNotice'
@@ -2491,30 +2491,21 @@ async function networkMethod(method: string, args: unknown[]) {
     return agentHosts.list()
   }
   if (method === 'network.setDevicePermission') {
-    const [deviceId, permission, duration] = args
-    if (typeof deviceId !== 'string' || !isDevicePermission(permission)) throw new Error('Invalid permission')
-    if (duration !== 'revoke' && duration !== 'never' && !PERMISSION_DURATIONS.includes(duration as PermissionDuration))
-      throw new Error('Invalid duration')
-    if (duration === 'never') devices.block(deviceId, permission)
-    else
-      devices.setPermission(
-        deviceId,
-        permission,
-        duration === 'revoke' ? null : grantFor(duration as PermissionDuration, Date.now()),
-      )
+    const [deviceId, permission, setting] = z
+      .tuple([z.string().min(1).max(100), z.enum(DEVICE_PERMISSIONS), z.enum(PERMISSION_SETTINGS)])
+      .parse(args)
+    devices.setState(deviceId, permission, setting)
     permissionRequests.clear(deviceId, permission)
     send('device:permissions', {})
     return networkStatus()
   }
   if (method === 'network.decidePermission') {
-    const [requestId, duration] = args
-    const request = typeof requestId === 'string' ? permissionRequests.take(requestId) : undefined
+    const [requestId, answer] = z.tuple([z.string().min(1).max(100), z.enum(PERMISSION_ANSWERS)]).parse(args)
+    const request = permissionRequests.take(requestId)
     if (!request) throw new Error('That request was already answered or expired.')
-    if (duration === 'never') devices.block(request.deviceId, request.permission)
-    else if (duration !== 'deny') {
-      if (!PERMISSION_DURATIONS.includes(duration as PermissionDuration)) throw new Error('Invalid duration')
-      devices.setPermission(request.deviceId, request.permission, grantFor(duration as PermissionDuration, Date.now()))
-    }
+    if (answer === 'never') devices.block(request.deviceId, request.permission)
+    else if (answer !== 'deny')
+      devices.setPermission(request.deviceId, request.permission, grantFor(answer, Date.now()))
     send('device:permissions', {})
     return networkStatus()
   }

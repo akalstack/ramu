@@ -48,7 +48,7 @@ import { hostStorageFor } from '../hostStorage'
 import { ownHostId } from '../hosts'
 import { HostProvider } from './HostProvider'
 import { useComputers } from './computers'
-import { createEventPump, createHostEventRouter } from './hostEvents'
+import { createEventPump, createHostEventRouter, type HostEventRouter } from './hostEvents'
 import {
   createHostRuntime,
   createMountRequests,
@@ -208,6 +208,8 @@ export function useHostRuntime(): HostRuntime {
 
 // Live wiring: one event router over the bridge, one pump shared by every host, one runtime per mounted host.
 const router = createHostEventRouter(bridge, ownHostId)
+/** Listens to one host's push events, for code that follows a host other than the one it is shown in. */
+export const onHostEvent: HostEventRouter['on'] = (host, channel, listener) => router.on(host, channel, listener)
 const pump = createEventPump()
 const runtimes = createRuntimeRegistry((host) =>
   createHostRuntime(

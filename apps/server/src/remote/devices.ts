@@ -11,6 +11,7 @@ import {
   isDevicePermission,
   type DevicePermission,
   type PermissionGrant,
+  type PermissionSetting,
 } from '@ramu/shared/devicePermissions'
 
 export const PAIRING_TTL_MS = 10 * 60_000
@@ -312,6 +313,23 @@ export class DeviceStore {
           ? { ...entry, permissions: next, ...(blocked?.length ? { blocked } : { blocked: undefined }) }
           : entry,
       ),
+    })
+  }
+
+  /** Sets where a permission stands, as Settings does: allowed until revoked, ask first, or blocked. */
+  setState(id: string, permission: DevicePermission, setting: PermissionSetting, now = Date.now()): void {
+    if (setting === 'blocked') return this.block(id, permission)
+    this.setPermission(id, permission, setting === 'allowed' ? { until: null } : null, now)
+    if (setting === 'allowed' || !this.blocked(id).includes(permission)) return
+    // Ask first lifts a block, so the device may request it again.
+    const file = this.read()
+    this.write({
+      ...file,
+      devices: file.devices.map((entry) => {
+        if (entry.id !== id) return entry
+        const blocked = entry.blocked?.filter((item) => item !== permission)
+        return { ...entry, blocked: blocked?.length ? blocked : undefined }
+      }),
     })
   }
 

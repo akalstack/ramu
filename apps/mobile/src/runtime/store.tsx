@@ -282,6 +282,8 @@ interface Store extends State {
   appPreferences: Record<string, AppPreferences>
   /** Whether this phone should be offered a control that needs a host permission; unknown counts as yes. */
   mayUse(computerId: string, permission: DevicePermission): boolean
+  /** What this phone holds on each host, followed as the host changes it; null when the host cannot say. */
+  permissions: Record<string, DevicePermissionsView | null>
   /** Reads this phone's permissions on a host again, as after asking for one. */
   reloadPermissions(computerId: string): void
   /** The computer's model sets and steps (Settings › Models), which the step slider walks through. */
@@ -1579,6 +1581,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setMobileLayer: (id, layer) => setMobileLayers((p) => ({ ...p, [id]: layer })),
     appPreferences,
     mayUse: (id, permission) => mayUse(permissions[id], permission, Date.now()),
+    permissions,
     reloadPermissions: loadPermissions,
     invoke,
     refresh,
