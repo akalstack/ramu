@@ -112,18 +112,14 @@ export function PendingBubble({
           }}
         >
           {/* Drawn as the sent message will be (Markdown, long ones cut to a preview), so the swap does not move the
-              transcript; the floating pill above the composer says it is sending. */}
-          {delivering ? (
-            <LongMessage
-              text={item.text}
-              expanded={expanded}
-              label={expanded ? say('Show less') : say('Show more')}
-              accent={c.accent}
-              onToggle={() => setExpanded((open) => !open)}
-            />
-          ) : (
-            <T style={{ lineHeight: 21 }}>{item.text}</T>
-          )}
+              transcript, and a long message waiting offline does not grow taller than iOS will draw. */}
+          <LongMessage
+            text={item.text}
+            expanded={expanded}
+            label={expanded ? say('Show less') : say('Show more')}
+            accent={c.accent}
+            onToggle={() => setExpanded((open) => !open)}
+          />
         </View>
         {delivering ? null : (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingRight: 4 }}>

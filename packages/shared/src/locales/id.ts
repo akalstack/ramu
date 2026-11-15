@@ -7357,7 +7357,7 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Pengiriman belum pasti. Periksa percakapan di host sebelum mengirim lagi. Menghapus entri ini tidak membatalkan tindakan yang sudah diterima host.',
   "It hasn't reached the host yet, so the thread is discarded.": 'Belum sampai ke host, jadi thread-nya dibuang.',
   "It hasn't been sent yet.": 'Belum terkirim.',
-  Keep: 'Simpan',
+  Keep: 'Biarkan',
   'Sending: {0}': 'Mengirim: {0}',
   'Waiting to send: {0}. Tap to cancel': 'Menunggu dikirim: {0}. Ketuk untuk membatalkan',
   'Check delivery on host': 'Periksa pengiriman di host',
