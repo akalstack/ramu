@@ -108,7 +108,11 @@ export class PageAutomation {
       const document = this.pages.document(page.id)
       const built = JSON.stringify(document.reference.libraries ?? null)
       const key = `${page.id}:${page.version}`
-      if (!document.files?.length || built === pinned || seen[key] === pinned) continue
+      // Only an App is built with the shipped libraries; a doc, deck or diagram keeps its source, not an HTML entry.
+      const app = !page.kind || page.kind === 'app'
+      // Clears what an earlier check wrongly said about one.
+      if (!app && page.lastError?.device === 'host library check') this.pages.clearError(page.id)
+      if (!app || !document.files?.length || built === pinned || seen[key] === pinned) continue
       seen[key] = pinned
       changed = true
       const result = await this.libraries

@@ -494,6 +494,26 @@ it('runs kept checks once when the shipped libraries change, and reports a page 
   await automation.checkLibraries()
   expect(check).toHaveBeenCalledTimes(1)
   expect(pages.get(page.id).lastError?.message).toContain('would break: Check failed: Total')
+  // A diagram keeps its Mermaid source, not an HTML entry, so it is never checked or flagged.
+  const diagram = interactive.publish(
+    's',
+    (
+      await interactive.preview('s', {
+        ...input,
+        html: undefined,
+        kind: 'diagram',
+        format: 'mermaid',
+        source: 'flowchart TD\n  A --> B',
+      })
+    ).id,
+    'lib2',
+  )
+  const kept = pages.keep('s', diagram.id)
+  // An earlier check that wrongly flagged it is cleared.
+  pages.reportError(kept.id, { message: 'v1 would break', version: 1, device: 'host library check' })
+  await automation.checkLibraries()
+  expect(check).toHaveBeenCalledTimes(1)
+  expect(pages.get(kept.id).lastError).toBeUndefined()
 })
 
 it('imports a page another host shared without its records, values or grants', async () => {
