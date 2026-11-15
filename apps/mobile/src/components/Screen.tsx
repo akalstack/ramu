@@ -405,7 +405,7 @@ export function Header({
           headerLeft: modal
             ? () => <HeaderButton icon={X} label={say('Close')} onPress={close} />
             : left
-              ? () => <View>{left}</View>
+              ? () => <View style={{ flexDirection: 'row', alignItems: 'center' }}>{left}</View>
               : undefined,
           headerRight: right
             ? () => <View style={{ flexDirection: 'row', alignItems: 'center' }}>{right}</View>

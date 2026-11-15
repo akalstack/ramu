@@ -8,6 +8,7 @@ import { useStore } from '../../runtime/store'
 import { useAutomation } from '../../runtime/automation'
 import { runsOf, sortSchedules, VIEW_ONLY_SCHEDULE_NOTICE } from '../../runtime/scheduleModel'
 import { useT } from '../../i18n'
+import { FloatingActionButton } from '../../components/FloatingActionButton'
 import { GlassButton, Header, LargeTitle, PageScrollView, Screen, useScrolledUnderBar } from '../../components/Screen'
 import { TopFade } from '../../components/Glass'
 import { Nothing } from '../../components/InboxParts'
@@ -65,15 +66,18 @@ export default function SchedulesScreen() {
     else if (target.status !== 'online') openNeedComputer('offline')
     else router.push({ pathname: '/schedule-edit', params: { computer: target.id } })
   }
+  // Android offers New schedule as the floating button instead of a bar button.
   const actions = useTabActions(
-    viewOnly ? null : { icon: Plus, label: t.newSchedule, systemIcon: 'plus', onPress: create },
+    viewOnly || Platform.OS === 'android'
+      ? null
+      : { icon: Plus, label: t.newSchedule, systemIcon: 'plus', onPress: create },
   )
   return (
     <Screen>
       <Header large scrollEdge collapsed={edge.scrolled} title={t.schedules} right={actions} />
       <PageScrollView
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ paddingBottom: space.xl * 2 }}
+        contentContainerStyle={{ paddingBottom: Platform.OS === 'android' ? 96 : space.xl * 2 }}
         onScroll={edge.onScroll}
         scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={c.muted} />}
@@ -124,7 +128,8 @@ export default function SchedulesScreen() {
               title={t.noSchedules}
               detail={viewOnly ? '' : anyOnline ? t.noSchedulesHint : t.offlineNeeded}
             />
-            {anyOnline && !viewOnly ? (
+            {/* Android's floating button already offers it. */}
+            {anyOnline && !viewOnly && Platform.OS !== 'android' ? (
               <View style={{ alignItems: 'center' }}>
                 <GlassButton primary title={t.newSchedule} icon={Plus} onPress={create} />
               </View>
@@ -134,6 +139,7 @@ export default function SchedulesScreen() {
         <PageScheduleRows hosts={hosts.filter((host) => host.status === 'online').map((host) => host.id)} />
       </PageScrollView>
       {Platform.OS === 'ios' ? null : <TopFade visible={edge.scrolled} />}
+      {viewOnly ? null : <FloatingActionButton icon={Plus} label={t.newSchedule} overSystemBar onPress={create} />}
     </Screen>
   )
 }

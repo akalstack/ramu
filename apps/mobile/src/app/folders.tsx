@@ -32,6 +32,7 @@ import { Button, Chip, Divider, IconButton, ROW_INSET, Row, SectionLabel, T, tap
 import { useStore } from '../runtime/store'
 import { font, radius, space, useTheme } from '../theme'
 import { useSay } from '../i18n'
+import { PageLoader } from '../components/PageLoader'
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
@@ -188,7 +189,7 @@ export default function HostFolders() {
                 </Row>
               </View>
             ))}
-            {!roots.length && busy ? <ActivityIndicator style={{ margin: space.xl }} color={c.accent} /> : null}
+            {!roots.length && busy ? <PageLoader style={{ margin: space.xl }} color={c.accent} /> : null}
           </>
         ) : (
           <>

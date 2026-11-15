@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Alert, Pressable, View } from 'react-native'
+import { Alert, Pressable, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
 import { ArchiveRestore, ChevronRight, Copy, Download, FileDiff, ListTree, Trash2 } from 'lucide-react-native'
@@ -18,6 +18,7 @@ import {
 import { Header, HeaderButton, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
 import { Button, Card, Divider, IconButton, Pill, SectionLabel, T, tap } from '../../../components/ui'
 import { FileJumpSheet } from '../../../components/LargeDiff'
+import { PageLoader } from '../../../components/PageLoader'
 
 /** Files listed before Show all; the rest mount only when asked for. */
 const SHOWN_FIRST = 100
@@ -196,7 +197,7 @@ export default function Revision() {
               {error}
             </T>
           ) : !files ? (
-            <ActivityIndicator style={{ marginTop: space.l }} color={c.accent} />
+            <PageLoader style={{ marginTop: space.l }} color={c.accent} />
           ) : rows.length ? (
             <View style={{ marginHorizontal: -space.l }}>
               {(showAll ? rows : rows.slice(0, SHOWN_FIRST)).map((file, index) => {

@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react'
-import { ActivityIndicator, View } from 'react-native'
+import { View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useStore } from '../runtime/store'
 import { Header, Screen } from '../components/Screen'
 import { T } from '../components/ui'
 import { useSay } from '../i18n'
+import { PageLoader } from '../components/PageLoader'
 export default function ActivityRoute() {
   const say = useSay()
   const { computerId } = useLocalSearchParams<{ computerId?: string }>()
@@ -34,7 +35,7 @@ export default function ActivityRoute() {
     <Screen scrollable={false}>
       <Header title={say('Ongoing work')} />
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-        <ActivityIndicator />
+        <PageLoader />
         <T tone="muted">{say('Opening your workspace…')}</T>
       </View>
     </Screen>

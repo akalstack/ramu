@@ -39,6 +39,7 @@ import { useT } from '../../../i18n'
 import { Header, HeaderButton, LargeTitle, Screen, useScrolledUnderBar, PageFlatList } from '../../../components/Screen'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
 import { HostResources } from '../../../components/HostResources'
+import { FloatingActionButton } from '../../../components/FloatingActionButton'
 import { ChatRow } from '../../../components/ChatRow'
 import { ProjectActionsSheet } from '../../../components/ChatActions'
 import { Disclosure, animateLayout } from '../../../components/Motion'
@@ -587,6 +588,32 @@ export default function Threads() {
       }
     />
   ) : null
+  // Material puts a top bar's actions after the title, so on Android they join Search and Settings on the right.
+  const hostTools = (
+    <>
+      {computers.some(
+        (host) => (merged || host.id === selected) && store.appPreferences?.[host.id]?.showUsageLimits !== false,
+      ) ? (
+        <HeaderButton
+          actionId="tab-usage"
+          icon={Gauge}
+          label={say('Plan usage')}
+          systemIcon="gauge.with.dots.needle.50percent"
+          onPress={() => setUsageOpen(true)}
+        />
+      ) : null}
+      {/* What each host's threads hold in memory, and Stop: the desktop's status-bar Resources. */}
+      {computers.some((host) => (merged || host.id === selected) && host.access !== 'viewer') ? (
+        <HeaderButton
+          actionId="tab-resources"
+          icon={MemoryStick}
+          label={say('Resources')}
+          systemIcon="memorychip"
+          onPress={() => setResourcesOpen(true)}
+        />
+      ) : null}
+    </>
+  )
   return (
     <Screen>
       {header ?? (
@@ -598,33 +625,13 @@ export default function Threads() {
           title={t.chats}
           // Usage and Resources lead the bar: with Search and Settings on the right there is room for the centred
           // title once the large one scrolls away, which iOS hides when the buttons crowd it.
-          left={
+          left={Platform.OS === 'android' ? undefined : hostTools}
+          right={
             <>
-              {computers.some(
-                (host) =>
-                  (merged || host.id === selected) && store.appPreferences?.[host.id]?.showUsageLimits !== false,
-              ) ? (
-                <HeaderButton
-                  actionId="tab-usage"
-                  icon={Gauge}
-                  label={say('Plan usage')}
-                  systemIcon="gauge.with.dots.needle.50percent"
-                  onPress={() => setUsageOpen(true)}
-                />
-              ) : null}
-              {/* What each host's threads hold in memory, and Stop: the desktop's status-bar Resources. */}
-              {computers.some((host) => (merged || host.id === selected) && host.access !== 'viewer') ? (
-                <HeaderButton
-                  actionId="tab-resources"
-                  icon={MemoryStick}
-                  label={say('Resources')}
-                  systemIcon="memorychip"
-                  onPress={() => setResourcesOpen(true)}
-                />
-              ) : null}
+              {Platform.OS === 'android' ? hostTools : null}
+              {actions}
             </>
           }
-          right={<>{actions}</>}
         />
       )}
       <PageFlatList
@@ -632,7 +639,8 @@ export default function Threads() {
         keyExtractor={(row) => row.key}
         renderItem={({ item: row }) => renderRow(row)}
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ paddingBottom: space.xl }}
+        // Room below the last row for Android's floating New thread button.
+        contentContainerStyle={{ paddingBottom: Platform.OS === 'android' ? 96 : space.xl }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         onScroll={edge.onScroll}
@@ -744,6 +752,9 @@ export default function Threads() {
         open={usageOpen}
         onClose={() => setUsageOpen(false)}
       />
+      {selection.on ? null : (
+        <FloatingActionButton icon={SquarePen} label={t.newChat} onPress={() => router.push('/new')} />
+      )}
     </Screen>
   )
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Linking, RefreshControl, ScrollView, TextInput, View } from 'react-native'
+import { Linking, RefreshControl, ScrollView, TextInput, View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
 import { Copy, ExternalLink, FolderGit2, GitPullRequest, Layers, MessageSquare, Search, X } from 'lucide-react-native'
@@ -30,6 +30,7 @@ import { PullRequestListNotices } from '../../../components/PullRequestListNotic
 import { offlineHosts, pullRequestRepoLabel as repoLabel } from '../../../runtime/pullRequestList'
 import { PULL_REQUEST_ROW_TEXT_INSET, PullRequestListRow } from '../../../components/PullRequestListRow'
 import { pullRequestCopy } from '../../../runtime/pullRequestCopy'
+import { PageLoader } from '../../../components/PageLoader'
 
 /** The repository picker's choice: everything, one hosting service whole, or one repository on every host. */
 type Scope = { kind: 'all' } | { kind: 'service'; service: ForgeService } | { kind: 'repo'; key: string }
@@ -302,7 +303,7 @@ export default function PullRequestsScreen() {
             ))}
           </View>
         ) : waiting ? (
-          <ActivityIndicator color={c.muted} style={{ paddingVertical: space.xl }} />
+          <PageLoader style={{ marginVertical: space.xl }} />
         ) : (
           <Nothing
             icon={GitPullRequest}

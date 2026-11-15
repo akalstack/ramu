@@ -1,6 +1,6 @@
 import { goBackOrHome } from '../../../runtime/navigation'
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, TextInput, View } from 'react-native'
+import { TextInput, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Brain, MessageSquare, Send, Sparkles } from 'lucide-react-native'
 import type { LibrarySummary, LibrarySummaryItem } from '@ramu/shared/types'
@@ -11,6 +11,7 @@ import { useT, useSay } from '../../../i18n'
 import { Header, PageScrollView, Screen } from '../../../components/Screen'
 import { Markdown } from '../../../components/Markdown'
 import { Divider, IconButton, Row, SectionLabel, T, tap } from '../../../components/ui'
+import { PageLoader } from '../../../components/PageLoader'
 
 const ORDER: LibrarySummaryItem['change'][] = ['added', 'updated', 'merged', 'archived', 'restored']
 const LABEL: Record<LibrarySummaryItem['change'], string> = {
@@ -102,7 +103,7 @@ export default function SummaryScreen() {
         keyboardDismissMode="interactive"
         contentContainerStyle={{ padding: space.l, paddingBottom: space.xl * 2, gap: space.m }}
       >
-        {!summary && !error ? <ActivityIndicator style={{ margin: space.xl }} /> : null}
+        {!summary && !error ? <PageLoader style={{ margin: space.xl }} /> : null}
         {error ? (
           <T tone="bad" size={font.control}>
             {error}

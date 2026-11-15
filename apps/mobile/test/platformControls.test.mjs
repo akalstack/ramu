@@ -711,6 +711,32 @@ test('Android pairing actions use filled buttons, while iOS keeps glass', () => 
   assert.equal(android.Header({ title: 'Settings' }).props.options.headerTitleAlign, 'left')
 })
 
+test('Android top bars lay leading items in a row, and the main create action floats only on Android', () => {
+  const { Header } = load('components/Screen.tsx', 'android')
+  const left = Header({ title: 'Threads', left: 'tools' }).props.options.headerLeft()
+  assert.equal(left.props.style.flexDirection, 'row')
+  const ui = {
+    './ui': { T: 'T', tap() {} },
+    'react-native-reanimated': {
+      default: { View: 'AnimatedView' },
+      useSharedValue: (value) => ({ value }),
+      useAnimatedStyle: (style) => style(),
+      withSpring: (value) => value,
+    },
+  }
+  const android = load('components/FloatingActionButton.tsx', 'android', ui)
+  const ios = load('components/FloatingActionButton.tsx', 'ios', ui)
+  let pressed = 0
+  const action = { icon: 'SquarePen', label: 'New thread', onPress: () => pressed++ }
+  assert.equal(ios.FloatingActionButton(action), null)
+  const button = find(android.FloatingActionButton(action), 'Pressable')
+  assert.equal(button.props.accessibilityLabel, 'New thread')
+  button.props.onPress()
+  assert.equal(pressed, 1)
+  // Icon only, as Material's FAB; the label is its accessible name.
+  assert.ok(!nodes(button).some((node) => node.props?.children === 'New thread'))
+})
+
 test('iOS composite titles use a bounded leading item in the native bar', () => {
   const { Header, Screen } = load('components/Screen.tsx', 'ios')
   const tree = Header({ title: 'A long thread title', subtitle: 'host · project' })

@@ -71,6 +71,7 @@ import { supportsPullRequest } from '@ramu/shared/pullRequestSupport'
 import type { ForgeService, PullRequestWrite, ReviewVerdict } from '@ramu/shared/types'
 import { pullRequestHostChoices } from '../../../runtime/pullRequestHosts'
 import { pullRequestCopy } from '../../../runtime/pullRequestCopy'
+import { PageLoader } from '../../../components/PageLoader'
 
 const METHOD_LABEL: Record<MergeMethod, string> = {
   squash: 'Squash and merge',
@@ -553,7 +554,7 @@ export default function PullRequestScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={() => void pullToRefresh()} tintColor={c.muted} />
           }
         >
-          {!loaded ? <ActivityIndicator color={c.muted} style={{ paddingVertical: space.xl }} /> : null}
+          {!loaded ? <PageLoader style={{ marginVertical: space.xl }} /> : null}
           {loaded && !pr ? (
             <View style={{ gap: space.m }}>
               <T tone={error ? 'bad' : 'muted'}>{error ?? say('This pull request was not found with this account.')}</T>
@@ -1205,7 +1206,7 @@ function MergeSheet({
 
   return (
     <Sheet open onClose={() => !busy && onClose(false)} title={say('Merge pull request')}>
-      {!options && !error ? <ActivityIndicator color={c.muted} style={{ paddingVertical: space.l }} /> : null}
+      {!options && !error ? <PageLoader style={{ marginVertical: space.l }} /> : null}
       {blockers.length ? (
         <View
           style={{

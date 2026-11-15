@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Linking, View } from 'react-native'
+import { Alert, Linking, View } from 'react-native'
 import type { RamuMethods } from '@ramu/shared/api'
 import {
   queuePlace,
@@ -16,6 +16,7 @@ import { useStore } from '../runtime/store'
 import { Hint, ToggleRow } from './SettingRows'
 import { Button, Card, Divider, SectionLabel, Sheet, T } from './ui'
 import { SheetGroup, SheetOption } from './SheetOptions'
+import { PageLoader } from './PageLoader'
 
 type Status = ReturnType<RamuMethods['computer.status']>
 
@@ -73,7 +74,7 @@ export function ComputerUseSettings({ hostId }: { hostId: string }) {
         {say('This computer is not reachable, so Computer use cannot be shown.')}
       </T>
     )
-  if (!status && !error) return <ActivityIndicator style={{ margin: space.xl }} />
+  if (!status && !error) return <PageLoader style={{ margin: space.xl }} />
   if (!status)
     return (
       <T tone="bad" style={{ padding: space.xl }}>

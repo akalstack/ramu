@@ -25,7 +25,7 @@ import {
   routingSnapshot,
 } from '../runtime/routingDraft'
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Keyboard, Pressable, View } from 'react-native'
+import { ActivityIndicator, Alert, Keyboard, Platform, Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
@@ -645,17 +645,20 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
           ) : undefined
         }
         right={
-          <HeaderButton
-            icon={X}
-            systemIcon="xmark"
-            actionId="new-thread-close"
-            label={say('Close')}
-            onPress={() => {
-              Keyboard.dismiss()
-              if (asTab) router.navigate('/')
-              else goBackOrHome(router)
-            }}
-          />
+          // Android's up arrow already leaves the screen; a second Close beside it is not how Material bars read.
+          Platform.OS === 'android' && !asTab && picker === 'project' ? undefined : (
+            <HeaderButton
+              icon={X}
+              systemIcon="xmark"
+              actionId="new-thread-close"
+              label={say('Close')}
+              onPress={() => {
+                Keyboard.dismiss()
+                if (asTab) router.navigate('/')
+                else goBackOrHome(router)
+              }}
+            />
+          )
         }
         scrollEdge={picker === 'project'}
         align="center"

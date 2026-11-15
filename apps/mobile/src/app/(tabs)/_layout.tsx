@@ -5,8 +5,8 @@ import { useAutomation } from '../../runtime/automation'
 import { usePullRequestsWaiting } from '../../runtime/pullRequestsWaiting'
 import { useSay, useT } from '../../i18n'
 
-// The app's places, as a native tab bar (Liquid Glass on iOS 26): Threads, Inbox, Pull requests, Artifacts and New
-// thread. Schedules open from the Inbox, where their results arrive.
+// The app's places, as a native tab bar (Liquid Glass on iOS 26): Threads, Inbox, Pull requests, Artifacts and, on iOS,
+// New thread. Schedules open from the Inbox, where their results arrive.
 // Each tab holds its own stack, so a thread opened from any of them pushes on the root stack above the bar.
 export default function TabsLayout() {
   const { c, scheme } = useTheme()
@@ -52,7 +52,8 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Icon sf={{ default: 'macwindow', selected: 'macwindow' }} md="web" />
         <NativeTabs.Trigger.Label>{say('Artifacts')}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="compose" prominent>
+      {/* Android starts a thread from the Threads list's floating button, as Material apps do. */}
+      <NativeTabs.Trigger name="compose" prominent hidden={Platform.OS === 'android'}>
         <NativeTabs.Trigger.Icon sf="square.and.pencil" md="edit_square" />
         <NativeTabs.Trigger.Label>{t.newChat}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
