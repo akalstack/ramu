@@ -358,6 +358,8 @@ export default function ChatScreen() {
     changed: number
     ahead: number
     published: boolean
+    /** Whether the repository has any remote; without one there is nowhere to push. */
+    remote: boolean
     /** The thread already has its own worktree, so it cannot move into a new one. */
     isolated: boolean
   }>()
@@ -403,6 +405,7 @@ export default function ChatScreen() {
             changed: status.entries.length,
             ahead: status.ahead,
             published: Boolean(status.upstream),
+            remote: status.remote !== false,
             isolated: bindings.some((b) => b.mode === 'worktree'),
           })
       })().catch(() => {})
@@ -1010,16 +1013,18 @@ export default function ChatScreen() {
   }
   const pushReason = !live
     ? tr('Checking repository…')
-    : changed
-      ? tr('Commit or stash local changes before pushing.')
-      : live.ahead
-        ? live.ahead === 1
-          ? tr('Push 1 commit to origin')
-          : tr('Push {count} commits to origin', { count: live.ahead })
-        : !live.published
-          ? tr('Publish this branch to origin')
-          : tr('Nothing to push')
-  const canPush = Boolean(live) && !changed && (Boolean(live!.ahead) || !live!.published)
+    : !live.remote
+      ? tr('This repository has no remote to push to')
+      : changed
+        ? tr('Commit or stash local changes before pushing.')
+        : live.ahead
+          ? live.ahead === 1
+            ? tr('Push 1 commit to origin')
+            : tr('Push {count} commits to origin', { count: live.ahead })
+          : !live.published
+            ? tr('Publish this branch to origin')
+            : tr('Nothing to push')
+  const canPush = Boolean(live?.remote) && !changed && (Boolean(live!.ahead) || !live!.published)
   const push = () =>
     live &&
     void act(async () => {
@@ -1298,7 +1303,11 @@ export default function ChatScreen() {
                     icon={GitBranch}
                     label={tr('Source Control')}
                     systemIcon="arrow.triangle.branch"
-                    onPress={() => setSheet(true)}
+                    onPress={() => {
+                      // Files edited outside a turn (an editor, the terminal) count too, so the status is read again.
+                      setRefresh((n) => n + 1)
+                      setSheet(true)
+                    }}
                   />
                 ) : (
                   <HeaderButton
@@ -2169,9 +2178,14 @@ export default function ChatScreen() {
                 {
                   icon: CircleArrowUp,
                   title: 'Commit & push',
-                  sub: changed ? 'AI message, commit all, push' : 'No changes to commit',
+                  sub:
+                    live && !live.remote
+                      ? 'This repository has no remote to push to'
+                      : changed
+                        ? 'AI message, commit all, push'
+                        : 'No changes to commit',
                   run: quickCommit,
-                  off: !changed || busy,
+                  off: !changed || busy || (live ? !live.remote : false),
                 },
                 { icon: CircleArrowUp, title: 'Push', sub: pushReason, run: push, off: !canPush || busy },
               ],

@@ -7731,4 +7731,5 @@ export const indonesian: Readonly<Record<string, string>> = {
   '… {0} unchanged lines …': '… {0} baris tidak berubah …',
   'Waiting for “{0}” in the same checkout': 'Menunggu “{0}” di checkout yang sama',
   'Hold to choose how to send': 'Tahan untuk memilih cara mengirim',
+  'This repository has no remote to push to': 'Repositori ini tidak punya remote untuk push',
 }
