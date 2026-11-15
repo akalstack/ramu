@@ -7,5 +7,5 @@
   "compatibility_flags": ["nodejs_compat"],
   "routes": [{ "pattern": "account.akalstack.com", "custom_domain": true }],
   "vars": { "ACCOUNT_URL": "https://account.akalstack.com", "PASSKEY_DOMAIN": "akalstack.com" },
-  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "REPLACE_WITH_HYPERDRIVE_ID" }],
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "d9d714605f5049a9b07c239eeb53e078" }],
 }
