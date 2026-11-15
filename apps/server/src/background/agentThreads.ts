@@ -734,14 +734,15 @@ export class AgentThreadService {
       null,
       settings,
     )
-    const name = clipText(request.as?.trim() || 'a terminal', 80)
+    // With no name given the thread is simply from a terminal, never "by a terminal".
+    const name = clipText(request.as?.trim() ?? '', 80)
     const [started] = await this.start(planned, {
       source: null,
       groupId: `${TERMINAL_GROUP}${randomUUID()}`,
       sourceHost: { deviceId: TERMINAL_DEVICE, name, thread: '' },
       settings,
       depth: 0,
-      context: `Started from a terminal by ${JSON.stringify(name)}.`,
+      context: name ? `Started from a terminal by ${JSON.stringify(name)}.` : 'Started from a terminal.',
     })
     if (!started) throw new Error('The thread did not start.')
     return started

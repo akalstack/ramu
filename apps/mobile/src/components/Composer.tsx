@@ -1474,7 +1474,7 @@ export function Composer({
                 accessibilityRole="button"
                 accessibilityLabel={
                   offline
-                    ? 'Add to outbox'
+                    ? say('Add to outbox')
                     : limited
                       ? t.queue
                       : running
@@ -1483,7 +1483,7 @@ export function Composer({
                           : t.steer
                         : compaction?.compact
                           ? say('Compact and send')
-                          : 'Send'
+                          : say('Send')
                 }
                 disabled={!has || viewOnly || busy || uploading || dictating}
                 // A 34-point button beside the keyboard is easy to miss; the touch area reaches past it.

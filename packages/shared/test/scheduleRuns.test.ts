@@ -31,6 +31,7 @@ describe('thread origin', () => {
     expect(threadOriginLabel(origin({ groupId: 'terminal:x', host: 'mini' }), t)).toBe(
       'Started from a terminal by mini',
     )
+    expect(threadOriginLabel(origin({ groupId: 'terminal:x' }), t)).toBe('Started from a terminal')
     expect(threadOriginLabel(origin({ host: 'vps' }), t)).toBe('Started by an agent on vps')
     expect(threadOriginLabel(origin({ title: 'Fix login' }), t)).toBe('Started by the agent in Fix login')
     expect(threadOriginLabel(origin({}), t)).toBe('Started by another thread')

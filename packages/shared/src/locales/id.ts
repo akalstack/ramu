@@ -243,6 +243,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   Started: 'Dimulai',
   Suggested: 'Disarankan',
   'Started from a terminal by {0}': 'Dimulai dari terminal oleh {0}',
+  'Add to outbox': 'Tambahkan ke kotak keluar',
+  'Started from a terminal': 'Dimulai dari terminal',
   'Continued on {0}': 'Dilanjutkan di {0}',
   'Continued from {0} on {1}': 'Dilanjutkan dari {0} di {1}',
   'Bring back result': 'Bawa kembali hasil',

@@ -20,7 +20,8 @@ type Translate = (text: string, values?: Record<string, string>) => string
 
 /** Who started a thread the person did not start themselves, in the words both the sidebar and the phone's list use. */
 export function threadOriginLabel(origin: ThreadOrigin, t: Translate): string {
-  if (startedFromTerminal(origin)) return t('Started from a terminal by {0}', { '0': origin.host ?? '' })
+  if (startedFromTerminal(origin))
+    return origin.host ? t('Started from a terminal by {0}', { '0': origin.host }) : t('Started from a terminal')
   if (continuedFrom(origin) && origin.host)
     return t('Continued from {0} on {1}', { '0': origin.title ?? '', '1': origin.host })
   if (origin.host) return t('Started by an agent on {0}', { '0': origin.host })
