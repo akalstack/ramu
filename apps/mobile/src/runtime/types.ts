@@ -164,7 +164,12 @@ export type TranscriptItem = (
   | {
       kind: 'note'
       id: string
+      /** English, for search and previews. */
       title: string
+      /** The catalog copy behind `title`; drawn with translate() so the note follows the app language. */
+      titleCopy?: { text: string; values?: import('@ramu/shared/i18n').TranslationValues }
+      /** The detail is Ramu's own catalog copy rather than text from the person or an agent, so it is translated. */
+      detailIsCopy?: true
       detail?: string
       failed?: boolean
       /** Set on a goal's turning-point note, so the title follows the app language. */
@@ -224,6 +229,8 @@ export interface MobileProject extends Project {
 export interface DiffLine {
   type: 'ctx' | 'add' | 'del' | 'hunk'
   text: string
+  /** On a hunk row that stands for collapsed unchanged lines: how many, so the row is drawn in the reader's language. */
+  skipped?: number
   old?: number
   new?: number
 }

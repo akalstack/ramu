@@ -533,7 +533,7 @@ export function GoalQueueTray({
           ) : null}
           <IconButton
             icon={paused ? Play : Pause}
-            label={paused ? 'Resume goal' : 'Pause goal'}
+            label={paused ? say('Resume goal') : say('Pause goal')}
             size={28}
             tone="muted"
             onPress={onToggleGoal}
@@ -548,7 +548,7 @@ export function GoalQueueTray({
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}>
           <Pause size={14} color={c.warn} strokeWidth={1.8} />
           <T size={font.control} tone="warn" style={{ flex: 1 }}>
-            Queue paused
+            {say('Queue paused')}
           </T>
           {onResumeQueue ? (
             <Pressable
@@ -570,7 +570,7 @@ export function GoalQueueTray({
             >
               <Play size={12} color={c.soft} />
               <T size={font.caption} weight="600" tone="soft">
-                Resume
+                {say('Resume')}
               </T>
             </Pressable>
           ) : null}
@@ -1205,7 +1205,7 @@ export function Composer({
       ) : null}
       {uploading ? (
         <T size={font.caption} tone="muted" style={{ padding: space.s }}>
-          Uploading to this host…
+          {say('Uploading to this host…')}
         </T>
       ) : null}
       {editing ? (
@@ -1233,9 +1233,9 @@ export function Composer({
       ) : null}
       {viewOnly ? (
         <T tone="muted" size={font.caption} style={{ paddingTop: space.s }} accessibilityRole="alert">
-          {store.language === 'id'
-            ? 'Perangkat ini hanya bisa melihat thread dan menjawab permintaan, tidak mengirim pesan. Minta pemilik host memasangkannya dengan akses penuh.'
-            : 'This phone can view threads and answer requests, but not send messages. Ask the host owner to pair it with full access.'}
+          {say(
+            'This phone can view threads and answer requests, but not send messages. Ask the host owner to pair it with full access.',
+          )}
         </T>
       ) : null}
       <View style={{ paddingTop: space.s }}>
@@ -1438,7 +1438,7 @@ export function Composer({
           ) : onResume && !has && !running && !offline ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={resumeLabel ?? 'Continue where the agent left off'}
+              accessibilityLabel={resumeLabel ?? say('Continue where the agent left off')}
               onPress={() => {
                 tap()
                 onResume()
@@ -1586,7 +1586,7 @@ export function Composer({
                 title={skill.name}
                 help={skill.description}
                 onPress={() => {
-                  append(`\nUse the host skill at ${skill.path}.`)
+                  append(`\n${translate(store.language, 'Use the host skill at {0}.', { 0: skill.path })}`)
                   setMenu(null)
                 }}
               />
@@ -1726,8 +1726,9 @@ async function pickAttachment(
   add: (attachment: import('@ramu/shared/types').Attachment) => void,
   kind: 'document' | 'camera' | 'photos' = 'document',
 ) {
+  const say = (text: string) => translate(store.language, text)
   try {
-    if (!store.isOnline(computerId)) throw new Error('Reconnect this host to upload an attachment.')
+    if (!store.isOnline(computerId)) throw new Error(say('Reconnect this host to upload an attachment.'))
     let asset: { uri: string; name: string; size?: number; file?: File }
     if (kind === 'document') {
       const { getDocumentAsync } = await import('expo-document-picker')
@@ -1737,7 +1738,7 @@ async function pickAttachment(
     } else {
       const picker = await import('expo-image-picker')
       if (kind === 'camera' && !(await picker.requestCameraPermissionsAsync()).granted)
-        throw new Error('Camera permission is required to take a photo.')
+        throw new Error(say('Camera permission is required to take a photo.'))
       const result =
         kind === 'camera'
           ? await picker.launchCameraAsync({ quality: 0.8 })
@@ -1746,7 +1747,7 @@ async function pickAttachment(
       const photo = result.assets[0]!
       asset = { uri: photo.uri, name: photo.fileName ?? `photo-${Date.now()}.jpg`, size: photo.fileSize }
     }
-    if ((asset.size ?? 0) > 10_000_000) throw new Error('Attachments must be 10 MB or smaller.')
+    if ((asset.size ?? 0) > 10_000_000) throw new Error(say('Attachments must be 10 MB or smaller.'))
     const { File } = await import('expo-file-system')
     const base64 = asset.file
       ? await new Promise<string>((resolve, reject) => {
@@ -1756,10 +1757,10 @@ async function pickAttachment(
           reader.readAsDataURL(asset.file!)
         })
       : await new File(asset.uri).base64()
-    if (base64.length > 13_400_000) throw new Error('Attachments must be 10 MB or smaller.')
+    if (base64.length > 13_400_000) throw new Error(say('Attachments must be 10 MB or smaller.'))
     add(await store.invoke(computerId, 'attachments.add', asset.name, base64))
   } catch (error) {
-    Alert.alert(translate(store.language, 'Attachment failed'), error instanceof Error ? error.message : String(error))
+    Alert.alert(say('Attachment failed'), error instanceof Error ? error.message : String(error))
   }
 }
 
@@ -2013,10 +2014,10 @@ function QuickSteps({
           style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingVertical: space.xs }}
         >
           <T size={font.control} tone="soft" style={{ flex: 1 }}>
-            Fast mode · higher usage
+            {say('Fast mode · higher usage')}
           </T>
           <T size={font.control} weight="600" tone={value.settings?.serviceTier === 'fast' ? 'accent' : 'muted'}>
-            {value.settings?.serviceTier === 'fast' ? 'On' : 'Off'}
+            {value.settings?.serviceTier === 'fast' ? say('On') : say('Off')}
           </T>
         </Pressable>
       ) : null}

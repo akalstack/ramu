@@ -109,8 +109,8 @@ export function ComputerUseSettings({ hostId }: { hostId: string }) {
               title={say('Let app drags use your real pointer')}
               help={say(
                 status.globalPointer
-                  ? 'On. Dragging in an app can move windows and select text, and it may move the pointer while the agent works.'
-                  : 'Off. Drags stay inside the app and never move the pointer, but cannot move windows or select text.',
+                  ? 'On. Dragging in an app can move windows and select text, and it may move your pointer while the agent works.'
+                  : 'Off. Drags stay inside the app and never move your pointer, but cannot move windows or select text.',
               )}
               value={status.globalPointer}
               disabled={busy || readOnly}

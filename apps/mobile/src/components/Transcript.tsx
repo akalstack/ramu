@@ -357,7 +357,7 @@ function MessageActions({
       // On iOS a long press selects a word natively, so the message itself takes none; "More" in the bar has the rest.
       onLongPress={native ? undefined : () => startSelecting(null)}
       delayLongPress={350}
-      accessibilityHint="Long-press to select text"
+      accessibilityHint={say('Long-press to select text')}
     >
       <MessageTextSelection.Provider value={report}>
         <MessageBlockPress.Provider value={native ? null : startSelecting}>
@@ -370,6 +370,7 @@ function MessageActions({
 
 /** An image in the chat: fits the column, keeps its aspect ratio, and opens full screen when tapped. */
 function ImageBlock({ uri, alt, size }: { uri: string; alt?: string; size?: number }) {
+  const say = useSay()
   const { c } = useTheme()
   const [ratio, setRatio] = useState(4 / 3)
   const [full, setFull] = useState(false)
@@ -386,7 +387,7 @@ function ImageBlock({ uri, alt, size }: { uri: string; alt?: string; size?: numb
     <>
       <Pressable
         accessibilityRole="imagebutton"
-        accessibilityLabel={alt ?? 'Image'}
+        accessibilityLabel={alt ?? say('Image')}
         onPress={() => {
           tap()
           setFull(true)
@@ -402,7 +403,7 @@ function ImageBlock({ uri, alt, size }: { uri: string; alt?: string; size?: numb
           }
         />
       </Pressable>
-      <Sheet open={full} onClose={() => setFull(false)} title={alt ?? 'Image'}>
+      <Sheet open={full} onClose={() => setFull(false)} title={alt ?? say('Image')}>
         <Card style={{ marginHorizontal: space.l, padding: space.s }}>
           <Image
             source={{ uri }}
@@ -658,6 +659,7 @@ export function TranscriptItemView({ item, chat, meta }: { item: TranscriptItem;
 
 /** Time of an answer and a copy button, like the desktop's row under each reply. */
 const AnswerFooter = memo(function AnswerFooter({ at, text }: { at?: number; text: string }) {
+  const say = useSay()
   const { c } = useTheme()
   const store = useStore()
   const [copied, setCopied] = useState(false)
@@ -682,7 +684,7 @@ const AnswerFooter = memo(function AnswerFooter({ at, text }: { at?: number; tex
       ) : null}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={copied ? 'Copied' : 'Copy reply'}
+        accessibilityLabel={copied ? say('Copied') : say('Copy reply')}
         hitSlop={10}
         onPress={() => {
           tap()
@@ -1029,7 +1031,7 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
       ? loginName(s)
       : label(s)
   let title = item.goalNote ? (strings.goalNotes[item.goalNote] ?? item.title) : item.title
-  if (item.title === 'Background command stop requested') title = translate(store.language, item.title)
+  if (!item.goalNote) title = item.titleCopy ? say(item.titleCopy.text, item.titleCopy.values) : say(item.title)
   // As on the desktop, each model carries its provider's mark: "[Claude] Opus Medium → [Codex] GPT-5.5 High".
   let change: ReactNode = null
   if (item.settings) {
@@ -1050,12 +1052,12 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
     const others = (
       before
         ? [
-            ...([[ACCESS[before.access], ACCESS[next.access]]] as const)
+            ...([[say(ACCESS[before.access]), say(ACCESS[next.access])]] as const)
               .filter(([a, b]) => a !== b)
               .map(([a, b]) => `${a} → ${b}`),
             ...(accountChanged ? [`${loginName(before!)} → ${loginName(next)}`] : []),
           ]
-        : [ACCESS[next.access]]
+        : [say(ACCESS[next.access])]
     ).join(' · ')
     change = (
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
@@ -1091,7 +1093,7 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
         )}
         {item.detail ? (
           <T size={font.caption} tone="placeholder" style={{ textAlign: 'center' }}>
-            {item.detail}
+            {item.detailIsCopy ? say(item.detail) : item.detail}
           </T>
         ) : null}
         {item.pending ? (
@@ -1106,7 +1108,7 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
             style={{ marginTop: 2 }}
           >
             <T size={font.caption} weight="600" tone="accent">
-              {item.previous ? `Cancel · stay on ${label(item.previous)}` : 'Cancel'}
+              {item.previous ? say('Cancel · stay on {0}', { 0: label(item.previous) }) : say('Cancel')}
             </T>
           </Pressable>
         ) : null}
@@ -1121,8 +1123,10 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
           >
             <T size={font.caption} weight="600" tone="accent">
               {undoing
-                ? 'Switching back…'
-                : `Switch back to ${item.previous ? backTo(item.previous) : 'previous model'}`}
+                ? say('Switching back…')
+                : item.previous
+                  ? say('Switch back to {0}', { 0: backTo(item.previous) })
+                  : say('Switch back to previous model')}
             </T>
           </Pressable>
         ) : null}
@@ -1134,6 +1138,7 @@ function NoteRow({ item, chat }: { item: Extract<TranscriptItem, { kind: 'note' 
 
 /** "Worked for 12m 48s": a finished turn's routine steps, collapsed until tapped. */
 function TurnSummary({ label, children }: { label: string; children: ReactNode }) {
+  const say = useSay()
   const { c } = useTheme()
   const [open, setOpen] = useState(false)
   const toggled = useContext(RowToggle)
@@ -1159,7 +1164,7 @@ function TurnSummary({ label, children }: { label: string; children: ReactNode }
       >
         {/* A section heading over the steps, so its chevron stays beside the label as on the desktop; the row is the target. */}
         <T size={font.control} tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
-          {label}
+          {say(label)}
         </T>
         <Disclosure open={open} color={c.muted} />
       </Pressable>
@@ -1365,7 +1370,7 @@ function ToolGroup({ item, thinking }: { item: Extract<TranscriptItem, { kind: '
         </View>
         {failed > 0 ? (
           <T size={font.caption} tone="bad">
-            {language === 'id' ? 'Gagal' : 'Failed'} · {failed}
+            {say('Failed')} · {failed}
           </T>
         ) : null}
         <Disclosure open={open} color={c.muted} />
@@ -1503,7 +1508,7 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
         ) : null}
         {failed ? (
           <T size={font.caption} tone="bad">
-            {storeLanguage === 'id' ? 'Gagal' : 'Failed'}
+            {say('Failed')}
           </T>
         ) : null}
         {openable ? <Disclosure open={open} color={c.muted} /> : null}
@@ -1560,7 +1565,7 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
             {item.input ? (
               <View style={{ gap: space.xs, marginBottom: item.detail ? space.s : 0 }}>
                 <T size={font.caption} weight="600" tone="muted">
-                  {storeLanguage === 'id' ? 'Masukan' : 'Input'}
+                  {say('Input')}
                 </T>
                 <T size={font.caption} mono copyable={item.input}>
                   {item.input}
@@ -1568,7 +1573,7 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
               </View>
             ) : null}
             <T size={font.caption} weight="600" tone="muted">
-              {storeLanguage === 'id' ? 'Keluaran' : 'Output'}
+              {say('Output')}
             </T>
             <T
               size={font.caption}
@@ -1577,14 +1582,7 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
               numberOfLines={PREVIEW_LINES}
               ellipsizeMode="tail"
             >
-              {item.detail ||
-                (running
-                  ? storeLanguage === 'id'
-                    ? 'Berjalan…'
-                    : 'Running…'
-                  : storeLanguage === 'id'
-                    ? 'Tidak ada keluaran'
-                    : 'No output')}
+              {item.detail || (running ? say('Running…') : say('No output'))}
             </T>
             {long ? (
               <Pressable
@@ -1598,7 +1596,7 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
                 style={{ alignSelf: 'flex-start', paddingTop: space.s }}
               >
                 <T size={font.caption} weight="600" tone="accent">
-                  Show full log
+                  {say('Show full log')}
                 </T>
               </Pressable>
             ) : null}
@@ -1926,7 +1924,7 @@ function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
         <ShieldAlert size={16} color={c.warn} strokeWidth={1.8} />
         <T size={font.body} weight="600">
-          {item.title}
+          {say(item.title)}
         </T>
       </View>
       <View style={{ backgroundColor: c.code, borderRadius: radius.s, padding: space.m }}>

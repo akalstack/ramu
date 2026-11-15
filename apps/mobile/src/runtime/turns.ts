@@ -1,3 +1,12 @@
+import type { TranslationValues } from '@ramu/shared/i18n'
+
+/** Translates English catalog copy; the caller passes the app's translator. */
+type Say = (text: string, values?: TranslationValues) => string
+// Node tests import this file directly, which cannot load the shared translator, so English is filled here.
+const english: Say = (text: string, values: TranslationValues = {}) =>
+  text.replace(/\{(\w+)\}/g, (placeholder, name: string) =>
+    Object.hasOwn(values, name) ? String(values[name]) : placeholder,
+  )
 import type { TranscriptItem } from './types'
 
 /** "35s", "12m 48s", "1h 5m": the desktop's duration format. */
@@ -30,7 +39,12 @@ const settled = (item: TranscriptItem) =>
  * Once a turn is done its routine steps fold into one "Worked for …" row; the answer, failed or open
  * steps, and unanswered prompts stay visible.
  */
-export function foldTurns(items: TranscriptItem[], live: boolean, waiting: boolean): TranscriptItem[] {
+export function foldTurns(
+  items: TranscriptItem[],
+  live: boolean,
+  waiting: boolean,
+  say: Say = english,
+): TranscriptItem[] {
   const turns: TranscriptItem[][] = []
   // A message to a teammate opens a turn too, so the lead's answer above it is not folded into the work before it.
   // Work after a turn's end opens one as well: a goal continuing on its own must not fold into the turn that finished.
@@ -68,11 +82,11 @@ export function foldTurns(items: TranscriptItem[], live: boolean, waiting: boole
       const duration = startedAt !== undefined && endedAt !== undefined ? Math.max(0, endedAt - startedAt) : undefined
       const label = done
         ? duration !== undefined
-          ? `Worked for ${formatDuration(duration)}`
-          : 'Worked'
+          ? say('Worked for {0}', { 0: formatDuration(duration) })
+          : say('Worked')
         : duration !== undefined
-          ? `Stopped after ${formatDuration(duration)}`
-          : 'Stopped'
+          ? say('Stopped after {0}', { 0: formatDuration(duration) })
+          : say('Stopped')
       return [
         ...(user ? [user] : []),
         ...(folded.length

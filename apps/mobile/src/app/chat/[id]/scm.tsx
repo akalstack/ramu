@@ -156,6 +156,7 @@ function FileRow({
   onStage?: () => void
   onDiscard?: () => void
 }) {
+  const say = useSay()
   const dir = file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/') + 1) : ''
   return (
     <View
@@ -173,7 +174,13 @@ function FileRow({
       </View>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Open ${file.staged === 'all' ? 'all' : file.staged ? 'staged' : 'unstaged'} changes in ${file.path}`}
+        accessibilityLabel={
+          file.staged === 'all'
+            ? say('Open all changes in {0}', { 0: file.path })
+            : file.staged
+              ? say('Open staged changes in {0}', { 0: file.path })
+              : say('Open unstaged changes in {0}', { 0: file.path })
+        }
         onPress={() => {
           tap()
           onOpen()
@@ -190,7 +197,7 @@ function FileRow({
       {onDiscard ? (
         <IconButton
           icon={Undo2}
-          label={file.staged === 'all' ? 'Discard unstaged changes' : 'Discard changes'}
+          label={file.staged === 'all' ? say('Discard unstaged changes') : say('Discard changes')}
           size={34}
           tone="muted"
           onPress={onDiscard}
@@ -199,7 +206,7 @@ function FileRow({
       {onStage ? (
         <IconButton
           icon={file.staged ? Minus : Plus}
-          label={file.staged ? 'Unstage changes' : 'Stage changes'}
+          label={file.staged ? say('Unstage changes') : say('Stage changes')}
           size={34}
           tone="soft"
           onPress={onStage}
@@ -493,7 +500,7 @@ export default function SourceControl() {
     }
   }
   const call = (method: 'git.stage' | 'git.unstage' | 'git.discard', paths: string[]) => {
-    if (!chat || !binding) throw new Error('Select a repository first.')
+    if (!chat || !binding) throw new Error(tr('Select a repository first.'))
     return store.invoke(chat.computerId, method, chat.taskId, binding.repoId, paths)
   }
   const setStaged = (paths: string[], value: boolean) =>
@@ -504,12 +511,12 @@ export default function SourceControl() {
       const paths = targets.map((f) => f.path)
       const preview = await store.invoke(chat.computerId, 'git.discardPreview', chat.taskId, binding.repoId, paths)
       Alert.alert(
-        'Discard changes?',
-        `${store.computers.find((c) => c.id === chat.computerId)?.name} · ${binding.cwd}\n\n${preview.files.map((f) => `${f.path}${f.untracked ? ' (permanently delete)' : ' (restore)'}`).join('\n')}`,
+        tr('Discard changes?'),
+        `${store.computers.find((c) => c.id === chat.computerId)?.name} · ${binding.cwd}\n\n${preview.files.map((f) => `${f.path} (${f.untracked ? tr('permanently delete') : tr('restore')})`).join('\n')}`,
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: tr('Cancel'), style: 'cancel' },
           {
-            text: 'Discard',
+            text: tr('Discard'),
             style: 'destructive',
             onPress: () =>
               void run(
@@ -522,7 +529,7 @@ export default function SourceControl() {
       )
     }, 'Review discard preview')
   const syncRepo = async () => {
-    if (!chat || !binding) throw new Error('Select a repository first.')
+    if (!chat || !binding) throw new Error(tr('Select a repository first.'))
     try {
       await store.invoke(chat.computerId, 'git.sync', chat.taskId, binding.repoId)
     } catch (error) {
@@ -530,22 +537,22 @@ export default function SourceControl() {
       if (!approval) throw error
       const approved = await new Promise<boolean>((resolve) =>
         Alert.alert(
-          'Push to a protected branch?',
+          tr('Push to a protected branch?'),
           `${binding.repoName} · ${approval.branch} → ${approval.targetBranch}`,
           [
-            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-            { text: 'Sync anyway', onPress: () => resolve(true) },
+            { text: tr('Cancel'), style: 'cancel', onPress: () => resolve(false) },
+            { text: tr('Sync anyway'), onPress: () => resolve(true) },
           ],
           { cancelable: true, onDismiss: () => resolve(false) },
         ),
       )
-      if (!approved) throw new Error('Sync cancelled. Nothing was pushed.', { cause: error })
+      if (!approved) throw new Error(tr('Sync cancelled. Nothing was pushed.'), { cause: error })
       await store.invoke(chat.computerId, 'git.sync', chat.taskId, binding.repoId, approval)
     }
   }
   const sync = () => void run(syncRepo, 'Synced changes')
   const continueOperation = (method: 'git.continueOperation' | 'git.abortOperation') => {
-    if (!chat || !binding) throw new Error('Select a repository first.')
+    if (!chat || !binding) throw new Error(tr('Select a repository first.'))
     return store.invoke(chat.computerId, method, chat.taskId, binding.repoId)
   }
   const openConflict = (path: string) => {
@@ -622,7 +629,7 @@ export default function SourceControl() {
       throw new Error(
         tr(gates.operation ? 'Finish the rebase or merge in progress first.' : 'Resolve conflicts before committing.'),
       )
-    if (!chat || !binding) throw new Error('Select a repository first.')
+    if (!chat || !binding) throw new Error(tr('Select a repository first.'))
     const result = await draftCommit(
       store.invoke,
       chat,
@@ -648,7 +655,7 @@ export default function SourceControl() {
     void run(async () => {
       const blocked = commitBlock(action, gates, changeCount, !!head)
       if (blocked) throw new Error(tr(blocked))
-      if (!chat || !binding) throw new Error('Select a repository first.')
+      if (!chat || !binding) throw new Error(tr('Select a repository first.'))
       const onBranch = await chooseBranch()
       if (onBranch === null) return CANCELLED
       if (!staged.length && unstaged.length)
@@ -698,7 +705,7 @@ export default function SourceControl() {
     argument?: string,
     stagedOnly?: boolean,
   ) => {
-    if (!chat || !binding) throw new Error('Select a repository first.')
+    if (!chat || !binding) throw new Error(tr('Select a repository first.'))
     const pc = chat.computerId,
       task = chat.taskId,
       repoId = binding.repoId
@@ -876,7 +883,7 @@ export default function SourceControl() {
     if (!validBranchName(name)) return
     setSheet(null)
     setBranchName('')
-    void run(() => gitAction('git.createBranch', name), `Created ${name}`)
+    void run(() => gitAction('git.createBranch', name), tr('Created {0}', { 0: name }))
   }
 
   return (
@@ -884,7 +891,9 @@ export default function SourceControl() {
       <Header
         title={tr('Source Control')}
         subtitle={
-          project ? `${project.name} · ${chat?.mode === 'worktree' ? 'worktree' : 'current checkout'}` : undefined
+          project
+            ? `${project.name} · ${chat?.mode === 'worktree' ? tr('worktree') : tr('current checkout')}`
+            : undefined
         }
         right={<HeaderButton icon={Ellipsis} label={tr('Source control actions')} onPress={() => setSheet('menu')} />}
       />
@@ -898,7 +907,7 @@ export default function SourceControl() {
           keyboardDismissMode="on-drag"
         >
           {!binding ? (
-            <T tone="muted">No repository is attached to this thread.</T>
+            <T tone="muted">{tr('No repository is attached to this thread.')}</T>
           ) : binding.notGit ? (
             <Row
               onPress={() =>
@@ -908,7 +917,7 @@ export default function SourceControl() {
                 )
               }
             >
-              <T>Initialize Git in {binding.cwd}</T>
+              <T>{tr('Initialize Git in {0}', { 0: binding.cwd })}</T>
             </Row>
           ) : null}
           {/* One picker instead of tabs: a workspace project can hold any number of repositories. */}
@@ -934,8 +943,12 @@ export default function SourceControl() {
                 {repo}
               </T>
               <T size={font.caption} tone="muted" style={{ flex: 1 }} numberOfLines={1}>
-                {changeCount ? `${changeCount} change${changeCount === 1 ? '' : 's'}` : 'no changes'} · {repos.length}{' '}
-                repositories
+                {!changeCount
+                  ? tr('no changes')
+                  : changeCount === 1
+                    ? tr('1 change')
+                    : tr('{count} changes', { count: changeCount })}{' '}
+                · {tr('{count} repositories', { count: repos.length })}
               </T>
               <ChevronDown size={15} color={c.muted} />
             </Pressable>
@@ -972,9 +985,9 @@ export default function SourceControl() {
               onPress={() => {
                 tap()
                 if (published) sync()
-                else void run(() => gitAction('git.push'), `Published ${branch} to origin`)
+                else void run(() => gitAction('git.push'), tr('Published {0} to origin', { 0: branch }))
               }}
-              accessibilityLabel={published ? 'Sync changes' : 'Publish branch'}
+              accessibilityLabel={published ? tr('Sync changes') : tr('Publish branch')}
               style={({ pressed }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -988,7 +1001,7 @@ export default function SourceControl() {
             >
               {published ? <RefreshCcw size={15} color={c.soft} /> : <CloudUpload size={15} color={c.soft} />}
               <T size={font.control} weight="500" tone="soft" style={{ fontVariant: ['tabular-nums'] }}>
-                {published ? `${behind}↓ ${ahead}↑` : 'Publish'}
+                {published ? `${behind}↓ ${ahead}↑` : tr('Publish')}
               </T>
             </Pressable>
           </View>
@@ -1132,7 +1145,7 @@ export default function SourceControl() {
                     staged.length
                       ? {
                           icon: Minus,
-                          label: 'Unstage all changes',
+                          label: tr('Unstage all changes'),
                           onPress: () =>
                             setStaged(
                               staged.map((f) => f.path),
@@ -1164,7 +1177,7 @@ export default function SourceControl() {
                   unstaged.length
                     ? {
                         icon: Plus,
-                        label: 'Stage all changes',
+                        label: tr('Stage all changes'),
                         onPress: () =>
                           setStaged(
                             unstaged.map((f) => f.path),
@@ -1187,9 +1200,9 @@ export default function SourceControl() {
                 ))}
               </Group>
               {needle && !shownStaged.length && !shownUnstaged.length && !shownConflicted.length ? (
-                <T tone="muted">No changed file matches.</T>
+                <T tone="muted">{tr('No changed file matches.')}</T>
               ) : null}
-              {!changeCount ? <T tone="muted">No changes in this checkout.</T> : null}
+              {!changeCount ? <T tone="muted">{tr('No changes in this checkout.')}</T> : null}
             </>
           ) : null}
           {tab === 'commits' || tab === 'stashes' ? (
@@ -1351,7 +1364,7 @@ export default function SourceControl() {
                     tap()
                     if (!gates.syncOnly) commit()
                     else if (published) sync()
-                    else void run(() => gitAction('git.push'), `Published ${branch} to origin`)
+                    else void run(() => gitAction('git.push'), tr('Published {0} to origin', { 0: branch }))
                   }}
                   style={({ pressed }) => ({
                     flex: 1,
@@ -1494,7 +1507,7 @@ export default function SourceControl() {
               selected={b === branch}
               onPress={() => {
                 setSheet(null)
-                if (b !== branch) void run(() => gitAction('git.checkout', b), `Switched to ${b}`)
+                if (b !== branch) void run(() => gitAction('git.checkout', b), tr('Switched to {0}', { 0: b }))
               }}
             />
           ))}

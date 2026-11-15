@@ -1,4 +1,5 @@
 import { LiveBuffer } from '@ramu/shared/sync/streamSync'
+import { translate, type TranslationValues } from '@ramu/shared/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Keyboard as NativeKeyboard, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -19,6 +20,7 @@ import { TerminalTabs } from './TerminalTabs'
 import { Button, Sheet, T, tap } from './ui'
 import { SheetGroup, SheetOption, SheetPanelGroup } from './SheetOptions'
 import { useSay } from '../i18n'
+import { showToast } from '../runtime/toast'
 
 /** The terminal text size this phone remembers, whatever host or thread it shows. */
 const TERMINAL_FONT_DEVICE_KEY = 'pref-device:terminalFontSize'
@@ -287,7 +289,19 @@ export function TerminalScreen({
       setKeyAction({ sequence: ++keySequence.current, key: label })
       return
     }
-    let text = await Clipboard.getStringAsync()
+    // iOS answers '' (or rejects) when the person denied Paste from Other Apps, so an empty read needs a word.
+    let text = await Clipboard.getStringAsync().catch(() => '')
+    if (!text) {
+      setLatch(null)
+      showToast(
+        Platform.OS === 'ios'
+          ? say(
+              'Nothing to paste. If the clipboard has text, allow Ramu to paste in Settings → Ramu → Paste from Other Apps.',
+            )
+          : say('Nothing to paste.'),
+      )
+      return
+    }
     if (latch === 'ctrl' && text.length === 1) text = String.fromCharCode(text.toUpperCase().charCodeAt(0) & 31)
     else if (latch === 'alt') text = '\x1b' + text
     setLatch(null)
@@ -361,20 +375,20 @@ export function TerminalScreen({
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 }}>
               <TerminalSquare size={32} color="#a1a1a8" strokeWidth={1.5} />
               <T size={17} weight="600" style={{ color: '#f5f5f7' }}>
-                Your host’s shell
+                {say('Your host’s shell')}
               </T>
               <T size={13} style={{ color: '#a1a1a8', textAlign: 'center', lineHeight: 20 }}>
                 {computer?.access === 'viewer'
-                  ? 'This phone has view-only access to this host.'
+                  ? say('This phone has view-only access to this host.')
                   : connected
-                    ? 'Open a session to run commands in this workspace.'
-                    : 'Reconnect to this host to open a terminal.'}
+                    ? say('Open a session to run commands in this workspace.')
+                    : say('Reconnect to this host to open a terminal.')}
               </T>
               {computer?.access !== 'viewer' && !terminalAllowed ? (
                 <PermissionNeeded computerId={computerId} permission="terminal" />
               ) : (
                 <Button
-                  title={opening ? 'Opening terminal…' : 'New terminal'}
+                  title={opening ? say('Opening terminal…') : say('New terminal')}
                   disabled={opening || !connected || computer?.access === 'viewer'}
                   onPress={() => void open()}
                 />
@@ -428,14 +442,14 @@ export function TerminalScreen({
           }}
         >
           <TerminalDock
-            workspace={targets.find((target) => target.ctx === ctx)?.title ?? 'Terminal'}
+            workspace={targets.find((target) => target.ctx === ctx)?.title ?? say('Terminal')}
             kind={targets.find((target) => target.ctx === ctx)?.kind}
             detail={
               targets.find((target) => target.ctx === ctx)?.kind === 'worktree'
                 ? targets.find((target) => target.ctx === ctx)?.subtitle
                 : undefined
             }
-            computer={computer?.name ?? 'Terminal'}
+            computer={computer?.name ?? say('Terminal')}
             directory={directory}
             hasShell={tabs.length > 0}
             exited={terminal?.exited}
@@ -514,7 +528,7 @@ export function TerminalScreen({
           </SheetGroup>
         ) : null}
         {terminalKeyGroups.map((group) => (
-          <SheetPanelGroup key={group.title} title={group.title}>
+          <SheetPanelGroup key={group.title} title={say(group.title)}>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {group.keys.map((label) => (
                 <Pressable
@@ -523,8 +537,8 @@ export function TerminalScreen({
                   accessibilityLabel={label}
                   accessibilityHint={
                     rail.includes(label)
-                      ? 'On the key rail. Long press to remove it.'
-                      : 'Long press to add it to the key rail.'
+                      ? say('On the key rail. Long press to remove it.')
+                      : say('Long press to add it to the key rail.')
                   }
                   accessibilityState={{ selected: rail.includes(label) }}
                   onPress={() => void press(label)}
@@ -569,6 +583,7 @@ export function terminalCtx(chat: Pick<Chat, 'taskId' | 'projectId' | 'workspace
 
 /** Every place a shell can run on this computer: each project's folders, each isolated worktree, each project-less chat. */
 export function terminalTargets(store: ReturnType<typeof useStore>, computerId: string): TerminalTarget[] {
+  const say = (text: string, values?: TranslationValues) => translate(store.language, text, values)
   const targets = store.projects
     .filter((p) => p.computerId === computerId)
     .map<TerminalTarget>((p) => ({
@@ -576,7 +591,7 @@ export function terminalTargets(store: ReturnType<typeof useStore>, computerId: 
       ctx: `project:${p.id.slice(p.id.indexOf(':') + 1)}`,
       kind: 'project',
       title: p.name,
-      subtitle: p.kind === 'workspace' ? `Workspace · ${p.repos.length} repos` : 'Project folder',
+      subtitle: p.kind === 'workspace' ? say('Workspace · {0} repos', { 0: p.repos.length }) : say('Project folder'),
       project: true,
     }))
   const seen = new Set(targets.map((t) => t.ctx))
@@ -589,12 +604,19 @@ export function terminalTargets(store: ReturnType<typeof useStore>, computerId: 
     // A worktree is named by its project and told apart by its branch, which is what says which checkout you are in.
     targets.push(
       chat.projectId === STANDALONE
-        ? { computerId, ctx, kind: 'chat', title: chat.title, subtitle: 'Thread without a project', project: false }
+        ? {
+            computerId,
+            ctx,
+            kind: 'chat',
+            title: chat.title,
+            subtitle: say('Thread without a project'),
+            project: false,
+          }
         : {
             computerId,
             ctx,
             kind: 'worktree',
-            title: project ?? 'Workspace',
+            title: project ?? say('Workspace'),
             subtitle: chat.branch || chat.title,
             project: true,
           },

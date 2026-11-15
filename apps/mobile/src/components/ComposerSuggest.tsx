@@ -82,7 +82,7 @@ export function useComposerSuggest({
   useEffect(() => {
     if (!visible || !scope || (loaded?.scope === scope && loaded.computerId === computerId)) return
     if (!online) {
-      setError('Reconnect this host to browse its files and skills.')
+      setError(say('Reconnect this host to browse its files and skills.'))
       return
     }
     let alive = true
@@ -129,7 +129,10 @@ export function useComposerSuggest({
       ...here.map((entry) => ({
         id: `teammate:${entry.name}`,
         label: `@${teammateHandle(entry.name)}`,
-        description: `Talk to teammate ${entry.name} · ${entry.mode === 'take-over' ? 'Take over' : 'Review'}`,
+        description: say('Talk to teammate {0} · {1}', {
+          0: entry.name,
+          1: entry.mode === 'take-over' ? say('Take over') : say('Review'),
+        }),
         kind: 'Teammate' as const,
         insertion: `@${teammateHandle(entry.name)} `,
       })),
@@ -138,7 +141,7 @@ export function useComposerSuggest({
         .map((agent) => ({
           id: `agent:${agent.id}`,
           label: `@${teammateHandle(agent.name)}`,
-          description: agent.description || 'Custom agent',
+          description: agent.description || say('Custom agent'),
           kind: 'Agent' as const,
           insertion: `@${teammateHandle(agent.name)} `,
         })),
@@ -147,7 +150,7 @@ export function useComposerSuggest({
         .map((model) => ({
           id: `model:${model.provider}:${model.id}`,
           label: `@${modelHandle(model)}`,
-          description: `${model.name || model.id} · ${providerName(model.provider)} joins this thread and reviews`,
+          description: `${model.name || model.id} · ${say('{0} joins this thread and reviews', { 0: providerName(model.provider) })}`,
           kind: 'Model' as const,
           insertion: `@${modelHandle(model)} `,
         })),
@@ -165,11 +168,11 @@ export function useComposerSuggest({
         : []),
     ]
     const commands: Choice[] = [
-      { id: 'new', label: '/new', description: 'Start a new thread', kind: 'Command', run: go('/new') },
+      { id: 'new', label: '/new', description: say('Start a new thread'), kind: 'Command', run: go('/new') },
       {
         id: 'goal',
         label: '/goal',
-        description: 'Keep working until a goal is complete',
+        description: say('Keep working until a goal is complete'),
         kind: 'Command',
         insertion: '/goal ',
       },
@@ -178,42 +181,42 @@ export function useComposerSuggest({
             {
               id: 'goal-pause',
               label: '/goal pause',
-              description: 'Pause goal',
+              description: say('Pause goal'),
               kind: 'Command' as const,
               insertion: '/goal pause',
             },
             {
               id: 'goal-resume',
               label: '/goal resume',
-              description: 'Resume goal',
+              description: say('Resume goal'),
               kind: 'Command' as const,
               insertion: '/goal resume',
             },
             {
               id: 'goal-clear',
               label: '/goal clear',
-              description: 'Clear goal',
+              description: say('Clear goal'),
               kind: 'Command' as const,
               insertion: '/goal clear',
             },
             {
               id: 'mcp',
               label: '/mcp',
-              description: 'Show MCP servers and skills',
+              description: say('Show MCP servers and skills'),
               kind: 'Command' as const,
               run: go({ pathname: '/settings/[section]', params: { section: 'agent-setup' } }),
             },
             {
               id: 'aside',
               label: '/aside',
-              description: 'Ask a side question without interrupting the thread',
+              description: say('Ask a side question without interrupting the thread'),
               kind: 'Command' as const,
               insertion: '/aside ',
             },
             {
               id: 'changes',
               label: '/changes',
-              description: 'Open the thread’s changed files',
+              description: say('Open the thread’s changed files'),
               kind: 'Command' as const,
               run: go({ pathname: '/chat/[id]/changes', params: { id: chatId } }),
             },
@@ -222,40 +225,52 @@ export function useComposerSuggest({
       {
         id: 'schedule',
         label: '/schedule',
-        description: 'Create a schedule through the agent',
+        description: say('Create a schedule through the agent'),
         kind: 'Command',
-        insertion: 'Create a schedule for: ',
+        insertion: say('Create a schedule for: '),
       },
       {
         id: 'schedules',
         label: '/schedules',
-        description: 'Open schedules and run history',
+        description: say('Open schedules and run history'),
         kind: 'Command',
         run: go('/schedules'),
       },
-      { id: 'recap', label: '/recap', description: 'Open your daily recap', kind: 'Command', run: go('/(tabs)/inbox') },
-      { id: 'settings', label: '/settings', description: 'Open app settings', kind: 'Command', run: go('/settings') },
+      {
+        id: 'recap',
+        label: '/recap',
+        description: say('Open your daily recap'),
+        kind: 'Command',
+        run: go('/(tabs)/inbox'),
+      },
+      {
+        id: 'settings',
+        label: '/settings',
+        description: say('Open app settings'),
+        kind: 'Command',
+        run: go('/settings'),
+      },
       ...(store.appPreferences[computerId]?.memory.enabled === false
         ? []
         : [
             {
               id: 'remember',
               label: '/remember',
-              description: 'Save something to shared memory',
+              description: say('Save something to shared memory'),
               kind: 'Command' as const,
-              insertion: 'Remember this for future threads: ',
+              insertion: say('Remember this for future threads: '),
             },
             {
               id: 'forget',
               label: '/forget',
-              description: 'Ask the agent to forget a memory',
+              description: say('Ask the agent to forget a memory'),
               kind: 'Command' as const,
-              insertion: 'Forget this memory: ',
+              insertion: say('Forget this memory: '),
             },
             {
               id: 'memory',
               label: '/memory',
-              description: 'Open saved memories',
+              description: say('Open saved memories'),
               kind: 'Command' as const,
               run: go({ pathname: '/settings/[section]', params: { section: 'memory' } }),
             },
@@ -263,7 +278,7 @@ export function useComposerSuggest({
       {
         id: 'learn',
         label: '/learn',
-        description: 'Review recent threads for lessons and skills now',
+        description: say('Review recent threads for lessons and skills now'),
         kind: 'Command',
         run: () => {
           store.invoke(computerId, 'learning.run').then(
@@ -277,14 +292,14 @@ export function useComposerSuggest({
             {
               id: 'teammate',
               label: '/teammate',
-              description: 'Bring another model into this thread',
+              description: say('Bring another model into this thread'),
               kind: 'Command' as const,
               insertion: '',
               run: onAddTeammate,
             },
           ]
         : []),
-      { id: 'clear', label: '/clear', description: 'Clear this draft', kind: 'Command', insertion: '' },
+      { id: 'clear', label: '/clear', description: say('Clear this draft'), kind: 'Command', insertion: '' },
     ]
     const names = data?.names ?? {}
     const options: Choice[] =
@@ -294,7 +309,7 @@ export function useComposerSuggest({
             ...(data?.files ?? []).map((file) => ({
               id: `${file.repoId}:${file.path}`,
               label: `${names[file.repoId] ?? ''}${names[file.repoId] ? '/' : ''}${file.path}`,
-              description: 'Add file context',
+              description: say('Add file context'),
               kind: 'File' as const,
               insertion: `@"${names[file.repoId] ? `${names[file.repoId]}/` : ''}${file.path}" `,
               file,
@@ -313,8 +328,8 @@ export function useComposerSuggest({
     return options
       .filter((choice) => `${choice.label} ${choice.description}`.toLowerCase().includes(query))
       .slice(0, 30)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [mode, query, data, chatId, computerId, teammate, onAddTeammate, trigger start] by design; the values it reads beyond these are current as of that run
-  }, [mode, query, data, chatId, computerId, teammate, onAddTeammate, trigger?.start])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [mode, query, data, chatId, computerId, teammate, onAddTeammate, trigger start, language] by design; the values it reads beyond these are current as of that run
+  }, [mode, query, data, chatId, computerId, teammate, onAddTeammate, trigger?.start, store.language])
 
   return {
     // `$` is ordinary text unless a skill matches, so it never shows an empty picker.
@@ -350,6 +365,7 @@ export function SuggestionList({
   error?: string
   onChoose: (choice: Choice) => void
 }) {
+  const say = useSay()
   const { c } = useTheme()
   return (
     <View style={{ maxHeight: 232, borderBottomWidth: 0.5, borderBottomColor: c.lineStrong }}>
@@ -390,7 +406,7 @@ export function SuggestionList({
               </T>
             </View>
             <T size={font.caption} tone="placeholder">
-              {choice.kind}
+              {say(choice.kind)}
             </T>
           </Pressable>
         ))}
@@ -402,7 +418,7 @@ export function SuggestionList({
         ) : null}
         {!loading && !error && !choices.length ? (
           <T size={font.caption} tone="muted" style={{ padding: space.m }}>
-            Nothing matches.
+            {say('Nothing matches.')}
           </T>
         ) : null}
       </ScrollView>

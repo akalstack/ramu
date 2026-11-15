@@ -17,14 +17,15 @@ export function confirmCancel(
   say: (text: string) => string,
 ) {
   const first = item.kind === 'chat'
-  const title = say(first ? 'Cancel this new thread?' : 'Cancel this message?')
-  const message = say(
+  const title = first ? say('Cancel this new thread?') : say('Cancel this message?')
+  const message =
     item.state === 'uncertain'
-      ? 'Delivery is uncertain. Check the host conversation before sending again. Removing this entry does not undo an action the host already received.'
+      ? say(
+          'Delivery is uncertain. Check the host conversation before sending again. Removing this entry does not undo an action the host already received.',
+        )
       : first
-        ? "It hasn't reached the host yet, so the thread is discarded."
-        : "It hasn't been sent yet.",
-  )
+        ? say("It hasn't reached the host yet, so the thread is discarded.")
+        : say("It hasn't been sent yet.")
   const remove = () => cancel?.(item.id)
   const edit = () => {
     const text = cancel?.(item.id)
@@ -116,7 +117,7 @@ export function PendingBubble({
             <LongMessage
               text={item.text}
               expanded={expanded}
-              label={say(expanded ? 'Show less' : 'Show more')}
+              label={expanded ? say('Show less') : say('Show more')}
               accent={c.accent}
               onToggle={() => setExpanded((open) => !open)}
             />
@@ -130,22 +131,20 @@ export function PendingBubble({
             <T size={font.caption} tone="muted">
               {item.state === 'review'
                 ? t.branchReviewBases
-                : say(
-                    item.state === 'uncertain'
-                      ? 'Check delivery on host'
-                      : item.state === 'sending'
-                        ? 'Sending'
-                        : item.mode === 'steer'
-                          ? 'Steer'
-                          : item.mode === 'queue'
-                            ? 'Queued'
-                            : 'Waiting',
-                  )}{' '}
+                : item.state === 'uncertain'
+                  ? say('Check delivery on host')
+                  : item.state === 'sending'
+                    ? say('Sending')
+                    : item.mode === 'steer'
+                      ? say('Steer')
+                      : item.mode === 'queue'
+                        ? say('Queued')
+                        : say('Waiting')}{' '}
               ·{' '}
               {viewOnly
                 ? VIEW_ONLY_WRITE_NOTICE[store.language]
                 : item.state === 'uncertain' || item.state === 'review'
-                  ? item.error
+                  ? item.error && say(item.error)
                   : say('sends when {0} is back', { 0: computer })}{' '}
               ·{' '}
               <T size={font.caption} tone="accent" weight="600">

@@ -65,7 +65,9 @@ export function TerminalTabs({
             <Pressable
               accessibilityRole="tab"
               accessibilityState={{ selected }}
-              accessibilityLabel={`Shell ${index + 1}${tab.exited ? ', ended' : ''}`}
+              accessibilityLabel={
+                tab.exited ? say('Shell {0}, ended', { 0: index + 1 }) : say('Shell {0}', { 0: index + 1 })
+              }
               onPress={() => onSelect(index)}
               style={{
                 flexDirection: 'row',
@@ -83,13 +85,13 @@ export function TerminalTabs({
                 tone={selected ? 'accent' : 'soft'}
                 numberOfLines={1}
               >
-                {tab.exited ? `Shell ${index + 1} · ended` : `Shell ${index + 1}`}
+                {tab.exited ? say('Shell {0} · ended', { 0: index + 1 }) : say('Shell {0}', { 0: index + 1 })}
               </T>
             </Pressable>
             {selected ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Close shell ${index + 1}`}
+                accessibilityLabel={say('Close shell {0}', { 0: index + 1 })}
                 hitSlop={6}
                 onPress={() => onClose(tab)}
                 style={{ width: 30, height: 34, alignItems: 'center', justifyContent: 'center' }}

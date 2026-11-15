@@ -426,13 +426,7 @@ function ComputerViewer({
       />
       <ControlStrip
         text={
-          viewOnly
-            ? store.language === 'id'
-              ? 'Hanya melihat'
-              : 'View only'
-            : asked
-              ? t('Waiting for the device in control to allow it.')
-              : t(label(current))
+          viewOnly ? t('View only') : asked ? t('Waiting for the device in control to allow it.') : t(label(current))
         }
         tone={human ? 'accent' : current.interruption === 'local-input' || current.paused ? 'warn' : 'muted'}
         action={

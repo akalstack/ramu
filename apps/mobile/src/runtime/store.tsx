@@ -9,7 +9,7 @@ import './socketTransport'
 import { viewerMayInvoke } from '@ramu/shared/viewerAccess'
 import { mayUse, type DevicePermission, type DevicePermissionsView } from '@ramu/shared/devicePermissions'
 import { VIEW_ONLY_WRITE_NOTICE } from './viewerAccess'
-import { saveIssuedCredential } from './saveCredential'
+import { CREDENTIAL_NOT_SAVED, saveIssuedCredential } from './saveCredential'
 import { planLayerSync } from '@ramu/shared/sharedFields'
 import { inputSummary } from '@ramu/shared/chat/inputSummary'
 import type { BranchNamingIntent, BranchChoice } from '@ramu/shared/workspaceDefaults'
@@ -450,16 +450,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const report = (error: unknown) => {
     // A request the phone stopped on purpose (backgrounded, connection replaced) is not an error to show.
     if (error instanceof SuspendedError) return
-    change((s) => ({ ...s, error: error instanceof Error ? error.message : String(error) }))
+    // The phone's own copy is English; a host's message without a catalog entry is shown as it came.
+    const message = error instanceof Error ? error.message : String(error)
+    change((s) => ({ ...s, error: translate(ref.current.language, message) }))
   }
   const clearSaveError = () => {
-    if (ref.current.error?.startsWith('Could not save phone data.')) change((state) => ({ ...state, error: null }))
+    if (ref.current.error?.startsWith(translate(ref.current.language, 'Could not save phone data. {0}', { 0: '' })))
+      change((state) => ({ ...state, error: null }))
   }
   const status = (id: string, value: Computer['status'], error?: string) =>
     change((s) => ({
       ...s,
       computers: s.computers.map((c) =>
-        c.id === id ? { ...c, status: value, error, lastSeen: value === 'online' ? Date.now() : c.lastSeen } : c,
+        c.id === id
+          ? {
+              ...c,
+              status: value,
+              // Phone-side connection copy is English; a host's own message passes through unchanged.
+              error: error && translate(ref.current.language, error),
+              lastSeen: value === 'online' ? Date.now() : c.lastSeen,
+            }
+          : c,
       ),
     }))
   async function invoke<M extends keyof RamuMethods>(
@@ -471,7 +482,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       throw new HostError(VIEW_ONLY_WRITE_NOTICE[ref.current.language], 403)
     const connection = connections.current.get(id)
     if (!connection || connection.controller.signal.aborted)
-      throw new HostError('This host is offline. Reconnect before taking this action.')
+      throw new HostError(translate(ref.current.language, 'This host is offline. Reconnect before taking this action.'))
     try {
       return await connection.client.invoke(method, ...args)
     } catch (error) {
@@ -926,7 +937,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       let taskId = chat.taskId
       if (!taskId) {
         const projectId = item.projectId === STANDALONE ? STANDALONE : raw(item.projectId!)
-        const title = item.text.split('\n')[0]!.slice(0, 60) || 'Discuss attachments'
+        const title = item.text.split('\n')[0]!.slice(0, 60) || translate(ref.current.language, 'Discuss attachments')
         const creation = workspaceCreation({
           projectId,
           title,
@@ -1186,7 +1197,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       (typeof result.hostId === 'string' ? ref.current.computers.find((c) => c.hostId === result.hostId) : undefined) ??
       ref.current.computers.find((c) => c.address === url)
     const id = known?.id ?? uid()
-    await saveIssuedCredential(() => saveToken(id, result.token))
+    await saveIssuedCredential(() => saveToken(id, result.token)).catch((error: unknown) => {
+      throw error instanceof Error && error.message === CREDENTIAL_NOT_SAVED
+        ? new Error(translate(ref.current.language, CREDENTIAL_NOT_SAVED))
+        : error
+    })
     const computer: Computer = {
       id,
       name: name || (known && !known.auto ? known.name : new URL(url).hostname),
@@ -1416,7 +1431,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     change((s) => ({ ...s, ready: true }))
     if (ref.current.drafts['push-enabled'] === 'yes')
       void import('./push')
-        .then((module) => module.registerPush())
+        .then((module) => module.registerPush(ref.current.language))
         .then((token) => {
           pushToken.current = token
           for (const c of ref.current.computers) if (c.status === 'online') void registerPushOn(c.id).catch(report)
@@ -1439,7 +1454,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })
           .then(clearSaveError)
           .catch((error) =>
-            report(new Error(`Could not save phone data. ${error instanceof Error ? error.message : String(error)}`)),
+            report(
+              new Error(
+                translate(ref.current.language, 'Could not save phone data. {0}', {
+                  0: error instanceof Error ? error.message : String(error),
+                }),
+              ),
+            ),
           )
       }
       if (!foreground)
@@ -1507,7 +1528,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           })
           .then(clearSaveError)
           .catch((error) =>
-            report(new Error(`Could not save phone data. ${error instanceof Error ? error.message : String(error)}`)),
+            report(
+              new Error(
+                translate(ref.current.language, 'Could not save phone data. {0}', {
+                  0: error instanceof Error ? error.message : String(error),
+                }),
+              ),
+            ),
           )
       },
       savedOutbox.current === state.outbox ? 1500 : 250,
@@ -1521,7 +1548,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       try {
         writeDrafts(ref.current.drafts)
       } catch (error) {
-        report(new Error(`Could not save drafts. ${error instanceof Error ? error.message : String(error)}`))
+        report(
+          new Error(
+            translate(ref.current.language, 'Could not save drafts. {0}', {
+              0: error instanceof Error ? error.message : String(error),
+            }),
+          ),
+        )
       }
     }, 400)
     return () => clearTimeout(timer)
@@ -1563,7 +1596,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     enablePush: async () => {
       const { registerPush } = await import('./push')
-      const token = await registerPush()
+      const token = await registerPush(ref.current.language)
       pushToken.current = token
       change((s) => ({ ...s, drafts: { ...s.drafts, 'push-enabled': 'yes' } }))
       await Promise.all(ref.current.computers.filter((c) => c.status === 'online').map((c) => registerPushOn(c.id)))
@@ -1862,7 +1895,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         sessionId: null,
         computerId,
         projectId: input.projectId,
-        title: input.text.slice(0, 60) || 'Discuss attachments',
+        title: input.text.slice(0, 60) || translate(ref.current.language, 'Discuss attachments'),
         mode: input.mode,
         workspaceId: input.workspaceId ?? null,
         status: 'idle',
@@ -1938,7 +1971,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         item.computerId,
         'tasks.plan',
         projectId,
-        item.text.split('\n')[0]!.slice(0, 60) || 'Discuss attachments',
+        item.text.split('\n')[0]!.slice(0, 60) || translate(ref.current.language, 'Discuss attachments'),
         repos.map((r) => r.id),
         item.branchChoice,
         { branchPrefix: item.branchPrefix ?? 'ramu/', strategy: item.branchNaming?.strategy ?? 'fixed' },

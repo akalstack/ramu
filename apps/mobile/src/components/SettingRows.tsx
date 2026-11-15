@@ -323,9 +323,13 @@ export function HostNotice({ host, name, children }: { host: Host; name?: string
       {state.status === 'loading' ? <ActivityIndicator /> : null}
       <T tone="muted" style={{ textAlign: 'center', lineHeight: 21 }}>
         {state.status === 'loading'
-          ? `Loading settings from ${name ?? 'this computer'}…`
+          ? name
+            ? say('Loading settings from {0}…', { 0: name })
+            : say('Loading settings from this computer…')
           : state.status === 'offline'
-            ? `${name ?? 'This computer'} is not reachable, so its settings can't be shown. Phone settings still work.`
+            ? name
+              ? say("{0} is not reachable, so its settings can't be shown. Phone settings still work.", { 0: name })
+              : say("This computer is not reachable, so its settings can't be shown. Phone settings still work.")
             : state.message}
       </T>
       {state.status === 'error' ? <Button title={say('Try again')} onPress={host.reload} /> : null}
@@ -472,7 +476,7 @@ export function HostGroups({
   if (!groups.length)
     return (
       <T tone="muted" style={{ padding: space.xl, textAlign: 'center' }}>
-        {name ?? 'This host'} offers no settings here.
+        {name ? say('{0} offers no settings here.', { 0: name }) : say('This host offers no settings here.')}
       </T>
     )
   const { main, advanced } = splitAdvanced(groups)

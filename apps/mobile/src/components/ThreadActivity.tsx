@@ -6,6 +6,7 @@ import { goalActivityLabel, type ActivityKind } from '@ramu/shared/chat/threadAc
 import type { Chat } from '../runtime/types'
 import type { QueuedMessage } from '@ramu/shared/types'
 import { useStore } from '../runtime/store'
+import { useSay } from '../i18n'
 import { space } from '../theme'
 import { Sheet, T, type Icon } from './ui'
 import { ActivityPill } from './ActivityPill'
@@ -47,8 +48,8 @@ export function ThreadActivity({
   actions?: { label: string; icon: Icon; onPress(): void }[]
 }) {
   const store = useStore()
+  const say = useSay()
   const online = store.isOnline(chat.computerId)
-  const id = store.language === 'id'
   const activity = mobileThreadActivity(chat, online)
   const [opened, setOpened] = useState<ActivityKind | 'more' | null>(null)
   const [adviceSeen, setAdviceSeen] = useState(false)
@@ -66,38 +67,23 @@ export function ThreadActivity({
   if (!primary && !actions.length && !children && !leading) return null
   const label = (kind: ActivityKind | 'more'): string =>
     ({
-      connection: id ? 'Terputus' : 'Offline',
+      connection: say('Offline'),
       input: activity.requests.some((r) => r.kind === 'permission')
-        ? id
-          ? 'Perlu persetujuan'
-          : 'Approval needed'
-        : `${activity.requests.length} ${id ? 'pertanyaan' : 'questions'}`,
-      provider: id ? 'Menunggu reset batas' : 'Waiting for limit reset',
-      working: chat.compacting ? (id ? 'Meringkas konteks…' : 'Compacting context…') : id ? 'Bekerja' : 'Working',
-      helpers: `${activity.model.counts.active} ${id ? 'agen aktif' : 'active agents'}`,
+        ? say('Approval needed')
+        : activity.requests.length === 1
+          ? say('{0} question', { 0: 1 })
+          : say('{0} questions', { 0: activity.requests.length }),
+      provider: say('Waiting for limit reset'),
+      working: chat.compacting ? say('Compacting context…') : say('Working'),
+      helpers: say('{0} active agents', { 0: activity.model.counts.active }),
       advisor: activity.advisors.some(helperActive)
-        ? id
-          ? 'Penasihat meninjau'
-          : 'Advisor reviewing'
+        ? say('Advisor reviewing')
         : unread
-          ? id
-            ? `Riwayat penasihat · ${unread} baru`
-            : `Advisor history · ${unread} new`
-          : id
-            ? 'Riwayat penasihat'
-            : 'Advisor history',
-      goal: id
-        ? {
-            active: 'Tujuan aktif',
-            verifying: 'Memverifikasi tujuan',
-            'turn-limit': 'Batas giliran tujuan tercapai',
-            paused: 'Tujuan dijeda',
-            provider: 'Tujuan menunggu penyedia',
-            blocked: 'Tujuan terhambat',
-          }[activity.model.goalState ?? 'paused']
-        : goalActivityLabel(activity.model.goalState),
-      queue: `${chat.queue.length} ${id ? 'dalam antrean' : 'queued'}`,
-      more: id ? 'Aktivitas lainnya' : 'More activity',
+          ? say('Advisor history · {0} new', { 0: unread })
+          : say('Advisor history'),
+      goal: say(goalActivityLabel(activity.model.goalState)),
+      queue: say('{0} queued', { 0: chat.queue.length }),
+      more: say('More activity'),
     })[kind]
   /** One line under a row in the overview: what is waiting there, in the thread's own words. */
   const detailOf = (kind: ActivityKind): string | null =>
@@ -106,13 +92,9 @@ export function ThreadActivity({
       : kind === 'queue'
         ? (chat.queue[0]?.text ?? null)
         : kind === 'input'
-          ? id
-            ? 'Jawab agar agen bisa lanjut'
-            : 'Answer so the agent can continue'
+          ? say('Answer so the agent can continue')
           : kind === 'provider'
-            ? id
-              ? 'Lanjut otomatis saat batas pulih'
-              : 'Resumes on its own when the limit resets'
+            ? say('Resumes on its own when the limit resets')
             : null
   const primaryKind: ActivityKind | 'more' = primary ?? 'more'
   // Only what needs the person earns a second pill; helpers, a goal, advice and the queue wait under "More", so the row
@@ -143,7 +125,7 @@ export function ThreadActivity({
         keyboardShouldPersistTaps="handled"
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ alignItems: 'center', paddingHorizontal: space.s }}
-        accessibilityLabel={id ? 'Aktivitas thread' : 'Thread activity'}
+        accessibilityLabel={say('Thread activity')}
         style={{ flexGrow: 0, marginTop: space.xs }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
@@ -172,13 +154,9 @@ export function ThreadActivity({
         onClose={() => setOpened(null)}
         title={
           opened === 'working'
-            ? id
-              ? 'Sedang bekerja'
-              : 'Working'
+            ? say('Working')
             : opened === 'connection'
-              ? id
-                ? 'Koneksi'
-                : 'Connection'
+              ? say('Connection')
               : opened
                 ? label(opened)
                 : ''
@@ -246,9 +224,7 @@ export function ThreadActivity({
         {opened === 'input' ? <InputRequests chat={chat} /> : null}
         {(opened === 'goal' || opened === 'queue') && !online ? (
           <View style={{ padding: space.m }}>
-            <T tone="muted">
-              {id ? 'Hubungkan kembali untuk menggunakan kontrol.' : 'Reconnect to use these controls.'}
-            </T>
+            <T tone="muted">{say('Reconnect to use these controls.')}</T>
             <T>{opened === 'goal' ? chat.goal?.objective : chat.queue.map((q) => q.text).join('\n\n')}</T>
           </View>
         ) : null}
@@ -284,7 +260,7 @@ export function ThreadActivity({
             <LimitTray chatId={chat.id} />
           ) : (
             <T tone="muted" style={{ paddingHorizontal: space.l }}>
-              {id ? 'Hubungkan kembali untuk melihat batas penyedia.' : 'Reconnect to check the provider limit.'}
+              {say('Reconnect to check the provider limit.')}
             </T>
           )
         ) : null}

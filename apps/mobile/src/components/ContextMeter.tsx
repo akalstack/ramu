@@ -2,6 +2,7 @@ import { View } from 'react-native'
 import { font, useTheme } from '../theme'
 import { useContextUsage } from '../runtime/useContextUsage'
 import { T } from './ui'
+import { useSay } from '../i18n'
 import Svg, { Circle } from 'react-native-svg'
 
 const CIRCUMFERENCE = 2 * Math.PI * 5.5
@@ -9,6 +10,7 @@ const CIRCUMFERENCE = 2 * Math.PI * 5.5
 /** How full the chat's context window is, like the desktop's ring beside the model: green, amber from 80%, red from 95%. */
 export function ContextMeter({ computerId, sessionId }: { computerId: string; sessionId: string | null }) {
   const { c } = useTheme()
+  const say = useSay()
   const context = useContextUsage(computerId, sessionId)
   if (!context) return null
   const color = context.percent >= 95 ? c.bad : context.percent >= 80 ? c.warn : c.muted
@@ -18,7 +20,11 @@ export function ContextMeter({ computerId, sessionId }: { computerId: string; se
   return (
     <View
       accessible
-      accessibilityLabel={`Context ${Math.round(context.percent)}% used, ${k(context.used)} of ${k(context.max)} tokens`}
+      accessibilityLabel={say('Context {0}% used, {1} of {2} tokens', {
+        0: Math.round(context.percent),
+        1: k(context.used),
+        2: k(context.max),
+      })}
       style={{ flexDirection: 'row', alignItems: 'center', gap: 4, height: 34, paddingHorizontal: 6 }}
     >
       {/* A ring that fills clockwise from the top, like the desktop's meter. */}

@@ -322,10 +322,10 @@ export function Header({
             <Stack.Toolbar.Button
               icon={modal ? 'xmark' : 'chevron.left'}
               tintColor={c.text}
-              accessibilityLabel={modal ? 'Close' : 'Back'}
+              accessibilityLabel={modal ? say('Close') : say('Back')}
               onPress={close}
             >
-              {modal ? 'Close' : 'Back'}
+              {modal ? say('Close') : say('Back')}
             </Stack.Toolbar.Button>
           ) : null}
           <Stack.Toolbar.View hidesSharedBackground>
@@ -499,7 +499,7 @@ export function Header({
     (back ? (
       <HeaderButton
         icon={modal ? X : ChevronLeft}
-        label={modal ? 'Close' : 'Back'}
+        label={modal ? say('Close') : say('Back')}
         onPress={() => goBackOrHome(router)}
       />
     ) : null)

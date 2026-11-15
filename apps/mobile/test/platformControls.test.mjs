@@ -76,6 +76,9 @@ const threadSelectionStub = {
   useThreadSelection: () => ({ on: false, ids: new Set() }),
 }
 
+const english = (text, values = {}) =>
+  text.replace(/\{(\w+)\}/g, (placeholder, key) => (key in values ? String(values[key]) : placeholder))
+
 function load(file, os, overrides = {}, globals = {}) {
   const module = { exports: {} }
   const native = {
@@ -166,10 +169,8 @@ function load(file, os, overrides = {}, globals = {}) {
     exports: module.exports,
     require: (id) => {
       // Copy translated at its call site reads English in tests unless a test supplies its own.
-      if (id.endsWith('/i18n') && id in mocks && !mocks[id].useSay)
-        return { ...mocks[id], useSay: () => (text) => text }
-      if (id.endsWith('/i18n') && !(id in mocks))
-        return { useT: () => ({}), useSay: () => (text) => text, ago: () => '' }
+      if (id.endsWith('/i18n') && id in mocks && !mocks[id].useSay) return { ...mocks[id], useSay: () => english }
+      if (id.endsWith('/i18n') && !(id in mocks)) return { useT: () => ({}), useSay: () => english, ago: () => '' }
       if (id in mocks) return mocks[id]
       // Opening a referenced file navigates; tests that follow a tap supply their own opener.
       if (id.endsWith('/runtime/openFile'))
@@ -9453,7 +9454,7 @@ test('every pull request row opens in full on the phone, a repository in no proj
   const options = nodes(render())
     .filter((node) => node.type === 'SheetOption')
     .map((node) => node.props.title)
-  assert.ok(options.includes('Open on {0}'), 'Open on GitHub is in the long-press menu')
+  assert.ok(options.includes('Open on GitHub'), 'Open on GitHub is in the long-press menu')
   // The sign-in notice is one per host and service, handed to the notices above the list.
   const notices = find(render(), 'PullRequestListNotices')
   assert.deepEqual([...notices.props.repos.map((entry) => entry.repoName)], ['ai-brain-web'])

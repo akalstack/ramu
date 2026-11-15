@@ -78,7 +78,8 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
           ? say('Failed')
           : row.kind === 'pull-request'
             ? `#${row.chat.pullRequest!.number} · ${say(PULL_REQUEST_STAGE_LABEL[row.chat.pullRequest!.stage])}`
-            : request?.title || inboxBlockerText(row.blocker, store.language === 'id' ? 'id' : 'en')
+            : (request?.title && say(request.title)) ||
+              inboxBlockerText(row.blocker, store.language === 'id' ? 'id' : 'en')
   return (
     <View>
       {divider ? <Divider inset={space.l} /> : null}

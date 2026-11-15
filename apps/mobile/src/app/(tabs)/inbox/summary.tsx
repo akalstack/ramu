@@ -119,7 +119,7 @@ export default function SummaryScreen() {
             {groups.map((group) => (
               // Lists reach the screen edges, as everywhere else, out of the page's reading margin.
               <View key={group.change} style={{ marginHorizontal: -space.l }}>
-                <SectionLabel>{LABEL[group.change]}</SectionLabel>
+                <SectionLabel>{say(LABEL[group.change])}</SectionLabel>
                 <View>
                   {group.items.map((item, index) => (
                     <View key={`${item.kind}:${item.id}`}>

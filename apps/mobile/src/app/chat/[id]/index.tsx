@@ -543,14 +543,16 @@ export default function ChatScreen() {
     const next = shareRows(
       previousRows.current,
       withChangeCards(
-        foldTurns(chat?.items ?? [], chat?.status === 'running', chat?.status === 'needs-input'),
+        foldTurns(chat?.items ?? [], chat?.status === 'running', chat?.status === 'needs-input', (text, values) =>
+          translate(store.language, text, values),
+        ),
         reviews,
         chat?.sessionId,
       ),
     )
     previousRows.current = next
     return next
-  }, [chat?.items, chat?.status, chat?.sessionId, reviews])
+  }, [chat?.items, chat?.status, chat?.sessionId, reviews, store.language])
   const arrivalReady = useRef(false)
   const arrivalChat = useRef(id)
   if (arrivalChat.current !== id) {
@@ -589,7 +591,9 @@ export default function ChatScreen() {
             title: '',
             pending: true,
             detail:
-              waiting.provider !== chat!.provider ? 'Context handoff · applies when you send' : 'Applies when you send',
+              waiting.provider !== chat!.provider
+                ? tr('Context handoff · applies when you send')
+                : tr('Applies when you send'),
             previous: chat!.settings!,
             settings: {
               ...chat!.settings!,
@@ -771,7 +775,7 @@ export default function ChatScreen() {
   const branch = live?.branch ?? chat.branch
   const identity = projectIdentity(hostIdentities, chat?.projectId)
   const project =
-    chat.projectId === STANDALONE ? 'Standalone' : store.projects.find((p) => p.id === chat.projectId)?.name
+    chat.projectId === STANDALONE ? tr('Standalone') : store.projects.find((p) => p.id === chat.projectId)?.name
   const running = chat.status === 'running'
   const lastRow = rows.at(-1)
   const lastShowsWork =
@@ -998,32 +1002,37 @@ export default function ChatScreen() {
                   tr,
                 ),
               )
-              return message === null ? null : `Pushed: ${message}`
+              return message === null ? null : tr('Pushed: {0}', { 0: message })
             }),
         },
       ],
     )
   }
   const pushReason = !live
-    ? 'Checking repository…'
+    ? tr('Checking repository…')
     : changed
-      ? 'Commit or stash local changes before pushing.'
+      ? tr('Commit or stash local changes before pushing.')
       : live.ahead
-        ? `Push ${live.ahead} commit${live.ahead === 1 ? '' : 's'} to origin`
+        ? live.ahead === 1
+          ? tr('Push 1 commit to origin')
+          : tr('Push {count} commits to origin', { count: live.ahead })
         : !live.published
-          ? 'Publish this branch to origin'
-          : 'Nothing to push'
+          ? tr('Publish this branch to origin')
+          : tr('Nothing to push')
   const canPush = Boolean(live) && !changed && (Boolean(live!.ahead) || !live!.published)
   const push = () =>
     live &&
     void act(async () => {
       await pushBranch(store.invoke, chat, live.repoId)
-      return `Pushed ${live.branch}`
+      return tr('Pushed {0}', { 0: live.branch })
     })
   const openTerminal = () => router.push({ pathname: '/chat/[id]/terminal', params: { id: chat.id } })
   // Thread actions that belong to this screen sit above the shared ones (pin, rename, archive…) in the same sheet:
   // first the tools that look into the thread's workspace, then usage and where it runs.
   const say_ = (text: string) => translate(store.language, text)
+  const hostName = computer?.name ?? tr('Host unavailable')
+  const hostStatus =
+    computer?.status === 'online' ? tr('Online') : computer?.status === 'connecting' ? tr('Connecting…') : tr('Offline')
   const chatExtras: {
     icon: typeof Folder
     label: string
@@ -1220,7 +1229,7 @@ export default function ChatScreen() {
     // Which computer runs the thread: information only, so it has no action (and no native menu entry).
     {
       icon: Server,
-      label: `${computer?.name ?? say_('Host unavailable')} · ${say_(computer?.status === 'online' ? 'Online' : computer?.status === 'connecting' ? 'Connecting…' : 'Offline')}`,
+      label: `${hostName} · ${hostStatus}`,
       group: 'info',
     },
   ]
@@ -1239,7 +1248,11 @@ export default function ChatScreen() {
               // Where the thread works: its project and branch, under the title instead of inside the conversation.
               <View
                 accessible
-                accessibilityLabel={`Project ${project}${branch ? `, branch ${branch}` : ''}`}
+                accessibilityLabel={
+                  branch
+                    ? tr('Project {0}, branch {1}', { 0: project ?? '', 1: branch })
+                    : tr('Project {0}', { 0: project ?? '' })
+                }
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' }}
               >
                 {chat.startedFrom ? <GitFork size={11} color={c.muted} /> : null}
@@ -1259,22 +1272,19 @@ export default function ChatScreen() {
                     </T>
                   </>
                 ) : null}
-                <View
-                  accessible
-                  accessibilityLabel={`${computer?.name ?? say_('Host unavailable')} · ${say_(computer?.status === 'online' ? 'Online' : computer?.status === 'connecting' ? 'Connecting…' : 'Offline')}`}
-                >
+                <View accessible accessibilityLabel={`${hostName} · ${hostStatus}`}>
                   <ConnectionDot status={computer?.status ?? 'offline'} size={5} />
                 </View>
               </View>
             ) : (
               <View
                 accessible
-                accessibilityLabel={`Host: ${computer?.name ?? 'Unavailable'}, ${computer?.status ?? 'offline'}`}
+                accessibilityLabel={`${hostName} · ${hostStatus}`}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' }}
               >
                 <Monitor size={11} color={c.muted} />
                 <T size={12} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
-                  {computer?.name ?? 'Host unavailable'}
+                  {hostName}
                 </T>
                 <ConnectionDot status={computer?.status ?? 'offline'} size={5} />
               </View>
@@ -1447,20 +1457,22 @@ export default function ChatScreen() {
                 const blocked = preview.files.filter((f) => f.status === 'conflict')
                 if (!ready.length)
                   return Alert.alert(
-                    'Nothing to undo',
+                    tr('Nothing to undo'),
                     preview.files.map((f) => `${f.path}: ${f.reason}`).join('\n') ||
-                      'The agent has not changed files since this message.',
+                      tr('The agent has not changed files since this message.'),
                   )
                 Alert.alert(
-                  `Undo ${ready.length} file${ready.length === 1 ? '' : 's'}?`,
+                  ready.length === 1 ? tr('Undo 1 file?') : tr('Undo {count} files?', { count: ready.length }),
                   `${ready
-                    .map((f) => `${f.repoName}/${f.path}${f.remove ? ' (delete)' : ''}`)
+                    .map((f) => `${f.repoName}/${f.path}${f.remove ? ` (${tr('delete')})` : ''}`)
                     .slice(0, 8)
-                    .join('\n')}${blocked.length ? `\n\n${blocked.length} changed since and will be left alone.` : ''}`,
+                    .join(
+                      '\n',
+                    )}${blocked.length ? `\n\n${tr('{count} changed since and will be left alone.', { count: blocked.length })}` : ''}`,
                   [
-                    { text: 'Cancel', style: 'cancel' },
+                    { text: tr('Cancel'), style: 'cancel' },
                     {
-                      text: 'Undo',
+                      text: tr('Undo'),
                       style: 'destructive',
                       onPress: () =>
                         !viewerNow() &&
@@ -1471,7 +1483,7 @@ export default function ChatScreen() {
                             preview.token,
                             ready.map((f) => f.fileId),
                           )
-                          .then(() => say('Restored the files'))
+                          .then(() => say(tr('Restored the files')))
                           .catch((e) => say(e instanceof Error ? e.message : String(e))),
                     },
                   ],
@@ -1580,7 +1592,7 @@ export default function ChatScreen() {
                           }}
                         >
                           <T size={font.control} weight="500" tone="soft">
-                            {store.language === 'id' ? 'Tampilkan giliran sebelumnya' : 'Show earlier turns'}
+                            {tr('Show earlier turns')}
                           </T>
                         </Pressable>
                       ) : null}
@@ -2002,7 +2014,7 @@ export default function ChatScreen() {
                         }}
                         placeholder={
                           offline
-                            ? `Message · sends when ${computer?.name ?? 'it'} is back`
+                            ? tr('Message · sends when {0} is back', { 0: computer?.name ?? tr('the host') })
                             : limit && !running
                               ? fill(
                                   t[limitPlaceholderKey(limit)],
@@ -2142,7 +2154,7 @@ export default function ChatScreen() {
                     : changed
                       ? changed === 1
                         ? '1 file changed'
-                        : `${changed} files changed`
+                        : tr('{count} files changed', { count: changed })
                       : 'No changes to commit',
                   run: openScm,
                 },

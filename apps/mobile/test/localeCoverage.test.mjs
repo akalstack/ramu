@@ -18,11 +18,15 @@ function sources(dir) {
   })
 }
 
-test('every literal passed to say() or t(), and every host setting label, has an Indonesian entry', () => {
+test('every literal passed to say(), t() or translate(), and every host setting label, has an Indonesian entry', () => {
   const missing = new Set()
   for (const file of sources(join(root, 'src'))) {
     const source = readFileSync(file, 'utf8')
-    const patterns = [/(?<![\w.$])(?:say|t)\(\s*(['"])((?:\\.|(?!\1).)*)\1\s*[,)]/g]
+    const patterns = [
+      /(?<![\w.$])(?:say_?|tr|t)\(\s*(['"])((?:\\.|(?!\1).)*)\1\s*[,)]/g,
+      // Copy translated outside React: translate(language, 'English', values).
+      /(?<![\w.$])translate\(\s*[\w.?]+\s*,\s*(['"])((?:\\.|(?!\1).)*)\1\s*[,)]/g,
+    ]
     // Host setting rows are written in English in the model and translated where they are drawn.
     if (file.endsWith('settingsModel.ts'))
       patterns.push(/\b(?:title|help|emptyLabel|label):\s*(['"])((?:\\.|(?!\1).)*)\1/g)

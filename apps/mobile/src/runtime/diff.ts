@@ -15,7 +15,7 @@ export function changedFile(path: string, repo: string, original: string, modifi
       const text = texts[index]!
       if (!chunk.added && !chunk.removed && texts.length > 12 && index === 4) {
         const skip = texts.length - 8
-        lines.push({ type: 'hunk', text: `… ${skip} unchanged lines …` })
+        lines.push({ type: 'hunk', text: `… ${skip} unchanged lines …`, skipped: skip })
         old += skip
         next += skip
         index += skip - 1

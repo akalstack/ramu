@@ -16,6 +16,7 @@ import { Glass } from './Glass'
 import { T, tap, type Icon } from './ui'
 import { font, useTheme } from '../theme'
 import { DEFAULT_RAIL } from '../runtime/terminalKeys'
+import { useSay } from '../i18n'
 
 const railIcons: Record<string, Icon> = { left: ArrowLeft, up: ArrowUp, down: ArrowDown, right: ArrowRight }
 
@@ -59,6 +60,7 @@ export function TerminalDock({
   /** The keys on the quiet rail, in order; the person's own choice from the keys sheet. */
   rail?: readonly string[]
 }) {
+  const say = useSay()
   const { c } = useTheme()
   const button = (I: Icon, label: string, onPress: () => void, disabled = false) => (
     <Pressable
@@ -86,17 +88,21 @@ export function TerminalDock({
   const same = (a?: string, b?: string) =>
     !!a && !!b && a.toLowerCase().replace(/[^a-z0-9]/g, '') === b.toLowerCase().replace(/[^a-z0-9]/g, '')
   const folder = !hasShell
-    ? 'No shell open'
+    ? say('No shell open')
     : same(directory, workspace) || same(directory, detail)
       ? undefined
       : directory
   return (
     <Glass radius={24} style={{ padding: 6, borderWidth: 0.5, borderColor: c.lineStrong }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-        {button(ChevronLeft, 'Back to thread', onBack)}
+        {button(ChevronLeft, say('Back to thread'), onBack)}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${workspace} on ${computer}. ${directory ?? 'No shell open'}. Switch workspace`}
+          accessibilityLabel={say('{0} on {1}. {2}. Switch workspace', {
+            0: workspace,
+            1: computer,
+            2: directory ?? say('No shell open'),
+          })}
           onPress={() => {
             tap()
             onWorkspace()
@@ -132,12 +138,12 @@ export function TerminalDock({
                 >
                   <T size={10} weight="600" tone="muted" numberOfLines={1}>
                     {detail
-                      ? `Worktree · ${detail}`
+                      ? `${say('Worktree')} · ${detail}`
                       : kind === 'project'
-                        ? 'Project'
+                        ? say('Project')
                         : kind === 'worktree'
-                          ? 'Worktree'
-                          : 'Thread'}
+                          ? say('Worktree')
+                          : say('Thread')}
                   </T>
                 </View>
               ) : null}
@@ -153,9 +159,9 @@ export function TerminalDock({
               />
               <T size={11} tone="muted" numberOfLines={1} style={{ flex: 1 }}>
                 {!connected
-                  ? `${computer} · Disconnected`
+                  ? `${computer} · ${say('Disconnected')}`
                   : exited
-                    ? `${computer} · Session ended`
+                    ? `${computer} · ${say('Session ended')}`
                     : folder
                       ? `${computer} · ${folder}`
                       : computer}
@@ -166,7 +172,7 @@ export function TerminalDock({
         </Pressable>
         {button(
           keyboardVisible ? KeyboardOff : Keyboard,
-          keyboardVisible ? 'Hide terminal keyboard' : 'Show terminal keyboard',
+          keyboardVisible ? say('Hide terminal keyboard') : say('Show terminal keyboard'),
           onKeyboard,
           !hasShell || !connected || exited,
         )}
@@ -196,7 +202,7 @@ export function TerminalDock({
                   key={label}
                   disabled={!connected || exited}
                   accessibilityRole="button"
-                  accessibilityLabel={label === 'paste' ? 'Paste into terminal' : label}
+                  accessibilityLabel={label === 'paste' ? say('Paste into terminal') : label}
                   aria-pressed={label === 'ctrl' || label === 'alt' ? latch === label : undefined}
                   accessibilityState={label === 'ctrl' || label === 'alt' ? { selected: latch === label } : undefined}
                   onPress={() => onKey(label)}
@@ -222,8 +228,8 @@ export function TerminalDock({
               )
             })}
           </ScrollView>
-          {onMoreKeys ? button(Grid2X2, 'More terminal keys', onMoreKeys, !connected || exited) : null}
-          {button(ClipboardPaste, 'Paste into terminal', () => onKey('paste'), !connected || exited)}
+          {onMoreKeys ? button(Grid2X2, say('More terminal keys'), onMoreKeys, !connected || exited) : null}
+          {button(ClipboardPaste, say('Paste into terminal'), () => onKey('paste'), !connected || exited)}
         </View>
       ) : null}
     </Glass>

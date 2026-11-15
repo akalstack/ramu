@@ -19,6 +19,7 @@ import { requestOutcomes, parseAnswerMessage, questionState } from '@ramu/shared
 import { goalChanges, goalFactLines } from '@ramu/shared/chat/goalHistory'
 import { providerWaitState, type ProviderWaitState } from '@ramu/shared/chat/providerWait'
 import { foldSettingsChanges } from '@ramu/shared/chat/settingsChanges'
+import type { TranslationValues } from '@ramu/shared/i18n'
 
 /**
  * The line for a thread at a provider's usage limit. It names the cause and says the thread continues; "Paused" stays
@@ -28,9 +29,27 @@ const isToolKind = (kind: string): kind is ToolKind =>
   ['read', 'edit', 'search', 'execute', 'think', 'fetch'].includes(kind)
 
 export function limitNoteTitle(wait: Pick<ProviderWaitState, 'retryAt' | 'guessed'>): string {
-  if (wait.guessed) return 'Limit reached · resuming automatically'
+  return limitNote(wait).title
+}
+
+function limitNote(wait: Pick<ProviderWaitState, 'retryAt' | 'guessed'>) {
+  if (wait.guessed) return noteTitle('Limit reached · resuming automatically')
   const at = new Date(wait.retryAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  return `Limit reached · resumes around ${at}`
+  return noteTitle('Limit reached · resumes around {0}', { 0: at })
+}
+
+/**
+ * A note's title in English, plus the catalog copy it came from, so the transcript can draw it in the app language
+ * while search and previews keep reading the English title.
+ */
+// Node tests import this file directly, which cannot load the shared translator, so English is filled here.
+const english = (text: string, values: TranslationValues = {}) =>
+  text.replace(/\{(\w+)\}/g, (placeholder, name: string) =>
+    Object.hasOwn(values, name) ? String(values[name]) : placeholder,
+  )
+
+function noteTitle(text: string, values: TranslationValues = {}) {
+  return { title: english(text, values), titleCopy: { text, values } }
 }
 
 /** What the person typed, without what Ramu added around it for the agent, as on the desktop. */
@@ -114,18 +133,20 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
             ? {
                 kind: 'note',
                 id,
-                title: advice.failed ? `The advisor could not answer: ${advice.body}` : 'Advice delivered to the agent',
+                ...(advice.failed
+                  ? noteTitle('The advisor could not answer: {0}', { 0: advice.body })
+                  : noteTitle('Advice delivered to the agent')),
                 detail: advice.advisor,
                 failed: advice.failed,
               }
             : stop
-              ? { kind: 'note', id, title: `Asked the agent to stop ${stop.name}` }
+              ? { kind: 'note', id, ...noteTitle('Asked the agent to stop {0}', { 0: stop.name }) }
               : relay
-                ? { kind: 'note', id, title: `Message to ${relay.name}`, detail: relay.body }
+                ? { kind: 'note', id, ...noteTitle('Message to {0}', { 0: relay.name }), detail: relay.body }
                 : ({
                     kind: 'note',
                     id,
-                    title: "Answers to the agent's questions",
+                    ...noteTitle("Answers to the agent's questions"),
                     detail: answers!.body,
                   } as TranscriptItem),
       )
@@ -160,8 +181,8 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
       items.push({
         kind: 'note',
         id,
-        title: `Schedule created: ${e.schedule.name}`,
-        detail: e.schedule.state === 'paused' ? 'Paused' : undefined,
+        ...noteTitle('Schedule created: {0}', { 0: e.schedule.name }),
+        ...(e.schedule.state === 'paused' ? { detail: 'Paused', detailIsCopy: true as const } : {}),
       })
     else if (e.kind === 'user')
       items.push({
@@ -326,18 +347,20 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
         previous: e.previous,
       })
     else if (e.kind === 'background-terminal-stop')
-      items.push({ kind: 'note', id, title: 'Background command stop requested', detail: e.command })
-    else if (e.kind === 'recovery') items.push({ kind: 'note', id, title: 'Continued after restart' })
+      items.push({ kind: 'note', id, ...noteTitle('Background command stop requested'), detail: e.command })
+    else if (e.kind === 'recovery') items.push({ kind: 'note', id, ...noteTitle('Continued after restart') })
     else if (e.kind === 'compaction' && e.state !== 'started')
       items.push({
         kind: 'note',
         id,
-        title:
-          e.state === 'failed'
-            ? 'Could not compact the conversation'
-            : e.beforeTokens && e.afterTokens
-              ? `Conversation compacted · ${Math.round(e.beforeTokens / 1000)}k → ${Math.round(e.afterTokens / 1000)}k tokens`
-              : 'Conversation compacted',
+        ...(e.state === 'failed'
+          ? noteTitle('Could not compact the conversation')
+          : e.beforeTokens && e.afterTokens
+            ? noteTitle('Conversation compacted · {0}k → {1}k tokens', {
+                0: Math.round(e.beforeTokens / 1000),
+                1: Math.round(e.afterTokens / 1000),
+              })
+            : noteTitle('Conversation compacted')),
         failed: e.state === 'failed',
       })
     else if (e.kind === 'result') items.push({ kind: 'end', id, ended: true, interrupted: resultStopped(e) })
@@ -375,7 +398,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
       id: `wait-${lastWait}`,
       wait: true,
       limit: { retryAt: wait.retryAt, guessed: wait.guessed, ...(wait.provider ? { provider: wait.provider } : {}) },
-      title: limitNoteTitle(wait),
+      ...limitNote(wait),
     })
   const groups = helperGroups(events).groups
   // Insert at the launch point, rather than append every helper from the thread's lifetime.

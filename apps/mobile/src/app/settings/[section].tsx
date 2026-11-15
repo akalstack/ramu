@@ -406,7 +406,7 @@ function Usage({ computer }: { computer: string }) {
           ))
         ) : (
           <T size={font.control} tone="muted" style={{ padding: space.m }}>
-            Unavailable — this computer has not reported usage.
+            {say('Unavailable — this computer has not reported usage.')}
           </T>
         )}
       </Card>

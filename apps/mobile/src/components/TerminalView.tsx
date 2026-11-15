@@ -3,6 +3,7 @@ import { createElement, useEffect, useRef, useState } from 'react'
 import { View } from 'react-native'
 import { TerminalGestureOverlay, readGesture, type GestureDisplay } from './TerminalGestureOverlay'
 import { terminalHtml } from '../assets/terminal'
+import { useSay } from '../i18n'
 export interface TerminalViewProps {
   /** Which shell `output` belongs to; a different one always starts the screen over. */ session?: string
   output: string
@@ -26,6 +27,7 @@ export default function TerminalView({
   keyboardAction,
   keyAction,
 }: TerminalViewProps) {
+  const say = useSay()
   const frame = useRef<HTMLIFrameElement>(null)
   const callbacks = useRef({ onInput, onResize, enabled })
   callbacks.current = { onInput, onResize, enabled }
@@ -76,7 +78,7 @@ export default function TerminalView({
     <View style={{ flex: 1 }} onLayout={(event) => setSize(event.nativeEvent.layout)}>
       {createElement('iframe', {
         ref: frame,
-        title: 'Host terminal',
+        title: say('Host terminal'),
         srcDoc: terminalHtml,
         sandbox: 'allow-scripts',
         style: { flex: 1, width: '100%', height: '100%', border: 0, background: '#0e0e10' },

@@ -39,20 +39,16 @@ export function PlanUsageReading({
 }) {
   const { c } = useTheme()
   const { language } = useStore()
+  const say = useSay()
   const now = Date.now()
   const percent = usagePercent(r)
   const tone = usageTone(r)
-  const used = language === 'id' ? 'terpakai' : 'used'
   const value =
     percent === null
       ? r.source === 'notice'
-        ? language === 'id'
-          ? 'Batas dilaporkan; penggunaan tidak tersedia'
-          : 'Limit reported, usage unavailable'
-        : language === 'id'
-          ? 'Tidak dilaporkan'
-          : 'Not reported'
-      : `${Math.round(percent)}% ${used}`
+        ? say('Limit reported, usage unavailable')
+        : say('Not reported')
+      : say('{0}% used', { 0: Math.round(percent) })
   const lastKnown = offline || usageStale(r, now)
   const scopeHint = usageScopeHint(r, language)
   const id = language === 'id'
@@ -61,20 +57,18 @@ export function PlanUsageReading({
   const until = r.resetsAt ? r.resetsAt - now : null
   const reset =
     until === null
-      ? id
-        ? 'Waktu reset tidak dilaporkan'
-        : 'No reset time reported'
+      ? say('No reset time reported')
       : until <= 0
-        ? id
-          ? 'Menunggu reset dilaporkan'
-          : 'Awaiting the reset'
+        ? say('Awaiting the reset')
         : until < 24 * 60 * 60_000
-          ? `${id ? 'Reset dalam' : 'Resets in'} ${duration(until)}`
-          : `${id ? 'Reset' : 'Resets'} ${new Date(r.resetsAt!).toLocaleString(id ? 'id-ID' : 'en-US', {
-              weekday: 'short',
-              hour: 'numeric',
-              minute: '2-digit',
-            })}`
+          ? say('Resets in {0}', { 0: duration(until, say) })
+          : say('Resets {0}', {
+              0: new Date(r.resetsAt!).toLocaleString(id ? 'id-ID' : 'en-US', {
+                weekday: 'short',
+                hour: 'numeric',
+                minute: '2-digit',
+              }),
+            })
   return (
     <View style={{ padding: space.m, gap: space.s }}>
       {!compact ? (
@@ -117,7 +111,9 @@ export function PlanUsageReading({
           reset,
           !compact && r.plan ? planName(r.plan) : null,
           !compact
-            ? `${lastKnown ? (id ? 'terakhir dilaporkan' : 'last reported') : id ? 'diperbarui' : 'updated'} ${relative(r.updatedAt, id)}`
+            ? lastKnown
+              ? say('last reported {0}', { 0: relative(r.updatedAt, say, id) })
+              : say('updated {0}', { 0: relative(r.updatedAt, say, id) })
             : null,
         ]
           .filter(Boolean)
@@ -133,6 +129,7 @@ export function PlanUsageReading({
  */
 function AccountFacts({ readings, offline }: { readings: UsageReading[]; offline: boolean }) {
   const { language } = useStore()
+  const say = useSay()
   const id = language === 'id'
   const now = Date.now()
   const plan = [...readings].filter((r) => r.plan).sort((a, b) => b.updatedAt - a.updatedAt)[0]?.plan
@@ -141,7 +138,7 @@ function AccountFacts({ readings, offline }: { readings: UsageReading[]; offline
   if (!plan && !stale) return null
   return (
     <T size={font.caption} tone={stale ? 'warn' : 'muted'}>
-      {[plan ? planName(plan) : null, stale ? `${id ? 'Diperbarui' : 'Updated'} ${relative(newest, id)}` : null]
+      {[plan ? planName(plan) : null, stale ? say('Updated {0}', { 0: relative(newest, say, id) }) : null]
         .filter(Boolean)
         .join(' · ')}
     </T>
@@ -149,18 +146,22 @@ function AccountFacts({ readings, offline }: { readings: UsageReading[]; offline
 }
 
 /** "2 h 15 min", "45 min": how long until a limit resets. */
-function duration(ms: number): string {
+function duration(ms: number, say: ReturnType<typeof useSay>): string {
   const minutes = Math.max(1, Math.round(ms / 60_000))
   const hours = Math.floor(minutes / 60)
-  return hours ? `${hours} h${minutes % 60 ? ` ${minutes % 60} min` : ''}` : `${minutes} min`
+  return hours
+    ? minutes % 60
+      ? say('{0} h {1} min', { 0: hours, 1: minutes % 60 })
+      : say('{0} h', { 0: hours })
+    : say('{0} min', { 0: minutes })
 }
 
-function relative(at: number, id: boolean): string {
+function relative(at: number, say: ReturnType<typeof useSay>, id: boolean): string {
   const minutes = Math.round((Date.now() - at) / 60_000)
-  if (minutes < 1) return id ? 'baru saja' : 'just now'
-  if (minutes < 60) return id ? `${minutes} menit lalu` : `${minutes} min ago`
+  if (minutes < 1) return say('just now')
+  if (minutes < 60) return say('{0} min ago', { 0: minutes })
   const hours = Math.round(minutes / 60)
-  if (hours < 24) return id ? `${hours} jam lalu` : `${hours} h ago`
+  if (hours < 24) return say('{0} h ago', { 0: hours })
   return new Date(at).toLocaleDateString(id ? 'id-ID' : 'en-US')
 }
 
@@ -221,10 +222,7 @@ export function PlanUsageSheet({
         if (request !== generation.current) return
         setErrors((all) => ({
           ...all,
-          [id]:
-            store.language === 'id'
-              ? 'Tidak dapat memuat akun. Data terakhir tetap ditampilkan.'
-              : 'Could not load accounts. Last-known readings remain visible.',
+          [id]: say('Could not load accounts. Last-known readings remain visible.'),
         }))
       })
     }
@@ -261,10 +259,7 @@ export function PlanUsageSheet({
           if (request !== generation.current) break
           setErrors((all) => ({
             ...all,
-            [id]:
-              store.language === 'id'
-                ? 'Pembaruan tidak tersedia. Data terakhir tetap ditampilkan.'
-                : 'Refresh unavailable. Last-known readings remain visible.',
+            [id]: say('Refresh unavailable. Last-known readings remain visible.'),
           }))
         }
       }
@@ -276,37 +271,19 @@ export function PlanUsageSheet({
     }
   }
   return (
-    <Sheet
-      presentation="screen"
-      open={open}
-      onClose={onClose}
-      title={store.language === 'id' ? 'Penggunaan paket' : 'Plan usage'}
-    >
+    <Sheet presentation="screen" open={open} onClose={onClose} title={say('Plan usage')}>
       {context}
       <T tone="muted" style={{ padding: space.m }}>
-        {store.language === 'id' ? 'Dibagikan antar thread pada akun ini' : 'Shared across threads on this account'}
+        {say('Shared across threads on this account')}
       </T>
       {!provider || provider === 'claude-code' ? (
         <Row onPress={busy || !refreshHosts.length ? undefined : () => void refresh()}>
-          <T tone="muted">
-            {store.language === 'id'
-              ? busy
-                ? 'Memperbarui…'
-                : 'Perbarui penggunaan Claude'
-              : busy
-                ? 'Refreshing…'
-                : 'Refresh Claude usage'}
-          </T>
+          <T tone="muted">{busy ? say('Refreshing…') : say('Refresh Claude usage')}</T>
         </Row>
       ) : null}
       {hosts.length > 1 ? (
         <SheetGroup>
-          <SheetOption
-            icon={Network}
-            title={store.language === 'id' ? 'Semua host' : 'All hosts'}
-            selected={!filter}
-            onPress={() => setFilter(null)}
-          />
+          <SheetOption icon={Network} title={say('All hosts')} selected={!filter} onPress={() => setFilter(null)} />
           {hosts.map((id) => (
             <SheetOption
               key={id}
@@ -338,7 +315,7 @@ export function PlanUsageSheet({
             <View key={id}>
               <SectionLabel>
                 {host?.name ?? id}
-                {store.isOnline(id) ? '' : store.language === 'id' ? ' · Luring' : ' · Offline'}
+                {store.isOnline(id) ? '' : ` · ${say('Offline')}`}
               </SectionLabel>
               {errors[id] ? (
                 <T tone="bad" style={{ padding: space.m }}>
@@ -347,7 +324,7 @@ export function PlanUsageSheet({
               ) : null}
               {!rows.length ? (
                 <T tone="muted" style={{ padding: space.m }}>
-                  {store.language === 'id' ? 'Tidak dilaporkan' : 'Not reported'}
+                  {say('Not reported')}
                 </T>
               ) : (
                 groupUsageByProvider(rows).map((group) => (
@@ -364,11 +341,11 @@ export function PlanUsageSheet({
                       >
                         <ProviderIcon provider={group.provider} size={14} />
                         <T tone="muted" size={font.caption} style={{ flexShrink: 1 }}>
-                          {providerNames[group.provider]} · {group.readings.length}{' '}
-                          {store.language === 'id' ? 'jendela' : group.readings.length === 1 ? 'window' : 'windows'}
-                          {group.attention
-                            ? ` · ${group.attention} ${store.language === 'id' ? 'perlu perhatian' : 'need attention'}`
-                            : ''}
+                          {providerNames[group.provider]} ·{' '}
+                          {group.readings.length === 1
+                            ? say('{0} window', { 0: 1 })
+                            : say('{0} windows', { 0: group.readings.length })}
+                          {group.attention ? ` · ${say('{0} need attention', { 0: group.attention })}` : ''}
                         </T>
                       </View>
                     )}
@@ -414,7 +391,7 @@ export function PlanUsageSheet({
       <SheetGroup>
         <SheetOption
           icon={Settings}
-          title={store.language === 'id' ? 'Pengaturan model & akses' : 'Models & access settings'}
+          title={say('Models & access settings')}
           onPress={() => {
             const target = filter ?? (hosts.length === 1 ? hosts[0] : undefined)
             if (target) store.select(target)
@@ -429,6 +406,7 @@ export function PlanUsageSheet({
 
 export function PlanUsageSummary({ hostIds, actionOnly = false }: { hostIds: string[]; actionOnly?: boolean }) {
   const store = useStore()
+  const say = useSay()
   const { c } = useTheme()
   const [open, setOpen] = useState(false)
   const hosts = hostIds.filter((id) => store.appPreferences[id]?.showUsageLimits !== false)
@@ -444,12 +422,10 @@ export function PlanUsageSummary({ hostIds, actionOnly = false }: { hostIds: str
   )
   if (!hosts.length) return null
   const percent = summary ? usagePercent(summary.reading) : null
-  const label = store.language === 'id' ? 'Penggunaan paket' : 'Plan usage'
+  const label = say('Plan usage')
   const value = !summary
-    ? store.language === 'id'
-      ? 'Tidak dilaporkan'
-      : 'Not reported'
-    : `${hostIds.length > 1 ? `${store.computers.find((h) => h.id === summary.hostId)?.name ?? summary.hostId} · ` : ''}${providerNames[summary.reading.provider]} · ${percent === null ? (summary.reading.source === 'notice' ? (store.language === 'id' ? 'Batas dilaporkan' : 'Limit reported') : store.language === 'id' ? 'Tidak dilaporkan' : 'Not reported') : `${Math.round(percent)}% ${store.language === 'id' ? 'terpakai' : 'used'}`}${summary.lastKnown ? (store.language === 'id' ? ' · Terakhir dilaporkan' : ' · Last reported') : ''}`
+    ? say('Not reported')
+    : `${hostIds.length > 1 ? `${store.computers.find((h) => h.id === summary.hostId)?.name ?? summary.hostId} · ` : ''}${providerNames[summary.reading.provider]} · ${percent === null ? (summary.reading.source === 'notice' ? say('Limit reported') : say('Not reported')) : say('{0}% used', { 0: Math.round(percent) })}${summary.lastKnown ? ` · ${say('Last reported')}` : ''}`
   return (
     <>
       <Pressable

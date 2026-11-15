@@ -272,7 +272,7 @@ export function BrowserViewer({
   useEffect(() => {
     if (!controlled || !frameReady || !tabId || generation === undefined || !chat.taskId) return
     const queue = new BrowserInputQueue(async (input) => {
-      if (!allowed()) throw new Error('Browser control changed.')
+      if (!allowed()) throw new Error(translate(io.current.language, 'Browser control changed.'))
       await io.current.invoke(chat.computerId, 'hostBrowser.input', chat.taskId!, tabId, generation, input)
     })
     inputQueue.current = queue
@@ -520,7 +520,7 @@ export function BrowserViewer({
         void act(async () => {
           const value = (await Clipboard.getStringAsync()).slice(0, 2000)
           if (!value) throw new Error(t('The clipboard is empty.'))
-          if (!inputQueue.current) throw new Error('Take control again to continue.')
+          if (!inputQueue.current) throw new Error(t('Take control again to continue.'))
           await inputQueue.current.push({ kind: 'text', text: value })
         }),
     },

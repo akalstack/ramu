@@ -94,7 +94,7 @@ export function NoticeBanner() {
         >
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`${shown.title}. ${shown.body}`}
+            accessibilityLabel={`${shown.title}. ${say(shown.body)}`}
             onPress={open}
             style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.m, paddingVertical: space.s }}
           >
@@ -104,7 +104,7 @@ export function NoticeBanner() {
                 {shown.title}
               </T>
               <T size={font.caption} tone="muted" numberOfLines={1}>
-                {computer ? `${computer} · ${shown.body}` : shown.body}
+                {computer ? `${computer} · ${say(shown.body)}` : say(shown.body)}
               </T>
             </View>
           </Pressable>

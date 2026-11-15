@@ -19,13 +19,12 @@ export function ComputerUseNotice({ chat, onOpen }: { chat: Chat; onOpen?(): voi
   if (!session) return null
   const online = store.isOnline(chat.computerId)
   const active = session.controller.kind === 'agent' && !session.paused
-  const id = store.language === 'id'
-  const label = active ? (id ? 'Menggunakan komputer' : 'Using computer') : id ? 'Komputer' : 'Computer'
+  const label = active ? say('Using computer') : say('Computer')
   return (
     <ActivityPill
       icon={Monitor}
       label={`${label} · ${session.target.name}`}
-      accessibilityLabel={`${id ? 'Buka komputer' : 'Open computer'}, ${session.target.name}`}
+      accessibilityLabel={`${say('Open computer')}, ${session.target.name}`}
       tone={!online ? 'off' : active ? 'attention' : 'quiet'}
       emphasis={active}
       iconOnly={!active}
@@ -33,7 +32,7 @@ export function ComputerUseNotice({ chat, onOpen }: { chat: Chat; onOpen?(): voi
       trailing={
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={id ? 'Hentikan penggunaan komputer' : 'Stop computer use'}
+          accessibilityLabel={say('Stop computer use')}
           accessibilityState={{ disabled: busy || !online }}
           disabled={busy || !online}
           onPress={(event) => {

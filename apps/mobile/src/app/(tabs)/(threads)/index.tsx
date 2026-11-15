@@ -196,7 +196,7 @@ export default function Threads() {
         } as HomeRow),
       )
     if (outbox.length && !filtering) {
-      out.push({ key: 'label:outbox', kind: 'label', text: `${t.outbox} ${outbox.length}`, right: 'sends when online' })
+      out.push({ key: 'label:outbox', kind: 'label', text: `${t.outbox} ${outbox.length}`, right: 'Sends when online' })
       group(
         'outbox',
         outbox.map((o) => ({ key: o.id, kind: 'outbox', o }) as HomeRow),
@@ -347,7 +347,7 @@ export default function Threads() {
           right={
             row.right ? (
               <T size={font.caption} tone="muted">
-                {row.right}
+                {translate(store.language, row.right)}
               </T>
             ) : undefined
           }
@@ -369,7 +369,9 @@ export default function Threads() {
                 <View style={{ flex: 1, gap: 2 }}>
                   <T size={font.body} weight="500" numberOfLines={1}>
                     {row.o.kind === 'chat'
-                      ? `New thread · ${nameOf(chat?.projectId ?? '') ?? 'Standalone'}`
+                      ? translate(store.language, 'New thread · {0}', {
+                          0: nameOf(chat?.projectId ?? '') ?? translate(store.language, 'Standalone'),
+                        })
                       : chat?.title}
                   </T>
                   <T size={font.control} tone="muted" numberOfLines={1}>
@@ -605,7 +607,7 @@ export default function Threads() {
                 <HeaderButton
                   actionId="tab-usage"
                   icon={Gauge}
-                  label={store.language === 'id' ? 'Penggunaan paket' : 'Plan usage'}
+                  label={say('Plan usage')}
                   systemIcon="gauge.with.dots.needle.50percent"
                   onPress={() => setUsageOpen(true)}
                 />

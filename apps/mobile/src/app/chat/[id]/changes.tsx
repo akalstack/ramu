@@ -92,7 +92,7 @@ function FileDiff({
               style={{ paddingHorizontal: space.m, paddingVertical: space.s }}
             >
               <T size={font.caption} weight="600" tone="accent">
-                Open file
+                {say('Open file')}
               </T>
             </Pressable>
           ) : null}
@@ -116,8 +116,8 @@ function FileDiff({
               <MessageSquarePlus size={14} color={x.state === 'draft' ? c.warn : c.muted} style={{ marginTop: 2 }} />
               <View style={{ flex: 1, gap: 2 }}>
                 <T size={font.caption} tone="muted">
-                  {x.scope === 'file' ? 'File' : `Line ${x.line}`} ·{' '}
-                  {x.state === 'sent' ? 'sent' : x.state === 'resolved' ? 'resolved' : 'draft'}
+                  {x.scope === 'file' ? say('File') : say('Line {0}', { 0: x.line })} ·{' '}
+                  {x.state === 'sent' ? say('sent') : x.state === 'resolved' ? say('resolved') : say('draft')}
                 </T>
                 <T size={font.control}>{x.text}</T>
               </View>
@@ -222,18 +222,20 @@ export default function Changes() {
   }
   const undo = () =>
     void action(async () => {
-      if (!chat || !review) throw new Error('Choose a recorded run first.')
+      if (!chat || !review) throw new Error(say('Choose a recorded run first.'))
       const preview = await store.invoke(chat.computerId, 'reviews.undoPreview', review.id)
       const ready = preview.files.filter((f) => f.status === 'ready')
       if (!ready.length)
-        throw new Error(preview.files.map((f) => `${f.path}: ${f.reason}`).join('\n') || 'There is nothing to undo.')
+        throw new Error(
+          preview.files.map((f) => `${f.path}: ${f.reason}`).join('\n') || say('There is nothing to undo.'),
+        )
       Alert.alert(
-        'Undo this run?',
-        `${store.computers.find((c) => c.id === chat.computerId)?.name}\n${ready.map((f) => `${f.repoName}/${f.path}${f.remove ? ' (delete)' : ''}`).join('\n')}\n\n${preview.files.filter((f) => f.status === 'conflict').length} conflicting files will be skipped.`,
+        say('Undo this run?'),
+        `${store.computers.find((c) => c.id === chat.computerId)?.name}\n${ready.map((f) => `${f.repoName}/${f.path}${f.remove ? ` (${say('delete')})` : ''}`).join('\n')}\n\n${say('{count} conflicting files will be skipped.', { count: preview.files.filter((f) => f.status === 'conflict').length })}`,
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: say('Cancel'), style: 'cancel' },
           {
-            text: 'Undo',
+            text: say('Undo'),
             style: 'destructive',
             onPress: () =>
               void action(() =>
@@ -250,9 +252,9 @@ export default function Changes() {
     })
   const sendReview = () =>
     void action(async () => {
-      if (!chat || !review || !note.trim()) throw new Error('Write a review comment first.')
+      if (!chat || !review || !note.trim()) throw new Error(say('Write a review comment first.'))
       const file = review.files[0]
-      if (!file) throw new Error('This run has no recorded files.')
+      if (!file) throw new Error(say('This run has no recorded files.'))
       const updated = await store.invoke(chat.computerId, 'reviews.comment', review.id, {
         fileId: file.id,
         side: 'new',
@@ -262,7 +264,7 @@ export default function Changes() {
         scope: 'file',
       })
       const comment = updated.comments.findLast((c) => c.text === note.trim())
-      if (!comment) throw new Error('Could not find the saved comment.')
+      if (!comment) throw new Error(say('Could not find the saved comment.'))
       await store.invoke(chat.computerId, 'reviews.sendComments', review.id, [comment.id])
       setNote('')
     })
@@ -285,7 +287,7 @@ export default function Changes() {
     })
   const sendDrafts = () =>
     void action(async () => {
-      if (!chat || !review || !drafts.length) throw new Error('Tap a diff line to add a comment first.')
+      if (!chat || !review || !drafts.length) throw new Error(say('Tap a diff line to add a comment first.'))
       await store.invoke(
         chat.computerId,
         'reviews.sendComments',
@@ -295,6 +297,11 @@ export default function Changes() {
       )
       setNote('')
     })
+  const sendLabel = !drafts.length
+    ? say('Send review')
+    : drafts.length === 1
+      ? say('Send 1 comment')
+      : say('Send {count} comments', { count: drafts.length })
   const add = changes.reduce((n, f) => n + f.additions, 0)
   const del = changes.reduce((n, f) => n + f.deletions, 0)
   return (
@@ -371,7 +378,7 @@ export default function Changes() {
         />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingBottom: space.s }}>
           <T size={font.control} tone="muted" style={{ flex: 1 }}>
-            {changes.length} files changed
+            {say('{count} files changed', { count: changes.length })}
           </T>
           <T size={font.control} mono tone="ok">
             +{add}
@@ -416,7 +423,7 @@ export default function Changes() {
             disabled={busy || !review || (!note.trim() && !drafts.length)}
             onPress={drafts.length ? sendDrafts : sendReview}
           >
-            {drafts.length ? `Send ${drafts.length} comment${drafts.length === 1 ? '' : 's'}` : 'Send review'}
+            {sendLabel}
           </Stack.Toolbar.Button>
         </Stack.Toolbar>
       ) : (
@@ -446,7 +453,7 @@ export default function Changes() {
             />
             <GlassButton
               icon={MessageSquarePlus}
-              title={drafts.length ? `Send ${drafts.length} comment${drafts.length === 1 ? '' : 's'}` : 'Send review'}
+              title={sendLabel}
               disabled={busy || !review || (!note.trim() && !drafts.length)}
               onPress={drafts.length ? sendDrafts : sendReview}
               primary
@@ -460,8 +467,11 @@ export default function Changes() {
         onClose={() => setCommenting(null)}
         title={
           commenting
-            ? `${commenting.file.path.split('/').at(-1)} · line ${commenting.line.new ?? commenting.line.old}`
-            : 'Comment'
+            ? say('{0} · line {1}', {
+                0: commenting.file.path.split('/').at(-1) ?? '',
+                1: commenting.line.new ?? commenting.line.old ?? '',
+              })
+            : say('Comment')
         }
       >
         <View style={{ padding: space.l, gap: space.m }}>

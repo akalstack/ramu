@@ -111,7 +111,7 @@ export const ChatRow = memo(function ChatRow({
     : !status || status.kind === 'finished'
       ? null
       : status.kind === 'working' || status.kind === 'goal' || status.kind === 'verifying'
-        ? { text: chat.activityLabel || strings[shortKey!], tone: 'accent' }
+        ? { text: chat.activityLabel ? say(chat.activityLabel) : strings[shortKey!], tone: 'accent' }
         : WAITING.has(status.kind)
           ? {
               text:
@@ -154,7 +154,7 @@ export const ChatRow = memo(function ChatRow({
           },
           {
             icon: commands.archived ? ArchiveRestore : Archive,
-            label: commands.archived ? 'Unarchive' : 'Archive',
+            label: commands.archived ? say('Unarchive') : say('Archive'),
             color: c.warn,
             onPress: () => void commands.toggleArchive(),
             removes: true,

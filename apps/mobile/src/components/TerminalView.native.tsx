@@ -81,7 +81,9 @@ export default function TerminalView({
     <View style={{ flex: 1 }} onLayout={(event) => setSize(event.nativeEvent.layout)}>
       <WebView<object>
         accessibilityLabel={say('Host terminal')}
-        accessibilityHint="Hold, then drag to move the cursor. Drag farther to repeat faster. Pinch to change the text size."
+        accessibilityHint={say(
+          'Hold, then drag to move the cursor. Drag farther to repeat faster. Pinch to change the text size.',
+        )}
         ref={view}
         source={{ html: terminalHtml }}
         style={{ flex: 1, backgroundColor: '#0e0e10' }}

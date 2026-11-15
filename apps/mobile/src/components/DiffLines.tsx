@@ -4,6 +4,7 @@ import { CodeTokens, grammarFor, highlightLines } from './Code'
 import { space, useTheme } from '../theme'
 import type { ChangedFile, DiffLine } from '../runtime/types'
 import { T } from './ui'
+import { useSay } from '../i18n'
 
 /**
  * The lines of one file's diff, shared by the review screen, the file viewer and a pull request's Files changed. Scrolls
@@ -34,6 +35,7 @@ export function DiffLines({
   /** What a tappable line says to a screen reader. */
   lineLabel?: (line: DiffLine) => string
 }) {
+  const say = useSay()
   const { c } = useTheme()
   // Each side is highlighted as a whole (so multi-line strings and comments colour correctly), then matched back by line number.
   const colors = useMemo(() => {
@@ -61,7 +63,7 @@ export function DiffLines({
             <Pressable
               disabled={(!onLine && !onLongLine) || l.type === 'hunk'}
               accessibilityRole={onLine && l.type !== 'hunk' ? 'button' : undefined}
-              accessibilityLabel={lineLabel?.(l) ?? `Comment on line ${l.new ?? l.old}`}
+              accessibilityLabel={lineLabel?.(l) ?? say('Comment on line {0}', { 0: l.new ?? l.old ?? '' })}
               delayLongPress={350}
               onPress={() => onLine?.(l)}
               onLongPress={onLongLine ? () => onLongLine(l) : undefined}
@@ -96,7 +98,9 @@ export function DiffLines({
                 {!l.text
                   ? ' '
                   : l.type === 'hunk'
-                    ? l.text
+                    ? l.skipped
+                      ? say('… {0} unchanged lines …', { 0: l.skipped })
+                      : l.text
                     : (() => {
                         const tokens = l.type === 'del' ? colors.old.get(l.old) : colors.new.get(l.new)
                         return tokens ? <CodeTokens tokens={tokens} /> : l.text

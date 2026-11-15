@@ -13,7 +13,7 @@ import {
   REPORT_STATUS,
   sortHelpers,
 } from '@ramu/shared/chat/helperPresentation'
-import { translate } from '@ramu/shared/i18n'
+import { translate, type TranslationValues } from '@ramu/shared/i18n'
 import { customAgentHandle, teammateRecipeName } from '@ramu/shared/customAgents'
 import type { AgentTask, AgentWork } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../theme'
@@ -27,19 +27,6 @@ import { Button, Card, Divider, Sheet, T, tap } from './ui'
 import { ActivityText, Collapse, Disclosure } from './Motion'
 
 type Helper = Extract<TranscriptItem, { kind: 'agents' }>['agents'][number]
-const copy = (key: string, id: boolean) =>
-  id
-    ? ({
-        Working: 'Bekerja',
-        Completed: 'Selesai',
-        Failed: 'Gagal',
-        Stopped: 'Dihentikan',
-        'Waiting for input': 'Menunggu jawaban',
-        'Waiting for provider': 'Menunggu penyedia',
-        'Recovered activity': 'Aktivitas dipulihkan',
-        'Paused for you': 'Dijeda untukmu',
-      }[key] ?? key)
-    : key
 /** What a helper is, beside its name: Teammate · Review, Sub-agent · Explore, Advisor, Command (as on the desktop). */
 export function RoleTag({ task }: { task: Pick<AgentTask, 'teammate' | 'taskType' | 'agentType'> }) {
   const { c } = useTheme()
@@ -56,13 +43,14 @@ export function RoleTag({ task }: { task: Pick<AgentTask, 'teammate' | 'taskType
 }
 
 /** A teammate's changes and usage, e.g. "2 files +40 −5 · 3 turns · $0.12". */
-function workLine(work: AgentWork, id: boolean): string {
+function workLine(work: AgentWork, say: (text: string, values?: TranslationValues) => string): string {
+  const counts = { 0: work.files, 1: work.added, 2: work.removed }
   const files = work.files
-    ? `${work.files} ${id ? 'file' : work.files === 1 ? 'file' : 'files'} +${work.added} −${work.removed}`
-    : id
-      ? 'Tidak ada perubahan'
-      : 'No changes'
-  const turns = `${work.turns} ${id ? 'giliran' : work.turns === 1 ? 'turn' : 'turns'}`
+    ? work.files === 1
+      ? say('{0} file +{1} −{2}', counts)
+      : say('{0} files +{1} −{2}', counts)
+    : say('No changes')
+  const turns = work.turns === 1 ? say('{0} turn', { 0: work.turns }) : say('{0} turns', { 0: work.turns })
   return [files, turns, ...(work.costUsd ? [`$${work.costUsd.toFixed(2)}`] : [])].join(' · ')
 }
 /** Only this visible label ticks; backgrounding or leaving the route stops its timer. */
@@ -126,10 +114,7 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
       await store.invoke(chat.computerId, 'agent.messageTask', chat.sessionId, task.agentId, text)
       setDraft('')
     } catch (error) {
-      Alert.alert(
-        id ? 'Tidak dapat mengirim' : 'Could not send',
-        error instanceof Error ? error.message : String(error),
-      )
+      Alert.alert(say('Could not send'), error instanceof Error ? error.message : String(error))
     } finally {
       inFlight.current = false
       setSending(false)
@@ -140,7 +125,7 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
     chat.sessionId &&
     void latestStore.current
       .invoke(chat.computerId, 'agent.continueTeammates', chat.sessionId)
-      .catch((error) => Alert.alert(id ? 'Tidak dapat melanjutkan' : 'Could not continue', String(error)))
+      .catch((error) => Alert.alert(say('Could not continue'), String(error)))
   const saveTeammate = async () => {
     if (!writable() || !chat.sessionId || !saveName?.trim() || inFlight.current) return
     inFlight.current = true
@@ -155,18 +140,13 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
       )
       setSaveName(null)
       Alert.alert(
-        id ? 'Tersimpan sebagai rekan' : 'Saved as a teammate',
-        translate(
-          store.language,
-          'Start a message with @{0} in any thread to bring it in. Edit it in Settings → Custom agents.',
-          { 0: customAgentHandle(saved.name) },
-        ),
+        say('Saved as a teammate'),
+        say('Start a message with @{0} in any thread to bring it in. Edit it in Settings → Custom agents.', {
+          0: customAgentHandle(saved.name),
+        }),
       )
     } catch (error) {
-      Alert.alert(
-        id ? 'Tidak dapat menyimpan' : 'Could not save',
-        error instanceof Error ? error.message : String(error),
-      )
+      Alert.alert(say('Could not save'), error instanceof Error ? error.message : String(error))
     } finally {
       inFlight.current = false
       setSending(false)
@@ -176,18 +156,12 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
     writable() &&
     chat.sessionId &&
     Alert.alert(
-      task.taskType === 'local_bash'
-        ? id
-          ? 'Hentikan perintah ini?'
-          : 'Stop this command?'
-        : id
-          ? 'Hentikan agen ini?'
-          : 'Stop this agent?',
-      id ? 'Thread utama tetap berjalan.' : 'The main thread keeps going.',
+      task.taskType === 'local_bash' ? say('Stop this command?') : say('Stop this agent?'),
+      say('The main thread keeps going.'),
       [
-        { text: id ? 'Batal' : 'Cancel', style: 'cancel' },
+        { text: say('Cancel'), style: 'cancel' },
         {
-          text: id ? 'Hentikan' : 'Stop',
+          text: say('Stop'),
           style: 'destructive',
           onPress: () =>
             writable() &&
@@ -201,16 +175,16 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
     <Sheet open onClose={onClose} title={task.name}>
       <View style={{ paddingHorizontal: space.l, paddingBottom: space.m, gap: space.m }}>
         <T tone="muted">
-          {!online ? `${id ? 'Terakhir diketahui' : 'Last known'} · ` : ''}
-          {copy(helperStatusLabel(task), id)}
+          {!online ? `${say('Last known')} · ` : ''}
+          {say(helperStatusLabel(task))}
         </T>
         <T size={font.caption} tone="muted">
           {[
             task.provider ? providerNames[task.provider] : undefined,
             task.model,
             task.effort,
-            task.isolated ? (id ? 'Salinan terpisah' : 'Own copy') : undefined,
-            task.background ? (id ? 'Latar belakang' : 'Background') : undefined,
+            task.isolated ? say('Own copy') : undefined,
+            task.background ? say('Background') : undefined,
           ]
             .filter(Boolean)
             .join(' · ')}
@@ -219,20 +193,18 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
         {task.recoveryError ? <T tone="muted">{task.recoveryError}</T> : null}
         {task.prompt ? (
           <>
-            <T weight="600">{id ? 'Tugas' : 'Task'}</T>
+            <T weight="600">{say('Task')}</T>
             <T copyable={task.prompt}>{task.prompt}</T>
           </>
         ) : null}
         {task.log ? (
           <>
-            <T weight="600">
-              {task.log.length > shown ? (id ? 'Cuplikan keluaran' : 'Output excerpt') : id ? 'Keluaran' : 'Output'}
-            </T>
+            <T weight="600">{task.log.length > shown ? say('Output excerpt') : say('Output')}</T>
             <Markdown text={task.log.slice(-shown)} />
             {task.log.length > shown ? (
               <Button
                 kind="ghost"
-                title={id ? 'Tampilkan keluaran sebelumnya' : 'Show earlier output'}
+                title={say('Show earlier output')}
                 onPress={() => setShown((current) => current + OUTPUT_PAGE)}
               />
             ) : null}
@@ -240,9 +212,9 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
         ) : null}
         {task.work ? (
           <>
-            <T weight="600">{id ? 'Perubahan' : 'Changes'}</T>
+            <T weight="600">{say('Changes')}</T>
             <T tone="muted" size={font.caption}>
-              {workLine(task.work, id)}
+              {workLine(task.work, say)}
             </T>
             {task.work.paths.map((path) => (
               <T key={path} size={font.caption} mono numberOfLines={1}>
@@ -253,15 +225,15 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
         ) : null}
         {task.summary || task.error ? (
           <>
-            <T weight="600">{id ? 'Laporan' : 'Report'}</T>
+            <T weight="600">{say('Report')}</T>
             <Markdown text={task.error ?? task.summary ?? ''} />
           </>
         ) : null}
         {task.toolUses !== undefined || task.tokens !== undefined ? (
           <T tone="muted" size={font.caption}>
             {[
-              task.toolUses !== undefined ? `${task.toolUses} tools` : '',
-              task.tokens !== undefined ? `${task.tokens} tokens` : '',
+              task.toolUses !== undefined ? say('{0} tools', { 0: task.toolUses }) : '',
+              task.tokens !== undefined ? say('{0} tokens', { 0: task.tokens }) : '',
             ]
               .filter(Boolean)
               .join(' · ')}
@@ -270,12 +242,12 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
         {chat.sessionId && actions.canMessage ? (
           <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'flex-end' }}>
             <TextInput
-              accessibilityLabel={`${id ? 'Pesan untuk' : 'Message'} ${task.name}`}
+              accessibilityLabel={say('Message {0}', { 0: task.name })}
               value={draft}
               onChangeText={setDraft}
               multiline
               editable={!viewOnly && !sending}
-              placeholder={`${id ? 'Pesan untuk' : 'Message'} ${task.name}`}
+              placeholder={say('Message {0}', { 0: task.name })}
               placeholderTextColor={c.placeholder}
               style={{
                 flex: 1,
@@ -287,52 +259,37 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
                 borderRadius: radius.m,
               }}
             />
-            <Button
-              title={id ? 'Kirim' : 'Send'}
-              disabled={viewOnly || !draft.trim() || sending}
-              onPress={() => void send()}
-            />
+            <Button title={say('Send')} disabled={viewOnly || !draft.trim() || sending} onPress={() => void send()} />
           </View>
         ) : (
           <T tone="muted" size={font.caption}>
-            {!online
-              ? id
-                ? 'Hubungkan kembali untuk menggunakan kontrol agen.'
-                : 'Reconnect to use agent controls.'
-              : id
-                ? 'Agen ini tidak mendukung pesan langsung.'
-                : 'This agent does not support direct messages.'}
+            {!online ? say('Reconnect to use agent controls.') : say('This agent does not support direct messages.')}
           </T>
         )}
         {viewOnly ? <T tone="muted">{VIEW_ONLY_WRITE_NOTICE[id ? 'id' : 'en']}</T> : null}
         {chat.sessionId && actions.canContinue && !viewOnly ? (
           <>
             <T tone="muted" size={font.caption}>
-              {id
-                ? 'Percakapan dengan agen utama dijeda setelah beberapa putaran tanpa kamu. Laporannya menunggu.'
-                : 'The exchange with the main agent paused after a few rounds without you. Its report is waiting.'}
+              {say('The exchange with the main agent paused after a few rounds without you. Its report is waiting.')}
             </T>
-            <Button title={id ? 'Lanjut' : 'Continue'} onPress={resume} />
+            <Button title={say('Continue')} onPress={resume} />
           </>
         ) : null}
         {chat.sessionId && task.teammate && !viewOnly ? (
           saveName === null ? (
             <Button
               kind="ghost"
-              title={id ? 'Simpan sebagai rekan' : 'Save as teammate'}
+              title={say('Save as teammate')}
               onPress={() => setSaveName(teammateRecipeName(task))}
             />
           ) : (
             <View style={{ gap: space.s }}>
               <T size={font.caption} tone="muted">
-                {translate(
-                  store.language,
-                  'Its model, its brief and what it may do are saved, so you can bring it into another thread.',
-                )}
+                {say('Its model, its brief and what it may do are saved, so you can bring it into another thread.')}
               </T>
               <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'center' }}>
                 <TextInput
-                  accessibilityLabel={id ? 'Nama' : 'Name'}
+                  accessibilityLabel={say('Name')}
                   value={saveName}
                   onChangeText={setSaveName}
                   autoFocus
@@ -351,7 +308,7 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
                   }}
                 />
                 <Button
-                  title={id ? 'Simpan' : 'Save'}
+                  title={say('Save')}
                   disabled={!saveName.trim() || sending}
                   onPress={() => void saveTeammate()}
                 />
@@ -363,27 +320,23 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
         {chat.sessionId && task.teammate && !viewOnly && task.status !== 'stopped' && task.status !== 'failed' ? (
           <Button
             kind="danger"
-            title={id ? 'Keluarkan dari thread' : 'Remove from thread'}
+            title={say('Remove from thread')}
             onPress={() =>
               writable() &&
               Alert.alert(
-                id ? `Keluarkan ${task.name}?` : `Remove ${task.name}?`,
-                id
-                  ? 'Berhenti jika sedang bekerja, dan tidak lagi menerima pesan dari kamu atau agen utama.'
-                  : 'It stops if it is working, and neither you nor the lead can message it afterwards.',
+                say('Remove {0} from the thread?', { 0: task.name }),
+                say('It stops if it is working, and neither you nor the lead can message it afterwards.'),
                 [
-                  { text: id ? 'Batal' : 'Cancel', style: 'cancel' },
+                  { text: say('Cancel'), style: 'cancel' },
                   {
-                    text: id ? 'Keluarkan' : 'Remove',
+                    text: say('Remove from thread'),
                     style: 'destructive',
                     onPress: () => {
                       if (!writable()) return
                       onClose()
                       void latestStore.current
                         .invoke(chat.computerId, 'agent.dismissTeammate', chat.sessionId!, task.agentId)
-                        .catch((error) =>
-                          Alert.alert(id ? 'Tidak dapat mengeluarkan' : 'Could not remove', String(error)),
-                        )
+                        .catch((error) => Alert.alert(say('Could not remove'), String(error)))
                     },
                   },
                 ],
@@ -393,19 +346,11 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
         ) : chat.sessionId && actions.canStop && !viewOnly ? (
           <Button
             kind="danger"
-            title={
-              task.taskType === 'local_bash'
-                ? id
-                  ? 'Hentikan perintah'
-                  : 'Stop command'
-                : id
-                  ? 'Hentikan agen'
-                  : 'Stop agent'
-            }
+            title={task.taskType === 'local_bash' ? say('Stop command') : say('Stop agent')}
             onPress={stop}
           />
         ) : null}
-        <Button kind="ghost" title={id ? 'Kembali ke thread' : 'Back to thread'} onPress={onClose} />
+        <Button kind="ghost" title={say('Back to thread')} onPress={onClose} />
       </View>
     </Sheet>
   )
@@ -421,17 +366,17 @@ export function Helpers({
 }) {
   const { c } = useTheme()
   const store = useStore()
+  const say = useSay()
   const online = store.isOnline(chat.computerId)
-  const id = store.language === 'id'
   const [open, setOpen] = useState(() => item.agents.some(helperActive))
   const [shownId, setShownId] = useState<string | null>(null)
   const agents = item.agents.map((task) => ({ ...task, agentId: task.agentId ?? task.id }))
   const counts = helperCounts(agents)
   const names = [
-    counts.active ? `${counts.active} ${id ? 'aktif' : 'active'}` : '',
-    counts.completed ? `${counts.completed} ${id ? 'selesai' : 'completed'}` : '',
-    counts.failed ? `${counts.failed} ${id ? 'gagal' : 'failed'}` : '',
-    counts.stopped ? `${counts.stopped} ${id ? 'dihentikan' : 'stopped'}` : '',
+    counts.active ? say('{0} active', { 0: counts.active }) : '',
+    counts.completed ? say('{0} completed', { 0: counts.completed }) : '',
+    counts.failed ? say('{0} failed', { 0: counts.failed }) : '',
+    counts.stopped ? say('{0} stopped', { 0: counts.stopped }) : '',
   ]
     .filter(Boolean)
     .join(' · ')
@@ -450,11 +395,11 @@ export function Helpers({
         <Bot size={16} color={c.soft} />
         <View style={{ flex: 1 }}>
           <T weight="600">
-            {item.advisor ? (id ? 'Penasihat' : 'Advisor') : `${counts.total} ${id ? 'agen' : 'agents'}`}
-            {item.earlier ? ` · ${id ? 'Aktivitas sebelumnya' : 'Earlier activity'}` : ''}
+            {item.advisor ? say('Advisor') : say('{0} agents', { 0: counts.total })}
+            {item.earlier ? ` · ${say('Earlier activity')}` : ''}
           </T>
           <T size={font.caption} tone="muted">
-            {!online ? `${id ? 'Terakhir diketahui' : 'Last known'} · ` : ''}
+            {!online ? `${say('Last known')} · ` : ''}
             {names}
           </T>
         </View>
@@ -466,7 +411,7 @@ export function Helpers({
             <Divider inset={space.m} />
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`${helper.name}, ${copy(helperStatusLabel(helper), id)}`}
+              accessibilityLabel={`${helper.name}, ${say(helperStatusLabel(helper))}`}
               onPress={() => setShownId(helper.agentId)}
               style={{ padding: space.m, minHeight: 44, gap: space.s }}
             >
@@ -481,11 +426,11 @@ export function Helpers({
                 </T>
                 {online && helperActive(helper) ? (
                   <ActivityText active size={font.caption}>
-                    {copy(helperStatusLabel(helper), id)}
+                    {say(helperStatusLabel(helper))}
                   </ActivityText>
                 ) : (
                   <T size={font.caption} tone={helper.status === 'failed' ? 'bad' : 'muted'}>
-                    {copy(helperStatusLabel(helper), id)}
+                    {say(helperStatusLabel(helper))}
                   </T>
                 )}
               </View>

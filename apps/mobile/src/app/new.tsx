@@ -350,7 +350,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
   /** A project on another online host: the thread starts there, as it would here, and opens. Text only. */
   const startElsewhere = async (id: string, text: string, settings: AgentSettings) => {
     const target = others.targets.get(id)
-    if (!target) throw new Error('That host is no longer online.')
+    if (!target) throw new Error(say('That host is no longer online.'))
     const started = await storeRef.current.invoke(
       target.computerId,
       'threads.startInProject',
@@ -388,13 +388,13 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
       if (offline) {
         setAuto(false)
         setPicker('project')
-        throw new Error('Choose a project to start while this host is offline.')
+        throw new Error(say('Choose a project to start while this host is offline.'))
       }
       setRouting({ text, status: say('Choosing a project…') })
       const revision = ++routeRevision.current
       const verified = await agentDraft.verify()
       if (revision !== routeRevision.current)
-        throw new Error('The message changed while choosing a project. Send again.')
+        throw new Error(say('The message changed while choosing a project. Send again.'))
       let raw = destination
       if (!raw) {
         const outcome = await storeRef.current.invoke(selected, 'projects.route', text, verified, {
@@ -402,7 +402,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
           localHost: computers.find((x) => x.id === selected)?.name,
         })
         if (revision !== routeRevision.current)
-          throw new Error('The message changed while choosing a project. Send again.')
+          throw new Error(say('The message changed while choosing a project. Send again.'))
         if (outcome.kind === 'resolved' && others.targets.has(outcome.projectId)) {
           await startElsewhere(outcome.projectId, text, verified)
           return
@@ -455,7 +455,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
         return
       }
       const destinationProject = list.find((p) => rawId(p.id) === raw)
-      if (!destinationProject) throw new Error('That project is no longer available. Choose a project.')
+      if (!destinationProject) throw new Error(say('That project is no longer available. Choose a project.'))
       // The destination's repository model defaults apply as if the project had been picked by hand.
       const base = preset ?? DEFAULT_AGENT_SETTINGS
       const destinationDefaults = agentDraft.choice.selection
@@ -464,7 +464,9 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
       const routed = routedAgentSettings(base, destinationDefaults, agentDraft.choice)
       if (!routed) {
         // Stay in Auto so the draft remains visible; a model chosen here then wins over the project default.
-        throw new Error(`${destinationProject.name}'s model default can't be used. Choose a model, then send again.`)
+        throw new Error(
+          say("{0}'s model default can't be used. Choose a model, then send again.", { 0: destinationProject.name }),
+        )
       }
       const sendModel = asModelChoice(routed)
       const options = await storeRef.current.invoke(selected, 'tasks.workspaceOptions', raw)
@@ -484,7 +486,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
       const branch = currentBranchChoice(undefined, text.split('\n')[0]!.slice(0, 60) || 'Discuss attachments', intent)
       if (checkout.mode === 'worktree' && branch && !validBranchName(branch.name)) throw new Error(t.branchNameInvalid)
       if (revision !== routeRevision.current)
-        throw new Error('The message changed while choosing a project. Send again.')
+        throw new Error(say('The message changed while choosing a project. Send again.'))
       const id = await createChat({
         computerId: selected,
         projectId: destinationProject.id,
@@ -637,7 +639,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
               icon={ChevronLeft}
               systemIcon="chevron.left"
               actionId="new-thread-back"
-              label={store.language === 'id' ? 'Kembali ke proyek' : 'Back to projects'}
+              label={say('Back to projects')}
               onPress={() => setPicker('project')}
             />
           ) : undefined
@@ -647,7 +649,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
             icon={X}
             systemIcon="xmark"
             actionId="new-thread-close"
-            label={store.language === 'id' ? 'Tutup' : 'Close'}
+            label={say('Close')}
             onPress={() => {
               Keyboard.dismiss()
               if (asTab) router.navigate('/')
@@ -657,7 +659,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
         }
         scrollEdge={picker === 'project'}
         align="center"
-        title={picker === 'project' ? (store.language === 'id' ? 'Pilih proyek' : 'Choose a project') : t.newChat}
+        title={picker === 'project' ? say('Choose a project') : t.newChat}
       />
       {picker === 'project' ? (
         <PageScrollView
@@ -714,7 +716,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
                 <AnimatedMark size={48} />
               </View>
               <T size={font.hero - 4} weight="600" style={{ letterSpacing: -0.5, textAlign: 'center' }}>
-                {project ? `What should we work on in ${project.name}?` : 'What should we work on?'}
+                {project ? say('What should we work on in {0}?', { 0: project.name }) : say('What should we work on?')}
               </T>
             </View>
           </View>
@@ -748,10 +750,10 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
                     (startingNew
                       ? say('New project')
                       : projectId === STANDALONE
-                        ? 'Standalone'
+                        ? say('Standalone')
                         : auto
-                          ? 'Auto'
-                          : 'Choose a project')
+                          ? say('Auto')
+                          : say('Choose a project'))
                   }
                   onPress={() => setPicker(choices?.length ? 'choice' : 'project')}
                 />
@@ -789,7 +791,9 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
             offline={offline}
             placeholder={
               offline
-                ? `What should the agent do? Sends when ${pc?.name ?? 'it'} is back`
+                ? pc?.name
+                  ? say('What should the agent do? Sends when {0} is back', { 0: pc.name })
+                  : say('What should the agent do? Sends when the host is back')
                 : startingNew
                   ? say('Describe what to build')
                   : t.newPlaceholder
@@ -800,14 +804,14 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
               if (projectId === null && auto) return startInAuto(text, attachments, context)
               if (projectId === null) {
                 setPicker('project')
-                throw new Error('Choose a project first.')
+                throw new Error(say('Choose a project first.'))
               }
               if (offline && projectId !== STANDALONE && !store.appPreferences[selected] && manualMode === null)
                 throw new Error(
-                  'Connect to this host to load its workspace default, or explicitly choose Current checkout.',
+                  say('Connect to this host to load its workspace default, or explicitly choose Current checkout.'),
                 )
               if (workspaceId && !offline && !existingWorkspace) throw new Error(t.workspaceUnavailable)
-              if (resolution.blocked) throw new Error(resolution.reason ?? 'Worktree unavailable')
+              if (resolution.blocked) throw new Error(resolution.reason ?? say('Worktree unavailable'))
               if (!offline && !workspaceId && projectId !== STANDALONE && !workspaceOptions && manualMode !== 'current')
                 throw new Error(optionsError ? t.workspaceSettingsFailed : t.loadingWorkspaces)
               const sendIntent = { ...namingIntent, prompt: text.slice(0, 6000) }

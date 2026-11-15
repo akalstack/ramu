@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Globe } from 'lucide-react-native'
 import type { BrowserTabInfo } from '@ramu/shared/types/browser'
+import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
 import type { Chat } from '../runtime/types'
 import { ActivityPill } from './ActivityPill'
@@ -50,17 +51,16 @@ export function useThreadBrowserTabs(chat: Chat | undefined) {
 /** Sits with the computer-use bar: shows when this thread has browser tabs and opens the live view in one tap. */
 export function BrowserNotice({ chat, tabs, onOpen }: { chat: Chat; tabs: BrowserTabInfo[]; onOpen(): void }) {
   const store = useStore()
+  const say = useSay()
   const online = store.isOnline(chat.computerId)
   const tab = tabs[0]
   if (!chat.taskId || !tab) return null
-  const id = store.language === 'id'
   const agent = tabs.some((entry) => entry.controller === 'agent' && !entry.paused)
-  const label = agent ? (id ? 'Menggunakan browser' : 'Using browser') : 'Browser'
   return (
     <ActivityPill
       icon={Globe}
-      label={agent ? label : tab.title || tab.url}
-      accessibilityLabel={`${id ? 'Buka browser' : 'Open browser'}, ${tab.title || tab.url}`}
+      label={agent ? say('Using browser') : tab.title || tab.url}
+      accessibilityLabel={`${say('Open browser')}, ${tab.title || tab.url}`}
       tone={!online ? 'off' : agent ? 'attention' : 'quiet'}
       emphasis={agent}
       iconOnly={!agent}
