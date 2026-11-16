@@ -129,6 +129,21 @@ describe.skipIf(!available)('the account service on plain Postgres', () => {
     return { call, userId: user.id }
   }
 
+  it('approves a sign-in code only after the signed-in page has looked it up, as the device page does', async () => {
+    const started = await app.request('/api/auth/device/code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: 'ramu-host' }),
+    })
+    const { user_code: userCode } = (await started.json()) as { user_code: string }
+    const person = await client('grace@example.com')
+    expect((await person.call('POST', '/api/auth/device/approve', { userCode })).status).toBe(400)
+    const looked = await person.call('GET', `/api/auth/device?user_code=${encodeURIComponent(userCode)}`)
+    expect(looked.status).toBe(200)
+    expect((looked.body as unknown as { status: string }).status).toBe('pending')
+    expect((await person.call('POST', '/api/auth/device/approve', { userCode })).status).toBe(200)
+  })
+
   it('keeps sealed backups it cannot read, the last 30 of each slot, at most once a minute', async () => {
     const host = await client('ada@example.com')
     const key = newBackupKey(random)

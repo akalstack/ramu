@@ -70,7 +70,17 @@ async function show() {
   const session = await api('/get-session').catch(() => null);
   document.getElementById('signed-in').hidden = !session;
   document.getElementById('signed-out').hidden = !!session;
-  if (session) document.getElementById('who').textContent = 'Signed in as ' + (session.user.email || session.user.name) + '.';
+  if (!session) return;
+  document.getElementById('who').textContent = 'Signed in as ' + (session.user.email || session.user.name) + '.';
+  // Looking the code up while signed in claims it for this account; approving or denying needs that first.
+  if (!code) return;
+  try {
+    const request = await api('/device?user_code=' + encodeURIComponent(code));
+    if (request.status !== 'pending') {
+      document.getElementById('signed-in').hidden = true;
+      say(request.status === 'approved' ? 'Already approved. You can close this tab.' : 'This sign-in was denied.');
+    }
+  } catch (error) { say(error.message, true); }
 }
 for (const button of document.querySelectorAll('[data-provider]'))
   button.onclick = async () => {
