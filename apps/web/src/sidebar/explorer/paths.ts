@@ -18,3 +18,13 @@ export const isValidEntryName = (name: string) => !!name.trim() && !/[/\\]/.test
 
 /** Whether `path` is `parent` itself or lives inside it. */
 export const isWithin = (path: string, parent: string) => path === parent || path.startsWith(`${parent}/`)
+
+/**
+ * Folders inside `root` that are another tree's root, relative to `root`, such as repositories inside a project's
+ * folder. The explorer shows each of them once, as its own tree.
+ */
+export function nestedRoots(root: string, others: readonly string[]): Set<string> {
+  return new Set(
+    others.filter((other) => other !== root && isWithin(other, root)).map((other) => other.slice(root.length + 1)),
+  )
+}

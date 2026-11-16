@@ -272,6 +272,42 @@ export class Workspace {
     return repo
   }
 
+  /**
+   * Git repositories directly inside a project's folder that are not among its repositories yet. Only a folder that
+   * is not itself a repository groups repositories this way; clones inside a repository are its own business.
+   */
+  unregisteredChildRepositories(projectId: string): string[] {
+    const project = this.getProject(projectId)
+    if (!project.root || !existsSync(project.root) || existsSync(join(project.root, '.git'))) return []
+    const known = new Set(this.listRepositories(projectId).map((repo) => repo.root))
+    const found: string[] = []
+    try {
+      for (const entry of readdirSync(project.root, { withFileTypes: true })) {
+        if (!entry.isDirectory() || entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue
+        const child = join(project.root, entry.name)
+        if (!existsSync(join(child, '.git'))) continue
+        const root = realpathSync(child)
+        if (!known.has(root)) found.push(root)
+      }
+    } catch {
+      return []
+    }
+    return found.sort()
+  }
+
+  /** The project whose own folder (not a repository) directly holds `dir`, which a clone there belongs to. */
+  projectHolding(dir: string): Project | undefined {
+    let parent: string
+    try {
+      parent = realpathSync(dirname(dir))
+    } catch {
+      return undefined
+    }
+    return this.listProjects().find(
+      (project) => project.root === parent && !existsSync(join(parent, '.git')) && project.id !== NO_PROJECT,
+    )
+  }
+
   /** Registers a plain folder as the project's only repository entry; it works as files and terminals until initialized. */
   private addFolderRepository(projectId: string, root: string): Repository {
     const repo: Repository = { id: randomUUID(), projectId, name: basename(root), root }

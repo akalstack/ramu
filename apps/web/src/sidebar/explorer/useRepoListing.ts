@@ -14,6 +14,8 @@ export function useRepoListing(
   binding: RepositoryBinding,
   selectedPath: string | null,
   selectedRow: RefObject<HTMLButtonElement | null>,
+  /** Folders shown as their own tree, left out of this one. */
+  nested: Set<string>,
 ) {
   const host = useHost()
   const viewOnly = useViewOnly()
@@ -32,7 +34,7 @@ export function useRepoListing(
   const children: Record<string, DirEntry[]> = {}
   directories.forEach((dir, index) => {
     const data = listings[index]?.data
-    if (data) children[dir] = data
+    if (data) children[dir] = nested.size ? data.filter((entry) => !nested.has(entry.path)) : data
   })
   const pendingReveal = useRef<string | null>(null)
 

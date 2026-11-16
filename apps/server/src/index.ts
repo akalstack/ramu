@@ -541,6 +541,7 @@ const agents = new AgentService(
       } catch {}
     threadTitles?.observe(sessionId, event)
     shellPushes?.observe(sessionId, event)
+    if (event.kind === 'state') void adoptClones(sessionId, event.state)
     queueMicrotask(() => {
       try {
         const session = agents.get(sessionId)
@@ -557,6 +558,33 @@ const agents = new AgentService(
   fake?.fakeQuery ?? query,
   fake?.fakeCodex,
 )
+/**
+ * A repository an agent clones straight into its project's folder joins the project when the turn ends. Repositories
+ * already there when the turn began stay as the person arranged them, so one they removed is not added back.
+ */
+const cloneBaselines = new Map<string, Set<string>>()
+async function adoptClones(sessionId: string, state: string) {
+  try {
+    const session = agents.get(sessionId)
+    if (session.parentId) return
+    const projectId = workspace.projectIdOf(session.taskId)
+    if (projectId === NO_PROJECT) return
+    if (state === 'starting' || state === 'running') {
+      if (!cloneBaselines.has(sessionId))
+        cloneBaselines.set(sessionId, new Set(workspace.unregisteredChildRepositories(projectId)))
+      return
+    }
+    if (state === 'needs-input') return
+    const before = cloneBaselines.get(sessionId)
+    cloneBaselines.delete(sessionId)
+    if (!before) return
+    const cloned = workspace.unregisteredChildRepositories(projectId).filter((root) => !before.has(root))
+    for (const root of cloned) await workspace.addRepository(projectId, root)
+    if (cloned.length) send('workspace:changed', {})
+  } catch {
+    // A thread or project removed mid-turn has nothing to join.
+  }
+}
 // A `git push` an agent runs itself is followed from the checkout it ran in, as Source Control's push is.
 const shellPushes = new ShellPushes((sessionId) => {
   const session = agents.get(sessionId)

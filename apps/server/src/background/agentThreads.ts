@@ -5,7 +5,7 @@ import { createProjectFolder, runCommand } from '../workspace/projectCreate'
 import { RequestReplay } from '../agent/requestReplay'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { readdirSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -1008,15 +1008,32 @@ export class AgentThreadService {
         repoName,
         input.url,
       ])) as string
+      const holder = await this.joinHoldingProject(path)
+      if (holder) return holder
       const { project } = (await this.invoke('folders.addProject', [path])) as { project: { id: string; name: string } }
       return { projectId: project.id, name: project.name, added: true }
     }
     const existing = this.workspace.listProjects().find((project) => project.root === input.path)
     if (existing) return { projectId: existing.id, name: existing.name, added: false }
+    const holder = await this.joinHoldingProject(input.path!)
+    if (holder) return holder
     const { project } = (await this.invoke('folders.addProject', [input.path])) as {
       project: { id: string; name: string }
     }
     return { projectId: project.id, name: project.name, added: true }
+  }
+
+  /** A repository placed directly in a project's folder joins that project instead of becoming one of its own. */
+  private async joinHoldingProject(path: string) {
+    const project = this.workspace.projectHolding(path)
+    if (!project || !existsSync(join(path, '.git'))) return null
+    const known = this.workspace.listRepositories(project.id).length
+    await this.workspace.addRepository(project.id, path)
+    return {
+      projectId: project.id,
+      name: project.name,
+      added: this.workspace.listRepositories(project.id).length > known,
+    }
   }
 
   /**

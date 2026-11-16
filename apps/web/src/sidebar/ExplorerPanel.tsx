@@ -4,6 +4,7 @@ import { t, useLanguage } from './../i18n'
 import { useWorkspace } from '../workspace/workspace'
 import { ExplorerHeader } from './explorer/ExplorerHeader'
 import { RepoTree } from './explorer/RepoTree'
+import { nestedRoots } from './explorer/paths'
 
 export function ExplorerPanel() {
   useLanguage()
@@ -27,6 +28,10 @@ export function ExplorerPanel() {
                 taskId={taskId}
                 binding={b}
                 primary={index === 0}
+                nested={nestedRoots(
+                  b.cwd,
+                  bindings.map((other) => other.cwd),
+                )}
               />
             ) : (
               <div key={b.repoId} className="muted text-muted-foreground">

@@ -34,10 +34,13 @@ export function RepoTree({
   taskId,
   binding,
   primary,
+  nested,
 }: {
   taskId: string
   binding: RepositoryBinding
   primary: boolean
+  /** Folders shown as their own tree, left out here. */
+  nested: Set<string>
 }) {
   useLanguage()
   const ws = useWorkspace()
@@ -81,6 +84,7 @@ export function RepoTree({
     binding,
     selectedPath,
     selectedRow,
+    nested,
   )
 
   // ---- selection, clipboard, drag and drop ----

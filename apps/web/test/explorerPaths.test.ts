@@ -1,5 +1,13 @@
 import { expect, it } from 'vitest'
-import { baseName, freeName, isValidEntryName, isWithin, joinPath, parentOf } from '../src/sidebar/explorer/paths'
+import {
+  baseName,
+  freeName,
+  isValidEntryName,
+  isWithin,
+  joinPath,
+  nestedRoots,
+  parentOf,
+} from '../src/sidebar/explorer/paths'
 
 it('splits and joins repository paths', () => {
   expect(baseName('a/b/c.ts')).toBe('c.ts')
@@ -29,4 +37,11 @@ it('treats a path as within its parent only at a folder boundary', () => {
   expect(isWithin('src', 'src')).toBe(true)
   expect(isWithin('src/a.ts', 'src')).toBe(true)
   expect(isWithin('src2/a.ts', 'src')).toBe(false)
+})
+
+it('names the folders that another tree shows as its own root', () => {
+  const roots = ['/p/albea-hr', '/p/albea-hr/backend', '/p/albea-hr/frontend', '/p/other']
+  expect([...nestedRoots('/p/albea-hr', roots)]).toEqual(['backend', 'frontend'])
+  expect(nestedRoots('/p/albea-hr/backend', roots).size).toBe(0)
+  expect(nestedRoots('/p/albea', ['/p/albea-hr']).size).toBe(0)
 })
