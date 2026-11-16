@@ -383,3 +383,17 @@ test('work after a finished turn opens a running turn instead of folding into th
   assert.equal(rows[1].label, 'Worked for 1m 5s')
   assert.equal(rows.at(-1).text, 'Building the hero next.')
 })
+
+test('a goal note stays where it happened instead of trailing every new step', () => {
+  const goal = { kind: 'note', id: 'goal-set', title: 'Goal set', goalNote: 'set', objective: 'Ship it' }
+  const items = transcript([...finished.slice(0, 2), ...tool('a', 3_000), ...tool('b', 4_000)])
+  // Set between the two tools, as the agent did it.
+  const at = items.findIndex((item) => item.kind === 'tool') + 1
+  const withGoal = [...items.slice(0, at), goal, ...items.slice(at)]
+  const kinds = (rows) => rows.map((row) => (row.kind === 'note' ? row.id : row.kind))
+  assert.deepEqual(kinds(foldTurns(withGoal, true, false)), ['user', 'text', 'tool', 'goal-set', 'tool'])
+  // Finished, it stays above the answer with what was not folded; a note after the last step still closes the turn.
+  const stop = { kind: 'note', id: 'stopped', title: 'Stopped' }
+  const done = [...withGoal, ...transcript([{ kind: 'text', text: 'done!', at: 65_000 }]), stop]
+  assert.deepEqual(kinds(foldTurns(done, false, false)), ['user', 'summary', 'goal-set', 'text', 'stopped'])
+})

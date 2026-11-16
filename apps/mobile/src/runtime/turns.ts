@@ -61,13 +61,18 @@ export function foldTurns(
   return groupTools(
     turns.flatMap((turn, index) => {
       const user = turn[0]?.kind === 'user' || turn[0]?.kind === 'teammate-message' ? turn[0] : undefined
-      const notes = turn.filter((item) => item.kind === 'note')
-      const body = turn.filter((item) => item !== user && item.kind !== 'end' && item.kind !== 'note')
+      // Notes stay where they happened, as on the desktop: a goal set between tools sits between them, not trailing every
+      // new step. Only the notes after the turn's last step (a stop, a settings change) close it.
+      const steps = turn.filter((item) => item !== user && item.kind !== 'end')
+      let tail = steps.length
+      while (tail > 0 && steps[tail - 1]!.kind === 'note') tail--
+      const notes = steps.slice(tail)
+      const body = steps.slice(0, tail)
       const ends = turn.filter((item): item is Extract<TranscriptItem, { kind: 'end' }> => item.kind === 'end')
       const result = ends.find((item) => item.ended)
       const isLast = index === turns.length - 1
       const finished = Boolean(result) || !isLast || (!live && !waiting)
-      const startedAt = user?.at ?? body.find((item) => item.at !== undefined)?.at
+      const startedAt = user?.at ?? body.find((item) => item.kind !== 'note' && item.at !== undefined)?.at
       // A running turn shows its steps as they come; the status line above the composer says it is working.
       if (!finished) return [...(user ? [user] : []), ...body, ...notes]
       let start = body.length
@@ -75,7 +80,8 @@ export function foldTurns(
       const work = body.slice(0, start)
       const folded = work.filter(settled)
       const kept = work.filter((item) => !settled(item))
-      const endedAt = (result ?? ends[0])?.at ?? body.findLast((item) => item.at !== undefined)?.at
+      const endedAt =
+        (result ?? ends[0])?.at ?? body.findLast((item) => item.kind !== 'note' && item.at !== undefined)?.at
       // A message steered into a running turn starts the next turn before the result; with no stop, failure or idle
       // in between, the agent carried on rather than stopped.
       const done = result ? !result.interrupted : !isLast && !ends.length
