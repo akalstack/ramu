@@ -363,6 +363,8 @@ export interface AgentTask {
   providerSessionId?: string
   /** Works in its own copy of the checkout; its changes are applied back when it finishes. */
   isolated?: boolean
+  /** The paired host a `ramu_agent` helper runs on, when it is not this one; its progress is mirrored from there. */
+  host?: string
   /** Where it actually runs, when Ramu chose it (cross-provider or fallback). */
   provider?: AgentProvider
   model?: string

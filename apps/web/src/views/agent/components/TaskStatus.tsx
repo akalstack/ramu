@@ -70,6 +70,7 @@ export function taskMeta(task: AgentTask, status: AgentTask['status']): string {
       ? (task.endedAt ?? Date.now()) - task.startedAt
       : undefined)
   return [
+    task.host ? t('On {0}', { 0: task.host }) : undefined,
     task.provider
       ? `${providerName(task.provider)}${task.model && !namesModel(task.name, task.model) ? ` · ${modelDisplayName(task.model)}` : ''}`
       : undefined,

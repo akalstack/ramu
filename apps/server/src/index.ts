@@ -1701,6 +1701,8 @@ async function performInvoke(
     } else if (method === 'hostThreads.status')
       value = agentThreads.statusForHost(device, z.string().max(100).nullish().parse(args?.[0]))
     else if (method === 'hostThreads.projects') value = agentThreads.projectsForHost(device)
+    else if (method === 'hostThreads.stop')
+      value = await agentThreads.stopForHost(device, z.string().min(1).max(100).parse(args?.[0]))
     else if (method === 'hostThreads.message') {
       const [taskId, text, mode] = z
         .tuple([z.string().min(1).max(100), z.string().min(1).max(20_000), z.enum(['queue', 'steer'])])
@@ -2026,10 +2028,27 @@ const mcpHttp = createServer(async (req, res) => {
           isolation: z.enum(['shared', 'worktree']).optional(),
           role: z.enum(HELPER_ROLES).optional(),
           requestId: z.string().min(1).max(120).optional(),
+          host: z
+            .string()
+            .min(1)
+            .max(100)
+            .optional()
+            .describe(
+              'Run the helper on another host your agents can use (project_list with host), as a thread there. It always runs in the background; project is then required, and that host decides its model.',
+            ),
+          project: z.string().min(1).max(200).optional(),
         },
       },
-      async (value, extra) => {
+      async ({ host, project, ...value }, extra) => {
         try {
+          if (host)
+            return result(
+              await agentThreads.startHelperOnHost(
+                source.id,
+                { description: value.description, prompt: value.prompt, name: value.name, host, project },
+                extra.signal,
+              ),
+            )
           return result(await agents.spawnSubagent(source.id, value, extra.signal))
         } catch (error) {
           return {
@@ -2076,7 +2095,11 @@ const mcpHttp = createServer(async (req, res) => {
       },
       async ({ agent }) => {
         try {
-          return result(await agents.stopHelper(source.id, agent))
+          return result(
+            agent.startsWith('remote:')
+              ? await agentThreads.stopHelperOnHost(source.id, agent)
+              : await agents.stopHelper(source.id, agent),
+          )
         } catch (error) {
           return {
             isError: true,

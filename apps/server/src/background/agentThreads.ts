@@ -511,6 +511,8 @@ export class AgentThreadService {
     settings: AgentSettings,
     depth: number,
     signal?: AbortSignal,
+    /** Started as this thread's helper: its card shows in the thread rather than as a started thread. */
+    helper?: boolean,
   ) {
     if (threads.some((entry) => entry.bringChanges))
       throw new Error('bringChanges works only on this host: uncommitted changes never leave it.')
@@ -542,7 +544,11 @@ export class AgentThreadService {
     ]
     const allowed = await this.agents.requestPermission(
       sessionId,
-      threads.length === 1 ? `starting a thread on ${host.name}` : `starting ${threads.length} threads on ${host.name}`,
+      helper
+        ? `starting a helper on ${host.name}`
+        : threads.length === 1
+          ? `starting a thread on ${host.name}`
+          : `starting ${threads.length} threads on ${host.name}`,
       [
         ...warnings,
         ...threads.map(
@@ -571,11 +577,85 @@ export class AgentThreadService {
         request: request && request.kind === 'user' ? redactSecrets(clipText(request.text, 1500)) : '',
       },
     )
+    if (helper) return { started: started.map((entry) => ({ threadId: entry.taskId, ...entry })) }
     this.agents.threadsStarted(sessionId, started)
     return {
       started: started.map((entry) => ({ threadId: entry.taskId, ...entry })),
       note: `These run on ${host.name}. Each reports back here when it finishes or needs input; a thread waiting for the host starts when it is reachable again, for up to a day.`,
     }
+  }
+
+  /**
+   * `ramu_agent` with a host: a helper that runs as a thread on that paired host, after the person approves. Its card
+   * in this thread mirrors its progress while it works, `ramu_agent_stop` stops it, and its report arrives here as a
+   * message. It always runs in the background, since this turn should not wait on another computer.
+   */
+  async startHelperOnHost(
+    sessionId: string,
+    input: { description: string; prompt: string; name?: string; host: string; project?: string },
+    signal?: AbortSignal,
+  ): Promise<Record<string, unknown>> {
+    if (!this.enabled()) throw new Error(OFF)
+    if (!input.project?.trim())
+      throw new Error(`Name the project on ${input.host} for the helper (project_list with host lists them).`)
+    const caller = this.agents.get(sessionId)
+    if (caller.parentId) throw new Error('A helper cannot start helpers of its own.')
+    const depth = this.depthOf(caller.taskId) + 1
+    if (depth > MAX_DEPTH)
+      throw new Error(
+        'This thread was started by another agent-started thread, so it cannot start more on other hosts.',
+      )
+    if (this.recentStarts(sessionId) + 1 > MAX_THREADS_PER_HOUR)
+      throw new Error(
+        `This thread started ${MAX_THREADS_PER_HOUR} threads in the last hour. Ask the person to start more.`,
+      )
+    const host = this.hostNamed(input.host)
+    const name = input.name?.trim() || input.description
+    const outcome = (await this.startRemote(
+      sessionId,
+      caller,
+      this.workspace.getTask(caller.taskId),
+      host,
+      [{ prompt: input.prompt, title: input.description, project: input.project }],
+      caller.settings,
+      depth,
+      signal,
+      true,
+    )) as { started: (StartedThread & { threadId: string })[]; declined?: boolean; message?: string }
+    if (outcome.declined) return { started: false, message: outcome.message }
+    const thread = outcome.started[0]!
+    if (thread.error && !thread.pending) throw new Error(thread.error)
+    const startedAt = Date.now()
+    this.agents.recordHelperTask(sessionId, thread.taskId, {
+      agentId: thread.taskId,
+      name,
+      status: 'running',
+      background: true,
+      prompt: input.prompt,
+      startedAt,
+      address: thread.taskId,
+      canStop: true,
+      canMessage: false,
+      host: host.name,
+      ...(thread.pending ? { waitingFor: 'provider', summary: 'Waiting for the host to be reachable.' } : {}),
+    })
+    this.remote!.followHelper(thread.taskId, sessionId)
+    return {
+      agent: thread.taskId,
+      host: host.name,
+      project: thread.projectName,
+      note: `It runs on ${host.name}, which decides its model and the most access it gets. Its progress shows in this thread and its report arrives as a message; do not wait for it.`,
+    }
+  }
+
+  /** `ramu_agent_stop` for a helper on another host. */
+  async stopHelperOnHost(sessionId: string, agentId: string): Promise<{ stopped: boolean; status: string }> {
+    if (!this.remote?.ownedBy(this.agents.get(sessionId).taskId, agentId))
+      throw new Error('That is not one of your helpers.')
+    const { stopped } = await this.remote.stopHelper(agentId)
+    if (stopped)
+      this.agents.recordHelperTask(sessionId, agentId, { status: 'stopped', endedAt: Date.now(), canStop: false })
+    return { stopped, status: stopped ? 'stopped' : 'not running' }
   }
 
   /**
@@ -702,7 +782,38 @@ export class AgentThreadService {
       .all(device.id) as { target_task_id: string }[]
     return rows
       .filter((row) => !taskId || row.target_task_id === taskId)
-      .map((row) => this.status(row.target_task_id, 'started') as unknown as RemoteStatus)
+      .map((row) => {
+        const status = this.status(row.target_task_id, 'started') as unknown as RemoteStatus
+        const session = this.latestSession(row.target_task_id)
+        return session ? { ...status, ...this.progress(session.id) } : status
+      })
+  }
+
+  /**
+   * How far a thread's agent has got, for the host that started it to mirror as a helper's progress: its latest
+   * step's summary (redacted, clipped) and its count of tool calls. Never tool input or output.
+   */
+  private progress(sessionId: string): { step?: string; tools: number } {
+    const row = this.db
+      .prepare(
+        "SELECT COUNT(*) AS tools, (SELECT json_extract(event, '$.summary') FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'tool-use' AND json_extract(event, '$.agentId') IS NULL ORDER BY seq DESC LIMIT 1) AS step FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'tool-use' AND json_extract(event, '$.agentId') IS NULL",
+      )
+      .get(sessionId, sessionId) as { tools: number; step: string | null } | undefined
+    const step = row?.step ? redactSecrets(clipText(row.step, 200)) : ''
+    return { tools: row?.tools ?? 0, ...(step ? { step } : {}) }
+  }
+
+  /** The paired host stops a thread it started here, as its helper; the thread and its work stay. */
+  async stopForHost(device: DeviceInfo, taskId: string): Promise<{ stopped: boolean }> {
+    if (device.kind !== 'host') throw new Error('Only a paired host can stop threads this way.')
+    const owned = this.db
+      .prepare('SELECT 1 FROM thread_links WHERE source_device = ? AND target_task_id = ?')
+      .get(device.id, taskId)
+    if (!owned) throw new Error('That thread was not started by this host.')
+    const target = this.latestSession(taskId)
+    if (!target || !['starting', 'running', 'needs-input'].includes(target.state)) return { stopped: false }
+    await this.agents.interrupt(target.id)
+    return { stopped: true }
   }
 
   /** A message from the paired host's agent to a thread that pairing started here, within its ceiling and hourly limit. */

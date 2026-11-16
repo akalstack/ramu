@@ -7,8 +7,8 @@ import { PAIR_REQUEST_PATH, PAIR_REVEAL_PATH, PAIR_WAIT_PATH } from '@ramu/share
 import { PairingError, type PairingRequests } from './pairingRequests'
 
 /**
- * Everything a paired host may call here: start, check and message the threads it started, list projects to name
- * them by name, and offer its tools for a review here. Nothing that reads files, paths, Git, terminals, settings or
+ * Everything a paired host may call here: start, check, message and stop the threads it started, list projects to
+ * name them by name, and offer its tools for a review here. Nothing that reads files, paths, Git, terminals, settings or
  * other threads, and nothing that installs.
  */
 export const HOST_METHODS: ReadonlySet<string> = new Set([
@@ -16,6 +16,7 @@ export const HOST_METHODS: ReadonlySet<string> = new Set([
   'hostThreads.status',
   'hostThreads.message',
   'hostThreads.projects',
+  'hostThreads.stop',
   'hostTools.offer',
 ])
 

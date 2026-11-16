@@ -1375,6 +1375,11 @@ export class AgentService {
     return this.parts.dispatcher.updateQueue(...args)
   }
 
+  /** A helper that runs elsewhere (on another host): its card in the parent, updated as its progress arrives. */
+  recordHelperTask(parentId: string, agentId: string, patch: Partial<import('@ramu/shared/types').AgentTask>): void {
+    this.updateTask(parentId, agentId, { ...patch, taskType: 'ramu_agent' })
+  }
+
   private updateTask(...args: Parameters<AgentTasks['updateTask']>) {
     return this.parts.tasks.updateTask(...args)
   }

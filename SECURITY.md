@@ -49,11 +49,11 @@ Any process running as your OS user can reach the host's local socket with owner
 
 ### Host pairing
 
-A host paired with another as `host` may call only `hostThreads.start`, `status`, `message` and `projects` and `hostTools.offer`, over calls-only sockets; retries and operation keys pass the same check. A person at the asking host approves each start; nobody at this host approves individual starts, and these choices follow from that:
+A host paired with another as `host` may call only `hostThreads.start`, `status`, `message`, `stop` and `projects` and `hostTools.offer`, over calls-only sockets; retries and operation keys pass the same check. A person at the asking host approves each start; nobody at this host approves individual starts, and these choices follow from that:
 
 - **Access ceiling.** Threads a pairing starts default to **Allow edits**. Raising the ceiling shows a warning, because the other host's agent writes the prompt and, if compromised, could run commands here at Auto or Full access.
 - **What `projects` names.** `hostThreads.projects` answers with each project's id, name, aliases, description and Git author email, and this host's platform and architecture (such as `darwin` and `arm64`) so the asking agent can pick a host that can build the task; never folders, hostnames or hardware.
-- **What comes back.** `hostThreads.status` returns the latest reply of threads that pairing started, so those threads can pass file contents back. Their reports reach the asking agent labelled as not coming from the person.
+- **What comes back.** `hostThreads.status` returns the latest reply of threads that pairing started, so those threads can pass file contents back, plus their count of tool calls and their latest tool call's summary (secrets redacted, at most 200 characters), never tool input or output. The asking host reads it every five seconds while such a thread runs as one of its agent's helpers. `hostThreads.stop` interrupts only a thread that pairing started; the thread and its work stay here. Their reports reach the asking agent labelled as not coming from the person.
 - **Limits.** 2 levels of depth, 8 threads and 20 messages per hour per pairing. The message count is kept in memory and resets when this host restarts.
 - **Labels.** A thread shows this host's own name for the pairing; the other host's name for itself and its thread title are context only.
 - **Revocation.** Revoking a pairing stops new calls at once. Threads it already started keep running, visible with their origin label, until stopped here.

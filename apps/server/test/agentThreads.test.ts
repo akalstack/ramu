@@ -37,6 +37,8 @@ let goals: { id: string; objective: string; verify?: string }[]
 let api: Project, web: Project, apiRoot: string
 let remote: RemoteThreads
 let hostCalls: { id: string; method: string; args: unknown[]; key?: string }[]
+let helperCards: Record<string, unknown>[]
+let interrupted: string[]
 let hostFails: Error | null
 let remoteStatus: Record<string, unknown> = { state: 'running', threadId: 'far-1', title: 'Remote', project: 'jobs' }
 
@@ -77,6 +79,8 @@ beforeEach(async () => {
   events = new Map()
   approvals = []
   permissionDetails = []
+  helperCards = []
+  interrupted = []
   submitted = []
   recorded = []
   calls = []
@@ -105,6 +109,9 @@ beforeEach(async () => {
       return approvals.shift() ?? false
     }),
     threadsStarted: (id: string, threads: unknown[]) => recorded.push({ id, threads }),
+    recordHelperTask: (id: string, agentId: string, patch: Record<string, unknown>) =>
+      helperCards.push({ id, agentId, ...patch }),
+    interrupt: vi.fn(async (id: string) => interrupted.push(id)),
     submit: vi.fn(
       async (
         id: string,
@@ -182,6 +189,7 @@ beforeEach(async () => {
       if (method === 'hostThreads.start')
         return [{ taskId: 'far-1', title: (args[0] as RemoteRequest).thread.title ?? 'Remote', projectName: 'jobs' }]
       if (method === 'hostThreads.status') return [remoteStatus]
+      if (method === 'hostThreads.stop') return { stopped: true }
       if (method === 'hostThreads.projects')
         return { platform: 'linux', arch: 'x64', projects: [{ id: 'jobs', name: 'jobs', gitEmail: 'me@vps' }] }
       return { sent: true }
@@ -765,4 +773,95 @@ describe('threads this host’s agents start on another host', () => {
 it('leaves a brief without context unchanged', () => {
   expect(briefOf('Do it', undefined)).toBe('Do it')
   expect(briefOf('Do it', 'From X')).toBe('Do it\n\nFrom X')
+})
+
+describe('helpers on another host', () => {
+  it('asks first, shows the helper here, mirrors its progress, stops it there and reports once', async () => {
+    await callerIn(api)
+    approvals.push(true)
+    const out = await service.startHelperOnHost('caller', {
+      description: 'Backfill dueDate',
+      prompt: 'Backfill dueDate on the jobs table',
+      host: 'vps',
+      project: 'jobs',
+    })
+    expect(permissionDetails[0]).toContain('jobs on vps')
+    const agentsSeen = (service as unknown as { agents: AgentService }).agents
+    expect(vi.mocked(agentsSeen.requestPermission).mock.calls[0]![1]).toBe('starting a helper on vps')
+    expect(recorded).toEqual([])
+    expect(out).toMatchObject({ host: 'vps', agent: expect.stringMatching(/^remote:/) })
+    expect(helperCards[0]).toMatchObject({
+      id: 'caller',
+      agentId: out.agent,
+      status: 'running',
+      host: 'vps',
+      canStop: true,
+    })
+
+    const now = Date.now()
+    remoteStatus = { state: 'running', threadId: 'far-1', title: 'Backfill', step: 'Run pnpm test', tools: 4 }
+    await remote.tick(now)
+    expect(helperCards.at(-1)).toMatchObject({ status: 'running', lastTool: 'Run pnpm test', toolUses: 4 })
+    expect(submitted).toEqual([])
+
+    await expect(service.stopHelperOnHost('caller', 'remote:other')).rejects.toThrow(/not one of your helpers/)
+    expect(await service.stopHelperOnHost('caller', String(out.agent))).toEqual({ stopped: true, status: 'stopped' })
+    expect(hostCalls.find((call) => call.method === 'hostThreads.stop')!.args).toEqual(['far-1'])
+
+    remoteStatus = { state: 'cancelled', threadId: 'far-1', title: 'Backfill', latest: 'Stopped halfway.' }
+    await remote.tick(now + 10_000)
+    await remote.tick(now + REMOTE_POLL_MS + 10_000)
+    expect(helperCards.at(-1)).toMatchObject({ status: 'stopped', summary: 'Stopped halfway.', canStop: false })
+    expect(submitted).toHaveLength(1)
+    expect(submitted[0]!.text).toContain('the person stopped it')
+    remoteStatus = { state: 'running', threadId: 'far-1', title: 'Remote', project: 'jobs' }
+  })
+
+  it('needs a project there, and refuses a helper of a helper', async () => {
+    await callerIn(api)
+    await expect(service.startHelperOnHost('caller', { description: 'x', prompt: 'x', host: 'vps' })).rejects.toThrow(
+      /Name the project on vps/,
+    )
+    sessions.set('child', { ...sessions.get('caller')!, id: 'child', parentId: 'caller' } as AgentSessionInfo)
+    await expect(
+      service.startHelperOnHost('child', { description: 'x', prompt: 'x', host: 'vps', project: 'jobs' }),
+    ).rejects.toThrow(/cannot start helpers/)
+  })
+
+  it('tells the starting host only a thread’s latest step, redacted, and stops only threads that pairing started', async () => {
+    const device = { id: 'studio', kind: 'host', name: 'studio', role: 'owner', maxAccess: 'edits' } as DeviceInfo
+    const [first] = await service.startForHost(device, {
+      thread: { prompt: 'Backfill', project: 'api' },
+      depth: 1,
+      access: 'edits',
+      settings: DEFAULT_AGENT_SETTINGS,
+      from: { host: 'laptop', thread: 'Plan', request: 'r' },
+    })
+    const sessionId = sessions.get('started-1')!.id
+    db.exec('PRAGMA foreign_keys = OFF')
+    const insert = db.prepare('INSERT INTO agent_events (session_id, seq, event) VALUES (?, ?, ?)')
+    insert.run(sessionId, 1, JSON.stringify({ kind: 'tool-use', toolUseId: 'a', name: 'Bash', summary: 'ls' }))
+    insert.run(
+      sessionId,
+      2,
+      JSON.stringify({
+        kind: 'tool-use',
+        toolUseId: 'b',
+        name: 'Bash',
+        summary: 'curl -H "Authorization: Bearer sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789"',
+        input: 'secret input',
+      }),
+    )
+    const [status] = service.statusForHost(device, first!.taskId)
+    expect(status).toMatchObject({ tools: 2 })
+    expect(status!.step).toContain('curl')
+    expect(status!.step).not.toContain('abcdefghijklmnopqrstuvwxyz0123456789')
+    expect(JSON.stringify(status)).not.toContain('secret input')
+
+    await expect(service.stopForHost({ ...device, id: 'other' } as DeviceInfo, first!.taskId)).rejects.toThrow(
+      /not started by this host/,
+    )
+    expect(await service.stopForHost(device, first!.taskId)).toEqual({ stopped: true })
+    expect(interrupted).toEqual([sessionId])
+  })
 })

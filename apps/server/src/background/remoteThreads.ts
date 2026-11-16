@@ -11,6 +11,8 @@ import type { AgentHostService } from '../remote/agentHosts'
 export const PENDING_MS = 24 * 60 * 60_000
 /** Remote threads are checked on this cadence, far slower than local ones, and only while unsettled. */
 export const REMOTE_POLL_MS = 60_000
+/** A helper on another host is followed this often while it works, so its card keeps up with it. */
+export const HELPER_POLL_MS = 5_000
 
 /** What one remote thread start asks the other host for. The other host enforces its own limits on every field. */
 export interface RemoteRequest {
@@ -35,6 +37,10 @@ export interface RemoteStatus {
   state: string
   error?: string
   latest?: string
+  /** The latest step its agent took (a tool's summary), redacted and clipped by the other host. */
+  step?: string
+  /** How many tool calls its agent has made. */
+  tools?: number
 }
 
 interface Row {
@@ -77,6 +83,10 @@ export const remoteThreadId = (id: string) => `remote:${id}`
  */
 export class RemoteThreads {
   private nextPoll = 0
+  private nextHelperPoll = 0
+  /** Helpers being mirrored, by remote thread row: the parent session whose card shows them. Kept in memory: after a
+   * restart a helper still reports its outcome on the slow cadence, only without live progress. */
+  private readonly helpers = new Map<string, { sessionId: string }>()
 
   constructor(
     private readonly db: Db,
@@ -203,8 +213,83 @@ export class RemoteThreads {
     await this.hosts.invoke(row.host_id, 'hostThreads.message', [row.remote_task_id, text, mode])
   }
 
+  /** Mirrors a started thread as a helper of `sessionId` until it settles. */
+  followHelper(threadId: string, sessionId: string): void {
+    const id = threadId.replace(/^remote:/, '')
+    if (this.row(id)) this.helpers.set(id, { sessionId })
+  }
+
+  /** Stops a helper's thread on its host; the thread stays there with its work. */
+  async stopHelper(threadId: string): Promise<{ stopped: boolean }> {
+    const row = this.row(threadId.replace(/^remote:/, ''))
+    if (!row) throw new Error('That is not one of your helpers.')
+    if (row.state !== 'started' || !row.remote_task_id) {
+      this.db
+        .prepare("UPDATE remote_threads SET state = 'failed', request = NULL, error = ? WHERE id = ?")
+        .run('Stopped before it started on its host.', row.id)
+      return { stopped: true }
+    }
+    return (await this.hosts.invoke(row.host_id, 'hostThreads.stop', [row.remote_task_id])) as { stopped: boolean }
+  }
+
+  /** Brings each followed helper's card up to date with its thread on the other host. */
+  private async followHelpers(now: number): Promise<void> {
+    if (now < this.nextHelperPoll || !this.helpers.size) return
+    this.nextHelperPoll = now + HELPER_POLL_MS
+    for (const [id, { sessionId }] of this.helpers) {
+      const row = this.row(id)
+      const agentId = remoteThreadId(id)
+      const card = (patch: Parameters<AgentService['recordHelperTask']>[2]) => {
+        try {
+          this.agents.recordHelperTask(sessionId, agentId, patch)
+        } catch {
+          this.helpers.delete(id)
+        }
+      }
+      if (!row || row.state === 'failed') {
+        card({ status: 'failed', error: row?.error ?? 'The thread is gone.', endedAt: now, canStop: false })
+        this.helpers.delete(id)
+        continue
+      }
+      if (row.state === 'pending') {
+        card({ status: 'running', waitingFor: 'provider', summary: 'Waiting for the host to be reachable.' })
+        continue
+      }
+      let status: RemoteStatus | undefined
+      try {
+        ;[status] = (await this.hosts.invoke(row.host_id, 'hostThreads.status', [row.remote_task_id])) as RemoteStatus[]
+      } catch {
+        continue
+      }
+      if (!status) continue
+      const settled = SETTLED.has(status.state)
+      card({
+        status: !settled
+          ? 'running'
+          : status.state === 'completed'
+            ? 'completed'
+            : status.state === 'failed'
+              ? 'failed'
+              : status.state === 'needs-input'
+                ? 'running'
+                : 'stopped',
+        waitingFor: status.state === 'needs-input' ? 'input' : null,
+        ...(status.latest ? { summary: status.latest } : {}),
+        ...(status.step ? { lastTool: status.step } : {}),
+        ...(status.tools !== undefined ? { toolUses: status.tools } : {}),
+        ...(status.error ? { error: status.error } : {}),
+        ...(settled && status.state !== 'needs-input' ? { endedAt: now, canStop: false } : {}),
+      })
+      if (settled) {
+        await this.settle(row, status)
+        if (status.state !== 'needs-input') this.helpers.delete(id)
+      }
+    }
+  }
+
   /** Retries waiting starts and reports settled threads, on a slow cadence. */
   async tick(now = Date.now()): Promise<void> {
+    await this.followHelpers(now)
     if (now < this.nextPoll) return
     this.nextPoll = now + REMOTE_POLL_MS
     await this.hosts.renew(now)
@@ -246,11 +331,16 @@ export class RemoteThreads {
         continue
       }
       if (!status || !SETTLED.has(status.state)) continue
-      const signature = `${status.state}:${status.latest ?? ''}`.slice(0, 2000)
-      if (row.reported === signature) continue
-      this.db.prepare('UPDATE remote_threads SET reported = ? WHERE id = ?').run(signature, row.id)
-      await this.report(row, status.state, status.error ?? '', status.latest ?? '')
+      await this.settle(row, status)
     }
+  }
+
+  /** Tells the starting thread once about each outcome, whichever loop saw it first. */
+  private async settle(row: Row, status: RemoteStatus): Promise<void> {
+    const signature = `${status.state}:${status.latest ?? ''}`.slice(0, 2000)
+    if (this.row(row.id)?.reported === signature) return
+    this.db.prepare('UPDATE remote_threads SET reported = ? WHERE id = ?').run(signature, row.id)
+    await this.report(row, status.state, status.error ?? '', status.latest ?? '')
   }
 
   private async report(row: Row, state: string, error: string, latest: string): Promise<void> {

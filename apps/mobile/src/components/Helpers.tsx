@@ -180,6 +180,7 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
         </T>
         <T size={font.caption} tone="muted">
           {[
+            task.host ? say('On {0}', { 0: task.host }) : undefined,
             task.provider ? providerNames[task.provider] : undefined,
             task.model,
             task.effort,
