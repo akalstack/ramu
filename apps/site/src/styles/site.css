@@ -816,8 +816,18 @@ main > section {
   overflow: hidden;
   pointer-events: none;
   transform: translateX(-50%);
-  -webkit-mask-image: linear-gradient(#000 60%, transparent);
-  mask-image: linear-gradient(#000 60%, transparent);
+  contain: strict;
+}
+/* A painted fade into the page, rather than a mask, so scrolling never re-rasterizes the animated layers. */
+.sky::after {
+  content: '';
+  position: absolute;
+  inset: 60% 0 0;
+  background: linear-gradient(transparent, var(--window));
+}
+.sky.is-off *,
+.sky.is-off {
+  animation-play-state: paused;
 }
 .sky-grid {
   position: absolute;
@@ -829,6 +839,7 @@ main > section {
   background-position: center top;
   -webkit-mask-image: radial-gradient(ellipse 55% 50% at 50% 20%, #000 10%, transparent 75%);
   mask-image: radial-gradient(ellipse 55% 50% at 50% 20%, #000 10%, transparent 75%);
+  will-change: transform;
   animation: grid-pan 14s linear infinite;
 }
 @keyframes grid-pan {
@@ -845,16 +856,16 @@ main > section {
   margin-left: -800px;
   background: conic-gradient(
     from 180deg at 50% 0%,
-    transparent 156deg,
-    color-mix(in srgb, var(--accent) 16%, transparent) 166deg,
-    transparent 172deg,
-    color-mix(in srgb, var(--primary) 22%, transparent) 180deg,
-    transparent 188deg,
-    color-mix(in srgb, var(--accent) 12%, transparent) 195deg,
-    transparent 205deg
+    transparent 150deg,
+    color-mix(in srgb, var(--accent) 12%, transparent) 166deg,
+    transparent 176deg,
+    color-mix(in srgb, var(--primary) 18%, transparent) 180deg,
+    transparent 190deg,
+    color-mix(in srgb, var(--accent) 9%, transparent) 196deg,
+    transparent 212deg
   );
-  filter: blur(18px);
   transform-origin: 50% 0;
+  will-change: transform;
   animation: sway 16s ease-in-out infinite alternate;
 }
 @keyframes sway {
@@ -867,9 +878,8 @@ main > section {
 }
 .sky-orb {
   position: absolute;
-  border-radius: 50%;
-  filter: blur(100px);
   opacity: 0.5;
+  will-change: transform;
   animation: drift 20s ease-in-out infinite alternate;
 }
 .sky-orb:nth-of-type(1) {
@@ -877,22 +887,21 @@ main > section {
   height: 440px;
   left: calc(50% - 720px);
   top: 80px;
-  background: color-mix(in srgb, var(--primary) 50%, transparent);
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--primary) 55%, transparent), transparent);
 }
 .sky-orb:nth-of-type(2) {
   width: 520px;
   height: 420px;
   left: calc(50% + 220px);
   top: 180px;
-  background: color-mix(in srgb, #3b6fd8 30%, transparent);
+  background: radial-gradient(closest-side, color-mix(in srgb, #3b6fd8 35%, transparent), transparent);
   animation-duration: 24s;
   animation-direction: alternate-reverse;
 }
 .sky-grain {
   position: absolute;
   inset: 0;
-  opacity: 0.07;
-  mix-blend-mode: overlay;
+  opacity: 0.035;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
@@ -1047,7 +1056,6 @@ main > section {
     color-mix(in srgb, var(--primary) 45%, transparent),
     transparent 70%
   );
-  filter: blur(20px);
   animation: breathe 6s ease-in-out infinite;
 }
 .stage::after {
@@ -1076,7 +1084,6 @@ main > section {
     0 0 0 1px rgba(0, 0, 0, 0.3),
     0 40px 120px -20px color-mix(in srgb, var(--primary) 45%, transparent),
     0 30px 80px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(20px);
 }
 .window-bar {
   position: relative;
@@ -1269,7 +1276,6 @@ main > section {
   color: var(--soft);
   background: rgba(255, 255, 255, 0.12);
   border-radius: 14px;
-  backdrop-filter: blur(10px);
   animation: drop 0.5s var(--ease);
 }
 .note img {
@@ -1308,15 +1314,33 @@ main > section {
 .marquee {
   margin-top: clamp(80px, 10vw, 120px);
   overflow: hidden;
+  position: relative;
   border-block: 1px solid var(--line);
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 15%, #000 85%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 15%, #000 85%, transparent);
+}
+.marquee::before,
+.marquee::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  width: 15%;
+  pointer-events: none;
+}
+.marquee::before {
+  left: 0;
+  background: linear-gradient(90deg, var(--window), transparent);
+}
+.marquee::after {
+  right: 0;
+  background: linear-gradient(-90deg, var(--window), transparent);
 }
 .marquee-track {
   display: flex;
   gap: 56px;
   width: max-content;
   padding: 20px 0;
+  will-change: transform;
   animation: scroll 40s linear infinite;
 }
 .marquee-track span {

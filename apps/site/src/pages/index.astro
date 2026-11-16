@@ -448,6 +448,11 @@ const WORK = [
         )
         items.forEach((el) => io.observe(el))
       }
+      // The sky's loops cost frames while scrolling the rest of the page; run them only while the hero shows.
+      const sky = document.querySelector('.sky')
+      if (sky && 'IntersectionObserver' in window) {
+        new IntersectionObserver(([entry]) => sky.classList.toggle('is-off', !entry?.isIntersecting)).observe(sky)
+      }
     </script>
   </body>
 </html>
