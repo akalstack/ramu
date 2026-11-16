@@ -189,3 +189,17 @@ it('finds Firefox profiles under the roaming folder on Windows', () => {
     /AppData\/Roaming\/Mozilla\/Firefox$/,
   )
 })
+
+it('finds each Chromium browser’s profiles where it keeps them, and refuses one that does not ship here', () => {
+  expect(sourceRoot('brave', '/Users/a', 'darwin')).toBe(
+    '/Users/a/Library/Application Support/BraveSoftware/Brave-Browser',
+  )
+  expect(sourceRoot('arc', '/Users/a', 'darwin')).toBe('/Users/a/Library/Application Support/Arc/User Data')
+  expect(sourceRoot('vivaldi', '/home/a', 'linux', () => false)).toBe('/home/a/.config/vivaldi')
+  expect(sourceRoot('brave', '/home/a', 'linux', (path) => path.includes('snap'))).toBe(
+    '/home/a/snap/brave/current/.config/BraveSoftware/Brave-Browser',
+  )
+  expect(sourceRoot('chrome', '/home/a', 'linux', (path) => path.endsWith('chromium'))).toBe('/home/a/.config/chromium')
+  expect(() => sourceRoot('arc', '/home/a', 'linux')).toThrow(/not available on this host/)
+  expect(() => sourceRoot('chrome', 'C:\\Users\\a', 'win32')).toThrow(/not available on this host/)
+})

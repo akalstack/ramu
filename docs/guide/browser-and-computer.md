@@ -10,7 +10,7 @@ Agents can work in a browser, on your computer's screen or apps, and on iOS Simu
 - To check a responsive layout, the agent can lay a tab it controls out at a phone, tablet or desktop size. The size ends when you take control, and the page returns to its normal layout.
 - To check a page in both themes, the agent can switch a tab it controls to light or dark mode, the same setting as **Display → Appearance** in the phone's browser viewer; **System** follows the computer again.
 - **Take control** pauses the agent so you can sign in or click; **Give control** hands it back.
-- **Profiles:** **Default** keeps sign-ins on this host; **Temporary** is cleared after each run. **Import…** copies sign-in cookies from Chrome, Edge or Firefox into a new profile.
+- **Profiles:** **Default** keeps sign-ins on this host; **Temporary** is cleared after each run. **Import…** copies sign-in cookies from Chrome, Edge, Brave, Vivaldi, Arc (macOS) or Firefox into a new profile; on Windows only Firefox can be imported.
 - **Engine:** **Automatic** uses the desktop app's own browser when Ramu is open on the host, and the host's Chromium otherwise (as on a headless server).
 - **Downloads** need your approval first and are never opened automatically. **Uploads** take files from inside the workspace.
 

@@ -29,3 +29,24 @@ it('keeps Windows unsupported with a specific reason, supports Linux Chromium/Fi
   // Discovery only asks whether an app exists.
   expect(exists.mock.calls.every(([path]) => typeof path === 'string')).toBe(true)
 })
+
+it('lists Brave, Vivaldi and Arc where they ship, as importable as Chrome', () => {
+  const mac = browserImportSources(
+    'darwin',
+    { HOME: '/Users/a' },
+    installed('Brave Browser', 'Users/a/Applications/Arc'),
+  )
+  const byId = Object.fromEntries(mac.map((source) => [source.id, source]))
+  expect(byId.brave).toMatchObject({ name: 'Brave', installed: true, supported: true })
+  expect(byId.arc).toMatchObject({ name: 'Arc', installed: true, supported: true })
+  expect(byId.vivaldi).toMatchObject({ installed: false, supported: true })
+  const linux = browserImportSources('linux', {}, installed('/usr/bin/vivaldi'))
+  expect(linux.map((source) => source.id)).toEqual(['chrome', 'edge', 'brave', 'vivaldi', 'firefox'])
+  expect(linux.find((source) => source.id === 'vivaldi')).toMatchObject({ installed: true, supported: true })
+  // Arc and Vivaldi have no Windows build to list; Chrome and Edge are listed to say why not.
+  expect(browserImportSources('win32', {}, () => false).map((source) => source.id)).toEqual([
+    'chrome',
+    'edge',
+    'firefox',
+  ])
+})

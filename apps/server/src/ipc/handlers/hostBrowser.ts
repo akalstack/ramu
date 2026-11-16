@@ -5,12 +5,13 @@ import { id } from '../schemas'
 import { saveBrowserDownload } from '../../browser/download'
 import { readBrowserUpload } from '../../browser/upload'
 import { DesktopBrowserViewer, type BrowserViewerBackend } from '../../browser/desktopViewer'
+import { IMPORT_SOURCE_IDS } from '../../browser/chromiumBrowsers'
 
 const NO_TRANSFERS =
   'The desktop browser cannot send or receive files from a phone yet. Use the browser on the computer for file transfers.'
 
 const tab = z.string().uuid()
-const importSource = z.enum(['chrome', 'edge', 'firefox'])
+const importSource = z.enum(IMPORT_SOURCE_IDS)
 const importText = z.string().min(1).max(200)
 const input = z.discriminatedUnion('kind', [
   z.object({

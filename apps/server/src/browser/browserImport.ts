@@ -16,6 +16,7 @@ import type {
   BrowserImportStaged,
 } from '@ramu/shared/types/browser'
 import type { BrowserProfiles } from './browserProfiles'
+import { CHROMIUM_BROWSERS, linuxOf, type ImportSourceId } from './chromiumBrowsers'
 import {
   chromiumKey,
   chromiumLinuxKey,
@@ -28,11 +29,11 @@ import {
   type CookieRead,
 } from './browserImportReaders'
 
-export type ImportSourceId = 'chrome' | 'edge' | 'firefox'
+export type { ImportSourceId } from './chromiumBrowsers'
 
 /**
- * Where each supported source keeps its profiles on macOS, Linux and (Firefox only) Windows. Safari and Windows Chromium
- * stay unsupported: their cookies are protected in ways Ramu does not read.
+ * Where each supported source keeps its profiles: every listed Chromium browser on macOS and Linux, and Firefox on
+ * all three. Safari and Windows Chromium stay unsupported: their cookies are protected in ways Ramu does not read.
  */
 export function sourceRoot(
   source: ImportSourceId,
@@ -41,23 +42,18 @@ export function sourceRoot(
   exists: (path: string) => boolean = existsSync,
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  // Firefox keeps plain SQLite cookies under the roaming profile on Windows; Chromium's are app-bound encrypted there.
-  if (platform === 'win32' && source === 'firefox')
-    return join(env.APPDATA ?? join(home, 'AppData', 'Roaming'), 'Mozilla', 'Firefox')
-  if (platform === 'linux') {
-    const first = (candidates: string[]) => candidates.find((path) => exists(path)) ?? candidates[0]!
-    return source === 'chrome'
-      ? first([join(home, '.config/google-chrome'), join(home, '.config/chromium')])
-      : source === 'edge'
-        ? join(home, '.config/microsoft-edge')
-        : first([join(home, '.mozilla/firefox'), join(home, 'snap/firefox/common/.mozilla/firefox')])
+  const first = (candidates: readonly string[]) => candidates.find((path) => exists(path)) ?? candidates[0]!
+  if (source === 'firefox') {
+    // Firefox keeps plain SQLite cookies under the roaming profile on Windows; Chromium's are app-bound encrypted there.
+    if (platform === 'win32') return join(env.APPDATA ?? join(home, 'AppData', 'Roaming'), 'Mozilla', 'Firefox')
+    if (platform === 'linux')
+      return first([join(home, '.mozilla/firefox'), join(home, 'snap/firefox/common/.mozilla/firefox')])
+    return join(home, 'Library/Application Support/Firefox')
   }
-  const support = join(home, 'Library/Application Support')
-  return source === 'chrome'
-    ? join(support, 'Google/Chrome')
-    : source === 'edge'
-      ? join(support, 'Microsoft Edge')
-      : join(support, 'Firefox')
+  const linux = linuxOf(source)
+  if (platform === 'linux' && linux) return first(linux.data.map((path) => join(home, path)))
+  if (platform === 'darwin') return join(home, 'Library/Application Support', CHROMIUM_BROWSERS[source].mac.data)
+  throw new Error(`Importing from ${CHROMIUM_BROWSERS[source].name} is not available on this host.`)
 }
 
 export interface ImporterDeps {

@@ -146,6 +146,12 @@ describe('Chromium', () => {
         throw new Error('no tool')
       }),
     ).toBeNull()
+    const asked: string[] = []
+    await linuxKeyringPassword('brave', async (_file, args) => (asked.push(args[2]!), 'b'))
+    await linuxKeyringPassword('vivaldi', async (_file, args) => (asked.push(args[2]!), 'v'))
+    expect(asked).toEqual(['brave', 'vivaldi'])
+    // A browser with no Linux build has nothing to ask the keyring for.
+    expect(await linuxKeyringPassword('arc', async () => 'never')).toBeNull()
   })
 
   it('reads encrypted and plain cookies, converts the expiry, and counts what it could not decrypt', () => {
@@ -200,6 +206,12 @@ describe('keychain', () => {
       'Chrome',
     ])
     expect(calls[1]).toContain('Microsoft Edge Safe Storage')
+    await keychainPassword('brave', exec)
+    await keychainPassword('arc', exec)
+    expect(calls.slice(2).map((call) => call.slice(4))).toEqual([
+      ['Brave Safe Storage', '-a', 'Brave'],
+      ['Arc Safe Storage', '-a', 'Arc'],
+    ])
     await expect(
       keychainPassword('chrome', async () => {
         throw new Error('The keychain did not allow access.')

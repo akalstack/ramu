@@ -17,7 +17,7 @@ Every change needs scoped tests and typechecks for the packages it touches; desk
 - **Transport:** bounded replay and snapshot recovery for every resource, and defined connection outcomes (current, synchronizing, disconnected, authorization rejected, outcome unknown) that keep drafts and queued messages; non-retriable mutations report an unknown outcome and reconcile. Start from measurements on real networks ([Architecture](contributing/architecture.md#transport)).
 - **Windows:** continue the port on the `windows-port` branch: the server's shell, terminal and path handling, packaging, and a hands-on run in a Windows 11 VM.
 - **Presenting from the phone:** **Present** a deck on a display the phone is connected to (AirPlay or a cable), with speaker notes on the phone ([Artifacts](guide/artifacts.md)).
-- **Browser and computer use:** provider capability negotiation and more session-import sources.
+- **Browser and computer use:** provider capability negotiation.
 - **Helpers on another host:** `ramu_agent` with a `host` would mirror a helper's events into the parent live; it needs an event channel between hosts.
 - **Site screenshots:** a real capture from a release build beside each step of **From an idea to a live app** (`apps/site`). Claim "anyone can ship an app" only after the non-coder task under [Acceptance](#acceptance) passes with real people, and an improvement over another application only with matched-task evidence.
 
@@ -51,7 +51,7 @@ The code is in; each check needs a real device, account or second host and stays
 
 ### Desktop builds
 
-- **Packaged and signed builds:** upgrading real profiles, browser session import with a real keychain, computer-use permission identity, theme and system-appearance changes, background-terminal stop timing, installation on a second Mac.
+- **Packaged and signed builds:** upgrading real profiles, browser session import with a real keychain (Chrome, Edge, Brave, Vivaldi and Arc on macOS; Brave and Vivaldi through the Linux keyring), computer-use permission identity, theme and system-appearance changes, background-terminal stop timing, installation on a second Mac.
 - **Linux desktop:** the installed app on a real GNOME or KDE desktop (Wayland and X11), with the sandbox, on Ubuntu 24.04.
 - **Presenting on two displays:** **Present** puts the deck on the external display and **Presenter notes** on the laptop, following each slide; Escape closes both.
 - **Artifact exports:** a Slides PowerPoint export opens in PowerPoint and Keynote with its notes, its PDF and images match the deck, and a Doc's Word export opens in Word and Pages.

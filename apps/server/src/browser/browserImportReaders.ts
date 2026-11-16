@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { SKIP_REASONS, type CookieSameSite, type ImportCookie } from '@ramu/shared/browserImport'
 import type { BrowserImportProfile, BrowserImportSkip } from '@ramu/shared/types/browser'
+import { CHROMIUM_BROWSERS, linuxOf, type ChromiumBrowserId } from './chromiumBrowsers'
 
 // Readers for the privileged process only. They open a copy of the source database, return parsed cookies to the importer
 // and never log or return a value to the renderer. Source paths come from discovery here, never from the renderer.
@@ -211,9 +212,8 @@ const run: Exec = (file, args) =>
   )
 
 /** macOS asks the person to allow keychain access for this one read. A refusal is reported, never bypassed. */
-export function keychainPassword(browser: 'chrome' | 'edge', exec: Exec = run): Promise<string> {
-  const [service, account] =
-    browser === 'chrome' ? ['Chrome Safe Storage', 'Chrome'] : ['Microsoft Edge Safe Storage', 'Microsoft Edge']
+export function keychainPassword(browser: ChromiumBrowserId, exec: Exec = run): Promise<string> {
+  const { service, account } = CHROMIUM_BROWSERS[browser].mac.keychain
   return exec('/usr/bin/security', ['find-generic-password', '-w', '-s', service, '-a', account])
 }
 
@@ -221,9 +221,8 @@ export function keychainPassword(browser: 'chrome' | 'edge', exec: Exec = run): 
  * Linux keeps Chromium's "Safe Storage" secret in the desktop keyring (libsecret). A missing tool or refusal returns null:
  * cookies using that secret are then reported as unreadable instead of the import failing.
  */
-export async function linuxKeyringPassword(browser: 'chrome' | 'edge', exec: Exec = run): Promise<string | null> {
-  const applications = browser === 'chrome' ? ['chrome', 'chromium'] : ['microsoft-edge']
-  for (const application of applications) {
+export async function linuxKeyringPassword(browser: ChromiumBrowserId, exec: Exec = run): Promise<string | null> {
+  for (const application of linuxOf(browser)?.keyring ?? []) {
     try {
       const secret = await exec('secret-tool', ['lookup', 'application', application])
       if (secret) return secret
