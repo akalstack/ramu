@@ -3,7 +3,7 @@ import { REPLACE_CONTENT_LIMIT } from '@ramu/shared/search/searchLimits'
 import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { cp, lstat, mkdir, opendir, readdir, readFile, realpath, rename, stat, writeFile } from 'node:fs/promises'
+import { cp, lstat, mkdir, opendir, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join, normalize, relative, sep } from 'node:path'
 import { ripgrep } from './ripgrep'
 import type {
@@ -425,8 +425,13 @@ export async function describeDroppedPaths(paths: string[]): Promise<{ path: str
   )
 }
 
-/** Copy native drops into the chosen folder without overwriting existing entries. */
-export async function importEntries(root: string, dir: string, paths: string[]): Promise<string[]> {
+/** Copy native drops into the chosen folder without overwriting existing entries. `move` takes staged items as they are. */
+export async function importEntries(
+  root: string,
+  dir: string,
+  paths: string[],
+  { move = false }: { move?: boolean } = {},
+): Promise<string[]> {
   const folder = await resolveInRoot(root, dir)
   if (!(await stat(folder)).isDirectory()) throw new Error('Drop into a folder.')
   const taken = new Set(await readdir(folder)),
@@ -447,11 +452,23 @@ export async function importEntries(root: string, dir: string, paths: string[]):
     const target = await resolveEntryInRoot(root, destination),
       source = await realpath(path)
     if (target === source || target.startsWith(source + sep)) throw new Error('A folder cannot be copied into itself.')
-    await cp(path, target, { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true })
+    if (move) await moveEntry(path, target)
+    else await cp(path, target, { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true })
     taken.add(name)
     imported.push(destination)
   }
   return imported
+}
+
+/** Renames when both sides share a volume; across volumes, copies and then removes the original. */
+async function moveEntry(source: string, target: string): Promise<void> {
+  try {
+    await rename(source, target)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error
+    await cp(source, target, { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true })
+    await rm(source, { recursive: true, force: true })
+  }
 }
 
 /** What the editor will open and save. Reads are checked on disk first so a huge file is never loaded into memory. */

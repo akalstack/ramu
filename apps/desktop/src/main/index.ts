@@ -38,7 +38,8 @@ import { editorMenu, type EditorMenuOptions } from './editorMenu'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir, hostname } from 'node:os'
 import { type AppPreferences } from '@ramu/shared/types'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
+import { FILE_LIST_TYPE, fileListEntry, pathsFromUriList } from './fileClipboard'
 import {
   app,
   protocol,
@@ -1104,6 +1105,24 @@ async function main() {
       )
         throw new Error('Invalid editor menu request')
       return editorMenu(win, options, { x: point.x, y: point.y })
+    }
+    if (method === 'clipboard.readFiles') {
+      if (!(await clipboard.has(FILE_LIST_TYPE))) return []
+      for (const item of await clipboard.read())
+        if (item.types.includes(FILE_LIST_TYPE))
+          return pathsFromUriList(await (await item.getType(FILE_LIST_TYPE)).text())
+      return []
+    }
+    if (method === 'clipboard.writeFiles') {
+      const paths = args[0]
+      if (
+        !Array.isArray(paths) ||
+        !paths.length ||
+        paths.length > 100 ||
+        paths.some((path) => typeof path !== 'string' || !isAbsolute(path) || path.length > 4096)
+      )
+        throw new Error('Invalid clipboard files')
+      return clipboard.write([new ClipboardItem(fileListEntry(paths as string[]))])
     }
     if (method === 'clipboard.write') {
       if (typeof args[0] !== 'string' || args[0].length > 5_000_000) throw new Error('Invalid clipboard text')

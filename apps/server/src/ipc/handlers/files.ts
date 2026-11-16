@@ -1,9 +1,18 @@
 import { rm } from 'node:fs/promises'
+import { join } from 'node:path'
 import { z } from 'zod'
 import { editorConfigFor } from '../../workspace/editorconfig'
 import { resolveFileLink } from '../../workspace/fileLinks'
 import * as files from '../../workspace/files'
 import * as git from '../../workspace/git'
+import {
+  TRANSFER_CHUNK_BYTES,
+  MAX_TRANSFER_BYTES,
+  TransferInbox,
+  downloadsFolder,
+  readTransferChunk,
+  transferManifest,
+} from '../../workspace/transfer'
 import { lockCheckout } from '../helpers'
 import type { ModelViewerLabels } from '@ramu/shared/interactive'
 import { modelViewerHtml } from '../../interactive/modelViewer'
@@ -12,6 +21,27 @@ import type { HandlerContext, RegisterHandlers } from '../types'
 
 const MAX_QUICK_OPEN_FILES = 50_000
 const droppedPaths = z.string().min(1).max(4096)
+const transferSource = z.union([
+  z.object({ taskId: id, repoId: id, paths: z.array(relPath.min(1)).min(1).max(100) }).strict(),
+  z.object({ paths: z.array(droppedPaths).min(1).max(100) }).strict(),
+])
+const transferTarget = z.union([
+  z.object({ taskId: id, repoId: id, dir: relPath }).strict(),
+  z.object({ downloads: z.literal(true) }).strict(),
+])
+const transferWrite = z
+  .object({
+    root: z.number().int().min(0).max(99),
+    path: z.string().min(1).max(4096),
+    kind: z.enum(['file', 'dir', 'link']),
+    mode: z.number().int().min(0).max(0o777),
+    target: z.string().min(1).max(4096).optional(),
+    offset: z.number().int().min(0).max(MAX_TRANSFER_BYTES),
+    // A gzipped chunk is never larger than the raw one it replaced; base64 adds a third.
+    data: z.string().max(Math.ceil((TRANSFER_CHUNK_BYTES * 4) / 3) + 4),
+    gzip: z.boolean(),
+  })
+  .strict()
 
 /** Runs a mutation on one entry's checkout while holding that checkout's lock. */
 const inCheckout = <T>(ctx: HandlerContext, taskId: string, repoId: string, fn: (cwd: string) => Promise<T>) => {
@@ -22,6 +52,19 @@ const inCheckout = <T>(ctx: HandlerContext, taskId: string, repoId: string, fn: 
 /** Reading, writing and managing files inside a task's checkouts. */
 export const registerFileHandlers: RegisterHandlers = (ctx) => {
   const { host, workspace, cwdOf, lock } = ctx
+  const inbox = new TransferInbox()
+  /** The chosen items of a copy, as absolute paths. Project items stay inside their checkout. */
+  const sourceRoots = (source: z.infer<typeof transferSource>): Promise<string[]> => {
+    if (!('taskId' in source)) return Promise.resolve(source.paths)
+    const cwd = cwdOf(source.taskId, source.repoId)
+    return Promise.all(
+      source.paths.map(async (path) => {
+        const absolute = await files.resolveEntryInRoot(cwd, path)
+        if (absolute === cwd) throw new Error('Choose files or folders inside the project.')
+        return absolute
+      }),
+    )
+  }
   return {
     'files.explorerBindings': { args: z.tuple([id]), run: (context: string) => workspace.explorerBindings(context) },
     'files.browse': {
@@ -49,6 +92,42 @@ export const registerFileHandlers: RegisterHandlers = (ctx) => {
       run: (t: string, r: string, dir: string, paths: string[]) =>
         inCheckout(ctx, t, r, (cwd) => files.importEntries(cwd, dir, paths)),
     },
+    'files.transfer.manifest': {
+      args: z.tuple([transferSource]),
+      run: async (source: z.infer<typeof transferSource>) => transferManifest(await sourceRoots(source)),
+    },
+    'files.transfer.read': {
+      args: z.tuple([
+        transferSource,
+        z.number().int().min(0).max(99),
+        z.string().min(1).max(4096),
+        z.number().int().min(0),
+      ]),
+      run: async (source: z.infer<typeof transferSource>, root: number, path: string, offset: number) => {
+        const absolute = (await sourceRoots(source))[root]
+        if (!absolute) throw new Error('That file is not part of this copy.')
+        return readTransferChunk(absolute, path, offset)
+      },
+    },
+    'files.transfer.begin': { args: z.tuple([]), run: async () => ({ id: await inbox.begin() }) },
+    'files.transfer.write': {
+      args: z.tuple([z.string().uuid(), transferWrite]),
+      run: (transfer: string, write: z.infer<typeof transferWrite>) => inbox.write(transfer, write),
+    },
+    'files.transfer.finish': {
+      args: z.tuple([z.string().uuid(), transferTarget]),
+      run: async (transfer: string, target: z.infer<typeof transferTarget>) => {
+        if ('downloads' in target) {
+          const folder = await downloadsFolder()
+          const saved = await lock.run(`file:${folder}`, () => inbox.finish(transfer, folder, ''))
+          // Downloads go to the person at this computer, so show them where; a host with no desktop just skips it.
+          if (saved[0]) await host.native('reveal', join(folder, saved[0])).catch(() => {})
+          return saved
+        }
+        return inCheckout(ctx, target.taskId, target.repoId, (cwd) => inbox.finish(transfer, cwd, target.dir))
+      },
+    },
+    'files.transfer.cancel': { args: z.tuple([z.string().uuid()]), run: (transfer: string) => inbox.cancel(transfer) },
     'files.dropInfo': {
       args: z.tuple([z.array(droppedPaths).max(100)]),
       run: (paths: string[]) => files.describeDroppedPaths(paths),

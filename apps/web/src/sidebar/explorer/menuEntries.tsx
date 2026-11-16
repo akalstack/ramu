@@ -2,6 +2,7 @@ import {
   ClipboardPaste,
   Copy,
   CopyPlus,
+  Download,
   FileText,
   FilePlus,
   FolderOpen,
@@ -17,11 +18,11 @@ import { invoke } from '../../ipc'
 import type { MenuEntry } from '../../Menu'
 import type { useWorkspace } from '../../workspace/workspace'
 import { baseName, parentOf } from './paths'
-import { type sharedForHost, type TreeAction } from './shared'
+import { explorerClipboard, type PlaceSource, type TreeAction } from './shared'
 
 type Ctx = {
   ws: ReturnType<typeof useWorkspace>
-  shared: ReturnType<typeof sharedForHost>
+  hostId: string
   taskId: string
   binding: RepositoryBinding
   /** The right-clicked entry, and the whole selection when it is part of a multi-selection. */
@@ -34,7 +35,12 @@ type Ctx = {
   setClip: (paths: string[], cut: boolean) => void
   begin: (action: TreeAction) => void
   deletePicked: (clicked?: DirEntry) => void
-  pasteInto: (dir: string, source?: ReturnType<typeof sharedForHost>['clip']) => Promise<void>
+  placeInto: (dir: string, source: PlaceSource) => Promise<boolean>
+  paste: (dir: string) => Promise<void>
+  /** Copies items of a remote host to this computer. */
+  download: (entries: DirEntry[]) => void
+  /** Files the system clipboard held when the menu opened. */
+  systemFiles: string[]
   copy: (text: string) => Promise<void>
   fail: (reason: unknown) => void
 }
@@ -42,7 +48,7 @@ type Ctx = {
 /** Context menu of a tree row: a multi-selection gets bulk actions, a single entry the full set. */
 export function explorerMenuEntries({
   ws,
-  shared,
+  hostId,
   taskId,
   binding,
   target,
@@ -54,10 +60,34 @@ export function explorerMenuEntries({
   setClip,
   begin,
   deletePicked,
-  pasteInto,
+  placeInto,
+  paste,
+  download,
+  systemFiles,
   copy,
   fail,
 }: Ctx): MenuEntry[] {
+  // The same choice paste makes: this window's copy, unless files were copied in another app after it.
+  const clip = explorerClipboard.clip
+  const fromSystem =
+    systemFiles.length > 0 && !(clip && (clip.systemFiles === undefined || systemFiles.join('\n') === clip.systemFiles))
+  const pasting = fromSystem ? systemFiles : (clip?.paths ?? [])
+  const downloadEntry = (entries: DirEntry[]) =>
+    isLocal
+      ? []
+      : [
+          {
+            key: 'download',
+            label: (
+              <>
+                <Download size={14} />
+                {t('Download to this computer')}
+              </>
+            ),
+            disabled: busy,
+            onSelect: () => download(entries),
+          },
+        ]
   return multi
     ? [
         {
@@ -100,6 +130,7 @@ export function explorerMenuEntries({
           label: t('Copy relative paths'),
           onSelect: () => void copy(targets.map((entry) => entry.path).join('\n')),
         },
+        ...downloadEntry(targets),
         { key: 'separator', separator: true as const },
         {
           key: 'delete',
@@ -193,14 +224,15 @@ export function explorerMenuEntries({
           label: (
             <>
               <ClipboardPaste size={14} />
-              {t('Paste')}
-              {shared.clip
-                ? ` ${shared.clip.paths.length === 1 ? baseName(shared.clip.paths[0]!) : `${shared.clip.paths.length} items`}`
-                : ''}
+              {pasting.length === 1
+                ? t('Paste {0}', { 0: baseName(pasting[0]!) })
+                : pasting.length
+                  ? t('Paste {0} items', { 0: pasting.length })
+                  : t('Paste')}
             </>
           ),
-          disabled: busy || !shared.clip || shared.clip.repoId !== binding.repoId,
-          onSelect: () => void pasteInto(pasteDir),
+          disabled: busy || !pasting.length,
+          onSelect: () => void paste(pasteDir),
         },
         ...(target.path
           ? [
@@ -214,9 +246,12 @@ export function explorerMenuEntries({
                 ),
                 disabled: busy,
                 onSelect: () =>
-                  void pasteInto(parentOf(target.path), {
+                  void placeInto(parentOf(target.path), {
+                    kind: 'tree',
+                    hostId,
                     taskId,
                     repoId: binding.repoId,
+                    cwd: binding.cwd,
                     paths: [target.path],
                     cut: false,
                   }),
@@ -224,6 +259,7 @@ export function explorerMenuEntries({
             ]
           : []),
         { key: 'separator-paths', separator: true as const },
+        ...(target.path ? downloadEntry([target]) : []),
         {
           key: 'reveal',
           disabled: !isLocal,

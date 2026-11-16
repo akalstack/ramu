@@ -227,6 +227,38 @@ export interface DirEntry {
   kind: 'file' | 'dir'
 }
 
+/** One item of a copy between hosts. `path` starts with the chosen item's own name and uses POSIX separators. */
+export interface TransferEntry {
+  /** Which chosen item this belongs to, in the order they were chosen. */
+  root: number
+  path: string
+  kind: 'file' | 'dir' | 'link'
+  size: number
+  /** Permission bits, so scripts stay executable. */
+  mode: number
+  /** A link's target, recreated as written. */
+  target?: string
+}
+
+export interface TransferManifest {
+  entries: TransferEntry[]
+  bytes: number
+}
+
+/** Up to one chunk of a file, base64-encoded and gzipped when that made it meaningfully smaller. */
+export interface TransferChunk {
+  data: string
+  gzip: boolean
+  /** Bytes of the file this chunk covers, before compression. */
+  bytes: number
+}
+
+/** What a copy reads from: items in a project on that host, or absolute paths on that host (a desktop drop). */
+export type TransferSource = { taskId: string; repoId: string; paths: string[] } | { paths: string[] }
+
+/** Where a copy lands: a folder of a project, or that host's Downloads folder. */
+export type TransferTarget = { taskId: string; repoId: string; dir: string } | { downloads: true }
+
 export interface FileContent {
   content: string
   /** sha256 of the bytes on disk when read; used to refuse silent overwrites. */

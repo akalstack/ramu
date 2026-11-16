@@ -94,6 +94,10 @@ import type {
   CreateTaskInput,
   DiffContents,
   DirEntry,
+  TransferChunk,
+  TransferManifest,
+  TransferSource,
+  TransferTarget,
   FileContent,
   EditorConfigProps,
   GitStatus,
@@ -1358,6 +1362,28 @@ export interface RamuMethods extends ArtifactMethods {
   'files.copy'(taskId: string, repoId: string, path: string, destination: string): void
   'files.import'(taskId: string, repoId: string, dir: string, paths: string[]): string[]
   'files.dropInfo'(paths: string[]): { path: string; kind: 'file' | 'dir' }[]
+  /** Every file, folder and link a copy to another host will send. */
+  'files.transfer.manifest'(source: TransferSource): TransferManifest
+  /** One chunk of a file listed by the manifest of `source`'s item `root`. */
+  'files.transfer.read'(source: TransferSource, root: number, path: string, offset: number): TransferChunk
+  /** Starts receiving a copy from another host. */
+  'files.transfer.begin'(): { id: string }
+  'files.transfer.write'(
+    id: string,
+    write: {
+      root: number
+      path: string
+      kind: 'file' | 'dir' | 'link'
+      mode: number
+      target?: string
+      offset: number
+      data: string
+      gzip: boolean
+    },
+  ): void
+  /** Places everything received under free names and returns where it landed (relative to the target). */
+  'files.transfer.finish'(id: string, target: TransferTarget): string[]
+  'files.transfer.cancel'(id: string): void
   /** Permanently deletes a file or folder inside the checkout. */
   'files.delete'(taskId: string, repoId: string, path: string): void
   /** Whether an agent is writing in this checkout, so a rename, move or delete can collide with its work. */
@@ -1669,6 +1695,10 @@ export interface RamuMethods extends ArtifactMethods {
   ): 'cut' | 'undo' | 'redo' | 'selectAll' | 'find' | 'comment' | { paste: string } | null
   /** Writes plain text, with an HTML version when there is one, so rich targets keep tables, lists and links. */
   'clipboard.write'(text: string, html?: string): void
+  /** Absolute paths of files copied in the system file manager on this computer; none when it holds text. */
+  'clipboard.readFiles'(): string[]
+  /** Puts these files of this computer on the clipboard for the file manager to paste. */
+  'clipboard.writeFiles'(paths: string[]): void
   'term.menu'(selection: string, point: { x: number; y: number }): 'selectAll' | 'clear' | { paste: string } | null
   'agent.list'(taskId: string): AgentSessionInfo[]
   'agent.get'(sessionId: string): AgentSessionInfo
