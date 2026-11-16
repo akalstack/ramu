@@ -5690,6 +5690,13 @@ export const indonesian: Readonly<Record<string, string>> = {
   Export: 'Ekspor',
   'Choose where to put it': 'Pilih tempatnya',
   'Put it here': 'Taruh di sini',
+  'of {0}': 'dari {0}',
+  'of 1 core': 'dari 1 core',
+  'of {0} cores': 'dari {0} core',
+  '{0} CPU': 'CPU {0}',
+  'Left running': 'Masih berjalan',
+  'Untitled thread': 'Thread tanpa judul',
+  'Running in threads': 'Berjalan di thread',
   'Clone as project': 'Clone sebagai proyek',
   'Offline · reconnect to act on it': 'Offline · sambungkan ulang untuk menindaklanjutinya',
   'Showing what this phone last read of this pull request.':

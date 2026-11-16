@@ -1,6 +1,9 @@
 import { expect, it } from 'vitest'
 import {
+  cpuPercent,
   cpuShare,
+  leftoverLabel,
+  memorySize,
   memoryBreakdown,
   attributeProcesses,
   gigabytes,
@@ -104,4 +107,25 @@ it('reads CPU as a share of the whole host', () => {
   expect(cpuShare(200, 8)).toBe(0.25)
   expect(cpuShare(1200, 8)).toBe(1)
   expect(cpuShare(50)).toBe(0.5)
+})
+
+it('gives memory a unit, in megabytes under a gigabyte', () => {
+  expect(memorySize(40 * 1024 * 1024)).toBe('40 MB')
+  expect(memorySize(1.5 * 1024 ** 3)).toBe('1.5 GB')
+  expect(memorySize(11.4 * 1024 ** 3)).toBe('11 GB')
+})
+
+it('puts a row\'s CPU on the same whole-host scale as the bar', () => {
+  expect(cpuPercent(8, 8)).toBe('1%')
+  expect(cpuPercent(3, 8)).toBe('0%')
+  expect(cpuPercent(400, 8)).toBe('50%')
+})
+
+it('names what a thread without a title still runs', () => {
+  const item = (kind: 'agent' | 'terminal' | 'command', name: string) => ({ kind, id: name, name, rssBytes: 0 })
+  expect(leftoverLabel({ items: [item('agent', 'a'), item('command', 'dev'), item('terminal', 'Terminal')] })).toBe(
+    'dev, Terminal',
+  )
+  expect(leftoverLabel({ items: ['a', 'b', 'c', 'd'].map((name) => item('command', name)) })).toBe('a, b +2')
+  expect(leftoverLabel({ items: [item('agent', 'a')] })).toBeNull()
 })

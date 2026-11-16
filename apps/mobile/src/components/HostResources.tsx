@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { View } from 'react-native'
 import {
-  cpuShare,
-  gigabytes,
+  cpuPercent,
   isBusy,
   isLowMemory,
+  leftoverLabel,
   memoryBreakdown,
+  memorySize,
   stopItemCall,
   threadActivity,
   type ResourceItem,
@@ -53,73 +54,182 @@ function useSnapshots(host: string | null) {
 
 const share = (part: number, whole: number) => `${whole > 0 ? Math.min(100, (part / whole) * 100) : 0}%` as const
 
-/** One thin bar of coloured parts on a quiet track, as on the desktop. */
-function Bar({ parts, height = 6 }: { parts: { key: string; value: number; color: string }[]; height?: number }) {
+interface Part {
+  key: string
+  label: string
+  value: number
+  text: string
+  color: string
+}
+
+/** One thin bar of coloured parts on a quiet track, a hairline between parts, as on the desktop. */
+function Bar({ parts, total, height = 8 }: { parts: Part[]; total: number; height?: number }) {
   const { c } = useTheme()
-  const total = Math.max(
-    1,
-    parts.reduce((sum, part) => sum + part.value, 0),
-  )
   return (
-    <View style={{ flexDirection: 'row', height, borderRadius: height, overflow: 'hidden', backgroundColor: c.fill }}>
-      {parts.map((part) => (
-        <View key={part.key} style={{ width: share(part.value, total), backgroundColor: part.color }} />
-      ))}
+    <View
+      style={{
+        flexDirection: 'row',
+        gap: 2,
+        height,
+        borderRadius: height,
+        overflow: 'hidden',
+        backgroundColor: c.fill,
+      }}
+    >
+      {parts
+        .filter((part) => part.key !== 'free' && part.value > 0)
+        .map((part) => (
+          <View key={part.key} style={{ width: share(part.value, total), minWidth: 3, backgroundColor: part.color }} />
+        ))}
     </View>
   )
 }
 
-/** The host's memory: Ramu's threads in the accent, Ramu itself lighter, other apps neutral, then what is free. */
-function HostMeter({ data }: { data: ResourceSnapshot }) {
+/** A reading of the host: what it is, the headline figure, the bar and each part named with its unit. */
+function Meter({
+  title,
+  headline,
+  detail,
+  warning,
+  total,
+  parts,
+}: {
+  title: string
+  headline: string
+  detail: string
+  warning?: string
+  total: number
+  parts: Part[]
+}) {
   const { c } = useTheme()
-  const say = useSay()
-  const memory = data.memory!
-  const threads = data.threads.reduce((sum, thread) => sum + thread.rssBytes, 0)
-  const split = memoryBreakdown(memory, threads, data.ramuBytes)
-  const low = isLowMemory(memory)
-  const parts = [
-    { key: 'threads', label: say('Threads'), value: split.threads, color: c.accent },
-    { key: 'ramu', label: say('Ramu'), value: split.ramu, color: c.accentSoft },
-    { key: 'other', label: say('Other apps'), value: split.other, color: low ? c.warn : c.lineStrong },
-    { key: 'free', label: say('Available'), value: split.free, color: 'transparent' },
-  ]
-  const cpu = data.threads.reduce((sum, thread) => sum + thread.cpu, 0)
   return (
-    <View style={{ paddingHorizontal: space.l, paddingBottom: space.s, gap: space.xs }}>
-      <T size={font.caption} tone={low ? 'warn' : 'muted'}>
-        {[
-          say('{0} of {1} GB used', {
-            0: gigabytes(memory.totalBytes - memory.availableBytes),
-            1: gigabytes(memory.totalBytes),
-          }),
-          low ? say('Low memory') : '',
-          // The whole host's CPU, with Ramu's part of it, as Activity Monitor would add it up.
-          say('CPU {0}% (Ramu {1}%)', {
-            0: Math.round(cpuShare(Math.max(data.hostCpu ?? 0, cpu), data.cores) * 100),
-            1: Math.round(cpuShare(cpu + (data.ramuCpu ?? 0), data.cores) * 100),
-          }),
-        ]
-          .filter(Boolean)
-          .join(' · ')}
-      </T>
+    <View style={{ gap: space.xs + 2 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.s }}>
+        <T size={font.caption} weight="500" tone="muted">
+          {title}
+        </T>
+        {warning ? (
+          <T size={font.caption} weight="500" tone="warn">
+            {warning}
+          </T>
+        ) : null}
+        <View style={{ flex: 1 }} />
+        <T weight="600">{headline}</T>
+        <T size={font.caption} tone="muted">
+          {detail}
+        </T>
+      </View>
       <View
         accessible
-        accessibilityLabel={parts
-          .map((part) => `${part.label} ${say('{0} GB', { 0: gigabytes(part.value) })}`)
-          .join(', ')}
+        accessibilityLabel={[
+          `${title} ${headline} ${detail}`,
+          ...parts.map((part) => `${part.label} ${part.text}`),
+        ].join(', ')}
       >
-        <Bar parts={parts} height={8} />
+        <Bar parts={parts} total={total} />
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: space.m, rowGap: 2 }}>
-        {parts.slice(0, 3).map((part) => (
-          <View key={part.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: part.color }} />
+        {parts.map((part) => (
+          <View
+            key={part.key}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 5, opacity: part.value > 0 ? 1 : 0.5 }}
+          >
+            <View
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: part.key === 'free' ? 'transparent' : part.color,
+                borderWidth: part.key === 'free' ? 1 : 0,
+                borderColor: c.placeholder,
+              }}
+            />
             <T size={font.caption} tone="muted">
-              {`${part.label} ${gigabytes(part.value)}`}
+              {part.label}
+            </T>
+            <T size={font.caption} tone="soft">
+              {part.text}
             </T>
           </View>
         ))}
       </View>
+    </View>
+  )
+}
+
+/** The host's memory and CPU: Ramu's threads in the accent, Ramu itself deeper violet, other apps neutral. */
+function HostMeters({ data }: { data: ResourceSnapshot }) {
+  const { c } = useTheme()
+  const say = useSay()
+  const cores = Math.max(1, data.cores ?? 1)
+  const threadBytes = data.threads.reduce((sum, thread) => sum + thread.rssBytes, 0)
+  const threadCpu = data.threads.reduce((sum, thread) => sum + thread.cpu, 0)
+  const ramuCpu = data.ramuCpu ?? 0
+  const allCpu = Math.max(data.hostCpu ?? 0, threadCpu + ramuCpu)
+  const otherCpu = Math.max(0, allCpu - threadCpu - ramuCpu)
+  const capacity = 100 * cores
+  const memory = data.memory
+  const split = memory ? memoryBreakdown(memory, threadBytes, data.ramuBytes) : null
+  const low = memory ? isLowMemory(memory) : false
+  return (
+    <View style={{ paddingHorizontal: space.l, paddingBottom: space.m, gap: space.m }}>
+      {memory && split ? (
+        <Meter
+          title={say('Memory')}
+          headline={memorySize(memory.totalBytes - memory.availableBytes)}
+          detail={say('of {0}', { 0: memorySize(memory.totalBytes) })}
+          warning={low ? say('Low memory') : undefined}
+          total={memory.totalBytes}
+          parts={[
+            {
+              key: 'threads',
+              label: say('Threads'),
+              value: split.threads,
+              text: memorySize(split.threads),
+              color: c.accent,
+            },
+            { key: 'ramu', label: say('Ramu'), value: split.ramu, text: memorySize(split.ramu), color: c.primary },
+            {
+              key: 'other',
+              label: say('Other apps'),
+              value: split.other,
+              text: memorySize(split.other),
+              color: low ? c.warn : c.placeholder,
+            },
+            { key: 'free', label: say('Available'), value: split.free, text: memorySize(split.free), color: c.fill },
+          ]}
+        />
+      ) : null}
+      <Meter
+        title={say('CPU')}
+        headline={cpuPercent(allCpu, cores)}
+        detail={cores === 1 ? say('of 1 core') : say('of {0} cores', { 0: cores })}
+        total={capacity}
+        parts={[
+          {
+            key: 'threads',
+            label: say('Threads'),
+            value: threadCpu,
+            text: cpuPercent(threadCpu, cores),
+            color: c.accent,
+          },
+          { key: 'ramu', label: say('Ramu'), value: ramuCpu, text: cpuPercent(ramuCpu, cores), color: c.primary },
+          {
+            key: 'other',
+            label: say('Other apps'),
+            value: otherCpu,
+            text: cpuPercent(otherCpu, cores),
+            color: c.placeholder,
+          },
+          {
+            key: 'free',
+            label: say('Idle'),
+            value: Math.max(0, capacity - allCpu),
+            text: cpuPercent(Math.max(0, capacity - allCpu), cores),
+            color: c.fill,
+          },
+        ]}
+      />
     </View>
   )
 }
@@ -155,7 +265,7 @@ function ItemRow({ hostId, thread, item }: { hostId: string; thread: ThreadResou
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingLeft: space.m }}>
       <T size={font.caption} tone="muted" numberOfLines={1} style={{ flex: 1 }}>
-        {`${name} · ${say('{0} GB', { 0: gigabytes(item.rssBytes) })}`}
+        {`${name} · ${memorySize(item.rssBytes)}`}
       </T>
       <Button
         kind="ghost"
@@ -174,13 +284,13 @@ function ThreadRow({
   hostId,
   thread,
   divider,
-  heaviest,
+  cores,
   servers,
 }: {
   hostId: string
   thread: ThreadResources
   divider: boolean
-  heaviest: number
+  cores: number
   servers: ThreadServer[]
 }) {
   const { c } = useTheme()
@@ -190,6 +300,7 @@ function ThreadRow({
   const [confirming, setConfirming] = useState(false)
   const task = store.chats.find((chat) => chat.computerId === hostId && chat.taskId === thread.taskId)
   const activity = threadActivity(task, thread)
+  const busy = isBusy(thread)
   const invoke = store.invoke as unknown as Invoke
   const stop = () => {
     setConfirming(false)
@@ -200,46 +311,50 @@ function ThreadRow({
       }
     })().catch(() => {})
   }
-  const title = task?.title ?? say('Thread')
-  const state = activity === 'working' ? say('Working') : activity === 'idle' ? say('Idle') : say('Still running')
+  const title = task?.title ?? leftoverLabel(thread) ?? say('Untitled thread')
+  const pill =
+    activity === 'working'
+      ? { text: say('Working'), color: c.accent, background: c.accentWash }
+      : activity === 'idle'
+        ? { text: say('Idle'), color: c.muted, background: c.fill }
+        : { text: say('Left running'), color: c.warn, background: c.warnWash }
+  const details = thread.items.length + servers.length
   return (
-    <View style={{ padding: space.m, gap: space.xs, borderTopWidth: divider ? 0.5 : 0, borderTopColor: c.line }}>
-      <T weight="500" numberOfLines={1}>
-        {title}
-      </T>
-      <T size={font.caption} tone={activity === 'left-running' ? 'warn' : 'muted'}>
-        {[state, isBusy(thread) ? say('Busy') : '', say('{0} GB', { 0: gigabytes(thread.rssBytes) })]
-          .filter(Boolean)
-          .join(' · ')}
-      </T>
+    <View style={{ padding: space.m, gap: space.s, borderTopWidth: divider ? 0.5 : 0, borderTopColor: c.line }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m }}>
-        <View style={{ flex: 1 }}>
-          <Bar
-            parts={[
-              { key: 'used', value: thread.rssBytes, color: c.accent },
-              { key: 'rest', value: Math.max(0, heaviest - thread.rssBytes), color: 'transparent' },
-            ]}
-            height={4}
-          />
+        <View style={{ flex: 1, gap: 3 }}>
+          <T weight="500" numberOfLines={1}>
+            {title}
+          </T>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs + 2 }}>
+            <View
+              style={{ borderRadius: 999, paddingHorizontal: 7, paddingVertical: 1, backgroundColor: pill.background }}
+            >
+              <T size={font.caption} weight="500" style={{ color: pill.color }}>
+                {pill.text}
+              </T>
+            </View>
+            {busy ? (
+              <T size={font.caption} tone="warn">
+                {say('Busy')}
+              </T>
+            ) : null}
+            {servers.length ? (
+              <T size={font.caption} tone="accent" numberOfLines={1} style={{ flexShrink: 1 }}>
+                {servers.map((server) => `:${server.port}`).join(' ')}
+              </T>
+            ) : null}
+          </View>
         </View>
-        <View style={{ width: 36 }}>
-          <Bar
-            parts={[
-              { key: 'cpu', value: cpuShare(thread.cpu), color: isBusy(thread) ? c.warn : c.soft },
-              { key: 'rest', value: 1 - cpuShare(thread.cpu), color: 'transparent' },
-            ]}
-            height={4}
-          />
+        <View style={{ alignItems: 'flex-end' }}>
+          <T size={font.caption} tone="soft">
+            {memorySize(thread.rssBytes)}
+          </T>
+          <T size={font.caption} tone={busy ? 'warn' : 'muted'}>
+            {say('{0} CPU', { 0: cpuPercent(thread.cpu, cores) })}
+          </T>
         </View>
-        <T size={font.caption} tone={isBusy(thread) ? 'warn' : 'muted'} style={{ width: 40, textAlign: 'right' }}>
-          {`${Math.round(thread.cpu)}%`}
-        </T>
       </View>
-      {servers.length ? (
-        <T size={font.caption} tone="accent">
-          {servers.map((server) => `localhost:${server.port}`).join(' · ')}
-        </T>
-      ) : null}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
         {confirming ? (
           <Button kind="danger" title={say('Stop {0}?', { 0: title })} onPress={stop} />
@@ -247,10 +362,13 @@ function ThreadRow({
           <Button
             kind="secondary"
             title={say('Stop')}
+            accessibilityLabel={say('Stop everything {0} left running', { 0: title })}
             onPress={() => (activity === 'working' ? setConfirming(true) : stop())}
           />
         )}
-        <Button kind="ghost" title={open ? say('Hide') : say('Details')} onPress={() => setOpen((value) => !value)} />
+        {details ? (
+          <Button kind="ghost" title={open ? say('Hide') : say('Details')} onPress={() => setOpen((value) => !value)} />
+        ) : null}
       </View>
       {open ? thread.items.map((item) => <ItemRow key={item.id} hostId={hostId} thread={thread} item={item} />) : null}
       {open
@@ -260,39 +378,61 @@ function ThreadRow({
   )
 }
 
-/** The same host line, figures and Stop as the desktop's Resources panel; hidden when a host gives no reading. */
+/** The same meters, threads and Stop as the desktop's Resources panel; hidden when a host gives no reading. */
 export function HostResources({ host }: { host: string | null }) {
   const say = useSay()
   const store = useStore()
+  const { c } = useTheme()
   const snapshots = useSnapshots(host)
   return (
     <>
       {snapshots.map(({ id, data, servers }) => {
-        const total = data.ramuBytes + data.threads.reduce((sum, thread) => sum + thread.rssBytes, 0)
-        const heaviest = Math.max(0, ...data.threads.map((thread) => thread.rssBytes))
+        const cores = Math.max(1, data.cores ?? 1)
         return (
           <Section key={id} title={store.computers.find((pc) => pc.id === id)?.name ?? ''}>
-            {data.memory ? (
-              <HostMeter data={data} />
-            ) : (
-              <T size={font.caption} tone="muted" style={{ paddingHorizontal: space.l, paddingBottom: space.s }}>
-                {say('Ramu {0} GB', { 0: gigabytes(total) })}
-              </T>
-            )}
-            {data.threads.length ? (
-              <Group>
-                {data.threads.map((thread, index) => (
-                  <ThreadRow
-                    key={thread.taskId}
-                    hostId={id}
-                    thread={thread}
-                    divider={index > 0}
-                    heaviest={heaviest}
-                    servers={servers.filter((server) => server.taskId === thread.taskId)}
-                  />
-                ))}
-              </Group>
-            ) : null}
+            <HostMeters data={data} />
+            <Group>
+              {data.threads.map((thread, index) => (
+                <ThreadRow
+                  key={thread.taskId}
+                  hostId={id}
+                  thread={thread}
+                  divider={index > 0}
+                  cores={cores}
+                  servers={servers.filter((server) => server.taskId === thread.taskId)}
+                />
+              ))}
+              {!data.threads.length ? (
+                <T size={font.caption} tone="muted" style={{ padding: space.m }}>
+                  {say('No thread is running anything')}
+                </T>
+              ) : null}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: space.m,
+                  padding: space.m,
+                  borderTopWidth: 0.5,
+                  borderTopColor: c.line,
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <T tone="soft">{say('Ramu')}</T>
+                  <T size={font.caption} tone="muted" numberOfLines={1}>
+                    {say('The service, the app and its browser')}
+                  </T>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <T size={font.caption} tone="soft">
+                    {memorySize(data.ramuBytes)}
+                  </T>
+                  <T size={font.caption} tone="muted">
+                    {say('{0} CPU', { 0: cpuPercent(data.ramuCpu ?? 0, cores) })}
+                  </T>
+                </View>
+              </View>
+            </Group>
           </Section>
         )
       })}

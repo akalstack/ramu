@@ -201,3 +201,20 @@ export function memoryBreakdown(memory: HostMemory, threadBytes: number, ramuByt
 
 /** CPU as a share of the whole host (0–1), from a percent of one core summed over processes. */
 export const cpuShare = (cpu: number, cores = 1) => Math.min(1, Math.max(0, cpu / (100 * Math.max(1, cores))))
+
+const MB = 1024 * 1024
+/** A memory figure with its unit: megabytes under one gigabyte, so a small process never reads as `0.0 GB`. */
+export const memorySize = (bytes: number) =>
+  bytes < GB ? `${Math.max(0, Math.round(bytes / MB))} MB` : `${gigabytes(bytes)} GB`
+
+/** CPU as a whole-host percentage, the scale the CPU bar uses, so a row and the bar always agree. */
+export const cpuPercent = (cpu: number, cores = 1) => `${Math.round(cpuShare(cpu, cores) * 100)}%`
+
+/**
+ * What a thread that no longer has a title is running, by the names it uses (a dev server, a terminal), so a row left
+ * behind by a deleted or unloaded thread still says what Stop would end. Null when only its agent is left.
+ */
+export function leftoverLabel(thread: Pick<ThreadResources, 'items'>): string | null {
+  const names = [...new Set(thread.items.filter((item) => item.kind !== 'agent' && item.name).map((item) => item.name))]
+  return names.length ? names.slice(0, 2).join(', ') + (names.length > 2 ? ` +${names.length - 2}` : '') : null
+}
