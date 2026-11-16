@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { PullRequestSummary } from '../src/types'
-import { READINESS_ACTION, readinessRows, readinessStep, reviewNeedsWords, reviewVerdicts } from '../src/pullRequestReadiness'
+import {
+  READINESS_ACTION,
+  readinessRows,
+  readinessStep,
+  reviewNeedsWords,
+  reviewVerdicts,
+} from '../src/pullRequestReadiness'
 
 const pr = (overrides: Partial<PullRequestSummary> = {}): PullRequestSummary => ({
   number: 4,
