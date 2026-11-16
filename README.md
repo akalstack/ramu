@@ -33,7 +33,7 @@ Open a project, say what you want, and review the result. The defaults work out 
 
 **Agents that keep going**
 
-- **Goals.** An agent works toward an objective across turns, with an optional verification command that decides when it is done.
+- **Goals.** Agents set a goal themselves when work needs more turns, or you set one with `/goal`. Ramu checks the reported tests and changed files before accepting it as done, with an optional verification command.
 - **Background work.** Schedules, webhook triggers, queued messages and long-running commands keep going after you close the window. Recaps say what happened.
 
 **Models working together**
