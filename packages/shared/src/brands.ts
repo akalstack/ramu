@@ -18,6 +18,7 @@ export const BRAND_IDS = [
   'expo',
   'appstore',
   'googleplay',
+  'google',
   'gemini',
   'elevenlabs',
   'supabase',

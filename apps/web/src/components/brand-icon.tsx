@@ -21,6 +21,7 @@ import expo from '../assets/brands/expo.svg'
 import expoDark from '../assets/brands/expo-dark.svg'
 import appstore from '../assets/brands/appstore.svg'
 import googleplay from '../assets/brands/googleplay.svg'
+import google from '../assets/brands/google.svg'
 import gemini from '../assets/brands/gemini.svg'
 import elevenlabs from '../assets/brands/elevenlabs.svg'
 import elevenlabsDark from '../assets/brands/elevenlabs-dark.svg'
@@ -53,6 +54,7 @@ const MARKS: Record<BrandId, { light: string; dark?: string }> = {
   expo: { light: expo, dark: expoDark },
   appstore: { light: appstore },
   googleplay: { light: googleplay },
+  google: { light: google },
   gemini: { light: gemini },
   elevenlabs: { light: elevenlabs, dark: elevenlabsDark },
   supabase: { light: supabase },
