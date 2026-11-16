@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, Linking, Pressable, View } from 'react-native'
-import type { HostUpdateResult } from '@ramu/shared/types'
+import type { AgentProvider, HostUpdateResult } from '@ramu/shared/types'
 import { hostUpdateSummary, type HostUpdateSummary } from '@ramu/shared/updates'
 import { providerName } from '@ramu/shared/providers/providers'
 import { useStore } from '../runtime/store'
@@ -18,7 +18,8 @@ export function HostUpdates({ hostId, name, running }: { hostId: string; name: s
   const store = useStore()
   const { c } = useTheme()
   const [summary, setSummary] = useState<HostUpdateSummary | null>(null)
-  const [busy, setBusy] = useState<'ramu' | 'providers' | null>(null)
+  // What is updating: Ramu, every provider, or one provider by name.
+  const [busy, setBusy] = useState<'ramu' | 'providers' | AgentProvider | null>(null)
   const online = store.isOnline(hostId)
   const load = useCallback(() => {
     if (!online) return
@@ -68,10 +69,10 @@ export function HostUpdates({ hostId, name, running }: { hostId: string; name: s
         },
       ],
     )
-  const updateProviders = async () => {
-    setBusy('providers')
+  const updateProviders = async (only?: AgentProvider) => {
+    setBusy(only ?? 'providers')
     const failed: string[] = []
-    for (const entry of summary.providers)
+    for (const entry of summary.providers.filter((item) => !only || item.provider === only))
       await store
         .invoke(hostId, 'providers.update', entry.provider)
         .catch((error) =>
@@ -84,9 +85,6 @@ export function HostUpdates({ hostId, name, running }: { hostId: string; name: s
   const line = [
     summary.currentVersion ? say('Ramu {0}', { 0: summary.currentVersion }) : null,
     summary.nextVersion ? say('{0} available', { 0: summary.nextVersion }) : null,
-    summary.providers.length
-      ? say('Updates for {0}', { 0: summary.providers.map((entry) => providerName(entry.provider)).join(', ') })
-      : null,
   ].filter(Boolean)
   const action = (label: string, onPress: () => void) => (
     <Pressable
@@ -108,17 +106,51 @@ export function HostUpdates({ hostId, name, running }: { hostId: string; name: s
       </T>
     </Pressable>
   )
+  const row = (key: string, label: string, detail: string, updating: boolean, onPress: () => void) => (
+    <View key={key} style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 34 }}>
+      <View style={{ flex: 1 }}>
+        <T size={font.control} numberOfLines={1}>
+          {label}
+        </T>
+        <T size={font.caption} tone="muted" numberOfLines={1}>
+          {detail}
+        </T>
+      </View>
+      {action(updating ? say('Updating…') : say('Update'), onPress)}
+    </View>
+  )
+  const count = summary.providers.length + (summary.nextVersion ? 1 : 0)
   return (
     <View style={{ gap: space.xs }}>
       <T size={font.caption} tone="muted">
-        {line.join(' · ') || say('Up to date')}
+        {line.join(' · ') || (count ? '' : say('Up to date'))}
       </T>
-      {summary.nextVersion || summary.providers.length ? (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
-          {summary.nextVersion ? action(busy === 'ramu' ? say('Updating…') : say('Update Ramu'), updateRamu) : null}
-          {summary.providers.length
-            ? action(busy === 'providers' ? say('Updating…') : say('Update providers'), () => void updateProviders())
-            : null}
+      {summary.nextVersion
+        ? row(
+            'ramu',
+            say('Ramu {0}', { 0: summary.nextVersion }),
+            say('Restarts {0}', { 0: name }),
+            busy === 'ramu',
+            updateRamu,
+          )
+        : null}
+      {summary.providers.map((entry) =>
+        row(
+          entry.provider,
+          providerName(entry.provider),
+          entry.version && entry.latest ? `${entry.version} → ${entry.latest}` : (entry.latest ?? ''),
+          busy === entry.provider || busy === 'providers',
+          () => void updateProviders(entry.provider),
+        ),
+      )}
+      {summary.providers.length > 1 ? (
+        <View style={{ flexDirection: 'row' }}>
+          {action(
+            busy === 'providers'
+              ? say('Updating…')
+              : say('Update all providers ({0})', { 0: summary.providers.length }),
+            () => void updateProviders(),
+          )}
         </View>
       ) : null}
     </View>

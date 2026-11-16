@@ -5698,6 +5698,17 @@ export const indonesian: Readonly<Record<string, string>> = {
   Export: 'Ekspor',
   'Choose where to put it': 'Pilih tempatnya',
   'Put it here': 'Taruh di sini',
+  'Restarts {0}': 'Memulai ulang {0}',
+  'Update all providers ({0})': 'Perbarui semua provider ({0})',
+  Choose: 'Pilih',
+  'Update all ({0})': 'Perbarui semua ({0})',
+  '{0} · restarts {1}': '{0} · memulai ulang {1}',
+  '{0} updates available': '{0} pembaruan tersedia',
+  '{0} updates installed': '{0} pembaruan terpasang',
+  'Updating {0} of {1}…': 'Memperbarui {0} dari {1}…',
+  'Install {0} updates?': 'Pasang {0} pembaruan?',
+  'Ramu restarts on {0}, where threads are working. Threads continue after the restart when Continue threads after restart is on.':
+    'Ramu dimulai ulang di {0}, tempat thread sedang bekerja. Thread berlanjut setelah dimulai ulang bila Lanjutkan thread setelah mulai ulang aktif.',
   'of {0}': 'dari {0}',
   'of 1 core': 'dari 1 core',
   'of {0} cores': 'dari {0} core',
@@ -5722,13 +5733,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Star one to keep it at the top of the model picker, where you choose it for a thread.':
     'Beri bintang agar tetap di atas pemilih model, tempat kamu memilihnya untuk thread.',
   ' update available': ' punya pembaruan',
-  '{0} provider updates': '{0} pembaruan provider',
-  '{0} providers updated': '{0} provider diperbarui',
   '{0} of {1} updates failed': '{0} dari {1} pembaruan gagal',
-  'Updating providers… {0} of {1}': 'Memperbarui provider… {0} dari {1}',
   'Ramu {0} is available on {1}': 'Ramu {0} tersedia di {1}',
-  '{0} threads are working there. Updating restarts that host.':
-    '{0} thread sedang bekerja di sana. Memperbarui akan memulai ulang host itu.',
   'Updating restarts that host; it reconnects by itself.':
     'Memperbarui akan memulai ulang host itu; host tersambung lagi sendiri.',
   'Clone here': 'Clone di sini',

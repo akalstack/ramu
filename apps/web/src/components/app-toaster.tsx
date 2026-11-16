@@ -2,6 +2,7 @@ import { CircleCheck, Info, OctagonX, TriangleAlert } from 'lucide-react'
 import { Spinner } from '@/components/ui/spinner'
 import type { ReactNode } from 'react'
 import { cn } from 'cn'
+import { Button } from './desktop-button'
 import {
   Toast,
   ToastAction,
@@ -17,7 +18,12 @@ import {
 } from '@/components/ui/toast'
 
 /** What Ramu attaches to a toast: an icon of its own (a provider logo, say) and a hook for when the user dismisses it. */
-export type AppToastData = { icon?: ReactNode; onDismiss?: () => void }
+export type AppToastData = {
+  icon?: ReactNode
+  onDismiss?: () => void
+  /** A quieter second choice beside the action, such as picking which updates to install. */
+  secondary?: { label: string; onClick: () => void }
+}
 
 /** The app-wide toast manager (shadcn's). Add, update, close and promise toasts from anywhere. */
 export const notify = toast
@@ -50,6 +56,11 @@ function AppToastList({ closeLabel }: { closeLabel: string }) {
             <ToastTitle />
             <ToastDescription />
           </div>
+          {data?.secondary && (
+            <Button variant="ghost" size="sm" className="shrink-0" onClick={data.secondary.onClick}>
+              {data.secondary.label}
+            </Button>
+          )}
           <ToastAction />
           {/* Only a click here counts as the user dismissing it; timeouts and programmatic closes don't call onDismiss. */}
           <ToastClose aria-label={closeLabel} onClick={() => data?.onDismiss?.()} />

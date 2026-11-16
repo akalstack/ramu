@@ -300,6 +300,16 @@ export function BackgroundActivityIndicator({
                         </div>
                       )}
                     </div>
+                    {notice.onSecondary && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="min-h-6 px-2 py-0 text-caption text-muted-foreground"
+                        onClick={notice.onSecondary}
+                      >
+                        {notice.secondaryLabel}
+                      </Button>
+                    )}
                     {notice.onAction && (
                       <Button
                         variant="ghost"

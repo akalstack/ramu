@@ -10,6 +10,9 @@ export interface CenterNotice {
   at: number
   actionLabel?: string
   onAction?: () => void
+  /** A quieter second choice shown before the action. */
+  secondaryLabel?: string
+  onSecondary?: () => void
   /** What the ✕ does when removing it here is not enough (a host notice is dismissed for every device). */
   onDismiss?: () => void
   /** Set for chat notices, so they clear themselves once the chat is on screen. */

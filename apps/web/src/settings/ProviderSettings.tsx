@@ -7,7 +7,8 @@ import { t, useLanguage } from '../i18n'
 import { useContext, useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ownHostId } from '../hosts'
-import { RefreshCw } from 'lucide-react'
+import { Download, RefreshCw } from 'lucide-react'
+import { pendingProviderUpdates } from '@ramu/shared/updates'
 import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
 import { AGENT_PROVIDERS, providerAccountRows, providerEnabled, providerName } from '@ramu/shared/providers/providers'
@@ -76,6 +77,7 @@ export function ProviderSettings({
   const [known, setKnown] = useState(() => ({ host, value: lastCached(host) }))
   const shown = known.host === host ? known.value : lastCached(host)
   const statuses = shown.statuses
+  const updatable = pendingProviderUpdates([['', statuses]], new Set())
   const stamp = useRef(0)
   const [fullChecks, setFullChecks] = useState(0)
   const [checking, setChecking] = useState<ReadonlySet<AgentProvider>>(new Set())
@@ -308,6 +310,24 @@ export function ProviderSettings({
       setUpdating(null)
     }
   }
+  // One after another: installers share global package folders, and each card shows its own progress meanwhile.
+  const updateAll = async () => {
+    setError(null)
+    const failed: string[] = []
+    for (const { provider } of updatable) {
+      setUpdating(provider)
+      await invoke('providers.update', provider).catch((reason) =>
+        failed.push(`${providerName(provider)}: ${errorText(reason)}`),
+      )
+    }
+    setUpdating(null)
+    await refresh(
+      false,
+      false,
+      updatable.map((entry) => entry.provider),
+    )
+    if (failed.length) setError(failed.join(' · '))
+  }
   const add = (provider: AgentProvider, identityId: string) => {
     const id = crypto.randomUUID()
     arrange(provider, [...providerAccountRows(config, provider), id], [...(config[provider]?.accounts ?? []), { id }])
@@ -345,6 +365,22 @@ export function ProviderSettings({
           <p className="error text-bad small text-caption" role="alert">
             {error}
           </p>
+        )}
+        {updatable.length > 1 && (
+          <div className="flex items-center gap-3 rounded-(--radius-m) border border-line bg-fill px-3 py-2">
+            <Download size={15} className="flex-none text-muted-foreground" aria-hidden="true" />
+            <span className="min-w-0 flex-1 text-caption text-soft">
+              {t('Updates for {0}', { 0: updatable.map((entry) => providerName(entry.provider)).join(', ') })}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={updating !== null || viewOnly}
+              onClick={() => void updateAll()}
+            >
+              {updating ? t('Updating {0}…', { '0': providerName(updating) }) : t('Update all')}
+            </Button>
+          </div>
         )}
         {AGENT_PROVIDERS.map((provider) => {
           const status = statuses.find((item) => item.provider === provider),
