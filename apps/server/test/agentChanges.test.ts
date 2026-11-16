@@ -50,18 +50,31 @@ describe('agent.changes', () => {
     const quiet = svc.changes(id, first.cursor, first.lastSeq)
     expect(quiet).toMatchObject({ reset: false, events: [] })
 
-    record({ kind: 'text', text: 'draft', messageId: 'm1' } as AgentEvent)
+    record({ kind: 'text', text: 'draft\n\n', messageId: 'm1' } as AgentEvent)
     const appended = svc.changes(id, first.cursor, first.lastSeq)
     expect(appended.reset).toBe(false)
     expect(appended.events).toHaveLength(1)
 
     // An earlier row edited in place shows up even though its sequence is not new.
-    record({ kind: 'text', text: 'final', messageId: 'm1' } as AgentEvent)
+    record({ kind: 'text', text: 'draft\n\nfinal\n\n', messageId: 'm1' } as AgentEvent)
     const edited = svc.changes(id, appended.cursor, appended.lastSeq)
     expect(edited.reset).toBe(false)
-    expect(edited.events).toEqual([{ seq: appended.events[0]!.seq, event: expect.objectContaining({ text: 'final' }) }])
+    expect(edited.events).toEqual([
+      { seq: appended.events[0]!.seq, event: expect.objectContaining({ text: 'draft\n\nfinal\n\n' }) },
+    ])
     expect(edited.cursor).toBeGreaterThan(appended.cursor)
     expect(edited.lastSeq).toBe(appended.lastSeq)
+  })
+
+  it('sends a reply a whole block at a time, and the rest once the agent moves on', async () => {
+    const { svc, id, record } = await start()
+    const reply = () => svc.events(id).find((event) => event.kind === 'text' && event.messageId === 'r1')
+    record({ kind: 'text', text: 'Half a sen', messageId: 'r1' } as AgentEvent)
+    expect(reply()).toBeUndefined()
+    record({ kind: 'text', text: 'Whole sentence.\n\nNext one is hal', messageId: 'r1' } as AgentEvent)
+    expect(reply()).toMatchObject({ text: 'Whole sentence.\n\n' })
+    record({ kind: 'tool-use', toolUseId: 'u1', name: 'Read', input: {} } as AgentEvent)
+    expect(reply()).toMatchObject({ text: 'Whole sentence.\n\nNext one is hal' })
   })
 
   it('resets for a cursor from the future or a client holding rows that no longer exist', async () => {

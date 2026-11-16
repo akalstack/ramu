@@ -3,6 +3,7 @@ import { permissionKey, PermissionApprovals, commandPatterns } from './permissio
 import { goalContinues } from '@ramu/shared/chat/goalHold'
 import { commandDeploy } from '@ramu/shared/deployActions'
 import { isStaleProgress } from '@ramu/shared/chat/agentTasks'
+import { settledTextLength } from '@ramu/shared/chat/settledText'
 import type { AppPreferences, AgentEvent, AgentSessionState, AgentTask } from '@ramu/shared/types'
 import type { MessageDispatcher } from './messageDispatcher'
 import type { GoalManager } from './goalManager'
@@ -40,7 +41,59 @@ export class SessionRecorder {
   /** Timers that move a long foreground command to the background, by session and tool use id. */
   private readonly autoBackground = new Map<string, Map<string, NodeJS.Timeout>>()
 
+  /**
+   * Replies still being written, by session and message: the whole text so far and how much of it went out. A reply goes
+   * out a whole Markdown block at a time, whatever pieces its provider streams, so every client shows complete
+   * paragraphs, tables and code blocks; the rest goes out once the next block ends or the reply does.
+   */
+  private readonly unsettled = new Map<
+    string,
+    Map<string, { event: Extract<AgentEvent, { kind: 'text' }>; replaces?: string; sent: number }>
+  >()
+
   record(id: string, recorded: AgentEvent, replacesMessageId?: string): void {
+    if (recorded.kind === 'text' && recorded.messageId) {
+      const held = this.unsettled.get(id) ?? new Map()
+      this.unsettled.set(id, held)
+      // Another reply from the same agent has begun, so the earlier one is finished.
+      for (const [messageId, entry] of held)
+        if (
+          messageId !== recorded.messageId &&
+          messageId !== replacesMessageId &&
+          (entry.event.agentId ?? '') === (recorded.agentId ?? '')
+        )
+          this.releaseText(id, messageId)
+      const previous = held.get(recorded.messageId) ?? (replacesMessageId ? held.get(replacesMessageId) : undefined)
+      if (replacesMessageId) held.delete(replacesMessageId)
+      const sent = previous?.sent ?? 0
+      const settled = Math.max(sent, settledTextLength(recorded.text))
+      held.set(recorded.messageId, {
+        event: recorded,
+        replaces: replacesMessageId ?? previous?.replaces,
+        sent: settled,
+      })
+      if (settled === sent) return
+      this.persist(id, { ...recorded, text: recorded.text.slice(0, settled) }, replacesMessageId ?? previous?.replaces)
+      return
+    }
+    // Anything else the agent does (a tool, a question, its result) means the reply before it is complete.
+    if (recorded.kind !== 'thinking') this.releaseText(id)
+    this.persist(id, recorded, replacesMessageId)
+  }
+
+  /** Sends the rest of a reply held back for its block to end: one message, or every reply of the session. */
+  private releaseText(id: string, messageId?: string): void {
+    const held = this.unsettled.get(id)
+    if (!held) return
+    for (const [key, entry] of [...held]) {
+      if (messageId !== undefined && key !== messageId) continue
+      held.delete(key)
+      if (entry.event.text.length > entry.sent) this.persist(id, entry.event, entry.replaces)
+    }
+    if (!held.size) this.unsettled.delete(id)
+  }
+
+  private persist(id: string, recorded: AgentEvent, replacesMessageId?: string): void {
     const questionRequestId = recorded.kind === 'question' ? recorded.requestId : undefined
     if (
       recorded.kind === 'question' &&
@@ -252,6 +305,8 @@ export class SessionRecorder {
   }
 
   setState(id: string, state: AgentSessionState): void {
+    // A turn that ended, stopped or waits on the person has nothing more to add to its replies.
+    if (state !== 'running' && state !== 'starting') this.releaseText(id)
     if (state === 'failed') {
       const goal = this.host.getGoal(id)
       if (goal?.status === 'active')

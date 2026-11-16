@@ -677,7 +677,7 @@ describe('AgentService', () => {
           yield partial(parent, {
             type: 'content_block_delta',
             index: 1,
-            delta: { type: 'text_delta', text: parent ? 'Helper partial' : 'Main partial' },
+            delta: { type: 'text_delta', text: parent ? 'Helper partial\n\nHelper una' : 'Main partial\n\nMain una' },
           })
         }
         await gate
@@ -685,7 +685,7 @@ describe('AgentService', () => {
           yield partial(parent, {
             type: 'content_block_delta',
             index: 1,
-            delta: { type: 'text_delta', text: ' complete' },
+            delta: { type: 'text_delta', text: 'nswered' },
           })
           yield partial(parent, { type: 'content_block_stop', index: 1 })
           // Complete frames carry a single block, even though it streamed at index 1.
@@ -695,7 +695,12 @@ describe('AgentService', () => {
             parent_tool_use_id: parent,
             message: {
               id: 'shared-native-id',
-              content: [{ type: 'text', text: parent ? 'Helper partial complete' : 'Main partial complete' }],
+              content: [
+                {
+                  type: 'text',
+                  text: parent ? 'Helper partial\n\nHelper unanswered' : 'Main partial\n\nMain unanswered',
+                },
+              ],
             },
           } as unknown as SDKMessage
           yield final
@@ -716,8 +721,9 @@ describe('AgentService', () => {
         .filter((event) => event.kind === 'text')
         .map((event) => [event.text, event.agentId]),
     ).toEqual([
-      ['Main partial', undefined],
-      ['Helper partial', 'helper'],
+      // A reply goes out a whole block at a time: the line still being written waits.
+      ['Main partial\n\n', undefined],
+      ['Helper partial\n\n', 'helper'],
     ])
     expect(
       svc
@@ -737,8 +743,8 @@ describe('AgentService', () => {
         .filter((event) => event.kind === 'text')
         .map((event) => [event.text, event.messageId, event.agentId]),
     ).toEqual([
-      ['Main partial complete', 'claude:main-final:0', undefined],
-      ['Helper partial complete', 'claude:helper-final:0', 'helper'],
+      ['Main partial\n\nMain unanswered', 'claude:main-final:0', undefined],
+      ['Helper partial\n\nHelper unanswered', 'claude:helper-final:0', 'helper'],
     ])
     expect(delivered.filter(({ event }) => event.kind === 'text').every(({ seq }) => positions.includes(seq))).toBe(
       true,
