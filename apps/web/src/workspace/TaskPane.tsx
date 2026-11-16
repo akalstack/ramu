@@ -379,8 +379,10 @@ export const TaskPane = memo(function TaskPane({ taskId, visible }: { taskId: st
                   horizontal
                   className="flex-initial min-w-0 w-max max-w-full h-[27px] [&:focus-within_>_[data-slot='scroll-area-scrollbar']]:opacity-0 [&_>_[data-slot='scroll-area-scrollbar'][data-scrolling]]:opacity-0 [&:hover_>_[data-slot='scroll-area-scrollbar']]:opacity-100 [&_>_[data-slot='scroll-area-scrollbar'][data-dragging]]:opacity-100 [&_>_[data-slot='scroll-area-scrollbar']]:h-[9px] [&_>_[data-slot='scroll-area-scrollbar']]:p-0 [&_>_[data-slot='scroll-area-scrollbar']]:pt-[6px] [&_>_[data-slot='scroll-area-scrollbar']]:bottom-px [&_[data-slot='scroll-area-thumb']]:[background:color-mix(in_srgb,_var(--text)_22%,_transparent)] [&_[data-slot='scroll-area-thumb']:hover]:[background:color-mix(in_srgb,_var(--text)_38%,_transparent)]"
                   viewportRef={tabScroll}
-                  viewportClassName="view-tabs"
-                  contentClassName="flex items-center gap-1 w-max! min-w-full!"
+                  // Scrolling sideways would otherwise let the strip scroll a pixel or two up and down too, so focusing
+                  // a tab with a taller label nudged the whole row; it only ever scrolls sideways.
+                  viewportClassName="view-tabs overflow-y-hidden! h-full"
+                  contentClassName="flex items-center gap-1 w-max! min-w-full! h-full"
                   viewportProps={{
                     role: 'tablist',
                     'aria-label': t('Workspace tabs'),
