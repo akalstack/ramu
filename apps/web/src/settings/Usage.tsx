@@ -7,11 +7,12 @@ import {
   type LoginUsage,
 } from '@ramu/shared/usageAcrossHosts'
 import { useComputers } from '../workspace/computers'
-import { usageTone, usagePercent, usageScopeHint } from '@ramu/shared/usage/presentation'
+import { usageTone, usagePercent, usageOnlyAtLimit } from '@ramu/shared/usage/presentation'
 export { usageTone } from '@ramu/shared/usage/presentation'
 import { t, useLanguage, formatLocale } from '../i18n'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/desktop-button'
+import { InlineLink } from '@/components/inline-action'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { cn } from 'cn'
@@ -25,7 +26,7 @@ import {
   type AccountLogin,
   type ProviderConfiguration,
 } from '@ramu/shared/providers/providers'
-import { bridge, invokeOn, invokerFor } from '../ipc'
+import { bridge, invokeOn, invokerFor, ramu } from '../ipc'
 import { ownHostId } from '../hosts'
 import { deviceStorage } from '../deviceStorage'
 import { useHost } from '../workspace/HostProvider'
@@ -198,18 +199,7 @@ export function peakUsage(all: UsageReading[], provider: AgentProvider): UsageRe
   return all.filter((reading) => reading.provider === provider).sort((a, b) => b.usedPercent - a.usedPercent)[0]
 }
 
-/** Cursor's headline number is the two allowances combined, not a third quota. */
-const isCursorOverall = (reading: UsageReading) =>
-  reading.provider === 'cursor' && reading.window === 'monthly' && !reading.scope
-
-/** What a window means, for the providers whose windows are not obvious from their name. */
-export function usageHint(reading: UsageReading): string | undefined {
-  const hint = usageScopeHint(reading)
-  return hint ? t(hint) : undefined
-}
-
 export function windowLabel(reading: UsageReading, short = false): string {
-  if (isCursorOverall(reading)) return t('Overall')
   const base =
     reading.window === 'five_hour'
       ? short
@@ -306,7 +296,7 @@ function WindowMeter({ reading }: { reading: UsageReading }) {
   const tone = usageTone(reading),
     reset = resetText(reading.resetsAt)
   return (
-    <div className="flex min-w-0 flex-col gap-1" title={usageHint(reading)}>
+    <div className="flex min-w-0 flex-col gap-1">
       <div className="flex items-baseline justify-between gap-2 text-caption">
         <span className="truncate text-muted-foreground">{windowLabel(reading)}</span>
         <span className={cn('flex-none tabular-nums', toneText[tone])}>{usageStatusText(reading)}</span>
@@ -377,6 +367,9 @@ type LoginRow = LoginUsage & {
   plan?: string
   newest: number
 }
+
+/** Where a provider shows plan usage itself, for the providers Ramu learns about only at a limit. */
+const OWN_USAGE_PAGE: Partial<Record<AgentProvider, string>> = { cursor: 'https://cursor.com/dashboard?tab=usage' }
 
 /**
  * Every login of one provider: the one this host uses first, then the ones with the most room. A login signed in on
@@ -480,6 +473,23 @@ function ProviderLogins({
                     <WindowMeter key={`${reading.window}:${reading.scope ?? ''}`} reading={reading} />
                   ))}
                 </div>
+              ) : usageOnlyAtLimit(provider) ? (
+                <span className="flex flex-wrap items-center gap-x-2 self-center text-caption text-muted-foreground">
+                  {t('{0} shares usage only with its own app. A limit shows here when one is reached.', {
+                    0: providerName(provider),
+                  })}
+                  {OWN_USAGE_PAGE[provider] && (
+                    <InlineLink
+                      href={OWN_USAGE_PAGE[provider]}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        void ramu.invoke('app.openExternal', OWN_USAGE_PAGE[provider]!).catch(() => {})
+                      }}
+                    >
+                      {t('Open {0} usage', { 0: providerName(provider) })}
+                    </InlineLink>
+                  )}
+                </span>
               ) : (
                 <span className="self-center text-caption text-muted-foreground">
                   {t('No usage yet. It appears after this login runs again.')}

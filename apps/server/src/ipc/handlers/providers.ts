@@ -40,7 +40,6 @@ export const registerProviderHandlers: RegisterHandlers = ({
   providers,
   usage,
   agents,
-  extraUsage,
   accountUsage,
   abilities,
   activity,
@@ -186,7 +185,7 @@ export const registerProviderHandlers: RegisterHandlers = ({
     'usage.refresh': {
       args: z.tuple([]),
       run: async () => {
-        await Promise.all([agents.readClaudeUsage(), extraUsage.refresh(), accountUsage.refresh()])
+        await Promise.all([agents.readClaudeUsage(), accountUsage.refresh()])
         return usage.list()
       },
     },

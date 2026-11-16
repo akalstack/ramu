@@ -13,7 +13,6 @@ import {
   usageStale,
   usageTone,
   usageWindow,
-  usageScopeHint,
   groupUsageByProvider,
 } from '@ramu/shared/usage/presentation'
 import { useStore } from '../runtime/store'
@@ -50,7 +49,6 @@ export function PlanUsageReading({
         : say('Not reported')
       : say('{0}% used', { 0: Math.round(percent) })
   const lastKnown = offline || usageStale(r, now)
-  const scopeHint = usageScopeHint(r, language)
   const id = language === 'id'
   const color = percent === null ? c.muted : tone === 'bad' ? c.bad : tone === 'warn' ? c.warn : c.primary
   // How long until it resets reads at a glance; the exact time stays for when it is far off.
@@ -100,11 +98,6 @@ export function PlanUsageReading({
         >
           <View style={{ height: 8, borderRadius: 4, width: `${Math.max(2, percent)}%`, backgroundColor: color }} />
         </View>
-      ) : null}
-      {scopeHint ? (
-        <T tone="muted" size={font.caption}>
-          {scopeHint}
-        </T>
       ) : null}
       <T tone="muted" size={font.caption}>
         {[

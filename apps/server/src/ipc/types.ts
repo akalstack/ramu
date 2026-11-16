@@ -7,7 +7,6 @@ import type { ProviderService } from '../providers/providers'
 import type { KeepAwakeService } from '../background/keepAwake'
 import type { AppUpdateService } from '../background/appUpdates'
 import type { UsageService } from '../providers/usage'
-import type { ExtraUsageReader } from '../providers/providerUsage'
 import type { AccountUsage } from '../providers/accountUsage'
 import type { ProviderEnvironmentStore } from '../providers/environmentStore'
 import type { ForgeAccountStore } from '../workspace/forgeAccounts'
@@ -131,7 +130,6 @@ export interface HandlerContext extends Services {
   updates: AppUpdateService
   hostUpdates: import('../background/hostUpdate').HostUpdater
   usage: UsageService
-  extraUsage: ExtraUsageReader
   accountUsage: AccountUsage
   environment: ProviderEnvironmentStore
   apiKeys: import('../providers/apiKeyStore').ProviderApiKeyStore

@@ -1,11 +1,6 @@
 import type { AgentProvider, UsageReading } from '@ramu/shared/types'
+import { usageOnlyAtLimit } from '@ramu/shared/usage/presentation'
 import { providerAccountId } from './providerBinaries'
-
-/**
- * Providers whose usage comes only from reading their quota service, so each read is the whole picture for its login.
- * A window or group the service stopped reporting (or that Ramu now names differently) is dropped, not kept forever.
- */
-const SNAPSHOT_PROVIDERS = new Set<AgentProvider>(['antigravity', 'cursor'])
 
 /** The latest plan usage per provider and window, kept across restarts. Readings only arrive while a provider runs. */
 export class UsageService {
@@ -17,7 +12,8 @@ export class UsageService {
     /** Whether a login still exists; readings of a removed login are not shown and are dropped at the next save. */
     private readonly known: (provider: AgentProvider, accountId: string) => boolean = () => true,
   ) {
-    this.readings = load()
+    // For providers known only at a limit, a notice is the one reading Ramu can stand behind.
+    this.readings = load().filter((reading) => reading.source === 'notice' || !usageOnlyAtLimit(reading.provider))
     // Lets screenshots and UI work show gauges without a live account: RAMU_FAKE_USAGE='[{"provider":"codex","window":"five_hour","usedPercent":40}]'.
     if (process.env.RAMU_FAKE_USAGE)
       try {
@@ -47,13 +43,7 @@ export class UsageService {
     const login = (r: UsageReading) => `${r.provider}:${r.accountId ?? 'default'}`
     // A login on a new plan starts over: windows only the old plan had (a Max-only Opus limit) would keep its name.
     const plans = new Map(next.filter((r) => r.plan).map((r) => [login(r), r.plan]))
-    const snapshots = new Set(next.filter((r) => SNAPSHOT_PROVIDERS.has(r.provider) && !r.source).map(login))
-    const current = this.readings.filter(
-      (r) =>
-        (!r.plan || !plans.has(login(r)) || plans.get(login(r)) === r.plan) &&
-        // A limit notice is not part of the service's reading, so a fresh read keeps it.
-        (r.source === 'notice' || !snapshots.has(login(r))),
-    )
+    const current = this.readings.filter((r) => !r.plan || !plans.has(login(r)) || plans.get(login(r)) === r.plan)
     const merged = new Map(
       current.filter((r) => this.known(r.provider, r.accountId ?? 'default')).map((r) => [key(r), r]),
     )

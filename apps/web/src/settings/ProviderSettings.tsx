@@ -52,7 +52,7 @@ export function ProviderSettings({
   const [updating, setUpdating] = useState<AgentProvider | null>(null)
   const [signingIn, setSigningIn] = useState<AgentProvider | null>(null)
   // Antigravity offers several sign-in methods; the account being signed in and the key names the host keeps.
-  const [antigravity, setAntigravity] = useState<{ accountId: string; keys: string[] } | null>(null)
+  const [antigravity, setAntigravity] = useState<{ accountId: string; keys: string[]; method?: string } | null>(null)
   const [apiKey, setApiKey] = useState<{ provider: AgentProvider; accountId: string; name: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -283,7 +283,8 @@ export function ProviderSettings({
       }
       if (provider === 'antigravity') {
         const environment = await Promise.resolve(invoke('providers.environment')).catch(() => null)
-        if (allowed()) setAntigravity({ accountId, keys: environment?.keys.antigravity ?? [] })
+        const method = statuses.find((entry) => entry.provider === 'antigravity')?.signIn?.[accountId]?.detail
+        if (allowed()) setAntigravity({ accountId, keys: environment?.keys.antigravity ?? [], method })
         return
       }
       // Cursor signs in inside Ramu: the browser opens, and the call returns once sign-in completes.
@@ -463,6 +464,7 @@ export function ProviderSettings({
       {antigravity && (
         <AntigravitySignIn
           hasKey={(method) => antigravity.keys.includes(antigravityKeyName(method))}
+          current={antigravity.method}
           onClose={() => setAntigravity(null)}
           onSubmit={async (input) => {
             setSigningIn('antigravity')

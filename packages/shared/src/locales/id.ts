@@ -3295,15 +3295,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Hide others': 'Sembunyikan lainnya',
   'Show all': 'Tampilkan semua',
   'Open a folder': 'Buka folder',
-  Overall: 'Keseluruhan',
   Quota: 'Kuota',
-  'Combined usage across both allowances, not a third quota.':
-    'Pemakaian gabungan dari kedua jatah, bukan kuota ketiga.',
-  'Grok and Composer use this first. Auto can use either pool.':
-    'Grok dan Composer memakai ini lebih dulu. Auto bisa memakai salah satu jatah.',
-  'Claude, GPT, and Gemini use this pool. Grok and Composer fall back here.':
-    'Claude, GPT, dan Gemini memakai jatah ini. Grok dan Composer pindah ke sini saat jatahnya habis.',
-  'Claude and GPT share one allowance.': 'Claude dan GPT berbagi satu jatah.',
+  '{0} shares usage only with its own app. A limit shows here when one is reached.':
+    '{0} hanya membagikan pemakaian ke aplikasinya sendiri. Batas muncul di sini saat tercapai.',
+  'Open {0} usage': 'Buka pemakaian {0}',
+  'Google may limit personal plans used outside its own apps. A Gemini API key avoids that.':
+    'Google bisa membatasi paket pribadi yang dipakai di luar aplikasinya sendiri. Gemini API key menghindari itu.',
   'Show {0} in Explorer': 'Tampilkan {0} di Explorer',
   '{0} completed this week': '{0} selesai minggu ini',
   'Threads finished in the last 7 days. Older ones stay in the sidebar, and Search finds them all.':

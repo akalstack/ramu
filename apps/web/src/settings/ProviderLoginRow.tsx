@@ -164,6 +164,12 @@ export function ProviderLoginRow({
           >
             {statusLine}
           </span>
+          {state && !state.signedIn && onApiKey && (
+            // A key is the sign-in every provider's terms allow in other apps, so it is offered beside the plan login.
+            <InlineAction className="flex-none" disabled={signingIn} onClick={onApiKey}>
+              {t('Use an API key')}
+            </InlineAction>
+          )}
           {mcpSharing?.readiness && (
             <span
               className={`min-w-0 truncate ${readinessTone(mcpSharing.readiness.status) === 'warn' ? 'text-warn' : readinessTone(mcpSharing.readiness.status) === 'ok' ? 'text-brand' : 'text-muted-foreground'}`}

@@ -16,6 +16,7 @@ import { AgentService, type QueryFn } from '../src/agent'
 import type { AgentRunnerFactory, ProviderRunners } from '../src/agent/agentRunner'
 import { FallbackRouter, type FallbackRouterHost } from '../src/agent/fallbackRouter'
 import { UsageService } from '../src/providers/usage'
+import { usageOnlyAtLimit } from '@ramu/shared/usage/presentation'
 import { openDb, type Db } from '../src/db'
 
 const catalogs: ProviderCatalog[] = AGENT_PROVIDERS.map((provider) => ({
@@ -47,6 +48,8 @@ const reading = (provider: AgentProvider, accountId = 'default', usedPercent = 1
   window: 'five_hour',
   usedPercent,
   status: usedPercent >= 100 ? 'limited' : 'ok',
+  // These providers' runtimes only say when a limit is reached, so a full login is known from its notice.
+  ...(usageOnlyAtLimit(provider) && usedPercent >= 100 ? { source: 'notice' as const } : {}),
   updatedAt: Date.now(),
   resetsAt: Date.now() + 3600000,
 })

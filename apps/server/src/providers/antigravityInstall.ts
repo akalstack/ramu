@@ -1,6 +1,7 @@
 // Downloads Google's official Antigravity ACP runtime so nobody has to unpack it by hand.
 import { spawn } from 'node:child_process'
-import { createWriteStream, existsSync, lstatSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { createReadStream, createWriteStream, existsSync, lstatSync } from 'node:fs'
 import { chmod, mkdir, mkdtemp, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -15,9 +16,11 @@ const MAX_ARCHIVE_BYTES = 1024 ** 3
 export interface AntigravityAsset {
   version: string
   archive: string
+  /** The archive's SHA-256 as the registry lists it; a download that does not match is never unpacked. */
+  sha256?: string
 }
 
-/** The registry's archive for this platform. Only Google's download origin and plain version numbers are trusted. */
+/** The registry's archive for this platform. Only Google's download origin, plain version numbers and a listed checksum are trusted. */
 export function resolveAntigravityAsset(
   registry: unknown,
   platform: NodeJS.Platform = process.platform,
@@ -25,18 +28,26 @@ export function resolveAntigravityAsset(
 ): AntigravityAsset | null {
   const entry = registry as {
     version?: unknown
-    distribution?: { binary?: Record<string, { archive?: unknown }> }
+    distribution?: { binary?: Record<string, { archive?: unknown; sha256?: unknown }> }
   } | null
   const target = `${platform === 'darwin' ? 'darwin' : platform === 'win32' ? 'windows' : 'linux'}-${arch === 'x64' ? 'x86_64' : arch === 'arm64' ? 'aarch64' : arch}`
   const archive = entry?.distribution?.binary?.[target]?.archive,
+    sha256 = entry?.distribution?.binary?.[target]?.sha256,
     version = entry?.version
   if (typeof archive !== 'string' || typeof version !== 'string' || !/^\d+\.\d+\.\d+$/.test(version)) return null
+  if (typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(sha256)) return null
   try {
     if (new URL(archive).origin !== ARCHIVE_ORIGIN) return null
   } catch {
     return null
   }
-  return { version, archive }
+  return { version, archive, sha256: sha256.toLowerCase() }
+}
+
+async function sha256Of(file: string): Promise<string> {
+  const hash = createHash('sha256')
+  await pipeline(createReadStream(file), hash)
+  return hash.digest('hex')
 }
 
 async function downloadFile(url: string, file: string, signal?: AbortSignal): Promise<void> {
@@ -172,6 +183,8 @@ export async function installAntigravity(
     await mkdir(unpacked)
     await (options.download ?? downloadFile)(asset.archive, archive, signal)
     signal?.throwIfAborted()
+    if (asset.sha256 && (await sha256Of(archive)) !== asset.sha256)
+      throw new Error('The runtime download does not match the checksum Google published')
     await extract(archive, unpacked, signal)
     signal?.throwIfAborted()
     for (const name of [names.executable, names.harness]) {

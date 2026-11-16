@@ -24,18 +24,20 @@ const registry = {
   version: '1.4.0',
   distribution: {
     binary: {
-      'darwin-aarch64': { archive: 'https://dl.google.com/agy/mac-arm64.zip' },
-      'linux-x86_64': { archive: 'https://dl.google.com/agy/linux-x64.zip' },
-      'windows-x86_64': { archive: 'https://dl.google.com/agy/win-x64.zip' },
-      'linux-aarch64': { archive: 'https://evil.example/agy.zip' },
+      'darwin-aarch64': { archive: 'https://dl.google.com/agy/mac-arm64.zip', sha256: 'A'.repeat(64) },
+      'linux-x86_64': { archive: 'https://dl.google.com/agy/linux-x64.zip', sha256: 'b'.repeat(64) },
+      'windows-x86_64': { archive: 'https://dl.google.com/agy/win-x64.zip', sha256: 'c'.repeat(64) },
+      'linux-aarch64': { archive: 'https://evil.example/agy.zip', sha256: 'd'.repeat(64) },
+      'darwin-x86_64': { archive: 'https://dl.google.com/agy/mac-x64.zip' },
     },
   },
 }
 
-it('picks the archive for this platform and trusts only Google downloads and plain versions', () => {
+it('picks the archive for this platform and trusts only Google downloads, plain versions and listed checksums', () => {
   expect(resolveAntigravityAsset(registry, 'darwin', 'arm64')).toEqual({
     version: '1.4.0',
     archive: 'https://dl.google.com/agy/mac-arm64.zip',
+    sha256: 'a'.repeat(64),
   })
   expect(resolveAntigravityAsset(registry, 'linux', 'x64')?.archive).toContain('linux-x64')
   expect(resolveAntigravityAsset(registry, 'win32', 'x64')?.archive).toContain('win-x64')
@@ -116,6 +118,17 @@ it.skipIf(!hasZip)('never activates an archive that is incomplete or fails its h
   expect(managedAntigravity()).toBeNull()
   expect(existsSync(join(providerRuntimeHome('antigravity'), 'versions', '1.4.0'))).toBe(false)
   expect(readdirSync(providerRuntimeHome('antigravity')).filter((entry) => entry.startsWith('.stage-'))).toEqual([])
+})
+it.skipIf(!hasZip)('never unpacks a download whose checksum differs from the registry', async () => {
+  const names = antigravityFileNames()
+  await expect(
+    installAntigravity({
+      asset: { ...asset, sha256: '0'.repeat(64) },
+      download: fakeArchive([names.executable, names.harness]),
+      probe: async () => {},
+    }),
+  ).rejects.toThrow('checksum')
+  expect(managedAntigravity()).toBeNull()
 })
 it.skipIf(process.env.RAMU_LIVE_INSTALL !== '1')(
   "installs Google's real runtime and it answers the ACP handshake",

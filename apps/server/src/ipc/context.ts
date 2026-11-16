@@ -3,7 +3,7 @@ import { forgeChoiceOf } from '@ramu/shared/identities'
 import { fileURLToPath } from 'node:url'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
 import type { AgentProvider, AppPreferences, FileContext, UsageReading, ModelPreferences } from '@ramu/shared/types'
-import { providerAccountRows, providerEnabled } from '@ramu/shared/providers/providers'
+import { providerAccountRows } from '@ramu/shared/providers/providers'
 import { withContext as withFileContext } from '../context'
 import { HostFolders } from '../remote/hostFolders'
 import { ActivityService } from '../background/activity'
@@ -15,7 +15,7 @@ import { HostUpdater, isSupervised, runCommand, sourceCheckout } from '../backgr
 import { ModelNews } from '../providers/modelNews'
 import { ModelSignalSource } from '../providers/modelSignals'
 import { runtimeVersion } from '../build'
-import { configureProviderAccounts, providerEnvironment } from '../providers/providerBinaries'
+import { configureProviderAccounts } from '../providers/providerBinaries'
 import { UsageService } from '../providers/usage'
 import { ProviderEnvironmentStore } from '../providers/environmentStore'
 import { ProviderApiKeyStore } from '../providers/apiKeyStore'
@@ -24,7 +24,6 @@ import { BitbucketCredentials, configureBitbucketCredentials } from '../workspac
 import { AzureCredentials, configureAzureCredentials } from '../workspace/forge/azureCredentials'
 import { GitlabCredentials, configureGitlabCredentials } from '../workspace/forge/gitlabCredentials'
 import { configureForgeAccounts } from '../workspace/forge'
-import { ExtraUsageReader, readAntigravityUsage, readCursorUsage } from '../providers/providerUsage'
 import { ACCOUNT_USAGE_INTERVAL_MS, AccountUsage } from '../providers/accountUsage'
 import { onAcpPlanChange } from '../providers/acp'
 import { codexUsage } from '../providers/codex'
@@ -146,25 +145,15 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     (readings) => host.send('usage:changed', readings),
     (provider, accountId) => providerAccountRows(loadPreferences().providerBinaries, provider).includes(accountId),
   )
-  const extraUsage = new ExtraUsageReader(
-    (readings) => usage.update(readings),
-    () => {
-      const config = loadPreferences().providerBinaries
-      return { cursor: providerEnabled(config, 'cursor') }
-    },
-  )
-  // Read every enabled login on demand and on a timer; Codex and Antigravity also need reads with only one login.
+  // Read every enabled login on demand and on a timer, only through each provider's own runtime; Codex also needs reads with only one login.
   const accountUsage = new AccountUsage(
     (readings) => usage.update(readings),
     () => loadPreferences().providerBinaries,
     {
       'claude-code': (account) => (agents ? agents.claudeAccountUsage(account) : Promise.resolve([])),
       codex: (account) => codexUsage(account),
-      cursor: (account) => readCursorUsage(providerEnvironment('cursor', loadPreferences().providerBinaries, account)),
-      antigravity: (account) =>
-        readAntigravityUsage(providerEnvironment('antigravity', loadPreferences().providerBinaries, account)),
     },
-    ['codex', 'antigravity'],
+    ['codex'],
   )
   const loadPreferences = (): AppPreferences => {
     const saved = storedPreferences()
@@ -230,8 +219,7 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     })
   }
   // Plan usage only arrives while a provider runs, so poll it too; each read is throttled per login.
-  const refreshUsage = () =>
-    void Promise.allSettled([agents?.readClaudeUsage(), extraUsage.refresh(), accountUsage.refresh()])
+  const refreshUsage = () => void Promise.allSettled([agents?.readClaudeUsage(), accountUsage.refresh()])
   setTimeout(refreshUsage, 15_000).unref()
   setInterval(refreshUsage, ACCOUNT_USAGE_INTERVAL_MS).unref()
   setTimeout(() => void cleanupArchived(), 30_000).unref()
@@ -286,7 +274,6 @@ export function createHandlerContext(host: RuntimeHost, services: Services): Han
     updates,
     hostUpdates,
     usage,
-    extraUsage,
     accountUsage,
     environment,
     apiKeys,

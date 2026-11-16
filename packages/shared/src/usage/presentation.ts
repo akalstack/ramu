@@ -1,7 +1,13 @@
 import type { AgentProvider, UsageReading } from '../types'
-import { ANTIGRAVITY_SCOPES, usageAppliesTo } from '@ramu/shared/providers/usageScope'
+import { usageAppliesTo } from '@ramu/shared/providers/usageScope'
 
 export const USAGE_STALE_MS = 10 * 60_000
+/**
+ * Providers that report plan usage only to their own apps. Ramu never reads their quota services with a borrowed login,
+ * so it learns a limit from what the runtime says when one is reached.
+ */
+export const usageOnlyAtLimit = (provider: AgentProvider): boolean =>
+  provider === 'opencode' || provider === 'cursor' || provider === 'antigravity'
 export const usagePercent = (reading: UsageReading): number | null =>
   reading.source === 'notice' || !Number.isFinite(reading.usedPercent)
     ? null
@@ -13,8 +19,6 @@ export const usageStale = (reading: UsageReading, now: number): boolean =>
   now - reading.updatedAt > USAGE_STALE_MS ||
   Boolean(reading.resetsAt && reading.resetsAt <= now)
 export function usageWindow(reading: UsageReading, short = false, language: 'en' | 'id' = 'en'): string {
-  if (reading.provider === 'cursor' && reading.window === 'monthly' && !reading.scope)
-    return language === 'id' ? 'Keseluruhan' : 'Overall'
   const labels = {
     five_hour: language === 'id' ? '5 jam' : short ? '5h' : '5-hour',
     weekly: language === 'id' ? (short ? 'mgg' : 'Mingguan') : short ? 'wk' : 'Weekly',
@@ -24,32 +28,6 @@ export function usageWindow(reading: UsageReading, short = false, language: 'en'
   return reading.scope ? `${reading.scope} · ${labels[reading.window]}` : labels[reading.window]
 }
 
-/** Explain provider-reported pools without inventing scopes for other readings. */
-export function usageScopeHint(reading: UsageReading, language: 'en' | 'id' = 'en'): string | undefined {
-  if (reading.provider === 'cursor') {
-    if (reading.window === 'monthly' && !reading.scope)
-      return language === 'id'
-        ? 'Pemakaian gabungan dari kedua jatah, bukan kuota ketiga.'
-        : 'Combined usage across both allowances, not a third quota.'
-    if (reading.scope === 'Cursor models')
-      return language === 'id'
-        ? 'Grok dan Composer memakai ini lebih dulu. Auto bisa memakai salah satu jatah.'
-        : 'Grok and Composer use this first. Auto can use either pool.'
-    if (reading.scope === 'Other models')
-      return language === 'id'
-        ? 'Claude, GPT, dan Gemini memakai jatah ini. Grok dan Composer beralih ke sini bila habis.'
-        : 'Claude, GPT, and Gemini use this pool. Grok and Composer fall back here.'
-  }
-  if (reading.provider === 'antigravity') {
-    if (reading.scope === ANTIGRAVITY_SCOPES.partner || reading.scope === 'Claude' || reading.scope === 'GPT')
-      return language === 'id' ? 'Claude dan GPT berbagi satu jatah.' : 'Claude and GPT share one allowance.'
-    if (reading.scope === ANTIGRAVITY_SCOPES.argon)
-      return language === 'id'
-        ? 'Jatah mingguan sendiri, terpisah dari model Gemini lain.'
-        : 'Its own weekly allowance, separate from the other Gemini models.'
-  }
-  return undefined
-}
 /** Unknown account identity is safe only when the host reported one unambiguous account. */
 export function relevantUsage(
   readings: UsageReading[],

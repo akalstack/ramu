@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import {
+  ANTIGRAVITY_SIGN_IN_METHODS,
   antigravitySignInProblem,
   type AntigravitySignIn as SignIn,
   type AntigravitySignInMethod,
@@ -18,8 +19,13 @@ import { RowButton } from '@/components/row-button'
 import { t } from '../i18n'
 import { errorText } from '../lib/errors'
 
-const METHODS: { id: AntigravitySignInMethod; title: string; help: string }[] = [
-  { id: 'oauth-personal', title: 'Google account', help: 'Sign in with Google in your browser.' },
+const METHODS: { id: AntigravitySignInMethod; title: string; help: string; note?: string }[] = [
+  {
+    id: 'oauth-personal',
+    title: 'Google account',
+    help: 'Sign in with Google in your browser.',
+    note: 'Google may limit personal plans used outside its own apps. A Gemini API key avoids that.',
+  },
   {
     id: 'oauth-business',
     title: 'Gemini Enterprise',
@@ -38,16 +44,21 @@ const METHODS: { id: AntigravitySignInMethod; title: string; help: string }[] = 
  * provider variables in its credential store, and a Google Cloud project goes to the runtime's own settings.
  */
 export function AntigravitySignIn({
+  current,
   hasKey,
   onSubmit,
   onClose,
 }: {
+  /** The method this account signed in with last, chosen again so a sign-in after expiry is one click. */
+  current?: string
   /** Which key variables the host already has for Antigravity, so a saved key need not be typed again. */
   hasKey: (method: AntigravitySignInMethod) => boolean
   onSubmit: (input: SignIn) => Promise<void>
   onClose: () => void
 }) {
-  const [method, setMethod] = useState<AntigravitySignInMethod>('oauth-personal')
+  const [method, setMethod] = useState<AntigravitySignInMethod>(
+    ANTIGRAVITY_SIGN_IN_METHODS.find((entry) => entry === current) ?? 'oauth-personal',
+  )
   const [apiKey, setApiKey] = useState('')
   const [gcpProject, setProject] = useState('')
   const [gcpLocation, setLocation] = useState('')
@@ -86,6 +97,7 @@ export function AntigravitySignIn({
             >
               <span className="text-body font-medium">{t(entry.title)}</span>
               <span className="text-caption text-muted-foreground">{t(entry.help)}</span>
+              {entry.note && method === entry.id && <span className="text-caption text-warn">{t(entry.note)}</span>}
             </RowButton>
           ))}
         </div>
