@@ -1863,8 +1863,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (!keys?.['agent:event']) void refresh(id, true).catch(report)
         for (const sessionId of shown) {
           const chat = ref.current.chats.find((c) => c.computerId === id && c.sessionId === sessionId)
-          if (chat?.taskId)
-            void catchUp([scoped(id, sessionId)], reconcileThread(id, chat.taskId, sessionId)).catch(report)
+          // Opening a thread reads quietly; only a catch-up after the connection dropped says Syncing.
+          if (chat?.taskId) void reconcileThread(id, chat.taskId, sessionId).catch(report)
         }
       }
       return () => {

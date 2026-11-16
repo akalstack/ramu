@@ -89,9 +89,11 @@ export function ChatStatus({ label, compacting }: { label: string; compacting?: 
 export function ChatSyncStatus({ label }: { label: string }) {
   return (
     <div className={`${WORKING_CLASS} text-muted-foreground`} role="status" aria-live="polite" data-chat-sync>
-      <ChatFade identity={label} animate className="inline-flex items-center gap-2">
-        <Spinner role="presentation" aria-hidden aria-label={undefined} className="size-3.5" />
-        {label}
+      <ChatFade identity={label} animate>
+        <span className="flex items-center gap-2">
+          <Spinner role="presentation" aria-hidden aria-label={undefined} className="size-3.5 flex-none" />
+          {label}
+        </span>
       </ChatFade>
     </div>
   )
