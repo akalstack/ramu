@@ -69,14 +69,13 @@ describe('the account at the foot of the rail', () => {
     expect(html).not.toMatch(/Sign in|Ramu account/)
   })
 
-  it('shows the signed-in picture and opens a menu with who it is, Settings and the account', () => {
+  it('shows the signed-in picture above Settings, its menu naming who it is and opening the account', () => {
     state.account = status(true)
     const html = renderToStaticMarkup(createElement(AccountMenuButton, { onOpen: () => {} }))
-    expect(html).toContain('aria-label="Account and settings"')
     expect(html).toContain(`data-avatar="${user.image}"`)
     expect(html).toContain('Ada Lovelace')
     expect(html).toContain('ada@example.com')
-    expect(html).toMatch(/Settings.*mod\+,.*Ramu account/)
+    expect(html).toMatch(/aria-label="Ramu account"[\s\S]*aria-label="Settings"/)
   })
 })
 
