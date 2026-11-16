@@ -806,13 +806,11 @@ function ChatView({ id }: { id: string }) {
   const project =
     chat.projectId === STANDALONE ? tr('Standalone') : store.projects.find((p) => p.id === chat.projectId)?.name
   const running = chat.status === 'running'
-  const lastRow = rows.at(-1)
+  // As on the desktop, once the running turn has a tool row its headline says what the agent is doing, so the status
+  // line under it stays quiet instead of flashing Working between one step and the next.
+  const turnRows = rows.slice(rows.findLastIndex((row) => row.kind === 'user') + 1)
   const lastShowsWork =
-    running &&
-    (lastRow?.kind === 'thinking' ||
-      (lastRow?.kind === 'tool' && lastRow.status === 'in_progress') ||
-      (lastRow?.kind === 'tools' &&
-        (lastRow.entries.at(-1)?.kind === 'thinking' || lastRow.tools.some((tool) => tool.status === 'in_progress'))))
+    running && (rows.at(-1)?.kind === 'thinking' || turnRows.some((row) => row.kind === 'tool' || row.kind === 'tools'))
   // Stopped by you or failed since the last message: the empty send button becomes Continue.
   const lastUser = chat.items.findLastIndex((item) => item.kind === 'user')
   const stopped =
@@ -1642,7 +1640,15 @@ function ChatView({ id }: { id: string }) {
                   renderItem={renderRow}
                   // Each kind keeps its own measured size, so unmeasured rows above and below are estimated closely.
                   // A message on its way is measured as the sent message it becomes.
-                  getItemType={(item) => (item.kind === 'pending' || item.kind === 'steering' ? 'user' : item.kind)}
+                  // A tool or thought that becomes a group keeps its key; one type for all three keeps it in its place instead of
+                  // moving it to another recycled container, which flashed the row as the group formed.
+                  getItemType={(item) =>
+                    item.kind === 'pending' || item.kind === 'steering'
+                      ? 'user'
+                      : item.kind === 'tool' || item.kind === 'tools' || item.kind === 'thinking'
+                        ? 'work'
+                        : item.kind
+                  }
                   estimatedItemSize={260}
                   drawDistance={400}
                   // Lays out the newest rows first instead of the whole page from the top.
