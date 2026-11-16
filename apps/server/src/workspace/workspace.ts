@@ -959,6 +959,11 @@ export class Workspace {
     return rows.map((row) => ({ ...toBinding(row), taskId: ctx }))
   }
 
+  /** Folders Ramu manages for every thread: worktrees and project-free chat folders. */
+  managedFolders(): string[] {
+    return [this.worktreesRoot, join(this.worktreesRoot, '..', 'chats')]
+  }
+
   /** Explorer must never allocate a project-free folder just by opening a read surface. */
   explorerBindings(ctx: string): RepositoryBinding[] {
     if (this.projectIdOf(ctx) === NO_PROJECT) {

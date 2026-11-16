@@ -1,4 +1,5 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { HOST_FILES_REPO, hostFilesBinding } from '@ramu/shared/workspace/fileLinks'
 import { ActivityIndicator, Alert, Image, Linking, ScrollView, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { SvgXml } from 'react-native-svg'
@@ -138,7 +139,11 @@ export function FileViewer({
     bindings: [],
     loading: online,
   })
-  const binding = scope.owner === identity ? scope.bindings.find((b) => b.repoId === repoId) : undefined
+  const hostFiles = useMemo(
+    () => (repoId === HOST_FILES_REPO && taskId ? hostFilesBinding(taskId) : undefined),
+    [repoId, taskId],
+  )
+  const binding = hostFiles ?? (scope.owner === identity ? scope.bindings.find((b) => b.repoId === repoId) : undefined)
   const repoName = binding?.repoName ?? ''
   const gitAvailable = !!binding && !binding.folderOnly && !binding.notGit
   const openLink = useOpenLink(computerId, taskId, (targetRepo, targetPath, targetLine) =>
@@ -166,7 +171,7 @@ export function FileViewer({
       const target = markdownLinkTarget(path, href)
       if (!target) return
       if (target.kind === 'local') void openLink(target.href)
-      else if (binding) void openLink(`${binding.cwd}/${target.path}`)
+      else if (binding) void openLink(`${binding.cwd.replace(/\/$/, '')}/${target.path}`)
     },
     openUrl: (url) => void Linking.openURL(url).catch(() => {}),
     image: async (href) => {

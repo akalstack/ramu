@@ -1,8 +1,9 @@
 import { rm } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { editorConfigFor } from '../../workspace/editorconfig'
-import { resolveFileLink } from '../../workspace/fileLinks'
+import { resolveFileLink, withheldPath } from '../../workspace/fileLinks'
+import { HOST_FILES_REPO } from '@ramu/shared/workspace/fileLinks'
 import * as files from '../../workspace/files'
 import * as git from '../../workspace/git'
 import {
@@ -52,6 +53,18 @@ const inCheckout = <T>(ctx: HandlerContext, taskId: string, repoId: string, fn: 
 /** Reading, writing and managing files inside a task's checkouts. */
 export const registerFileHandlers: RegisterHandlers = (ctx) => {
   const { host, workspace, cwdOf, lock } = ctx
+  /**
+   * The editor's reads and saves also open a file a thread linked outside its repositories, as the host's own user can.
+   * Listing, creating, moving and deleting stay inside the thread's folders.
+   */
+  const editorCwdOf = (taskId: string, repoId: string, path: string) => {
+    if (repoId !== HOST_FILES_REPO) return cwdOf(taskId, repoId)
+    workspace.projectIdOf(taskId)
+    if (sep !== '/' || withheldPath(resolve('/', path), withheld()))
+      throw new Error('This file is outside the folders a thread can open.')
+    return '/'
+  }
+  const withheld = () => [...workspace.managedFolders(), host.userData]
   const inbox = new TransferInbox()
   /** The chosen items of a copy, as absolute paths. Project items stay inside their checkout. */
   const sourceRoots = (source: z.infer<typeof transferSource>): Promise<string[]> => {
@@ -149,7 +162,7 @@ export const registerFileHandlers: RegisterHandlers = (ctx) => {
     'files.reveal': {
       args: z.tuple([id, id, relPath]),
       run: async (t: string, r: string, path: string) => {
-        await host.native('reveal', await files.resolveInRoot(cwdOf(t, r), path))
+        await host.native('reveal', await files.resolveInRoot(editorCwdOf(t, r, path), path))
       },
     },
     'files.list': {
@@ -158,36 +171,36 @@ export const registerFileHandlers: RegisterHandlers = (ctx) => {
     },
     'files.read': {
       args: z.tuple([id, id, relPath]),
-      run: (taskId: string, repoId: string, path: string) => files.readText(cwdOf(taskId, repoId), path),
+      run: (taskId: string, repoId: string, path: string) => files.readText(editorCwdOf(taskId, repoId, path), path),
     },
     'files.editorconfig': {
       args: z.tuple([id, id, relPath]),
-      run: (taskId: string, repoId: string, path: string) => editorConfigFor(cwdOf(taskId, repoId), path),
+      run: (taskId: string, repoId: string, path: string) => editorConfigFor(editorCwdOf(taskId, repoId, path), path),
     },
     'files.image': {
       args: z.tuple([id, id, relPath]),
-      run: (taskId: string, repoId: string, path: string) => files.readImage(cwdOf(taskId, repoId), path),
+      run: (taskId: string, repoId: string, path: string) => files.readImage(editorCwdOf(taskId, repoId, path), path),
     },
     'files.media': {
       args: z.tuple([id, id, relPath]),
-      run: (taskId: string, repoId: string, path: string) => files.readMedia(cwdOf(taskId, repoId), path),
+      run: (taskId: string, repoId: string, path: string) => files.readMedia(editorCwdOf(taskId, repoId, path), path),
     },
     'files.modelViewer': {
       args: z.tuple([id, id, relPath, modelViewerLabels]),
       run: async (taskId: string, repoId: string, path: string, labels: ModelViewerLabels) =>
-        modelViewerHtml(await files.readModel(cwdOf(taskId, repoId), path), labels),
+        modelViewerHtml(await files.readModel(editorCwdOf(taskId, repoId, path), path), labels),
     },
     'files.write': {
       args: z.tuple([id, id, relPath, z.string().max(files.MAX_EDITABLE_BYTES), z.string().max(128).nullable()]),
       run: (taskId: string, repoId: string, path: string, content: string, baseHash: string | null) => {
-        const cwd = cwdOf(taskId, repoId)
+        const cwd = editorCwdOf(taskId, repoId, path)
         return lock.run(`file:${cwd}/${path}`, () => files.writeText(cwd, path, content, baseHash))
       },
     },
     'files.resolveLink': {
       args: z.tuple([id, z.string().min(1).max(8192), z.object({ folders: z.boolean().optional() }).optional()]),
       run: (taskId: string, href: string, options?: { folders?: boolean }) =>
-        resolveFileLink(workspace, taskId, href, options),
+        resolveFileLink(workspace, taskId, href, options, [host.userData]),
     },
     'files.all': {
       args: z.tuple([id]),

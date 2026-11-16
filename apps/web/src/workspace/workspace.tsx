@@ -1,4 +1,5 @@
 import { warmModelSets } from '../models/modelSetsCache'
+import { HOST_FILES_REPO, hostFilesBinding } from '@ramu/shared/workspace/fileLinks'
 import { latestOnly } from '@ramu/shared/latestOnly'
 import { mapBounded } from '@ramu/shared/mapBounded'
 import { newerTaskSnapshot } from '@ramu/shared/chat/threadStatus'
@@ -1230,7 +1231,10 @@ const HostWorkspace = memo(function HostWorkspace({ hostId, active }: { hostId: 
           ),
         ),
       setDirty,
-      binding: (taskId, repoId) => sharedBindings[taskId]?.find((b) => b.repoId === repoId),
+      binding: (taskId, repoId) =>
+        repoId === HOST_FILES_REPO
+          ? hostFilesBinding(taskId)
+          : sharedBindings[taskId]?.find((b) => b.repoId === repoId),
       task: (taskId) => tasks.find((t) => t.id === taskId),
       projectOf(taskId) {
         if (isWorktreeCtx(taskId))

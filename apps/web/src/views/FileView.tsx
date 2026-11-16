@@ -67,7 +67,7 @@ function TextFileView({
   // A link in a Markdown file opens the file at its line or reveals a folder, from this document's repository.
   const openMarkdownLink = useCallback(
     (target: MarkdownLinkTarget) =>
-      openFileLink(target.kind === 'repository' ? `${binding.cwd}/${target.path}` : target.href),
+      openFileLink(target.kind === 'repository' ? `${binding.cwd.replace(/\/$/, '')}/${target.path}` : target.href),
     [openFileLink, binding.cwd],
   )
   const changingBuffer = useRef(false)

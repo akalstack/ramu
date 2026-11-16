@@ -1,3 +1,26 @@
+import type { RepositoryBinding } from '../types'
+
+/**
+ * A file a thread links to outside its repositories (the project folder around them, or anywhere the host can read).
+ * Its path is relative to the filesystem root, and only the editor's own reads and saves accept it.
+ */
+export const HOST_FILES_REPO = 'host-files'
+
+export function hostFilesBinding(taskId: string): RepositoryBinding {
+  return {
+    taskId,
+    repoId: HOST_FILES_REPO,
+    repoName: '',
+    folderOnly: true,
+    mode: 'current',
+    cwd: '/',
+    taskBranch: null,
+    baseRef: null,
+    setupState: 'ready',
+    setupError: null,
+  }
+}
+
 /** Markdown file references can include editor line and column suffixes. */
 export function localFileLink(href: string): { path: string; line?: number; column?: number } | null {
   if (!href || href.startsWith('#') || href.startsWith('//')) return null

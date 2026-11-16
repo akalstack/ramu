@@ -1,6 +1,7 @@
+import { realpathSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
-import { isAbsolute, relative, resolve } from 'node:path'
-import { localFileLink } from '@ramu/shared/workspace/fileLinks'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { HOST_FILES_REPO, localFileLink } from '@ramu/shared/workspace/fileLinks'
 import { listFolderFiles, resolveInRoot } from './files'
 import { listFiles } from './git'
 import type { Workspace } from './workspace'
@@ -10,6 +11,7 @@ export async function resolveFileLink(
   taskId: string,
   href: string,
   options: { folders?: boolean } = {},
+  withheld: string[] = [],
 ) {
   const target = localFileLink(href)
   if (!target) return null
@@ -43,9 +45,52 @@ export async function resolveFileLink(
       }
     }
   if (matches.size) return matches.size === 1 ? [...matches.values()][0]! : null
+  // A file beside the repositories, such as a draft in the project folder, or one the agent wrote elsewhere on the host.
+  const outside = await hostFile(isAbsolute(target.path) ? target.path : resolve(scope.cwd, target.path), target, [
+    ...workspace.managedFolders(),
+    ...withheld,
+  ])
+  if (outside) return outside
   return isAbsolute(target.path) || /^\.{1,2}[\\/]/.test(target.path)
     ? null
     : endingWith(bindings, target, options.folders === true)
+}
+
+async function hostFile(absolute: string, target: { line?: number; column?: number }, withheld: string[]) {
+  // The host-files root is `/`; a Windows path on another drive has no relative form under it.
+  if (sep !== '/' || withheldPath(absolute, withheld)) return null
+  try {
+    if (!(await stat(absolute)).isFile()) return null
+  } catch {
+    return null
+  }
+  return { repoId: HOST_FILES_REPO, path: relative('/', absolute), line: target.line, column: target.column }
+}
+
+/**
+ * Whether a file outside the thread's folders lies, after symlinks, in a folder Ramu keeps to itself: other threads'
+ * worktrees and chat folders, or the host's own data with its credentials. A file that does not exist yet is judged by
+ * its folder.
+ */
+export function withheldPath(absolute: string, roots: string[]): boolean {
+  const real = (path: string): string | null => {
+    try {
+      return realpathSync(path)
+    } catch {
+      const parent = dirname(path)
+      if (parent === path) return null
+      const folder = real(parent)
+      return folder && join(folder, basename(path))
+    }
+  }
+  const target = real(absolute)
+  if (!target) return true
+  return roots.some((root) => {
+    const base = real(root)
+    if (!base) return false
+    const rel = relative(base, target)
+    return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+  })
 }
 
 /**
