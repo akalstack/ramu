@@ -3,6 +3,7 @@
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
+import { applyDevIcon } from './dev-icon.mjs'
 
 const RELAUNCH = 75
 const require = createRequire(import.meta.url)
@@ -18,4 +19,5 @@ const run = () => {
     process.exit(signal ? 1 : (code ?? 0))
   })
 }
+applyDevIcon()
 run()
