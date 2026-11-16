@@ -1,7 +1,6 @@
 import { PULL_REQUEST_STAGE_LABEL } from '@ramu/shared/pullRequests'
 import { useState } from 'react'
 import { Pressable, View } from 'react-native'
-import { useRouter } from 'expo-router'
 import {
   ChevronRight,
   CircleAlert,
@@ -38,6 +37,7 @@ import type { Chat } from '../runtime/types'
 import { font, space, useTheme } from '../theme'
 import { Nothing } from './InboxParts'
 import { InputRequests } from './InputRequests'
+import { useOpenThread } from './paneContext'
 import { Button, Divider, ROW_INSET, T, tap } from './ui'
 
 const MARK: Record<BriefMark, typeof CircleAlert> = {
@@ -57,7 +57,7 @@ type Invoke = (hostId: string, method: string, ...args: unknown[]) => Promise<un
 function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean; where: (chat: Chat) => string }) {
   const say = useSay()
   const { c } = useTheme()
-  const router = useRouter()
+  const openThread = useOpenThread()
   const store = useStore()
   const auto = useAutomation()
   const [busy, setBusy] = useState(false)
@@ -77,7 +77,7 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
       .finally(() => setBusy(false))
   }
   const go = () => {
-    if (chat) router.push({ pathname: '/chat/[id]', params: { id: chat.id } })
+    if (chat) openThread(chat.id)
   }
   const invoke = store.invoke as unknown as Invoke
   const request =

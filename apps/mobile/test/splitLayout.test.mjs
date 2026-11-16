@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { LIST_PANE_WIDTH, SPLIT_MIN_WIDTH, paneThreads, showsSplit } from '../src/runtime/splitLayout.ts'
+import { LIST_PANE_WIDTH, SPLIT_MIN_WIDTH, paneThreads, showsSplit, threadRoute } from '../src/runtime/splitLayout.ts'
 
 test('only windows wide enough for a list and a readable thread split', () => {
   assert.equal(showsSplit(430, 932), false) // a large phone
@@ -48,4 +48,9 @@ test('the open thread stays listed past the limit or when it is done', () => {
   assert.equal(list.more, true)
   const done = paneThreads([...threads, thread('d', { doneAt: 1 })], 'd', 5)
   assert.ok(done.recent.some((t) => t.id === 'd'))
+})
+
+test('a thread opened from the Inbox remembers it, so a wide window shows the Inbox beside it', () => {
+  assert.deepEqual(threadRoute('t1', 'threads'), { pathname: '/chat/[id]', params: { id: 't1' } })
+  assert.deepEqual(threadRoute('t1', 'inbox'), { pathname: '/chat/[id]', params: { id: 't1', from: 'inbox' } })
 })

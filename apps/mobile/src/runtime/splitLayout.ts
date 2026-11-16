@@ -31,3 +31,11 @@ export function paneThreads<T extends PaneThread>(threads: readonly T[], openId:
   if (open && !pinned.includes(open) && !shown.includes(open)) shown.push(open)
   return { pinned, recent: shown, more: recent.length > limit }
 }
+
+/** The list a thread was opened from, which a wide window shows beside it. */
+export type ThreadOrigin = 'threads' | 'inbox'
+
+/** A thread's route, remembering a list other than the thread list so the thread opens beside it. */
+export function threadRoute(id: string, origin: ThreadOrigin) {
+  return { pathname: '/chat/[id]' as const, params: origin === 'threads' ? { id } : { id, from: origin } }
+}

@@ -101,6 +101,7 @@ function load(file, os, overrides = {}, globals = {}) {
       flatten: (styles) => Object.assign({}, ...[styles].flat(Infinity).filter(Boolean)),
     },
   }
+  const routerOf = () => overrides['expo-router'] ?? mocks['expo-router']
   const mocks = {
     '../runtime/scrollSurface': scrollSurface,
     // A phone-width view: no gutter, content styles pass through.
@@ -110,7 +111,13 @@ function load(file, os, overrides = {}, globals = {}) {
       ReadableScrollView: 'ScrollView',
     },
     // A phone: no list beside the thread, so rows push the thread and headers stay native.
-    './paneContext': { useThreadPicker: () => null, useInDetailPane: () => false },
+    './paneContext': {
+      useThreadPicker: () => null,
+      useInDetailPane: () => false,
+      // Opened from the thread list, so a thread's route carries no origin.
+      useOpenThread: () => (id) => routerOf().useRouter().push({ pathname: '/chat/[id]', params: { id } }),
+      ThreadOrigin: { Provider: 'ThreadOrigin' },
+    },
     './transcript': mobileTranscript,
     './chatViewport': chatViewport,
     './transcriptChanges': transcriptChanges,
@@ -9446,15 +9453,15 @@ test('every pull request row opens in full on the phone, a repository in no proj
     },
   ]
   let status = 'online'
-  const { default: Pulls } = load('app/(tabs)/pulls/index.tsx', 'ios', {
+  const { PullRequestList: Pulls } = load('components/PullRequestList.tsx', 'ios', {
     react: hooks.react,
     '@ramu/shared/pullRequests': pullRequests,
     '@ramu/shared/pullRequestAccess': access,
-    '../../../runtime/pullRequestList': list,
-    '../../../runtime/pullRequestCopy': {
+    '../runtime/pullRequestList': list,
+    '../runtime/pullRequestCopy': {
       pullRequestCopy: { read: (_host, _method, closed) => (closed ? undefined : repos), keep() {} },
     },
-    '../../../runtime/store': {
+    '../runtime/store': {
       useStore: () => ({
         language: 'en',
         selected: 'a',
@@ -9470,13 +9477,10 @@ test('every pull request row opens in full on the phone, a repository in no proj
       useFocusEffect() {},
     },
     'expo-clipboard': { setStringAsync: async () => {} },
-    '../../../components/ui': new Proxy(
-      { tap() {} },
-      { get: (target, key) => (key in target ? target[key] : String(key)) },
-    ),
-    '../../../components/Overlays': { useTabActions: () => null },
+    './ui': new Proxy({ tap() {} }, { get: (target, key) => (key in target ? target[key] : String(key)) }),
+    './Overlays': { useTabActions: () => null },
   })
-  const render = () => hooks.render(() => Pulls())
+  const render = () => hooks.render(() => Pulls({}))
   const row = find(render(), 'PullRequestListRow')
   assert.equal(row.props.row.outside, true)
   row.props.onOpen()

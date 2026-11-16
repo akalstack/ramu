@@ -1,6 +1,5 @@
 import { memo, useState, type ReactNode } from 'react'
 import { View, useWindowDimensions } from 'react-native'
-import { useRouter } from 'expo-router'
 import {
   Archive,
   ArchiveRestore,
@@ -36,7 +35,7 @@ import { useStore } from '../runtime/store'
 import { threadSelection, useThreadSelection } from '../runtime/threadSelection'
 import { PULL_REQUEST_STAGE_LABEL, PULL_REQUEST_STAGE_TONE } from '@ramu/shared/pullRequests'
 import { PullRequestGlyph } from './PullRequestParts'
-import { useThreadPicker } from './paneContext'
+import { useOpenThread, useThreadPicker } from './paneContext'
 
 /** Statuses where the thread waits on the person. */
 const WAITING = new Set(['approval', 'input', 'blocked', 'turn-limit'])
@@ -81,7 +80,7 @@ export const ChatRow = memo(function ChatRow({
   const { c, textSize } = useTheme()
   // At large text a long title takes two lines and the detail line wraps instead of cutting its facts off.
   const stacked = useWindowDimensions().fontScale * TEXT_SCALE[textSize] >= 1.3
-  const router = useRouter()
+  const openThread = useOpenThread()
   const [menu, setMenu] = useState(false)
   const commands = useChatCommands(chat)
   const strings = useT()
@@ -179,8 +178,7 @@ export const ChatRow = memo(function ChatRow({
                 }
           }
           onPress={() => {
-            if (picker && !selecting) return picker.open(chat.id)
-            if (!selecting) return router.push({ pathname: '/chat/[id]', params: { id: chat.id } })
+            if (!selecting) return openThread(chat.id)
             tap()
             threadSelection.toggle(chat.id)
           }}

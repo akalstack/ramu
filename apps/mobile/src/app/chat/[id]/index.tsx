@@ -154,11 +154,14 @@ function keepsSettings(chat: Chat, m: import('../../../components/Composer').Mod
   })
 }
 
-/** On a wide window the thread sits beside the thread list; another thread picked there replaces this one in place. */
+/**
+ * On a wide window the thread sits beside the list it was opened from (the thread list, or the Inbox with `from`);
+ * another thread picked there replaces this one in place.
+ */
 export default function ChatScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>()
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>()
   return (
-    <ThreadSplit id={id}>
+    <ThreadSplit id={id} from={from}>
       <ChatView key={id} id={id} />
     </ThreadSplit>
   )

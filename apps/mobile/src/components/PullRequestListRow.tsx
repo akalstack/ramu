@@ -27,6 +27,7 @@ export function PullRequestListRow({
   row,
   hostName,
   elsewhere,
+  selected,
   onOpen,
   onMenu,
 }: {
@@ -35,6 +36,8 @@ export function PullRequestListRow({
   hostName?: string
   /** How many other hosts have the same repository. */
   elsewhere: number
+  /** The pull request open beside the list on a wide window. */
+  selected?: boolean
   onOpen: () => void
   onMenu: () => void
 }) {
@@ -59,7 +62,11 @@ export function PullRequestListRow({
       onPress={onOpen}
       onLongPress={onMenu}
       delayLongPress={350}
-      style={{ alignItems: 'flex-start', paddingVertical: space.m }}
+      accessibilityState={selected ? { selected: true } : undefined}
+      style={[
+        { alignItems: 'flex-start', paddingVertical: space.m },
+        selected ? { backgroundColor: c.accentSoft } : null,
+      ]}
     >
       {/* A fixed column, so every title starts at the same edge whatever the glyph. */}
       <View style={{ width: 16, paddingTop: 3, alignItems: 'center' }}>
