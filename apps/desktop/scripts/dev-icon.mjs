@@ -10,6 +10,15 @@ import { fileURLToPath } from 'node:url'
 const LSREGISTER =
   '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister'
 
+function runningFrom(app) {
+  try {
+    return execFileSync('/usr/bin/pgrep', ['-f', join(app, 'Contents', '')], { encoding: 'utf8' }).trim() !== ''
+  } catch {
+    // pgrep exits 1 when nothing matches.
+    return false
+  }
+}
+
 /** Never fails the dev start. */
 export function applyDevIcon() {
   if (process.platform !== 'darwin') return
@@ -23,6 +32,14 @@ export function applyDevIcon() {
     // The stamp changes with the icon and with how it is applied, so an older patch is redone.
     const stamp = `2:${readFileSync(car).length}`
     if (existsSync(done) && readFileSync(done, 'utf8') === stamp) return
+    // Re-signing under a running process (such as the background service) leaves its code no longer matching the disk,
+    // and macOS then refuses it the keychain, so every saved credential reads as locked until it restarts.
+    if (runningFrom(app)) {
+      console.log(
+        'Ramu dev icon not applied while Ramu runs from this Electron; quit Ramu and its background service first.',
+      )
+      return
+    }
     copyFileSync(car, join(app, 'Contents', 'Resources', 'Assets.car'))
     const plist = join(app, 'Contents', 'Info.plist')
     const edit = (command) => execFileSync('/usr/libexec/PlistBuddy', ['-c', command, plist], { stdio: 'ignore' })

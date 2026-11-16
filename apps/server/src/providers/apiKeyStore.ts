@@ -60,7 +60,7 @@ export class ProviderApiKeyStore {
     if (!this.loaded) await this.load()
     if (!this.loaded)
       throw new Error(
-        'The host credential store is unavailable or locked. Unlock it on the execution host and try again.',
+        'The host credential store is unavailable or locked. Unlock it on the execution host, or restart Ramu and the background service, then try again.',
       )
     const next: ProviderApiKeys = structuredClone(this.values)
     const logins = { ...next[provider] }

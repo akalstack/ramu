@@ -23,7 +23,9 @@ const nativeEntry: EntryFactory = async (service, key) => {
 const service = 'app.ramu.host-credentials.v1'
 const referencePattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 const safeError = () =>
-  new Error('The host credential store is unavailable or locked. Unlock it on the execution host and try again.')
+  new Error(
+    'The host credential store is unavailable or locked. Unlock it on the execution host, or restart Ramu and the background service, then try again.',
+  )
 
 /** OS-backed, host-owned credential storage shared by MCP, Git hosting and provider environment variables.
  * Only opaque references enter SQLite/settings. No native errors or values are returned in status.

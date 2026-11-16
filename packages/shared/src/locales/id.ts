@@ -6890,6 +6890,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Sign in with glab instead': 'Masuk dengan glab saja',
   'Use the GitLab CLI?': 'Pakai GitLab CLI?',
   'Tagged New in the model list.': 'Ditandai Baru di daftar model.',
+  'Restart background service': 'Mulai ulang layanan latar belakang',
   'The host checks the token, keeps it in its credential store and sends it only to {0}.':
     'Host memeriksa token, menyimpannya di penyimpanan kredensialnya dan hanya mengirimnya ke {0}.',
   optional: 'opsional',

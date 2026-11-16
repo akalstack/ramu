@@ -137,15 +137,18 @@ function TokenForm({
             <ExternalLink data-icon="inline-end" />
           </Button>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid items-start gap-3 sm:grid-cols-2">
           <div className="flex min-w-0 flex-col gap-1.5">
+            {/* One span, so the stacked label style keeps "optional" on the label's line. */}
             <label htmlFor={fieldId} className="text-caption">
-              {field.label}
-              {!field.required && <span className="text-muted-foreground"> · {t('optional')}</span>}
+              <span>
+                {field.label}
+                {!field.required && <span className="text-muted-foreground"> · {t('optional')}</span>}
+              </span>
             </label>
             <Input
               id={fieldId}
-              className="w-full! flex-auto!"
+              className="w-full!"
               type={field.type}
               autoComplete="off"
               autoCapitalize="none"
@@ -170,7 +173,7 @@ function TokenForm({
             </label>
             <Input
               id={tokenId}
-              className="w-full! flex-auto!"
+              className="w-full!"
               type="password"
               autoComplete="off"
               autoCapitalize="none"
@@ -185,8 +188,9 @@ function TokenForm({
           </div>
         </div>
         {error && (
-          <p role="alert" className="m-0 text-caption text-destructive">
+          <p role="alert" className="m-0 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-destructive">
             {error}
+            {STORE_FAILURE.test(error) && <RestartService />}
           </p>
         )}
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -209,6 +213,35 @@ function TokenForm({
         {alternative}
       </form>
     </SettingsRow>
+  )
+}
+
+/** How the host reports that it could not use its credential store. */
+const STORE_FAILURE = /credential store is unavailable or locked/i
+
+/**
+ * After a Ramu rebuild or update, a background service still running the old code is refused the keychain until it
+ * restarts; the host asks before restarting, since that stops running agents.
+ */
+function RestartService() {
+  const invoke = useSettingsInvoke()
+  const [error, setError] = useState<string | null>(null)
+  return (
+    <>
+      <Button
+        type="button"
+        variant="link"
+        size="sm"
+        className="h-auto p-0"
+        onClick={() => {
+          setError(null)
+          void Promise.resolve(invoke('background.restart')).catch((reason) => setError(errorText(reason)))
+        }}
+      >
+        {t('Restart background service')}
+      </Button>
+      {error && <span>{error}</span>}
+    </>
   )
 }
 
@@ -343,10 +376,14 @@ export function HostingAccounts() {
         </span>
       </SettingsRow>
       {storeLocked && (
-        <p role="status" className="m-0 mb-3 px-4 text-caption text-muted-foreground">
+        <p
+          role="status"
+          className="m-0 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 px-4 text-caption text-muted-foreground"
+        >
           {t(
             'The credential store on this host is locked or unavailable, so tokens cannot be saved. Unlock it on that machine and check again. Existing GitHub CLI sign-ins keep working.',
           )}
+          {canAdminister && <RestartService />}
         </p>
       )}
       {single && !canAdminister && (
