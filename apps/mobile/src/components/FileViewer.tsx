@@ -55,7 +55,7 @@ const CodeLine = memo(function CodeLine({
       >
         {number}
       </T>
-      <T size={12} mono tone="soft" copyable={line} style={{ flex: 1, lineHeight: 18 }}>
+      <T size={font.caption} mono tone="soft" copyable={line} style={{ flex: 1, lineHeight: 18 }}>
         {line === '' ? ' ' : tokens ? <CodeTokens tokens={tokens} /> : line}
       </T>
     </View>
@@ -600,6 +600,7 @@ export function FileViewer({
       ) : null}
       {draft !== null ? null : state.kind === 'text' && !rendered ? (
         <PageFlatList
+          fullWidth
           ref={list}
           data={rows}
           keyExtractor={(_, index) => String(index)}

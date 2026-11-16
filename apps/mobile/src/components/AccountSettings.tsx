@@ -7,7 +7,7 @@ import * as account from '../runtime/account'
 import { secureRandom } from '../runtime/secureRandom'
 import { useStore } from '../runtime/store'
 import { connectAccountHosts } from './AccountHosts'
-import { space, useTheme, type Appearance, type TextSize } from '../theme'
+import { font, space, useTheme, type Appearance, type TextSize } from '../theme'
 import { RowLabel, TextRow } from './SettingRows'
 import { Button, Card, Divider, Row, SectionLabel, T } from './ui'
 
@@ -74,7 +74,7 @@ export function AccountSettings() {
   if (user === undefined) return <ActivityIndicator color={c.accent} style={{ padding: space.l }} />
   return (
     <View>
-      <T size={13} tone="muted" style={{ paddingHorizontal: space.l, paddingTop: space.m }}>
+      <T size={font.control} tone="muted" style={{ paddingHorizontal: space.l, paddingTop: space.m }}>
         {t(
           'Optional. It keeps backups only your devices can open and connects this phone to the hosts you listed, as each host allows. Run by Akalstack.',
         )}

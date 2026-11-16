@@ -6,7 +6,7 @@ import { setupFromText, setupReachText, type ProjectSetup, type SharedMcpManagem
 import type { Memory } from '@ramu/shared/types'
 import { matchesWords, searchWords } from '@ramu/shared/listView'
 import { useStore } from '../runtime/store'
-import { space, useTheme } from '../theme'
+import { font, space, useTheme } from '../theme'
 import { BottomSearch } from './BottomSearch'
 import { Button, Card, Chip, Divider, Row, SectionLabel, T } from './ui'
 import { RowLabel } from './SettingRows'
@@ -142,7 +142,7 @@ export function AgentSetupSettings({ hostId }: { hostId: string }) {
           </View>
         ))}
       </Card>
-      <T size={13} tone="muted" style={{ paddingHorizontal: space.l }}>
+      <T size={font.control} tone="muted" style={{ paddingHorizontal: space.l }}>
         {t('Change sharing in Settings → Agent setup on the host.')}
       </T>
       <SectionLabel>{t('Ramu connections')}</SectionLabel>
@@ -183,7 +183,7 @@ export function AgentSetupSettings({ hostId }: { hostId: string }) {
           </View>
         ))}
       </Card>
-      <T size={13} tone="muted" style={{ paddingHorizontal: space.l }}>
+      <T size={font.control} tone="muted" style={{ paddingHorizontal: space.l }}>
         {t('Add servers, sign in and approve their tools on the host. It keeps the credentials.')}
       </T>
       <SectionLabel>{t('Skills')}</SectionLabel>

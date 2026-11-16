@@ -123,7 +123,7 @@ export function TerminalDock({
           <TerminalSquare size={19} strokeWidth={1.8} color={c.accent} />
           <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <T size={13} weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>
+              <T size={font.control} weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>
                 {workspace}
               </T>
               {kind ? (

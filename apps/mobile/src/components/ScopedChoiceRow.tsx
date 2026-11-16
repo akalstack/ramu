@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { View } from 'react-native'
 import type { PreferenceScope } from '@ramu/shared/preferenceScopes'
-import { space } from '../theme'
+import { font, space } from '../theme'
 import { useSay, useT, type Strings } from '../i18n'
 import type { ScopeBlock, ScopedChoiceControl } from '../runtime/useScopedChoice'
 import { deviceKind, scopeText, sourceText } from './ScopeControl'
@@ -55,7 +55,7 @@ export function ScopedChoiceRow<V extends string>({
         <RowLabel title={say(title)} help={help} />
       </Row>
       <View style={{ paddingHorizontal: space.l, gap: space.s, paddingBottom: space.s }}>
-        <T size={12} tone="muted">
+        <T size={font.caption} tone="muted">
           {t.scopeApplyTo}
         </T>
         <Segmented<PreferenceScope>

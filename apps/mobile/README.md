@@ -28,6 +28,8 @@ Use the host's LAN or VPN address, never `localhost`. The host must stay awake a
 - **Hosts:** several hosts connect at once. Each has a switch that turns its connection off and on, keeping its pairing.
 - **Offline:** drafts and an outbox stay on the phone and send in order when the host is back. A send that may or may not have arrived is marked **uncertain** and never retried by itself.
 
+On an iPad or an Android tablet, lists, settings, the transcript and its composer keep to one centered reading column, while code, diffs and conflicts use the full width; iPad shows the tabs as a sidebar. Screens rotate and follow Split View and resizable windows.
+
 A viewer pairing can read and answer requests but change nothing. A device's access lapses after 90 days without use.
 
 ## Notifications

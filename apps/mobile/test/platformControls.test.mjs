@@ -103,6 +103,12 @@ function load(file, os, overrides = {}, globals = {}) {
   }
   const mocks = {
     '../runtime/scrollSurface': scrollSurface,
+    // A phone-width view: no gutter, content styles pass through.
+    './ReadableColumn': {
+      useReadableColumn: () => ({ gutter: 0, onLayout() {}, contentContainerStyle: (style) => style }),
+      ReadableColumn: 'ReadableColumn',
+      ReadableScrollView: 'ScrollView',
+    },
     './transcript': mobileTranscript,
     './chatViewport': chatViewport,
     './transcriptChanges': transcriptChanges,

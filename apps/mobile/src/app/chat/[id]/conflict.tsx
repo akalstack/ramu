@@ -209,6 +209,7 @@ export default function ConflictScreen() {
     <Screen bg="canvas">
       <Header title={name} subtitle={path.includes('/') ? path : undefined} />
       <PageScrollView
+        fullWidth
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l, paddingBottom: space.xl }}
         refreshControl={

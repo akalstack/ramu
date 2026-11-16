@@ -24,6 +24,7 @@ import {
 } from '../runtime/scheduleModel'
 import { useSay, useT } from '../i18n'
 import { GlassButton, Header, PageScrollView, Screen } from '../components/Screen'
+import { ReadableColumn } from '../components/ReadableColumn'
 import { ModelChip, type ModelChoice } from '../components/Composer'
 import { Field, Stepper, TextField, TimeField, WeekdayPicker } from '../components/ScheduleFields'
 import { Row, Segmented, Sheet, T } from '../components/ui'
@@ -393,14 +394,16 @@ export default function ScheduleEdit() {
           <Stack.Toolbar.Spacer />
         </Stack.Toolbar>
       ) : (
-        <View style={{ position: 'absolute', left: space.l, right: space.l, bottom: Math.max(insets.bottom, space.m) }}>
-          <GlassButton
-            primary
-            title={busy ? '…' : t.save}
-            icon={busy ? undefined : Check}
-            disabled={busy || !online || Boolean(problem)}
-            onPress={() => void save()}
-          />
+        <View style={{ position: 'absolute', left: 0, right: 0, bottom: Math.max(insets.bottom, space.m) }}>
+          <ReadableColumn style={{ paddingHorizontal: space.l }}>
+            <GlassButton
+              primary
+              title={busy ? '…' : t.save}
+              icon={busy ? undefined : Check}
+              disabled={busy || !online || Boolean(problem)}
+              onPress={() => void save()}
+            />
+          </ReadableColumn>
         </View>
       )}
       {busy ? <ActivityIndicator style={{ position: 'absolute', alignSelf: 'center', top: 120 }} /> : null}

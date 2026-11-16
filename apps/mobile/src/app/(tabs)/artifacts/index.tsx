@@ -130,7 +130,7 @@ export default function PagesScreen() {
               }
               style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l }}
             >
-              <T size={22}>{page.icon}</T>
+              <T size={font.title}>{page.icon}</T>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <T numberOfLines={1}>{page.title}</T>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>

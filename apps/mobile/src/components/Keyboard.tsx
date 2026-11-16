@@ -20,6 +20,7 @@ import Reanimated, {
   type SharedValue,
 } from 'react-native-reanimated'
 import { space } from '../theme'
+import { ReadableColumn } from './ReadableColumn'
 
 /**
  * Whether this app binary has the native keyboard tracker. Builds made before it was added do not, and drawing its view
@@ -260,7 +261,8 @@ export function ComposerDock({
         paddingTop: space.xs,
       }}
     >
-      {children}
+      {/* Lined up with the transcript's readable column on a tablet. */}
+      <ReadableColumn>{children}</ReadableColumn>
     </View>
   )
 }

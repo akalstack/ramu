@@ -114,6 +114,7 @@ import { SelectionBar } from '../../../components/SelectionBar'
 import { Button, Chip, ConnectionDot, IconButton, Segmented, Sheet, T, tap } from '../../../components/ui'
 import { BottomFade, Glass, TopFade, floatingChrome } from '../../../components/Glass'
 import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
+import { ReadableColumn } from '../../../components/ReadableColumn'
 import { PendingBubble } from '../../../components/Outbox'
 import { SteeringBubble } from '../../../components/SteeringBubble'
 import { PlanUsageSheet } from '../../../components/PlanUsage'
@@ -1257,18 +1258,18 @@ export default function ChatScreen() {
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' }}
               >
                 {chat.startedFrom ? <GitFork size={11} color={c.muted} /> : null}
-                <T size={12} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+                <T size={font.caption} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
                   {project}
                 </T>
                 {identity ? (
-                  <T size={12} tone="muted" numberOfLines={1}>
+                  <T size={font.caption} tone="muted" numberOfLines={1}>
                     · {identity.name}
                   </T>
                 ) : null}
                 {branch ? (
                   <>
                     <GitBranch size={11} color={c.muted} />
-                    <T size={12} mono tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+                    <T size={font.caption} mono tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
                       {branch}
                     </T>
                   </>
@@ -1284,7 +1285,7 @@ export default function ChatScreen() {
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' }}
               >
                 <Monitor size={11} color={c.muted} />
-                <T size={12} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+                <T size={font.caption} tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
                   {hostName}
                 </T>
                 <ConnectionDot status={computer?.status ?? 'offline'} size={5} />
@@ -1713,7 +1714,9 @@ export default function ChatScreen() {
                       style={{ position: 'absolute', left: 0, right: 0, bottom: composerHeight }}
                       onLayout={(event) => setSelectionBarHeight(event.nativeEvent.layout.height)}
                     >
-                      <SelectionBar selection={selection} />
+                      <ReadableColumn>
+                        <SelectionBar selection={selection} />
+                      </ReadableColumn>
                     </View>
                   ) : null}
                   {/* iOS/web: the glass composer floats over the transcript, which scrolls beneath it. */}

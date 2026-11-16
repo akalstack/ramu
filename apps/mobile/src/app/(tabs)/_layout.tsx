@@ -30,7 +30,8 @@ export default function TabsLayout() {
         }
       : {}
   return (
-    <NativeTabs tintColor={c.accent} minimizeBehavior="onScrollDown" {...material}>
+    // On iPad the bar can become UIKit's sidebar (iPadOS 18+), so a wide screen gets the side navigation iPad apps use.
+    <NativeTabs tintColor={c.accent} minimizeBehavior="onScrollDown" sidebarAdaptable {...material}>
       <NativeTabs.Trigger name="(threads)">
         <NativeTabs.Trigger.Icon
           sf={{ default: 'bubble.left.and.bubble.right', selected: 'bubble.left.and.bubble.right.fill' }}

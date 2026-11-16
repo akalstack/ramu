@@ -110,6 +110,7 @@ export default function Revision() {
         }
       />
       <ScrollView
+        fullWidth
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l, paddingBottom: space.xl * 2 }}
       >

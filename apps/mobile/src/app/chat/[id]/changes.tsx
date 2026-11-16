@@ -10,6 +10,7 @@ import { type ChangedFile } from '../../../runtime/types'
 import type { ChangeReview, ReviewComment } from '@ramu/shared/types'
 import { changedFile } from '../../../runtime/diff'
 import { GlassButton, Header, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
+import { ReadableColumn } from '../../../components/ReadableColumn'
 import { BottomFade, floatingChrome } from '../../../components/Glass'
 import { Button, Card, Divider, Pill, Sheet, T, tap } from '../../../components/ui'
 import { SheetGroup, SheetOption, useSheetInputStyle } from '../../../components/SheetOptions'
@@ -317,6 +318,7 @@ export default function Changes() {
         }
       />
       <ScrollView
+        fullWidth
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{
           padding: space.l,
@@ -436,29 +438,28 @@ export default function Changes() {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                flexDirection: 'row',
-                gap: 10,
-                paddingHorizontal: space.l,
                 paddingBottom: Math.max(insets.bottom, space.m),
               },
               !floatingChrome && { backgroundColor: c.canvas, paddingTop: space.m },
             ]}
           >
-            <GlassButton
-              icon={Undo2}
-              title={say('Undo run')}
-              disabled={busy || !review}
-              onPress={undo}
-              style={{ flex: 1 }}
-            />
-            <GlassButton
-              icon={MessageSquarePlus}
-              title={sendLabel}
-              disabled={busy || !review || (!note.trim() && !drafts.length)}
-              onPress={drafts.length ? sendDrafts : sendReview}
-              primary
-              style={{ flex: 1 }}
-            />
+            <ReadableColumn style={{ flexDirection: 'row', gap: 10, paddingHorizontal: space.l }}>
+              <GlassButton
+                icon={Undo2}
+                title={say('Undo run')}
+                disabled={busy || !review}
+                onPress={undo}
+                style={{ flex: 1 }}
+              />
+              <GlassButton
+                icon={MessageSquarePlus}
+                title={sendLabel}
+                disabled={busy || !review || (!note.trim() && !drafts.length)}
+                onPress={drafts.length ? sendDrafts : sendReview}
+                primary
+                style={{ flex: 1 }}
+              />
+            </ReadableColumn>
           </View>
         </>
       )}

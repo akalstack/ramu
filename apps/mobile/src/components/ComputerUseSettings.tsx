@@ -10,7 +10,7 @@ import {
   type TestPlatform,
 } from '@ramu/shared/testDevices'
 import { appControlHelp, runtimeHelp } from '@ramu/shared/computerStatus'
-import { space } from '../theme'
+import { font, space } from '../theme'
 import { useSay } from '../i18n'
 import { useStore } from '../runtime/store'
 import { Hint, ToggleRow } from './SettingRows'
@@ -97,7 +97,7 @@ export function ComputerUseSettings({ hostId }: { hostId: string }) {
             <Divider inset={space.l} />
             <View style={{ padding: space.l }}>
               <T weight="500">{say('App control')}</T>
-              <T size={12} tone="muted" style={{ marginTop: 4, lineHeight: 18 }}>
+              <T size={font.caption} tone="muted" style={{ marginTop: 4, lineHeight: 18 }}>
                 {say(appControlHelp(status))}
               </T>
             </View>
@@ -140,7 +140,7 @@ function Readiness({ title, value }: { title: string; value: PlatformReadiness }
     <View style={{ padding: space.l, gap: 4 }}>
       <T weight="500">{value.unsupported ? title : `${title} · ${say(value.ready ? 'Ready' : 'Needs setup')}`}</T>
       {value.unsupported ? (
-        <T size={12} tone="muted" style={{ lineHeight: 18 }}>
+        <T size={font.caption} tone="muted" style={{ lineHeight: 18 }}>
           {say(value.unsupported)}
         </T>
       ) : null}
@@ -148,7 +148,7 @@ function Readiness({ title, value }: { title: string; value: PlatformReadiness }
         const fix = testDeviceFix(entry.item)
         return (
           <View key={entry.item} style={{ gap: 4 }}>
-            <T size={12} tone="muted" style={{ lineHeight: 18 }}>
+            <T size={font.caption} tone="muted" style={{ lineHeight: 18 }}>
               {say(entry.name)}: {entry.fix}
             </T>
             {fix?.kind === 'link' ? (
@@ -180,7 +180,7 @@ function DeviceRow({
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, padding: space.l }}>
       <View style={{ flex: 1, gap: 2 }}>
         <T numberOfLines={1}>{title}</T>
-        <T size={12} tone="muted" numberOfLines={1}>
+        <T size={font.caption} tone="muted" numberOfLines={1}>
           {detail}
         </T>
       </View>
@@ -271,7 +271,7 @@ export function TestDeviceSettings({ hostId }: { hostId: string }) {
           <>
             <Divider inset={space.l} />
             <View style={{ padding: space.l, gap: space.s }}>
-              <T size={12} tone="muted" style={{ lineHeight: 18 }}>
+              <T size={font.caption} tone="muted" style={{ lineHeight: 18 }}>
                 {say('Installs Simlock and agent-device in Ramu’s tools folder. No Homebrew, nothing system-wide.')}
               </T>
               <Button
@@ -340,7 +340,7 @@ export function TestDeviceSettings({ hostId }: { hostId: string }) {
                 <SheetOption
                   title={say(platform === 'ios' ? 'iPhone or iPad' : 'Android device')}
                   trailing={
-                    <T size={12} tone="muted">
+                    <T size={font.caption} tone="muted">
                       {status.defaults[platform] ?? ''}
                     </T>
                   }
@@ -412,7 +412,7 @@ export function TestDeviceSettings({ hostId }: { hostId: string }) {
             <SheetOption
               title={say('Devices at once')}
               trailing={
-                <T size={12} tone="muted">
+                <T size={font.caption} tone="muted">
                   {status.maxRunning === null ? say('Automatic') : String(status.maxRunning)}
                 </T>
               }

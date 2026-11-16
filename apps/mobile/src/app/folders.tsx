@@ -30,6 +30,7 @@ import { goBackOrHome } from '../runtime/navigation'
 import { finishFolderPick } from '../runtime/folderPick'
 import { childPath, repositoryCloneUrl } from '../runtime/cloneRepository'
 import { Header, Screen, GlassButton, PageScrollView as ScrollView } from '../components/Screen'
+import { ReadableColumn } from '../components/ReadableColumn'
 import { useKeyboardInset } from '../components/Keyboard'
 import { Button, Chip, Divider, IconButton, ROW_INSET, Row, SectionLabel, T, tap } from '../components/ui'
 import { useStore } from '../runtime/store'
@@ -401,55 +402,55 @@ export default function HostFolders() {
           style={{
             borderTopWidth: 0.5,
             borderTopColor: c.lineStrong,
-            paddingHorizontal: space.l,
             paddingTop: space.s,
             paddingBottom: keyboard ? keyboard + space.s : Math.max(insets.bottom, space.s),
-            gap: 6,
           }}
         >
-          {cloning ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 48 }}>
-              <ActivityIndicator size="small" color={c.accent} />
-              <T tone="accent" weight="500" numberOfLines={1} style={{ flex: 1 }} accessibilityLiveRegion="polite">
-                {cloneProgressText(cloneRun.progress, say)}
-              </T>
-              <Button kind="secondary" title={say('Cancel clone')} onPress={cloneRun.cancel} />
-            </View>
-          ) : wanted && !existing ? (
-            <GlassButton
-              primary
-              icon={Download}
-              title={say('Clone here')}
-              disabled={working || !!opening || !cloneName}
-              onPress={() => cloneHere(listing.path)}
-            />
-          ) : (
-            <GlassButton
-              primary
-              icon={existing || listing.repo ? FolderGit2 : Folder}
-              title={
-                existing
-                  ? say('Add {0}', { 0: existing.name })
-                  : choosingParent
-                    ? say('Put it here')
-                    : say('Add {0}', { 0: here })
-              }
-              disabled={working || !!opening}
-              onPress={() => {
-                if (existing) return void addProject(existing.path)
-                if (!choosingParent) return void addProject(listing.path)
-                finishFolderPick(listing.path)
-                goBackOrHome(router)
-              }}
-            />
-          )}
-          <T size={font.caption} tone="muted" numberOfLines={1} ellipsizeMode="head" style={{ textAlign: 'center' }}>
-            {existing
-              ? say('Already cloned here. Add it as a project.')
-              : wanted
-                ? say('Clones into {0}', { 0: childPath(listing.path, cloneName) })
-                : listing.path}
-          </T>
+          <ReadableColumn style={{ paddingHorizontal: space.l, gap: 6 }}>
+            {cloning ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 48 }}>
+                <ActivityIndicator size="small" color={c.accent} />
+                <T tone="accent" weight="500" numberOfLines={1} style={{ flex: 1 }} accessibilityLiveRegion="polite">
+                  {cloneProgressText(cloneRun.progress, say)}
+                </T>
+                <Button kind="secondary" title={say('Cancel clone')} onPress={cloneRun.cancel} />
+              </View>
+            ) : wanted && !existing ? (
+              <GlassButton
+                primary
+                icon={Download}
+                title={say('Clone here')}
+                disabled={working || !!opening || !cloneName}
+                onPress={() => cloneHere(listing.path)}
+              />
+            ) : (
+              <GlassButton
+                primary
+                icon={existing || listing.repo ? FolderGit2 : Folder}
+                title={
+                  existing
+                    ? say('Add {0}', { 0: existing.name })
+                    : choosingParent
+                      ? say('Put it here')
+                      : say('Add {0}', { 0: here })
+                }
+                disabled={working || !!opening}
+                onPress={() => {
+                  if (existing) return void addProject(existing.path)
+                  if (!choosingParent) return void addProject(listing.path)
+                  finishFolderPick(listing.path)
+                  goBackOrHome(router)
+                }}
+              />
+            )}
+            <T size={font.caption} tone="muted" numberOfLines={1} ellipsizeMode="head" style={{ textAlign: 'center' }}>
+              {existing
+                ? say('Already cloned here. Add it as a project.')
+                : wanted
+                  ? say('Clones into {0}', { 0: childPath(listing.path, cloneName) })
+                  : listing.path}
+            </T>
+          </ReadableColumn>
         </View>
       ) : null}
     </Screen>

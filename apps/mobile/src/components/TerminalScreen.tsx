@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert, Keyboard as NativeKeyboard, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FolderGit2, GitBranch, MessageCircle, RotateCcw, TerminalSquare } from 'lucide-react-native'
-import { space, useTheme } from '../theme'
+import { font, space, useTheme } from '../theme'
 import { PermissionNeeded } from './DevicePermissions'
 import { useStore } from '../runtime/store'
 import { Stack } from 'expo-router'
@@ -374,10 +374,10 @@ export function TerminalScreen({
           {!terminal ? (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 }}>
               <TerminalSquare size={32} color="#a1a1a8" strokeWidth={1.5} />
-              <T size={17} weight="600" style={{ color: '#f5f5f7' }}>
+              <T size={font.heading} weight="600" style={{ color: '#f5f5f7' }}>
                 {say('Your host’s shell')}
               </T>
-              <T size={13} style={{ color: '#a1a1a8', textAlign: 'center', lineHeight: 20 }}>
+              <T size={font.control} style={{ color: '#a1a1a8', textAlign: 'center', lineHeight: 20 }}>
                 {computer?.access === 'viewer'
                   ? say('This phone has view-only access to this host.')
                   : connected
@@ -512,7 +512,7 @@ export function TerminalScreen({
             </SheetGroup>
           )
         })}
-        <T size={12} tone="muted" style={{ paddingHorizontal: space.l + 4, paddingTop: space.s }}>
+        <T size={font.caption} tone="muted" style={{ paddingHorizontal: space.l + 4, paddingTop: space.s }}>
           {say('Shells keep running in their own workspace while you look at another.')}
         </T>
       </Sheet>
@@ -553,7 +553,7 @@ export function TerminalScreen({
                     backgroundColor: pressed ? c.pressed : rail.includes(label) ? c.accentWash : c.fill,
                   })}
                 >
-                  <T mono size={13}>
+                  <T mono size={font.control}>
                     {label}
                   </T>
                 </Pressable>
@@ -561,7 +561,7 @@ export function TerminalScreen({
             </View>
           </SheetPanelGroup>
         ))}
-        <T size={12} tone="muted" style={{ paddingHorizontal: space.l + 4, paddingTop: space.s }}>
+        <T size={font.caption} tone="muted" style={{ paddingHorizontal: space.l + 4, paddingTop: space.s }}>
           {say(
             'Press a key to send it. Long press to add or remove it on the key rail; highlighted keys are on the rail.',
           )}

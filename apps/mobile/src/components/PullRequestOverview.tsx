@@ -29,6 +29,7 @@ import { Card, Divider, T, tap } from './ui'
 import { PullRequestGlyph, StageText } from './PullRequestParts'
 import { Glass } from './Glass'
 import { GlassButton } from './Screen'
+import { ReadableColumn } from './ReadableColumn'
 
 const STATE_LABEL = { open: 'Open', draft: 'Draft', merged: 'Merged', closed: 'Closed' } as const
 const STATE_TONE = { open: 'ok', draft: 'muted', merged: 'accent', closed: 'bad' } as const
@@ -332,64 +333,70 @@ export function PullRequestActionBar({
         left: 0,
         right: 0,
         bottom: 0,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: space.s,
-        paddingHorizontal: space.l,
         paddingTop: space.s,
         paddingBottom: Math.max(insets.bottom, space.s),
       }}
     >
-      {shortcut && Shortcut ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={shortcut.label}
-          hitSlop={4}
-          onPress={() => {
-            tap()
-            shortcut.onPress()
-          }}
-        >
-          <Glass
-            radius={radius.full}
-            interactive
-            style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Shortcut size={20} color={c.text} strokeWidth={2} />
-          </Glass>
-        </Pressable>
-      ) : null}
-      {primary ? (
-        <GlassButton
-          primary
-          icon={busy ? undefined : primary.icon}
-          title={busy ? say('Working…') : primary.title}
-          disabled={busy || primary.disabled}
-          onPress={primary.onPress}
-          style={{ flex: 1 }}
-        />
-      ) : note ? (
-        <View style={{ flex: 1 }} accessibilityLiveRegion="polite">
-          <Glass
-            radius={radius.full}
-            style={{
-              minHeight: 48,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: space.s,
-              paddingHorizontal: space.l,
+      <ReadableColumn
+        style={{
+          pointerEvents: 'box-none',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: space.s,
+          paddingHorizontal: space.l,
+        }}
+      >
+        {shortcut && Shortcut ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={shortcut.label}
+            hitSlop={4}
+            onPress={() => {
+              tap()
+              shortcut.onPress()
             }}
           >
-            <NoteIcon size={15} color={c.muted} />
-            <T size={font.control} tone="muted" numberOfLines={2} style={{ flexShrink: 1, textAlign: 'center' }}>
-              {note.text}
-            </T>
-          </Glass>
-        </View>
-      ) : (
-        <View style={{ flex: 1 }} pointerEvents="none" />
-      )}
+            <Glass
+              radius={radius.full}
+              interactive
+              style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Shortcut size={20} color={c.text} strokeWidth={2} />
+            </Glass>
+          </Pressable>
+        ) : null}
+        {primary ? (
+          <GlassButton
+            primary
+            icon={busy ? undefined : primary.icon}
+            title={busy ? say('Working…') : primary.title}
+            disabled={busy || primary.disabled}
+            onPress={primary.onPress}
+            style={{ flex: 1 }}
+          />
+        ) : note ? (
+          <View style={{ flex: 1 }} accessibilityLiveRegion="polite">
+            <Glass
+              radius={radius.full}
+              style={{
+                minHeight: 48,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: space.s,
+                paddingHorizontal: space.l,
+              }}
+            >
+              <NoteIcon size={15} color={c.muted} />
+              <T size={font.control} tone="muted" numberOfLines={2} style={{ flexShrink: 1, textAlign: 'center' }}>
+                {note.text}
+              </T>
+            </Glass>
+          </View>
+        ) : (
+          <View style={{ flex: 1 }} pointerEvents="none" />
+        )}
+      </ReadableColumn>
     </View>
   )
 }

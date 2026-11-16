@@ -4,7 +4,7 @@ import { translate } from '@ramu/shared/i18n'
 import type { InstalledPlugin } from '@ramu/shared/plugins'
 import type { WaitingTool } from '@ramu/shared/toolSync'
 import { useStore } from '../runtime/store'
-import { space, useTheme } from '../theme'
+import { font, space, useTheme } from '../theme'
 import { RowLabel } from './SettingRows'
 import { Card, Divider, Row, SectionLabel, T } from './ui'
 
@@ -104,7 +104,7 @@ export function PluginSettings({ hostId }: { hostId: string }) {
           )
         })}
       </Card>
-      <T size={13} tone="muted" style={{ paddingHorizontal: space.l }}>
+      <T size={font.control} tone="muted" style={{ paddingHorizontal: space.l }}>
         {t('Plugins are installed and their credentials pasted on the host, which keeps them.')}
       </T>
     </View>

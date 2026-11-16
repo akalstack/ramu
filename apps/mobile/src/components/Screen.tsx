@@ -24,6 +24,7 @@ import {
   type FlatListProps,
   type StyleProp,
   type ViewStyle,
+  type LayoutChangeEvent,
   useWindowDimensions,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -33,6 +34,7 @@ import { ChevronLeft, MoreHorizontal, X } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { Glass, floatingChrome } from './Glass'
 import { Button, IconButton, T, tap, type Icon } from './ui'
+import { useReadableColumn } from './ReadableColumn'
 import { useSay } from '../i18n'
 
 const BAR = 44
@@ -61,11 +63,29 @@ function PrimaryScroll({ children }: { children: NonNullable<ReactNode> }) {
     )
   return children
 }
+/** Page lists and scroll views keep their content in the readable column on a tablet unless they pass `fullWidth`. */
+type Readable = { fullWidth?: boolean }
+function useReadableProps(
+  props: { contentContainerStyle?: StyleProp<ViewStyle>; onLayout?: (event: LayoutChangeEvent) => void },
+  enabled: boolean,
+) {
+  const column = useReadableColumn(enabled)
+  const { onLayout } = props
+  return {
+    contentContainerStyle: column.contentContainerStyle(props.contentContainerStyle),
+    onLayout: (event: LayoutChangeEvent) => {
+      column.onLayout(event)
+      onLayout?.(event)
+    },
+  }
+}
 export function PageScrollView({
   ref,
   horizontal,
+  fullWidth,
   ...props
-}: ComponentProps<typeof ScrollView> & { ref?: Ref<import('react-native').ScrollViewInstance> }) {
+}: ComponentProps<typeof ScrollView> & Readable & { ref?: Ref<import('react-native').ScrollViewInstance> }) {
+  const readable = useReadableProps(props, !horizontal && !fullWidth)
   // A field inside a page scrolls above the keyboard on iOS (Android resizes the window). Screens that pad their own
   // bottom composer for the keyboard pass `automaticallyAdjustKeyboardInsets={false}`.
   const view = (
@@ -73,17 +93,23 @@ export function PageScrollView({
       automaticallyAdjustKeyboardInsets={!horizontal}
       keyboardShouldPersistTaps="handled"
       {...props}
+      {...readable}
       ref={ref}
       horizontal={horizontal}
     />
   )
   return horizontal ? view : <PrimaryScroll>{view}</PrimaryScroll>
 }
-export function PageFlatList<T>({ ref, ...props }: FlatListProps<T> & { ref?: Ref<FlatList<T>> }) {
+export function PageFlatList<T>({
+  ref,
+  fullWidth,
+  ...props
+}: FlatListProps<T> & Readable & { ref?: Ref<FlatList<T>> }) {
   const { c } = useTheme()
+  const readable = useReadableProps(props, !props.horizontal && !fullWidth)
   return (
     <PrimaryScroll>
-      <FlatList {...props} ref={ref} style={[{ backgroundColor: c.window }, props.style]} />
+      <FlatList {...props} {...readable} ref={ref} style={[{ backgroundColor: c.window }, props.style]} />
     </PrimaryScroll>
   )
 }
@@ -96,13 +122,16 @@ export function PageFlatList<T>({ ref, ...props }: FlatListProps<T> & { ref?: Re
 export function PageLegendList<T>({
   ref,
   recycleItems = false,
+  fullWidth,
   ...props
-}: LegendListProps<T> & { ref?: Ref<LegendListRef> }) {
+}: LegendListProps<T> & Readable & { ref?: Ref<LegendListRef> }) {
   const { c } = useTheme()
+  const readable = useReadableProps(props, !props.horizontal && !fullWidth)
   return (
     <PrimaryScroll>
       <LegendList
         {...props}
+        {...readable}
         ref={ref}
         recycleItems={recycleItems}
         style={[{ backgroundColor: c.window }, props.style]}
@@ -384,11 +413,11 @@ export function Header({
                     maxWidth: align === 'left' ? 260 : 220,
                   }}
                 >
-                  <T size={17} weight="600" numberOfLines={1}>
+                  <T size={font.heading} weight="600" numberOfLines={1}>
                     {title}
                   </T>
                   {typeof subtitle === 'string' ? (
-                    <T size={12} tone="muted" numberOfLines={1}>
+                    <T size={font.caption} tone="muted" numberOfLines={1}>
                       {subtitle}
                     </T>
                   ) : (
@@ -456,11 +485,11 @@ export function Header({
         ) : (
           <Stack.Title asChild>
             <View style={{ alignItems: 'center', maxWidth: titleWidth }}>
-              <T size={17} weight="600" numberOfLines={1}>
+              <T size={font.heading} weight="600" numberOfLines={1}>
                 {title}
               </T>
               {typeof subtitle === 'string' ? (
-                <T size={12} tone="muted" numberOfLines={1}>
+                <T size={font.caption} tone="muted" numberOfLines={1}>
                   {subtitle}
                 </T>
               ) : (
