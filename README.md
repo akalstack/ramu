@@ -27,13 +27,14 @@ Open a project, say what you want, and review the result. The defaults work out 
 
 **From one sentence to a live app.** Describe what you want. Ramu asks a few questions, picks a stack, runs the framework's own generator and keeps building until the build and tests pass. Then it deploys to your own Vercel, Netlify or app store account, with a preview for every pull request and **Roll back** when something breaks ([shipping an app](docs/guide/shipping.md)).
 
+**Work that finishes itself.** When a task needs more than one turn, the agent sets a goal and keeps going on its own, across turns and providers. Ramu accepts it as done only when the reported checks pass and the changed files match the repository; add a verification command, such as your test suite, to decide it yourself ([goals](docs/guide/goals.md)).
+
 **Usage limits don't stop the work.** Rank your providers and models. When one runs out, the thread moves to the next with its context and switches back once your first choice has room again. When all are limited, Ramu waits and resumes, even after a restart.
 
 ## What else it does
 
 **Agents that keep going**
 
-- **Goals.** Agents set a goal themselves when work needs more turns, or you set one with `/goal`. Ramu checks the reported tests and changed files before accepting it as done, with an optional verification command.
 - **Background work.** Schedules, webhook triggers, queued messages and long-running commands keep going after you close the window. Recaps say what happened.
 
 **Models working together**
