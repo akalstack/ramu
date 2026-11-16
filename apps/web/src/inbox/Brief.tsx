@@ -190,12 +190,14 @@ function BriefRowView({
             <span className="block truncate font-medium text-foreground">{content.title}</span>
             <span className="block truncate text-caption">
               <span className={TONE_TEXT[look.tone]}>{content.detail}</span>
-              {where && <span className="text-muted-foreground"> · {where}</span>}
+              {[where, content.at ? timeAgo(content.at) : ''].filter(Boolean).map((part) => (
+                <span key={part} className="text-muted-foreground">
+                  {' · '}
+                  {part}
+                </span>
+              ))}
             </span>
           </span>
-          {content.at ? (
-            <span className="flex-none text-caption text-muted-foreground tabular-nums">{timeAgo(content.at)}</span>
-          ) : null}
           <ChevronRight
             size={14}
             aria-hidden
