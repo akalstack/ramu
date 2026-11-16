@@ -182,7 +182,8 @@ beforeEach(async () => {
       if (method === 'hostThreads.start')
         return [{ taskId: 'far-1', title: (args[0] as RemoteRequest).thread.title ?? 'Remote', projectName: 'jobs' }]
       if (method === 'hostThreads.status') return [remoteStatus]
-      if (method === 'hostThreads.projects') return [{ id: 'jobs', name: 'jobs' }]
+      if (method === 'hostThreads.projects')
+        return { platform: 'linux', arch: 'x64', projects: [{ id: 'jobs', name: 'jobs', gitEmail: 'me@vps' }] }
       return { sent: true }
     },
   } as unknown as AgentHostService
@@ -628,11 +629,15 @@ describe('threads another host asks for', () => {
     await expect(service.startForHost(device, request())).rejects.toThrow(/last hour/)
   })
 
-  it('names projects to a paired host without their folders', () => {
-    expect(service.projectsForHost(device)).toEqual([
-      { id: api.id, name: 'api' },
-      { id: web.id, name: 'web' },
-    ])
+  it('names projects and its platform to a paired host, without folders or hostnames', () => {
+    expect(service.projectsForHost(device)).toEqual({
+      platform: process.platform,
+      arch: process.arch,
+      projects: [
+        { id: api.id, name: 'api' },
+        { id: web.id, name: 'web' },
+      ],
+    })
     expect(() => service.projectsForHost({ id: 'p', role: 'owner' } as DeviceInfo)).toThrow(/Only a paired host/)
   })
 
@@ -748,7 +753,12 @@ describe('threads this host’s agents start on another host', () => {
       }),
     ).rejects.toThrow(/never leave it/)
     const projects = await tools('caller').call('project_list', { host: 'vps' })
-    expect(projects).toEqual([{ id: 'jobs', name: 'jobs', host: 'vps' }])
+    expect(projects).toEqual({ host: 'vps', platform: 'linux', arch: 'x64', projects: [{ id: 'jobs', name: 'jobs' }] })
+    expect(await tools('caller').call('project_list', {})).toMatchObject({
+      platform: process.platform,
+      arch: process.arch,
+      projects: expect.arrayContaining([expect.objectContaining({ name: 'api', current: true })]),
+    })
   })
 })
 

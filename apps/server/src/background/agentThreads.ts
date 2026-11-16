@@ -45,6 +45,28 @@ export const MAX_THREADS_PER_HOUR = 8
 /** A person's thread is depth 0; threads it starts are 1 and may start threads at depth 2, which may not. */
 export const MAX_DEPTH = 2
 export const MAX_MESSAGES_PER_HOUR = 20
+/**
+ * What a paired host answers to `hostThreads.projects`: its projects plus the platform and architecture, so an agent
+ * can pick a host that can build the task (an iOS build needs a Mac). Bounded, since the other host is not trusted.
+ */
+const HOST_PROJECTS = z.object({
+  platform: z.string().max(20),
+  arch: z.string().max(20),
+  projects: z
+    .array(
+      z.object({
+        id: z.string().max(200),
+        name: z.string().max(200),
+        aliases: z.array(z.string().max(200)).max(50).optional(),
+        description: z.string().max(4000).optional(),
+        gitEmail: z.string().max(320).nullish(),
+      }),
+    )
+    .max(1000),
+})
+
+const hostFacts = () => ({ platform: process.platform, arch: process.arch })
+
 const REQUEST_ID = z
   .string()
   .min(1)
@@ -222,35 +244,37 @@ export class AgentThreadService {
       'project_list',
       {
         description:
-          'List the projects on this host, or on another host your agents can use (host), by name with aliases and descriptions, to choose where thread_start should start a thread.',
+          "List the projects on this host, or on another host your agents can use (host), by name with aliases and descriptions, to choose where thread_start should start a thread. The answer names the host's platform and architecture (darwin, linux or win32; arm64 or x64): pick a host that can build the task, such as darwin for an iOS build.",
         inputSchema: { host: z.string().max(100).optional() },
       },
       ({ host }) =>
         result(async () => {
           if (host) {
             const target = this.hostNamed(host)
-            const projects = (await this.remote!.hosts.invoke(target.id, 'hostThreads.projects', [])) as {
-              id: string
-              name: string
-              aliases?: string[]
-              description?: string
-            }[]
-            return projects.map(({ id, name, aliases, description }) => ({
-              id,
-              name,
+            const answer = HOST_PROJECTS.parse(await this.remote!.hosts.invoke(target.id, 'hostThreads.projects', []))
+            return {
               host: target.name,
-              ...(aliases?.length ? { aliases } : {}),
-              ...(description ? { description } : {}),
-            }))
+              platform: answer.platform,
+              arch: answer.arch,
+              projects: answer.projects.map(({ id, name, aliases, description }) => ({
+                id,
+                name,
+                ...(aliases?.length ? { aliases } : {}),
+                ...(description ? { description } : {}),
+              })),
+            }
           }
           const current = this.workspace.getTask(this.agents.get(sessionId).taskId).projectId
-          return this.workspace.listProjects().map((project) => ({
-            id: project.id,
-            name: project.name,
-            ...(project.aliases?.length ? { aliases: project.aliases } : {}),
-            ...(project.description ? { description: project.description } : {}),
-            ...(project.id === current ? { current: true } : {}),
-          }))
+          return {
+            ...hostFacts(),
+            projects: this.workspace.listProjects().map((project) => ({
+              id: project.id,
+              name: project.name,
+              ...(project.aliases?.length ? { aliases: project.aliases } : {}),
+              ...(project.description ? { description: project.description } : {}),
+              ...(project.id === current ? { current: true } : {}),
+            })),
+          }
         }),
     )
     server.registerTool(
@@ -496,12 +520,10 @@ export class AgentThreadService {
     // as another address there. The person sees it on the approval card, which the agent cannot answer.
     const here = this.gitEmail({ projectId: callerTask.projectId })
     const theirs = here
-      ? (((await this.remote!.hosts.invoke(host.id, 'hostThreads.projects', []).catch(() => [])) as {
-          id: string
-          name: string
-          aliases?: string[]
-          gitEmail?: string | null
-        }[]) ?? [])
+      ? await this.remote!.hosts.invoke(host.id, 'hostThreads.projects', []).then(
+          (answer) => HOST_PROJECTS.parse(answer).projects,
+          () => [],
+        )
       : []
     const warnings = [
       ...new Set(
@@ -660,13 +682,16 @@ export class AgentThreadService {
   /** What a paired host may know about projects here to name one: names, aliases and descriptions, never paths. */
   projectsForHost(device: DeviceInfo) {
     if (device.kind !== 'host') throw new Error('Only a paired host can ask this way.')
-    return this.workspace.listProjects().map((project) => ({
-      id: project.id,
-      name: project.name,
-      ...(project.aliases?.length ? { aliases: project.aliases } : {}),
-      ...(project.description ? { description: project.description } : {}),
-      ...((email) => (email ? { gitEmail: email } : {}))(this.gitEmail({ projectId: project.id })),
-    }))
+    return {
+      ...hostFacts(),
+      projects: this.workspace.listProjects().map((project) => ({
+        id: project.id,
+        name: project.name,
+        ...(project.aliases?.length ? { aliases: project.aliases } : {}),
+        ...(project.description ? { description: project.description } : {}),
+        ...((email) => (email ? { gitEmail: email } : {}))(this.gitEmail({ projectId: project.id })),
+      })),
+    }
   }
 
   /** The state of threads this pairing started here, one or all; never anything else on this host. */
