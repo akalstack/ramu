@@ -1,45 +1,53 @@
 # Roadmap
 
-Unfinished work only. Completed items are removed; lasting behavior lives in the [guide](README.md#guide). Open an issue before starting anything here.
+Unfinished work only, sorted by what each item needs next. Completed items are removed; lasting behavior lives in the [guide](README.md#guide). Open an issue before starting anything here.
 
-Every item needs scoped tests and typechecks for the packages it touches. Desktop-facing changes also run `pnpm build` then `pnpm test:desktop-smoke` ([contributing](../CONTRIBUTING.md#checks)). Checks that need a physical phone, a signed build, a live provider or a second host are listed under [Acceptance](#acceptance) and stay open until run; fake-provider tests do not close them.
+| Section | What it holds |
+| --- | --- |
+| [To build](#to-build) | Code to write now; nothing blocks it |
+| [To build after a review](#to-build-after-a-review) | Code that waits on a security review or a comparison run |
+| [Blocked](#blocked) | Waiting on another company's release, a paid account or hardware |
+| [To release](#to-release) | Built; needs signing, publishing or a by-hand install |
+| [Acceptance](#acceptance) | Built; needs a run on a real device, account or second host |
+| [Later](#later) | Options, not planned |
 
-## Release
+Every change needs scoped tests and typechecks for the packages it touches; desktop-facing changes also run `pnpm build` then `pnpm test:desktop-smoke` ([contributing](../CONTRIBUTING.md#checks)). Fake-provider tests do not close an Acceptance check.
 
-- **macOS:** confirm a release run's signed, notarized build (certificate and App Store Connect key secrets are in [Releasing](contributing/releasing.md#signing-and-packaged-checks)), then turn on `APP_AUTO_UPDATE` in `packages/shared/src/updates.ts` once it installs on a second Mac.
-- **Linux:** install the `.rpm` on Fedora and start the AppImage on Ubuntu 24.04 by hand (its AppArmor user-namespace limit can block Electron's sandbox); CI smoke-tests only the `.deb`.
-- **Windows:** continue the port on the `windows-port` branch: the server's shell, terminal and path handling, packaging, and a hands-on run in a Windows 11 VM.
-- **Mobile stores, held until the app is ready:** EAS holds the Android keystore and Play submission key, and a production `.aab` is built; Apple has both bundle IDs, an APNs key and an App Store Connect key. To publish: create the Play app, upload the first `.aab` to the internal track by hand (later ones use `eas:release:android`) and invite the submission key; give EAS the APNs key, create the App Store Connect record and send the first build to TestFlight.
-
-## Implementation
+## To build
 
 - **Transport:** bounded replay and snapshot recovery for every resource, and defined connection outcomes (current, synchronizing, disconnected, authorization rejected, outcome unknown) that keep drafts and queued messages; non-retriable mutations report an unknown outcome and reconcile. Start from measurements on real networks ([Architecture](contributing/architecture.md#transport)).
-- **Cursor on a paid login:** confirm who owns Cursor's native background commands on a live turn, as was done for Claude, Codex and OpenCode ([Architecture](contributing/architecture.md#providers)), and that Cursor turns record tokens from the SDK's `usage`. Cursor's SDK refuses free accounts.
-- **Thread titles:** recheck that Codex sends no `thread/name/updated` on a live turn that completes; Ramu writes Codex and Antigravity titles itself.
-- **Mobile tablets:** the Inbox and Pull requests tabs could open items beside their list on a wide window, as threads do.
-- **Test device video through a tunnel:** when WebRTC cannot connect (a tunnel blocking UDP), play Simlock's stream through Ramu's connection, decoded with WebCodecs in a WebView, instead of dropping to screenshots. Whether the phone's WebView decodes H.264 can only be tried on a physical phone.
-- **Starting points for test devices:** **Save as starting point** would make a Simlock baseline the next thread opens from. Blocked until Simlock's agent-device front can allocate from a baseline (0.6.0 cannot).
-- **Browser and computer use:** provider capability negotiation and more session-import sources. Forwarding one loopback port to one paired phone for **Open on this phone** needs a security review first. Computer use on Windows and Linux waits for native capture, permissions and signing.
-- **Host facts for agents:** `hostThreads.projects` could add each host's platform, architecture and description so an agent can recommend a host; it changes what a paired host learns, so it needs the [host pairing](../SECURITY.md#host-pairing) review.
-- **Helpers on another host:** `ramu_agent` with a `host` would mirror a helper's events into the parent live, which needs an event channel between hosts.
-- **Site screenshots:** a real capture from a release build beside each step of **From an idea to a live app** (`apps/site`). Claim "anyone can ship an app" only after the non-coder task under [Acceptance](#acceptance) passes with real people, and an improvement over another application only with matched-task evidence, not source inspection or one demo.
+- **Windows:** continue the port on the `windows-port` branch: the server's shell, terminal and path handling, packaging, and a hands-on run in a Windows 11 VM.
+- **Tablet Inbox and Pull requests:** open an item beside its list on a wide window, as threads do (`ThreadSplit` in `apps/mobile/src/components/SplitPane.tsx`).
 - **Presenting from the phone:** **Present** a deck on a display the phone is connected to (AirPlay or a cable), with speaker notes on the phone ([Artifacts](guide/artifacts.md)).
-- **Plugins:** make `akalstack/ramu-plugins` and `akalstack/ramu-plugin-template` public together with `akalstack/ramu` (until then CI needs `RAMU_READ_TOKEN`), and run `pnpm --filter @ramu/site plugins:sync` before the site's build. Move a media service to a plugin once it ships an MCP server that passes the same live checks (ElevenLabs first). Decide whether Bitbucket and Azure DevOps stay first-party by running one pull request task through Ramu and through their CLIs with a plugin's skill ([Plugins](guide/plugins.md)).
-- **Ramu account, to go live:** a full GitHub and Google sign-in from the desktop and a phone, and Google's brand verification of the **Ramu** consent screen (project `akalstack-ramu`), which checks the [privacy notice](https://akalstack.com/privacy) and [terms](https://akalstack.com/terms) ([Account](guide/account.md)).
-- **Mobile dev builds:** `apps/mobile/package.json` builds `expo-video` from source because its prebuilt binary does not match `expo-modules-core` 58.0.26. Drop the override once a matching binary ships.
+- **Browser and computer use:** provider capability negotiation and more session-import sources.
+- **Helpers on another host:** `ramu_agent` with a `host` would mirror a helper's events into the parent live; it needs an event channel between hosts.
+- **Site screenshots:** a real capture from a release build beside each step of **From an idea to a live app** (`apps/site`). Claim "anyone can ship an app" only after the non-coder task under [Acceptance](#acceptance) passes with real people, and an improvement over another application only with matched-task evidence.
 
-### Later
+## To build after a review
 
-- **Games and 3D:** Rapier beside three.js if games keep shipping their own physics; an App docked as a panel across a project's threads if asked for; Unity checks through computer use; a Blender plugin for retopology and levels of detail.
-- **Tools across hosts:** sending a key to another host, sealed and confirmed with a matching number, if re-entering keys proves the main friction (needs a [host pairing](../SECURITY.md#host-pairing)-level review); installing from the phone; adopting provider-folder skills and servers so they travel; one server following several projects ([On your other hosts](guide/plugins.md#on-your-other-hosts)).
-- **Cloud hosts:** Ramu hosts attached to the account and listed in the host switcher, with the web app at `ramu.akalstack.com`.
-- **Hosted connection:** a relay or tunnels provisioned per host by a Ramu service (the cheapest option to revisit), once there is a way to fund them; today hosts are reached over the LAN, a private network, SSH or the person's own tunnel ([Remote hosts](guide/remote-hosts.md)).
-- **Codex call costs:** price Codex calls in cost-aware Auto once Codex reports cost; Ramu keeps no price table of its own, since published prices change and disagree.
-- **Browser recording:** change videos on pull requests, if people ask for them; it needs a video encoder Ramu does not ship.
-- **Certificate pinning:** only with a threat that HTTPS pairing and host-identity checks do not cover; it needs a native transport replacement.
-- **Not planned unless people ask:** a full mobile editor, mobile provider sign-in, chunked large-file upload, a theme marketplace, plugin code inside Ramu and plugin hooks, automatic provider-file or credential sync, AI conflict resolution, local grounding models and VMs for computer use, and vector retrieval for learning.
+- **Open on this phone for loopback servers:** forward one loopback port to one paired phone (expiring, IP-bound, shown with its port); security review first.
+- **Host facts for agents:** `hostThreads.projects` could add each host's platform, architecture and description so an agent can recommend a host; it changes what a paired host learns, so it needs the [host pairing](../SECURITY.md#host-pairing) review.
+- **Bitbucket and Azure DevOps:** decide whether they stay first-party by running one pull request task through Ramu and through their CLIs with a plugin's skill, counting steps, failures and secrets in the transcript ([Plugins](guide/plugins.md)).
+
+## Blocked
+
+- **Starting points for test devices:** **Save as starting point** would make a Simlock baseline the next thread opens from. Waits for Simlock's agent-device front to allocate from a baseline (Ramu pins 0.6.0, which cannot).
+- **Test device video through a tunnel:** when WebRTC cannot connect (a tunnel blocking UDP), play Simlock's stream through Ramu's connection, decoded with WebCodecs in a WebView. Start by checking on a physical phone that its WebView decodes H.264 with WebCodecs.
+- **Computer use on Windows and Linux:** waits for native capture, permissions and signing on each.
+- **Media services as plugins:** move ElevenLabs (then others) from its built-in connector to a plugin once the vendor ships an MCP server that makes the file and passes the same live checks.
+- **Mobile dev builds:** `apps/mobile/package.json` builds `expo-video` from source because its prebuilt binary does not match `expo-modules-core` 58.0.26; drop the override once Expo ships a matching binary.
+- **Ramu account consent screen:** Google's brand verification of the **Ramu** consent screen (project `akalstack-ramu`), which checks the [privacy notice](https://akalstack.com/privacy) and [terms](https://akalstack.com/terms) ([Account](guide/account.md)).
+
+## To release
+
+- **macOS:** confirm a release run's signed, notarized build ([Releasing](contributing/releasing.md#signing-and-packaged-checks)), then turn on `APP_AUTO_UPDATE` in `packages/shared/src/updates.ts` once it installs on a second Mac.
+- **Linux:** install the `.rpm` on Fedora and start the AppImage on Ubuntu 24.04 by hand (its AppArmor user-namespace limit can block Electron's sandbox); CI smoke-tests only the `.deb`.
+- **Plugins:** make `akalstack/ramu-plugins` and `akalstack/ramu-plugin-template` public together with `akalstack/ramu` (until then their CI needs `RAMU_READ_TOKEN`), and run `pnpm --filter @ramu/site plugins:sync` before the site's build.
+- **Mobile stores, held until the app is ready:** create the Play app, upload the first `.aab` to the internal track by hand (later ones use `eas:release:android`) and invite the submission key; give EAS the APNs key, create the App Store Connect record and send the first build to TestFlight. The keystore, submission key, bundle IDs, APNs key and a production `.aab` already exist.
 
 ## Acceptance
+
+The code is in; each check needs a real device, account or second host and stays open until run.
 
 ### Phones and tablets
 
@@ -59,6 +67,10 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 ### Live accounts and second hosts
 
 Paid calls and credentials are opt-in.
+
+- **Cursor on a paid login:** who owns Cursor's native background commands on a live turn ([Architecture](contributing/architecture.md#providers)), and that its turns record tokens from the SDK's `usage`. Cursor's SDK refuses free accounts.
+- **Codex titles:** on a live turn that completes, Codex still sends no `thread/name/updated`, so Ramu's own title stays.
+- **Ramu account sign-in:** a full GitHub and Google sign-in from the desktop and a phone.
 
 - **Publishing from this computer:** an app published through a tunnel opens from a phone on another network. With a hostname on a real Cloudflare zone, it answers after Ramu restarts, and **Remove** leaves no tunnel or record.
 - **Compact before sending (Claude):** a thread over 200K tokens, idle past its cache lifetime, shows **Compact** beside Send on the desktop and a phone; sending compacts first, and **Keep** sends with full history.
@@ -82,3 +94,14 @@ Paid calls and credentials are opt-in.
 - **New projects:** **New project** for a website, a phone app and an API with **Auto**, on the desktop and the phone: at most three questions, the stack in one line, the generator running, the thread moving into the project, the dev server in the browser panel, and **New project…** with a name creating it without an agent turn.
 - **Helpers:** a lead splits a task into a worktree helper on another model and a read-only reviewer, checks them with `ramu_agent_status`, stops one with `ramu_agent_stop`, and a resent call with the same `requestId` starts no second helper.
 - **Multi-device:** an agent opens Calculator and computes `(125 * 8) + 42` (expect `1042`) while watched and stopped from a phone and a second desktop. Stream on one host, answer a permission and stop an agent on a second, switch hosts, drop Wi-Fi, sleep the phone and resume with drafts and unread state intact. Tell from icons and labels which of several concurrent threads (goal, approval, question, usage limit, stalled goal, failed run, unread result) needs action.
+
+## Later
+
+- **Games and 3D:** Rapier beside three.js if games keep shipping their own physics; an App docked as a panel across a project's threads if asked for; Unity checks through computer use; a Blender plugin for retopology and levels of detail.
+- **Tools across hosts:** sending a key to another host, sealed and confirmed with a matching number, if re-entering keys proves the main friction (needs a [host pairing](../SECURITY.md#host-pairing)-level review); installing from the phone; adopting provider-folder skills and servers so they travel; one server following several projects ([On your other hosts](guide/plugins.md#on-your-other-hosts)).
+- **Cloud hosts:** Ramu hosts attached to the account and listed in the host switcher, with the web app at `ramu.akalstack.com`.
+- **Hosted connection:** a relay or tunnels provisioned per host by a Ramu service (the cheapest option to revisit), once there is a way to fund them; today hosts are reached over the LAN, a private network, SSH or the person's own tunnel ([Remote hosts](guide/remote-hosts.md)).
+- **Codex call costs:** price Codex calls in cost-aware Auto once Codex reports cost; Ramu keeps no price table of its own, since published prices change and disagree.
+- **Browser recording:** change videos on pull requests, if people ask for them; it needs a video encoder Ramu does not ship.
+- **Certificate pinning:** only with a threat that HTTPS pairing and host-identity checks do not cover; it needs a native transport replacement.
+- **Not planned unless people ask:** a full mobile editor, mobile provider sign-in, chunked large-file upload, a theme marketplace, plugin code inside Ramu and plugin hooks, automatic provider-file or credential sync, AI conflict resolution, local grounding models and VMs for computer use, and vector retrieval for learning.
