@@ -7,6 +7,7 @@ import { SearchField } from '@/components/search-field'
 import { RowButton } from '@/components/row-button'
 import { ContentSkeleton } from '@/components/content-skeleton'
 import { OverlayScrollArea } from '@/components/overlay-scroll-area'
+import { SplitPane } from '@/components/split-pane'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { ForgeService, PullRequestSummary, RepositoryPullRequests } from '@ramu/shared/types'
@@ -47,6 +48,8 @@ import { PullRequestView } from './PullRequestView'
 const ALL = ''
 const SERVICE = 'service:'
 const SORT_KEY = 'ramu.pull-requests-sort'
+/** Room for a title, its checks and the repository line; dragging can widen it for long titles or narrow it for the diff. */
+const LIST_WIDTH = { initial: 480, min: 320, max: 720 }
 
 /** The order last chosen on this device; storage may be unavailable, which leaves the default. */
 function savedSort(): PullRequestSort {
@@ -332,186 +335,192 @@ export function PullRequestsPage() {
   ]
 
   return (
-    <div className="@container flex min-h-0 min-w-0 flex-1">
-      <section
-        aria-label={t('Pull requests')}
-        className={cn(
-          'flex min-h-0 w-full flex-col @min-[900px]:w-[480px] @min-[1280px]:w-[540px] @min-[900px]:flex-none @min-[900px]:border-r @min-[900px]:border-(--line)',
-          selected && '@max-[899px]:hidden',
-        )}
-      >
-        <div className="flex flex-none flex-col gap-2 px-4 pt-4">
-          <div className="flex items-center gap-1.5">
-            <SearchField
-              value={search}
-              onChange={setSearch}
-              label={t('Search pull requests')}
-              placeholder={t('Search title, author, branch or repository')}
-              className="flex-1"
-            />
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t('Refresh pull requests')}
-              title={t('Refresh')}
-              disabled={refreshing}
-              onClick={() => void refresh()}
-            >
-              <RefreshCw size={14} className={cn((refreshing || fetching) && 'animate-spin')} />
-            </Button>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Dropdown
-              label={t('Sort')}
-              value={sort}
-              options={[
-                { value: 'updated', label: t('Recently updated') },
-                { value: 'readiness', label: t('Closest to merging') },
-              ]}
-              onChange={(value) => {
-                const next = value === 'readiness' ? 'readiness' : 'updated'
-                setSort(next)
-                try {
-                  localStorage.setItem(SORT_KEY, next)
-                } catch {
-                  // The choice still applies until the page closes.
-                }
-              }}
-              className="flex-1"
-            />
-            {uniqueRepos.length > 1 && (
-              <Combobox
-                label={t('Repository')}
-                searchPlaceholder={t('Search repositories')}
-                value={repoKey}
-                options={repoOptions}
+    <SplitPane
+      id="pull-requests"
+      label={t('Resize pull request list')}
+      bounds={LIST_WIDTH}
+      mainMin={360}
+      splitFrom={900}
+      side={
+        <section
+          aria-label={t('Pull requests')}
+          className={cn('flex min-h-0 w-full flex-col', selected && '@max-[899px]:hidden')}
+        >
+          <div className="flex flex-none flex-col gap-2 px-4 pt-4">
+            <div className="flex items-center gap-1.5">
+              <SearchField
+                value={search}
+                onChange={setSearch}
+                label={t('Search pull requests')}
+                placeholder={t('Search title, author, branch or repository')}
+                className="flex-1"
+              />
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t('Refresh pull requests')}
+                title={t('Refresh')}
+                disabled={refreshing}
+                onClick={() => void refresh()}
+              >
+                <RefreshCw size={14} className={cn((refreshing || fetching) && 'animate-spin')} />
+              </Button>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Dropdown
+                label={t('Sort')}
+                value={sort}
+                options={[
+                  { value: 'updated', label: t('Recently updated') },
+                  { value: 'readiness', label: t('Closest to merging') },
+                ]}
                 onChange={(value) => {
-                  setRepoKey(value)
-                  setSelected(null)
+                  const next = value === 'readiness' ? 'readiness' : 'updated'
+                  setSort(next)
+                  try {
+                    localStorage.setItem(SORT_KEY, next)
+                  } catch {
+                    // The choice still applies until the page closes.
+                  }
                 }}
                 className="flex-1"
               />
-            )}
-          </div>
-          <Tabs value={filter} onValueChange={(value) => setFilter(value as PullRequestFilter)}>
-            <TabsList
-              variant="line"
-              className="h-9! w-full justify-start gap-2.5 overflow-x-auto border-b border-(--line) p-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            >
-              {PULL_REQUEST_FILTERS.map((entry) => (
-                <TabsTrigger key={entry} value={entry} className="flex-none gap-1.5 px-0.5 text-control">
-                  {t(PULL_REQUEST_FILTER_LABEL[entry])}
-                  {count(entry) > 0 && (
-                    <span className="min-w-4 rounded-full bg-fill px-1.5 text-[11px] leading-4 text-muted-foreground tabular-nums">
-                      {count(entry)}
-                    </span>
-                  )}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-        </div>
-        <OverlayScrollArea className="min-h-0 flex-1">
-          <div ref={listRef} className="flex flex-col gap-px px-2 pt-2 pb-6" onKeyDown={move}>
-            <RepositoryAccessNotices
-              repos={attention}
-              hosts={unreachable.map(({ host, query }) => ({
-                host,
-                error: host.status === 'connected' ? errorText(query.error) : null,
-                onRetry: () => void query.refetch(),
-              }))}
-              hostName={hostName}
-              manyHosts={manyHosts}
-              onRetry={() => void refresh()}
-              retrying={refreshing}
-            />
-            {loading && !rows.length && <ContentSkeleton />}
-            {rows.map(row)}
-            {settled && !rows.length && (
-              <Empty className="py-12">
-                <EmptyHeader>
-                  <EmptyMedia variant="icon">
-                    <GitPullRequest />
-                  </EmptyMedia>
-                  <EmptyTitle>
-                    {!reachable.length && !attention.length
-                      ? t('No repositories with a hosting service')
-                      : search
-                        ? t('No pull requests match')
-                        : filter === 'needs-you'
-                          ? t('No pull requests waiting on you')
-                          : t('No pull requests here')}
-                  </EmptyTitle>
-                  <EmptyDescription>
-                    {!reachable.length && !attention.length
-                      ? t(
-                          'Publish a project to GitHub, GitLab, Bitbucket or Azure DevOps to see its pull requests here.',
-                        )
-                      : filter === 'needs-you'
-                        ? t('Reviews asked of you and your pull requests that are ready or blocked show here.')
-                        : t('Try another tab or repository.')}
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            )}
-          </div>
-        </OverlayScrollArea>
-      </section>
-      <section
-        aria-label={t('Pull request')}
-        className={cn('min-h-0 min-w-0 flex-1 flex-col', selected ? 'flex' : 'hidden @min-[900px]:flex')}
-      >
-        {selected ? (
-          <>
-            <div className={cn('flex flex-none items-center gap-1 px-3 pt-2', !manyHosts && '@min-[900px]:hidden')}>
-              <Button variant="ghost" size="sm" className="@min-[900px]:hidden" onClick={() => setSelected(null)}>
-                <ArrowLeft size={13} />
-                {t('Pull requests')}
-              </Button>
-              {manyHosts && (
-                <PullRequestHost
-                  row={selected}
-                  name={hostName}
-                  connected={connected}
-                  onChange={(source) => setSelected({ ...selected, ...source })}
+              {uniqueRepos.length > 1 && (
+                <Combobox
+                  label={t('Repository')}
+                  searchPlaceholder={t('Search repositories')}
+                  value={repoKey}
+                  options={repoOptions}
+                  onChange={(value) => {
+                    setRepoKey(value)
+                    setSelected(null)
+                  }}
+                  className="flex-1"
                 />
               )}
             </div>
-            <HostContent
-              key={`${selected.host}\n${selected.pr.url}`}
-              host={selected.host}
-              fallback={
-                <div className="flex-1 p-6">
-                  <ContentSkeleton />
-                </div>
-              }
-            >
-              <PullRequestView
-                taskId={projectCtx(selected.projectId)}
-                view={{
-                  kind: 'pull-request',
-                  id: `pull-request:${selected.pr.url}`,
-                  repoId: selected.repoId,
-                  url: selected.pr.url,
-                  number: selected.pr.number,
-                  title: selected.pr.title,
-                }}
+            <Tabs value={filter} onValueChange={(value) => setFilter(value as PullRequestFilter)}>
+              <TabsList
+                variant="line"
+                className="h-9! w-full justify-start gap-2.5 overflow-x-auto border-b border-(--line) p-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {PULL_REQUEST_FILTERS.map((entry) => (
+                  <TabsTrigger key={entry} value={entry} className="flex-none gap-1.5 px-0.5 text-control">
+                    {t(PULL_REQUEST_FILTER_LABEL[entry])}
+                    {count(entry) > 0 && (
+                      <span className="min-w-4 rounded-full bg-fill px-1.5 text-[11px] leading-4 text-muted-foreground tabular-nums">
+                        {count(entry)}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
+          <OverlayScrollArea className="min-h-0 flex-1">
+            <div ref={listRef} className="flex flex-col gap-px px-2 pt-2 pb-6" onKeyDown={move}>
+              <RepositoryAccessNotices
+                repos={attention}
+                hosts={unreachable.map(({ host, query }) => ({
+                  host,
+                  error: host.status === 'connected' ? errorText(query.error) : null,
+                  onRetry: () => void query.refetch(),
+                }))}
+                hostName={hostName}
+                manyHosts={manyHosts}
+                onRetry={() => void refresh()}
+                retrying={refreshing}
               />
-            </HostContent>
-          </>
-        ) : (
-          <Empty className="flex-1">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <GitPullRequest />
-              </EmptyMedia>
-              <EmptyTitle>{t('Choose a pull request')}</EmptyTitle>
-              <EmptyDescription>{t('It opens here with its checks, review threads and merge.')}</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        )}
-      </section>
-    </div>
+              {loading && !rows.length && <ContentSkeleton />}
+              {rows.map(row)}
+              {settled && !rows.length && (
+                <Empty className="py-12">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <GitPullRequest />
+                    </EmptyMedia>
+                    <EmptyTitle>
+                      {!reachable.length && !attention.length
+                        ? t('No repositories with a hosting service')
+                        : search
+                          ? t('No pull requests match')
+                          : filter === 'needs-you'
+                            ? t('No pull requests waiting on you')
+                            : t('No pull requests here')}
+                    </EmptyTitle>
+                    <EmptyDescription>
+                      {!reachable.length && !attention.length
+                        ? t(
+                            'Publish a project to GitHub, GitLab, Bitbucket or Azure DevOps to see its pull requests here.',
+                          )
+                        : filter === 'needs-you'
+                          ? t('Reviews asked of you and your pull requests that are ready or blocked show here.')
+                          : t('Try another tab or repository.')}
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              )}
+            </div>
+          </OverlayScrollArea>
+        </section>
+      }
+      main={
+        <section
+          aria-label={t('Pull request')}
+          className={cn('min-h-0 min-w-0 flex-1 flex-col', selected ? 'flex' : 'hidden @min-[900px]:flex')}
+        >
+          {selected ? (
+            <>
+              <div className={cn('flex flex-none items-center gap-1 px-3 pt-2', !manyHosts && '@min-[900px]:hidden')}>
+                <Button variant="ghost" size="sm" className="@min-[900px]:hidden" onClick={() => setSelected(null)}>
+                  <ArrowLeft size={13} />
+                  {t('Pull requests')}
+                </Button>
+                {manyHosts && (
+                  <PullRequestHost
+                    row={selected}
+                    name={hostName}
+                    connected={connected}
+                    onChange={(source) => setSelected({ ...selected, ...source })}
+                  />
+                )}
+              </div>
+              <HostContent
+                key={`${selected.host}\n${selected.pr.url}`}
+                host={selected.host}
+                fallback={
+                  <div className="flex-1 p-6">
+                    <ContentSkeleton />
+                  </div>
+                }
+              >
+                <PullRequestView
+                  taskId={projectCtx(selected.projectId)}
+                  view={{
+                    kind: 'pull-request',
+                    id: `pull-request:${selected.pr.url}`,
+                    repoId: selected.repoId,
+                    url: selected.pr.url,
+                    number: selected.pr.number,
+                    title: selected.pr.title,
+                  }}
+                />
+              </HostContent>
+            </>
+          ) : (
+            <Empty className="flex-1">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <GitPullRequest />
+                </EmptyMedia>
+                <EmptyTitle>{t('Choose a pull request')}</EmptyTitle>
+                <EmptyDescription>{t('It opens here with its checks, review threads and merge.')}</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+        </section>
+      }
+    />
   )
 }
 

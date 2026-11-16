@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import { DEFAULT_SIDEBAR_WIDTH, SIDEBAR_WIDTH_RANGE } from '@ramu/shared/types'
 import { useDefaultLayout, useGroupRef, type Layout, type LayoutStorage } from 'react-resizable-panels'
 import { ownHostId } from '../hosts'
-import { deviceStorage } from '../deviceStorage'
+import { deviceStorage, type DeviceStorage } from '../deviceStorage'
 import { clearOwnHostLayout, hostStorageFor } from '../hostStorage'
 
 /**
@@ -45,6 +45,37 @@ export function useSidebarWidth(preferred: number): [number, (width: number) => 
   }, [stored, preferred])
   const set = useCallback((width: number) => deviceStorage.setItem(SIDEBAR_WIDTH_KEY, String(Math.round(width))), [])
   return [stored ?? preferred, set]
+}
+
+/** A side pane's width in pixels: where it starts, and how narrow or wide dragging may make it. */
+export interface SplitBounds {
+  initial: number
+  min: number
+  max: number
+}
+
+const splitKey = (id: string) => `${PREFIX}split.${id}`
+
+/**
+ * A page's remembered side-pane width on this device, or `bounds.initial` when none is stored or the stored value is
+ * no longer inside the bounds. Lives under the layout prefix so resetting layout sizes clears it too.
+ */
+export function readSplitWidth(storage: Pick<DeviceStorage, 'getItem'>, id: string, bounds: SplitBounds) {
+  const raw = storage.getItem(splitKey(id))
+  const value = raw === null ? NaN : Number(raw)
+  return Number.isFinite(value) && value >= bounds.min && value <= bounds.max ? value : bounds.initial
+}
+
+/** Remembers a dragged width, kept inside the bounds; the starting width is stored as no preference at all. */
+export function saveSplitWidth(
+  storage: Pick<DeviceStorage, 'setItem' | 'removeItem'>,
+  id: string,
+  bounds: SplitBounds,
+  width: number,
+) {
+  const value = Math.round(Math.min(bounds.max, Math.max(bounds.min, width)))
+  if (value === bounds.initial) storage.removeItem(splitKey(id))
+  else storage.setItem(splitKey(id), String(value))
 }
 
 let epoch = 0

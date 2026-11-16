@@ -1632,6 +1632,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Show sidebar': 'Tampilkan sidebar',
   'Hide sidebar': 'Sembunyikan sidebar',
   'Resize sidebar': 'Ubah ukuran sidebar',
+  'Resize pull request list': 'Ubah ukuran daftar pull request',
   'Workspace tabs': 'Tab workspace',
   'Unsaved changes': 'Perubahan belum disimpan',
   'Close view': 'Tutup tampilan',
