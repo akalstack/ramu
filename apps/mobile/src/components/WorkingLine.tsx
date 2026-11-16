@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Pressable, View } from 'react-native'
+import { ActivityIndicator, Pressable, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import { translate } from '@ramu/shared/i18n'
 import { elapsedText } from '@ramu/shared/chat/agentActivity'
@@ -125,5 +125,29 @@ export function WorkingLine({
       ) : null}
       {onPress ? <ChevronRight size={12} color={c.muted} /> : null}
     </Pressable>
+  )
+}
+
+/**
+ * The end of a thread while its host catches up what this phone holds, as T3 Code shows it. Quieter than the turn's
+ * status: nothing is wrong and nothing needs the person, so it neither shimmers nor takes the accent.
+ */
+export function SyncLine() {
+  const store = useStore()
+  const { c } = useTheme()
+  const label = translate(store.language, 'Syncing messages…')
+  return (
+    <View
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={label}
+      accessibilityLiveRegion="polite"
+      style={{ height: 24, flexDirection: 'row', alignItems: 'center', gap: space.s }}
+    >
+      <ActivityIndicator size="small" color={c.muted} style={{ transform: [{ scale: 0.75 }] }} />
+      <T size={font.control} tone="muted" numberOfLines={1}>
+        {label}
+      </T>
+    </View>
   )
 }

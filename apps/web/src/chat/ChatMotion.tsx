@@ -3,6 +3,7 @@ import { CHAT_MOTION, SENT_MOTION } from '@ramu/shared/chat/presentation'
 import { reducedMotion } from '../workspace/panelMotion'
 import { WorkingText } from '../views/agent/components/WorkingText'
 import { WORKING_CLASS } from '../views/agent/styles'
+import { Spinner } from '@/components/ui/spinner'
 
 /** Fade changed content without replacing its disclosure, focus target, or live region. */
 export function ChatFade({
@@ -76,6 +77,21 @@ export function ChatStatus({ label, compacting }: { label: string; compacting?: 
     <div className={WORKING_CLASS} role="status" aria-live="polite" data-compacting={compacting || undefined}>
       <ChatFade identity={label} animate>
         <WorkingText>{label}</WorkingText>
+      </ChatFade>
+    </div>
+  )
+}
+
+/**
+ * The rows on screen are this client's copy while the host catches the thread up. Quieter than the agent's own status:
+ * nothing is wrong and nothing needs the person, so it neither shimmers nor takes the accent.
+ */
+export function ChatSyncStatus({ label }: { label: string }) {
+  return (
+    <div className={`${WORKING_CLASS} text-muted-foreground`} role="status" aria-live="polite" data-chat-sync>
+      <ChatFade identity={label} animate className="inline-flex items-center gap-2">
+        <Spinner role="presentation" aria-hidden aria-label={undefined} className="size-3.5" />
+        {label}
       </ChatFade>
     </div>
   )

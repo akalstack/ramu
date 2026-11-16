@@ -133,7 +133,8 @@ import { QueuedMessages } from './agent/components/QueuedMessages'
 import { ErrorNote } from './agent/components/ErrorNote'
 import { TranscriptTurn } from './agent/components/TranscriptTurn'
 import { useTranscriptArrival } from './agent/hooks/useTranscriptArrival'
-import { ChatStatus } from '../chat/ChatMotion'
+import { ChatStatus, ChatSyncStatus } from '../chat/ChatMotion'
+import { useDelayedStatus } from '../lib/useDelayedStatus'
 import { AsidePanel } from './agent/components/AsidePanel'
 import { AgentTaskPanel } from './agent/components/AgentTaskPanel'
 import { SaveTeammateDialog } from './agent/components/SaveTeammateDialog'
@@ -176,6 +177,7 @@ export const AgentView = memo(function AgentView({
     queuePaused,
     queueWaitingFor,
     hydrating,
+    syncing,
     error,
     setError,
   } = useAgentStream(view.sessionId, visible)
@@ -231,13 +233,7 @@ export const AgentView = memo(function AgentView({
   const blocks = useMemo(() => toBlocks(events), [events])
   const claimArrival = useTranscriptArrival(eventSequences, hydrating)
   // Most chats load before a person would notice; only a slow load earns an indicator.
-  const [slowHydration, setSlowHydration] = useState(false)
-  useEffect(() => {
-    setSlowHydration(false)
-    if (!hydrating) return
-    const timer = window.setTimeout(() => setSlowHydration(true), 400)
-    return () => window.clearTimeout(timer)
-  }, [hydrating])
+  const slowHydration = useDelayedStatus(view.sessionId, hydrating || null) !== null
   const goalNotes = useMemo(() => goalChanges(events), [events])
   const latestAssistant = blocks.findLast((block) => block.kind === 'event' && block.event.kind === 'text')
   const live = session ? LIVE.includes(session.state) : false
@@ -449,6 +445,11 @@ export const AgentView = memo(function AgentView({
   const threadArchived = thread?.status === 'archived'
   const threadDoneAt = thread?.doneAt ?? null
   const { offline: hostOffline, name: hostName } = useHostConnection()
+  // A thread opened from what this client holds says so while the host catches it up, so a person does not act on
+  // a transcript that may be behind. A first load has its spinner, and a host that is away has its own note below.
+  const syncShown =
+    useDelayedStatus(view.sessionId, syncing && !hydrating && !hostOffline && turns.length > 0 ? 'syncing' : null) !==
+    null
   const pending = useOutbox(view.sessionId, host.id)
   const supportsSteering = !!session
   const action = supportsSteering ? preferences.busyMessageAction : 'queue'
@@ -973,6 +974,7 @@ export const AgentView = memo(function AgentView({
                           {activityLabel && (compacting || !statusGroup) && (
                             <ChatStatus label={translate(activityLabel)} compacting={compacting} />
                           )}
+                          {syncShown && <ChatSyncStatus label={translate('Syncing messages…')} />}
                         </MessageScrollerContent>
                       </MessageScrollerViewport>
                       <ScrollToLatestButton working={working} />

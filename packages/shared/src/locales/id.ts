@@ -2344,6 +2344,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   Live: 'Langsung',
   'Live video': 'Video langsung',
   'Loading conversation': 'Memuat percakapan',
+  'Syncing messages…': 'Menyinkronkan pesan…',
   'Looking for profiles…': 'Mencari profil…',
   'Mark selected done': 'Tandai yang dipilih selesai',
   'Name the current scenario': 'Beri nama skenario saat ini',

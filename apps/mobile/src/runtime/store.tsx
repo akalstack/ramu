@@ -276,6 +276,8 @@ interface Store extends State {
   notifications: { computerId: string; chatId: string; title: string; body: string }[]
   /** Work the computer does on its own (cleanups, indexing…), per computer. */
   activity: Record<string, BackgroundActivity[]>
+  /** Open threads, by `scoped(computerId, sessionId)`, whose host is catching up what this phone holds of them. */
+  syncing: ReadonlySet<string>
   /** What a new chat starts with on each computer: its default model step and default access, as set in its Settings. */
   defaults: Record<string, AgentSettings>
   /** Shared preferences on each paired computer, refreshed when its settings change. */
@@ -374,6 +376,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const pushToken = useRef<string | null>(null)
   const [notifications, setNotifications] = useState<Store['notifications']>([])
   const [activity, setActivity] = useState<Record<string, BackgroundActivity[]>>({})
+  const [syncing, setSyncing] = useState<ReadonlySet<string>>(() => new Set())
+  // Overlapping catch-up reads per thread; it reads as syncing until the last one settles.
+  const syncReads = useRef(new Map<string, number>())
+  const catchUp = <T,>(keys: readonly string[], work: Promise<T>): Promise<T> => {
+    if (!keys.length) return work
+    for (const key of keys) syncReads.current.set(key, (syncReads.current.get(key) ?? 0) + 1)
+    setSyncing(new Set(syncReads.current.keys()))
+    return work.finally(() => {
+      for (const key of keys) {
+        const left = (syncReads.current.get(key) ?? 1) - 1
+        if (left) syncReads.current.set(key, left)
+        else syncReads.current.delete(key)
+      }
+      setSyncing(new Set(syncReads.current.keys()))
+    })
+  }
   const [inbox, setInbox] = useState<Record<string, InboxNotice[]>>({})
   const [modelPrefs, setModelPrefs] = useState<Record<string, import('@ramu/shared/types').ModelPreferences | null>>({})
   const [appPreferences, setAppPreferences] = useState<Record<string, AppPreferences>>({})
@@ -1395,7 +1413,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           try {
             await refreshing.current.get(computer.id)?.catch(() => {})
             if (!current()) return
-            await refresh(computer.id, true)
+            // The threads on screen were last read before the connection dropped.
+            const shown = [...shownSessions.current].filter((key) => key.startsWith(`${computer.id}:`))
+            await catchUp(shown, refresh(computer.id, true))
             if (current()) void flush(computer.id)
           } catch (error) {
             if (current()) report(error)
@@ -1574,6 +1594,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     ...state,
     notifications,
     activity,
+    syncing,
     inbox,
     defaults: startSettings,
     modelPrefs,
@@ -1842,7 +1863,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (!keys?.['agent:event']) void refresh(id, true).catch(report)
         for (const sessionId of shown) {
           const chat = ref.current.chats.find((c) => c.computerId === id && c.sessionId === sessionId)
-          if (chat?.taskId) void reconcileThread(id, chat.taskId, sessionId).catch(report)
+          if (chat?.taskId)
+            void catchUp([scoped(id, sessionId)], reconcileThread(id, chat.taskId, sessionId)).catch(report)
         }
       }
       return () => {

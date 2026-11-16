@@ -77,6 +77,9 @@ export function useAgentStream(sessionId: string, visible = true) {
   const [queueWaitingFor, setQueueWaitingFor] = useState(() => latestQueue(initial?.events ?? [])?.waitingFor ?? null)
   const [queued, setQueued] = useState<QueuedMessage[]>(() => latestQueue(initial?.events ?? [])?.messages ?? [])
   const [hydrating, setHydrating] = useState(() => !initial)
+  // A read from the host is catching this chat up (on open, on reconnect, when it is shown again) while the rows
+  // already here stay on screen.
+  const [syncing, setSyncing] = useState(false)
   const [session, setSession] = useState<AgentSessionInfo | null>(
     () => cachedDataOn(host, 'agent.get', sessionId) ?? kept.read(host, sessionId)?.session ?? null,
   )
@@ -100,6 +103,7 @@ export function useAgentStream(sessionId: string, visible = true) {
   useEffect(() => {
     const cached = seedOf(host, sessionId)
     setHydrating(!cached)
+    setSyncing(false)
     setError(null)
     let cancelled = false,
       revision = 0,
@@ -155,14 +159,21 @@ export function useAgentStream(sessionId: string, visible = true) {
       refreshEvents()
       setHydrating(false)
     }
+    let reads = 0
     const hydrate = async () => {
       const requestedAt = revision
-      const [s, changed] = await Promise.all([invoke('agent.get', sessionId), read(requestedAt)])
-      if (cancelled) return
-      setSession({ ...s, state: latestState ?? s.state })
-      // Nothing new: the rows on screen stay the same objects, so a reopened chat renders nothing twice.
-      if (changed || !cached) refreshEvents()
-      setHydrating(false)
+      reads++
+      setSyncing(true)
+      try {
+        const [s, changed] = await Promise.all([invoke('agent.get', sessionId), read(requestedAt)])
+        if (cancelled) return
+        setSession({ ...s, state: latestState ?? s.state })
+        // Nothing new: the rows on screen stay the same objects, so a reopened chat renders nothing twice.
+        if (changed || !cached) refreshEvents()
+        setHydrating(false)
+      } finally {
+        if (--reads === 0 && !cancelled) setSyncing(false)
+      }
     }
     setEvents(cached?.events ?? [])
     setEventSequences(new Map([...stored].map(([seq, item]) => [item.event, seq])))
@@ -243,6 +254,7 @@ export function useAgentStream(sessionId: string, visible = true) {
     queuePaused,
     queueWaitingFor,
     hydrating,
+    syncing,
     error,
     setError,
   }

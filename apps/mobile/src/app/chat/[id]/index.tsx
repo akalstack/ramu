@@ -52,7 +52,8 @@ import { ChatFindBar, FIND_BAR_HEIGHT } from '../../../components/ChatFindBar'
 import { quoteNeedles } from '../../../runtime/textMark'
 import { MAKE_PAGE_PROMPT } from '@ramu/shared/artifacts'
 import { useAutomation } from '../../../runtime/automation'
-import { useChat, useStore, type OutboxItem } from '../../../runtime/store'
+import { scoped, useChat, useStore, type OutboxItem } from '../../../runtime/store'
+import { useDelayedStatus } from '../../../runtime/useDelayedStatus'
 import { MODEL_WARNING_DEVICE_KEY, resolveModelChangeWarning } from '../../../runtime/busyMode'
 import { sharedValue } from '@ramu/shared/sharedFields'
 import { foldTurns } from '../../../runtime/turns'
@@ -76,7 +77,7 @@ import Reanimated, { cancelAnimation, useAnimatedStyle, useSharedValue, withTimi
 import { scheduleOnRN } from 'react-native-worklets'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { ThreadActivity } from '../../../components/ThreadActivity'
-import { WorkingLine } from '../../../components/WorkingLine'
+import { SyncLine, WorkingLine } from '../../../components/WorkingLine'
 import { BackgroundTerminals } from '../../../components/BackgroundTerminals'
 import { ThreadServers } from '../../../components/ThreadServers'
 import { BrowserActivity } from '../../../components/BrowserActivity'
@@ -778,6 +779,18 @@ function ChatView({ id }: { id: string }) {
   )
   // Keep is chosen per thread for one message; the next idle spell offers Compact again.
   const [keepHistoryFor, setKeepHistoryFor] = useState<string | null>(null)
+  // What this phone holds shows at once; while the host catches it up, the end of the thread says so. A first load
+  // has the opening cover, and a host that is away says so in the header and the message box.
+  const syncShown =
+    useDelayedStatus(
+      chat?.id ?? '',
+      chat?.sessionId &&
+        chat.items?.length &&
+        store.isOnline(chat.computerId) &&
+        store.syncing.has(scoped(chat.computerId, chat.sessionId))
+        ? 'syncing'
+        : null,
+    ) !== null
   if (!chat)
     return (
       <Screen>
@@ -1697,6 +1710,7 @@ function ChatView({ id }: { id: string }) {
                       {/* The running turn's status at its end, as on the desktop: a shimmering label, unless the newest row
                         (reasoning, or a tool group at work) already says what the agent is doing. */}
                       <WorkingLine inline quiet={lastShowsWork} chat={chat} sending={pending.length > 0} />
+                      {syncShown ? <SyncLine /> : null}
                     </View>
                   }
                 />
