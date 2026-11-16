@@ -35,8 +35,7 @@ export function InstalledSkills() {
   const [source, setSource] = useState(''),
     [name, setName] = useState(''),
     [projectId, setProjectId] = useState('')
-  const [preview, setPreview] = useState<SkillInstallPreview | null>(null),
-    [scripts, setScripts] = useState(false)
+  const [preview, setPreview] = useState<SkillInstallPreview | null>(null)
   const [removing, setRemoving] = useState<ManagedSkill | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('')
@@ -136,7 +135,6 @@ export function InstalledSkills() {
     }
   }
   const stage = (value: SkillInstallPreview) => {
-    setScripts(false)
     setPreview(value)
   }
   return (
@@ -498,7 +496,10 @@ export function InstalledSkills() {
           }}
           onConfirm={() =>
             void act(async () => {
-              await invoke('skills.confirm', preview.id, scripts)
+              await invoke('skills.confirm', preview.id, {
+                projectId: preview.projectId,
+                providers: [...AGENT_PROVIDERS],
+              })
               setPreview(null)
             })
           }
@@ -509,7 +510,7 @@ export function InstalledSkills() {
             {preview.source} ·{' '}
             {preview.projectId ? projects.find((p) => p.id === preview.projectId)?.name : t('All projects')}
           </p>
-          <p>{t('Review the files before installing. Scripts are skipped unless you approve them separately.')}</p>
+          <p>{t('Review the files before installing. Its scripts come with it; Ramu never runs them itself.')}</p>
           <ul>
             {preview.files.map((file) => (
               <li key={file.path}>
@@ -524,12 +525,6 @@ export function InstalledSkills() {
             <summary>{t('Skill instructions')}</summary>
             <pre className="whitespace-pre-wrap max-h-60 overflow-auto text-caption">{preview.markdown}</pre>
           </details>
-          {preview.files.some((file) => file.script) && (
-            <label className="flex items-center gap-2">
-              <Checkbox disabled={viewOnly} checked={scripts} onCheckedChange={(value) => setScripts(value === true)} />
-              {t('Also copy the listed scripts. Ramu will not run them.')}
-            </label>
-          )}
         </Dialog>
       )}
       {currentHost && copyUpdate && (

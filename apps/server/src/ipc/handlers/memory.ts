@@ -45,8 +45,9 @@ export const registerMemoryHandlers: RegisterHandlers = ({
     run: (ref: { stageId: string } | { skillId: string }, path: string) => need(externalSkills).fileText(ref, path),
   },
   'skills.confirm': {
-    args: z.tuple([id, z.boolean()]),
-    run: (stageId: string, scripts: boolean) => need(externalSkills).confirm(stageId, scripts),
+    args: z.tuple([id, z.object({ projectId: id.nullable(), providers: z.array(providerId).min(1).max(5) })]),
+    run: (stageId: string, options: { projectId: string | null; providers: AgentProvider[] }) =>
+      need(externalSkills).confirm(stageId, options),
   },
   'skills.create': {
     args: z.tuple([

@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { BookOpen, Check, ChevronDown, Plus, RefreshCw, Sparkle } from 'lucide-react'
+import { BookOpen, ChevronDown, RefreshCw, Sparkle } from 'lucide-react'
 import type { DirectorySkill, ManagedSkill, Project, SkillInstallPreview } from '@ramu/shared/types'
-import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
+import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
 import { Button } from '@/components/desktop-button'
 import { Badge } from '@/components/ui/badge'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { cn } from 'cn'
-import { Dialog, Dropdown, Menu } from '../Menu'
+import { Dialog, Menu } from '../Menu'
 import { useHost } from '../workspace/HostProvider'
 import { errorText } from '../lib/errors'
 import { formatLocale, t, useLanguage } from '../i18n'
@@ -17,6 +15,8 @@ import { SkillFiles } from './SkillFiles'
 import type { WaitingTool } from '@ramu/shared/toolSync'
 import { Advanced, CustomizeHeader, ExtensionGrid, ExtensionItem, Quiet, SectionTitle } from './parts'
 import { AvailableOn, RemoveElsewhere, useRemoveElsewhere, useToolSync, WaitingTools } from './toolSync'
+import { SafetyCheck } from './SafetyCheck'
+import { EVERY_USE, UseFor, type UseChoice } from './UseFor'
 
 const fromPlugin = (skill: ManagedSkill) => skill.installation?.source.startsWith('plugin:') === true
 const words = (query: string) => query.toLowerCase().split(/\s+/).filter(Boolean)
@@ -25,7 +25,14 @@ const matches = (skill: ManagedSkill, query: string) =>
 const installs = (count: number) =>
   t('{0} installs', { '0': new Intl.NumberFormat(formatLocale(), { notation: 'compact' }).format(count) })
 
-type Draft = { id?: string; revision?: number; name: string; description: string; content: string; projectId: string }
+type Draft = {
+  id?: string
+  revision?: number
+  name: string
+  description: string
+  content: string
+  projectId: string
+}
 
 /**
  * Skills: the ones you wrote, the ones installed from a repository or a plugin, and the skills.sh directory to add more
@@ -142,7 +149,6 @@ export function SkillsSection({ onOpenPlugins }: { onOpenPlugins: () => void }) 
         </>
       }
       onOpen={() => setOpenId(skill.id)}
-      action={<Check size={15} className="text-muted-foreground" aria-label={t('Installed')} />}
     />
   )
   const directoryItem = (entry: DirectorySkill) => (
@@ -154,14 +160,14 @@ export function SkillsSection({ onOpenPlugins }: { onOpenPlugins: () => void }) 
       onOpen={() => void install(entry.id, entry.source, entry.skill)}
       action={
         <Button
-          size="icon-sm"
-          variant="ghost"
+          size="sm"
+          variant="secondary"
           aria-label={t('Install {name}', { name: entry.name })}
-          title={t('Install {name}', { name: entry.name })}
           disabled={busy !== null}
           onClick={() => void install(entry.id, entry.source, entry.skill)}
         >
-          {busy === entry.id ? <RefreshCw size={15} className="animate-spin" /> : <Plus size={16} />}
+          {busy === entry.id && <RefreshCw size={13} className="animate-spin" aria-hidden />}
+          {t('Install')}
         </Button>
       }
     />
@@ -250,14 +256,15 @@ export function SkillsSection({ onOpenPlugins }: { onOpenPlugins: () => void }) 
       {preview && (
         <SkillReview
           preview={preview}
+          projects={projects}
           busy={busy === 'confirm'}
           onCancel={() => {
             void invoke('skills.cancel', preview.id).catch(() => {})
             setPreview(null)
           }}
-          onConfirm={(scripts) =>
+          onConfirm={(use) =>
             void act('confirm', async () => {
-              await invoke('skills.confirm', preview.id, scripts)
+              await invoke('skills.confirm', preview.id, { projectId: use.place || null, providers: use.providers })
               setPreview(null)
             })
           }
@@ -293,7 +300,7 @@ export function SkillsSection({ onOpenPlugins }: { onOpenPlugins: () => void }) 
           projects={projects}
           busy={busy === 'save'}
           onCancel={() => setDraft(null)}
-          onSave={(value) =>
+          onSave={(value, use) =>
             void act('save', async () => {
               if (value.id)
                 await invoke(
@@ -302,13 +309,16 @@ export function SkillsSection({ onOpenPlugins }: { onOpenPlugins: () => void }) 
                   { description: value.description, content: value.content },
                   value.revision ?? 0,
                 )
-              else
-                await invoke('skills.create', {
+              else {
+                const created = await invoke('skills.create', {
                   name: value.name,
                   description: value.description,
                   content: value.content,
-                  projectId: value.projectId || null,
+                  projectId: use.place || null,
                 })
+                if (use.providers.length < AGENT_PROVIDERS.length)
+                  await invoke('skills.setProviders', created.id, use.providers)
+              }
               setDraft(null)
             })
           }
@@ -361,7 +371,9 @@ function SkillDetail({
   const read = useCallback((path: string) => invoke('skills.fileText', { skillId: skill.id }, path), [invoke, skill.id])
   const bundle = skill.installation ?? skill.bundle
   const plugin = fromPlugin(skill)
-  const chosen = skill.providers?.length ? skill.providers : [...AGENT_PROVIDERS]
+  const chosen = skill.providers?.length
+    ? AGENT_PROVIDERS.filter((provider) => skill.providers!.includes(provider))
+    : [...AGENT_PROVIDERS]
   if (confirmRemove)
     return (
       <Dialog
@@ -431,51 +443,21 @@ function SkillDetail({
             {t('Show what it tells agents')}
           </Button>
         )}
-        <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0" disabled={busy !== null}>
-          <legend className="mb-1.5 text-caption text-muted-foreground">{t('Used by')}</legend>
-          <div className="flex flex-wrap gap-1.5">
-            {AGENT_PROVIDERS.map((provider) => {
-              const on = chosen.includes(provider)
-              return (
-                <Button
-                  key={provider}
-                  size="sm"
-                  variant="ghost"
-                  aria-pressed={on}
-                  disabled={on && chosen.length === 1}
-                  className={cn(
-                    'h-7 rounded-full border border-line px-2.5 text-caption',
-                    on ? 'bg-fill text-foreground' : 'text-muted-foreground',
-                  )}
-                  onClick={() =>
-                    void act('providers', () =>
-                      invoke(
-                        'skills.setProviders',
-                        skill.id,
-                        on ? chosen.filter((entry) => entry !== provider) : [...chosen, provider],
-                      ),
-                    )
-                  }
-                >
-                  {on && <Check size={12} />}
-                  {providerName(provider)}
-                </Button>
-              )
-            })}
-          </div>
-        </fieldset>
-        {!plugin && projects.length > 0 && (
-          <Dropdown
-            label={t('Use in')}
-            value={skill.projectId ?? ''}
-            options={[
-              { value: '', label: t('All projects') },
-              ...projects.map((project) => ({ value: project.id, label: project.name })),
-            ]}
-            onChange={(value) => void act('move', () => invoke('skills.move', skill.id, value || null))}
-            disabled={busy !== null}
-          />
-        )}
+        <UseFor
+          value={{ providers: chosen, place: skill.projectId ?? '' }}
+          projects={projects}
+          disabled={busy !== null}
+          placeLocked={
+            plugin ? t('Used where the {0} plugin is.', { '0': skill.installation!.source.slice(7) }) : undefined
+          }
+          onChange={(next) =>
+            void act('use', async () => {
+              if (next.providers.join() !== chosen.join()) await invoke('skills.setProviders', skill.id, next.providers)
+              if (next.place !== (skill.projectId ?? '')) await invoke('skills.move', skill.id, next.place || null)
+            })
+          }
+        />
+        <SafetyCheck target={{ kind: 'skill', skillId: skill.id }} />
         {!plugin && <AvailableOn toolKey={`skill:${skill.name}`} status={sync} />}
         <div className="flex flex-wrap gap-1.5">
           {plugin ? (
@@ -543,21 +525,26 @@ function SkillDetail({
   )
 }
 
-/** What a skill would add, before it is saved. */
+/**
+ * What a skill would add, before it is saved: what it tells agents, the files it brings, which agents use it and where,
+ * and a safety read on request. Its scripts come with it, since its instructions call them.
+ */
 function SkillReview({
   preview,
+  projects,
   busy,
   onConfirm,
   onCancel,
 }: {
   preview: SkillInstallPreview
+  projects: Project[]
   busy: boolean
-  onConfirm: (scripts: boolean) => void
+  onConfirm: (use: UseChoice) => void
   onCancel: () => void
 }) {
   useLanguage()
   const { invoke } = useHost()
-  const [scripts, setScripts] = useState(false)
+  const [use, setUse] = useState<UseChoice>({ ...EVERY_USE, place: preview.projectId ?? '' })
   const scriptFiles = preview.files.filter((file) => file.script)
   const read = useCallback(
     (path: string) => invoke('skills.fileText', { stageId: preview.id }, path),
@@ -571,7 +558,7 @@ function SkillReview({
       confirmLabel={preview.updatingId ? t('Update') : t('Install')}
       busy={busy}
       onCancel={onCancel}
-      onConfirm={() => onConfirm(scripts)}
+      onConfirm={() => onConfirm(use)}
     >
       <div className="dialog-wide flex min-w-0 flex-col gap-3">
         {preview.description && <p className="m-0 text-control text-soft">{preview.description}</p>}
@@ -589,6 +576,8 @@ function SkillReview({
               .join(' · ') || t('No file changes')}
           </p>
         )}
+        {!preview.updatingId && <UseFor value={use} onChange={setUse} projects={projects} disabled={busy} />}
+        <SafetyCheck target={{ kind: 'skill', stageId: preview.id }} disabled={busy} />
         <SkillFiles
           markdown={preview.markdown}
           files={preview.files}
@@ -596,10 +585,13 @@ function SkillReview({
           changed={preview.updatingId ? new Set([...preview.changes.added, ...preview.changes.changed]) : undefined}
         />
         {scriptFiles.length > 0 && (
-          <label className="flex items-start gap-2 text-caption">
-            <Checkbox checked={scripts} onCheckedChange={(value) => setScripts(value === true)} />
-            <span>{t('Also copy its {0} scripts. Ramu will not run them.', { '0': scriptFiles.length })}</span>
-          </label>
+          <p className="m-0 text-caption text-muted-foreground">
+            {scriptFiles.length === 1
+              ? t('It comes with 1 script its instructions call. Ramu never runs it itself.')
+              : t('It comes with {0} scripts its instructions call. Ramu never runs them itself.', {
+                  '0': scriptFiles.length,
+                })}
+          </p>
         )}
       </div>
     </Dialog>
@@ -616,11 +608,12 @@ function SkillEditor({
   draft: Draft
   projects: Project[]
   busy: boolean
-  onSave: (draft: Draft) => void
+  onSave: (draft: Draft, use: UseChoice) => void
   onCancel: () => void
 }) {
   useLanguage()
   const [value, setValue] = useState(draft)
+  const [use, setUse] = useState<UseChoice>({ ...EVERY_USE, place: draft.projectId })
   return (
     <Dialog
       title={draft.id ? t('Edit {name}', { name: draft.name }) : t('Write a skill')}
@@ -628,7 +621,7 @@ function SkillEditor({
       busy={busy}
       confirmDisabled={!value.name.trim() || !value.description.trim() || !value.content.trim()}
       onCancel={onCancel}
-      onConfirm={() => onSave(value)}
+      onConfirm={() => onSave(value, use)}
     >
       <div className="flex min-w-0 flex-col gap-2.5">
         {!draft.id && (
@@ -653,17 +646,7 @@ function SkillEditor({
           value={value.content}
           onChange={(event) => setValue({ ...value, content: event.target.value })}
         />
-        {!draft.id && projects.length > 0 && (
-          <Dropdown
-            label={t('Use in')}
-            value={value.projectId}
-            options={[
-              { value: '', label: t('All projects') },
-              ...projects.map((project) => ({ value: project.id, label: project.name })),
-            ]}
-            onChange={(projectId) => setValue({ ...value, projectId })}
-          />
-        )}
+        {!draft.id && <UseFor value={use} onChange={setUse} projects={projects} disabled={busy} />}
       </div>
     </Dialog>
   )

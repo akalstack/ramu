@@ -74,7 +74,6 @@ describe('plugin_create', () => {
     expect(approval.mock.calls[0]![0]).toContain('Install the rodin-3d plugin')
     expect(plugins.confirm).toHaveBeenCalledWith('stage-1', {
       scope: { kind: 'all' },
-      includeScripts: false,
       development: true,
       offerAbilities: true,
     })

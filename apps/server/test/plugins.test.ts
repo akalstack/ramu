@@ -288,9 +288,10 @@ describe('installing', () => {
     const review = await h.service.stage({ source: renderPlugin({}, RAMU) })
     expect(h.skills).toEqual([])
     expect(review.blocked).toBeNull()
-    const plugin = await h.service.confirm(review.stageId, { scope: { kind: 'all' }, includeScripts: false })
+    const plugin = await h.service.confirm(review.stageId, { scope: { kind: 'all' } })
     expect(h.skills[0]).toMatchObject({ name: 'render-deploy', installation: { source: 'plugin:render' } })
-    expect(Object.keys(h.skills[0]!.installation!.files)).toEqual(['SKILL.md'])
+    // Its skill's scripts come with it, since the skill calls them.
+    expect(Object.keys(h.skills[0]!.installation!.files).sort()).toEqual(['SKILL.md', 'scripts/setup.sh'])
     const connection = h.connections[0]!
     expect(connection).toMatchObject({ name: 'render', scope: { hostWide: true } })
     expect(connection.transport).toMatchObject({ type: 'stdio', command: '/usr/bin/env' })
@@ -325,7 +326,7 @@ describe('installing', () => {
         },
       ),
     })
-    await h.service.confirm(review.stageId, { scope: { kind: 'all' }, includeScripts: false })
+    await h.service.confirm(review.stageId, { scope: { kind: 'all' } })
     expect(h.preferences().abilities.autoMcp?.model_3d).toEqual({
       connectionId: h.connections[0]!.id,
       tool: 'text_to_3d',
@@ -352,7 +353,7 @@ describe('installing', () => {
     const h = host()
     services.push(h.service)
     const first = await h.service.stage({ source: renderPlugin() })
-    await h.service.confirm(first.stageId, { scope: { kind: 'all' }, includeScripts: true })
+    await h.service.confirm(first.stageId, { scope: { kind: 'all' } })
     await expect(h.service.stage({ source: renderPlugin() })).rejects.toThrow(/already installed/)
     const newer = await h.service.stage({
       source: write(temp(), {
@@ -363,18 +364,58 @@ describe('installing', () => {
       }),
     })
     expect(newer.blocked).toMatch(/Ramu 9\.0\.0/)
-    await expect(h.service.confirm(newer.stageId, { scope: { kind: 'all' }, includeScripts: false })).rejects.toThrow()
+    await expect(h.service.confirm(newer.stageId, { scope: { kind: 'all' } })).rejects.toThrow()
   })
 
   it('limits every part to one project', async () => {
     const h = host()
     services.push(h.service)
     const review = await h.service.stage({ source: renderPlugin() })
-    await h.service.confirm(review.stageId, { scope: { kind: 'project', projectId: 'p1' }, includeScripts: false })
+    await h.service.confirm(review.stageId, { scope: { kind: 'project', projectId: 'p1' } })
     expect(h.skills[0]!.projectId).toBe('p1')
     expect(h.connections[0]!.scope).toEqual({ hostWide: false, projectIds: ['p1'] })
     expect(h.service.forProject('p2')).toEqual([])
     expect(h.service.forProject('p1')).toHaveLength(1)
+  })
+
+  it('gives every part to the agents chosen, and moves them in place later', async () => {
+    const h = host()
+    services.push(h.service)
+    const review = await h.service.stage({ source: renderPlugin() })
+    const plugin = await h.service.confirm(review.stageId, { scope: { kind: 'all' }, providers: ['codex'] })
+    expect(plugin.providers).toEqual(['codex'])
+    expect(h.skills[0]!.providers).toEqual(['codex'])
+    expect(h.connections[0]!.providers).toEqual(['codex'])
+    expect(h.rules[0]!.providers).toEqual(['codex'])
+    const [skillId, connectionId] = [h.skills[0]!.id, h.connections[0]!.id]
+    const moved = await h.service.setUse(plugin.id, {
+      scope: { kind: 'project', projectId: 'p1' },
+      providers: ['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'],
+    })
+    expect(moved).toMatchObject({ scope: { kind: 'project', projectId: 'p1' } })
+    expect(moved.providers).toHaveLength(5)
+    expect(h.skills).toHaveLength(1)
+    expect(h.skills[0]).toMatchObject({ id: skillId, projectId: 'p1' })
+    expect(h.skills[0]!.providers).toBeUndefined()
+    expect(h.connections[0]).toMatchObject({ id: connectionId, scope: { hostWide: false, projectIds: ['p1'] } })
+    await expect(h.service.setUse(plugin.id, { scope: { kind: 'all' }, providers: [] })).rejects.toThrow(
+      'at least one agent',
+    )
+  })
+
+  it('hands a safety read its skills, scripts, MCP commands and agents', async () => {
+    const h = host()
+    services.push(h.service)
+    const review = await h.service.stage({ source: renderPlugin() })
+    const paths = h.service.auditFiles({ stageId: review.stageId }).files.map((file) => file.path)
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        'skills/render-deploy/SKILL.md',
+        'skills/render-deploy/scripts/setup.sh',
+        'MCP server render',
+        'agents/render-reviewer',
+      ]),
+    )
   })
 
   it('Remove leaves no skill, server, agent, rule, credential or ability behind', async () => {
@@ -382,7 +423,7 @@ describe('installing', () => {
     const h = host(fetcher)
     services.push(h.service)
     const review = await h.service.stage({ source: renderPlugin({}, RAMU) })
-    const plugin = await h.service.confirm(review.stageId, { scope: { kind: 'all' }, includeScripts: false })
+    const plugin = await h.service.confirm(review.stageId, { scope: { kind: 'all' } })
     await h.service.setCredential(plugin.id, 'token', { token: 'rnd_secret', fields: {} })
     expect(h.vault.size).toBe(1)
     await h.service.remove(plugin.id)
@@ -398,7 +439,7 @@ describe('credentials', () => {
     const h = host(fetcher)
     services.push(h.service)
     const review = await h.service.stage({ source: renderPlugin({}, RAMU) })
-    const plugin = await h.service.confirm(review.stageId, { scope: { kind: 'all' }, includeScripts: false })
+    const plugin = await h.service.confirm(review.stageId, { scope: { kind: 'all' } })
     const saved = await h.service.setCredential(plugin.id, 'token', { token: 'rnd_secret', fields: {} })
     expect(saved.credentials[0]).toMatchObject({ state: 'saved', account: 'ada@acme.test' })
     const init = fetcher.mock.calls[0]![1]!
@@ -414,7 +455,7 @@ describe('credentials', () => {
     const h = host(fetcher)
     services.push(h.service)
     const review = await h.service.stage({ source: renderPlugin({}, RAMU) })
-    const plugin = await h.service.confirm(review.stageId, { scope: { kind: 'all' }, includeScripts: false })
+    const plugin = await h.service.confirm(review.stageId, { scope: { kind: 'all' } })
     const error = await h.service
       .setCredential(plugin.id, 'token', { token: 'rnd_secret', fields: {} })
       .catch((e: Error) => e)
@@ -460,7 +501,7 @@ describe('credentials', () => {
       }),
     })
     const review = await h.service.stage({ source: root })
-    const plugin = await h.service.confirm(review.stageId, { scope: { kind: 'all' }, includeScripts: false })
+    const plugin = await h.service.confirm(review.stageId, { scope: { kind: 'all' } })
     const started = await h.service.startSignIn(plugin.id, 'org', {
       clientId: 'client',
       sandbox: false,
@@ -485,7 +526,7 @@ describe('a credential split per identity', () => {
     const h = host(fetcher)
     services.push(h.service)
     const review = await h.service.stage({ source: renderPlugin({}, RAMU) })
-    const plugin = await h.service.confirm(review.stageId, { scope: { kind: 'all' }, includeScripts: false })
+    const plugin = await h.service.confirm(review.stageId, { scope: { kind: 'all' } })
     await h.service.setCredential(plugin.id, 'token', { token: 'personal-token', fields: {} })
     const split = await h.service.setCredential(plugin.id, 'token', { token: 'work-token', fields: {} }, 'work')
     expect(split.credentials[0]!.identities).toEqual(['work'])
@@ -513,7 +554,7 @@ describe('data sources', () => {
     const h = host(fetcher)
     services.push(h.service)
     const review = await h.service.stage({ source: renderPlugin({}, RAMU) })
-    const plugin = await h.service.confirm(review.stageId, { scope: { kind: 'all' }, includeScripts: false })
+    const plugin = await h.service.confirm(review.stageId, { scope: { kind: 'all' } })
     await h.service.setCredential(plugin.id, 'token', { token: 'rnd_secret', fields: {} })
     expect(await h.service.query('render', { limit: 5 }, ['name', 'type'], 100)).toEqual([
       { name: 'web', type: 'web_service' },
@@ -562,7 +603,7 @@ describe('data sources', () => {
       }),
     })
     const review = await h.service.stage({ source: root })
-    const plugin = await h.service.confirm(review.stageId, { scope: { kind: 'all' }, includeScripts: false })
+    const plugin = await h.service.confirm(review.stageId, { scope: { kind: 'all' } })
     await h.service.setCredential(plugin.id, 'sa', {
       token: 'glsa',
       fields: { url: 'https://acme.grafana.test/some/path' },

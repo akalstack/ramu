@@ -5,7 +5,15 @@ import { dirname, join, resolve, isAbsolute } from 'node:path'
 import { tmpdir } from 'node:os'
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { NO_PROJECT, type ManagedSkill, type SkillInstallPreview, type SkillCopyUpdate } from '@ramu/shared/types'
+import {
+  NO_PROJECT,
+  type AgentProvider,
+  type ManagedSkill,
+  type SkillInstallPreview,
+  type SkillCopyUpdate,
+} from '@ramu/shared/types'
+import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
+import type { ToolAuditFile } from '@ramu/shared/toolAudit'
 import type { LearningService } from './learning'
 import type { Workspace } from '../workspace/workspace'
 import type { AgentService } from '../agent'
@@ -15,6 +23,12 @@ import { toolKey } from '@ramu/shared/toolSync'
 import { setToolAvailability } from '../toolSync'
 
 export const SKILLS_CLI_VERSION = '1.7.2'
+
+/** A skill file as text; null for a binary or very large one. */
+const textOf = (data: string) => {
+  const bytes = Buffer.from(data, 'base64')
+  return bytes.length > 256 * 1024 || bytes.includes(0) ? null : bytes.toString('utf8')
+}
 export const skillInstallInput = z.object({
   source: z
     .string()
@@ -36,7 +50,6 @@ type AuthoredSkillInput = { name: string; description: string; content: string; 
 type Staged = {
   preview: SkillInstallPreview
   files: Record<string, string>
-  scripts: Set<string>
   expires: number
   expectedRevision?: number
   owner?: string
@@ -175,7 +188,6 @@ export class ExternalSkills {
       this.staged.set(preview.id, {
         preview,
         files,
-        scripts,
         expires: Date.now() + 30 * 60_000,
         expectedRevision: existing?.revision,
         owner,
@@ -185,25 +197,36 @@ export class ExternalSkills {
       rmSync(dir, { recursive: true, force: true })
     }
   }
-  confirm(id: string, includeScripts: boolean, owner?: string): ManagedSkill {
+  /**
+   * Saves a reviewed skill with every file it came with, scripts included, since a skill that calls its scripts does
+   * not work without them; Ramu never runs them itself. A new install takes the project and agents chosen in the
+   * review; an update keeps the ones it has.
+   */
+  confirm(
+    id: string,
+    options: { projectId?: string | null; providers?: AgentProvider[] } = {},
+    owner?: string,
+  ): ManagedSkill {
     const staged = this.staged.get(id)
     if (!staged || staged.expires < Date.now() || staged.owner !== owner)
       throw new Error('This preview expired or belongs to another request. Stage the skill again.')
-    const { preview, files, scripts } = staged
+    const { preview, files } = staged
     const old = preview.updatingId ? this.installed(preview.updatingId) : undefined
     if (old && old.revision !== staged.expectedRevision)
       throw new Error('Skill changed while awaiting approval. Preview it again.')
-    if (
-      this.learning
-        .skills()
-        .some((s) => s.name === preview.name && s.projectId === preview.projectId && s.id !== old?.id)
-    )
+    const projectId = old || options.projectId === undefined ? preview.projectId : options.projectId
+    if (projectId === NO_PROJECT) throw new Error('Choose a project or use user scope.')
+    if (projectId && !this.workspace.listProjects().some((p) => p.id === projectId)) throw new Error('Unknown project.')
+    const chosen = options.providers && AGENT_PROVIDERS.filter((provider) => options.providers!.includes(provider))
+    if (chosen && !chosen.length) throw new Error('Choose at least one agent to use it.')
+    const providers = old ? old.providers : chosen && chosen.length < AGENT_PROVIDERS.length ? chosen : undefined
+    if (this.learning.skills().some((s) => s.name === preview.name && s.projectId === projectId && s.id !== old?.id))
       throw new Error('A skill with this name already exists in that scope.')
     const { content } = skillMetadata(preview.markdown),
       now = Date.now()
     const skill: ManagedSkill = {
       id: old?.id ?? randomUUID(),
-      projectId: preview.projectId,
+      projectId,
       name: preview.name,
       description: preview.description,
       content,
@@ -222,8 +245,9 @@ export class ExternalSkills {
         skill: preview.name,
         cliVersion: SKILLS_CLI_VERSION,
         markdown: preview.markdown,
-        files: Object.fromEntries(Object.entries(files).filter(([path]) => includeScripts || !scripts.has(path))),
+        files,
       },
+      ...(providers ? { providers } : {}),
     }
     this.learning.write(skill)
     this.staged.delete(id)
@@ -473,9 +497,37 @@ export class ExternalSkills {
     }
     const data = files?.[path]
     if (data === undefined) throw new Error('That file is not part of this skill.')
-    const bytes = Buffer.from(data, 'base64')
-    if (bytes.length > 256 * 1024 || bytes.includes(0)) return null
-    return bytes.toString('utf8')
+    return textOf(data)
+  }
+
+  /** A staged or saved skill's instructions and every text file it carries, for a safety read. */
+  auditFiles(ref: { stageId: string } | { skillId: string }, owner?: string): { name: string; files: ToolAuditFile[] } {
+    let name: string, markdown: string, files: Record<string, string>
+    if ('stageId' in ref) {
+      const staged = this.staged.get(ref.stageId)
+      if (!staged || staged.expires < Date.now() || staged.owner !== owner)
+        throw new Error('This preview expired. Stage the skill again.')
+      ;({ name, markdown } = staged.preview)
+      files = staged.files
+    } else {
+      const skill = this.learning.skills().find((entry) => entry.id === ref.skillId)
+      if (!skill) throw new Error('That skill is no longer here.')
+      const bundle = skill.installation ?? skill.bundle
+      name = skill.name
+      markdown = bundle?.markdown ?? skill.content
+      files = bundle?.files ?? {}
+    }
+    return {
+      name,
+      files: [
+        { path: 'SKILL.md', text: markdown },
+        ...Object.entries(files).flatMap(([path, data]) => {
+          if (path === 'SKILL.md') return []
+          const text = textOf(data)
+          return text === null ? [] : [{ path, text }]
+        }),
+      ],
+    }
   }
 
   installed(id: string): ManagedSkill {
@@ -544,21 +596,13 @@ export class ExternalSkills {
       try {
         if (
           (await ask(
-            `Install ${preview.name}?\n${preview.description}\nSource: ${preview.source}\nScope: ${preview.projectId ? 'project' : 'user'}${everywhere ? '\nAlso on all your hosts: each one reviews it there.' : ''}\nFiles:\n${preview.files.map((f) => `${f.path}${f.script ? ' [script, separate approval]' : ''}`).join('\n')}\nChanges: ${JSON.stringify(preview.changes)}`,
+            `Install ${preview.name}?\n${preview.description}\nSource: ${preview.source}\nScope: ${preview.projectId ? 'project' : 'user'}${everywhere ? '\nAlso on all your hosts: each one reviews it there.' : ''}\nFiles:\n${preview.files.map((f) => `${f.path}${f.script ? ' [script, copied; Ramu does not run it]' : ''}`).join('\n')}\nChanges: ${JSON.stringify(preview.changes)}`,
             ['Install', 'Cancel'],
             signal,
           )) !== 'Install'
         )
           return { cancelled: true }
-        const scripts = preview.files.filter((f) => f.script)
-        const include =
-          scripts.length > 0 &&
-          (await ask(
-            `Also copy these scripts? Ramu does not run them.\n${scripts.map((f) => f.path).join('\n')}`,
-            ['Skip scripts', 'Include scripts'],
-            signal,
-          )) === 'Include scripts'
-        const skill = this.confirm(preview.id, include, sessionId)
+        const skill = this.confirm(preview.id, {}, sessionId)
         if (everywhere) {
           setToolAvailability(this.workspace, toolKey({ kind: 'skill', name: skill.name }), { all: true })
           this.toolsChanged?.()
@@ -619,7 +663,7 @@ export class ExternalSkills {
       'skill_install',
       {
         description:
-          'Stage one external skill from owner/repo, URL, git address or an absolute local path. Ask the user scope when omitted, then show files and wait for user approval; scripts require separate approval. Never runs skill scripts.',
+          'Stage one external skill from owner/repo, URL, git address or an absolute local path. Ask the user scope when omitted, then show files and wait for user approval. Scripts come with the skill; Ramu never runs them.',
         inputSchema: {
           source: skillInstallInput.shape.source,
           skill: skillInstallInput.shape.skill,

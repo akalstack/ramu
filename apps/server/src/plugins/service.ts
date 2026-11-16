@@ -8,7 +8,8 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
 import type { CustomAgent } from '@ramu/shared/customAgents'
 import type { SharedMcpConnection } from '@ramu/shared/mcp'
-import type { AppPreferences, ManagedSkill } from '@ramu/shared/types'
+import type { AgentProvider, AppPreferences, ManagedSkill } from '@ramu/shared/types'
+import type { ToolAuditFile } from '@ramu/shared/toolAudit'
 import type { Rule, RuleInput } from '@ramu/shared/types/rules'
 import { newerVersion } from '@ramu/shared/version'
 import {
@@ -71,7 +72,8 @@ interface PluginRecord {
   installedAt: number
   updatedAt: number
   enabled: boolean
-  includeScripts: boolean
+  /** The agents its skills, MCP servers and rule are for; absent means every agent. */
+  providers?: AgentProvider[]
   fingerprint: PluginFingerprint
   extension: RamuExtension
   mcpServers: Record<string, PluginMcpServer>
@@ -91,6 +93,14 @@ interface PluginRecord {
       identities?: Record<string, string>
     }
   >
+}
+
+/** The agents chosen for a plugin, or undefined when that is every agent. */
+function chosenProviders(providers: AgentProvider[] | undefined): AgentProvider[] | undefined {
+  if (!providers) return undefined
+  const chosen = AGENT_PROVIDERS.filter((provider) => providers.includes(provider))
+  if (!chosen.length) throw new Error('Choose at least one agent to use it.')
+  return chosen.length < AGENT_PROVIDERS.length ? chosen : undefined
 }
 
 interface State {
@@ -226,6 +236,7 @@ export class PluginService {
       contents: plugin.contents,
       source: plugin.source,
       scope: plugin.scope,
+      providers: plugin.providers ?? [...AGENT_PROVIDERS],
       installedAt: plugin.installedAt,
       updatedAt: plugin.updatedAt,
       enabled: plugin.enabled,
@@ -364,6 +375,36 @@ export class PluginService {
     return this.stagedFor(stageId).review
   }
 
+  /**
+   * What a staged or installed plugin hands agents, as text for a safety read: its skills and their scripts, the
+   * commands its MCP servers run, its agents' and rule's instructions, and the commands it lets run without asking.
+   */
+  auditFiles(ref: { stageId: string } | { pluginId: string }): { name: string; files: ToolAuditFile[] } {
+    const folder =
+      'stageId' in ref ? this.stagedFor(ref.stageId).folder : readPluginFolder(this.record(ref.pluginId).root)
+    const text = (data: string) => {
+      const bytes = Buffer.from(data, 'base64')
+      return bytes.length > 256 * 1024 || bytes.includes(0) ? null : bytes.toString('utf8')
+    }
+    const files: ToolAuditFile[] = []
+    for (const skill of folder.skills)
+      for (const [path, data] of Object.entries(skill.files)) {
+        const body = text(data)
+        if (body !== null) files.push({ path: `skills/${skill.name}/${path}`, text: body })
+      }
+    for (const [name, server] of Object.entries(folder.mcpServers))
+      files.push({
+        path: `MCP server ${name}`,
+        text: 'url' in server ? server.url : [server.command, ...server.args].join(' '),
+      })
+    for (const agent of folder.agents)
+      files.push({ path: `agents/${agent.name}`, text: `${agent.description}\n\n${agent.instructions}` })
+    if (folder.rule) files.push({ path: 'AGENTS.md', text: folder.rule })
+    if (folder.contents.cli?.reads.length)
+      files.push({ path: 'Commands that run without asking', text: folder.contents.cli.reads.join('\n') })
+    return { name: folder.manifest.name, files }
+  }
+
   private stagedFor(stageId: string): Staged {
     const staged = this.staged.get(stageId)
     if (!staged || staged.expires < Date.now()) throw new Error('This review expired. Open the plugin again.')
@@ -386,12 +427,16 @@ export class PluginService {
 
   // ---- Install ----
 
-  /** Saves every part of a reviewed plugin. Scripts in skills come only with their second approval. */
+  /**
+   * Saves every part of a reviewed plugin, its skills' scripts included since the skills call them; Ramu never runs
+   * them itself. An update keeps the projects and agents the plugin already has.
+   */
   async confirm(
     stageId: string,
     options: {
       scope: PluginScope
-      includeScripts: boolean
+      /** The agents it is for; every agent when left out. */
+      providers?: AgentProvider[]
       development?: boolean
       /** A Development plugin the person asked an agent to make: its abilities are offered to Auto at once. */
       offerAbilities?: boolean
@@ -399,11 +444,12 @@ export class PluginService {
   ): Promise<InstalledPlugin> {
     const staged = this.stagedFor(stageId)
     if (staged.review.blocked) throw new Error(staged.review.blocked)
-    const scope = options.scope
-    if (scope.kind === 'project' && !this.host.projects().some((project) => project.id === scope.projectId))
-      throw new Error('Choose a project on this host.')
     const { folder, review } = staged
     const old = review.replaces ? this.record(review.replaces) : null
+    const scope = old?.scope ?? options.scope
+    if (scope.kind === 'project' && !this.host.projects().some((project) => project.id === scope.projectId))
+      throw new Error('Choose a project on this host.')
+    const providers = old ? old.providers : chosenProviders(options.providers)
     const id = old?.id ?? randomUUID()
     const development = !!options.development
     let root = folder.root
@@ -419,11 +465,11 @@ export class PluginService {
       name: folder.manifest.name,
       contents: folder.contents,
       source: { ...review.source, kind: development ? 'development' : review.source.kind },
-      scope: options.scope,
+      scope,
       installedAt: old?.installedAt ?? now,
       updatedAt: now,
-      enabled: true,
-      includeScripts: options.includeScripts,
+      enabled: old?.enabled ?? true,
+      ...(providers ? { providers } : {}),
       fingerprint: folder.fingerprint,
       extension: folder.extension,
       mcpServers: folder.mcpServers,
@@ -510,10 +556,9 @@ export class PluginService {
           skill: skill.name,
           cliVersion: 'plugin',
           markdown,
-          files: Object.fromEntries(
-            Object.entries(skill.files).filter(([path]) => record.includeScripts || !skill.scripts.includes(path)),
-          ),
+          files: skill.files,
         },
+        ...(record.providers ? { providers: record.providers } : {}),
       }
       this.host.skills.write(managed)
       record.parts.skills.push(managed.id)
@@ -537,9 +582,9 @@ export class PluginService {
         {
           name: shown,
           serviceAccountId: `plugin-${record.id}`,
-          enabled: true,
+          enabled: record.enabled,
           scope,
-          providers: [...AGENT_PROVIDERS],
+          providers: record.providers ?? [...AGENT_PROVIDERS],
           transport: this.transport(server, record.root),
         },
         old?.parts.mcp[name],
@@ -570,7 +615,7 @@ export class PluginService {
         name: `${record.name} plugin`,
         body: folder.rule.trim().slice(0, 8000),
         projectId,
-        providers: [],
+        providers: record.providers ?? [],
         activation: 'always',
         paths: [],
         enabled: true,
@@ -1079,6 +1124,30 @@ export class PluginService {
     this.save({ ...state, plugins: state.plugins.filter((plugin) => plugin.id !== id) })
   }
 
+  /**
+   * Moves an installed plugin to other projects or agents: its parts are written again from its installed folder, in
+   * place, so its MCP servers keep their tool choices and its keys stay.
+   */
+  async setUse(id: string, use: { scope: PluginScope; providers: AgentProvider[] }) {
+    const old = this.record(id)
+    const scope = use.scope
+    if (scope.kind === 'project' && !this.host.projects().some((project) => project.id === scope.projectId))
+      throw new Error('Choose a project on this host.')
+    const { providers: _previous, ...rest } = old
+    const providers = chosenProviders(use.providers)
+    const record: PluginRecord = {
+      ...rest,
+      scope,
+      ...(providers ? { providers } : {}),
+      updatedAt: Date.now(),
+      parts: { skills: [], mcp: {}, agents: [], rule: null },
+    }
+    await this.apply(record, readPluginFolder(old.root), old)
+    const state = this.state()
+    this.save({ ...state, plugins: state.plugins.map((plugin) => (plugin.id === id ? record : plugin)) })
+    return this.view(record)
+  }
+
   setEnabled(id: string, enabled: boolean) {
     const record = this.record(id)
     for (const connectionId of Object.values(record.parts.mcp)) {
@@ -1105,11 +1174,7 @@ export class PluginService {
     const root = resolve(folder)
     const existing = this.state().plugins.find((plugin) => plugin.source.kind === 'development' && plugin.root === root)
     const review = await this.stage({ source: root, ...(existing ? { replaces: existing.id } : {}) })
-    return this.confirm(review.stageId, {
-      scope: existing?.scope ?? { kind: 'all' },
-      includeScripts: true,
-      development: true,
-    })
+    return this.confirm(review.stageId, { scope: existing?.scope ?? { kind: 'all' }, development: true })
   }
 
   /**

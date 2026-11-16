@@ -55,42 +55,65 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 const stage = () => service.stage({ source, projectId: null })
-it('stages without importing, requires the owning confirmation, skips scripts and exports references to every provider', async () => {
+it('stages without importing, requires the owning confirmation, and exports its files and scripts to every provider', async () => {
   const preview = await stage()
   expect(learning.skills()).toEqual([])
   expect(existsSync(staging)).toBe(false)
   expect(preview.files.find((f) => f.path === 'scripts/run.py')?.script).toBe(true)
-  expect(() => service.confirm(preview.id, false, 'foreign')).toThrow('belongs to another')
-  const installed = service.confirm(preview.id, false)
+  expect(() => service.confirm(preview.id, {}, 'foreign')).toThrow('belongs to another')
+  const installed = service.confirm(preview.id)
   expect(installed.installation!.cliVersion).toBe(SKILLS_CLI_VERSION)
-  expect(installed.installation!.files['scripts/run.py']).toBeUndefined()
+  expect(installed.installation!.files['scripts/run.py']).toBeDefined()
   for (const provider of ['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'] as const) {
     const dir = learning.exportDir(null, provider, root)!
     const skill = join(dir, 'skills', 'ramu-fixture')
     expect(readFileSync(join(skill, 'SKILL.md'), 'utf8')).toContain('allowed-tools: Read')
     expect(readFileSync(join(skill, 'references/check.md'), 'utf8')).toBe('original reference')
-    expect(existsSync(join(skill, 'scripts/run.py'))).toBe(false)
+    expect(existsSync(join(skill, 'scripts/run.py'))).toBe(true)
   }
-  expect(() => service.confirm(preview.id, true)).toThrow('expired')
+  expect(() => service.confirm(preview.id)).toThrow('expired')
+})
+it('installs to the project and agents chosen in the review, and an update keeps them', async () => {
+  const project = ws.createProject('Fixture')
+  const preview = await stage()
+  expect(() => service.confirm(preview.id, { providers: [] })).toThrow('at least one agent')
+  const installed = service.confirm(preview.id, { projectId: project.id, providers: ['codex', 'claude-code'] })
+  expect(installed).toMatchObject({ projectId: project.id, providers: ['claude-code', 'codex'] })
+  const update = await service.stage({ source, projectId: project.id, updatingId: installed.id })
+  const updated = service.confirm(update.id, { projectId: null, providers: ['cursor'] })
+  expect(updated).toMatchObject({ projectId: project.id, providers: ['claude-code', 'codex'] })
+  const everywhere = service.confirm((await stage()).id, {
+    projectId: null,
+    providers: ['claude-code', 'codex', 'opencode', 'cursor', 'antigravity'],
+  })
+  expect(everywhere.providers).toBeUndefined()
+})
+it('gives a safety read the instructions and every text file, scripts included', async () => {
+  const preview = await stage()
+  const { name, files } = service.auditFiles({ stageId: preview.id })
+  expect(name).toBe('fixture')
+  expect(files.map((file) => file.path).sort()).toEqual(['SKILL.md', 'references/check.md', 'scripts/run.py'])
+  expect(files.find((file) => file.path === 'scripts/run.py')!.text).toContain('must never execute')
+  expect(() => service.auditFiles({ stageId: preview.id }, 'foreign')).toThrow('expired')
 })
 it('updates from source with a diff, removes stale references, and rejects stale approvals', async () => {
-  const first = service.confirm((await stage()).id, true)
+  const first = service.confirm((await stage()).id)
   expect(first.installation!.files['scripts/run.py']).toBeDefined()
   rmSync(join(source, 'scripts'), { recursive: true })
   writeFileSync(join(source, 'references/check.md'), 'updated reference')
   const preview = await service.update(first.id)
   expect(preview.changes).toMatchObject({ changed: ['references/check.md'], removed: ['scripts/run.py'] })
   expect(learning.skills()[0]!.revision).toBe(1)
-  const second = service.confirm(preview.id, false)
+  const second = service.confirm(preview.id)
   const dir = learning.exportDir(null, 'codex', root)!
   expect(readFileSync(join(dir, 'skills/ramu-fixture/references/check.md'), 'utf8')).toBe('updated reference')
   expect(existsSync(join(dir, 'skills/ramu-fixture/scripts/run.py'))).toBe(false)
   const pending = await service.update(second.id)
   learning.control(second.id, 'disable')
-  expect(() => service.confirm(pending.id, false)).toThrow('changed while awaiting')
+  expect(() => service.confirm(pending.id)).toThrow('changed while awaiting')
 })
 it('disables and removes the skill from both the catalog and provider exports', async () => {
-  const skill = service.confirm((await stage()).id, false)
+  const skill = service.confirm((await stage()).id)
   const dir = learning.exportDir(null, 'codex', root)!
   learning.control(skill.id, 'disable')
   expect(learning.catalog(null)).toEqual([])
@@ -116,7 +139,7 @@ it('rejects symlinks, traversal, invalid names and oversized files before an imp
 it('moves scopes without exposing a project skill to another project and never auto-archives installs', async () => {
   const project = ws.createProject('Fixture'),
     other = ws.createProject('Other')
-  const skill = service.confirm((await stage()).id, false)
+  const skill = service.confirm((await stage()).id)
   service.move(skill.id, project.id)
   expect(learning.catalog(other.id)).toEqual([])
   expect(learning.catalog(project.id)[0]!.name).toBe('fixture')
@@ -146,7 +169,7 @@ it('creates an authored skill that learning never changes, and copies instead of
   const edited = service.edit(mine.id, { content: 'Check tests and docs.' }, 1)
   expect(edited).toMatchObject({ revision: 2, content: 'Check tests and docs.', description: 'Before merging' })
   expect(() => service.edit(mine.id, { content: 'late' }, 1)).toThrow('changed since')
-  const installed = service.confirm((await stage()).id, false)
+  const installed = service.confirm((await stage()).id)
   expect(() => service.edit(installed.id, { content: 'x' }, installed.revision)).toThrow('Copy it first')
   const copy = service.fork(installed.id)
   expect(copy).toMatchObject({
@@ -176,15 +199,15 @@ it('reads the MCP tools a skill asks for from allowed-tools, ignoring built-in t
   expect(skillMcpTools('no frontmatter')).toEqual([])
 })
 
-it('copies only approved files, preserves provider scope and exports an editable independent snapshot', async () => {
-  for (const includeScripts of [false, true]) {
-    const installed = service.confirm((await stage()).id, includeScripts)
+it('copies every file with its scripts, preserves provider scope and exports an editable independent snapshot', async () => {
+  {
+    const installed = service.confirm((await stage()).id)
     learning.setProviders(installed.id, ['codex'])
     const copy = service.fork(installed.id)
     expect(copy).toMatchObject({ revision: 1, providers: ['codex'], pinned: true })
     expect(copy.installation).toBeUndefined()
     expect(copy.bundle?.files['references/check.md']).toBe(Buffer.from('original reference').toString('base64'))
-    expect(!!copy.bundle?.files['scripts/run.py']).toBe(includeScripts)
+    expect(!!copy.bundle?.files['scripts/run.py']).toBe(true)
     expect(copy.bundle?.files).not.toBe(installed.installation!.files)
     const edited = service.edit(copy.id, { content: 'My instructions: read references/check.md.' }, 1)
     expect(edited.bundle).toEqual(copy.bundle)
@@ -195,11 +218,11 @@ it('copies only approved files, preserves provider scope and exports an editable
     expect(markdown).toContain('allowed-tools: Read')
     expect(markdown).toContain('My instructions: read references/check.md.')
     expect(readFileSync(join(folder, 'references/check.md'), 'utf8')).toBe('original reference')
-    expect(existsSync(join(folder, 'scripts/run.py'))).toBe(includeScripts)
+    expect(existsSync(join(folder, 'scripts/run.py'))).toBe(true)
     expect(existsSync(join(learning.exportDir(null, 'claude-code', root)!, 'skills/ramu-fixture-copy'))).toBe(false)
 
     writeFileSync(join(source, 'references/check.md'), 'updated source')
-    service.confirm((await service.update(installed.id)).id, includeScripts)
+    service.confirm((await service.update(installed.id)).id)
     service.remove(installed.id)
     expect(readFileSync(join(folder, 'references/check.md'), 'utf8')).toBe('original reference')
     const again = service.fork(copy.id)
@@ -230,7 +253,7 @@ it('copies only approved files, preserves provider scope and exports an editable
 it('keeps a maximum-length installed name and its copy in distinct bounded provider folders', async () => {
   const name = 'a'.repeat(64)
   writeFileSync(join(source, 'SKILL.md'), `---\nname: ${name}\ndescription: Long name\n---\nRead references/check.md.`)
-  const installed = service.confirm((await stage()).id, false)
+  const installed = service.confirm((await stage()).id)
   const copy = service.fork(installed.id)
   const dir = join(learning.exportDir(null, 'codex', root)!, 'skills')
   const names = readdirSync(dir)
@@ -248,7 +271,7 @@ it('keeps a maximum-length installed name and its copy in distinct bounded provi
 })
 
 it('reviews source updates against the copied revision and preserves user edits and provider scope', async () => {
-  const original = service.confirm((await stage()).id, false)
+  const original = service.confirm((await stage()).id)
   learning.setProviders(original.id, ['codex'])
   const copy = service.fork(original.id)
   service.edit(copy.id, { content: 'My custom instructions.' }, copy.revision)
@@ -257,7 +280,7 @@ it('reviews source updates against the copied revision and preserves user edits 
     '---\nname: fixture\ndescription: Updated description\nallowed-tools: Read\n---\nUpdated source instructions.\n',
   )
   writeFileSync(join(source, 'references/check.md'), 'updated reference')
-  const updated = service.confirm((await service.update(original.id)).id, false)
+  const updated = service.confirm((await service.update(original.id)).id)
   const preview = service.copyUpdate(copy.id)
   expect(preview.content).toMatchObject({
     conflict: true,
@@ -291,7 +314,7 @@ it('reviews source updates against the copied revision and preserves user edits 
 })
 
 it('refuses applying a reviewed update after either revision changes or the source disappears', async () => {
-  const original = service.confirm((await stage()).id, false)
+  const original = service.confirm((await stage()).id)
   const copy = service.fork(original.id)
   const preview = service.copyUpdate(copy.id)
   const choices = { description: copy.description, content: copy.content, files: {} }
@@ -314,7 +337,7 @@ it('refuses applying a reviewed update after either revision changes or the sour
 it.each(['copy', 'source'] as const)(
   'requires an explicit %s choice for files changed in both versions',
   async (choice) => {
-    const original = service.confirm((await stage()).id, false)
+    const original = service.confirm((await stage()).id)
     const copy = service.fork(original.id)
     learning.write({
       ...copy,
@@ -325,7 +348,7 @@ it.each(['copy', 'source'] as const)(
       },
     })
     writeFileSync(join(source, 'references/check.md'), 'source reference')
-    service.confirm((await service.update(original.id)).id, false)
+    service.confirm((await service.update(original.id)).id)
     const preview = service.copyUpdate(copy.id)
     expect(preview.files).toContainEqual({ path: 'references/check.md', change: 'changed', conflict: true })
     const changes = { description: copy.description, content: copy.content, files: {} }
@@ -345,18 +368,18 @@ it.each(['copy', 'source'] as const)(
 it('does not infer provenance for old authored skills or follow a source across scopes', async () => {
   const authored = service.create({ name: 'old-copy', description: 'Old', content: 'Old copy', projectId: null })
   expect(() => service.copyUpdate(authored.id)).toThrow('no recorded source revision')
-  const original = service.confirm((await stage()).id, false)
+  const original = service.confirm((await stage()).id)
   const copy = service.fork(original.id)
   service.move(original.id, ws.createProject('Other scope').id)
   expect(() => service.copyUpdate(copy.id)).toThrow('another scope')
 })
 
 it('reviews added and removed approved files and reconciles the exported copy', async () => {
-  const original = service.confirm((await stage()).id, false)
+  const original = service.confirm((await stage()).id)
   const copy = service.fork(original.id)
   rmSync(join(source, 'references/check.md'))
   writeFileSync(join(source, 'references/new.md'), 'new approved reference')
-  service.confirm((await service.update(original.id)).id, false)
+  service.confirm((await service.update(original.id)).id)
   const preview = service.copyUpdate(copy.id)
   expect(preview.files).toEqual(
     expect.arrayContaining([
@@ -377,11 +400,11 @@ it('reviews added and removed approved files and reconciles the exported copy', 
 it('bounds complete file-version previews and reports binary versions without interpreting them as text', async () => {
   for (let i = 0; i < 14; i++) writeFileSync(join(source, `references/text-${i}.md`), `base${'x'.repeat(6000)}`)
   writeFileSync(join(source, 'references/binary.dat'), Buffer.from([0, 255, 1]))
-  const original = service.confirm((await stage()).id, false)
+  const original = service.confirm((await stage()).id)
   const copy = service.fork(original.id)
   for (let i = 0; i < 14; i++) writeFileSync(join(source, `references/text-${i}.md`), `new ${'y'.repeat(6000)}`)
   writeFileSync(join(source, 'references/binary.dat'), Buffer.from([0, 255, 2, 3]))
-  service.confirm((await service.update(original.id)).id, false)
+  service.confirm((await service.update(original.id)).id)
   const preview = service.copyUpdate(copy.id)
   expect(preview.fileVersions['references/binary.dat']).toEqual({
     before: { bytes: 3 },
@@ -397,10 +420,10 @@ it('bounds complete file-version previews and reports binary versions without in
 })
 
 it('refuses oversized source instructions without truncating or changing the copy', async () => {
-  const original = service.confirm((await stage()).id, false)
+  const original = service.confirm((await stage()).id)
   const copy = service.fork(original.id)
   writeFileSync(join(source, 'SKILL.md'), `---\nname: fixture\ndescription: Updated\n---\n${'x'.repeat(24001)}`)
-  service.confirm((await service.update(original.id)).id, false)
+  service.confirm((await service.update(original.id)).id)
   expect(() => service.copyUpdate(copy.id)).toThrow('instruction limit')
   expect(learning.skills().find((skill) => skill.id === copy.id)).toEqual(copy)
 })

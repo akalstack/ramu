@@ -1,7 +1,9 @@
 import { z } from 'zod'
 import type { PluginScope } from '@ramu/shared/plugins'
+import type { AgentProvider } from '@ramu/shared/types'
 import { listenForCallback } from '../../plugins/callback'
 import type { PluginService } from '../../plugins/service'
+import { providerId } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
 const id = z.uuid()
@@ -19,6 +21,7 @@ const scope: z.ZodType<PluginScope> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('project'), projectId: z.string().min(1).max(200) }),
   z.object({ kind: z.literal('identity'), identityId: z.string().min(1).max(200) }),
 ])
+const providers = z.array(providerId).min(1).max(5)
 
 /** Plugins: listing is readable by paired devices; installing, credentials and removal stay on the host. */
 export const registerPluginHandlers: RegisterHandlers = (ctx) => {
@@ -54,8 +57,8 @@ export const registerPluginHandlers: RegisterHandlers = (ctx) => {
     },
     'plugins.cancel': { args: z.tuple([id]), run: (stageId: string) => service().cancel(stageId) },
     'plugins.confirm': {
-      args: z.tuple([id, z.object({ scope, includeScripts: z.boolean() })]),
-      run: async (stageId: string, options: { scope: PluginScope; includeScripts: boolean }) => {
+      args: z.tuple([id, z.object({ scope, providers })]),
+      run: async (stageId: string, options: { scope: PluginScope; providers: AgentProvider[] }) => {
         const installed = await admin().confirm(stageId, options)
         changed()
         return installed
@@ -78,6 +81,14 @@ export const registerPluginHandlers: RegisterHandlers = (ctx) => {
       run: async (pluginId: string) => {
         await admin().remove(pluginId)
         changed()
+      },
+    },
+    'plugins.setUse': {
+      args: z.tuple([id, z.object({ scope, providers })]),
+      run: async (pluginId: string, use: { scope: PluginScope; providers: AgentProvider[] }) => {
+        const plugin = await admin().setUse(pluginId, use)
+        changed()
+        return plugin
       },
     },
     'plugins.setEnabled': {

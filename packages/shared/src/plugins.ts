@@ -709,6 +709,8 @@ export interface InstalledPlugin {
   contents: PluginContents
   source: PluginSourceInfo
   scope: PluginScope
+  /** The agents its skills, MCP servers and rule are for. */
+  providers: import('./types').AgentProvider[]
   installedAt: number
   updatedAt: number
   enabled: boolean

@@ -12,7 +12,8 @@ import {
   listingMatches,
 } from '@ramu/shared/plugins'
 import { ABILITY_LABELS } from '@ramu/shared/providers/abilities'
-import type { Project } from '@ramu/shared/types'
+import type { AgentProvider, Project } from '@ramu/shared/types'
+import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
 import { Button } from '@/components/desktop-button'
 import { Checkbox } from '@/components/desktop-checkbox'
 import { Input } from '@/components/desktop-input'
@@ -54,12 +55,11 @@ function Review({
   projects: Project[]
   busy: boolean
   error: string | null
-  onConfirm: (options: { scope: PluginScope; includeScripts: boolean }) => void
+  onConfirm: (options: { scope: PluginScope; providers: AgentProvider[] }) => void
   onCancel: () => void
 }) {
   const { contents, source } = review
   const [scope, setScope] = useState('')
-  const [scripts, setScripts] = useState(false)
   const scriptFiles = contents.skills.flatMap((skill) => skill.scripts.map((path) => `${skill.name}/${path}`))
   return (
     <Dialog
@@ -74,7 +74,10 @@ function Review({
       error={error ?? review.blocked}
       onCancel={onCancel}
       onConfirm={() =>
-        onConfirm({ scope: scope ? { kind: 'project', projectId: scope } : { kind: 'all' }, includeScripts: scripts })
+        onConfirm({
+          scope: scope ? { kind: 'project', projectId: scope } : { kind: 'all' },
+          providers: [...AGENT_PROVIDERS],
+        })
       }
     >
       <div className="flex flex-col gap-2 text-control">
@@ -185,13 +188,10 @@ function Review({
           />
         )}
         {scriptFiles.length > 0 && (
-          <label className="flex items-start gap-2">
-            <Checkbox checked={scripts} onCheckedChange={(value) => setScripts(value === true)} />
-            <span>
-              {t('Also copy the scripts in its skills. Ramu will not run them.')}
-              <span className="block break-all text-caption text-muted-foreground">{scriptFiles.join(', ')}</span>
-            </span>
-          </label>
+          <p className="m-0 text-caption text-muted-foreground">
+            {t('Its skills come with the scripts they call. Ramu never runs them itself.')}
+            <span className="block break-all">{scriptFiles.join(', ')}</span>
+          </p>
         )}
       </div>
     </Dialog>

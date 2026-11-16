@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, ChevronDown, Plus, RefreshCw, Server, Share2 } from 'lucide-react'
+import { Check, ChevronDown, RefreshCw, Server, Share2 } from 'lucide-react'
 import {
   CLAUDE_PLUGIN_INDEX,
   listingMatches,
@@ -9,13 +9,13 @@ import {
   type PluginScope,
 } from '@ramu/shared/plugins'
 import type { PortablePlugin, WaitingTool } from '@ramu/shared/toolSync'
-import type { Project } from '@ramu/shared/types'
+import type { AgentProvider, Project } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
-import { Dialog, Dropdown, Menu } from '../Menu'
+import { Dialog, Menu } from '../Menu'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime } from '../workspace/workspace'
 import { Credential } from '../settings/Plugins'
@@ -26,6 +26,18 @@ import { PluginHeading, PluginParts, PluginSource } from './PluginParts'
 import { openCustomize } from './openCustomize'
 import { AvailableOn, mcpLogins, RemoveElsewhere, useRemoveElsewhere, useToolSync, WaitingTools } from './toolSync'
 import { useAppSettings } from '../settings/AppSettings'
+import { SafetyCheck } from './SafetyCheck'
+import { EVERY_USE, UseFor, type UseChoice } from './UseFor'
+
+/** A plugin's scope as the place `UseFor` shows: '' for every project, `identity:<id>`, or a project id. */
+const placeOf = (scope: PluginScope) =>
+  scope.kind === 'all' ? '' : scope.kind === 'identity' ? `identity:${scope.identityId}` : scope.projectId
+const scopeOf = (place: string): PluginScope =>
+  place.startsWith('identity:')
+    ? { kind: 'identity', identityId: place.slice(9) }
+    : place
+      ? { kind: 'project', projectId: place }
+      : { kind: 'all' }
 
 const matches = (plugin: InstalledPlugin, query: string) =>
   !query.trim() ||
@@ -224,9 +236,7 @@ export function PluginsSection({
           <Button size="sm" variant="secondary" onClick={() => setOpenId(plugin.id)}>
             {t('Finish setup')}
           </Button>
-        ) : (
-          <Check size={15} className="text-muted-foreground" aria-label={t('Installed')} />
-        )
+        ) : undefined
       }
     />
   )
@@ -246,14 +256,14 @@ export function PluginsSection({
       onOpen={() => openListing(listing)}
       action={
         <Button
-          size="icon-sm"
-          variant="ghost"
+          size="sm"
+          variant="secondary"
           aria-label={t('Install {name}', { name: listing.name })}
-          title={t('Install {name}', { name: listing.name })}
           disabled={busy !== null}
           onClick={() => openListing(listing)}
         >
-          {busy === `listing:${listing.name}` ? <RefreshCw size={15} className="animate-spin" /> : <Plus size={16} />}
+          {busy === `listing:${listing.name}` && <RefreshCw size={13} className="animate-spin" aria-hidden />}
+          {t('Install')}
         </Button>
       }
     />
@@ -434,6 +444,11 @@ export function PluginsSection({
           onClose={() => setOpenId(null)}
           onUpdate={() => void act('update', async () => setReview(await invoke('plugins.updateReview', open.id)))}
           onToggle={(enabled) => void act('toggle', () => invoke('plugins.setEnabled', open.id, enabled).then(load))}
+          onUse={(use) =>
+            void act('use', () =>
+              invoke('plugins.setUse', open.id, { scope: scopeOf(use.place), providers: use.providers }).then(load),
+            )
+          }
           onRemove={() =>
             void act('remove', async () => {
               await invoke('plugins.remove', open.id)
@@ -497,13 +512,15 @@ function InstallReview({
   /** The project a plugin from another host is for there, as the project on the same remote here. */
   projectId?: string | null
   busy: boolean
-  onConfirm: (options: { scope: PluginScope; includeScripts: boolean }, withCompanion: boolean) => void
+  onConfirm: (options: { scope: PluginScope; providers: AgentProvider[] }, withCompanion: boolean) => void
   onCancel: () => void
 }) {
   useLanguage()
   const { contents, source } = review
-  const [scope, setScope] = useState(identity ? `identity:${identity.id}` : (projectId ?? ''))
-  const [scripts, setScripts] = useState(false)
+  const [use, setUse] = useState<UseChoice>({
+    ...EVERY_USE,
+    place: identity ? `identity:${identity.id}` : (projectId ?? ''),
+  })
   const [withCompanion, setWithCompanion] = useState(true)
   const scriptFiles = contents.skills.flatMap((skill) => skill.scripts.map((path) => `${skill.name}/${path}`))
   return (
@@ -518,19 +535,7 @@ function InstallReview({
       confirmDisabled={!!review.blocked}
       error={review.blocked}
       onCancel={onCancel}
-      onConfirm={() =>
-        onConfirm(
-          {
-            scope: scope.startsWith('identity:')
-              ? { kind: 'identity', identityId: scope.slice(9) }
-              : scope
-                ? { kind: 'project', projectId: scope }
-                : { kind: 'all' },
-            includeScripts: scripts,
-          },
-          withCompanion,
-        )
-      }
+      onConfirm={() => onConfirm({ scope: scopeOf(use.place), providers: use.providers }, withCompanion)}
     >
       <div className="flex min-w-0 flex-col gap-3">
         <PluginHeading contents={contents} source={source} byRamu={review.byRamu} />
@@ -546,6 +551,18 @@ function InstallReview({
             </ul>
           </div>
         )}
+        {!review.replaces && (
+          <UseFor
+            value={use}
+            onChange={setUse}
+            projects={projects}
+            disabled={busy}
+            places={
+              identity ? [{ value: `identity:${identity.id}`, label: t('{0} projects', { 0: identity.name }) }] : []
+            }
+          />
+        )}
+        <SafetyCheck target={{ kind: 'plugin', stageId: review.stageId }} disabled={busy} />
         <PluginParts contents={contents} />
         {companion && (
           <label className="flex items-start gap-2 rounded-(--radius-s) bg-fill px-3 py-2 text-caption">
@@ -582,28 +599,11 @@ function InstallReview({
             {problem.file}: {problem.message}
           </p>
         ))}
-        {!review.replaces && (projects.length > 0 || identity) && (
-          <Dropdown
-            label={t('Use in')}
-            value={scope}
-            options={[
-              { value: '', label: t('All projects') },
-              ...(identity
-                ? [{ value: `identity:${identity.id}`, label: t('{0} projects', { 0: identity.name }) }]
-                : []),
-              ...projects.map((project) => ({ value: project.id, label: project.name })),
-            ]}
-            onChange={setScope}
-          />
-        )}
         {scriptFiles.length > 0 && (
-          <label className="flex items-start gap-2 text-caption">
-            <Checkbox checked={scripts} onCheckedChange={(value) => setScripts(value === true)} />
-            <span>
-              {t('Also copy the scripts in its skills. Ramu will not run them.')}
-              <span className="block break-all text-muted-foreground">{scriptFiles.join(', ')}</span>
-            </span>
-          </label>
+          <p className="m-0 text-caption text-muted-foreground">
+            {t('Its skills come with the scripts they call. Ramu never runs them itself.')}
+            <span className="block break-all">{scriptFiles.join(', ')}</span>
+          </p>
         )}
         <PluginSource source={source} />
       </div>
@@ -621,6 +621,7 @@ function PluginDetail({
   onClose,
   onUpdate,
   onToggle,
+  onUse,
   onRemove,
   onShare,
   onCompanion,
@@ -633,6 +634,7 @@ function PluginDetail({
   onClose: () => void
   onUpdate: () => void
   onToggle: (enabled: boolean) => void
+  onUse: (use: UseChoice) => void
   onRemove: () => void
   onShare: () => Promise<unknown>
   onCompanion: (companion: { index: string; name: string }) => void
@@ -640,11 +642,6 @@ function PluginDetail({
   useLanguage()
   const [confirmRemove, setConfirmRemove] = useState(false)
   const elsewhere = useRemoveElsewhere(`plugin:${plugin.name}`, sync)
-  const scopeName =
-    plugin.scope.kind === 'project'
-      ? (projects.find((project) => project.id === (plugin.scope as { projectId: string }).projectId)?.name ??
-        t('One project'))
-      : t('All projects')
   if (confirmRemove)
     return (
       <Dialog
@@ -679,7 +676,9 @@ function PluginDetail({
         <div className="flex items-center justify-between gap-3 rounded-(--radius-s) bg-fill px-3 py-2">
           <span className="flex flex-col">
             <span className="text-control text-foreground">{plugin.enabled ? t('On') : t('Off')}</span>
-            <span className="text-caption text-muted-foreground">{t('For {0}', { '0': scopeName })}</span>
+            <span className="text-caption text-muted-foreground">
+              {plugin.enabled ? t('Agents use it in new turns.') : t('Agents do not get it until you turn it on.')}
+            </span>
           </span>
           <Switch
             aria-label={t('Use {name}', { name: plugin.name })}
@@ -691,6 +690,18 @@ function PluginDetail({
         {plugin.credentials.map((slot) => (
           <Credential key={slot.id} plugin={plugin} slot={slot} viewOnly={false} onChanged={onChanged} />
         ))}
+        <UseFor
+          value={{ providers: plugin.providers, place: placeOf(plugin.scope) }}
+          onChange={onUse}
+          projects={projects}
+          disabled={busy !== null}
+          places={
+            plugin.scope.kind === 'identity'
+              ? [{ value: placeOf(plugin.scope), label: t('One identity’s projects') }]
+              : []
+          }
+        />
+        <SafetyCheck target={{ kind: 'plugin', pluginId: plugin.id }} disabled={busy !== null} />
         {plugin.update && (
           <div className="flex items-center justify-between gap-3 rounded-(--radius-s) bg-fill px-3 py-2 text-caption">
             <span className="min-w-0 text-muted-foreground">{plugin.update.changes.join('; ')}</span>

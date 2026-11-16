@@ -687,7 +687,11 @@ export interface RamuMethods extends ArtifactMethods {
   }): import('./types').SkillInstallPreview
   /** One file of a staged or saved skill as text, to read before installing or after; null for binary or very large. */
   'skills.fileText'(ref: { stageId: string } | { skillId: string }, path: string): string | null
-  'skills.confirm'(stageId: string, includeScripts: boolean): import('./types').ManagedSkill
+  /** Saves a staged skill with its scripts. A new install goes to the chosen project (null: all) and agents; an update keeps its own. */
+  'skills.confirm'(
+    stageId: string,
+    options: { projectId: string | null; providers: import('./types').AgentProvider[] },
+  ): import('./types').ManagedSkill
   /** Writes a skill the person authored. It is pinned, so learning never rewrites it. */
   'skills.create'(input: {
     name: string
@@ -834,13 +838,18 @@ export interface RamuMethods extends ArtifactMethods {
   'plugins.cancel'(stageId: string): void
   'plugins.confirm'(
     stageId: string,
-    options: { scope: import('./plugins').PluginScope; includeScripts: boolean },
+    options: { scope: import('./plugins').PluginScope; providers: import('./types').AgentProvider[] },
   ): import('./plugins').InstalledPlugin
   /** `commit` updates to that exact commit, such as the one another host has, instead of the newest. */
   'plugins.updateReview'(id: string, commit?: string): import('./plugins').PluginReview
   'plugins.checkUpdates'(): import('./plugins').InstalledPlugin[]
   'plugins.remove'(id: string): void
   'plugins.setEnabled'(id: string, enabled: boolean): import('./plugins').InstalledPlugin
+  /** Moves an installed plugin to other projects or agents; its keys and MCP tool choices stay. */
+  'plugins.setUse'(
+    id: string,
+    use: { scope: import('./plugins').PluginScope; providers: import('./types').AgentProvider[] },
+  ): import('./plugins').InstalledPlugin
   /** With `identityId`, keeps the value for that identity only, splitting the slot. */
   'plugins.setCredential'(
     id: string,
@@ -858,6 +867,18 @@ export interface RamuMethods extends ArtifactMethods {
   /** Pushes a Development plugin's folder to a private repository on the person's own GitHub account. */
   'plugins.share'(pluginId: string): { url: string }
   'plugins.dataSources'(): { id: string; label: string; plugin: string }[]
+  /**
+   * A safety read by the host's maintenance model of a staged or installed skill or plugin, or an MCP server with the
+   * tools it listed: what it would do that the person should know before agents use it.
+   */
+  'tools.audit'(
+    target:
+      | { kind: 'skill'; stageId: string }
+      | { kind: 'skill'; skillId: string }
+      | { kind: 'plugin'; stageId: string }
+      | { kind: 'plugin'; pluginId: string }
+      | { kind: 'mcp'; connectionId: string; tools?: { name: string; description?: string }[] },
+  ): import('./toolAudit').ToolAudit
   'agent.all'(): AgentSessionInfo[]
   'learning.get'(): import('./types').LearningSnapshot
   'learning.apply'(id: string): void

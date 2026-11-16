@@ -16,7 +16,7 @@ import { Button } from '@/components/desktop-button'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { Dialog, Menu } from '../Menu'
+import { Dialog } from '../Menu'
 import { ramu } from '../ipc'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
@@ -26,6 +26,8 @@ import { errorText } from '../lib/errors'
 import { openCustomize, reviewPluginInstall } from './openCustomize'
 import { AvailableOn, mcpLogins, RemoveElsewhere, useRemoveElsewhere, useToolSync, WaitingTools } from './toolSync'
 import { t, useLanguage } from '../i18n'
+import { SafetyCheck } from './SafetyCheck'
+import { EVERY_USE, UseFor, type UseChoice } from './UseFor'
 import {
   Advanced,
   brandOf,
@@ -62,6 +64,7 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
   const [signingIn, setSigningIn] = useState<string | null>(null)
   const { status: sync } = useToolSync()
   const [received, setReceived] = useState<WaitingTool | null>(null)
+  const [adding, setAdding] = useState<RecommendedMcpServer | null>(null)
   useEffect(() => {
     if (requested) setOpenId(requested.id)
   }, [requested])
@@ -105,6 +108,7 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
     act('new', async () => {
       const saved = await invoke('mcp.save', definition)
       setEditing(null)
+      setAdding(null)
       // A server is useful only once it is on; a sign-in it needs is asked for next.
       await invoke('mcp.turnOn', saved.id, loginsFor(saved)).catch(() => {})
       setOpenId(saved.id)
@@ -125,13 +129,13 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
       if (logins.length) await invoke('mcp.turnOn', added.connection.id, logins).catch(() => {})
       setOpenId(added.connection.id)
     })
-  const addRecommended = (server: RecommendedMcpServer) =>
+  const addRecommended = (server: RecommendedMcpServer, use: UseChoice) =>
     add({
       name: server.name,
       serviceAccountId: 'public',
       enabled: true,
-      scope: { hostWide: true, projectIds: [] },
-      providers: [...AGENT_PROVIDERS],
+      scope: use.place ? { hostWide: false, projectIds: [use.place] } : { hostWide: true, projectIds: [] },
+      providers: use.providers,
       transport: { type: 'http', url: server.url, headerSecretRefs: {} },
     })
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
@@ -269,40 +273,17 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
                     title={server.title}
                     subtitle={server.description}
                     badge={server.plugin ? <Badge variant="outline">{t('Plugin')}</Badge> : undefined}
+                    onOpen={() => setAdding(server)}
                     action={
-                      server.plugin ? (
-                        // Its plugin adds the service's skills to the same server; the server alone stays a choice.
-                        <Menu
-                          standard
-                          label={t('Add {name}', { name: server.name })}
-                          icon={<Plus size={16} />}
-                          align="end"
-                          disabled={!canAdminister || busy !== null}
-                          items={[
-                            {
-                              key: 'plugin',
-                              label: t('Add with its skills (plugin)'),
-                              onSelect: () => reviewPluginInstall(CLAUDE_PLUGIN_INDEX, server.plugin!),
-                            },
-                            {
-                              key: 'server',
-                              label: t('Add only the MCP server'),
-                              onSelect: () => void addRecommended(server),
-                            },
-                          ]}
-                        />
-                      ) : (
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          aria-label={t('Add {name}', { name: server.name })}
-                          title={server.signIn ? t('Add, then sign in with your account') : t('Add')}
-                          disabled={!canAdminister || busy !== null}
-                          onClick={() => void addRecommended(server)}
-                        >
-                          <Plus size={16} />
-                        </Button>
-                      )
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        aria-label={t('Add {name}', { name: server.title })}
+                        disabled={!canAdminister || busy !== null}
+                        onClick={() => setAdding(server)}
+                      >
+                        {t('Add')}
+                      </Button>
                     }
                   />
                 ))}
@@ -314,6 +295,24 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
       <Advanced title={t('Advanced: accounts per identity, sign-in by address, and every server setting')}>
         <McpSettings />
       </Advanced>
+      {adding && (
+        <AddRecommended
+          server={adding}
+          projects={projects}
+          busy={busy === 'new'}
+          error={error?.id === 'new' ? error.text : null}
+          canAdminister={canAdminister}
+          onCancel={() => {
+            setAdding(null)
+            setError(null)
+          }}
+          onAdd={(use) => void addRecommended(adding, use)}
+          onPlugin={() => {
+            setAdding(null)
+            reviewPluginInstall(CLAUDE_PLUGIN_INDEX, adding.plugin!)
+          }}
+        />
+      )}
       {received && received.tool.kind === 'mcp' && (
         <ReceivedServer
           entry={received}
@@ -329,6 +328,7 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
         <ServerDetail
           entry={open}
           sync={sync}
+          projects={projects}
           busy={busy}
           error={error?.id === open.connection.id ? error.text : null}
           canAdminister={canAdminister}
@@ -340,6 +340,23 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
           onEnabled={(enabled) => {
             const { id: _id, hostId: _host, revision: _revision, ...definition } = open.connection
             void act(open.connection.id, () => invoke('mcp.save', { ...definition, enabled }, open.connection.id))
+          }}
+          onUse={(use) => {
+            const { id: _id, hostId: _host, revision: _revision, ...definition } = open.connection
+            void act(open.connection.id, async () => {
+              const saved = await invoke(
+                'mcp.save',
+                {
+                  ...definition,
+                  providers: use.providers,
+                  scope: use.place ? { hostWide: false, projectIds: [use.place] } : { hostWide: true, projectIds: [] },
+                },
+                open.connection.id,
+              )
+              // An agent just added gets the tools the others have; its own login is asked for next if it needs one.
+              const logins = loginsFor(saved)
+              if (open.granted?.length && logins.length) await invoke('mcp.turnOn', saved.id, logins).catch(() => {})
+            })
           }}
           onRemove={() =>
             void act(open.connection.id, async () => {
@@ -383,9 +400,74 @@ export function McpSection({ open: requested }: { open?: { id: string } | null }
 }
 
 /**
- * One server: whether it is on and for whom, and its tools, each asking before it runs, running without asking, or
- * left off. Check connection reads the tools again from the server.
+ * A recommended server before it is added: what it is, which agents use it and where, and its fuller plugin when the
+ * service has one.
  */
+function AddRecommended({
+  server,
+  projects,
+  busy,
+  error,
+  canAdminister,
+  onCancel,
+  onAdd,
+  onPlugin,
+}: {
+  server: RecommendedMcpServer
+  projects: Project[]
+  busy: boolean
+  error: string | null
+  canAdminister: boolean
+  onCancel: () => void
+  onAdd: (use: UseChoice) => void
+  onPlugin: () => void
+}) {
+  useLanguage()
+  const [use, setUse] = useState<UseChoice>(EVERY_USE)
+  return (
+    <Dialog
+      title={t('Add {name}', { name: server.title })}
+      confirmLabel={server.signIn ? t('Add and sign in') : t('Add')}
+      confirmDisabled={!canAdminister}
+      busy={busy}
+      error={error ?? (canAdminister ? null : t('Add MCP servers on the computer running Ramu.'))}
+      onConfirm={() => onAdd(use)}
+      onCancel={onCancel}
+    >
+      <div className="flex min-w-0 flex-col gap-3">
+        <p className="m-0 text-control text-soft">{server.description}</p>
+        <p className="m-0 truncate font-mono text-caption text-muted-foreground" title={server.url}>
+          {server.url}
+        </p>
+        <UseFor value={use} onChange={setUse} projects={projects} disabled={busy} />
+        <p className="m-0 text-caption text-muted-foreground">
+          {server.signIn
+            ? t(
+                'Hosted by {0}. You sign in with your own account next; every tool asks before it runs until you let it.',
+                {
+                  0: server.title,
+                },
+              )
+            : t('Hosted by {0}. Every tool asks before it runs until you let it.', { 0: server.title })}
+        </p>
+        {server.plugin && (
+          <div className="flex items-center justify-between gap-3 rounded-(--radius-s) bg-fill px-3 py-2 text-caption">
+            <span className="flex min-w-0 flex-col">
+              <span className="text-control text-foreground">{t('Also teach agents {0}', { 0: server.title })}</span>
+              <span className="text-muted-foreground">
+                {t('Its plugin adds this server with skills that show agents how to use it.')}
+              </span>
+            </span>
+            <Button size="sm" variant="secondary" className="flex-none" disabled={busy} onClick={onPlugin}>
+              {t('Review plugin')}
+            </Button>
+          </div>
+        )}
+      </div>
+    </Dialog>
+  )
+}
+
 /** A server another host sent, before it is added here: what it runs, which tools are on there, and what it needs. */
 function ReceivedServer({
   entry,
@@ -452,9 +534,14 @@ function ReceivedServer({
   )
 }
 
+/**
+ * One server: whether it is on, which agents use it and where, and its tools, each asking before it runs, running
+ * without asking, or left off. Check connection reads the tools again from the server.
+ */
 function ServerDetail({
   entry,
   sync,
+  projects,
   busy,
   error,
   canAdminister,
@@ -464,10 +551,12 @@ function ServerDetail({
   onSignIn,
   onApply,
   onEnabled,
+  onUse,
   onRemove,
 }: {
   entry: Entry
   sync: ReturnType<typeof useToolSync>['status']
+  projects: Project[]
   busy: string | null
   error: string | null
   canAdminister: boolean
@@ -477,6 +566,7 @@ function ServerDetail({
   onSignIn: () => void
   onApply: (choices: Record<string, SharedMcpToolChoice>) => void
   onEnabled: (enabled: boolean) => void
+  onUse: (use: UseChoice) => void
   onRemove: () => void
 }) {
   useLanguage()
@@ -623,6 +713,21 @@ function ServerDetail({
             onCheckedChange={onEnabled}
           />
         </div>
+        {entry.plugin ? null : connection.scope.projectIds.length > 1 ? (
+          <p className="m-0 text-caption text-muted-foreground">
+            {t('Used in {0} projects. Change them with Edit.', { 0: connection.scope.projectIds.length })}
+          </p>
+        ) : (
+          <UseFor
+            value={{
+              providers: AGENT_PROVIDERS.filter((provider) => connection.providers.includes(provider)),
+              place: connection.scope.hostWide ? '' : (connection.scope.projectIds[0] ?? ''),
+            }}
+            onChange={onUse}
+            projects={projects}
+            disabled={!canAdminister || busy !== null}
+          />
+        )}
         {connection.transport.type === 'http' &&
           (entry.status === 'sign-in-required' || entry.status === 'insufficient-permission') && (
             <div className="flex items-center justify-between gap-3 rounded-(--radius-s) bg-fill px-3 py-2 text-caption">
@@ -685,6 +790,21 @@ function ServerDetail({
             ))}
           </ul>
         )}
+        <SafetyCheck
+          target={{
+            kind: 'mcp',
+            connectionId: connection.id,
+            ...(tools
+              ? {
+                  tools: tools.slice(0, 300).map((tool) => ({
+                    name: tool.name.slice(0, 200),
+                    ...(tool.description ? { description: tool.description.slice(0, 4000) } : {}),
+                  })),
+                }
+              : {}),
+          }}
+          disabled={checking}
+        />
       </div>
     </Dialog>
   )

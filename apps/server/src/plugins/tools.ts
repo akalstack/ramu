@@ -22,6 +22,9 @@ export function reviewText(review: PluginReview): string {
     `Source: ${source.location}${source.path ? ` (${source.path})` : ''}${source.commit ? ` at ${source.commit.slice(0, 12)}` : ''}${contents.license ? `, ${contents.license} license` : ''}. ${source.signedBy ? `Signed by ${source.signedBy}.` : 'Unsigned.'}`,
   ]
   if (contents.skills.length) lines.push(`Skills: ${contents.skills.map((skill) => skill.name).join(', ')}.`)
+  const scripts = contents.skills.flatMap((skill) => skill.scripts.map((path) => `${skill.name}/${path}`))
+  if (scripts.length)
+    lines.push(`Scripts its skills use (copied with them; Ramu never runs them): ${scripts.join(', ')}.`)
   for (const server of contents.mcpServers)
     lines.push(
       server.type === 'stdio'
@@ -118,15 +121,7 @@ export function registerPluginTools(
           : reviewText(review)
         if (!(await requestApproval(card, extra.signal)))
           throw new Error('The person declined the install. Do not retry it without a new request.')
-        const scripts = review.contents.skills.some((skill) => skill.scripts.length)
-          ? await requestApproval(
-              `Also install the scripts in ${name}'s skills? ${review.contents.skills
-                .flatMap((skill) => skill.scripts.map((path) => `${skill.name}/${path}`))
-                .join(', ')}`,
-              extra.signal,
-            )
-          : false
-        const plugin = await plugins.confirm(review.stageId, { scope: { kind: 'all' }, includeScripts: scripts })
+        const plugin = await plugins.confirm(review.stageId, { scope: { kind: 'all' } })
         installed(plugin.id)
         if (everywhere) keepOnAllHosts(plugin.name)
         const missing = plugin.credentials.filter((slot) => slot.state !== 'saved').map((slot) => slot.label)
@@ -189,7 +184,6 @@ export function registerPluginTools(
           throw new Error('The person declined the install. Do not retry it without a new request.')
         const plugin = await plugins.confirm(review.stageId, {
           scope: { kind: 'all' },
-          includeScripts: false,
           development: true,
           offerAbilities: true,
         })

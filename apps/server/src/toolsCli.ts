@@ -5,6 +5,7 @@ import type { SharedMcpConnection, SharedMcpManagement } from '@ramu/shared/mcp'
 import { mcpLogins, type PortableTool, type ToolSyncStatus, type WaitingTool } from '@ramu/shared/toolSync'
 import type { AppPreferences, LearningSnapshot, SkillInstallPreview } from '@ramu/shared/types'
 import type { IdentitySnapshot } from '@ramu/shared/identities'
+import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
 import { reviewText } from './plugins/tools'
 
 export type ToolsCall = <T>(method: string, args?: unknown[]) => Promise<T>
@@ -167,9 +168,6 @@ async function installPlugin(
       await call('plugins.cancel', [review.stageId])
       return
     }
-    const scripts = review.contents.skills.flatMap((skill) => skill.scripts.map((path) => `${skill.name}/${path}`))
-    const includeScripts =
-      scripts.length > 0 && (await io.confirm(`Also install the scripts in its skills? ${scripts.join(', ')}`))
     const identity = tool.identityId
       ? (await call<IdentitySnapshot>('identities.get')).settings.identities.find((item) => item.id === tool.identityId)
       : undefined
@@ -181,7 +179,7 @@ async function installPlugin(
           : entry.projectId
             ? { kind: 'project', projectId: entry.projectId }
             : { kind: 'all' },
-        includeScripts,
+        providers: [...AGENT_PROVIDERS],
       },
     ])
     io.print(
@@ -254,9 +252,7 @@ async function installSkill(
     await call('skills.cancel', [preview.id])
     return
   }
-  const scripts = preview.files.filter((file) => file.script)
-  const include = scripts.length > 0 && (await io.confirm('Also copy its scripts? Ramu does not run them.'))
-  await call('skills.confirm', [preview.id, include])
+  await call('skills.confirm', [preview.id, { projectId, providers: [...AGENT_PROVIDERS] }])
   io.print(`Installed ${preview.name}.`)
 }
 
