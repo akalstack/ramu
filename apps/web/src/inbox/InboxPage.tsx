@@ -7,56 +7,53 @@ import { useEffect, useState } from 'react'
 import { useWorkspace } from '../workspace/workspace'
 import { DateTime } from 'luxon'
 import { Inbox, Loader, Newspaper, RefreshCw, Sparkles } from 'lucide-react'
-import type { LibrarySummary } from '@ramu/shared/types'
+import type { LibrarySummary, RecapItem } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
-import { InboxEmpty, InboxTabsList } from './InboxParts'
+import { InboxEmpty, InboxList, InboxMark, InboxRow, InboxTabsList, byDay } from './InboxParts'
 import { t, useLanguage } from '../i18n'
 import { AgentList, recentlyCompleted, rowsOf, useAgentOverview } from '../HomeAgents'
 import { FeedSection } from '../HomeSection'
 import { useSummaries } from '../summaries/useSummaries'
 import { openSummary } from '../summaries/openSummary'
-import { RecapCard, useRecaps } from './recaps'
-import { FadeText } from '../FadeText'
+import { RecapRow, useRecaps } from './recaps'
 import { timeAgo } from '../Menu'
 import { StateDot } from '../sidebar/projects/TaskStateIcon'
 import type { InboxTab } from '@ramu/shared/hostInbox'
 import { saveInboxTab, savedInboxTab } from './navigation'
 
-/** Summaries as sidebar-style rows: headline, then age, or an unread dot. */
+/** What Ramu learned, one row per summary: the headline, how many changes, and its age or an unread dot. */
 function LearnedList({ summaries }: { summaries: LibrarySummary[] }) {
   const host = useHost()
   return (
-    <div className="-mx-2.5 flex flex-col gap-px">
+    <InboxList>
       {summaries.map((summary) => (
-        <div
+        <InboxRow
           key={summary.id}
-          role="button"
-          tabIndex={0}
-          onClick={() => openSummary(summary.id, host.invoke, host.id)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') openSummary(summary.id, host.invoke, host.id)
-          }}
-          className="flex min-h-9 cursor-default items-center gap-2 rounded-(--radius-s) px-2.5 text-body leading-5 text-soft [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] hover:bg-accent hover:text-foreground"
-        >
-          <Sparkles size={13} className="flex-none text-muted-foreground" />
-          <FadeText
-            className={`min-w-0 flex-1 overflow-hidden text-left whitespace-nowrap ${summary.status === 'dismissed' ? 'text-muted-foreground' : ''}`}
-            text={summary.headline}
-          />
-          <span className="flex-none text-caption text-muted-foreground">
-            {t('{0} changes', { 0: summary.items.length })}
-          </span>
-          {summary.status === 'unread' ? (
-            <StateDot kind="dot unread" label={t('Unread')} />
-          ) : (
-            <span className="min-w-6 flex-none text-right text-caption text-muted-foreground tabular-nums">
-              {timeAgo(summary.periodEnd)}
-            </span>
-          )}
-        </div>
+          mark={
+            <InboxMark>
+              <Sparkles />
+            </InboxMark>
+          }
+          title={summary.headline}
+          meta={t('{0} changes', { 0: summary.items.length })}
+          at={summary.periodEnd}
+          {...(summary.status === 'unread'
+            ? {
+                trailing: (
+                  <span className="flex flex-none items-center gap-2">
+                    <StateDot kind="dot unread" label={t('Unread')} />
+                    <span className="min-w-6 text-right text-caption text-muted-foreground tabular-nums">
+                      {timeAgo(summary.periodEnd)}
+                    </span>
+                  </span>
+                ),
+              }
+            : {})}
+          onOpen={() => openSummary(summary.id, host.invoke, host.id)}
+        />
       ))}
-    </div>
+    </InboxList>
   )
 }
 
@@ -91,22 +88,23 @@ function CurrentHostInbox() {
   const ws = useWorkspace()
   const finishedAt = (taskId: string) => ws.tasks.find((task) => task.id === taskId)?.lastActiveAt ?? 0
   const completed = recentlyCompleted(groups, ws.tasks)
-  const today = DateTime.now().startOf('day').toMillis()
-  const yesterday = today - 86_400_000
-  const days = [
-    { label: t('Today'), items: completed.filter((item) => finishedAt(item.session.taskId) >= today) },
-    {
-      label: t('Yesterday'),
-      items: completed.filter((item) => {
-        const at = finishedAt(item.session.taskId)
-        return at >= yesterday && at < today
-      }),
-    },
-    { label: t('Earlier'), items: completed.filter((item) => finishedAt(item.session.taskId) < yesterday) },
-  ].filter((day) => day.items.length)
+  const days = byDay(completed, (item) => finishedAt(item.session.taskId))
   const summaries = (snapshot?.summaries ?? []).slice(0, LEARNED_MAX)
   const unread = summaries.filter((summary) => summary.status === 'unread').length
   const earlier = recaps.recent.filter((item) => !recaps.sinceVisit.includes(item))
+  const recapRow = (item: RecapItem) => (
+    <RecapRow
+      key={item.id}
+      item={item}
+      where={ws.projects.find((p) => p.id === ws.tasks.find((task) => task.id === item.taskId)?.projectId)?.name}
+      attention={false}
+      onOpen={() => {
+        ws.openTask(item.taskId)
+        ws.openView(item.taskId, { kind: 'agent', sessionId: item.sessionId, sourceSeq: item.sourceSeq })
+      }}
+      act={(action, until) => void recaps.act(item.id, action, until)}
+    />
+  )
   const tabs: { id: InboxTab; label: string; count: number }[] = [
     { id: 'brief', label: t('Brief'), count: model.needsYou },
     { id: 'running', label: t('Running'), count: running.length },
@@ -184,16 +182,12 @@ function CurrentHostInbox() {
                 )}
                 {recaps.sinceVisit.length > 0 && (
                   <FeedSection title={t('Since your last visit')} count={recaps.sinceVisit.length}>
-                    {recaps.sinceVisit.map((item) => (
-                      <RecapCard key={item.id} item={item} attention={false} act={recaps.act} />
-                    ))}
+                    <InboxList>{recaps.sinceVisit.map(recapRow)}</InboxList>
                   </FeedSection>
                 )}
                 {earlier.length > 0 && (
                   <FeedSection title={t('Earlier')} count={earlier.length}>
-                    {earlier.map((item) => (
-                      <RecapCard key={item.id} item={item} attention={false} act={recaps.act} />
-                    ))}
+                    <InboxList>{earlier.map(recapRow)}</InboxList>
                   </FeedSection>
                 )}
                 {!recaps.recent.length && !(recaps.recap?.generating && !recaps.recap.generatedAt) && (

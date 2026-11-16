@@ -70,10 +70,12 @@ const session: AgentSessionInfo = {
   title: 'A finished thread',
 }
 const render = () => renderToStaticMarkup(createElement(AgentRow, { session, group: 'Done' }))
+/** The Done/Reopen action sits beside the row, so pressing it never opens the thread. */
 const click = () => {
-  const stopPropagation = vi.fn()
-  state.buttons[0]!.onClick!({ stopPropagation } as unknown as React.MouseEvent<HTMLButtonElement>)
-  expect(stopPropagation).toHaveBeenCalledOnce()
+  const action = state.buttons.find((button) =>
+    ['Mark thread done', 'Reopen thread'].includes(String(button['aria-label'])),
+  )
+  action!.onClick!({} as React.MouseEvent<HTMLButtonElement>)
 }
 beforeEach(() => {
   vi.clearAllMocks()

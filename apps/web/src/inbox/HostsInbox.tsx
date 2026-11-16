@@ -1,24 +1,20 @@
-import { RowButton } from '@/components/row-button'
 import { Brief, blockerLabel } from './Brief'
 import { useInboxModel } from './useBrief'
 import { useState, useEffect } from 'react'
 import { inboxBlocker, INBOX_TABS, type InboxChat, type InboxTab } from '@ramu/shared/hostInbox'
-import type { Task } from '@ramu/shared/types'
-import { Button } from '@/components/desktop-button'
-import { HoverCard, HoverCardTrigger } from '@/components/ui/hover-card'
 import { HostProvider } from '../workspace/HostProvider'
 import { ThreadHoverCard } from '../sidebar/projects/ThreadHoverCard'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
-import { FolderClosed, Inbox, Loader, Newspaper, Sparkles } from 'lucide-react'
-import { HostNotice, InboxEmpty, InboxTabsList } from './InboxParts'
+import { Check, Inbox, Loader, Newspaper, Sparkles } from 'lucide-react'
+import { HostNotice, InboxEmpty, InboxList, InboxMark, InboxRow, InboxTabsList, byDay } from './InboxParts'
 import { useHostSelection } from '../workspace/HostSelection'
 import { FeedSection } from '../HomeSection'
 import { t, useLanguage } from '../i18n'
 import { timeAgo } from '../Menu'
-import { StatusMark } from '../sidebar/projects/TaskStateIcon'
+import { StateDot, StatusMark } from '../sidebar/projects/TaskStateIcon'
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
 import { savedInboxTab, saveInboxTab } from './navigation'
-import { SnoozeMenu, notifyRecapAction, type RecapAction } from './recaps'
+import { RecapRow, notifyRecapAction, type RecapAction } from './recaps'
 import { ramu } from '../ipc'
 import { notifyError } from '../chat/Notifications'
 import { errorText } from '../lib/errors'
@@ -48,64 +44,60 @@ export function HostsInbox() {
     return [project?.name, pc(id)?.name].filter(Boolean).join(' · ')
   }
   const available = (id: string) => pc(id)?.status === 'connected'
-  // The same status as the sidebar, including goal states; a finished result shows its age instead of a mark.
-  const state = (task?: Task) => {
-    if (!task) return null
-    const status = threadStatus(task, false, task.goalState)
-    return status ? <StatusMark task={task} status={status} /> : null
-  }
-  const chats = (list: InboxChat[]) =>
-    list.map((chat) => {
-      const task = data(chat.computerId)?.tasks.find((entry) => entry.id === chat.taskId)
-      return (
-        <HostProvider key={JSON.stringify([chat.computerId, chat.id])} hostId={chat.computerId}>
-          <HoverCard open={!task ? false : undefined}>
-            <HoverCardTrigger
-              render={<RowButton size="lg" disabled={!available(chat.computerId)} focusableWhenDisabled />}
-              delay={400}
-              closeDelay={120}
-              aria-disabled={!available(chat.computerId)}
-              onClick={() =>
-                available(chat.computerId) &&
+  const chats = (list: InboxChat[]) => (
+    <InboxList>
+      {list.map((chat) => {
+        const task = data(chat.computerId)?.tasks.find((entry) => entry.id === chat.taskId)
+        const status = task ? threadStatus(task, false, task.goalState) : null
+        const blocker = blockerText(chat)
+        return (
+          <HostProvider key={JSON.stringify([chat.computerId, chat.id])} hostId={chat.computerId}>
+            <InboxRow
+              label={task?.title}
+              mark={
+                task && status ? (
+                  <InboxMark>
+                    <StatusMark task={task} status={status} />
+                  </InboxMark>
+                ) : (
+                  <InboxMark tone="ok">
+                    <Check />
+                  </InboxMark>
+                )
+              }
+              title={task?.title}
+              meta={[blocker, where(chat.computerId, chat.taskId)].filter(Boolean).join(' · ')}
+              at={chat.lastActiveAt}
+              disabled={!available(chat.computerId)}
+              onOpen={() =>
                 select(chat.computerId, {
                   kind: 'task',
                   taskId: chat.taskId,
                   ...(chat.sessionId ? { sessionId: chat.sessionId } : {}),
                 })
               }
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-foreground">{task?.title}</span>
-                <span className="block truncate text-caption text-muted-foreground">
-                  {where(chat.computerId, chat.taskId)}
-                </span>
-                {blockerText(chat) && (
-                  <span className="block truncate text-caption text-foreground/80">{blockerText(chat)}</span>
-                )}
-              </span>
-              {state(task)}
-              <span className="min-w-6 flex-none text-right text-caption text-muted-foreground tabular-nums">
-                {timeAgo(chat.lastActiveAt)}
-              </span>
-            </HoverCardTrigger>
-            {task && (
-              <ThreadHoverCard
-                task={task}
-                status={threadStatus(task, false, task.goalState)}
-                hostName={pc(chat.computerId)?.name}
-                sharedWorkspace={
-                  !!task.workspaceId &&
-                  !!data(chat.computerId)?.tasks.some(
-                    (other) => other.id !== task.id && other.workspaceId === task.workspaceId,
-                  )
-                }
-                offline={!available(chat.computerId)}
-              />
-            )}
-          </HoverCard>
-        </HostProvider>
-      )
-    })
+              hoverCard={
+                task && (
+                  <ThreadHoverCard
+                    task={task}
+                    status={status}
+                    hostName={pc(chat.computerId)?.name}
+                    sharedWorkspace={
+                      !!task.workspaceId &&
+                      !!data(chat.computerId)?.tasks.some(
+                        (other) => other.id !== task.id && other.workspaceId === task.workspaceId,
+                      )
+                    }
+                    offline={!available(chat.computerId)}
+                  />
+                )
+              }
+            />
+          </HostProvider>
+        )
+      })}
+    </InboxList>
+  )
   const actRecap = async (id: string, recapId: string, action: RecapAction, until?: number) => {
     const send = (next: 'open' | RecapAction, at?: number) =>
       at === undefined
@@ -123,51 +115,21 @@ export function HostsInbox() {
       notifyError(errorText(error), t('Recaps'))
     }
   }
-  // The same card as one host's Recaps tab, with the host named beside the project.
-  const recaps = (list: typeof model.attention) =>
-    list.map(({ computerId, item }) => (
-      <article
-        key={JSON.stringify([computerId, item.id])}
-        className="flex flex-col gap-1.5 rounded-(--radius-m) bg-card p-4"
-      >
-        <span className="flex items-center gap-1 text-caption text-muted-foreground">
-          <FolderClosed size={12} />
-          {where(computerId, item.taskId)}
-        </span>
-        <h3 className="m-0 text-body font-medium">{item.title}</h3>
-        <p className="m-0 leading-[1.5] text-muted-foreground">{item.detail}</p>
-        <div className="mt-1.5 flex flex-wrap items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={!available(computerId)}
-            onClick={() => select(computerId, { kind: 'task', taskId: item.taskId, sessionId: item.sessionId })}
-          >
-            {t('Open thread')}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!available(computerId)}
-            onClick={() => void actRecap(computerId, item.id, 'done')}
-          >
-            {t('Done')}
-          </Button>
-          <SnoozeMenu
-            disabled={!available(computerId)}
-            onSnooze={(until) => void actRecap(computerId, item.id, 'snoozed', until)}
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!available(computerId)}
-            onClick={() => void actRecap(computerId, item.id, 'dismissed')}
-          >
-            {t('Dismiss')}
-          </Button>
-        </div>
-      </article>
-    ))
+  const recaps = (list: typeof model.attention) => (
+    <InboxList>
+      {list.map(({ computerId, item }) => (
+        <RecapRow
+          key={JSON.stringify([computerId, item.id])}
+          item={item}
+          where={where(computerId, item.taskId)}
+          attention
+          disabled={!available(computerId)}
+          onOpen={() => select(computerId, { kind: 'task', taskId: item.taskId, sessionId: item.sessionId })}
+          act={(action, until) => void actRecap(computerId, item.id, action, until)}
+        />
+      ))}
+    </InboxList>
+  )
   const section = (id: InboxTab, title: string, count: number, children: React.ReactNode) =>
     count && tab === id ? (
       <FeedSection title={title} count={count}>
@@ -216,32 +178,46 @@ export function HostsInbox() {
               </p>
             )}
             {tab === 'brief' && <Brief />}
-            {tab === 'running' &&
-              section('running', t('Running in the background'), model.running.length, chats(model.running))}
+            {tab === 'running' && model.running.length > 0 && chats(model.running)}
             {section('recaps', t('Since your last visit'), model.sinceVisit.length, recaps(model.sinceVisit))}
             {tab === 'recaps' && section('recaps', t('Earlier'), model.earlier.length, recaps(model.earlier))}
-            {section(
-              'learned',
-              t('What Ramu learned'),
-              model.summaries.length,
-              model.summaries.map(({ computerId, summary }) => (
-                <RowButton
-                  size="lg"
-                  key={JSON.stringify([computerId, summary.id])}
-                  disabled={!available(computerId)}
-                  onClick={() => select(computerId, { kind: 'summary', summaryId: summary.id })}
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">{summary.headline}</span>
-                    <span className="text-caption text-muted-foreground">{where(computerId)}</span>
-                  </span>
-                  <span className="text-caption text-muted-foreground">
-                    {summary.status === 'unread' ? t('Unread') : timeAgo(summary.periodEnd)}
-                  </span>
-                </RowButton>
-              )),
+            {tab === 'learned' && model.summaries.length > 0 && (
+              <InboxList>
+                {model.summaries.map(({ computerId, summary }) => (
+                  <InboxRow
+                    key={JSON.stringify([computerId, summary.id])}
+                    mark={
+                      <InboxMark>
+                        <Sparkles />
+                      </InboxMark>
+                    }
+                    title={summary.headline}
+                    meta={[t('{0} changes', { 0: summary.items.length }), where(computerId)].join(' · ')}
+                    at={summary.periodEnd}
+                    {...(summary.status === 'unread'
+                      ? {
+                          trailing: (
+                            <span className="flex flex-none items-center gap-2">
+                              <StateDot kind="dot unread" label={t('Unread')} />
+                              <span className="min-w-6 text-right text-caption text-muted-foreground tabular-nums">
+                                {timeAgo(summary.periodEnd)}
+                              </span>
+                            </span>
+                          ),
+                        }
+                      : {})}
+                    disabled={!available(computerId)}
+                    onOpen={() => select(computerId, { kind: 'summary', summaryId: summary.id })}
+                  />
+                ))}
+              </InboxList>
             )}
-            {section('completed', t('Completed'), model.completed.length, chats(model.completed))}
+            {tab === 'completed' &&
+              byDay(model.completed, (chat) => chat.lastActiveAt).map((day) => (
+                <FeedSection key={day.label} title={day.label} count={day.items.length}>
+                  {chats(day.items)}
+                </FeedSection>
+              ))}
             {!pending && tab !== 'brief' && (tab === 'learned' ? !model.summaries.length : !counts[tab]) && (
               <InboxEmpty {...emptyTab(tab)} />
             )}

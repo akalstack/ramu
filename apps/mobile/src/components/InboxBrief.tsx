@@ -35,10 +35,10 @@ import { useAutomation } from '../runtime/automation'
 import { inboxBlockerText } from '../runtime/inboxBlockerText'
 import { useStore } from '../runtime/store'
 import type { Chat } from '../runtime/types'
-import { font, radius, space, useTheme } from '../theme'
-import { Group, Nothing } from './InboxParts'
+import { font, space, useTheme } from '../theme'
+import { Nothing } from './InboxParts'
 import { InputRequests } from './InputRequests'
-import { Button, Divider, T, tap } from './ui'
+import { Button, Divider, ROW_INSET, T, tap } from './ui'
 
 const MARK: Record<BriefMark, typeof CircleAlert> = {
   failed: CircleAlert,
@@ -173,7 +173,7 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
   // Tapping the row opens the thread; the buttons under it finish the step from here.
   return (
     <View>
-      {divider ? <Divider inset={space.l + 32 + space.m} /> : null}
+      {divider ? <Divider inset={ROW_INSET} /> : null}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={[title, detail, place].filter(Boolean).join(', ')}
@@ -193,18 +193,7 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
           backgroundColor: pressed ? c.pressed : 'transparent',
         })}
       >
-        <View
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: radius.full,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: look.tone === 'bad' ? c.badWash : look.tone === 'warn' ? c.warnWash : c.fill,
-          }}
-        >
-          <Mark size={15} color={toneColor} />
-        </View>
+        <Mark size={16} color={toneColor} />
         <View style={{ flex: 1, minWidth: 0 }}>
           <T weight="500" numberOfLines={1}>
             {title}
@@ -219,9 +208,7 @@ function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean
         {chat ? <ChevronRight size={16} color={c.placeholder} /> : null}
       </Pressable>
       {error || actions || (open && chat) ? (
-        <View
-          style={{ paddingLeft: space.l + 32 + space.m, paddingRight: space.l, paddingBottom: space.m, gap: space.s }}
-        >
+        <View style={{ paddingLeft: ROW_INSET, paddingRight: space.l, paddingBottom: space.m, gap: space.s }}>
           {error ? (
             <T size={font.caption} tone="bad">
               {error}
@@ -267,7 +254,7 @@ export function InboxBrief({ inbox, where }: { inbox: InboxModel; where: (chat: 
             .join(' · ')}
         </T>
       ) : null}
-      <Group>
+      <View>
         {shown.map((row, index) => (
           <BriefRowView
             key={JSON.stringify([
@@ -280,7 +267,7 @@ export function InboxBrief({ inbox, where }: { inbox: InboxModel; where: (chat: 
             where={where}
           />
         ))}
-      </Group>
+      </View>
       {rows.length > shown.length ? (
         <Button
           kind="ghost"

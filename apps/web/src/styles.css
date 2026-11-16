@@ -287,7 +287,6 @@ kbd {
     [data-slot='popover-content'],
     .msg.assistant pre,
     .tool-group-body,
-    .recap-card,
     .schedule-card,
     .home-agents
   ) {
@@ -894,12 +893,12 @@ kbd {
 
 /* Switch: base-ui exposes data-checked, not data-state. */
 /* Secondary actions in page toolbars are filled, so a row of them reads as one group. */
-:is(.review-toolbar, .automation-heading, .schedule-card-title, .recap-actions, .schedule-form-actions)
+:is(.review-toolbar, .automation-heading, .schedule-card-title, .schedule-form-actions)
   button.ghost:not(.icon, .small-icon) {
   @apply [background:var(--fill)];
   @apply text-soft;
 }
-:is(.review-toolbar, .automation-heading, .schedule-card-title, .recap-actions, .schedule-form-actions)
+:is(.review-toolbar, .automation-heading, .schedule-card-title, .schedule-form-actions)
   button.ghost:not(.icon, .small-icon):hover:not(:disabled) {
   @apply [background:var(--fill-hover)];
   @apply text-foreground;

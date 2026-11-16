@@ -16,9 +16,7 @@ import {
 import { retryThread, stopIdleThreads } from '@ramu/shared/chat/threadActions'
 import { gigabytes } from '@ramu/shared/resources'
 import { Button } from '@/components/desktop-button'
-import { RowButton } from '@/components/row-button'
-import { timeAgo } from '../Menu'
-import { BriefMarkIcon, TONE_TEXT } from './InboxParts'
+import { BriefMarkIcon, InboxList, InboxRow, TONE_TEXT } from './InboxParts'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { notifyError } from '../chat/Notifications'
 import { useViewOnly } from '../composer/useViewOnly'
@@ -174,44 +172,22 @@ function BriefRowView({
   const look = briefRowLook(row)
   // The row opens its thread; actions beside it finish the step without leaving the Inbox.
   return (
-    <article className="flex flex-col transition-colors hover:bg-hover">
-      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 pr-3">
-        <RowButton
-          size="lg"
-          className="group min-w-60 flex-1 basis-60 rounded-none px-3 py-2.5 hover:bg-transparent! focus-visible:bg-hover"
-          disabled={!online}
-          focusableWhenDisabled
-          aria-disabled={!online}
-          title={online ? t('Open') : undefined}
-          onClick={() => online && open()}
-        >
-          <BriefMarkIcon mark={look.mark} tone={look.tone} />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate font-medium text-foreground">{content.title}</span>
-            <span className="block truncate text-caption">
-              <span className={TONE_TEXT[look.tone]}>{content.detail}</span>
-              {[where, content.at ? timeAgo(content.at) : ''].filter(Boolean).map((part) => (
-                <span key={part} className="text-muted-foreground">
-                  {' · '}
-                  {part}
-                </span>
-              ))}
-            </span>
-          </span>
-          <ChevronRight
-            size={14}
-            aria-hidden
-            className="flex-none text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
-          />
-        </RowButton>
-        {actions && <div className="flex flex-none flex-wrap items-center gap-1.5">{actions}</div>}
-      </div>
-      {expanded && request && (
-        <div className="px-2.5 pt-1 pb-2">
-          <PendingInput sessionId={request.sessionId} />
-        </div>
-      )}
-    </article>
+    <InboxRow
+      mark={<BriefMarkIcon mark={look.mark} tone={look.tone} />}
+      title={content.title}
+      meta={
+        <>
+          <span className={TONE_TEXT[look.tone]}>{content.detail}</span>
+          {where && ` · ${where}`}
+        </>
+      }
+      at={content.at}
+      disabled={!online}
+      onOpen={open}
+      actions={actions || null}
+    >
+      {expanded && request && <PendingInput sessionId={request.sessionId} />}
+    </InboxRow>
   )
 }
 
@@ -291,7 +267,7 @@ export function Brief() {
                 .join(' · ')}
             </p>
           )}
-          <div className="flex flex-col divide-y divide-(--line) overflow-hidden rounded-(--radius-m) bg-card">
+          <InboxList>
             {shown.map((row) => {
               const hostId = briefRowHost(row)
               return (
@@ -310,7 +286,7 @@ export function Brief() {
                 </HostProvider>
               )
             })}
-          </div>
+          </InboxList>
           {rows.length > shown.length && (
             <Button
               variant="ghost"

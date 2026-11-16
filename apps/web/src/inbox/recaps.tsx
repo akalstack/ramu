@@ -1,7 +1,8 @@
 import { animateThreadListChange } from '../workspace/threadListMotion'
 import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, FolderClosed } from 'lucide-react'
+import { Check, ChevronDown, Newspaper, X } from 'lucide-react'
+import { InboxMark, InboxRow } from './InboxParts'
 import type { RecapItem } from '@ramu/shared/types'
 import { SNOOZE_CHOICES, snoozeUntil, type SnoozeChoice } from '@ramu/shared/snooze'
 import { Button } from '@/components/desktop-button'
@@ -137,54 +138,62 @@ export function useRecaps() {
   }
 }
 
-/** One recap item: the project, what happened, and what you can do about it. */
-export function RecapCard({
+/**
+ * One recap item as an Inbox row: what happened over where and the gist, opening the thread at the moment it is
+ * about. An item that needs a decision also offers Done and Snooze; any item can be dismissed.
+ */
+export function RecapRow({
   item,
+  where,
   attention,
+  disabled = false,
+  onOpen,
   act,
 }: {
   item: RecapItem
+  where?: string
   attention: boolean
-  act: (id: string, action: RecapAction, until?: number) => void
+  disabled?: boolean
+  onOpen: () => void
+  act: (action: RecapAction, until?: number) => void
 }) {
-  const ws = useWorkspace()
-  const project = ws.projects.find((p) => p.id === ws.tasks.find((task) => task.id === item.taskId)?.projectId)
   return (
-    <article data-thread-motion-row="" className="recap-card flex flex-col gap-1.5 rounded-(--radius-m) bg-card p-4">
-      {project && (
-        <span className="muted text-muted-foreground small text-caption flex items-center gap-1">
-          <FolderClosed size={12} />
-          {project.name}
-        </span>
-      )}
-      <h3 className="m-0 text-body font-medium">{item.title}</h3>
-      <p className="muted text-muted-foreground m-0 leading-[1.5]">{item.detail}</p>
-      <div className="recap-actions mt-1.5 flex items-center gap-2">
-        <Button
-          variant="secondary"
-          size="sm"
-          className="bg-fill hover:bg-fill-hover small text-caption"
-          title={t('Source event {0}', { '0': item.sourceSeq })}
-          onClick={() => {
-            ws.openTask(item.taskId)
-            ws.openView(item.taskId, { kind: 'agent', sessionId: item.sessionId, sourceSeq: item.sourceSeq })
-          }}
-        >
-          {t('Open thread')}
-        </Button>
-        {attention && (
-          <>
-            <Button variant="ghost" size="sm" className={GHOST} onClick={() => act(item.id, 'done')}>
-              <Check size={12} />
-              {t('Mark done')}
-            </Button>
-            <SnoozeMenu onSnooze={(until) => act(item.id, 'snoozed', until)} />
-          </>
-        )}
-        <Button variant="ghost" size="sm" className={GHOST} onClick={() => act(item.id, 'dismissed')}>
-          {t('Dismiss')}
-        </Button>
-      </div>
-    </article>
+    <InboxRow
+      mark={
+        <InboxMark tone={attention ? 'warn' : 'neutral'}>
+          <Newspaper />
+        </InboxMark>
+      }
+      title={item.title}
+      meta={[where, item.detail].filter(Boolean).join(' · ')}
+      wrapMeta
+      at={item.updatedAt}
+      disabled={disabled}
+      onOpen={onOpen}
+      actions={
+        <>
+          {attention && (
+            <>
+              <Button variant="ghost" size="xs" className={GHOST} disabled={disabled} onClick={() => act('done')}>
+                <Check size={12} />
+                {t('Mark done')}
+              </Button>
+              <SnoozeMenu disabled={disabled} onSnooze={(until) => act('snoozed', until)} />
+            </>
+          )}
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className={GHOST}
+            aria-label={t('Dismiss')}
+            title={t('Dismiss')}
+            disabled={disabled}
+            onClick={() => act('dismissed')}
+          >
+            <X size={13} />
+          </Button>
+        </>
+      }
+    />
   )
 }

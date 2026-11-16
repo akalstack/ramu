@@ -5,11 +5,10 @@ import { useQuery } from '@tanstack/react-query'
 import { DateTime } from 'luxon'
 import type { AgentSessionInfo, Task } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
-import { HoverCard, HoverCardTrigger } from '@/components/ui/hover-card'
 import { threadStatus } from '@ramu/shared/chat/threadStatus'
 import { ThreadHoverCard } from './sidebar/projects/ThreadHoverCard'
-import { ArrowLeft, Check, RotateCcw, Square } from 'lucide-react'
-import { FadeText } from './FadeText'
+import { ArrowLeft, Check, CircleAlert, MessageCircleQuestion, RotateCcw, Square } from 'lucide-react'
+import { InboxList, InboxMark, InboxRow } from './inbox/InboxParts'
 import { StateDot, StatusMark } from './sidebar/projects/TaskStateIcon'
 import { ICON_BUTTON_CLASS } from './sidebar/projects/constants'
 import { ramu } from './ipc'
@@ -118,36 +117,50 @@ export function useAgentOverview() {
   return { groups, error: sessions.error, refetch }
 }
 
-/** The trailing state, as on sidebar thread rows: working, needs you, usage wait or failed; finished rows show their age. */
-function AgentState({
+/** The row's mark, as on sidebar thread rows: working, needs you, usage wait, failed or finished. */
+function AgentMark({
   session,
   group,
-  at,
   unread,
   task,
 }: {
   session: AgentSessionInfo
   group: AgentGroup
-  at?: number
   unread?: boolean
   task?: Task
 }) {
   if (task && !session.parentId) {
     const status = threadStatus(task, !!unread, task.goalState)
-    if (status) return <StatusMark task={task} status={status} />
+    if (status) return <InboxMark>{<StatusMark task={task} status={status} />}</InboxMark>
   }
-  if (group === 'Limit reached' && session.waitingUntil) return <ProviderWaitIcon retryAt={session.waitingUntil} />
+  if (group === 'Limit reached' && session.waitingUntil)
+    return (
+      <InboxMark tone="warn">
+        <ProviderWaitIcon retryAt={session.waitingUntil} />
+      </InboxMark>
+    )
   if (group === 'Waiting for your input')
-    return <StateDot kind="dot warn text-warn" label={t('Waiting for your input')} />
-  if (group === 'Running') return <StateDot kind="spinner" label={t('Agent working')} />
-  if (session.state === 'failed') return <StateDot kind="dot bad" label={t('Agent failed')} />
+    return (
+      <InboxMark tone="warn">
+        <MessageCircleQuestion />
+      </InboxMark>
+    )
+  if (group === 'Running')
+    return (
+      <InboxMark>
+        <StateDot kind="spinner" label={t('Agent working')} />
+      </InboxMark>
+    )
+  if (session.state === 'failed')
+    return (
+      <InboxMark tone="bad">
+        <CircleAlert />
+      </InboxMark>
+    )
   return (
-    <>
-      {unread && <StateDot kind="dot unread" label={t('Finished, not viewed yet')} />}
-      <span className="agent-time min-w-6 flex-none text-right text-caption text-muted-foreground tabular-nums">
-        {at ? timeAgo(at) : ''}
-      </span>
-    </>
+    <InboxMark tone="ok">
+      <Check />
+    </InboxMark>
   )
 }
 
@@ -191,100 +204,87 @@ export function AgentRow({
   // A sub-agent (listed only while it needs you) says which thread it belongs to.
   const prefix = helper ? task?.title : (project?.name ?? t('No project'))
   const open = () => openAgent(ws, session)
+  const unread = ws.unread.has(session.taskId)
+  const stoppable =
+    group !== 'Done' &&
+    (['running', 'starting', 'needs-input'].includes(session.state) ||
+      !!session.waitingUntil ||
+      task?.goalState?.status === 'active')
+  const markDone = () => {
+    const marking = !task?.doneAt
+    const change = (done: boolean) =>
+      animateThreadListChange(async () => {
+        await invoke('tasks.done', session.taskId, done)
+        await ws.refresh()
+      })
+    void change(marking).then(
+      () => marking && offerThreadUndo('done', 1, () => change(false)),
+      (error) => notifyError(errorText(error)),
+    )
+  }
   return (
-    <article className="agent-row" data-thread-motion-row="">
-      <HoverCard open={helper || !task ? false : undefined}>
-        <HoverCardTrigger
-          render={<div />}
-          delay={400}
-          closeDelay={120}
-          role="button"
-          tabIndex={0}
-          aria-label={title}
-          onClick={open}
-          onKeyDown={(e) => {
-            if (e.target === e.currentTarget && e.key === 'Enter') open()
-          }}
-          className={`[&:hover_.row-actions]:flex [&:focus-within_.row-actions]:flex [&:hover_.agent-time]:hidden [&:focus-within_.agent-time]:hidden flex min-h-9 cursor-default items-center gap-2 rounded-(--radius-s) px-2.5 text-body leading-5 text-soft [transition:background_0.1s_var(--ease),_color_0.1s_var(--ease)] hover:bg-accent hover:text-foreground`}
-        >
-          <FadeText className="min-w-0 flex-1 overflow-hidden text-left whitespace-nowrap" text={title} />
+    <InboxRow
+      label={title}
+      mark={<AgentMark session={session} group={group} unread={unread} task={task} />}
+      title={
+        <>
+          {title}
           {helper && (
-            <span className="flex-none rounded-full bg-fill px-1.5 text-caption text-muted-foreground">
+            <span className="ml-2 rounded-full bg-fill px-1.5 text-caption font-normal text-muted-foreground">
               {t('Sub-agent')}
             </span>
           )}
-          {prefix && (
-            <span className="max-w-[25%] min-w-0 truncate text-caption text-muted-foreground" title={prefix}>
-              {prefix}
-            </span>
-          )}
-          <span className="hidden max-w-[40%] min-w-0 flex-none truncate text-caption text-muted-foreground @[480px]:inline">
-            {[
-              helpers > 0 && t(helpers === 1 ? '1 sub-agent' : '{0} sub-agents', { 0: helpers }),
-              session.settings.model || session.provider,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
+        </>
+      }
+      meta={[
+        prefix,
+        helpers > 0 && t(helpers === 1 ? '1 sub-agent' : '{0} sub-agents', { 0: helpers }),
+        session.settings.model || session.provider,
+      ]
+        .filter(Boolean)
+        .join(' · ')}
+      trailing={
+        <span className="flex flex-none items-center gap-2">
+          {unread && <StateDot kind="dot unread" label={t('Finished, not viewed yet')} />}
+          <span className="min-w-6 text-right text-caption text-muted-foreground tabular-nums">
+            {task?.lastActiveAt ? timeAgo(task.lastActiveAt) : ''}
           </span>
-          <AgentState
-            session={session}
-            group={group}
-            at={task?.lastActiveAt}
-            unread={ws.unread.has(session.taskId)}
-            task={task}
-          />
-          {group === 'Done' && !helper && (
-            <span className="row-actions hidden flex-none items-center gap-0.5">
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className={ICON_BUTTON_CLASS}
-                aria-label={task?.doneAt ? t('Reopen thread') : t('Mark thread done')}
-                title={task?.doneAt ? t('Reopen') : t('Mark done')}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  const marking = !task?.doneAt
-                  const change = (done: boolean) =>
-                    animateThreadListChange(async () => {
-                      await invoke('tasks.done', session.taskId, done)
-                      await ws.refresh()
-                    })
-                  void change(marking).then(
-                    () => marking && offerThreadUndo('done', 1, () => change(false)),
-                    (error) => notifyError(errorText(error)),
-                  )
-                }}
-              >
-                {task?.doneAt ? <RotateCcw size={14} /> : <Check size={14} />}
-              </Button>
-            </span>
-          )}
-          {group !== 'Done' &&
-            (['running', 'starting', 'needs-input'].includes(session.state) ||
-              session.waitingUntil ||
-              task?.goalState?.status === 'active') && (
-              <span className="row-actions hidden flex-none items-center gap-0.5">
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className={ICON_BUTTON_CLASS}
-                  aria-label={t('Stop')}
-                  title={t('Stop')}
-                  disabled={!!session.nativeTask && !session.nativeTask.canStop}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    stop()
-                  }}
-                >
-                  <Square size={11} />
-                </Button>
-              </span>
-            )}
-        </HoverCardTrigger>
-        {task && !helper && (
+        </span>
+      }
+      onOpen={open}
+      actionsOnHover
+      actions={
+        group === 'Done' && !helper ? (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className={ICON_BUTTON_CLASS}
+            aria-label={task?.doneAt ? t('Reopen thread') : t('Mark thread done')}
+            title={task?.doneAt ? t('Reopen') : t('Mark done')}
+            onClick={markDone}
+          >
+            {task?.doneAt ? <RotateCcw size={14} /> : <Check size={14} />}
+          </Button>
+        ) : stoppable ? (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className={ICON_BUTTON_CLASS}
+            aria-label={t('Stop')}
+            title={t('Stop')}
+            disabled={!!session.nativeTask && !session.nativeTask.canStop}
+            onClick={stop}
+          >
+            <Square size={11} />
+          </Button>
+        ) : null
+      }
+      hoverCard={
+        task &&
+        !helper && (
           <ThreadHoverCard
             task={task}
-            status={threadStatus(task, ws.unread.has(task.id), task.goalState)}
+            status={threadStatus(task, unread, task.goalState)}
             workspaceName={
               task.workspaceId ? ws.workspaces.find((workspace) => workspace.id === task.workspaceId)?.name : undefined
             }
@@ -294,14 +294,13 @@ export function AgentRow({
             }
             offline={hostStatus !== 'connected'}
           />
-        )}
-      </HoverCard>
+        )
+      }
+    >
       {group === 'Waiting for your input' && (session.state === 'needs-input' || session.pendingInput) && (
-        <div className="px-2.5 pt-1 pb-3">
-          <PendingInput sessionId={session.id} />
-        </div>
+        <PendingInput sessionId={session.id} />
       )}
-    </article>
+    </InboxRow>
   )
 }
 
@@ -317,7 +316,7 @@ export function AgentList({ items }: { items: Item[] }) {
   for (const session of Object.values(groups).flat())
     if (session.parentId) helpers.set(session.parentId, (helpers.get(session.parentId) ?? 0) + 1)
   return (
-    <div className="@container -mx-2.5 flex flex-col gap-px">
+    <InboxList>
       {items.map((item) => (
         <AgentRow
           key={item.session.id}
@@ -326,7 +325,7 @@ export function AgentList({ items }: { items: Item[] }) {
           helpers={helpers.get(item.session.id) ?? 0}
         />
       ))}
-    </div>
+    </InboxList>
   )
 }
 
