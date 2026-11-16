@@ -5,9 +5,12 @@
 // signed in to the same account straight away with the access they picked.
 import { randomBytes } from 'node:crypto'
 import { deflateRawSync, inflateRawSync } from 'node:zlib'
+import { z } from 'zod'
 import {
   ACCOUNT_LIMITS,
+  ACCOUNT_PROVIDERS,
   ACCOUNT_URL,
+  type AccountProvider,
   type AccountSignIn,
   type AccountStatus,
   type AccountTrust,
@@ -42,8 +45,26 @@ const random = (bytes: number) => new Uint8Array(randomBytes(bytes))
 const GIST_FILE = 'ramu-settings.sealed'
 const GIST_RECOVERY = 'ramu-recovery.sealed'
 
+/** The account's linked sign-ins as the service lists them; only which provider each is matters here. */
+const linkedAccountsSchema = z
+  .array(z.object({ providerId: z.string().max(64), createdAt: z.union([z.string().max(64), z.number()]).optional() }))
+  .max(20)
+
+/** The known providers among the linked sign-ins, oldest first, so the one the account was made with leads. */
+function linkedProviders(body: unknown): AccountProvider[] {
+  const parsed = linkedAccountsSchema.safeParse(body)
+  if (!parsed.success) return []
+  const time = (value: string | number | undefined) => (value === undefined ? 0 : new Date(value).getTime() || 0)
+  const ordered = [...parsed.data].sort((a, b) => time(a.createdAt) - time(b.createdAt))
+  const known = ordered
+    .map((entry) => entry.providerId)
+    .filter((id): id is AccountProvider => (ACCOUNT_PROVIDERS as readonly string[]).includes(id))
+  return [...new Set(known)]
+}
+
 interface State {
   user: AccountUser | null
+  providers: AccountProvider[]
   /** This host's backup slot: random, so the service learns nothing from it. */
   slot: string
   account: boolean
@@ -121,6 +142,7 @@ export class AccountService {
     const saved = this.host.getState<Partial<State> | null>(STATE_KEY, null)
     const state: State = {
       user: saved?.user ?? null,
+      providers: saved?.providers ?? [],
       slot: saved?.slot ?? Buffer.from(random(16)).toString('hex'),
       account: saved?.account ?? false,
       github: saved?.github ?? false,
@@ -145,6 +167,7 @@ export class AccountService {
     return {
       signedIn: !!state.user,
       user: state.user,
+      providers: state.user ? state.providers : [],
       backup: {
         account: state.account,
         github: state.github,
@@ -225,15 +248,24 @@ export class AccountService {
       const body = (await response?.json().catch(() => ({}))) as { access_token?: string; error?: string }
       if (body?.access_token) {
         await this.session.save({ token: body.access_token })
-        const user = await this.call<AccountUser>('GET', '/api/me')
+        const profile = await this.profile()
         this.signing = null
-        this.save({ user })
+        this.save(profile)
         return
       }
       if (body?.error && !['authorization_pending', 'slow_down'].includes(body.error)) break
     }
     if (this.signing === pending) this.signing = null
     this.host.changed()
+  }
+
+  /** Who is signed in and with which providers; a failed provider list leaves the providers unknown, not the user. */
+  private async profile(): Promise<{ user: AccountUser; providers: AccountProvider[] }> {
+    const [user, linked] = await Promise.all([
+      this.call<AccountUser>('GET', '/api/me'),
+      this.call<unknown>('GET', '/api/auth/list-accounts').catch(() => null),
+    ])
+    return { user, providers: linked === null ? this.state().providers : linkedProviders(linked) }
   }
 
   cancelSignIn() {
@@ -247,7 +279,7 @@ export class AccountService {
     await this.session.remove()
     await this.key.remove()
     this.stopPolling()
-    this.save({ user: null, account: false, listedId: null })
+    this.save({ user: null, providers: [], account: false, listedId: null })
   }
 
   async deleteAccount() {
@@ -255,7 +287,7 @@ export class AccountService {
     await this.session.remove()
     await this.key.remove()
     this.stopPolling()
-    this.save({ user: null, account: false, listedId: null, lastBackupAt: null })
+    this.save({ user: null, providers: [], account: false, listedId: null, lastBackupAt: null })
   }
 
   // ---- Backups ----
@@ -649,9 +681,17 @@ export class AccountService {
     this.save({ accountDevices: Object.fromEntries(entries.slice(-ACCOUNT_DEVICES_KEPT)) })
   }
 
-  /** Checks for relayed pairing requests while it runs. */
+  /** Checks for relayed pairing requests while it runs, and refreshes who is signed in. */
   start() {
     if (this.state().listedId && this.state().user) this.startPolling()
+    // The name, picture and linked providers can change at the account; offline, the saved ones stay.
+    if (this.state().user)
+      void this.profile().then(
+        (profile) => {
+          if (this.state().user) this.save(profile)
+        },
+        () => {},
+      )
   }
 
   /**

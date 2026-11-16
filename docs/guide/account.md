@@ -4,7 +4,9 @@ The Ramu account is optional. Everything works without it; signing in adds setti
 
 ## Signing in
 
-**Settings → Account → Sign in** on the desktop or the phone, or `ramu account login` on a host over SSH, shows a short code and opens the sign-in page in the system browser. Sign in with GitHub, Google or a passkey (add one from the page once signed in), check the code matches the one Ramu shows, and choose **Approve**. No password is stored, and the identity provider's access token is not kept after sign-in. **Sign out** ends this device's session; **Delete account** removes every backup, listed host and sign-in in the account at once.
+**Settings → Account → Sign in** on the desktop or the phone, or `ramu account login` on a host over SSH, shows a short code and opens the sign-in page in the system browser. Sign in with GitHub, Google or a passkey (add one from the page once signed in), check the code matches the one Ramu shows, and choose **Approve**. No password is stored, and the identity provider's access token is not kept after sign-in.
+
+Once signed in, the desktop shows the account's GitHub or Google picture (or its initials) at the foot of the sidebar's rail; it opens a menu with the account's name and email, **Settings** and **Ramu account**. Signed out, the same place is a plain Settings button. **Settings → Account** shows the picture, name, email and the provider the account was made with. The host fetches the picture, so the device never loads it from GitHub or Google. **Sign out** ends this device's session; **Delete account** removes every backup, listed host and sign-in in the account at once.
 
 ## Backing up settings
 

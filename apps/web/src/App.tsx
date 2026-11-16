@@ -26,7 +26,6 @@ import {
   Blocks,
   CalendarClock,
   Inbox,
-  Settings,
   MessagesSquare,
   SquarePen,
   Archive,
@@ -46,6 +45,7 @@ import {
 } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { buildCommands, formatKeys, useKeybindings } from './commands'
+import { AccountMenuButton } from './sidebar/AccountMenuButton'
 import { Palette } from './palette/Palette'
 import type { PaletteMode } from './palette/sources'
 import { copyText, invoke, ramu } from './ipc'
@@ -770,19 +770,12 @@ function Shell() {
                 {railButton('schedules', CalendarClock, t('Schedules'), 0)}
                 {railButton('artifacts', AppWindow, t('Artifacts'), 0)}
                 {railButton('customize', Blocks, t('Customize'), 0)}
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="mt-auto size-9 flex-none justify-center border-transparent bg-transparent p-0 text-muted-foreground hover:bg-hover hover:text-foreground"
-                  aria-label={t('Settings')}
-                  title={`${t('Settings')} (${formatKeys('mod+,')})`}
-                  onClick={() => {
-                    setSettingsSection('appearance')
+                <AccountMenuButton
+                  onOpen={(section) => {
+                    setSettingsSection(section)
                     setSettingsOpen(true)
                   }}
-                >
-                  <Settings size={18} />
-                </Button>
+                />
               </nav>
               <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                 <nav

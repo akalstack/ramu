@@ -2,6 +2,7 @@ import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { SETTINGS_MENU, SETTINGS_MENU_GROUPS, type SettingsMenuId } from '@ramu/shared/settingsMenu'
 import { cn } from 'cn'
 import { SettingsTargetSelector, SettingsScopeContext } from './SettingsScope'
+import { SettingsAccountRow } from './AccountProfile'
 import { t, useLanguage } from '../i18n'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/desktop-button'
@@ -232,6 +233,7 @@ export function SettingsPage({
             className="settings-navigation [&_.settings-nav-button]:[border:0] [&_.settings-nav-button]:bg-transparent [&_.settings-nav-button]:text-soft [&_.settings-nav-button]:justify-start [&_.settings-nav-button]:text-left [&_.settings-nav-button]:min-h-8 [&_.settings-nav-button]:p-[0_12px] [&_.settings-nav-button]:rounded-(--radius-s) [&_.settings-nav-button]:text-control [&_.settings-nav-button:not(.on):not(:disabled):hover]:bg-hover [&_.settings-nav-button:not(.on):not(:disabled):hover]:text-foreground [&_.settings-nav-button.on]:text-foreground [&_.settings-nav-button.on]:bg-accent [&_.settings-nav-button.on]:font-medium [&_.settings-nav-button]:flex [&_.settings-nav-button]:items-center [&_.settings-nav-button]:gap-2.5 [&_.settings-nav-button]:whitespace-normal [&_.settings-nav-button]:py-1 [&_.settings-nav-button]:leading-5 [&_.settings-nav-button_svg]:flex-none [&_.settings-nav-button_svg]:text-muted-foreground [&_.settings-nav-button.on_svg]:text-brand flex-none [background:var(--sidebar)] p-[16px_10px] flex flex-col overflow-y-auto gap-0.5 w-[240px]"
             aria-label={t('Settings sections')}
           >
+            <SettingsAccountRow disabled={busy || navigationLocked} onOpen={() => onSection('account')} />
             <SearchInput
               className="settings-search m-[0_0_12px]"
               aria-label={t('Find settings')}

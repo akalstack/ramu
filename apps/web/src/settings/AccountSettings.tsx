@@ -11,7 +11,8 @@ import { useViewOnly } from '../composer/useViewOnly'
 import { t, useLanguage } from '../i18n'
 import { copyText, invoke as onThisComputer, ramu } from '../ipc'
 import { errorText } from '../lib/errors'
-import { SettingsCard, SettingsCardList, SettingsEmpty, SettingsSectionHead } from './cards'
+import { AccountProfileHeader } from './AccountProfile'
+import { SETTINGS_CARD, SettingsCard, SettingsCardList, SettingsEmpty, SettingsSectionHead } from './cards'
 import { useSettingsEvents, useSettingsInvoke } from './SettingsScope'
 
 const when = (time: number | null) => (time ? new Date(time).toLocaleString() : t('never'))
@@ -154,25 +155,22 @@ export function AccountSettings() {
         />
       )}
       {signedIn && status.user && (
-        <SettingsCard
-          title={status.user.email}
-          meta={status.user.name}
-          actions={
-            <>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={viewOnly || busy}
-                onClick={() => void act(() => invoke('account.signOut'))}
-              >
-                {t('Sign out')}
-              </Button>
-              <Button size="sm" variant="ghost" disabled={viewOnly || busy} onClick={() => setDeleting(true)}>
-                {t('Delete account')}
-              </Button>
-            </>
-          }
-        />
+        <article className={`${SETTINGS_CARD} flex-row! items-center gap-3 py-3`}>
+          <AccountProfileHeader user={status.user} providers={status.providers} />
+          <div className="flex flex-none items-center gap-0.5">
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={viewOnly || busy}
+              onClick={() => void act(() => invoke('account.signOut'))}
+            >
+              {t('Sign out')}
+            </Button>
+            <Button size="sm" variant="ghost" disabled={viewOnly || busy} onClick={() => setDeleting(true)}>
+              {t('Delete account')}
+            </Button>
+          </div>
+        </article>
       )}
 
       <SettingsSectionHead

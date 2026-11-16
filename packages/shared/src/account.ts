@@ -29,6 +29,10 @@ export const ACCOUNT_LIMITS = {
 export type AccountTrust = 'ask' | 'viewer' | 'owner'
 export const ACCOUNT_TRUST: readonly AccountTrust[] = ['ask', 'viewer', 'owner']
 
+/** The identity providers an account signs in with; a passkey is added to an account made with one of them. */
+export type AccountProvider = 'github' | 'google'
+export const ACCOUNT_PROVIDERS: readonly AccountProvider[] = ['github', 'google']
+
 export interface AccountUser {
   id: string
   name: string
@@ -86,6 +90,8 @@ export interface AccountSignIn {
 export interface AccountStatus {
   signedIn: boolean
   user: AccountUser | null
+  /** The providers linked to the account, the one it was made with first. */
+  providers: AccountProvider[]
   /** Settings backup to the Ramu account and to the person's own GitHub. */
   backup: {
     account: boolean

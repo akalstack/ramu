@@ -1,5 +1,6 @@
-// Comment authors' pictures, fetched by the host so a device never loads them from the service itself (the desktop
-// window allows only its own images, and a picture loaded by a device tells the service who is reading).
+// Comment authors' and the Ramu account's pictures, fetched by the host so a device never loads them from the service
+// itself (the desktop window allows only its own images, and a picture loaded by a device tells the service who is
+// reading).
 
 /** The hosts the services serve avatars from; any other address shows the author's initials instead. */
 const AVATAR_HOSTS = [
@@ -10,6 +11,8 @@ const AVATAR_HOSTS = [
   /^bitbucket\.org$/,
   /^avatar-management--avatars\.[\w-]+\.prod\.public\.atl-paas\.net$/,
   /^secure\.gravatar\.com$/,
+  // Google account pictures, which a Ramu account made with Google carries.
+  /^lh\d+\.googleusercontent\.com$/,
 ]
 const MAX_BYTES = 256 * 1024
 const KEPT = 300

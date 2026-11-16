@@ -15,13 +15,16 @@ function fakeService() {
   const relayed: { id: string; path: string; body: unknown; from: string; account: string }[] = []
   const replies: { id: string; reply: unknown }[] = []
   let next = 1
+  let me: Record<string, unknown> = { id: 'u1', name: 'Ada', email: 'ada@example.com', image: null }
+  let linked: unknown[] | null = []
   const fetcher = vi.fn<typeof fetch>(async (input, init) => {
     const url = new URL(String(input))
     const method = init?.method ?? 'GET'
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {}
     const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status })
     const path = url.pathname
-    if (path === '/api/me') return json({ id: 'u1', name: 'Ada', email: 'ada@example.com', image: null })
+    if (path === '/api/me') return json(me)
+    if (path === '/api/auth/list-accounts') return linked ? json(linked) : json({ error: 'unavailable' }, 503)
     if (path === '/api/hosts' && method === 'PUT') {
       listed.push(body)
       return json({ id: '00000000-0000-4000-8000-0000000000aa' })
@@ -79,7 +82,17 @@ function fakeService() {
     }
     return json({ error: `unexpected ${method} ${path}` }, 404)
   })
-  return { fetcher, backups, listed, relayed, replies }
+  return {
+    fetcher,
+    backups,
+    listed,
+    relayed,
+    replies,
+    setProfile: (user: Record<string, unknown>, accounts: unknown[] | null) => {
+      me = user
+      linked = accounts
+    },
+  }
 }
 
 const file: SettingsExport = {
@@ -195,6 +208,36 @@ describe('settings backup on this host', () => {
     await made.account.signOut()
     expect(await made.account.status()).toMatchObject({ signedIn: false, backup: { hasKey: false } })
     expect(made.vault.size).toBe(0)
+  })
+})
+
+describe('who is signed in on this host', () => {
+  it('refreshes the name, picture and providers on start, oldest provider first, ignoring unknown ones', async () => {
+    const service = fakeService()
+    const { account } = await signedIn(service)
+    const image = 'https://avatars.githubusercontent.com/u/1?v=4'
+    service.setProfile({ id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', image }, [
+      { providerId: 'google', createdAt: '2026-02-01T00:00:00.000Z' },
+      { providerId: 'credential', createdAt: '2025-01-01T00:00:00.000Z' },
+      { providerId: 'github', createdAt: '2026-01-01T00:00:00.000Z' },
+    ])
+    account.start()
+    await vi.waitFor(async () => expect((await account.status()).providers).toEqual(['github', 'google']))
+    expect((await account.status()).user).toMatchObject({ name: 'Ada Lovelace', image })
+  })
+
+  it('keeps the saved providers when the service cannot list them, and forgets them on sign-out', async () => {
+    const service = fakeService()
+    const { account } = await signedIn(service)
+    service.setProfile({ id: 'u1', name: 'Ada', email: 'ada@example.com', image: null }, [{ providerId: 'github' }])
+    account.start()
+    await vi.waitFor(async () => expect((await account.status()).providers).toEqual(['github']))
+    service.setProfile({ id: 'u1', name: 'Ada L', email: 'ada@example.com', image: null }, null)
+    account.start()
+    await vi.waitFor(async () => expect((await account.status()).user?.name).toBe('Ada L'))
+    expect((await account.status()).providers).toEqual(['github'])
+    await account.signOut()
+    expect(await account.status()).toMatchObject({ signedIn: false, user: null, providers: [] })
   })
 })
 

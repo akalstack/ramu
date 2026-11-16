@@ -6827,6 +6827,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Open Settings → Account on a device you have.': 'Buka Pengaturan → Akun di perangkat yang kamu punya.',
   'Paired with {name}.': 'Terpasang dengan {name}.',
   'Ramu account': 'Akun Ramu',
+  'Account and settings': 'Akun dan pengaturan',
+  'Signed in with {provider}': 'Masuk dengan {provider}',
   'Recovery code': 'Kode pemulihan',
   'Restore settings from {0}': 'Pulihkan pengaturan dari {0}',
   'Restore your phone’s settings?': 'Pulihkan pengaturan ponsel kamu?',

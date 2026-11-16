@@ -5,6 +5,8 @@ describe('comment avatars', () => {
   it('fetches only https pictures from the services’ avatar hosts', () => {
     expect(avatarAllowed('https://avatars.githubusercontent.com/u/1?v=4')).toBe(true)
     expect(avatarAllowed('https://secure.gravatar.com/avatar/abc')).toBe(true)
+    expect(avatarAllowed('https://lh3.googleusercontent.com/a/ACg8oc-picture=s96-c')).toBe(true)
+    expect(avatarAllowed('https://evil.googleusercontent.com.example/a')).toBe(false)
     expect(avatarAllowed('http://avatars.githubusercontent.com/u/1')).toBe(false)
     expect(avatarAllowed('https://evil.example.com/a.png')).toBe(false)
     expect(avatarAllowed('https://user:pw@gitlab.com/a.png')).toBe(false)
