@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { ChatActivityButton } from './ChatActivity'
 import { ComposerTraySection } from '../composer/ComposerTraySection'
+import { useTraySection } from '../composer/TrayStack'
 import { Button } from '@/components/desktop-button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
@@ -25,7 +26,7 @@ import { resumeTime } from '../models/limitCopy'
 import { goalContinues, goalState, isLimitHold } from '@ramu/shared/chat/goalHold'
 import { goalLabel, GOAL_NOTE_LABELS, VERIFY_LIMIT, verifyDraft } from './goalLabels'
 
-const goalIcon = (goal: ChatGoal) => {
+export const goalIcon = (goal: ChatGoal) => {
   const state = goalState(goal)
   return state === 'completed'
     ? CircleCheck
@@ -140,7 +141,7 @@ export function GoalBar({
 }) {
   useLanguage()
   const [editing, setEditing] = useState(false)
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useTraySection()
   const { preferences } = useAppSettings()
   const active = goalContinues(goal)
   const Icon = goalIcon(goal),

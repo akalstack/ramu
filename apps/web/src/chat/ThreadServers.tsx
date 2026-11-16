@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Globe, Square, Unplug } from 'lucide-react'
+import { Server, Square, Unplug } from 'lucide-react'
 import { serverUrl, type ThreadServer } from '@ramu/shared/servers'
 import { Button } from '@/components/desktop-button'
 import { RowButton } from '@/components/row-button'
@@ -85,7 +85,7 @@ export function ServerRow({
         }}
       >
         {server.web ? (
-          <Globe size={14} className="flex-none text-muted-foreground" />
+          <Server size={14} className="flex-none text-muted-foreground" />
         ) : (
           <Unplug size={14} className="flex-none text-muted-foreground" />
         )}
@@ -116,7 +116,7 @@ export function ThreadServersSection({ state }: { state: ReturnType<typeof useTh
   useLanguage()
   const { local, open } = useOpenServer(state.hostId)
   return (
-    <ComposerTraySection aria-label={t('Servers')} title={t('Servers')} count={state.servers.length} icon={<Globe />}>
+    <ComposerTraySection aria-label={t('Servers')} title={t('Servers')} count={state.servers.length} icon={<Server />}>
       <ul className="my-0 -mx-1.5 flex max-h-40 list-none flex-col overflow-y-auto overscroll-contain p-0">
         {state.servers.map((server) => (
           <ServerRow

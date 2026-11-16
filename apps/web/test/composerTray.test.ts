@@ -63,6 +63,7 @@ it('shows a section count after its title with a dot separator that screen reade
 it('keeps the first live card in the tray and lifts the rest into the layer above it', () => {
   const html = renderToStaticMarkup(
     createElement(TrayStack, {
+      summary: [],
       children: [
         false,
         createElement('section', { id: 'agents', key: 'agents' }),
@@ -73,10 +74,26 @@ it('keeps the first live card in the tray and lifts the rest into the layer abov
     }),
   )
   expect(html).toBe(
-    '<div class="composer-tray-stack"><section id="agents"></section><div class="composer-tray-spread"><section id="browser"></section><section id="goal"></section></div></div>',
+    '<div class="composer-tray-stack"><div class="composer-tray-first"><section id="agents"></section></div><div class="composer-tray-spread"><section id="browser"></section><section id="goal"></section></div></div>',
   )
-  expect(renderToStaticMarkup(createElement(TrayStack, { children: createElement('section', { id: 'only' }) }))).toBe(
-    '<div class="composer-tray-stack"><section id="only"></section></div>',
-  )
-  expect(renderToStaticMarkup(createElement(TrayStack, { children: [false, null] }))).toBe('')
+  expect(
+    renderToStaticMarkup(createElement(TrayStack, { summary: [], children: createElement('section', { id: 'only' }) })),
+  ).toBe('<div class="composer-tray-stack"><div class="composer-tray-first"><section id="only"></section></div></div>')
+  expect(renderToStaticMarkup(createElement(TrayStack, { summary: [], children: [false, null] }))).toBe('')
+})
+
+it('names every kind of live work on the folded row once there is more than one', () => {
+  const summary = [
+    { key: 'browser', icon: createElement('i'), label: 'Browser', count: 1 },
+    { key: 'servers', icon: createElement('i'), label: 'Servers', count: 2 },
+    { key: 'goal', icon: createElement('i'), label: 'Goal' },
+  ]
+  const cards = [createElement('section', { key: 'a' }), createElement('section', { key: 'b' })]
+  const html = renderToStaticMarkup(createElement(TrayStack, { summary, children: cards }))
+  const row = html.match(/<div aria-hidden="true" class="composer-tray-summary">.*?<\/svg><\/div>/)?.[0] ?? ''
+  expect(row.replace(/<[^>]+>/g, '')).toBe('Browser1·Servers2·Goal')
+  // A single card is its own row; there is nothing to sum up.
+  expect(
+    renderToStaticMarkup(createElement(TrayStack, { summary: summary.slice(0, 1), children: cards[0] })),
+  ).not.toContain('composer-tray-summary')
 })
