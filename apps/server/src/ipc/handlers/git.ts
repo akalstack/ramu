@@ -332,16 +332,12 @@ export const registerGitHandlers: RegisterHandlers = (ctx) => {
     'git.pull': {
       args: z.tuple([id, id, pullMode.optional()]),
       run: (t: string, r: string, mode?: PullMode) =>
-        gitExclusive(ctx, t, r, async (cwd) => {
-          assertNoActiveWriter(ctx, cwd, 'Stop the agent in this checkout before pulling.')
-          return git.pull(cwd, mode ?? savedPullMode())
-        }),
+        gitExclusive(ctx, t, r, (cwd) => git.pull(cwd, mode ?? savedPullMode())),
     },
     'git.sync': {
       args: z.tuple([id, id, z.object({ branch: branchName, oid: gitOid, targetBranch: branchName }).optional()]),
       run: (t: string, r: string, approval?: SyncApproval) =>
         gitExclusive(ctx, t, r, async (cwd) => {
-          assertNoActiveWriter(ctx, cwd, 'Stop the agent in this checkout before syncing.')
           const before = await git.status(cwd)
           await git.sync(cwd, savedPullMode(), approval)
           // A sync that only pulled sent nothing of this thread's, so someone else's commit never wakes it.
