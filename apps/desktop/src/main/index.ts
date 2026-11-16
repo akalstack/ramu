@@ -87,7 +87,7 @@ import { RemoteServers } from './remoteServers'
 import type { DeviceOs } from '@ramu/shared/types'
 import { ComputerBroadcaster } from './computerBroadcast'
 import { ComputerRegistry, LOCAL } from './computers'
-import { BrowserImporter, type ImportSourceId } from './browserImport'
+import { BrowserImporter, IMPORT_SOURCE_IDS, type ImportSourceId } from './browserImport'
 import { ensureRuntime, waitForRuntimeExit, loginService, loginEnabled, loginPreferred } from './runtimeLauncher'
 
 protocol.registerSchemesAsPrivileged([
@@ -975,9 +975,8 @@ async function main() {
       if (method === 'browser.profiles.importSources') return browserImportSources()
       if (method.startsWith('browser.import.')) {
         const source = (value: unknown): ImportSourceId => {
-          if (value !== 'chrome' && value !== 'edge' && value !== 'firefox')
-            throw new Error('Choose a supported browser.')
-          return value
+          if (!IMPORT_SOURCE_IDS.includes(value as ImportSourceId)) throw new Error('Choose a supported browser.')
+          return value as ImportSourceId
         }
         const text = (value: unknown, max = 200) => {
           if (typeof value !== 'string' || !value || value.length > max) throw new Error('Invalid import request')

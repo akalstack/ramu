@@ -29,7 +29,7 @@ import {
   type CookieRead,
 } from './browserImportReaders'
 
-export type { ImportSourceId } from './chromiumBrowsers'
+export { IMPORT_SOURCE_IDS, type ImportSourceId } from './chromiumBrowsers'
 
 /**
  * Where each supported source keeps its profiles: every listed Chromium browser on macOS and Linux, and Firefox on
