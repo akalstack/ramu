@@ -23,13 +23,35 @@
   height: 28px;
   min-width: 28px;
   padding: 0;
+  border-radius: var(--radius-s);
+  color: var(--soft);
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+.rich-text-toolbar button svg {
+  width: 16px;
+  height: 16px;
 }
 .rich-text-toolbar button:hover:not(:disabled) {
   background: var(--fill-hover);
+  color: var(--text);
 }
+/* An applied format reads at a glance: the brand tint, not just a hover that stuck. */
 .rich-text-toolbar button[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+.rich-text-toolbar button[aria-pressed='true']:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.rich-text-toolbar button[aria-expanded='true'] {
   background: var(--fill-hover);
   color: var(--text);
+}
+.rich-text-toolbar button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: 1px;
 }
 .rich-text-toolbar-divider {
   width: 1px;

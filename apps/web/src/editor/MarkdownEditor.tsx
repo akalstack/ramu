@@ -352,8 +352,8 @@ export function MarkdownEditor({
           />
           <ToggleGroup
             multiple
-            size="default"
-            spacing={0}
+            size="sm"
+            spacing={0.5}
             value={formats.filter((format) => editor?.isActive(format.value)).map((format) => format.value)}
             onValueChange={(next) => {
               const changed = formats.find((format) => next.includes(format.value) !== !!editor?.isActive(format.value))
