@@ -15,7 +15,7 @@ Every change needs scoped tests and typechecks for the packages it touches; desk
 ## To build
 
 - **Transport:** bounded replay and snapshot recovery for every resource, and defined connection outcomes (current, synchronizing, disconnected, authorization rejected, outcome unknown) that keep drafts and queued messages; non-retriable mutations report an unknown outcome and reconcile. Start from measurements on real networks ([Architecture](contributing/architecture.md#transport)).
-- **Windows:** continue the port on the `windows-port` branch: the server's shell, terminal and path handling, packaging, and a hands-on run in a Windows 11 VM.
+- **Windows:** the `windows-port` branch reaches the local service over a named pipe, finds provider CLIs, `gh` and ripgrep, reads memory and processes, keeps the host awake, and packages a Squirrel installer with Ramu's icon, its shortcuts and `ramu://` links handed to the running app. Left: a hands-on run of the installed app in a Windows 11 VM (terminal, agents, pairing a phone, computer use refused with its reason), fixing what that finds, then merging the branch.
 - **Presenting from the phone:** **Present** a deck on a display the phone is connected to (AirPlay or a cable), with speaker notes on the phone ([Artifacts](guide/artifacts.md)).
 - **Site screenshots:** a real capture from a release build beside each step of **From an idea to a live app** (`apps/site`). Claim "anyone can ship an app" only after the non-coder task under [Acceptance](#acceptance) passes with real people, and an improvement over another application only with matched-task evidence.
 
