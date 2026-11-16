@@ -116,6 +116,7 @@ export default function SearchScreen() {
         </Stack.Toolbar>
       ) : null}
       <PageScrollView
+        fullWidth
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"

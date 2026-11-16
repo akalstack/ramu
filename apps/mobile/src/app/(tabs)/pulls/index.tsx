@@ -187,6 +187,7 @@ export default function PullRequestsScreen() {
     <Screen>
       <Header back={false} large scrollEdge collapsed={edge.scrolled} title={say('Pull requests')} right={actions} />
       <PageScrollView
+        fullWidth
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: space.xl * 2 }}
         onScroll={edge.onScroll}

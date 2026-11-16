@@ -1,4 +1,5 @@
 import { goBackOrHome } from '../runtime/navigation'
+import { ReadableColumn } from '../components/ReadableColumn'
 import { translate } from '@ramu/shared/i18n'
 import {
   DEFAULT_AGENT_SETTINGS,
@@ -736,7 +737,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
             </View>
           </View>
         )}
-        <View style={{ paddingBottom: Math.max(insets.bottom, space.s) }}>
+        <ReadableColumn style={{ paddingBottom: Math.max(insets.bottom, space.s) }}>
           <Composer
             key={composerKey}
             running={false}
@@ -879,7 +880,7 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
               else router.replace({ pathname: '/chat/[id]', params: { id } })
             }}
           />
-        </View>
+        </ReadableColumn>
       </KeyboardPadding>
 
       <Sheet open={picker === 'issue'} onClose={() => setPicker(null)} title={say('Start from an issue')}>

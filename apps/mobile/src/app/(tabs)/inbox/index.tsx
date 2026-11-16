@@ -359,6 +359,7 @@ export default function InboxScreen() {
     <Screen>
       <Header back={false} large scrollEdge collapsed={edge.scrolled} title={t.inbox} right={actions} />
       <PageScrollView
+        fullWidth
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: space.xl * 2 }}
         onScroll={edge.onScroll}

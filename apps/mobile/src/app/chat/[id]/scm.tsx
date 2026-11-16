@@ -1,4 +1,5 @@
 import { translate } from '@ramu/shared/i18n'
+import { ReadableColumn } from '../../../components/ReadableColumn'
 import { BottomSearch } from '../../../components/BottomSearch'
 import { readSyncConfirmation } from '@ramu/shared/protectedBranch'
 import { chooseCommitBranch } from '../../../runtime/commitBranchPrompt'
@@ -1304,12 +1305,11 @@ export default function SourceControl() {
               backgroundColor: c.canvas,
               borderTopWidth: 0.5,
               borderTopColor: c.lineStrong,
-              paddingHorizontal: space.l,
               paddingTop: space.s,
               paddingBottom: keyboard ? keyboard + space.s : Math.max(insets.bottom, space.s),
             }}
           >
-            <View style={{ gap: space.s }}>
+            <ReadableColumn style={{ gap: space.s, paddingHorizontal: space.l }}>
               {/* The draft button stays on the last line as the message grows, centred on a single line. */}
               <View
                 style={{
@@ -1433,7 +1433,7 @@ export default function SourceControl() {
                             { count: unstaged.length },
                           )}
               </T>
-            </View>
+            </ReadableColumn>
           </View>
         ) : null}
       </View>

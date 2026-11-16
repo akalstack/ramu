@@ -76,6 +76,7 @@ export default function SchedulesScreen() {
     <Screen>
       <Header large scrollEdge collapsed={edge.scrolled} title={t.schedules} right={actions} />
       <PageScrollView
+        fullWidth
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: Platform.OS === 'android' ? 96 : space.xl * 2 }}
         onScroll={edge.onScroll}

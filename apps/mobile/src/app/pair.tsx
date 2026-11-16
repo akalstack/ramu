@@ -22,6 +22,7 @@ import { CameraOff, Monitor, QrCode, ShieldAlert } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
 import { GlassButton, Header, Screen, useSheetKeyboardOffset, PageScrollView as ScrollView } from '../components/Screen'
+import { ReadableColumn } from '../components/ReadableColumn'
 import { Card, T, Toggle, tap } from '../components/ui'
 import { animateLayout } from '../components/Motion'
 import { fill, useT } from '../i18n'
@@ -647,7 +648,6 @@ export default function Pair() {
         {showFields ? (
           <View
             style={{
-              paddingHorizontal: space.l,
               paddingTop: space.m,
               paddingBottom: Math.max(insets.bottom, space.m),
               borderTopWidth: StyleSheet.hairlineWidth,
@@ -655,28 +655,30 @@ export default function Pair() {
               backgroundColor: c.canvas,
             }}
           >
-            <GlassButton
-              primary
-              style={{ alignSelf: 'stretch' }}
-              title={busy ? t.pairBusy : t.pairAction}
-              disabled={!ready || busy}
-              onPress={async () => {
-                if (!ready || pairing.current) return
-                pairing.current = true
-                Keyboard.dismiss()
-                setBusy(true)
-                try {
-                  await pair(name.trim(), address.trim(), code, http)
-                  if (router.canDismiss()) router.dismissAll()
-                  else router.replace('/')
-                } catch (error) {
-                  Alert.alert(t.pairFailed, error instanceof Error ? error.message : String(error))
-                } finally {
-                  pairing.current = false
-                  setBusy(false)
-                }
-              }}
-            />
+            <ReadableColumn style={{ paddingHorizontal: space.l }}>
+              <GlassButton
+                primary
+                style={{ alignSelf: 'stretch' }}
+                title={busy ? t.pairBusy : t.pairAction}
+                disabled={!ready || busy}
+                onPress={async () => {
+                  if (!ready || pairing.current) return
+                  pairing.current = true
+                  Keyboard.dismiss()
+                  setBusy(true)
+                  try {
+                    await pair(name.trim(), address.trim(), code, http)
+                    if (router.canDismiss()) router.dismissAll()
+                    else router.replace('/')
+                  } catch (error) {
+                    Alert.alert(t.pairFailed, error instanceof Error ? error.message : String(error))
+                  } finally {
+                    pairing.current = false
+                    setBusy(false)
+                  }
+                }}
+              />
+            </ReadableColumn>
           </View>
         ) : null}
       </KeyboardAvoidingView>

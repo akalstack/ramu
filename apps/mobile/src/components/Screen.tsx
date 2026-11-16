@@ -63,7 +63,10 @@ function PrimaryScroll({ children }: { children: NonNullable<ReactNode> }) {
     )
   return children
 }
-/** Page lists and scroll views keep their content in the readable column on a tablet unless they pass `fullWidth`. */
+/**
+ * Page lists and scroll views keep their content in the readable column on a tablet unless they pass `fullWidth`: code and
+ * diffs, and screens under a native large title, which stays at the leading edge, so their rows line up with it.
+ */
 type Readable = { fullWidth?: boolean }
 function useReadableProps(
   props: { contentContainerStyle?: StyleProp<ViewStyle>; onLayout?: (event: LayoutChangeEvent) => void },

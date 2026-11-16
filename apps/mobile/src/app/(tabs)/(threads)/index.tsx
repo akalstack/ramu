@@ -635,6 +635,7 @@ export default function Threads() {
         />
       )}
       <PageFlatList
+        fullWidth
         data={rows}
         keyExtractor={(row) => row.key}
         renderItem={({ item: row }) => renderRow(row)}
