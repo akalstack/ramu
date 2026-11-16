@@ -23,3 +23,15 @@ it('waits for hydration and never animates loaded or paginated history', () => {
   expect(arrivals.claim(4)).toBe(true)
   expect(arrivals.claim(undefined)).toBe(false)
 })
+
+it('tells a row that arrived while the chat was open from loaded history, as often as asked', () => {
+  const arrivals = transcriptArrivals()
+  arrivals.sync([1, 2], true)
+  expect(arrivals.fresh(3)).toBe(false)
+  arrivals.sync([1, 2], false)
+  expect(arrivals.fresh(2)).toBe(false)
+  expect(arrivals.fresh(3)).toBe(true)
+  expect(arrivals.claim(3)).toBe(true)
+  expect(arrivals.fresh(3)).toBe(true)
+  expect(arrivals.fresh(undefined)).toBe(false)
+})

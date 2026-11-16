@@ -100,6 +100,7 @@ function TranscriptBlock({
             generating={
               ctx.working && (b.event === ctx.liveText || (b.event.kind === 'thinking' && b === turn.items.at(-1)))
             }
+            fresh={ctx.freshArrival?.(b.event)}
             outcomes={ctx.outcomes}
             questionStates={ctx.questionStates}
             interactive={ctx.interactive}

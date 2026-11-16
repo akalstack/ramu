@@ -6,5 +6,8 @@ export function useTranscriptArrival(sequences: Map<AgentEvent, number>, hydrati
   const arrivals = useRef<ReturnType<typeof transcriptArrivals> | null>(null)
   arrivals.current ??= transcriptArrivals()
   arrivals.current.sync(sequences.values(), hydrating)
-  return (event: AgentEvent) => event.kind !== 'user' && arrivals.current!.claim(sequences.get(event))
+  return {
+    claim: (event: AgentEvent) => event.kind !== 'user' && arrivals.current!.claim(sequences.get(event)),
+    fresh: (event: AgentEvent) => arrivals.current!.fresh(sequences.get(event)),
+  }
 }

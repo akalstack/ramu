@@ -242,7 +242,7 @@ export const AgentView = memo(function AgentView({
   const openQuestion = (requestId: string) => setQuestionFocus({ requestId, at: Date.now() })
   const results = useMemo(() => toolResultsOf(events), [events])
   const blocks = useMemo(() => toBlocks(events), [events])
-  const claimArrival = useTranscriptArrival(eventSequences, hydrating)
+  const { claim: claimArrival, fresh: freshArrival } = useTranscriptArrival(eventSequences, hydrating)
   // Most chats load before a person would notice; only a slow load earns an indicator.
   const slowHydration = useDelayedStatus(view.sessionId, hydrating || null) !== null
   const goalNotes = useMemo(() => goalChanges(events), [events])
@@ -814,6 +814,7 @@ export const AgentView = memo(function AgentView({
     eventSequences,
     onBackground: session?.provider === 'claude-code' && live ? backgroundTool : undefined,
     claimArrival,
+    freshArrival,
     onOpenAgent: setOpenAgent,
     onStopTask: stopTask,
     onContinueTeammates: continueTeammates,

@@ -63,6 +63,8 @@ export interface TranscriptContext {
     updates: Map<string, import('@ramu/shared/interactiveRevisions').InteractiveUpdate>
   }
   claimArrival?: (event: AgentEvent) => boolean
+  /** Whether a row arrived while this chat was open, so a reply writes out from its first word. */
+  freshArrival?: (event: AgentEvent) => boolean
   onBackground: ((toolUseId: string) => void) | undefined
   onOpenAgent: (agentId: string | null) => void
   readOnly?: boolean

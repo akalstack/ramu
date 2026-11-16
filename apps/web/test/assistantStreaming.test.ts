@@ -86,7 +86,18 @@ it('shows the complete final reply without retaining a delayed animation queue',
 it('shows the outgoing message immediately without a Sending label', () => {
   const html = renderToStaticMarkup(
     createElement(PendingSubmission, {
-      submission: { text: 'My message', attachments: [], afterEvent: 0, queuedIds: [] },
+      submission: {
+        id: 'a',
+        text: 'My message',
+        attachments: [],
+        afterEvent: 0,
+        queuedIds: [],
+        state: 'sending',
+        payload: { outgoing: 'My message', mode: 'queue', context: [], compactFirst: false, reviews: [] },
+      },
+      onRetry: () => {},
+      onEdit: () => {},
+      onRemove: () => {},
     }),
   )
   expect(html).toContain('My message')

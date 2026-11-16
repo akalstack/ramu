@@ -254,8 +254,9 @@
 .transcript-arrival {
   animation: arrive var(--chat-enter-duration, 180ms) var(--chat-enter-ease, var(--ease)) both;
 }
+/* Each word of a reply that is still arriving fades in from nothing; ThinkingRow and AssistantText add the spans. */
 .stream-word {
-  animation: stream-in var(--chat-enter-duration, 180ms) var(--chat-enter-ease, var(--ease)) both;
+  animation: stream-in 280ms ease-out both;
 }
 @media (prefers-reduced-motion: reduce) {
   .stream-word {

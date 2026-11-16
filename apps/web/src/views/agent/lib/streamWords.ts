@@ -1,5 +1,5 @@
 /** Slightly past the CSS fade, so a word is never dropped from its span while still fading. */
-const FADE_MS = 240
+const FADE_MS = 320
 // A message already this long when it first appears (a chat opened mid-stream) shows what it has and fades only what follows.
 const SETTLED_CHARS = 160
 

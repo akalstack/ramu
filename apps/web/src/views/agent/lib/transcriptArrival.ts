@@ -9,6 +9,10 @@ export function transcriptArrivals() {
       for (const seq of sequences) baseline = Math.max(baseline, seq)
       ready = !hydrating
     },
+    /** Whether this row arrived after the chat loaded, without using up its one entrance. */
+    fresh(seq: number | undefined) {
+      return ready && seq !== undefined && seq > baseline
+    },
     claim(seq: number | undefined) {
       if (!ready || seq === undefined || seq <= baseline || seen.has(seq)) return false
       seen.add(seq)

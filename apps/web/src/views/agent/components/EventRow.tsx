@@ -47,6 +47,7 @@ export function EventRow({
   taskId,
   live,
   generating = false,
+  fresh = false,
   assistantActions = false,
   outcomes,
   questionStates,
@@ -64,6 +65,8 @@ export function EventRow({
   taskId?: string
   live: boolean
   generating?: boolean
+  /** Arrived while the chat was open: a reply writes out from its first word, however much came at once. */
+  fresh?: boolean
   assistantActions?: boolean
   outcomes: Map<string, string>
   questionStates: Map<string, QuestionState>
@@ -214,6 +217,7 @@ export function EventRow({
         <AssistantText
           event={e}
           generating={generating}
+          fresh={fresh}
           actions={assistantActions}
           latest={latest}
           taskId={taskId}
