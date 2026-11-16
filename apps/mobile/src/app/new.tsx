@@ -1033,7 +1033,6 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
       </Sheet>
 
       <Sheet open={picker === 'mode'} onClose={() => setPicker(null)} title={say('Workspace')}>
-        {workspaceOptions?.configSource ? <T tone="muted">{workspaceOptions.configSource}</T> : null}
         {workspaceOptions?.configError ? <T tone="bad">{workspaceOptions.configError}</T> : null}
         {resolution.reason ? (
           <T

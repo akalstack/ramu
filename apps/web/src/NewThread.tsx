@@ -863,7 +863,6 @@ export function NewThread({
           (!options.data ||
             options.data.defaultCheckoutMode === 'worktree' ||
             resolution.reason ||
-            options.data.configSource ||
             options.data.configError) && (
             <p className="m-0 px-3 text-caption leading-[1.45] text-muted-foreground" role="status">
               {options.data
@@ -871,7 +870,6 @@ export function NewThread({
                     options.data.defaultCheckoutMode === 'worktree' || resolution.reason
                       ? `${t('Default')}: ${t(options.data.defaultCheckoutMode === 'worktree' ? 'New worktree' : 'Current checkout')}${resolution.reason ? ` · ${t('Using current checkout')} — ${resolution.reason}` : ''}`
                       : null,
-                    options.data.configSource,
                     options.data.configError ? t(options.data.configError) : null,
                   ]
                     .filter(Boolean)

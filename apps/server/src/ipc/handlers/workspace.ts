@@ -347,13 +347,12 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       args: z.tuple([id]),
       run: async (projectId: string) => {
         const prefs = projectPreferences(projectId)
-        const { source, error } = projectConfiguration(projectId)
+        const { error } = projectConfiguration(projectId)
         return {
           defaultCheckoutMode: prefs.defaultCheckoutMode,
           branchPrefix: prefs.worktreeBranchPrefix,
           branchNaming: prefs.worktreeBranchNaming,
           branchInstructions: prefs.worktreeBranchInstructions,
-          configSource: source,
           configError: error,
           worktreeUnavailable: await workspace.worktreeUnavailable(projectId),
         }
