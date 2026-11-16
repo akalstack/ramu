@@ -704,6 +704,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
                 threads={threads.data ?? []}
                 canReview={open}
                 own={mine}
+                service={service}
                 onReviewed={() => void refresh()}
               />
             )}

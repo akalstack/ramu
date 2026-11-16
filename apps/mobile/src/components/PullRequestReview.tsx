@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { TextInput, View } from 'react-native'
 import { Trash2 } from 'lucide-react-native'
 import type { ForgeService, ReviewVerdict } from '@ramu/shared/types'
-import { reviewVerdicts } from '@ramu/shared/pullRequestReadiness'
+import { reviewNeedsWords, reviewVerdicts } from '@ramu/shared/pullRequestReadiness'
 import { font, radius, space, useTheme } from '../theme'
 import { useSay } from '../i18n'
 import { SheetGroup, SheetOption } from './SheetOptions'
@@ -160,11 +160,10 @@ export function FinishReviewSheet({
   const allowed = reviewVerdicts(service, own)
   const [verdict, setVerdict] = useState<ReviewVerdict>('comment')
   const [body, setBody] = useState('')
-  // A plain comment needs words or line comments; an approval may say nothing.
-  const empty = verdict !== 'approve' && !body.trim() && !pending.length
+  const empty = reviewNeedsWords(service, verdict) && !body.trim() && !pending.length
   return (
     <Sheet open onClose={() => !busy && onClose()} title={say('Finish review')}>
-      <View style={{ paddingHorizontal: space.l, gap: space.m }}>
+      <View style={{ paddingHorizontal: space.l, paddingBottom: space.s }}>
         <CommentInput value={body} onChange={setBody} placeholder={say('Leave a comment')} />
       </View>
       <SheetGroup title={say('Review')}>
@@ -198,10 +197,14 @@ export function FinishReviewSheet({
           ))}
         </SheetGroup>
       ) : null}
-      <View style={{ paddingHorizontal: space.l, paddingBottom: space.l, gap: space.s }}>
+      <View style={{ paddingHorizontal: space.l, paddingTop: space.l, paddingBottom: space.xl, gap: space.s }}>
         {error ? (
           <T size={font.control} tone="bad">
             {error}
+          </T>
+        ) : empty ? (
+          <T size={font.caption} tone="muted" style={{ textAlign: 'center' }}>
+            {say(verdict === 'request-changes' ? 'GitHub needs a comment to request changes.' : 'Add a comment first.')}
           </T>
         ) : null}
         <Button

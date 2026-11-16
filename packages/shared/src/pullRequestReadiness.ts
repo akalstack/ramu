@@ -95,3 +95,12 @@ export function reviewVerdicts(service: ForgeService, own: boolean): ReviewVerdi
   if (supportsPullRequest(service, 'request-changes')) verdicts.push('request-changes')
   return verdicts
 }
+
+/**
+ * Whether a review needs a summary or a line comment before it can go. A plain comment review has nothing else to
+ * send anywhere, and GitHub refuses a request for changes without one; Bitbucket and Azure DevOps record a change
+ * request as a status of its own, and an approval may say nothing on any service.
+ */
+export function reviewNeedsWords(service: ForgeService, verdict: ReviewVerdict): boolean {
+  return verdict === 'comment' || (verdict === 'request-changes' && service === 'github')
+}

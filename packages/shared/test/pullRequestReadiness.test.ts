@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PullRequestSummary } from '../src/types'
-import { READINESS_ACTION, readinessRows, readinessStep, reviewVerdicts } from '../src/pullRequestReadiness'
+import { READINESS_ACTION, readinessRows, readinessStep, reviewNeedsWords, reviewVerdicts } from '../src/pullRequestReadiness'
 
 const pr = (overrides: Partial<PullRequestSummary> = {}): PullRequestSummary => ({
   number: 4,
@@ -55,4 +55,14 @@ describe('pull request readiness', () => {
     expect(reviewVerdicts('github', true)).toEqual(['comment'])
     expect(reviewVerdicts('gitlab', false)).toEqual(['comment', 'approve'])
   })
+})
+
+it('asks for words only where the service needs them to send the review', () => {
+  for (const service of ['github', 'gitlab', 'bitbucket', 'azure'] as const) {
+    expect(reviewNeedsWords(service, 'comment')).toBe(true)
+    expect(reviewNeedsWords(service, 'approve')).toBe(false)
+  }
+  expect(reviewNeedsWords('github', 'request-changes')).toBe(true)
+  expect(reviewNeedsWords('bitbucket', 'request-changes')).toBe(false)
+  expect(reviewNeedsWords('azure', 'request-changes')).toBe(false)
 })

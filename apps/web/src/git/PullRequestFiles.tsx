@@ -4,7 +4,14 @@ import { ChevronRight, ChevronsDownUp, ChevronsUpDown, MessageSquare, Plus, Tras
 import { Button } from '@/components/desktop-button'
 import { SearchField } from '@/components/search-field'
 import { Textarea } from '@/components/ui/textarea'
-import type { PullRequestFile, PullRequestThread, PullRequestWrite, ReviewVerdict } from '@ramu/shared/types'
+import type {
+  ForgeService,
+  PullRequestFile,
+  PullRequestThread,
+  PullRequestWrite,
+  ReviewVerdict,
+} from '@ramu/shared/types'
+import { reviewNeedsWords, reviewVerdicts } from '@ramu/shared/pullRequestReadiness'
 import { diffLineMatches, matchesPullRequestFile, patchRows } from '@ramu/shared/pullRequests'
 import { cn } from 'cn'
 import { PullRequestMarkdown } from './PullRequestMarkdown'
@@ -423,6 +430,7 @@ export function PullRequestFiles({
   threads,
   canReview,
   own,
+  service,
   onReviewed,
 }: {
   taskId: string
@@ -432,6 +440,7 @@ export function PullRequestFiles({
   canReview: boolean
   /** The person's own pull request: services take a comment on it, never an approval or a request for changes. */
   own: boolean
+  service: ForgeService
   onReviewed: () => void
 }) {
   const { invoke } = useHost()
@@ -452,6 +461,7 @@ export function PullRequestFiles({
   const banner = useRef<HTMLDivElement>(null)
   const [query, setQuery] = useState('')
   const data = files.data
+  const wordless = reviewNeedsWords(service, verdict) && !body.trim() && !pending.length
   if (files.isPending) return <p className="m-0 text-caption text-muted-foreground">{t('Loading files…')}</p>
   if (files.isError) return <p className="m-0 text-caption text-bad">{errorText(files.error)}</p>
   if (!data?.files.length)
@@ -612,7 +622,7 @@ export function PullRequestFiles({
             className="min-h-20 text-control"
           />
           <div role="radiogroup" aria-label={t('Review')} className="flex flex-col gap-1">
-            {VERDICTS.filter((entry) => !own || entry.value === 'comment').map((entry) => (
+            {VERDICTS.filter((entry) => reviewVerdicts(service, own).includes(entry.value)).map((entry) => (
               <Button
                 key={entry.value}
                 variant="ghost"
@@ -638,15 +648,18 @@ export function PullRequestFiles({
             ))}
           </div>
           {error && <p className="m-0 text-caption text-bad">{error}</p>}
-          <div className="flex justify-end gap-1.5">
+          <div className="flex items-center justify-end gap-1.5">
+            {wordless && (
+              <p className="m-0 mr-auto text-caption text-muted-foreground">
+                {t(
+                  verdict === 'request-changes' ? 'GitHub needs a comment to request changes.' : 'Add a comment first.',
+                )}
+              </p>
+            )}
             <Button variant="ghost" size="sm" onClick={() => setFinishing(false)}>
               {t('Cancel')}
             </Button>
-            <Button
-              size="sm"
-              disabled={busy || (verdict !== 'approve' && !body.trim() && !pending.length)}
-              onClick={() => void submit()}
-            >
+            <Button size="sm" disabled={busy || wordless} onClick={() => void submit()}>
               {busy ? t('Submitting…') : t('Submit review')}
             </Button>
           </div>
