@@ -1,5 +1,7 @@
 import { t, useLanguage } from '../i18n'
-import { providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
+import { providerName } from '@ramu/shared/providers/providers'
+import { UpdateNotices } from './UpdateNotices'
+import { NewModelsDialog, showNewModels } from '../models/NewModelsDialog'
 import { ProviderIcon } from '../models/ProviderIcon'
 import { AppToaster, notify, type AppToastData } from '@/components/app-toaster'
 import { MessageCircleQuestion } from 'lucide-react'
@@ -34,96 +36,11 @@ export function Notifications() {
   useLanguage()
   const ws = useWorkspace()
   const { select } = useHostSelection()
-  // Inbox notices are the host's on screen; provider updates are this window's own host's (settings live there).
+  // Inbox notices are the host's on screen; updates are every connected host's (UpdateNotices).
   const { id: hostId, invoke } = useHost()
   const { on } = useHostRuntime()
   const { preferences } = useAppSettings()
   const clearBottom = useStatusPanelReach()
-  const dismissedUpdates = useRef(new Set<string>())
-  useEffect(() => {
-    if (!preferences.providerUpdateChecks) return
-    let active = true,
-      receivedPush = false
-    // Only the close button reports a user dismissal; hiding an update that no longer applies is not remembered.
-    const updateIds = new Set<string>()
-    const hide = (id: string) => {
-      notify.close(id)
-      notices.remove(id)
-    }
-    const accept = (statuses: ProviderStatus[]) => {
-      if (!active) return
-      const currentIds = new Set(statuses.map((status) => `provider-update:${status.provider}`))
-      for (const id of updateIds)
-        if (!currentIds.has(id)) {
-          hide(id)
-          updateIds.delete(id)
-        }
-      for (const status of statuses) {
-        const key = `${status.provider}:${status.binary}:${status.latestVersion}`
-        if (dismissedUpdates.current.has(key)) continue
-        const id = `provider-update:${status.provider}`
-        updateIds.add(id)
-        const title = `${providerName(status.provider)}${t(' update available')}`,
-          description = `${status.version} → ${status.latestVersion}`
-        const icon = <ProviderIcon provider={status.provider} size={18} />
-        const name = providerName(status.provider)
-        const install = () => {
-          notify.update(id, {
-            type: 'loading',
-            title: t('Updating {0}…', { '0': name }),
-            timeout: 0,
-            actionProps: undefined,
-          })
-          void ramu
-            .invoke('providers.update', status.provider)
-            .then(() => {
-              hide(id)
-              notify.add({ type: 'success', title: t('{0} updated', { '0': name }), timeout: TOAST_MS.success })
-            })
-            .catch((reason) => {
-              notify.update(id, {
-                type: 'error',
-                title: t('Could not update {0}', { '0': name }),
-                description: errorText(reason),
-                timeout: TOAST_MS.error,
-                actionProps: { children: t('Update'), onClick: install },
-              })
-            })
-        }
-        // The toast leaves by itself; the update waits in the activity popover until it is viewed or dismissed.
-        notify.add<AppToastData>({
-          id,
-          timeout: TOAST_MS.update,
-          title,
-          description,
-          data: {
-            icon,
-            onDismiss: () => {
-              dismissProvider(status)
-              notices.remove(id)
-            },
-          },
-          actionProps: { children: t('Update'), onClick: install },
-        })
-        notices.add({ id, title, description, type: 'info', icon, actionLabel: t('Update'), onAction: install })
-      }
-    }
-    const off = ramu.on('providers:updates', (statuses) => {
-      receivedPush = true
-      accept(statuses)
-    })
-    void ramu
-      .invoke('providers.updates')
-      .then((statuses) => {
-        if (!receivedPush) accept(statuses)
-      })
-      .catch(() => {})
-    return () => {
-      active = false
-      off()
-      for (const id of updateIds) hide(id)
-    }
-  }, [preferences.providerUpdateChecks])
   // Models providers started offering: one grouped notice, told once on every device and gone everywhere once dismissed.
   useEffect(() => {
     if (!preferences.newModelNotices) return
@@ -141,8 +58,9 @@ export function Notifications() {
       for (const notice of latest) void invoke('models.dismissNews', notice.provider, notice.model).catch(() => {})
     }
     const open = () => {
+      const list = latest
       dismiss()
-      window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'models' } }))
+      showNewModels(list)
     }
     const accept = (list: ModelNotice[]) => {
       if (!active) return
@@ -193,10 +111,6 @@ export function Notifications() {
       hide()
     }
   }, [preferences.newModelNotices, invoke, on])
-  const dismissProvider = (status: ProviderStatus) => {
-    dismissedUpdates.current.add(`${status.provider}:${status.binary}:${status.latestVersion}`)
-    void ramu.invoke('providers.dismissUpdate', status.provider, status.binary, status.latestVersion!).catch(() => {})
-  }
   useEffect(() => {
     let active = true
     const id = 'computer-use-update'
@@ -415,5 +329,11 @@ export function Notifications() {
       window.removeEventListener('ramu:notification', receive)
     }
   }, [])
-  return <AppToaster label={t('Notifications')} closeLabel={t('Dismiss notification')} clearBottom={clearBottom} />
+  return (
+    <>
+      <UpdateNotices providerChecks={preferences.providerUpdateChecks} />
+      <NewModelsDialog />
+      <AppToaster label={t('Notifications')} closeLabel={t('Dismiss notification')} clearBottom={clearBottom} />
+    </>
+  )
 }

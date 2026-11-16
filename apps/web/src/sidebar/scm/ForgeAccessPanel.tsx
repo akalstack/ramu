@@ -9,9 +9,14 @@ import { accessLines } from '../../settings/hostingStatus'
 import { BrandIcon } from '@/components/brand-icon'
 import { forgeBrand } from '@ramu/shared/brands'
 
-/** Opens Settings → Git at the hosting accounts. Closing Settings returns to the repository that asked. */
-export const openHostingSettings = () =>
-  window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'git', target: 'Hosting accounts' } }))
+/**
+ * Opens Settings → Git at the hosting accounts, on `host` when given so a sign-in is fixed where its checkout is.
+ * Closing Settings returns to the repository that asked.
+ */
+export const openHostingSettings = (host?: string) =>
+  window.dispatchEvent(
+    new CustomEvent('ramu:settings', { detail: { section: 'git', target: 'Hosting accounts', host } }),
+  )
 
 /** Why pull requests are unavailable here, with the one action that fixes it. */
 export function forgeUnavailableText(availability: ForgeAvailability, service: ForgeService = 'github'): string {
@@ -134,7 +139,7 @@ export function ForgeAccessPanel({
           {busy ? t('Checking…') : t('Check access')}
         </Button>
         {service === 'github' && (
-          <Button variant="ghost" size="sm" className="small text-caption" onClick={openHostingSettings}>
+          <Button variant="ghost" size="sm" className="small text-caption" onClick={() => openHostingSettings()}>
             {t('Open GitHub settings')}
           </Button>
         )}

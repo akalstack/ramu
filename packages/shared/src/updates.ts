@@ -48,3 +48,47 @@ export function hostUpdateSummary(
 
 /** Whether a host has anything to update. */
 export const hostNeedsUpdate = (summary: HostUpdateSummary) => !!summary.nextVersion || summary.providers.length > 0
+
+/** One provider CLI with a newer version on one host, as the update notice offers it. */
+export interface PendingProviderUpdate {
+  host: string
+  provider: import('./types').AgentProvider
+  binary: string
+  version: string | null
+  latest: string
+}
+
+/** Identifies one offered version on one host, so dismissing it hides that version only until a newer one comes. */
+export const providerUpdateKey = (update: Pick<PendingProviderUpdate, 'host' | 'provider' | 'binary' | 'latest'>) =>
+  `${update.host}:${update.provider}:${update.binary}:${update.latest}`
+
+/**
+ * Every provider update the hosts report that can run now: not already updating, with a version to go to and a command
+ * to get there, and not dismissed. Hosts keep the order given, and each host's providers keep the host's order.
+ */
+export function pendingProviderUpdates(
+  byHost: ReadonlyArray<
+    readonly [
+      string,
+      readonly Pick<
+        import('./providers/providers').ProviderStatus,
+        'provider' | 'binary' | 'version' | 'latestVersion' | 'updateAvailable' | 'updateCommand' | 'updating'
+      >[],
+    ]
+  >,
+  dismissed: ReadonlySet<string>,
+): PendingProviderUpdate[] {
+  return byHost.flatMap(([host, statuses]) =>
+    statuses.flatMap((status) => {
+      if (!status.updateAvailable || !status.updateCommand || status.updating || !status.latestVersion) return []
+      const update = {
+        host,
+        provider: status.provider,
+        binary: status.binary,
+        version: status.version,
+        latest: status.latestVersion,
+      }
+      return dismissed.has(providerUpdateKey(update)) ? [] : [update]
+    }),
+  )
+}

@@ -62,3 +62,50 @@ export function forgeUnavailableKey(availability: ForgeAvailability, service: Fo
     return 'Several GitHub accounts are saved for this server. Choose which one this repository uses.'
   return 'Sign in to GitHub with gh auth login, or save a GitHub token in Settings, to open pull requests here.'
 }
+
+/** What kind of trouble a failed read was, so the notice can say what to do instead of showing the raw message. */
+export type ReadFailure = 'outage' | 'rate-limit' | 'signed-out' | 'no-access' | 'network' | 'unknown'
+
+/**
+ * Classifies the message a host's hosting-service client gave for a failed read: `gh` stderr ("gh api failed: gh: HTTP
+ * 502"), the saved-token GitHub client ("HTTP 404: not found with this account…"), and the GitLab, Bitbucket and Azure
+ * DevOps clients ("Bitbucket answered 503. Try again in a moment.").
+ */
+export function readFailure(error: string): ReadFailure {
+  if (
+    /HTTP 401|gh auth login|not logged in|authentication required|token was rejected|did not accept|sign-in for .+ expired/i.test(
+      error,
+    )
+  )
+    return 'signed-out'
+  // GitHub's own 403 text names "rate limit or a missing permission", so only an explicit limit counts here.
+  if (/rate limit exceeded|secondary rate limit|HTTP 429|answered 429/i.test(error)) return 'rate-limit'
+  if (/HTTP 5\d\d|answered 5\d\d|bad gateway|service unavailable|gateway time-?out|internal server error/i.test(error))
+    return 'outage'
+  if (
+    /could not reach|ENOTFOUND|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EAI_AGAIN|error connecting to|timed? ?out/i.test(error)
+  )
+    return 'network'
+  if (
+    /HTTP 40[34]|could not find|cannot see|not have permission|could not resolve to a repository|not found/i.test(error)
+  )
+    return 'no-access'
+  return 'unknown'
+}
+
+/** The failure most of a group's repositories share, or `unknown` when they disagree. */
+export function groupReadFailure(errors: string[]): ReadFailure {
+  const kinds = new Set(errors.map(readFailure))
+  return kinds.size === 1 ? [...kinds][0]! : 'unknown'
+}
+
+/** What a failed read means and what to do about it, as an English copy key taking the service name as `{0}`. */
+export function readFailureKey(failure: ReadFailure): string {
+  if (failure === 'outage') return '{0} is having trouble right now. Try again in a few minutes.'
+  if (failure === 'rate-limit') return '{0} is limiting requests from this account. Try again in a few minutes.'
+  if (failure === 'signed-out') return '{0} did not accept the account on this host. Reconnect it in Hosting accounts.'
+  if (failure === 'no-access')
+    return 'The {0} account on this host cannot see this repository. It may be private, moved or need approval.'
+  if (failure === 'network') return 'The host could not reach {0}. Check its network connection, then try again.'
+  return '{0} did not answer as expected. Try again, or open the details below.'
+}

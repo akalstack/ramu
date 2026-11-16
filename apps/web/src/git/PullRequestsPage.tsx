@@ -33,7 +33,7 @@ import { Combobox, Dropdown, timeAgo } from '../Menu'
 import { ipcQueryKeyOn } from '../dataQueries'
 import { HostContent } from '../workspace/HostContent'
 import { useHostSelection } from '../workspace/HostSelection'
-import { statusText, useScopedHosts } from '../workspace/computers'
+import { useScopedHosts } from '../workspace/computers'
 import { projectCtx, type useWorkspace } from '../workspace/workspace'
 import { ownHostId } from '../hosts'
 import { DeviceIcon } from '@/components/device-icon'
@@ -194,7 +194,7 @@ export function PullRequestsPage() {
   const loading = lists.some(({ query }) => query.isLoading)
   const fetching = lists.some(({ query }) => query.isFetching)
   const settled = lists.some(({ query }) => query.isSuccess) && !loading
-  // A host that is offline or could not answer is named above the list; the other hosts' pull requests still show.
+  // A host that is offline or could not answer has a notice above the list; the other hosts' pull requests still show.
   const unreachable = lists.filter(({ host, query }) => host.status !== 'connected' || query.isError)
 
   const refresh = async () => {
@@ -412,38 +412,17 @@ export function PullRequestsPage() {
         </div>
         <OverlayScrollArea className="min-h-0 flex-1">
           <div ref={listRef} className="flex flex-col gap-px px-2 pt-2 pb-6" onKeyDown={move}>
-            {unreachable.map(({ host, query }) => (
-              <p
-                key={host.id}
-                role="status"
-                className={cn(
-                  'mx-2 my-1 flex items-center gap-1.5 text-caption',
-                  query.isError ? 'text-bad' : 'text-muted-foreground',
-                )}
-              >
-                {manyHosts && <DeviceIcon name={host.name} size={12} />}
-                <span className="min-w-0 flex-1 truncate">
-                  {[
-                    manyHosts ? host.name : '',
-                    host.status !== 'connected'
-                      ? t('{0}. Its pull requests show when it is back.', { '0': statusText(host.status) })
-                      : errorText(query.error),
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
-                {host.status === 'connected' && (
-                  <Button variant="ghost" size="xs" onClick={() => void query.refetch()}>
-                    {t('Retry')}
-                  </Button>
-                )}
-              </p>
-            ))}
             <RepositoryAccessNotices
               repos={attention}
+              hosts={unreachable.map(({ host, query }) => ({
+                host,
+                error: host.status === 'connected' ? errorText(query.error) : null,
+                onRetry: () => void query.refetch(),
+              }))}
               hostName={hostName}
               manyHosts={manyHosts}
-              activeHost={activeHost}
+              onRetry={() => void refresh()}
+              retrying={refreshing}
             />
             {loading && !rows.length && <ContentSkeleton />}
             {rows.map(row)}

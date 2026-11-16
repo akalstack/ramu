@@ -1,6 +1,7 @@
-import { expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   cloneFolderName,
+  cloneStartFolder,
   cloneProgressText,
   folderCrumbs,
   folderName,
@@ -62,4 +63,19 @@ it('names a folder after a title, and accepts only plain project-relative folder
   expect(isProjectFolder('/etc')).toBe(false)
   expect(isProjectFolder('src/.hidden')).toBe(false)
   expect(isProjectFolder('src//x')).toBe(false)
+})
+
+describe('cloneStartFolder', () => {
+  it('picks the folder most projects sit side by side in, when it can be browsed', () => {
+    expect(
+      cloneStartFolder(['/Users/me', '/Users/me/Projects/acme/app', '/Users/me/Projects/acme/api', '/Users/me/x/y']),
+    ).toBe('/Users/me/Projects/acme')
+  })
+  it('leaves a folder outside every root alone', () => {
+    expect(cloneStartFolder(['/Users/me', '/Volumes/Drive/work/app'])).toBeUndefined()
+    expect(cloneStartFolder(['/Users/me'])).toBeUndefined()
+  })
+  it('reads Windows paths', () => {
+    expect(cloneStartFolder(['C:\\Users\\me', 'C:\\Users\\me\\code\\app'])).toBe('C:\\Users\\me\\code')
+  })
 })

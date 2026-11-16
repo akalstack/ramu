@@ -12,6 +12,9 @@ import {
   CircleX,
   ExternalLink,
   FolderDown,
+  GitBranch,
+  GitPullRequest,
+  Info,
   LayoutList,
   FileDiff,
   GitMerge,
@@ -21,6 +24,7 @@ import {
   RefreshCw,
   RotateCcw,
   SquareArrowOutUpRight,
+  TriangleAlert,
   X,
 } from 'lucide-react'
 import { OverlayScrollArea } from '@/components/overlay-scroll-area'
@@ -47,7 +51,8 @@ import { PullRequestReadiness } from './PullRequestReadiness'
 import { forgeBrand } from '@ramu/shared/brands'
 import { BrandIcon } from '@/components/brand-icon'
 import { cn } from 'cn'
-import { Dialog, Dropdown, Menu, type MenuEntry } from '../Menu'
+import { Dialog, Dropdown, Menu, timeAgo, type MenuEntry } from '../Menu'
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Input } from '@/components/desktop-input'
 import { SearchField } from '@/components/search-field'
 import { supportsPullRequest } from '@ramu/shared/pullRequestSupport'
@@ -65,6 +70,7 @@ import { ReviewDraftsCard } from './ReviewDraftsCard'
 import { openPullRequestThread } from './pullRequestThreads'
 import { ReviewThread } from './ReviewThread'
 import { useAddProject } from '../workspace/addProject'
+import { PullRequestNotice, RawError, readFailureText } from './PullRequestNotice'
 
 type View = Extract<ViewDescriptor, { kind: 'pull-request' }>
 
@@ -178,7 +184,8 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
     }
   }
 
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<{ text: string; warn: boolean } | null>(null)
+  const [threadsDetails, setThreadsDetails] = useState(false)
   /** The service updates the branch when it can; otherwise the thread's checkout merges the base in and pushes. */
   const updateBranch = () =>
     run('update-branch', async () => {
@@ -186,15 +193,16 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
       const result = await invoke('forge.updateBranch', taskId, view.repoId, view.url)
       if (result.conflicts && result.taskId) {
         ws.openTask(result.taskId)
-        setNotice(
-          t(
+        setNotice({
+          text: t(
             '{0} files have conflicts. Choose a side for each in Source Control → Merge changes, then continue the merge.',
             {
               '0': String(result.conflicts),
             },
           ),
-        )
-      } else if (result.pushed) setNotice(t('The base branch was merged in and pushed.'))
+          warn: true,
+        })
+      } else if (result.pushed) setNotice({ text: t('The base branch was merged in and pushed.'), warn: false })
     })
 
   const act = (action: PullRequestAction) =>
@@ -237,18 +245,27 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
         <ContentSkeleton />
       </div>
     )
-  if (!pr)
+  if (!pr) {
+    const failure = list.error ? errorText(list.error) : null
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-muted-foreground">
-        <p className="m-0">
-          {list.error ? errorText(list.error) : t('This pull request was not found with this account.')}
-        </p>
-        <Button variant="outline" size="sm" onClick={() => void refresh()}>
-          <RefreshCw size={13} />
-          {t('Try again')}
-        </Button>
-      </div>
+      <Empty className="flex-1">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">{failure ? <TriangleAlert /> : <GitPullRequest />}</EmptyMedia>
+          <EmptyTitle>{failure ? t('This pull request could not be read') : t('Pull request not found')}</EmptyTitle>
+          <EmptyDescription>
+            {failure ? readFailureText(failure, service) : t('This pull request was not found with this account.')}
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent className="max-w-md">
+          <Button variant="secondary" size="sm" onClick={() => void refresh()}>
+            <RefreshCw size={13} />
+            {t('Try again')}
+          </Button>
+          {failure && <RawError>{failure}</RawError>}
+        </EmptyContent>
+      </Empty>
     )
+  }
 
   const batch = drafts.data ?? null
   const stage = pullRequestStage(pr, {
@@ -290,165 +307,250 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
     <OverlayScrollArea className="flex-1 min-h-0">
       <div className="mx-auto flex w-full max-w-[860px] flex-col gap-4 p-6">
         <header className="flex flex-col gap-2">
-          <div className="flex items-start gap-2">
+          <div className="flex items-start gap-2.5">
             <PullRequestIcon pr={pr} stage={stage} size={18} className="mt-1" />
             <h2 className="m-0 min-w-0 flex-1 text-[length:var(--font-title,18px)] font-semibold leading-snug [overflow-wrap:anywhere]">
               {pr.title} <span className="font-normal text-muted-foreground">{pullRequestRef(service, pr.number)}</span>
             </h2>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={t('Refresh')}
-              title={t('Refresh')}
-              disabled={!!busy}
-              onClick={() => void run('refresh', () => Promise.resolve())}
-            >
-              <RefreshCw size={13} className={cn(busy === 'refresh' && 'animate-spin')} />
-            </Button>
+            <div className="flex flex-none items-center gap-0.5">
+              <a
+                href={pr.url}
+                target="_blank"
+                rel="noreferrer"
+                title={t('Open on {0}', { '0': FORGE_NAMES[service] })}
+                className="inline-flex h-6 items-center gap-1.5 rounded-(--radius-s) px-2 text-caption text-muted-foreground no-underline hover:bg-fill-hover hover:text-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              >
+                <BrandIcon brand={forgeBrand(service)} size={12} />
+                {t('Open on {0}', { '0': FORGE_NAMES[service] })}
+                <ExternalLink size={11} aria-hidden="true" />
+              </a>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={t('Refresh')}
+                title={t('Refresh')}
+                disabled={!!busy}
+                onClick={() => void run('refresh', () => Promise.resolve())}
+              >
+                <RefreshCw size={13} className={cn(busy === 'refresh' && 'animate-spin motion-reduce:animate-none')} />
+              </Button>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-[26px] text-caption text-muted-foreground">
-            <StageChip stage={stage} />
-            {pr.author && <span>{pr.author}</span>}
-            <span className="font-mono">
-              {pr.headBranch} → {pr.baseBranch}
-            </span>
-            {pr.fork && <span>{t('From a fork')}</span>}
-            <ChecksLine checks={pr.checks} />
-            {pr.reviewDecision === 'approved' && <span className="text-ok">{t('Approved')}</span>}
-            {pr.reviewDecision === 'changes-requested' && <span className="text-warn">{t('Changes requested')}</span>}
-            {pr.requestedReviewers.length > 0 && (
-              <span>{t('Review requested from {0}', { '0': pr.requestedReviewers.join(', ') })}</span>
+          {/* Who and where on one line, then what it waits on: the order a reviewer reads a pull request in. */}
+          <div className="flex flex-col gap-1.5 pl-[28px] text-caption text-muted-foreground">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+              <StageChip stage={stage} className="rounded-full bg-fill px-2 leading-5 font-medium" />
+              {pr.author && <span className="text-foreground">{pr.author}</span>}
+              <span className="inline-flex min-w-0 items-center gap-1">
+                {pr.author ? t('wants to merge') : null}
+                <BranchName name={pr.headBranch} />
+                <span aria-label={t('into')}>→</span>
+                <BranchName name={pr.baseBranch} />
+              </span>
+              {pr.fork && (
+                <span className="rounded-full border border-(--line) px-1.5 leading-4">{t('From a fork')}</span>
+              )}
+              <span aria-hidden="true">·</span>
+              <span title={new Date(pr.updatedAt).toLocaleString()}>
+                {t('Updated {0}', { '0': timeAgo(pr.updatedAt) })}
+              </span>
+            </div>
+            {(pr.checks !== null ||
+              pr.reviewDecision === 'approved' ||
+              pr.reviewDecision === 'changes-requested' ||
+              pr.requestedReviewers.length > 0 ||
+              (pr.additions !== undefined && pr.deletions !== undefined)) && (
+              <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                <ChecksLine checks={pr.checks} />
+                {pr.reviewDecision === 'approved' && (
+                  <span className="inline-flex items-center gap-1 text-ok">
+                    <CircleCheck size={11} aria-hidden="true" />
+                    {t('Approved')}
+                  </span>
+                )}
+                {pr.reviewDecision === 'changes-requested' && (
+                  <span className="inline-flex items-center gap-1 text-warn">
+                    <MessageSquare size={11} aria-hidden="true" />
+                    {t('Changes requested')}
+                  </span>
+                )}
+                {pr.requestedReviewers.length > 0 && (
+                  <span className="min-w-0 truncate">
+                    {t('Review requested from {0}', { '0': pr.requestedReviewers.join(', ') })}
+                  </span>
+                )}
+                {pr.additions !== undefined && pr.deletions !== undefined && (
+                  <span
+                    className="tabular-nums"
+                    title={t('{0} lines added, {1} removed', { '0': pr.additions, '1': pr.deletions })}
+                  >
+                    <span className="text-ok">+{pr.additions}</span> <span className="text-bad">−{pr.deletions}</span>
+                  </span>
+                )}
+              </div>
             )}
-            <a
-              href={pr.url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
-            >
-              <BrandIcon brand={forgeBrand(service)} size={11} />
-              {t('Open on {0}', { '0': FORGE_NAMES[service] })}
-              <ExternalLink size={11} />
-            </a>
           </div>
         </header>
 
-        <div className="flex flex-wrap gap-1.5">
-          {outside ? (
-            <Button
-              size="sm"
-              disabled={addProject.busy}
-              title={t('Clone it into a folder on the host and add it as a project')}
-              onClick={() => void addProject.cloneProject(outside)}
-            >
-              <FolderDown size={13} />
-              {t('Clone {0} as a project', { '0': outside })}
-            </Button>
-          ) : thread ? (
-            <Button size="sm" onClick={() => ws.openTask(thread.taskId)}>
-              <SquareArrowOutUpRight size={13} />
-              {t('Open thread')}
-            </Button>
-          ) : (
-            open && (
-              <Button size="sm" disabled={!!busy || (pr.fork && !mine)} onClick={() => void openThread('work')}>
-                <MessagesSquare size={13} />
-                {busy === 'work' ? t('Starting…') : t('Open in thread')}
+        {/* Work on it with an agent on the left; change the pull request itself on the right. */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {outside ? (
+              <Button
+                size="sm"
+                disabled={addProject.busy}
+                title={t('Clone it into a folder on the host and add it as a project')}
+                onClick={() => void addProject.cloneProject(outside)}
+              >
+                <FolderDown size={13} />
+                {t('Clone {0} as a project', { '0': outside })}
               </Button>
-            )
-          )}
-          {open && !mine && !thread && !outside && (
-            <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => void openThread('review')}>
-              <Bot size={13} />
-              {busy === 'review' ? t('Starting…') : t('Review with agent')}
-            </Button>
-          )}
-          {open && thread && openThreads.length > 0 && mine && (
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={!!busy}
-              onClick={() => void sendFeedbackToAgent(thread.taskId)}
-            >
-              <MessageSquare size={13} />
-              {busy === 'reviews' ? t('Starting…') : t('Address review comments')}
-            </Button>
-          )}
-          {open && pr.draft && (
-            <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => void act({ kind: 'ready' })}>
-              {t('Ready for review')}
-            </Button>
-          )}
-          {open && (pr.mergeable === 'behind' || (pr.mergeable === 'conflicts' && !outside)) && (
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={!!busy}
-              title={
-                pr.mergeable === 'conflicts'
-                  ? t('Merges the base branch in the thread working on it, so you can resolve the conflicts there')
-                  : undefined
-              }
-              onClick={() => void updateBranch()}
-            >
-              <RotateCcw size={13} />
-              {busy === 'update-branch'
-                ? t('Updating…')
-                : pr.mergeable === 'conflicts'
-                  ? t('Resolve conflicts')
-                  : t('Update branch')}
-            </Button>
-          )}
-          {open && (
-            <Button variant="secondary" size="sm" disabled={!!busy || pr.draft} onClick={() => setMerging(true)}>
-              <GitMerge size={13} />
-              {t('Merge…')}
-            </Button>
-          )}
-          {open ? (
-            <Button variant="ghost" size="sm" disabled={!!busy} onClick={() => setClosing(true)}>
-              <X size={13} />
-              {t('Close')}
-            </Button>
-          ) : (
-            pr.state === 'closed' && (
-              <Button variant="ghost" size="sm" disabled={!!busy} onClick={() => void act({ kind: 'reopen' })}>
-                {t('Reopen')}
+            ) : thread ? (
+              <Button size="sm" onClick={() => ws.openTask(thread.taskId)}>
+                <SquareArrowOutUpRight size={13} />
+                {t('Open thread')}
               </Button>
-            )
-          )}
-          {open && (
-            <Menu
-              label={t('More actions')}
-              icon={<MoreHorizontal size={14} aria-hidden="true" />}
-              disabled={!!busy}
-              align="end"
-              items={moreActions({
-                service,
-                pr,
-                onDraft: () => void act({ kind: 'draft' }),
-                onRerun: () => void write('rerun-checks', { kind: 'rerun-checks' }),
-                onPeople: (kind) => {
-                  setError(null)
-                  setPeople(kind)
-                },
-              })}
-            />
-          )}
-        </div>
-        {outside && open && (
-          <p className="m-0 text-caption text-muted-foreground">
-            {t(
-              '{0} is in no project on this host. Review, comment and merge here; clone it as a project to work on it in a thread or have an agent review it.',
-              { '0': outside },
+            ) : (
+              open && (
+                <Button size="sm" disabled={!!busy || (pr.fork && !mine)} onClick={() => void openThread('work')}>
+                  <MessagesSquare size={13} />
+                  {busy === 'work' ? t('Starting…') : t('Open in thread')}
+                </Button>
+              )
             )}
-          </p>
-        )}
-        {error && <p className="m-0 whitespace-pre-wrap text-caption text-bad">{error}</p>}
-        {notice && <p className="m-0 text-caption text-warn">{notice}</p>}
-        {pr.fork && !mine && open && !outside && (
-          <p className="m-0 text-caption text-muted-foreground">
-            {t('This pull request comes from a fork. An agent can review it here, but only its author can push to it.')}
-          </p>
+            {open && !mine && !thread && !outside && (
+              <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => void openThread('review')}>
+                <Bot size={13} />
+                {busy === 'review' ? t('Starting…') : t('Review with agent')}
+              </Button>
+            )}
+            {open && thread && openThreads.length > 0 && mine && (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!!busy}
+                onClick={() => void sendFeedbackToAgent(thread.taskId)}
+              >
+                <MessageSquare size={13} />
+                {busy === 'reviews' ? t('Starting…') : t('Address review comments')}
+              </Button>
+            )}
+          </div>
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
+            {open && pr.draft && (
+              <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => void act({ kind: 'ready' })}>
+                {t('Ready for review')}
+              </Button>
+            )}
+            {open && (pr.mergeable === 'behind' || (pr.mergeable === 'conflicts' && !outside)) && (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!!busy}
+                title={
+                  pr.mergeable === 'conflicts'
+                    ? t('Merges the base branch in the thread working on it, so you can resolve the conflicts there')
+                    : undefined
+                }
+                onClick={() => void updateBranch()}
+              >
+                <RotateCcw size={13} />
+                {busy === 'update-branch'
+                  ? t('Updating…')
+                  : pr.mergeable === 'conflicts'
+                    ? t('Resolve conflicts')
+                    : t('Update branch')}
+              </Button>
+            )}
+            {open && (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!!busy || pr.draft}
+                title={pr.draft ? t('Mark it ready for review before merging') : undefined}
+                onClick={() => setMerging(true)}
+              >
+                <GitMerge size={13} />
+                {t('Merge…')}
+              </Button>
+            )}
+            {open ? (
+              <Button variant="ghost" size="sm" disabled={!!busy} onClick={() => setClosing(true)}>
+                <X size={13} />
+                {t('Close')}
+              </Button>
+            ) : (
+              pr.state === 'closed' && (
+                <Button variant="ghost" size="sm" disabled={!!busy} onClick={() => void act({ kind: 'reopen' })}>
+                  {t('Reopen')}
+                </Button>
+              )
+            )}
+            {open && (
+              <Menu
+                label={t('More actions')}
+                icon={<MoreHorizontal size={14} aria-hidden="true" />}
+                disabled={!!busy}
+                align="end"
+                items={moreActions({
+                  service,
+                  pr,
+                  onDraft: () => void act({ kind: 'draft' }),
+                  onRerun: () => void write('rerun-checks', { kind: 'rerun-checks' }),
+                  onPeople: (kind) => {
+                    setError(null)
+                    setPeople(kind)
+                  },
+                })}
+              />
+            )}
+          </div>
+        </div>
+        {(error || notice || (outside && open) || (pr.fork && !mine && open && !outside)) && (
+          <div className="flex flex-col gap-1">
+            {error && !people && (
+              <PullRequestNotice
+                tone="bad"
+                icon={<CircleX size={14} />}
+                title={t('That did not go through')}
+                detail={error}
+                wrap
+                live
+                onDismiss={() => setError(null)}
+              />
+            )}
+            {notice && (
+              <PullRequestNotice
+                tone={notice.warn ? 'warn' : 'muted'}
+                icon={notice.warn ? <TriangleAlert size={14} /> : <CircleCheck size={14} />}
+                title={notice.text}
+                wrap
+                live
+                onDismiss={() => setNotice(null)}
+              />
+            )}
+            {outside && open && (
+              <PullRequestNotice
+                icon={<Info size={14} />}
+                title={t('Not in a project on this host')}
+                detail={t(
+                  '{0} is in no project on this host. Review, comment and merge here; clone it as a project to work on it in a thread or have an agent review it.',
+                  { '0': outside },
+                )}
+                wrap
+              />
+            )}
+            {pr.fork && !mine && open && !outside && (
+              <PullRequestNotice
+                icon={<Info size={14} />}
+                title={t('From a fork')}
+                detail={t(
+                  'This pull request comes from a fork. An agent can review it here, but only its author can push to it.',
+                )}
+                wrap
+              />
+            )}
+          </div>
         )}
 
         {/* As on the services: the conversation and the changed files, one tab each. */}
@@ -543,7 +645,24 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
                 </div>
               </div>
               {threads.isPending && <ContentSkeleton />}
-              {threads.isError && <p className="m-0 text-caption text-bad">{errorText(threads.error)}</p>}
+              {threads.isError && (
+                <PullRequestNotice
+                  tone="warn"
+                  icon={<TriangleAlert size={14} />}
+                  title={t('Review threads could not be loaded')}
+                  detail={readFailureText(errorText(threads.error), service)}
+                  expanded={threadsDetails}
+                  onToggle={() => setThreadsDetails(!threadsDetails)}
+                  actions={
+                    <Button variant="secondary" size="xs" onClick={() => void threads.refetch()}>
+                      <RefreshCw size={12} />
+                      {t('Retry')}
+                    </Button>
+                  }
+                >
+                  <RawError>{errorText(threads.error)}</RawError>
+                </PullRequestNotice>
+              )}
               {threads.isSuccess && !shownThreads.length && (
                 <p className="m-0 text-caption text-muted-foreground">
                   {threadSearch.trim()
@@ -633,6 +752,19 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
         </Dialog>
       )}
     </OverlayScrollArea>
+  )
+}
+
+/** A branch name as a small code chip, cut short in narrow panes with the full name on hover. */
+function BranchName({ name }: { name: string }) {
+  return (
+    <span
+      title={name}
+      className="inline-flex min-w-0 max-w-[260px] items-center gap-1 rounded-(--radius-xs) bg-fill px-1.5 font-mono text-[11px] leading-5 text-foreground"
+    >
+      <GitBranch size={10} className="flex-none text-muted-foreground" aria-hidden="true" />
+      <span className="truncate">{name}</span>
+    </span>
   )
 }
 

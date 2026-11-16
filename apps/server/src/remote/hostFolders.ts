@@ -28,6 +28,26 @@ const PROGRESS =
 /** A clone that stops reporting for this long is abandoned; a slow, steady one is not. */
 const CLONE_IDLE_MS = 120_000
 
+/** The most folders one listing offers, and how many are looked at at once. */
+const MAX_LISTED = 2000
+const LIST_CONCURRENCY = 16
+/** A folder that takes longer than this to look at is left out of its listing. */
+const ENTRY_MS = 1500
+
+const withDeadline = <T>(work: Promise<T>, ms: number) =>
+  new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Timed out')), ms)
+    work.then(resolve, reject).finally(() => clearTimeout(timer))
+  })
+
+async function eachLimited<T>(items: T[], limit: number, run: (item: T) => Promise<void>) {
+  let next = 0
+  const worker = async () => {
+    while (next < items.length) await run(items[next++]!)
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+}
+
 interface RunningClone {
   progress: CloneProgress
   cancel(): void
@@ -41,6 +61,7 @@ export class HostFolders {
     private readonly spawnGit: GitSpawner = (args) =>
       spawn('git', args, { env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }, stdio: ['ignore', 'ignore', 'pipe'] }),
     private readonly idleMs = CLONE_IDLE_MS,
+    private readonly entryMs = ENTRY_MS,
   ) {}
   cloneProgress(cloneId: string): CloneProgress | null {
     return this.clones.get(cloneId)?.progress ?? null
@@ -57,30 +78,33 @@ export class HostFolders {
     const roots = configured ?? [homedir(), ...this.projectRoots()]
     return [...new Set(await Promise.all(roots.map((root) => realpath(root))))]
   }
-  private async check(path: string) {
+  private async check(path: string, roots?: string[]) {
     if (!isAbsolute(path) || path.includes('\0')) throw new Error('Choose an absolute host folder path')
     const actual = await realpath(path)
-    if (!(await this.roots()).some((root) => within(root, actual)))
+    if (!(roots ?? (await this.roots())).some((root) => within(root, actual)))
       throw new Error('This folder is outside the host browse roots')
     if (!(await stat(actual)).isDirectory()) throw new Error('Not a host folder')
     return actual
   }
   async list(path: string): Promise<HostFolderListing> {
-    const actual = await this.check(path)
     const roots = await this.roots()
-    const entries = await readdir(actual, { withFileTypes: true })
-    const folders: HostFolder[] = []
-    for (const entry of entries.slice(0, 2000)) {
+    const actual = await this.check(path, roots)
+    const entries = (await readdir(actual, { withFileTypes: true }))
       // Hidden folders (.git, .cache, .config) are never where a project starts, and they crowd the list.
-      if ((!entry.isDirectory() && !entry.isSymbolicLink()) || entry.name.startsWith('.')) continue
+      .filter((entry) => (entry.isDirectory() || entry.isSymbolicLink()) && !entry.name.startsWith('.'))
+      .slice(0, MAX_LISTED)
+    // A home folder holds protected, network and cloud-synced folders that can stall a lookup; checking them
+    // together, each with a deadline, keeps the list answering at once instead of after the slowest one.
+    const folders: HostFolder[] = []
+    await eachLimited(entries, LIST_CONCURRENCY, async (entry) => {
       const candidate = join(actual, entry.name)
-      try {
-        await this.check(candidate)
-        folders.push({ name: entry.name, path: candidate, repo: await isRepository(candidate) })
-      } catch {
-        /* inaccessible folders and symlink escapes are not offered */
-      }
-    }
+      const repo = await withDeadline(
+        this.check(candidate, roots).then(() => isRepository(candidate)),
+        this.entryMs,
+      ).catch(() => null)
+      // Inaccessible, slow and symlink-escaping folders are not offered.
+      if (repo !== null) folders.push({ name: entry.name, path: candidate, repo })
+    })
     return {
       path: actual,
       parent: roots.some((root) => within(root, dirname(actual))) ? dirname(actual) : null,

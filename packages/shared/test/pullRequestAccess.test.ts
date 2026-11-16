@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { accessGroupTitle, accessGroups, forgeUnavailableKey, needsAccess } from '../src/pullRequestAccess'
+import {
+  accessGroupTitle,
+  accessGroups,
+  forgeUnavailableKey,
+  groupReadFailure,
+  needsAccess,
+  readFailure,
+} from '../src/pullRequestAccess'
 
 const repo = (host: string, repoName: string, extra: Record<string, unknown> = {}) =>
   ({
@@ -51,5 +58,31 @@ describe('repository access notices', () => {
     ])
     expect(forgeUnavailableKey('signed-out', 'bitbucket')).toMatch(/^Connect Bitbucket/)
     expect(forgeUnavailableKey('no-cli')).toMatch(/^Install the GitHub CLI/)
+  })
+
+  it('reads what a failed read means from the messages the hosting clients give', () => {
+    expect(readFailure('gh api failed: gh: HTTP 502')).toBe('outage')
+    expect(readFailure('Bitbucket answered 503. Try again in a moment.')).toBe('outage')
+    expect(readFailure('gh api failed: gh: API rate limit exceeded for user ID 1. (HTTP 403)')).toBe('rate-limit')
+    // GitHub's 403 wording mentions a rate limit as one possibility; without the limit itself it is about access.
+    expect(readFailure('HTTP 403: GitHub refused the request (rate limit or a missing permission). Forbidden')).toBe(
+      'no-access',
+    )
+    expect(readFailure('HTTP 401: the saved GitHub token was rejected. It may be expired or revoked.')).toBe(
+      'signed-out',
+    )
+    expect(readFailure('Bitbucket did not accept this credential. Connect again in Settings → Git.')).toBe('signed-out')
+    expect(readFailure('gh api failed: To get started with GitHub CLI, please run:  gh auth login')).toBe('signed-out')
+    expect(readFailure('HTTP 404: not found with this account. The repository may be private.')).toBe('no-access')
+    expect(readFailure('GitLab could not find that project, or this account cannot see it.')).toBe('no-access')
+    expect(readFailure('Could not reach Azure DevOps. Check the network and try again.')).toBe('network')
+    expect(readFailure('gh api failed: error connecting to api.github.com')).toBe('network')
+    expect(readFailure('something odd')).toBe('unknown')
+  })
+
+  it('names a group by the failure its repositories share', () => {
+    expect(groupReadFailure(['gh api failed: gh: HTTP 502', 'gh api failed: gh: HTTP 504'])).toBe('outage')
+    expect(groupReadFailure(['gh api failed: gh: HTTP 502', 'HTTP 404: not found'])).toBe('unknown')
+    expect(groupReadFailure([])).toBe('unknown')
   })
 })

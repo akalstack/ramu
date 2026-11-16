@@ -59,6 +59,25 @@ export function folderCrumbs(path: string, roots: readonly string[]): FolderCrum
   return crumbs
 }
 
+/**
+ * Where a clone most likely belongs: the folder most of the host's projects sit side by side in, when it can be
+ * browsed (it lies inside one of `roots`, which hold the home folder and every project). Undefined when none does.
+ */
+export function cloneStartFolder(roots: readonly string[]): string | undefined {
+  const separator = (path: string) => (path.includes('\\') && !path.includes('/') ? '\\' : '/')
+  const inside = (path: string, root: string) =>
+    path !== root && path.startsWith(root.endsWith(separator(root)) ? root : root + separator(root))
+  const counts = new Map<string, number>()
+  for (const root of roots) {
+    const cut = root.replace(/[\\/]+$/, '').search(/[\\/][^\\/]*$/)
+    if (cut <= 0) continue
+    const parent = root.slice(0, cut)
+    if (roots.some((other) => other === parent || inside(parent, other)))
+      counts.set(parent, (counts.get(parent) ?? 0) + 1)
+  }
+  return [...counts].sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0]?.[0]
+}
+
 /** The folder a clone lands in: the repository's own name, from `owner/name`, an HTTPS URL or an SSH address. */
 export function cloneFolderName(value: string): string {
   return (

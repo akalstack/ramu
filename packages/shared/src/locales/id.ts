@@ -5690,6 +5690,38 @@ export const indonesian: Readonly<Record<string, string>> = {
   Export: 'Ekspor',
   'Choose where to put it': 'Pilih tempatnya',
   'Put it here': 'Taruh di sini',
+  'Clone as project': 'Clone sebagai proyek',
+  'Offline · reconnect to act on it': 'Offline · sambungkan ulang untuk menindaklanjutinya',
+  'Showing what this phone last read of this pull request.':
+    'Menampilkan apa yang terakhir dibaca ponsel ini dari pull request ini.',
+  '{0} is offline': '{0} sedang offline',
+  'Host is offline': 'Host sedang offline',
+  'Showing the pull requests this phone last read. They update when it is back.':
+    'Menampilkan pull request yang terakhir dibaca ponsel ini. Akan diperbarui saat host kembali.',
+  'Could not load pull requests': 'Pull request tidak bisa dimuat',
+  'Could not load pull requests from {0}': 'Pull request dari {0} tidak bisa dimuat',
+  'New model': 'Model baru',
+  'Released {0}': 'Rilis {0}',
+  '{0}M context': 'Konteks {0}M',
+  '{0}K context': 'Konteks {0}K',
+  'Star one to keep it at the top of the model picker, where you choose it for a thread.':
+    'Beri bintang agar tetap di atas pemilih model, tempat kamu memilihnya untuk thread.',
+  ' update available': ' punya pembaruan',
+  '{0} provider updates': '{0} pembaruan provider',
+  '{0} providers updated': '{0} provider diperbarui',
+  '{0} of {1} updates failed': '{0} dari {1} pembaruan gagal',
+  'Updating providers… {0} of {1}': 'Memperbarui provider… {0} dari {1}',
+  'Ramu {0} is available on {1}': 'Ramu {0} tersedia di {1}',
+  '{0} threads are working there. Updating restarts that host.':
+    '{0} thread sedang bekerja di sana. Memperbarui akan memulai ulang host itu.',
+  'Updating restarts that host; it reconnects by itself.':
+    'Memperbarui akan memulai ulang host itu; host tersambung lagi sendiri.',
+  'Clone here': 'Clone di sini',
+  'Clone {0}': 'Clone {0}',
+  'Clones into {0}': 'Di-clone ke {0}',
+  'Loading folders…': 'Memuat folder…',
+  'Already cloned here. Add it as a project.': 'Sudah di-clone di sini. Tambahkan sebagai proyek.',
+  'Choose the folder to clone it into.': 'Pilih folder tujuan clone.',
   'In the usual folder': 'Di folder biasanya',
   'Change where the project goes': 'Ubah tempat proyek',
   'Change…': 'Ubah…',
@@ -6495,7 +6527,33 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Opens on {0}. Also on {1}': 'Dibuka di {0}. Juga ada di {1}',
   'Host for this pull request': 'Host untuk pull request ini',
   'Its thread and checkout are on this host': 'Thread dan checkout-nya ada di host ini',
-  '{0}. Its pull requests show when it is back.': '{0}. Pull request-nya tampil saat host kembali.',
+  'Its pull requests show when it is back.': 'Pull request-nya tampil saat host kembali.',
+  'Pull requests on {0} could not be listed': 'Pull request di {0} tidak bisa dimuat',
+  'The host answered with an error. Try again in a moment.':
+    'Host menjawab dengan galat. Coba lagi sebentar lagi.',
+  'Choose account': 'Pilih akun',
+  '{0} more notices': '{0} pemberitahuan lagi',
+  '{0} hidden': '{0} disembunyikan',
+  '{0} is having trouble right now. Try again in a few minutes.':
+    '{0} sedang bermasalah. Coba lagi beberapa menit lagi.',
+  '{0} is limiting requests from this account. Try again in a few minutes.':
+    '{0} membatasi permintaan dari akun ini. Coba lagi beberapa menit lagi.',
+  '{0} did not accept the account on this host. Reconnect it in Hosting accounts.':
+    '{0} tidak menerima akun di host ini. Hubungkan ulang di Akun hosting.',
+  'The {0} account on this host cannot see this repository. It may be private, moved or need approval.':
+    'Akun {0} di host ini tidak bisa melihat repositori ini. Mungkin privat, dipindahkan, atau perlu persetujuan.',
+  'The host could not reach {0}. Check its network connection, then try again.':
+    'Host tidak bisa menjangkau {0}. Periksa koneksi jaringannya, lalu coba lagi.',
+  '{0} did not answer as expected. Try again, or open the details below.':
+    '{0} tidak menjawab seperti biasa. Coba lagi, atau buka detail di bawah.',
+  'This pull request could not be read': 'Pull request ini tidak bisa dibaca',
+  'Pull request not found': 'Pull request tidak ditemukan',
+  'wants to merge': 'ingin menggabungkan',
+  into: 'ke',
+  'Mark it ready for review before merging': 'Tandai siap untuk review sebelum menggabungkan',
+  'That did not go through': 'Itu tidak berhasil',
+  'Not in a project on this host': 'Tidak ada di proyek di host ini',
+  'Review threads could not be loaded': 'Thread review tidak bisa dimuat',
   '{0}. Its artifacts show when it is back.': '{0}. Artefaknya tampil saat host kembali.',
   '{0} is waiting for you': '{0} menunggumu',
   '{0} was interrupted': '{0} terhenti',
