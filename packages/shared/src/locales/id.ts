@@ -3234,6 +3234,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   Weekly: 'Mingguan',
   'Signed in': 'Sudah masuk',
   'Not signed in': 'Belum masuk',
+  'With GitHub, Google or a passkey.': 'Dengan GitHub, Google, atau passkey.',
   'Switch login': 'Ganti akun',
   'CLI login': 'Akun CLI',
   'Show fewer': 'Tampilkan lebih sedikit',

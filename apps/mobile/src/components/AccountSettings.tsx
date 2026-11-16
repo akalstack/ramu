@@ -1,17 +1,73 @@
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Linking, View } from 'react-native'
+import { ActivityIndicator, Image, Linking, View } from 'react-native'
 import * as Device from 'expo-device'
+import { KeyRound } from 'lucide-react-native'
 import type { AccountUser, ListedHostInfo } from '@ramu/shared/account'
 import { translate } from '@ramu/shared/i18n'
 import * as account from '../runtime/account'
 import { secureRandom } from '../runtime/secureRandom'
 import { useStore } from '../runtime/store'
 import { connectAccountHosts } from './AccountHosts'
+import { BrandIcon } from './Logos'
 import { font, space, useTheme, type Appearance, type TextSize } from '../theme'
 import { RowLabel, TextRow } from './SettingRows'
 import { Button, Card, Divider, Row, SectionLabel, T } from './ui'
 
 const phoneName = () => Device.deviceName || Device.modelName || 'Ramu phone'
+
+/** The account's picture from GitHub or Google, or its initials on a neutral disc when there is none or it fails. */
+function AccountAvatar({ user, size = 36 }: { user: AccountUser; size?: number }) {
+  const { c } = useTheme()
+  const [failed, setFailed] = useState(false)
+  const picture = !failed && user.image?.startsWith('https://') ? user.image : null
+  const initials = (user.name || user.email.split('@')[0] || '')
+    .split(/[\s._-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]!.toUpperCase())
+    .join('')
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        overflow: 'hidden',
+        backgroundColor: c.fill,
+        borderWidth: 1,
+        borderColor: c.line,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {picture ? (
+        <Image source={{ uri: picture }} style={{ width: size, height: size }} onError={() => setFailed(true)} />
+      ) : (
+        <T size={Math.round(size * 0.4)} tone="soft" weight="600">
+          {initials || '?'}
+        </T>
+      )}
+    </View>
+  )
+}
+
+/** The ways to sign in, each by its own mark, beside the words that name them. */
+function SignInMarks() {
+  const { c } = useTheme()
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}
+    >
+      <BrandIcon brand="github" size={16} />
+      <BrandIcon brand="google" size={16} />
+      <KeyRound size={16} color={c.soft} />
+    </View>
+  )
+}
 
 /**
  * The Ramu account on this phone: sign in, approve a new host's request for the backup key after the numbers match,
@@ -88,6 +144,7 @@ export function AccountSettings() {
       <Card style={{ marginHorizontal: space.l }}>
         {user ? (
           <Row style={{ paddingVertical: space.m }}>
+            <AccountAvatar user={user} />
             <RowLabel title={user.email} help={user.name} />
             <Button
               kind="secondary"
@@ -98,6 +155,7 @@ export function AccountSettings() {
           </Row>
         ) : signIn ? (
           <Row style={{ paddingVertical: space.m }}>
+            <SignInMarks />
             <RowLabel
               title={t('Code: {code}', { code: signIn.userCode })}
               help={t('Sign in with GitHub, Google or a passkey, check the code matches and choose Approve.')}
@@ -106,7 +164,8 @@ export function AccountSettings() {
           </Row>
         ) : (
           <Row style={{ paddingVertical: space.m }}>
-            <RowLabel title={t('Not signed in')} />
+            <SignInMarks />
+            <RowLabel title={t('Not signed in')} help={t('With GitHub, Google or a passkey.')} />
             <Button
               title={t('Sign in')}
               disabled={busy}
