@@ -583,6 +583,19 @@ export interface RamuMethods extends ArtifactMethods {
   /** Lays the page out at the controlling device's screen size, or restores the default with `null`. */
   'hostBrowser.fit'(taskId: string, tabId: string, size: { width: number; height: number } | null): { fitted: boolean }
   'hostBrowser.disconnect'(): void
+  /**
+   * Opens a page served only on the host's loopback for this phone alone: a fresh port on the address the phone reaches
+   * the host at, answering only this phone's address and the cookie its one-time `openPath` sets. Closes after
+   * `expiresAt`, when closed, or when the device is revoked.
+   */
+  'hostBrowser.phoneForward'(url: string): {
+    id: string
+    port: number
+    targetPort: number
+    openPath: string
+    expiresAt: number
+  }
+  'hostBrowser.phoneForwardClose'(id: string): void
   /** Host-owned tab metadata only; no frame, profile credentials or control grant. */
   'browser.activity'(taskId: string): { available: boolean; tabs: BrowserTabInfo[]; externalURLs?: string[] }
   /** Local desktop-only document origin. Never forwarded to a remote host. */

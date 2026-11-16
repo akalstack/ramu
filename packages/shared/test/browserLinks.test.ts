@@ -3,8 +3,10 @@ import {
   browserFaviconFrom,
   canOpenBrowserLinkOnDevice,
   isWebLink,
+  isHostLoopbackPage,
   linkTargetFrom,
   phoneBrowserUrl,
+  phoneForwardUrl,
 } from '../src/browserLinks'
 
 it('only an explicit choice moves links into the integrated browser', () => {
@@ -64,4 +66,20 @@ it('never offers a page the phone cannot safely load itself', () => {
     expect(phoneBrowserUrl(page, 'http://100.64.0.7:7788')).toBeNull()
   expect(phoneBrowserUrl('http://localhost:3000/', 'http://127.0.0.1:7788')).toBeNull()
   expect(phoneBrowserUrl('http://localhost:3000/', 'not a url')).toBeNull()
+})
+
+it('opens a host forward on the address the phone reaches the host at, never on the phone’s own loopback', () => {
+  expect(isHostLoopbackPage('http://localhost:5173/')).toBe(true)
+  expect(isHostLoopbackPage('http://[::1]:4000/')).toBe(true)
+  expect(isHostLoopbackPage('https://example.com/')).toBe(false)
+  expect(isHostLoopbackPage('nope')).toBe(false)
+  expect(phoneForwardUrl('https://192.168.1.5:7788', 51234, '/__ramu/open?t=abc')).toBe(
+    'http://192.168.1.5:51234/__ramu/open?t=abc',
+  )
+  expect(phoneForwardUrl('http://[fd7a::5]:7788', 51234, '/__ramu/open?t=abc')).toBe(
+    'http://[fd7a::5]:51234/__ramu/open?t=abc',
+  )
+  expect(phoneForwardUrl('http://127.0.0.1:7788', 51234, '/__ramu/open?t=abc')).toBeNull()
+  expect(phoneForwardUrl('http://192.168.1.5:7788', 51234, '//evil.example/x')).toBeNull()
+  expect(phoneForwardUrl('not a url', 51234, '/x')).toBeNull()
 })

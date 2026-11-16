@@ -15,7 +15,7 @@ import type { PhoneBrowserProps } from './PhoneBrowser'
  * session: nothing from the host browser's profiles reaches it, and it keeps no cookies after closing. The address field
  * opens addresses and searches as the host browser's does.
  */
-export default function PhoneBrowser({ url, rewritten, searchTemplate, onClose, onOpenOnHost }: PhoneBrowserProps) {
+export default function PhoneBrowser({ url, forward, searchTemplate, onClose, onOpenOnHost }: PhoneBrowserProps) {
   const { language } = useStore()
   const t = (text: string) => translate(language, text)
   const { c } = useTheme()
@@ -94,14 +94,23 @@ export default function PhoneBrowser({ url, rewritten, searchTemplate, onClose, 
           }}
         />
       </View>
+      {forward ? (
+        <T size={font.caption} tone="muted" style={{ paddingHorizontal: space.l, paddingBottom: space.s }}>
+          {translate(
+            language,
+            'From port {0} on the host, for this phone only. Closes in 30 minutes or when you leave.',
+            {
+              0: forward.targetPort,
+            },
+          )}
+        </T>
+      ) : null}
       {failed ? (
         <View style={{ padding: space.l, gap: space.m }}>
           <T weight="600">{t('This page did not load on this phone.')}</T>
           <T tone="muted">
-            {rewritten
-              ? t(
-                  'It runs on the host’s localhost. Start the dev server on all addresses (for example with --host 0.0.0.0) and allow it through the host’s firewall, or go back to the host browser.',
-                )
+            {forward
+              ? t('Check that the dev server is still running on the host, or go back to the host browser.')
               : t('Check that this phone can reach the address, or go back to the host browser.')}
           </T>
           <Button title={t('Try again')} icon={RotateCw} onPress={retry} />

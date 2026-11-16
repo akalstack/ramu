@@ -8,8 +8,8 @@ import { ViewerHeader } from './ViewerChrome'
 
 export interface PhoneBrowserProps {
   url: string
-  /** The page was on the host's localhost and now points at the host's address, so a refused load needs explaining. */
-  rewritten: boolean
+  /** The page runs on the host's localhost and comes through a forward the host opened for this phone alone. */
+  forward?: { targetPort: number; expiresAt: number }
   /** Where typed words are searched, as in the host browser's address field. */
   searchTemplate: string
   onClose(): void

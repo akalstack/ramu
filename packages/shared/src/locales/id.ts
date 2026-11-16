@@ -5327,8 +5327,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Buka halaman ini di aplikasi seluler untuk memuatnya di perangkat ini.',
   'Open in browser': 'Buka di browser',
   'This page did not load on this phone.': 'Halaman ini tidak termuat di ponsel ini.',
-  'It runs on the host’s localhost. Start the dev server on all addresses (for example with --host 0.0.0.0) and allow it through the host’s firewall, or go back to the host browser.':
-    'Halaman ini berjalan di localhost milik host. Jalankan dev server di semua alamat (misalnya dengan --host 0.0.0.0) dan izinkan lewat firewall host, atau kembali ke browser host.',
   'Check that the dev server is still running on the host, or go back to the host browser.':
     'Pastikan server pengembangan masih berjalan di host, atau kembali ke browser host.',
   'From port {0} on the host, for this phone only. Closes in 30 minutes or when you leave.':

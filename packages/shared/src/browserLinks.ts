@@ -69,6 +69,34 @@ export function phoneBrowserUrl(page: string, hostAddress: string): string | nul
   }
 }
 
+/** A web page served on the execution host's own loopback, which a phone opens through a forward. */
+export function isHostLoopbackPage(page: string): boolean {
+  try {
+    const url = new URL(page)
+    return ['http:', 'https:'].includes(url.protocol) && LOOPBACK.test(url.hostname.toLowerCase())
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The address a phone opens for a forward the host made for it: the forward's port on the address the phone already
+ * reaches the host at, with its one-time open path. Null when the phone reaches the host only through its own
+ * loopback (an SSH tunnel), where that port would be the phone's.
+ */
+export function phoneForwardUrl(hostAddress: string, port: number, openPath: string): string | null {
+  try {
+    const host = new URL(hostAddress).hostname
+    if (!host || LOOPBACK.test(host.toLowerCase()) || !Number.isInteger(port)) return null
+    const origin = `http://${host}:${port}`
+    const url = new URL(openPath, origin)
+    // Only a path on the forward itself: `//elsewhere` or a full address would leave the host.
+    return openPath.startsWith('/') && url.origin === new URL(origin).origin ? url.href : null
+  } catch {
+    return null
+  }
+}
+
 /** Device-state keys for what the address box searches with when typed text is not an address. */
 export const SEARCH_ENGINE_KEY = 'ramu.browser.searchEngine'
 export const SEARCH_CUSTOM_KEY = 'ramu.browser.searchCustom'

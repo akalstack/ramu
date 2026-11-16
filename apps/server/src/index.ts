@@ -142,6 +142,7 @@ import {
 import { PairingError, PairingRequests } from './remote/pairingRequests'
 import { createPairingNotice } from './remote/pairingNotice'
 import { clientAddress } from './remote/clientAddress'
+import { PhoneForwards, phoneForwardPeer, phoneForwardTarget } from './remote/phoneForward'
 import { parseTunnelChoice, TunnelManager } from './remote/tunnel'
 import { HostAdvertiser, advertisedInterfaces, discoveryName, readDiscoveryHostId } from './remote/discovery'
 import {
@@ -1461,6 +1462,7 @@ async function stop(intentional = false, exitCode = 0) {
   clearInterval(tick)
   tunnels.stop()
   publicPages.close()
+  phoneForwards.closeAll()
   await schedules.stop()
   await pullRequestWatches.stop()
   localApps.close()
@@ -1535,8 +1537,11 @@ const capabilities = (): Capability[] => [
 // Event streams of network clients stay open, so a revoked device must be cut off here, not only refused on its next request.
 const remoteStreams = new Map<EventSink, string | undefined>()
 const stillAuthorized = (header: string | undefined) => remoteAccess.authorized(header)
+// A phone's dev-server forwards: one listener each, closed by its viewer, after 30 minutes or when the device goes.
+const phoneForwards = new PhoneForwards()
 const dropRevoked = () => {
   for (const [stream, header] of remoteStreams) if (!stillAuthorized(header)) stream.end()
+  phoneForwards.keepOnly((id) => devices.list().some((device) => device.id === id && device.role !== 'viewer'))
 }
 const json = { 'Content-Type': 'application/json' }
 // Results of keyed mutations, kept briefly so a retry after a lost reply returns the first outcome instead of running twice.
@@ -1554,6 +1559,8 @@ async function performInvoke(
   remote: boolean,
   device: DeviceInfo | undefined,
   { method, args, operationKey }: InvokeRequest,
+  /** The connection the call arrived on, for calls that answer the device where it is. */
+  req?: import('node:http').IncomingMessage,
 ): Promise<{ value: unknown; after?: () => void }> {
   const deviceId = device?.id
   if (operationKey !== undefined && !(typeof operationKey === 'string' && OPERATION_KEY_PATTERN.test(operationKey)))
@@ -1660,6 +1667,19 @@ async function performInvoke(
       const [taskId, text] = z.tuple([z.string().min(1).max(100), z.string().min(1).max(20_000)]).parse(args)
       value = await agentThreads.messageForTerminal(taskId, text)
     } else throw new Error(`Unknown method ${method}`)
+  } else if (method === 'hostBrowser.phoneForward') {
+    // A dev server listening only on loopback, opened in this phone's own browser through a port only it can use.
+    if (!remote || !device || device.kind === 'host' || device.role === 'viewer' || !req)
+      throw new InvokeRefused('Only a paired owner phone can open a page from the host this way.')
+    const [page] = z.tuple([z.string().min(1).max(4000)]).parse(args)
+    const target = phoneForwardTarget(page, [network.port, address.port])
+    const from = clientAddress(req, publicUrl() !== null)
+    const peer = phoneForwardPeer(req.socket.remoteAddress, req.socket.localAddress, from.tunneled)
+    value = await phoneForwards.open({ deviceId: device.id, ...peer, target })
+  } else if (method === 'hostBrowser.phoneForwardClose') {
+    if (!remote || !device) throw new InvokeRefused('Only the phone that opened a forward can close it.')
+    phoneForwards.close(device.id, z.tuple([z.string().uuid()]).parse(args)[0])
+    value = {}
   } else if (method === 'hostTools.offer') {
     // Another host's tools only wait here for a review by the person on this host; nothing installs or is removed.
     if (!remote || device?.kind !== 'host') throw new InvokeRefused('Only a paired host can make this call.')
@@ -2350,9 +2370,9 @@ let sockets: ReturnType<typeof serveSockets> | null = null
 const streamDevices = new Map<object, string>()
 const socketHost: SocketHost = {
   accept: (req, res) => remoteAccess.accept(req, res),
-  invoke: async (device, request) => {
+  invoke: async (device, request, req) => {
     try {
-      const result = await performInvoke(true, device, request)
+      const result = await performInvoke(true, device, request, req)
       return { ok: true, value: result.value, ...(result.after ? { after: result.after } : {}) }
     } catch (error) {
       return {

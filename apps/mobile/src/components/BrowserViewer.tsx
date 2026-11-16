@@ -39,7 +39,9 @@ import {
   CUSTOM_SEARCH,
   SEARCH_ENGINES,
   addressFrom,
+  isHostLoopbackPage,
   phoneBrowserUrl,
+  phoneForwardUrl,
   searchTemplateFrom,
   validSearchTemplate,
 } from '@ramu/shared/browserLinks'
@@ -133,7 +135,17 @@ export function BrowserViewer({
   const [pageText, setPageText] = useState('')
   const [observation, setObservation] = useState<BrowserPageSnapshot | null>(null)
   const [uploadPath, setUploadPath] = useState('')
-  const [phonePage, setPhonePage] = useState<{ url: string; rewritten: boolean; fromTab?: BrowserTabInfo } | null>(null)
+  // A page on the host's loopback opens through a forward the host makes for this phone, closed with the page.
+  const [phonePage, setPhonePage] = useState<{
+    url: string
+    forward?: { id: string; targetPort: number; expiresAt: number }
+    fromTab?: BrowserTabInfo
+  } | null>(null)
+  const forwardId = phonePage?.forward?.id
+  useEffect(() => {
+    if (!forwardId) return
+    return () => void io.current.invoke(chat.computerId, 'hostBrowser.phoneForwardClose', forwardId).catch(() => {})
+  }, [forwardId, chat.computerId])
   const [panel, setPanel] = useState<'tabs' | 'text' | 'upload' | 'downloads' | 'display' | 'search' | 'keys' | null>(
     null,
   )
@@ -472,7 +484,7 @@ export function BrowserViewer({
     // on the host's localhost stays on the host, where it runs.
     const reachable = computer ? phoneBrowserUrl(url, computer.address) : null
     if ((newTab || !tab) && reachable && new URL(reachable).host === new URL(url).host) {
-      setPhonePage({ url: reachable, rewritten: false })
+      setPhonePage({ url: reachable })
       setNewTab(false)
       setDraft(null)
       return
@@ -539,10 +551,19 @@ export function BrowserViewer({
     openOnPhone: {
       title: t('Open on this phone'),
       icon: Smartphone,
-      onPress: () =>
-        tab &&
-        phoneUrl &&
-        setPhonePage({ url: phoneUrl, rewritten: new URL(phoneUrl).host !== new URL(tab.url).host, fromTab: tab }),
+      onPress: () => {
+        if (!tab || !phoneUrl) return
+        if (!isHostLoopbackPage(tab.url)) return setPhonePage({ url: phoneUrl, fromTab: tab })
+        void act(async () => {
+          const forward = await invoke(chat.computerId, 'hostBrowser.phoneForward', tab.url)
+          const url = computer ? phoneForwardUrl(computer.address, forward.port, forward.openPath) : null
+          if (!url) {
+            void invoke(chat.computerId, 'hostBrowser.phoneForwardClose', forward.id).catch(() => {})
+            throw new Error(t('This phone reaches the host through a tunnel, so the page cannot open here.'))
+          }
+          setPhonePage({ url, forward, fromTab: tab })
+        })
+      },
     },
     readText: {
       title: t('Read page text'),
@@ -597,7 +618,7 @@ export function BrowserViewer({
     return (
       <PhoneBrowser
         url={phonePage.url}
-        rewritten={phonePage.rewritten}
+        forward={phonePage.forward}
         searchTemplate={searchTemplate}
         onClose={() => setPhonePage(null)}
         onOpenOnHost={
@@ -607,9 +628,9 @@ export function BrowserViewer({
                 setPhonePage(null)
                 if (!from || !tabs.some((entry) => entry.id === from.id)) return openHostTab(url)
                 // Back to the tab it came from, as the person's tab: no new tab, and a page that moved on the phone
-                // moves there too (the host's own localhost address again, if the phone had rewritten it).
+                // moves there too (the host's own localhost address again, if the phone went through a forward).
                 const address = new URL(url)
-                if (phonePage.rewritten && address.host === new URL(phonePage.url).host)
+                if (phonePage.forward && address.host === new URL(phonePage.url).host)
                   address.host = new URL(from.url).host
                 selectTab(from.id)
                 void act(async () => {
