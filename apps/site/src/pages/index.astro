@@ -1,6 +1,5 @@
 ---
 import '@/styles/global.css'
-import { Backdrop } from '@/components/backdrop'
 import { Demo } from '@/components/demo'
 import Icon from '@/components/icon.astro'
 import { ProviderLogo } from '@/components/provider-logo'
@@ -132,8 +131,13 @@ const WORK = [
 
     <main>
       <section class="hero" id="top">
-        <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
-        <Backdrop client:idle />
+        <div class="sky" aria-hidden="true">
+          <div class="sky-grid"></div>
+          <div class="sky-beams"></div>
+          <i class="sky-orb"></i>
+          <i class="sky-orb"></i>
+          <div class="sky-grain"></div>
+        </div>
         <a class="pill" href={RELEASES}>
           <span class="pill-dot" aria-hidden="true"></span>
           Free and open source · Alpha

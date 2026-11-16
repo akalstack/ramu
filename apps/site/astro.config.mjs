@@ -3,7 +3,7 @@ import react from '@astrojs/react'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'astro/config'
 
-// Static HTML for every section; only the hero's backdrop and demo hydrate as React islands.
+// Static HTML for every section; only the hero's demo hydrates as a React island.
 export default defineConfig({
   site: 'https://getramu.dev',
   integrations: [react()],
