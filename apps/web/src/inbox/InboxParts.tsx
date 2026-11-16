@@ -21,10 +21,7 @@ import { StatusDot, statusText } from '../workspace/computers'
 /** The Inbox tabs, one look for one host and for many: a line under the active tab and a quiet count pill. */
 export function InboxTabsList({ tabs }: { tabs: { id: InboxTab; label: string; count: number }[] }) {
   return (
-    <TabsList
-      variant="line"
-      className="h-9! w-full justify-start gap-5 overflow-x-auto overflow-y-hidden border-b border-(--line) p-0 [scrollbar-width:none]"
-    >
+    <TabsList variant="line" className="h-9! w-full justify-start gap-5 border-b border-(--line) p-0">
       {tabs.map((entry) => (
         <TabsTrigger key={entry.id} value={entry.id} className="flex-none gap-1.5 px-0.5 text-control">
           {entry.label}
@@ -69,12 +66,9 @@ export function HostNotice({
   onRetry?: () => void
 }) {
   return (
-    <div
-      role="status"
-      className="flex min-h-9 items-center gap-2 rounded-(--radius-m) border border-(--line) px-3 py-1.5 text-caption text-muted-foreground"
-    >
+    <div role="status" className="flex min-h-6 items-center gap-2 text-caption text-muted-foreground">
       <StatusDot status={status} />
-      <span className="font-medium text-soft">{name}</span>
+      <span className="text-soft">{name}</span>
       <span className="min-w-0 flex-1 truncate">
         {failed
           ? t('Some host activity could not be loaded.')

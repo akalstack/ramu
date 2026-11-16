@@ -17,7 +17,6 @@ import { retryThread, stopIdleThreads } from '@ramu/shared/chat/threadActions'
 import { gigabytes } from '@ramu/shared/resources'
 import { Button } from '@/components/desktop-button'
 import { RowButton } from '@/components/row-button'
-import { FeedSection } from '../HomeSection'
 import { timeAgo } from '../Menu'
 import { BriefMarkIcon, TONE_TEXT } from './InboxParts'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -175,11 +174,11 @@ function BriefRowView({
   const look = briefRowLook(row)
   // The row opens its thread; actions beside it finish the step without leaving the Inbox.
   return (
-    <article className="flex flex-col">
-      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 pr-2">
+    <article className="flex flex-col transition-colors hover:bg-hover">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 pr-3">
         <RowButton
           size="lg"
-          className="group min-w-60 flex-1 basis-60"
+          className="group min-w-60 flex-1 basis-60 rounded-none px-3 py-2.5 hover:bg-transparent! focus-visible:bg-hover"
           disabled={!online}
           focusableWhenDisabled
           aria-disabled={!online}
@@ -278,21 +277,19 @@ export function Brief() {
   return (
     <div className="flex flex-col gap-5">
       {rows.length > 0 ? (
-        <FeedSection
-          title={t('Needs you')}
-          count={rows.length}
-          action={
-            finished ? (
-              <span className="text-caption text-muted-foreground" role="status">
-                {t('{0} finished', { 0: finished })}
-              </span>
-            ) : undefined
-          }
-        >
-          {model.waiting.length >= TALLY_MIN_THREADS && (
-            <p className="m-0 text-caption text-muted-foreground">{blockerTallyLine(blockerTally(model.waiting), t)}</p>
+        // The tab already counts these, so the list needs no heading; only facts the count leaves out get a line.
+        <section className="flex flex-col gap-2" aria-label={t('Needs you')}>
+          {(finished > 0 || model.waiting.length >= TALLY_MIN_THREADS) && (
+            <p className="m-0 text-caption text-muted-foreground" role="status">
+              {[
+                model.waiting.length >= TALLY_MIN_THREADS ? blockerTallyLine(blockerTally(model.waiting), t) : '',
+                finished ? t('{0} finished since your last visit.', { 0: finished }) : '',
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
           )}
-          <div className="flex flex-col gap-px rounded-(--radius-m) border border-(--line) bg-card p-1">
+          <div className="flex flex-col divide-y divide-(--line) overflow-hidden rounded-(--radius-m) bg-card">
             {shown.map((row) => {
               const hostId = briefRowHost(row)
               return (
@@ -323,7 +320,7 @@ export function Brief() {
               <ChevronRight size={12} />
             </Button>
           )}
-        </FeedSection>
+        </section>
       ) : (
         <Empty className="py-12">
           <EmptyHeader>

@@ -38,7 +38,7 @@ import type { Chat } from '../runtime/types'
 import { font, radius, space, useTheme } from '../theme'
 import { Group, Nothing } from './InboxParts'
 import { InputRequests } from './InputRequests'
-import { Button, Divider, SectionLabel, T, tap } from './ui'
+import { Button, Divider, T, tap } from './ui'
 
 const MARK: Record<BriefMark, typeof CircleAlert> = {
   failed: CircleAlert,
@@ -257,20 +257,14 @@ export function InboxBrief({ inbox, where }: { inbox: InboxModel; where: (chat: 
     )
   return (
     <View style={{ gap: space.s }}>
-      <SectionLabel
-        right={
-          finished ? (
-            <T size={font.caption} tone="muted">
-              {say('{0} finished', { 0: finished })}
-            </T>
-          ) : undefined
-        }
-      >
-        {`${say('Needs you')} · ${rows.length}`}
-      </SectionLabel>
-      {inbox.waiting.length >= TALLY_MIN_THREADS ? (
-        <T tone="muted" size={font.caption} style={{ paddingHorizontal: space.l }}>
-          {blockerTallyLine(blockerTally(inbox.waiting), say)}
+      {finished || inbox.waiting.length >= TALLY_MIN_THREADS ? (
+        <T tone="muted" size={font.caption} style={{ paddingHorizontal: space.l, paddingTop: space.s }}>
+          {[
+            inbox.waiting.length >= TALLY_MIN_THREADS ? blockerTallyLine(blockerTally(inbox.waiting), say) : '',
+            finished ? say('{0} finished since your last visit.', { 0: finished }) : '',
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </T>
       ) : null}
       <Group>
