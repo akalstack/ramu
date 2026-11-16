@@ -17,7 +17,6 @@ Every change needs scoped tests and typechecks for the packages it touches; desk
 - **Transport:** bounded replay and snapshot recovery for every resource, and defined connection outcomes (current, synchronizing, disconnected, authorization rejected, outcome unknown) that keep drafts and queued messages; non-retriable mutations report an unknown outcome and reconcile. Start from measurements on real networks ([Architecture](contributing/architecture.md#transport)).
 - **Windows:** continue the port on the `windows-port` branch: the server's shell, terminal and path handling, packaging, and a hands-on run in a Windows 11 VM.
 - **Presenting from the phone:** **Present** a deck on a display the phone is connected to (AirPlay or a cable), with speaker notes on the phone ([Artifacts](guide/artifacts.md)).
-- **Browser and computer use:** provider capability negotiation.
 - **Helpers on another host:** `ramu_agent` with a `host` would mirror a helper's events into the parent live; it needs an event channel between hosts.
 - **Site screenshots:** a real capture from a release build beside each step of **From an idea to a live app** (`apps/site`). Claim "anyone can ship an app" only after the non-coder task under [Acceptance](#acceptance) passes with real people, and an improvement over another application only with matched-task evidence.
 
