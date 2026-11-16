@@ -9,17 +9,20 @@ import { cn } from 'cn'
  * it. Only that overlay moves; the tray keeps its size, so what the person is reading stays where it is.
  */
 export function ComposerTray({ className, stack = false, ...props }: ComponentProps<'div'> & { stack?: boolean }) {
-  const [peek, setPeek] = useState(false)
+  // Pointing and focus are tracked apart: after a section is opened and closed, focus stays in the tray, so the stack
+  // stays spread even once the pointer leaves, until the person moves on elsewhere.
+  const [pointed, setPointed] = useState(false)
+  const [focused, setFocused] = useState(false)
   if (!stack) return <div className={cn('composer-tray', className)} {...props} />
   return (
     <div
       className={cn('composer-tray', className)}
-      data-peek={peek || undefined}
-      onPointerEnter={() => setPeek(true)}
-      onPointerLeave={() => setPeek(false)}
-      onFocus={() => setPeek(true)}
+      data-peek={pointed || focused || undefined}
+      onPointerEnter={() => setPointed(true)}
+      onPointerLeave={() => setPointed(false)}
+      onFocus={() => setFocused(true)}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setPeek(false)
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false)
       }}
       {...props}
     />
