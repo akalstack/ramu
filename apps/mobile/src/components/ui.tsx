@@ -98,6 +98,8 @@ export function T({
       : style
   return (
     <Text
+      // iOS dims pressable text under a resting finger, so held or scrolled text would change colour; it stays put.
+      suppressHighlighting
       {...rest}
       onLongPress={copy}
       style={[

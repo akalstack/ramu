@@ -10,7 +10,8 @@ import { fileToolDiffs, fileToolLine } from '@ramu/shared/chat/fileTools'
 import { FileToolCounts } from './FileToolCounts'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/desktop-button'
-import { ChevronRight } from 'lucide-react'
+import { Brain, ChevronRight } from 'lucide-react'
+import { thoughtLine } from '@ramu/shared/chat/thoughtLine'
 import { describeRamuTool, ramuTool } from '@ramu/shared/chat/ramuTools'
 import { toolIsRunning, toolVerb } from '@ramu/shared/chat/toolStatus'
 import { type ToolResult, type ToolUse } from '../types'
@@ -81,8 +82,12 @@ export function ToolGroup({
   })
   const running = status.running > 0
   const primaryTool = status.current ?? (live ? tools.at(-1)! : tools[0]!)
-  const headline =
-    running || live
+  // The live group's newest step may be a thought, so its headline reads what the agent is considering now.
+  const latest = entries.at(-1)
+  const thought = live && !running && latest?.kind === 'thinking' ? latest : undefined
+  const headline = thought
+    ? `${translate('Thinking')} ${thoughtLine(thought.text, true)}`.trim()
+    : running || live
       ? primaryTool.title?.trim() ||
         toolFallbackTitle(primaryTool, running) ||
         describeTools([primaryTool], results, active)
@@ -105,11 +110,15 @@ export function ToolGroup({
               />
             }
           >
-            <ToolIcon
-              tool={primaryTool}
-              content={results.get(primaryTool.toolUseId)?.content}
-              className={TOOL_ICON_CLASS}
-            />
+            {thought ? (
+              <Brain size={14} className={TOOL_ICON_CLASS} />
+            ) : (
+              <ToolIcon
+                tool={primaryTool}
+                content={results.get(primaryTool.toolUseId)?.content}
+                className={TOOL_ICON_CLASS}
+              />
+            )}
             <ActivityText active={running || live} className="tool-group-label truncate text-left">
               {headline}
             </ActivityText>
@@ -127,7 +136,8 @@ export function ToolGroup({
             className={`tool-group-body [&.fade-scroll]:max-h-[320px] [&.fade-scroll]:overflow-x-hidden [&.fade-scroll_>_*]:flex-none [&_.tool]:min-w-0 [&_.tool_>_[data-slot='collapsible-trigger']]:flex [&_.tool_>_[data-slot='collapsible-trigger']]:w-full [&_.tool_>_[data-slot='collapsible-trigger']]:max-w-full [&_.tool_>_[data-slot='collapsible-trigger']]:min-w-0 [&_.tool_>_[data-slot='collapsible-trigger']]:h-auto [&_.tool_>_[data-slot='collapsible-trigger']]:justify-start [&_.tool_>_[data-slot='collapsible-trigger']]:[border:0] [&_.tool_>_[data-slot='collapsible-trigger']]:bg-transparent [&_.tool_>_[data-slot='collapsible-trigger']]:[box-shadow:none] [&_.tool_>_[data-slot='collapsible-trigger']]:whitespace-nowrap [&_.tool_>_[data-slot='collapsible-trigger']:hover]:flex [&_.tool_>_[data-slot='collapsible-trigger']:hover]:w-full [&_.tool_>_[data-slot='collapsible-trigger']:hover]:max-w-full [&_.tool_>_[data-slot='collapsible-trigger']:hover]:min-w-0 [&_.tool_>_[data-slot='collapsible-trigger']:hover]:h-auto [&_.tool_>_[data-slot='collapsible-trigger']:hover]:justify-start [&_.tool_>_[data-slot='collapsible-trigger']:hover]:[border:0] [&_.tool_>_[data-slot='collapsible-trigger']:hover]:bg-transparent [&_.tool_>_[data-slot='collapsible-trigger']:hover]:[box-shadow:none] [&_.tool_>_[data-slot='collapsible-trigger']:hover]:whitespace-nowrap [&_.tool-summary]:flex-initial [&_.tool-summary]:min-w-0 [&_.tool-summary]:overflow-hidden [&_.tool-summary]:text-ellipsis [&_.tool-summary]:whitespace-nowrap [&_.tool_>_[data-slot='collapsible-trigger']_>_.tool-icon]:flex-none [&_.tool_>_[data-slot='collapsible-trigger']_>_.caret]:flex-none flex flex-col m-[2px_0_0] p-0 [border:0] bg-transparent gap-0 [border-radius:0] fade-scroll [--fade-top:0px] [--fade-bottom:0px] [mask-image:linear-gradient(to_bottom,_transparent_0,_#000_var(--fade-top),_#000_calc(100%_-_var(--fade-bottom)),_transparent_100%)] [transition:--fade-top_0.14s_ease-out,_--fade-bottom_0.14s_ease-out] overflow-y-auto`}
           >
             {entries.map((t, index) => {
-              if (t.kind === 'thinking') return <ThinkingRow key={`thinking-${index}`} text={t.text} />
+              if (t.kind === 'thinking')
+                return <ThinkingRow key={`thinking-${index}`} text={t.text} active={t === thought} />
               const r = results.get(t.toolUseId)
               const toolRunning = toolIsRunning(r, active)
               const summary = t.summary.split(`${cwd}/`).join('')

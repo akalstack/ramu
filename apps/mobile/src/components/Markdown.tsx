@@ -221,7 +221,8 @@ function Inline({ text, style, live }: { text: string; style?: TextStyle; live?:
       </UITextView>
     )
   return (
-    <Text style={look} onLongPress={pressBlock && !live ? () => pressBlock(text) : undefined}>
+    // iOS dims pressable text while a finger rests on it, which flickers the reply as it scrolls; it keeps its colour.
+    <Text style={look} suppressHighlighting onLongPress={pressBlock && !live ? () => pressBlock(text) : undefined}>
       {nodes}
     </Text>
   )

@@ -1335,8 +1335,12 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
   }
   const shown = live && !running ? (item.tools.at(-1) ?? current) : current
   const words = shown ? toolWords(shown, language, shown.status === 'in_progress') : null
-  const headline =
-    live || running || failed
+  // The live group's newest step may be a thought, so its headline reads what the agent is considering now.
+  const latest = item.entries.at(-1)
+  const thought = live && !running && latest?.kind === 'thinking' ? latest : undefined
+  const headline = thought
+    ? `${say('Thinking')} ${thoughtLine(thought.text, true)}`.trim()
+    : live || running || failed
       ? `${words?.verb ?? ''} ${words?.subject ?? ''}`.trim()
       : [...counts].map(([verb, count]) => `${verb}${count > 1 ? ` ×${count}` : ''}`).join(' · ')
   // A group of Ramu's own tools wears its mark, as each of its rows does.
@@ -1358,7 +1362,13 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
         }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 32 }}
       >
-        {ramuGroup || shown?.ramu ? <RamuGlyph size={14} color={tint} /> : <Icon size={14} color={tint} />}
+        {thought ? (
+          <Brain size={14} color={tint} />
+        ) : ramuGroup || shown?.ramu ? (
+          <RamuGlyph size={14} color={tint} />
+        ) : (
+          <Icon size={14} color={tint} />
+        )}
         <View style={{ flex: 1, minWidth: 0 }}>
           {/* The headline follows the current tool; each change fades instead of jumping. */}
           <Arrive animate={false} identity={headline}>

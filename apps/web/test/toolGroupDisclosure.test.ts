@@ -93,3 +93,20 @@ it('headlines the latest live step and keeps a failure marker visible while deta
   expect(html).not.toContain('Read earlier file')
   expect(html).toContain('aria-expanded="false"')
 })
+
+it('headlines a live group with its newest thought when the agent is thinking after a call', () => {
+  const html = renderToStaticMarkup(
+    createElement(ToolGroup, {
+      tools: [tool],
+      entries: [tool, { kind: 'thinking', text: 'First idea\n\nCheck the config next' }],
+      results: new Map<string, ToolResult>([
+        ['read', { kind: 'tool-result', toolUseId: 'read', summary: 'ok', isError: false }],
+      ]),
+      cwd: '',
+      active: true,
+      live: true,
+    }),
+  )
+  expect(html).toContain('Thinking Check the config next')
+  expect(html).toContain('lucide-brain')
+})
