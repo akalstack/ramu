@@ -2,6 +2,7 @@ import { expect, it } from 'vitest'
 import {
   blockerTally,
   blockerTallyLine,
+  briefRowLook,
   briefRows,
   buildInbox,
   finishedSince,
@@ -401,4 +402,24 @@ it('asks for pull requests whose next step is the person’s, after requests and
   expect(model.pullRequests.map((entry) => entry.taskId).sort()).toEqual(['merge', 'replies'])
   expect(briefRows(model).map((row) => row.kind)).toEqual(['blocker', 'pull-request', 'pull-request'])
   expect(model.needsYou).toBe(3)
+})
+
+it('marks each Brief row by how serious it is, the same on every device', () => {
+  const pr = (stage: 'conflicts' | 'ready'): InboxChat => ({
+    ...chat('host', stage),
+    pullRequest: { repoId: 'r', number: 1, title: 'Fix', url: 'u', state: 'open', draft: false, stage },
+  })
+  const look = (row: Parameters<typeof briefRowLook>[0]) => briefRowLook(row)
+  expect(look({ kind: 'pull-request', chat: pr('conflicts') })).toEqual({ mark: 'conflicts', tone: 'bad' })
+  expect(look({ kind: 'pull-request', chat: pr('ready') })).toEqual({ mark: 'pull-request', tone: 'warn' })
+  expect(look({ kind: 'failure', chat: chat('host') })).toEqual({ mark: 'failed', tone: 'bad' })
+  expect(look({ kind: 'blocker', chat: chat('host'), blocker: { kind: 'approval', count: 1 } })).toEqual({
+    mark: 'approval',
+    tone: 'warn',
+  })
+  expect(look({ kind: 'blocker', chat: chat('host'), blocker: { kind: 'verification-failed' } })).toEqual({
+    mark: 'goal',
+    tone: 'bad',
+  })
+  expect(look({ kind: 'blocker', chat: chat('host'), blocker: { kind: 'goal-paused' } }).tone).toBe('warn')
 })

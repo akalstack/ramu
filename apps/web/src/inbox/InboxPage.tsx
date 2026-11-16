@@ -3,14 +3,14 @@ import { useInboxModel } from './useBrief'
 import { useHost } from '../workspace/HostProvider'
 import { useComputers } from '../workspace/computers'
 import { HostsInbox } from './HostsInbox'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { useWorkspace } from '../workspace/workspace'
 import { DateTime } from 'luxon'
 import { Inbox, Loader, Newspaper, RefreshCw, Sparkles } from 'lucide-react'
 import type { LibrarySummary } from '@ramu/shared/types'
 import { Button } from '@/components/desktop-button'
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
+import { InboxEmpty, InboxTabsList } from './InboxParts'
 import { t, useLanguage } from '../i18n'
 import { AgentList, recentlyCompleted, rowsOf, useAgentOverview } from '../HomeAgents'
 import { FeedSection } from '../HomeSection'
@@ -22,18 +22,6 @@ import { timeAgo } from '../Menu'
 import { StateDot } from '../sidebar/projects/TaskStateIcon'
 import type { InboxTab } from '@ramu/shared/hostInbox'
 import { saveInboxTab, savedInboxTab } from './navigation'
-
-function Nothing({ icon, title, detail }: { icon: ReactNode; title: string; detail: string }) {
-  return (
-    <Empty className="py-16">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">{icon}</EmptyMedia>
-        <EmptyTitle>{title}</EmptyTitle>
-        <EmptyDescription>{detail}</EmptyDescription>
-      </EmptyHeader>
-    </Empty>
-  )
-}
 
 /** Summaries as sidebar-style rows: headline, then age, or an unread dot. */
 function LearnedList({ summaries }: { summaries: LibrarySummary[] }) {
@@ -73,13 +61,6 @@ function LearnedList({ summaries }: { summaries: LibrarySummary[] }) {
 }
 
 const LEARNED_MAX = 20
-
-const Count = ({ n }: { n: number }) =>
-  n > 0 ? (
-    <span className="min-w-4 rounded-full bg-fill px-1.5 text-[11px] leading-4 text-muted-foreground tabular-nums">
-      {n}
-    </span>
-  ) : null
 
 /**
  * Everything agents, recaps and learning have for you: the Brief of what needs you, what is running, recaps, what
@@ -142,14 +123,7 @@ function CurrentHostInbox() {
           </p>
         )}
         <Tabs value={tab} onValueChange={(value) => choose(value as InboxTab)} className="flex-col gap-5">
-          <TabsList variant="line" className="h-9! w-full justify-start gap-4 border-b border-(--line) p-0">
-            {tabs.map((entry) => (
-              <TabsTrigger key={entry.id} value={entry.id} className="flex-none gap-1.5 px-0.5 text-control">
-                {entry.label}
-                <Count n={entry.count} />
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          <InboxTabsList tabs={tabs} />
 
           <TabsContent value="brief" className="flex flex-col gap-6">
             {tab === 'brief' && <Brief />}
@@ -160,7 +134,7 @@ function CurrentHostInbox() {
               (running.length > 0 ? (
                 <AgentList items={running} />
               ) : (
-                <Nothing
+                <InboxEmpty
                   icon={<Loader />}
                   title={t('No agents running')}
                   detail={t('Threads and sub-agents that are working or waiting on a usage limit appear here.')}
@@ -223,7 +197,7 @@ function CurrentHostInbox() {
                   </FeedSection>
                 )}
                 {!recaps.recent.length && !(recaps.recap?.generating && !recaps.recap.generatedAt) && (
-                  <Nothing
+                  <InboxEmpty
                     icon={<Newspaper />}
                     title={t('No recaps yet')}
                     detail={
@@ -243,7 +217,7 @@ function CurrentHostInbox() {
                 {summaries.length > 0 ? (
                   <LearnedList summaries={summaries} />
                 ) : (
-                  <Nothing
+                  <InboxEmpty
                     icon={<Sparkles />}
                     title={t('No summaries yet')}
                     detail={t('Ramu summarizes the memories and skills it saves from your threads.')}
@@ -268,7 +242,7 @@ function CurrentHostInbox() {
                     )}
                   </p>
                 ) : (
-                  <Nothing
+                  <InboxEmpty
                     icon={<Inbox />}
                     title={t('Nothing finished this week')}
                     detail={t('Threads finished in the last 7 days are listed here. Older ones stay in the sidebar.')}

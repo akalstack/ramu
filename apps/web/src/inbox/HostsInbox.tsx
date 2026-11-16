@@ -8,8 +8,9 @@ import { Button } from '@/components/desktop-button'
 import { HoverCard, HoverCardTrigger } from '@/components/ui/hover-card'
 import { HostProvider } from '../workspace/HostProvider'
 import { ThreadHoverCard } from '../sidebar/projects/ThreadHoverCard'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { statusText } from '../workspace/computers'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
+import { FolderClosed, Inbox, Loader, Newspaper, Sparkles } from 'lucide-react'
+import { HostNotice, InboxEmpty, InboxTabsList } from './InboxParts'
 import { useHostSelection } from '../workspace/HostSelection'
 import { FeedSection } from '../HomeSection'
 import { t, useLanguage } from '../i18n'
@@ -122,21 +123,28 @@ export function HostsInbox() {
       notifyError(errorText(error), t('Recaps'))
     }
   }
+  // The same card as one host's Recaps tab, with the host named beside the project.
   const recaps = (list: typeof model.attention) =>
     list.map(({ computerId, item }) => (
-      <article key={JSON.stringify([computerId, item.id])} className="rounded-(--radius-m) bg-card p-4">
-        <p className="mb-1 text-caption text-muted-foreground">{where(computerId, item.taskId)}</p>
-        <h3 className="text-body font-medium">{item.title}</h3>
-        <p className="my-2 text-body text-muted-foreground">{item.detail}</p>
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={!available(computerId)}
-          onClick={() => select(computerId, { kind: 'task', taskId: item.taskId, sessionId: item.sessionId })}
-        >
-          {t('Open thread')}
-        </Button>
-        <div className="mt-2 flex flex-wrap gap-2">
+      <article
+        key={JSON.stringify([computerId, item.id])}
+        className="flex flex-col gap-1.5 rounded-(--radius-m) bg-card p-4"
+      >
+        <span className="flex items-center gap-1 text-caption text-muted-foreground">
+          <FolderClosed size={12} />
+          {where(computerId, item.taskId)}
+        </span>
+        <h3 className="m-0 text-body font-medium">{item.title}</h3>
+        <p className="m-0 leading-[1.5] text-muted-foreground">{item.detail}</p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={!available(computerId)}
+            onClick={() => select(computerId, { kind: 'task', taskId: item.taskId, sessionId: item.sessionId })}
+          >
+            {t('Open thread')}
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -186,30 +194,22 @@ export function HostsInbox() {
     <div className="flex min-h-0 flex-1 flex-col overflow-auto">
       <div className="mx-auto flex w-full max-w-[760px] flex-col gap-5 px-6 pt-6 pb-10">
         <Tabs value={tab} onValueChange={(value) => choose(value as InboxTab)} className="flex-col gap-5">
-          <TabsList variant="line" className="h-auto flex-wrap justify-start gap-3">
-            {INBOX_TABS.map((id) => (
-              <TabsTrigger key={id} value={id}>
-                {labels[id]}
-                {counts[id] ? ` · ${counts[id]}` : ''}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          <InboxTabsList tabs={INBOX_TABS.map((id) => ({ id, label: labels[id], count: counts[id] }))} />
           <TabsContent value={tab} className="flex flex-col gap-5">
-            {scopedHosts.map((entry) =>
-              !available(entry.id) || entry.error || entry.data?.errors.length ? (
-                <p key={entry.id} role="status" className="text-caption text-muted-foreground">
-                  {pc(entry.id)?.name} ·{' '}
-                  {!available(entry.id)
-                    ? `${statusText(pc(entry.id)!.status)}${entry.data ? ` · ${t('Last known activity')}` : ''}`
-                    : t('Some host activity could not be loaded.')}
-                  {available(entry.id) && (
-                    <Button variant="ghost" size="sm" onClick={() => void entry.refetch()}>
-                      {t('Retry')}
-                    </Button>
-                  )}
-                </p>
-              ) : null,
-            )}
+            {scopedHosts.map((entry) => {
+              const computer = pc(entry.id)
+              if (!computer || (available(entry.id) && !entry.error && !entry.data?.errors.length)) return null
+              return (
+                <HostNotice
+                  key={entry.id}
+                  name={computer.name}
+                  status={computer.status}
+                  stale={!available(entry.id) && !!entry.data}
+                  failed={available(entry.id)}
+                  {...(available(entry.id) ? { onRetry: () => void entry.refetch() } : {})}
+                />
+              )
+            })}
             {pending && (
               <p role="status" className="text-caption text-muted-foreground">
                 {t('Loading…')}
@@ -243,13 +243,43 @@ export function HostsInbox() {
             )}
             {section('completed', t('Completed'), model.completed.length, chats(model.completed))}
             {!pending && tab !== 'brief' && (tab === 'learned' ? !model.summaries.length : !counts[tab]) && (
-              <p className="py-12 text-center text-body text-muted-foreground">{t('Nothing here yet')}</p>
+              <InboxEmpty {...emptyTab(tab)} />
             )}
           </TabsContent>
         </Tabs>
       </div>
     </div>
   )
+}
+
+/** What an empty tab will hold, in the same words one host's Inbox uses. */
+function emptyTab(tab: Exclude<InboxTab, 'brief'>): { icon: React.ReactNode; title: string; detail: string } {
+  switch (tab) {
+    case 'running':
+      return {
+        icon: <Loader />,
+        title: t('No agents running'),
+        detail: t('Threads and sub-agents that are working or waiting on a usage limit appear here.'),
+      }
+    case 'recaps':
+      return {
+        icon: <Newspaper />,
+        title: t('No recaps yet'),
+        detail: t('A daily recap shows what your threads did and what is left.'),
+      }
+    case 'learned':
+      return {
+        icon: <Sparkles />,
+        title: t('No summaries yet'),
+        detail: t('Ramu summarizes the memories and skills it saves from your threads.'),
+      }
+    case 'completed':
+      return {
+        icon: <Inbox />,
+        title: t('Nothing finished this week'),
+        detail: t('Threads finished in the last 7 days are listed here. Older ones stay in the sidebar.'),
+      }
+  }
 }
 
 /** One line saying what a waiting thread needs from the person; empty for a thread that is not waiting. */

@@ -784,7 +784,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'All hosts': 'Semua host',
   'Last known activity': 'Aktivitas terakhir yang diketahui',
   'Some host activity could not be loaded.': 'Sebagian aktivitas host tidak dapat dimuat.',
-  'Nothing here yet': 'Belum ada apa-apa di sini',
+  'Showing last known activity': 'Menampilkan aktivitas terakhir yang diketahui',
   'Open project': 'Buka proyek',
   'Recall past conversations': 'Ingat percakapan sebelumnya',
   'Let agents search earlier threads across providers. Turning this off keeps your history and same-thread recall. Applies when a thread starts or restarts.':

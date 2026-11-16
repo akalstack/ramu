@@ -6,6 +6,7 @@ import {
   blockerTallyLine,
   BRIEF_ROWS,
   briefRowHost,
+  briefRowLook,
   briefRows,
   finishedSince,
   TALLY_MIN_THREADS,
@@ -15,6 +16,10 @@ import {
 import { retryThread, stopIdleThreads } from '@ramu/shared/chat/threadActions'
 import { gigabytes } from '@ramu/shared/resources'
 import { Button } from '@/components/desktop-button'
+import { RowButton } from '@/components/row-button'
+import { FeedSection } from '../HomeSection'
+import { timeAgo } from '../Menu'
+import { BriefMarkIcon, TONE_TEXT } from './InboxParts'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { notifyError } from '../chat/Notifications'
 import { useViewOnly } from '../composer/useViewOnly'
@@ -56,7 +61,8 @@ interface RowContent {
   requestId?: string
   title: string
   detail: string
-  tone?: 'bad' | 'warn'
+  /** When it last changed, for the row's age. */
+  at?: number
 }
 
 function BriefRowView({
@@ -166,26 +172,41 @@ function BriefRowView({
       {expanded ? t('Hide') : t('Answer')}
     </Button>
   ) : null
+  const look = briefRowLook(row)
+  // The row opens its thread; actions beside it finish the step without leaving the Inbox.
   return (
-    <article className="flex flex-col gap-1 rounded-(--radius-s) py-1.5">
-      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-        <div className="min-w-0 flex-1 basis-60">
-          <p className="m-0 truncate text-body text-foreground">{content.title}</p>
-          <p
-            className={`m-0 truncate text-caption ${content.tone === 'bad' ? 'text-bad' : content.tone === 'warn' ? 'text-warn' : 'text-muted-foreground'}`}
-          >
-            {[content.detail, where].filter(Boolean).join(' · ')}
-          </p>
-        </div>
-        <div className="flex flex-none flex-wrap items-center gap-1.5">
-          {actions}
-          <Button variant="ghost" size="xs" disabled={!online} onClick={open}>
-            {t('Open')}
-          </Button>
-        </div>
+    <article className="flex flex-col">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 pr-2">
+        <RowButton
+          size="lg"
+          className="group min-w-60 flex-1 basis-60"
+          disabled={!online}
+          focusableWhenDisabled
+          aria-disabled={!online}
+          title={online ? t('Open') : undefined}
+          onClick={() => online && open()}
+        >
+          <BriefMarkIcon mark={look.mark} tone={look.tone} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-medium text-foreground">{content.title}</span>
+            <span className="block truncate text-caption">
+              <span className={TONE_TEXT[look.tone]}>{content.detail}</span>
+              {where && <span className="text-muted-foreground"> · {where}</span>}
+            </span>
+          </span>
+          {content.at ? (
+            <span className="flex-none text-caption text-muted-foreground tabular-nums">{timeAgo(content.at)}</span>
+          ) : null}
+          <ChevronRight
+            size={14}
+            aria-hidden
+            className="flex-none text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+          />
+        </RowButton>
+        {actions && <div className="flex flex-none flex-wrap items-center gap-1.5">{actions}</div>}
       </div>
       {expanded && request && (
-        <div className="pt-1">
+        <div className="px-2.5 pt-1 pb-2">
           <PendingInput sessionId={request.sessionId} />
         </div>
       )}
@@ -217,22 +238,26 @@ export function Brief() {
         detail: low.idleThreads.length
           ? t('{0} idle threads use {1} GB', { 0: low.idleThreads.length, 1: gigabytes(low.idleBytes) })
           : t('{0} GB free', { 0: gigabytes(low.availableBytes) }),
-        tone: 'warn',
       }
     }
     if (row.kind === 'recap') {
       const { item } = row.recap
-      return { taskId: item.taskId, sessionId: item.sessionId, title: item.title, detail: item.detail }
+      return {
+        taskId: item.taskId,
+        sessionId: item.sessionId,
+        title: item.title,
+        detail: item.detail,
+        at: item.updatedAt,
+      }
     }
     const title = task(row.chat.computerId, row.chat.taskId)?.title ?? ''
-    const base = { taskId: row.chat.taskId, sessionId: row.chat.sessionId, title }
-    if (row.kind === 'failure') return { ...base, detail: t('Failed'), tone: 'bad' }
+    const base = { taskId: row.chat.taskId, sessionId: row.chat.sessionId, title, at: row.chat.lastActiveAt }
+    if (row.kind === 'failure') return { ...base, detail: t('Failed') }
     if (row.kind === 'pull-request') {
       const pr = row.chat.pullRequest!
       return {
         ...base,
         detail: `#${pr.number} · ${stageLabel(pr.stage)}`,
-        tone: pr.stage === 'conflicts' ? 'bad' : 'warn',
       }
     }
     const request = row.chat.inputSummary?.requests[0]
@@ -241,7 +266,6 @@ export function Brief() {
       ...base,
       ...(request ? { sessionId: request.sessionId, requestId: request.requestId } : {}),
       detail: request?.title || blockerLabel(row.blocker),
-      tone: 'warn',
     }
   }
   const refetch = (hostId: string) => () => void hosts.find((entry) => entry.id === hostId)?.refetch()
@@ -254,16 +278,21 @@ export function Brief() {
   return (
     <div className="flex flex-col gap-5">
       {rows.length > 0 ? (
-        <section className="flex flex-col gap-1" aria-label={t('Needs you')}>
-          <p className="m-0 text-caption text-muted-foreground" role="status">
-            {[t('{0} need you', { 0: rows.length }), finished && t('{0} finished', { 0: finished })]
-              .filter(Boolean)
-              .join(' · ')}
-          </p>
+        <FeedSection
+          title={t('Needs you')}
+          count={rows.length}
+          action={
+            finished ? (
+              <span className="text-caption text-muted-foreground" role="status">
+                {t('{0} finished', { 0: finished })}
+              </span>
+            ) : undefined
+          }
+        >
           {model.waiting.length >= TALLY_MIN_THREADS && (
             <p className="m-0 text-caption text-muted-foreground">{blockerTallyLine(blockerTally(model.waiting), t)}</p>
           )}
-          <div className="flex flex-col divide-y divide-(--line)">
+          <div className="flex flex-col gap-px rounded-(--radius-m) border border-(--line) bg-card p-1">
             {shown.map((row) => {
               const hostId = briefRowHost(row)
               return (
@@ -294,7 +323,7 @@ export function Brief() {
               <ChevronRight size={12} />
             </Button>
           )}
-        </section>
+        </FeedSection>
       ) : (
         <Empty className="py-12">
           <EmptyHeader>

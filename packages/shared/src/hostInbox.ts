@@ -341,6 +341,37 @@ export function briefRows(
   return rows.sort((a, b) => briefRank(a) - briefRank(b))
 }
 
+/** How serious a Brief row is, and which mark it carries, so desktop and phone draw the same row the same way. */
+export type BriefTone = 'bad' | 'warn' | 'neutral'
+export type BriefMark =
+  'failed' | 'conflicts' | 'pull-request' | 'approval' | 'question' | 'connector' | 'goal' | 'memory' | 'recap'
+
+export function briefRowLook(row: BriefRow): { mark: BriefMark; tone: BriefTone } {
+  switch (row.kind) {
+    case 'failure':
+      return { mark: 'failed', tone: 'bad' }
+    case 'pull-request':
+      return row.chat.pullRequest?.stage === 'conflicts'
+        ? { mark: 'conflicts', tone: 'bad' }
+        : { mark: 'pull-request', tone: 'warn' }
+    case 'low-memory':
+      return { mark: 'memory', tone: 'warn' }
+    case 'recap':
+      return { mark: 'recap', tone: 'neutral' }
+    case 'blocker':
+      switch (row.blocker.kind) {
+        case 'approval':
+        case 'question':
+        case 'connector':
+          return { mark: row.blocker.kind, tone: 'warn' }
+        case 'verification-failed':
+          return { mark: 'goal', tone: 'bad' }
+        default:
+          return { mark: 'goal', tone: 'warn' }
+      }
+  }
+}
+
 export const briefRowHost = (row: BriefRow) =>
   row.kind === 'recap' ? row.recap.computerId : row.kind === 'low-memory' ? row.memory.computerId : row.chat.computerId
 
