@@ -1074,12 +1074,14 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
   useEffect(() => {
     setPicked(null)
   }, [taskId, view?.id])
+  // A project folder that is not a repository (one holding several) has no branch, so the bar follows a repository:
+  // the one picked or open, else the first, never the folder before it.
+  const gitBindings = taskId ? (ws.bindings[taskId] ?? []).filter((b) => !b.folderOnly) : []
   const repoId =
-    picked ??
-    (view && 'repoId' in view ? view.repoId : undefined) ??
-    (taskId ? ws.bindings[taskId]?.[0]?.repoId : undefined)
-  const candidate = taskId && repoId ? ws.binding(taskId, repoId) : undefined
-  const binding = candidate?.folderOnly ? undefined : candidate
+    [picked, view && 'repoId' in view ? view.repoId : undefined].find(
+      (id) => id && gitBindings.some((b) => b.repoId === id),
+    ) ?? gitBindings[0]?.repoId
+  const binding = taskId && repoId ? ws.binding(taskId, repoId) : undefined
   const call = queryInvokerFor(host)
   const statusQuery = useQuery({
     queryKey: repositoryQueryKey(host, 'git.status', binding),
