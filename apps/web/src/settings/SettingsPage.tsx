@@ -170,7 +170,7 @@ export function SettingsPage({
     >
       <DialogContent
         ref={host}
-        className="settings-page [[data-slot='dialog-content']&]:max-w-[none] [[data-slot='dialog-content']&]:p-0 [[data-slot='dialog-content']&]:gap-0 [&[data-slot='dialog-content']]:w-[min(1000px,_calc(100vw_-_48px))] flex flex-col w-[min(1000px,_100%)] h-[min(780px,_calc(100vh_-_48px))] min-h-0 bg-canvas [border:1px_solid_var(--edge)] rounded-(--radius-xl) [box-shadow:0_24px_80px_rgba(0,0,0,.45)] overflow-hidden"
+        className="settings-page [[data-slot='dialog-content']&]:max-w-[none] [[data-slot='dialog-content']&]:p-0 [[data-slot='dialog-content']&]:gap-0 [&[data-slot='dialog-content']]:w-[min(1200px,_calc(100vw_-_48px))] flex flex-col w-[min(1200px,_100%)] h-[min(880px,_calc(100vh_-_48px))] min-h-0 bg-canvas [border:1px_solid_var(--edge)] rounded-(--radius-xl) [box-shadow:0_24px_80px_rgba(0,0,0,.45)] overflow-hidden"
         showCloseButton={false}
         aria-describedby={undefined}
         initialFocus={() => host.current?.querySelector<HTMLElement>('[aria-current="page"]') ?? true}
@@ -230,7 +230,7 @@ export function SettingsPage({
         )}
         <div className="settings-page-body flex flex-1 min-h-0">
           <nav
-            className="settings-navigation [&_.settings-nav-button]:[border:0] [&_.settings-nav-button]:bg-transparent [&_.settings-nav-button]:text-soft [&_.settings-nav-button]:justify-start [&_.settings-nav-button]:text-left [&_.settings-nav-button]:min-h-8 [&_.settings-nav-button]:p-[0_12px] [&_.settings-nav-button]:rounded-(--radius-s) [&_.settings-nav-button]:text-control [&_.settings-nav-button:not(.on):not(:disabled):hover]:bg-hover [&_.settings-nav-button:not(.on):not(:disabled):hover]:text-foreground [&_.settings-nav-button.on]:text-foreground [&_.settings-nav-button.on]:bg-accent [&_.settings-nav-button.on]:font-medium [&_.settings-nav-button]:flex [&_.settings-nav-button]:items-center [&_.settings-nav-button]:gap-2.5 [&_.settings-nav-button]:whitespace-normal [&_.settings-nav-button]:py-1 [&_.settings-nav-button]:leading-5 [&_.settings-nav-button_svg]:flex-none [&_.settings-nav-button_svg]:text-muted-foreground [&_.settings-nav-button.on_svg]:text-brand flex-none [background:var(--sidebar)] p-[16px_10px] flex flex-col overflow-y-auto gap-0.5 w-[240px]"
+            className="settings-navigation [&_.settings-nav-button]:[border:0] [&_.settings-nav-button]:bg-transparent [&_.settings-nav-button]:text-soft [&_.settings-nav-button]:justify-start [&_.settings-nav-button]:text-left [&_.settings-nav-button]:min-h-8 [&_.settings-nav-button]:p-[0_12px] [&_.settings-nav-button]:rounded-(--radius-s) [&_.settings-nav-button]:text-control [&_.settings-nav-button:not(.on):not(:disabled):hover]:bg-hover [&_.settings-nav-button:not(.on):not(:disabled):hover]:text-foreground [&_.settings-nav-button.on]:text-foreground [&_.settings-nav-button.on]:bg-accent [&_.settings-nav-button.on]:font-medium [&_.settings-nav-button]:flex [&_.settings-nav-button]:items-center [&_.settings-nav-button]:gap-2.5 [&_.settings-nav-button]:whitespace-normal [&_.settings-nav-button]:py-1 [&_.settings-nav-button]:leading-5 [&_.settings-nav-button_svg]:flex-none [&_.settings-nav-button_svg]:text-muted-foreground [&_.settings-nav-button.on_svg]:text-brand flex-none [background:var(--sidebar)] p-[16px_10px] flex flex-col overflow-y-auto gap-0.5 w-[260px]"
             aria-label={t('Settings sections')}
           >
             <SettingsAccountRow disabled={busy || navigationLocked} onOpen={() => onSection('account')} />

@@ -1,66 +1,43 @@
-import { CircleUserRound, Settings } from 'lucide-react'
+import { Settings } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import { formatKeys } from '../commands'
 import { t, useLanguage } from '../i18n'
-import { Menu } from '../Menu'
 import { AccountAvatar, useOwnAccount } from '../settings/AccountProfile'
 import type { SettingsSection } from '../settings/SettingsPage'
 
-const RAIL_BUTTON =
-  'size-9 flex-none justify-center border-transparent bg-transparent p-0 text-muted-foreground hover:bg-hover hover:text-foreground'
-
 /**
- * The foot of the rail: the signed-in account's picture, opening a menu with who it is and the account, above the
- * Settings button. Signed out, only Settings shows, since the account is optional.
+ * The foot of the rail opens Settings in one click. Signed in, it is the account's picture with a small gear on its
+ * corner, so who is signed in stays visible and the account lives at the top of Settings; signed out it is the gear,
+ * since the account is optional.
  */
 export function AccountMenuButton({ onOpen }: { onOpen: (section: SettingsSection) => void }) {
   useLanguage()
   const account = useOwnAccount()
   const user = account?.signedIn ? account.user : null
-  const settingsTitle = `${t('Settings')} (${formatKeys('mod+,')})`
-  const settings = (
+  const keys = formatKeys('mod+,')
+  return (
     <Button
       variant="ghost"
       size="icon-sm"
-      className={`${RAIL_BUTTON} ${user ? '' : 'mt-auto'}`}
+      className="mt-auto size-10 flex-none justify-center border-transparent bg-transparent p-0 text-muted-foreground hover:bg-hover hover:text-foreground"
       aria-label={t('Settings')}
-      title={settingsTitle}
+      title={user ? `${t('Settings')} · ${user.name || user.email} (${keys})` : `${t('Settings')} (${keys})`}
       onClick={() => onOpen('appearance')}
     >
-      <Settings size={18} />
+      {user ? (
+        <span className="relative flex">
+          <AccountAvatar user={user} size={28} />
+          <span
+            aria-hidden="true"
+            data-gear-badge=""
+            className="absolute -right-1 -bottom-1 flex size-3.5 items-center justify-center rounded-full bg-muted text-foreground ring-2 ring-(--sidebar)"
+          >
+            <Settings size={9} strokeWidth={2.5} />
+          </span>
+        </span>
+      ) : (
+        <Settings size={20} />
+      )}
     </Button>
-  )
-  if (!user) return settings
-  return (
-    <>
-      <Menu
-        label={t('Ramu account')}
-        className={`${RAIL_BUTTON} mt-auto aria-expanded:bg-hover`}
-        icon={<AccountAvatar user={user} size={24} />}
-        header={
-          <div className="flex min-w-0 items-center gap-2.5 p-[6px_8px_8px]">
-            <AccountAvatar user={user} size={32} />
-            <div className="flex min-w-0 flex-col">
-              <span className="truncate text-control font-medium text-foreground">{user.name || user.email}</span>
-              {user.name && <span className="truncate text-caption text-muted-foreground">{user.email}</span>}
-            </div>
-          </div>
-        }
-        items={[
-          { key: 'sep', separator: true },
-          {
-            key: 'account',
-            label: (
-              <>
-                <CircleUserRound />
-                {t('Ramu account')}
-              </>
-            ),
-            onSelect: () => onOpen('account'),
-          },
-        ]}
-      />
-      {settings}
-    </>
   )
 }
