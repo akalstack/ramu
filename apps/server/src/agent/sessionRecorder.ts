@@ -3,7 +3,7 @@ import { permissionKey, PermissionApprovals, commandPatterns } from './permissio
 import { goalContinues } from '@ramu/shared/chat/goalHold'
 import { commandDeploy } from '@ramu/shared/deployActions'
 import { isStaleProgress } from '@ramu/shared/chat/agentTasks'
-import { settledTextLength } from '@ramu/shared/chat/settledText'
+import { EMPTY_BLOCK_SCAN, scanBlocks, settledLength, type BlockScan } from '@ramu/shared/chat/settledText'
 import type { AppPreferences, AgentEvent, AgentSessionState, AgentTask } from '@ramu/shared/types'
 import type { MessageDispatcher } from './messageDispatcher'
 import type { GoalManager } from './goalManager'
@@ -14,6 +14,21 @@ import type { SubagentRunner } from './subagentRunner'
 import type { AgentTasks } from './agentTasks'
 import type { AgentService } from '../agent'
 import type { Db } from '../db'
+
+/** A reply's finished blocks go out at most this often. */
+const REPLY_STEP_MS = 400
+/** A reply quiet this long mid-block is sent whole. */
+const REPLY_IDLE_MS = 800
+
+/** A reply still being written: its whole text so far, what of it went out and when. */
+interface HeldReply {
+  event: Extract<AgentEvent, { kind: 'text' }>
+  replaces?: string
+  scan: BlockScan
+  sent: string
+  sentAt: number
+  timer?: NodeJS.Timeout
+}
 
 /** What SessionRecorder needs from the rest of the service. */
 export interface SessionRecorderHost
@@ -42,18 +57,14 @@ export class SessionRecorder {
   private readonly autoBackground = new Map<string, Map<string, NodeJS.Timeout>>()
 
   /**
-   * Replies still being written, by session and message: the whole text so far and how much of it went out. A reply goes
-   * out a whole Markdown block at a time, whatever pieces its provider streams, so every client shows complete
-   * paragraphs, tables and code blocks; the rest goes out once the next block ends or the reply does.
+   * Replies still being written, by session and message. A reply goes out a whole Markdown block at a time, whatever
+   * pieces its provider streams, so every client shows complete paragraphs, list items, tables and code blocks.
    */
-  private readonly unsettled = new Map<
-    string,
-    Map<string, { event: Extract<AgentEvent, { kind: 'text' }>; replaces?: string; sent: number }>
-  >()
+  private readonly unsettled = new Map<string, Map<string, HeldReply>>()
 
   record(id: string, recorded: AgentEvent, replacesMessageId?: string): void {
     if (recorded.kind === 'text' && recorded.messageId) {
-      const held = this.unsettled.get(id) ?? new Map()
+      const held = this.unsettled.get(id) ?? new Map<string, HeldReply>()
       this.unsettled.set(id, held)
       // Another reply from the same agent has begun, so the earlier one is finished.
       for (const [messageId, entry] of held)
@@ -64,23 +75,52 @@ export class SessionRecorder {
         )
           this.releaseText(id, messageId)
       const previous = held.get(recorded.messageId) ?? (replacesMessageId ? held.get(replacesMessageId) : undefined)
+      clearTimeout(previous?.timer)
       if (replacesMessageId) held.delete(replacesMessageId)
-      const sent = previous?.sent ?? 0
-      // A provider that rewrote what it sent (a final message differing from its stream) is scanned from the start.
-      const resume = recorded.text.startsWith(previous?.event.text.slice(0, sent) ?? '') ? sent : 0
-      const settled = Math.max(sent, settledTextLength(recorded.text, resume))
       held.set(recorded.messageId, {
         event: recorded,
         replaces: replacesMessageId ?? previous?.replaces,
-        sent: settled,
+        scan: scanBlocks(previous?.scan ?? EMPTY_BLOCK_SCAN, recorded.text),
+        sent: previous?.sent ?? '',
+        sentAt: previous?.sentAt ?? Number.NEGATIVE_INFINITY,
       })
-      if (settled === sent) return
-      this.persist(id, { ...recorded, text: recorded.text.slice(0, settled) }, replacesMessageId ?? previous?.replaces)
+      this.deliverText(id, recorded.messageId, false)
       return
     }
     // Anything else the agent does (a tool, a question, its result) means the reply before it is complete.
     if (recorded.kind !== 'thinking') this.releaseText(id)
     this.persist(id, recorded, replacesMessageId)
+  }
+
+  /**
+   * Sends a held reply's finished blocks, at most every few hundred milliseconds so a fast stream is not written once
+   * per line. The step that comes due runs on a timer rather than waiting for the provider's next piece, and a reply
+   * that goes quiet mid-block (the agent thinking before a tool) is sent whole, so what it wrote never looks lost.
+   */
+  private deliverText(id: string, messageId: string, idle: boolean): void {
+    const entry = this.unsettled.get(id)?.get(messageId)
+    if (!entry) return
+    clearTimeout(entry.timer)
+    entry.timer = undefined
+    const now = Date.now()
+    const ready = idle ? entry.event.text : entry.event.text.slice(0, settledLength(entry.scan))
+    // What already shows never shrinks; a provider that rewrote its text (not a continuation) replaces it.
+    const fresh = ready !== '' && !entry.sent.startsWith(ready)
+    const waiting = fresh && !idle && now - entry.sentAt < REPLY_STEP_MS
+    if (fresh && !waiting) {
+      this.persist(id, { ...entry.event, text: ready }, entry.replaces)
+      entry.sent = ready
+      entry.sentAt = now
+    }
+    if (entry.sent === entry.event.text) return
+    const timer = setTimeout(
+      () => {
+        if (this.unsettled.get(id)?.get(messageId) === entry) this.deliverText(id, messageId, !waiting)
+      },
+      waiting ? entry.sentAt + REPLY_STEP_MS - now : REPLY_IDLE_MS,
+    )
+    timer.unref?.()
+    entry.timer = timer
   }
 
   /** Sends the rest of a reply held back for its block to end: one message, or every reply of the session. */
@@ -89,8 +129,9 @@ export class SessionRecorder {
     if (!held) return
     for (const [key, entry] of [...held]) {
       if (messageId !== undefined && key !== messageId) continue
+      clearTimeout(entry.timer)
       held.delete(key)
-      if (entry.event.text.length > entry.sent) this.persist(id, entry.event, entry.replaces)
+      if (entry.event.text !== entry.sent) this.persist(id, entry.event, entry.replaces)
     }
     if (!held.size) this.unsettled.delete(id)
   }

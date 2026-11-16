@@ -57,6 +57,8 @@ describe('agent.changes', () => {
 
     // An earlier row edited in place shows up even though its sequence is not new.
     record({ kind: 'text', text: 'draft\n\nfinal\n\n', messageId: 'm1' } as AgentEvent)
+    // Finished blocks go out at most every 400ms, so the second one follows on its own shortly after.
+    await until(() => svc.changes(id, appended.cursor, appended.lastSeq).events.length > 0)
     const edited = svc.changes(id, appended.cursor, appended.lastSeq)
     expect(edited.reset).toBe(false)
     expect(edited.events).toEqual([
@@ -75,6 +77,17 @@ describe('agent.changes', () => {
     expect(reply()).toMatchObject({ text: 'Whole sentence.\n\n' })
     record({ kind: 'tool-use', toolUseId: 'u1', name: 'Read', input: {} } as AgentEvent)
     expect(reply()).toMatchObject({ text: 'Whole sentence.\n\nNext one is hal' })
+  })
+
+  it('sends a reply that goes quiet mid-block whole, and never takes back what showed', async () => {
+    const { svc, id, record } = await start()
+    const reply = () => svc.events(id).find((event) => event.kind === 'text' && event.messageId === 'r2')
+    record({ kind: 'text', text: 'Thinking out lou', messageId: 'r2' } as AgentEvent)
+    expect(reply()).toBeUndefined()
+    await until(() => reply() !== undefined)
+    expect(reply()).toMatchObject({ text: 'Thinking out lou' })
+    record({ kind: 'text', text: 'Thinking out loud.\n\nMore', messageId: 'r2' } as AgentEvent)
+    await until(() => (reply() as { text: string }).text === 'Thinking out loud.\n\nMore')
   })
 
   it('resets for a cursor from the future or a client holding rows that no longer exist', async () => {
