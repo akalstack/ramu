@@ -5,7 +5,12 @@ import { SHARED_MOBILE_FIELDS, isSharedMobileField, planLayerSync, sharedValue }
 
 describe('shared mobile fields', () => {
   it('knows exactly the fields the host will carry, and checks each value against its own field', () => {
-    expect(Object.keys(SHARED_MOBILE_FIELDS)).toEqual(['modelFlow', 'queueWhileBusy', 'modelChangeWarning', 'recentChatMode'])
+    expect(Object.keys(SHARED_MOBILE_FIELDS)).toEqual([
+      'modelFlow',
+      'queueWhileBusy',
+      'modelChangeWarning',
+      'recentChatMode',
+    ])
     expect(isSharedMobileField('queueWhileBusy')).toBe(true)
     expect(isSharedMobileField('toString')).toBe(false)
     expect(isSharedMobileField('appearance')).toBe(false)
