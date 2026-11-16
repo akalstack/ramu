@@ -60,3 +60,7 @@ Auto-update stays off (`APP_AUTO_UPDATE` in `packages/shared/src/updates.ts`) un
 When enabled, **Auto-update Ramu** downloads updates but does not restart automatically. **Restart app** leaves the service and threads running. **Restart app & service** switches to the bundled service, stops agents, and recovers unfinished threads according to the saved recovery setting. A healthy older service is not restarted on app launch.
 
 The service owns macOS keep-awake behavior. First-time login startup enables it once; later choices are preserved. **Plugged in only** is the default power policy. Display and manual sleep remain available.
+
+## Website
+
+getramu.dev is `apps/site`, served as static assets by the `ramu-site` Cloudflare Worker (`apps/site/wrangler.jsonc`). After a change, run `RAMU_PLUGINS_INDEX=<checkout of akalstack/ramu-plugins> pnpm --filter @ramu/site plugins:sync` if the plugin index changed, then `pnpm --filter @ramu/site run deploy`, which builds and uploads it. Cloudflare manages the `getramu.dev` and `www.getramu.dev` records and certificates.
