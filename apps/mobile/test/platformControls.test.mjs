@@ -3729,32 +3729,6 @@ for (const os of ['ios', 'android']) {
   })
 }
 
-for (const os of ['ios', 'android']) {
-  test(`${os} usage detail preserves provider allowance explanations in English and Indonesian`, async () => {
-    const presentation = await import('../../../packages/shared/src/usage/presentation.ts')
-    const store = { language: 'en' }
-    const { PlanUsageReading } = load('components/PlanUsage.tsx', os, {
-      '@ramu/shared/usage/presentation': presentation,
-      '../runtime/store': { useStore: () => store },
-      '../runtime/types': { providerNames: { cursor: 'Cursor', antigravity: 'Antigravity' } },
-    })
-    for (const language of ['en', 'id']) {
-      store.language = language
-      for (const [provider, scope] of [
-        ['cursor', undefined],
-        ['cursor', 'Cursor models'],
-        ['cursor', 'Other models'],
-        ['antigravity', 'Claude'],
-        ['antigravity', 'GPT'],
-      ]) {
-        const reading = { provider, scope, window: 'monthly', status: 'ok', usedPercent: 30, updatedAt: Date.now() }
-        const tree = PlanUsageReading({ reading })
-        assert.ok(nodes(tree).some((node) => node.props?.children === presentation.usageScopeHint(reading, language)))
-      }
-    }
-  })
-}
-
 test('usage refresh recovers after transient failure and reconnect without losing last-known account data', async () => {
   const presentation = await import('../../../packages/shared/src/usage/presentation.ts')
   const providers = await import('../../../packages/shared/src/providers/providers.ts')

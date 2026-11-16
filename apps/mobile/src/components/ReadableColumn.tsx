@@ -1,6 +1,5 @@
-import { useCallback, useState, type ComponentProps, type ReactNode, type Ref } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 import {
-  ScrollView,
   StyleSheet,
   View,
   useWindowDimensions,
@@ -34,25 +33,4 @@ export function useReadableColumn(enabled = true) {
 /** Chrome laid over a page (a docked composer, a selection bar) lined up with the readable column beneath it. */
 export function ReadableColumn({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   return <View style={[{ width: '100%', maxWidth: READABLE_WIDTH, alignSelf: 'center' }, style]}>{children}</View>
-}
-
-/** A vertical ScrollView whose content keeps to the readable column; for pages that need a plain ScrollView. */
-export function ReadableScrollView({
-  ref,
-  onLayout,
-  contentContainerStyle,
-  ...props
-}: ComponentProps<typeof ScrollView> & { ref?: Ref<import('react-native').ScrollViewInstance> }) {
-  const column = useReadableColumn(!props.horizontal)
-  return (
-    <ScrollView
-      {...props}
-      ref={ref}
-      contentContainerStyle={column.contentContainerStyle(contentContainerStyle)}
-      onLayout={(event) => {
-        column.onLayout(event)
-        onLayout?.(event)
-      }}
-    />
-  )
 }
