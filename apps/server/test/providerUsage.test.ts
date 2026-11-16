@@ -185,7 +185,7 @@ it('never runs the macOS security tool to find a login', async () => {
   const calls = execFile.mock.calls.length
   const fetchMock = mockQuotaService()
   expect(await readAntigravityUsage({ GEMINI_HOME: '/nonexistent' })).toEqual([])
-  expect(await readCursorUsage({ CURSOR_CONFIG_DIR: '/nonexistent' })).toEqual([])
+  expect(await readCursorUsage({ CURSOR_CONFIG_DIR: '/nonexistent', RAMU_CURSOR_SDK_DIR: '/nonexistent' })).toEqual([])
   expect(execFile.mock.calls.length).toBe(calls)
   expect(fetchMock).not.toHaveBeenCalled()
 })
