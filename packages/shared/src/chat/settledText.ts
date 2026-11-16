@@ -4,11 +4,14 @@ const FENCE = /^ {0,3}(`{3,}|~{3,})/
  * How much of a reply that is still being written forms whole Markdown blocks: everything up to its last blank line
  * outside a code block, or to the end of a code block that has just closed. A reply is sent a block at a time from
  * here, so a half-written paragraph, table or code block never shows and each block arrives whole.
+ *
+ * `from` is a length this returned earlier for the same reply. A settled point is never inside a code block, so the
+ * scan resumes there and each new piece costs only the unfinished tail, not the whole reply again.
  */
-export function settledTextLength(text: string): number {
-  let settled = 0
+export function settledTextLength(text: string, from = 0): number {
+  let settled = from
   let fence: string | null = null
-  let at = 0
+  let at = from
   while (at < text.length) {
     const end = text.indexOf('\n', at)
     // The last line has not ended yet, so it cannot close a block.

@@ -66,7 +66,9 @@ export class SessionRecorder {
       const previous = held.get(recorded.messageId) ?? (replacesMessageId ? held.get(replacesMessageId) : undefined)
       if (replacesMessageId) held.delete(replacesMessageId)
       const sent = previous?.sent ?? 0
-      const settled = Math.max(sent, settledTextLength(recorded.text))
+      // A provider that rewrote what it sent (a final message differing from its stream) is scanned from the start.
+      const resume = recorded.text.startsWith(previous?.event.text.slice(0, sent) ?? '') ? sent : 0
+      const settled = Math.max(sent, settledTextLength(recorded.text, resume))
       held.set(recorded.messageId, {
         event: recorded,
         replaces: replacesMessageId ?? previous?.replaces,
