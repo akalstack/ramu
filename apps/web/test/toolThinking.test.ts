@@ -17,6 +17,7 @@ it('puts reasoning before, between and after calls inside one tool disclosure in
       kind: 'work',
       block: { kind: 'tools', tools: [call, second] },
       entries: [first.event, call, next.event, second, first.event],
+      first,
     },
   ])
 })
@@ -31,7 +32,7 @@ it('preserves reasoning without tools and keeps messages between tool groups', (
 it('keeps subagent groups intact between work disclosures', () => {
   const agents: ChatBlock[] = []
   expect(groupToolThinking([tools, agents, first])).toEqual([
-    { kind: 'work', block: tools, entries: [call] },
+    { kind: 'work', block: tools, entries: [call], first: tools },
     agents,
     first,
   ])
@@ -44,7 +45,7 @@ it('retains reasoning inside tool groups during work and after completion', () =
   for (const finished of [false, true]) {
     const turn = turnThinking([first, tools, next, message], finished, new Map(), results)
     expect(groupToolThinking(finished ? turn.folded : turn.kept.filter((block) => block !== message))).toEqual([
-      { kind: 'work', block: tools, entries: [first.event, call, next.event] },
+      { kind: 'work', block: tools, entries: [first.event, call, next.event], first },
     ])
   }
 })

@@ -45,7 +45,8 @@ function TranscriptBlock({
 }) {
   const index = blockIndex(b, ctx.blocks)
   const row = useRef<HTMLDivElement>(null)
-  const event = b.kind === 'tools' ? b.tools[0] : b.event
+  // A run arrives with its first entry, which may be a thought that was on screen before the calls joined it.
+  const event = toolEntries?.[0] ?? (b.kind === 'tools' ? b.tools[0] : b.event)
   const { claimArrival } = ctx
   useLayoutEffect(() => {
     if (!event || !claimArrival?.(event) || reducedMotion()) return
@@ -155,9 +156,9 @@ export function TranscriptTurn({
   // A turn is done when the agent reported a result, a later message exists, or nothing is running any more.
   const finished = turn.ended || !isLast || (!working && !needsInput)
   const { folded, kept, answer } = turnThinking(turn.items, finished, ctx.outcomes, ctx.results)
-  const renderBlock = (b: Block, latest = false, toolEntries?: ToolEntry[]) => (
+  const renderBlock = (b: Block, latest = false, toolEntries?: ToolEntry[], first: Block = b) => (
     <TranscriptBlock
-      key={blockIndex(b, blocks)}
+      key={blockIndex(first, blocks)}
       block={b}
       toolEntries={toolEntries}
       ctx={ctx}
@@ -188,7 +189,7 @@ export function TranscriptTurn({
           />
         </TranscriptBlock>
       ) : item.kind === 'work' ? (
-        renderBlock(item.block, false, item.entries)
+        renderBlock(item.block, false, item.entries, item.first)
       ) : (
         renderBlock(item)
       ),

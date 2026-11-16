@@ -51,7 +51,8 @@ export function ThinkingRow({ text, active = false }: { text: string; active?: b
       {/* Full width, so a streaming thought ends in an ellipsis at the column's edge instead of overflowing it. */}
       <CollapsibleTrigger render={<Button variant="ghost" className="w-full min-w-0" />}>
         <Brain size={14} className={TOOL_ICON_CLASS} />
-        <span className={`${TOOL_SUMMARY_CLASS} flex-none`}>
+        {/* Not a tool-summary: a tool group shrinks those, and this label must always read in full. */}
+        <span className="flex-none whitespace-nowrap font-sans text-chat text-inherit">
           {active ? (
             <WorkingText>{translate('Thinking')}</WorkingText>
           ) : took !== null && took >= 1000 ? (
