@@ -5,7 +5,6 @@ Unfinished work only, sorted by what each item needs next. Completed items are r
 | Section | What it holds |
 | --- | --- |
 | [To build](#to-build) | Code to write now; nothing blocks it |
-| [To build after a review](#to-build-after-a-review) | Code that waits on a security review or a comparison run |
 | [Blocked](#blocked) | Waiting on another company's release, a paid account or hardware |
 | [To release](#to-release) | Built; needs signing, publishing or a by-hand install |
 | [Acceptance](#acceptance) | Built; needs a run on a real device, account or second host |
@@ -21,13 +20,9 @@ Every change needs scoped tests and typechecks for the packages it touches; desk
 - **Presenting from the phone:** **Present** a deck on a display the phone is connected to (AirPlay or a cable), with speaker notes on the phone ([Artifacts](guide/artifacts.md)).
 - **Browser and computer use:** provider capability negotiation and more session-import sources.
 - **Helpers on another host:** `ramu_agent` with a `host` would mirror a helper's events into the parent live; it needs an event channel between hosts.
+- **Open on this phone for loopback servers:** a dev server listening only on the host's loopback opens in the phone's private browser through a forward the host opens for that one phone: a fresh port on the address the phone already reaches the host at, accepting only that phone's IP and a one-time cookie set when the viewer opens it, for owner devices only (never viewers), shown with its port in the viewer, and closed when the viewer closes or after 30 minutes. Document those limits in [Security](../SECURITY.md); it replaces the viewer's current explanation that a loopback-only server cannot open on the phone.
+- **Host facts for agents:** `hostThreads.projects` answers with this host's platform and architecture (`darwin`/`linux`/`win32`, `arm64`/`x64`) beside its projects, so `project_list` can recommend a host that can build the task (an iOS build needs a Mac). Nothing else: no free-form host description, hardware or hostnames, since a paired host already gets project descriptions and Git emails and the [host pairing](../SECURITY.md#host-pairing) section must list each new fact.
 - **Site screenshots:** a real capture from a release build beside each step of **From an idea to a live app** (`apps/site`). Claim "anyone can ship an app" only after the non-coder task under [Acceptance](#acceptance) passes with real people, and an improvement over another application only with matched-task evidence.
-
-## To build after a review
-
-- **Open on this phone for loopback servers:** forward one loopback port to one paired phone (expiring, IP-bound, shown with its port); security review first.
-- **Host facts for agents:** `hostThreads.projects` could add each host's platform, architecture and description so an agent can recommend a host; it changes what a paired host learns, so it needs the [host pairing](../SECURITY.md#host-pairing) review.
-- **Bitbucket and Azure DevOps:** decide whether they stay first-party by running one pull request task through Ramu and through their CLIs with a plugin's skill, counting steps, failures and secrets in the transcript ([Plugins](guide/plugins.md)).
 
 ## Blocked
 
