@@ -282,7 +282,13 @@ export default function PullRequestsScreen() {
           />
         </ScrollView>
         {/* Why a host or repository is missing from the list, in one block above it. */}
-        <PullRequestListNotices repos={attention} offline={offline} failed={failedOnline} manyHosts={multi} />
+        <PullRequestListNotices
+          repos={attention}
+          offline={offline}
+          failed={failedOnline}
+          manyHosts={multi}
+          onRetry={(host) => load(host, true)}
+        />
         {rows.length ? (
           <View>
             {filter === 'needs-you' ? <SectionLabel>{say('Waiting on you')}</SectionLabel> : null}

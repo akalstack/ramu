@@ -7,8 +7,8 @@ import { useStore } from '../runtime/store'
 import { showToast } from '../runtime/toast'
 
 /**
- * Tells the person once when a host's provider starts offering a new model, as the desktop does. Seeing the models
- * dismisses it on every device; a notice the host still lists is not shown again on this phone.
+ * Tells the person once when a host's provider starts offering a new model, as the desktop does. Trying it dismisses
+ * it on every device; a notice the host still lists is not shown again on this phone.
  */
 export function ModelNewsToast() {
   const store = useStore()
@@ -29,12 +29,16 @@ export function ModelNewsToast() {
         const say = (text: string, values?: Record<string, string>) =>
           translate(latest.current.store.language, text, values)
         showToast(`${say('New model: {0}', { '0': notice.name })} · ${providerName(notice.provider)}`, {
-          label: 'seeModels',
+          label: 'tryModel',
+          // A new thread on that host, already on the new model, so trying it is one tap.
           run: () => {
             void latest.current.store
               .invoke(hostId, 'models.dismissNews', notice.provider, notice.model)
               .catch(() => {})
-            latest.current.router.push({ pathname: '/settings/[section]', params: { section: 'models' } })
+            latest.current.router.push({
+              pathname: '/new',
+              params: { computer: hostId, provider: notice.provider, model: notice.model },
+            })
           },
         })
       }

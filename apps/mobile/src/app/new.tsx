@@ -28,6 +28,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Keyboard, Platform, Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
+import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
 import {
   Check,
   ChevronDown,
@@ -110,6 +111,9 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
     quote?: string
     computer?: string
     draftContext?: string
+    /** A model to start on, as a "new model" notice's Try it hands over. */
+    provider?: string
+    model?: string
   }>()
   const [selected, setHost] = useState(params.computer ?? store.selected)
   // "Quote in new chat" hands the passage over once: it goes into the box, then leaves the route, so removing it there
@@ -309,6 +313,14 @@ export default function NewChat({ asTab = false }: { asTab?: boolean } = {}) {
       effort: (next.effort || null) as AgentSettings['effort'],
       ...(next.provider !== model.provider ? { accountId: undefined, serviceTier: 'standard' as const } : {}),
     })
+  // A model handed over by a notice is chosen once, then leaves the route like a quote does.
+  useEffect(() => {
+    const provider = AGENT_PROVIDERS.find((entry) => entry === params.provider)
+    if (!provider || !params.model) return
+    chooseModel({ provider, model: params.model, effort: '' })
+    router.setParams({ provider: undefined, model: undefined })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when a model is handed over; the router is stable
+  }, [params.provider, params.model])
   const project = list.find((p) => p.id === projectId)
   const rawId = (id: string) => id.slice(id.indexOf(':') + 1)
   // As on the desktop: a project's open issues can start the thread; its text fills the box, and the thread is linked

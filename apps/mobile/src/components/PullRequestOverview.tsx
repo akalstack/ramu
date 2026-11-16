@@ -8,7 +8,6 @@ import {
   CircleCheck,
   CircleDot,
   CircleX,
-  Ellipsis,
   GitMerge,
   MessageSquare,
   Users,
@@ -294,23 +293,37 @@ export function PullRequestNote({ icon: Icon = WifiOff, children }: { icon?: Luc
 /** How tall the floating action bar is above the safe area, for the page to scroll its last content clear of it. */
 export const ACTION_BAR_SPACE = 48 + space.s * 2
 
+/** The bar's one prominent action. */
+export interface PullRequestBarAction {
+  key: string
+  title: string
+  icon?: LucideIcon
+  onPress: () => void
+  disabled?: boolean
+}
+
 /**
- * The pull request's next step and its other actions, floating in glass over the page as the composer does, so the
- * content scrolls beneath it.
+ * The pull request's next step, floating in glass over the page as the composer does, so the content scrolls beneath
+ * it. A round shortcut beside it opens the thread working on it; every other action is in the header's menu. With
+ * nothing to do here (offline, view only) it says why instead of showing a button that cannot work.
  */
 export function PullRequestActionBar({
   primary,
-  onMore,
+  shortcut,
+  note,
   busy,
 }: {
-  primary: { title: string; onPress: () => void; disabled?: boolean } | null
-  onMore?: () => void
+  primary: PullRequestBarAction | null
+  shortcut?: { icon: LucideIcon; label: string; onPress: () => void } | null
+  note?: { text: string; icon?: LucideIcon } | null
   busy?: boolean
 }) {
   const say = useSay()
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
-  if (!primary && !onMore) return null
+  if (!primary && !shortcut && !note) return null
+  const Shortcut = shortcut?.icon
+  const NoteIcon = note?.icon ?? WifiOff
   return (
     <View
       pointerEvents="box-none"
@@ -327,24 +340,14 @@ export function PullRequestActionBar({
         paddingBottom: Math.max(insets.bottom, space.s),
       }}
     >
-      {primary ? (
-        <GlassButton
-          primary
-          title={busy ? say('Working…') : primary.title}
-          disabled={busy || primary.disabled}
-          onPress={primary.onPress}
-          style={{ flex: 1 }}
-        />
-      ) : (
-        <View style={{ flex: 1 }} pointerEvents="none" />
-      )}
-      {onMore ? (
+      {shortcut && Shortcut ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={say('More actions')}
+          accessibilityLabel={shortcut.label}
+          hitSlop={4}
           onPress={() => {
             tap()
-            onMore()
+            shortcut.onPress()
           }}
         >
           <Glass
@@ -352,10 +355,41 @@ export function PullRequestActionBar({
             interactive
             style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}
           >
-            <Ellipsis size={20} color={c.text} strokeWidth={2} />
+            <Shortcut size={20} color={c.text} strokeWidth={2} />
           </Glass>
         </Pressable>
       ) : null}
+      {primary ? (
+        <GlassButton
+          primary
+          icon={busy ? undefined : primary.icon}
+          title={busy ? say('Working…') : primary.title}
+          disabled={busy || primary.disabled}
+          onPress={primary.onPress}
+          style={{ flex: 1 }}
+        />
+      ) : note ? (
+        <View style={{ flex: 1 }} accessibilityLiveRegion="polite">
+          <Glass
+            radius={radius.full}
+            style={{
+              minHeight: 48,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: space.s,
+              paddingHorizontal: space.l,
+            }}
+          >
+            <NoteIcon size={15} color={c.muted} />
+            <T size={font.control} tone="muted" numberOfLines={2} style={{ flexShrink: 1, textAlign: 'center' }}>
+              {note.text}
+            </T>
+          </Glass>
+        </View>
+      ) : (
+        <View style={{ flex: 1 }} pointerEvents="none" />
+      )}
     </View>
   )
 }

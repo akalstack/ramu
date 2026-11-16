@@ -1100,6 +1100,7 @@ test('new thread with Auto moves to the composer once its host connects after th
     },
   }
   const { default: NewChat } = load('app/new.tsx', 'ios', {
+    '@ramu/shared/providers/providers': { AGENT_PROVIDERS: ['claude-code', 'codex'] },
     react: hooks.react,
     'expo-router': {
       useRouter: () => ({ replace() {}, navigate: (path) => destinations.push(path) }),
@@ -1148,6 +1149,7 @@ test('new thread switches projects and composer in one flow without losing the d
     },
   }
   const { default: NewChat } = load('app/new.tsx', 'ios', {
+    '@ramu/shared/providers/providers': { AGENT_PROVIDERS: ['claude-code', 'codex'] },
     react: hooks.react,
     'expo-router': {
       useRouter: () => ({ replace() {}, navigate: (path) => destinations.push(path) }),
@@ -1244,6 +1246,7 @@ test('a new-thread form keeps its chosen host when the global selection changes'
     },
   }
   const { default: NewChat } = load('app/new.tsx', 'android', {
+    '@ramu/shared/providers/providers': { AGENT_PROVIDERS: ['claude-code', 'codex'] },
     react: {
       memo: (component) => component,
       useRef: (current) => ({ current }),
@@ -1403,6 +1406,7 @@ for (const os of ['ios', 'android']) {
       ],
     }
     const { default: NewChat } = load('app/new.tsx', os, {
+      '@ramu/shared/providers/providers': { AGENT_PROVIDERS: ['claude-code', 'codex'] },
       react: {
         memo: (component) => component,
         useRef: (current) => ({ current }),
@@ -2900,6 +2904,7 @@ for (const os of ['ios', 'android']) {
       },
     }
     const { default: NewChat } = load('app/new.tsx', os, {
+      '@ramu/shared/providers/providers': { AGENT_PROVIDERS: ['claude-code', 'codex'] },
       react: hooks.react,
       'expo-router': {
         useRouter: () => ({ replace() {} }),
@@ -3084,6 +3089,7 @@ for (const os of ['ios', 'android']) {
       },
     }
     const { default: NewChat } = load('app/new.tsx', os, {
+      '@ramu/shared/providers/providers': { AGENT_PROVIDERS: ['claude-code', 'codex'] },
       react: hooks.react,
       'expo-router': { useRouter: () => ({ replace() {} }), useLocalSearchParams: () => ({ project: 'a:p' }) },
       '@ramu/shared/workspaceDefaults': workspaceDefaults,
@@ -3469,6 +3475,7 @@ for (const os of ['ios', 'android']) {
       },
     }
     const { default: NewChat } = load('app/new.tsx', os, {
+      '@ramu/shared/providers/providers': { AGENT_PROVIDERS: ['claude-code', 'codex'] },
       react: hooks.react,
       'expo-router': { useLocalSearchParams: () => ({ project: 'a:p' }), useRouter: () => ({ replace() {} }) },
       '@ramu/shared/workspaceDefaults': workspaceDefaults,
@@ -4249,6 +4256,7 @@ for (const os of ['ios', 'android']) {
       '../i18n': { useT: () => copy },
     })
     const { default: NewChat } = load('app/new.tsx', os, {
+      '@ramu/shared/providers/providers': { AGENT_PROVIDERS: ['claude-code', 'codex'] },
       react: hooks.react,
       'expo-router': {
         useLocalSearchParams: () => ({ project: 'a:p' }),

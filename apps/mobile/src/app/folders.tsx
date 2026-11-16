@@ -6,6 +6,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  CircleAlert,
   Download,
   Folder,
   FolderGit2,
@@ -19,6 +20,7 @@ import type { ForgeRepositorySummary } from '@ramu/shared/types'
 import {
   cloneFolderName,
   cloneProgressText,
+  cloneStartFolder,
   folderCrumbs,
   folderName,
   type CloneStep,
@@ -26,6 +28,7 @@ import {
 } from '@ramu/shared/workspace/hostFolders'
 import { goBackOrHome } from '../runtime/navigation'
 import { finishFolderPick } from '../runtime/folderPick'
+import { childPath, repositoryCloneUrl } from '../runtime/cloneRepository'
 import { Header, Screen, GlassButton, PageScrollView as ScrollView } from '../components/Screen'
 import { useKeyboardInset } from '../components/Keyboard'
 import { Button, Chip, Divider, IconButton, ROW_INSET, Row, SectionLabel, T, tap } from '../components/ui'
@@ -40,6 +43,8 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
  * Add a project from a folder on the selected host: walk its folders (Git repositories are marked), make a new one, or
  * clone a repository here, then add the folder in view with the one button at the bottom. Opened with `purpose=parent`
  * it chooses where a new project's folder goes instead (from `start`, on host `computer`), answering `pickFolder`.
+ * Opened with `clone=owner/repo` (a pull request's repository no project holds) it opens where the host's projects sit
+ * and the button clones that repository into the folder in view.
  */
 export default function HostFolders() {
   const say = useSay()
@@ -48,46 +53,103 @@ export default function HostFolders() {
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
   const keyboard = useKeyboardInset()
-  const params = useLocalSearchParams<{ clone?: string; purpose?: string; start?: string; computer?: string }>()
+  const params = useLocalSearchParams<{
+    clone?: string
+    forge?: string
+    purpose?: string
+    start?: string
+    computer?: string
+  }>()
   const choosingParent = params.purpose === 'parent'
   const computerId = params.computer ?? store.selected
   const host = store.computers.find((x) => x.id === computerId)
-  // Opened from a pull request in a repository no project holds: that repository (`owner/repo`) is the one to clone.
   const wanted = choosingParent ? undefined : params.clone
+  const cloneName = wanted ? cloneFolderName(wanted) : ''
   // Leaving without choosing answers the sheet that asked with no folder.
   useEffect(() => () => void (choosingParent && finishFolderPick(null)), [choosingParent])
-  const [roots, setRoots] = useState<string[]>([])
+  const [roots, setRoots] = useState<string[] | null>(null)
   const [listing, setListing] = useState<HostFolderListing | null>(null)
-  const [error, setError] = useState('')
+  const [error, setError] = useState<{ text: string; retry: () => void } | null>(null)
+  // The folder being opened, shown on its row until the host answers.
+  const [opening, setOpening] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [cloning, setCloning] = useState(false)
+  const [searching, setSearching] = useState(false)
   // The new folder's name while its row is open; null while it is closed.
   const [naming, setNaming] = useState<string | null>(null)
   const crumbBar = useRef<ScrollViewInstance>(null)
+  const browsing = useRef(0)
+  const cloneRun = useClone(computerId)
+  // The repository's clone address is looked up once, while a folder is chosen, so Clone here starts at once.
+  const cloneUrl = useRef<Promise<string> | null>(null)
+  useEffect(() => {
+    if (!wanted) return
+    cloneUrl.current = store
+      .invoke(computerId, 'forge.searchRepositories', wanted)
+      .catch(() => [])
+      .then((found) => repositoryCloneUrl(wanted, found, params.forge))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `store` changes on every update; the address follows the host and repository only
+  }, [computerId, wanted, params.forge])
+  useEffect(() => () => void browsing.current++, [])
+
   const run = async (work: () => Promise<unknown>) => {
     setBusy(true)
+    setError(null)
     try {
       await work()
-      setError('')
     } catch (e) {
-      setError(errorText(e))
+      setError({ text: errorText(e), retry: () => void run(work) })
     } finally {
       setBusy(false)
     }
   }
-  const browse = (path: string) =>
-    run(async () => {
-      setListing(await store.invoke(computerId, 'folders.list', path))
-      setNaming(null)
-    })
+  /** Opens a folder; only the latest one tapped is shown, so a slow earlier answer never replaces it. */
+  const browse = (path: string) => {
+    const mine = ++browsing.current
+    setOpening(path)
+    setError(null)
+    store.invoke(computerId, 'folders.list', path).then(
+      (next) => {
+        if (mine !== browsing.current) return
+        setListing(next)
+        setNaming(null)
+        setOpening(null)
+      },
+      (e: unknown) => {
+        if (mine !== browsing.current) return
+        setOpening(null)
+        setError({ text: errorText(e), retry: () => browse(path) })
+      },
+    )
+  }
+  const open = (path: string) => {
+    tap()
+    browse(path)
+  }
+  const showLocations = () => {
+    browsing.current++
+    setOpening(null)
+    setError(null)
+    setListing(null)
+  }
+  const loadRoots = () => {
+    setError(null)
+    setRoots(null)
+    store.invoke(computerId, 'folders.roots').then(
+      (found) => {
+        setRoots(found)
+        // Where the project would go now opens first; a clone opens where the host's projects sit; one place to
+        // browse needs no choosing.
+        const first =
+          (choosingParent && params.start) ||
+          (wanted ? cloneStartFolder(found) : undefined) ||
+          (found.length === 1 ? found[0] : undefined)
+        if (first) browse(first)
+      },
+      (e: unknown) => setError({ text: errorText(e), retry: loadRoots }),
+    )
+  }
   useEffect(() => {
-    void run(async () => {
-      const found = await store.invoke(computerId, 'folders.roots')
-      setRoots(found)
-      // Where the project would go now opens first; one place to browse needs no choosing.
-      const first = (choosingParent && params.start) || (found.length === 1 ? found[0]! : null)
-      if (first) setListing(await store.invoke(computerId, 'folders.list', first))
-    })
+    loadRoots()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [computerId] by design; the values it reads beyond these are current as of that run
   }, [computerId])
   const addProject = (path: string) =>
@@ -100,22 +162,36 @@ export default function HostFolders() {
     if (!listing || !naming?.trim()) return
     void run(async () => {
       const path = await store.invoke(computerId, 'folders.create', listing.path, naming.trim())
-      setListing(await store.invoke(computerId, 'folders.list', path))
       setNaming(null)
+      browse(path)
     })
   }
-  const crumbs = listing ? folderCrumbs(listing.path, roots) : []
+  const cloneHere = (parent: string) => {
+    if (!wanted || !cloneName || cloneRun.running) return
+    tap()
+    void run(async () => {
+      const url = await (cloneUrl.current ?? repositoryCloneUrl(wanted, [], params.forge))
+      const path = await cloneRun.run(parent, cloneName, url)
+      await store.invoke(computerId, 'folders.addProject', path)
+      await store.refresh(computerId)
+      goBackOrHome(router)
+    })
+  }
+  const crumbs = listing ? folderCrumbs(listing.path, roots ?? []) : []
   const here = listing ? folderName(listing.path) : ''
+  // The repository may already be here; adding that checkout beats cloning it again.
+  const existing = wanted ? listing?.folders.find((folder) => folder.name === cloneName && folder.repo) : undefined
+  const cloning = !!cloneRun.running
+  const working = busy || cloning
 
-  if (cloning && listing)
+  if (searching && listing)
     return (
       <Screen bg="canvas">
         <Header modal title={say('Clone a repository')} subtitle={host?.name} />
         <CloneRepository
           computerId={computerId}
           parent={listing.path}
-          initialQuery={wanted}
-          onBack={() => setCloning(false)}
+          onBack={() => setSearching(false)}
           onCloned={(path) => void addProject(path)}
         />
       </Screen>
@@ -123,10 +199,16 @@ export default function HostFolders() {
 
   return (
     <Screen bg="canvas">
-      <Header modal title={choosingParent ? say('Choose where to put it') : say('Add project')} subtitle={host?.name} />
+      <Header
+        modal
+        title={
+          wanted ? say('Clone {0}', { 0: wanted }) : choosingParent ? say('Choose where to put it') : say('Add project')
+        }
+        subtitle={host?.name}
+      />
       {wanted ? (
         <T size={font.caption} tone="muted" style={{ paddingHorizontal: space.l, paddingTop: space.s }}>
-          {say('Open the folder to clone {0} into, then choose Clone a repository here.', { 0: wanted })}
+          {say('Choose the folder to clone it into.')}
         </T>
       ) : null}
       {/* Where you are, one tap per step back up; Locations returns to the host's starting places. */}
@@ -139,9 +221,9 @@ export default function HostFolders() {
           onContentSizeChange={() => crumbBar.current?.scrollToEnd({ animated: false })}
           contentContainerStyle={{ paddingHorizontal: space.l, paddingVertical: space.s, gap: 4, alignItems: 'center' }}
         >
-          {roots.length > 1 ? (
+          {(roots?.length ?? 0) > 1 ? (
             <>
-              <Chip small icon={HardDrive} label={say('Locations')} onPress={() => setListing(null)} />
+              <Chip small icon={HardDrive} label={say('Locations')} onPress={showLocations} />
               <ChevronRight size={12} color={c.placeholder} />
             </>
           ) : null}
@@ -154,11 +236,12 @@ export default function HostFolders() {
                 selected={index === crumbs.length - 1}
                 maxLabelWidth={160}
                 onPress={() => {
-                  if (index < crumbs.length - 1) void browse(crumb.path)
+                  if (index < crumbs.length - 1) open(crumb.path)
                 }}
               />
             </View>
           ))}
+          {opening ? <ActivityIndicator size="small" color={c.muted} style={{ marginLeft: space.xs }} /> : null}
         </HScroll>
       ) : null}
       <ScrollView
@@ -167,35 +250,67 @@ export default function HostFolders() {
         contentContainerStyle={{ paddingBottom: space.xl }}
       >
         {error ? (
-          <T tone="bad" size={font.control} style={{ paddingHorizontal: space.l, paddingVertical: space.s }}>
-            {error}
-          </T>
+          <View
+            accessibilityLiveRegion="polite"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.s,
+              marginHorizontal: space.l,
+              marginVertical: space.s,
+              paddingLeft: space.m,
+              paddingRight: space.xs,
+              paddingVertical: space.xs,
+              borderRadius: radius.m,
+              backgroundColor: c.badWash,
+            }}
+          >
+            <CircleAlert size={15} color={c.bad} />
+            <T tone="bad" size={font.control} selectable style={{ flex: 1, paddingVertical: space.xs }}>
+              {error.text}
+            </T>
+            <Button kind="ghost" title={say('Try again')} disabled={working} onPress={error.retry} />
+          </View>
         ) : null}
         {!listing ? (
-          <>
-            <SectionLabel>{say('Locations')}</SectionLabel>
-            {roots.map((root, index) => (
-              <View key={root}>
-                {index ? <Divider inset={ROW_INSET} /> : null}
-                <Row onPress={() => void browse(root)}>
-                  <HardDrive size={16} color={c.soft} />
-                  <View style={{ flex: 1 }}>
-                    <T numberOfLines={1}>{folderName(root)}</T>
-                    <T size={font.caption} tone="muted" numberOfLines={1} ellipsizeMode="head">
-                      {root}
-                    </T>
-                  </View>
-                  <ChevronRight size={15} color={c.muted} />
-                </Row>
+          roots === null || (opening && !roots.includes(opening)) ? (
+            error ? null : (
+              <View style={{ alignItems: 'center', gap: space.s, margin: space.xl }}>
+                <PageLoader color={c.accent} />
+                <T size={font.caption} tone="muted">
+                  {say('Loading folders…')}
+                </T>
               </View>
-            ))}
-            {!roots.length && busy ? <PageLoader style={{ margin: space.xl }} color={c.accent} /> : null}
-          </>
+            )
+          ) : (
+            <>
+              <SectionLabel>{say('Locations')}</SectionLabel>
+              {roots.map((root, index) => (
+                <View key={root}>
+                  {index ? <Divider inset={ROW_INSET} /> : null}
+                  <Row onPress={() => open(root)} accessibilityState={{ busy: opening === root }}>
+                    <HardDrive size={16} color={c.soft} />
+                    <View style={{ flex: 1 }}>
+                      <T numberOfLines={1}>{folderName(root)}</T>
+                      <T size={font.caption} tone="muted" numberOfLines={1} ellipsizeMode="head">
+                        {root}
+                      </T>
+                    </View>
+                    {opening === root ? (
+                      <ActivityIndicator size="small" color={c.accent} />
+                    ) : (
+                      <ChevronRight size={15} color={c.muted} />
+                    )}
+                  </Row>
+                </View>
+              ))}
+            </>
+          )
         ) : (
           <>
             {/* Making room for a project comes first: a new folder named in place, or a repository cloned here. */}
             {naming === null ? (
-              <Row onPress={() => setNaming('')} disabled={busy}>
+              <Row onPress={() => setNaming('')} disabled={working}>
                 <FolderPlus size={16} color={c.accent} />
                 <T tone="accent" weight="500" style={{ flex: 1 }}>
                   {say('New folder')}
@@ -237,10 +352,11 @@ export default function HostFolders() {
                 <IconButton icon={X} label={say('Cancel')} size={34} tone="muted" onPress={() => setNaming(null)} />
               </View>
             )}
-            {choosingParent ? null : (
+            {/* A repository asked for by name clones with the button below, with no search for it. */}
+            {choosingParent || wanted ? null : (
               <>
                 <Divider inset={ROW_INSET} />
-                <Row onPress={() => setCloning(true)} disabled={busy}>
+                <Row onPress={() => setSearching(true)} disabled={working}>
                   <Download size={16} color={c.accent} />
                   <T tone="accent" weight="500" style={{ flex: 1 }}>
                     {say('Clone a repository here')}
@@ -253,14 +369,21 @@ export default function HostFolders() {
               <View key={folder.path}>
                 {index ? <Divider inset={ROW_INSET} /> : null}
                 <Row
-                  onPress={() => void browse(folder.path)}
+                  onPress={() => open(folder.path)}
+                  disabled={cloning}
+                  accessibilityState={{ busy: opening === folder.path }}
                   accessibilityLabel={folder.repo ? `${folder.name}, ${say('Git repository')}` : folder.name}
+                  style={opening === folder.path ? { backgroundColor: c.pressed } : undefined}
                 >
                   {folder.repo ? <FolderGit2 size={16} color={c.accent} /> : <Folder size={16} color={c.soft} />}
                   <T style={{ flex: 1 }} numberOfLines={1}>
                     {folder.name}
                   </T>
-                  <ChevronRight size={15} color={c.muted} />
+                  {opening === folder.path ? (
+                    <ActivityIndicator size="small" color={c.accent} />
+                  ) : (
+                    <ChevronRight size={15} color={c.muted} />
+                  )}
                 </Row>
               </View>
             ))}
@@ -272,7 +395,7 @@ export default function HostFolders() {
           </>
         )}
       </ScrollView>
-      {/* The one thing this screen is for, always in reach: add the folder in view. */}
+      {/* The one thing this screen is for, always in reach: add, choose or clone into the folder in view. */}
       {listing ? (
         <View
           style={{
@@ -284,24 +407,92 @@ export default function HostFolders() {
             gap: 6,
           }}
         >
-          <GlassButton
-            primary
-            icon={listing.repo ? FolderGit2 : Folder}
-            title={choosingParent ? say('Put it here') : say('Add {0}', { 0: here })}
-            disabled={busy}
-            onPress={() => {
-              if (!choosingParent) return void addProject(listing.path)
-              finishFolderPick(listing.path)
-              goBackOrHome(router)
-            }}
-          />
+          {cloning ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 48 }}>
+              <ActivityIndicator size="small" color={c.accent} />
+              <T tone="accent" weight="500" numberOfLines={1} style={{ flex: 1 }} accessibilityLiveRegion="polite">
+                {cloneProgressText(cloneRun.progress, say)}
+              </T>
+              <Button kind="secondary" title={say('Cancel clone')} onPress={cloneRun.cancel} />
+            </View>
+          ) : wanted && !existing ? (
+            <GlassButton
+              primary
+              icon={Download}
+              title={say('Clone here')}
+              disabled={working || !!opening || !cloneName}
+              onPress={() => cloneHere(listing.path)}
+            />
+          ) : (
+            <GlassButton
+              primary
+              icon={existing || listing.repo ? FolderGit2 : Folder}
+              title={
+                existing
+                  ? say('Add {0}', { 0: existing.name })
+                  : choosingParent
+                    ? say('Put it here')
+                    : say('Add {0}', { 0: here })
+              }
+              disabled={working || !!opening}
+              onPress={() => {
+                if (existing) return void addProject(existing.path)
+                if (!choosingParent) return void addProject(listing.path)
+                finishFolderPick(listing.path)
+                goBackOrHome(router)
+              }}
+            />
+          )}
           <T size={font.caption} tone="muted" numberOfLines={1} ellipsizeMode="head" style={{ textAlign: 'center' }}>
-            {listing.path}
+            {existing
+              ? say('Already cloned here. Add it as a project.')
+              : wanted
+                ? say('Clones into {0}', { 0: childPath(listing.path, cloneName) })
+                : listing.path}
           </T>
         </View>
       ) : null}
     </Screen>
   )
+}
+
+/** One clone at a time on the host, with its progress as Git reports it and a way to cancel it. */
+function useClone(computerId: string) {
+  const store = useStore()
+  // The URL being cloned and its progress; the id the host knows the clone by, to read progress and cancel it.
+  const [running, setRunning] = useState<string | null>(null)
+  const [progress, setProgress] = useState<CloneStep | null>(null)
+  const active = useRef<string | null>(null)
+  useEffect(() => () => void (active.current = null), [])
+  const run = async (parent: string, name: string, url: string) => {
+    const id = `clone-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+    active.current = id
+    setRunning(url)
+    setProgress(null)
+    const timer = setInterval(
+      () =>
+        void store.invoke(computerId, 'folders.cloneProgress', id).then(
+          (next) => active.current === id && setProgress(next && { phase: next.phase, percent: next.percent }),
+          () => {},
+        ),
+      800,
+    )
+    try {
+      return await store.invoke(computerId, 'folders.clone', parent, name, url, id)
+    } finally {
+      clearInterval(timer)
+      if (active.current === id) {
+        active.current = null
+        setRunning(null)
+        setProgress(null)
+      }
+    }
+  }
+  const cancel = () => {
+    const id = active.current
+    if (id) void store.invoke(computerId, 'folders.cancelClone', id).catch(() => {})
+  }
+  return { running, progress, run, cancel }
 }
 
 /**
@@ -311,30 +502,24 @@ export default function HostFolders() {
 function CloneRepository({
   computerId,
   parent,
-  initialQuery,
   onBack,
   onCloned,
 }: {
   computerId: string
   parent: string
-  initialQuery?: string
   onBack: () => void
   onCloned: (path: string) => void
 }) {
   const say = useSay()
   const store = useStore()
   const { c } = useTheme()
-  const [query, setQuery] = useState(initialQuery ?? '')
+  const [query, setQuery] = useState('')
   const [url, setUrl] = useState('')
   const [results, setResults] = useState<ForgeRepositorySummary[] | null>(null)
   const [searching, setSearching] = useState(false)
   const [error, setError] = useState('')
-  // The URL being cloned, its progress, and the id the host knows the clone by (to read progress and cancel it).
-  const [cloning, setCloning] = useState<string | null>(null)
-  const [progress, setProgress] = useState<CloneStep | null>(null)
-  const active = useRef<string | null>(null)
+  const { running: cloning, progress, run, cancel } = useClone(computerId)
   const request = useRef(0)
-  useEffect(() => () => void (active.current = null), [])
   useEffect(() => {
     // Debounced; a slow older search never replaces a newer one.
     const mine = ++request.current
@@ -364,35 +549,12 @@ function CloneRepository({
     const name = cloneFolderName(cloneUrl)
     if (!name || cloning) return
     tap()
-    const id = `clone-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-    active.current = id
-    setCloning(cloneUrl)
-    setProgress(null)
     setError('')
-    const timer = setInterval(
-      () =>
-        void store.invoke(computerId, 'folders.cloneProgress', id).then(
-          (next) => active.current === id && setProgress(next && { phase: next.phase, percent: next.percent }),
-          () => {},
-        ),
-      800,
-    )
     try {
-      onCloned(await store.invoke(computerId, 'folders.clone', parent, name, cloneUrl, id))
+      onCloned(await run(parent, name, cloneUrl))
     } catch (reason) {
-      if (active.current === id) setError(errorText(reason))
-    } finally {
-      clearInterval(timer)
-      if (active.current === id) {
-        active.current = null
-        setCloning(null)
-        setProgress(null)
-      }
+      setError(errorText(reason))
     }
-  }
-  const cancel = () => {
-    const id = active.current
-    if (id) void store.invoke(computerId, 'folders.cancelClone', id).catch(() => {})
   }
   const status = cloneProgressText(progress, say)
   const field = {

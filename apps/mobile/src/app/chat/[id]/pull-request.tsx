@@ -5,23 +5,35 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PullRequestTimeline } from '../../../components/PullRequestTimeline'
 import { PullRequestFilesList } from '../../../components/PullRequestFilesList'
 import { PullRequestMarkdown } from '../../../components/PullRequestMarkdown'
-import { ActivityIndicator, Alert, Linking, RefreshControl, View, type ScrollViewInstance } from 'react-native'
+import { ActivityIndicator, Alert, Linking, RefreshControl, Share, View, type ScrollViewInstance } from 'react-native'
+import * as Clipboard from 'expo-clipboard'
 import { diffAnchorFile, forgeRepoOf, parseForgeLink, sameForgeRepo } from '@ramu/shared/forgeLinks'
 import { ReferenceContext, type ReferenceActions } from '../../../components/Markdown'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Bot,
   CircleAlert,
+  CircleCheck,
+  Copy,
   ExternalLink,
+  Eye,
   FolderGit2,
   GitFork,
   GitMerge,
   MessageSquare,
   MessagesSquare,
+  PencilLine,
   RefreshCcw,
   RotateCcw,
+  Send,
+  Share as ShareIcon,
   SquareArrowOutUpRight,
+  Tag,
+  UserPlus,
+  Users,
+  Wrench,
   X,
+  type LucideIcon,
 } from 'lucide-react-native'
 import {
   DEFAULT_AGENT_SETTINGS,
@@ -43,6 +55,7 @@ import {
   pullRequestStage,
   matchesPullRequestFile,
   shownReviewThreads,
+  type PullRequestNextStep,
   type ReviewThreadFilter,
 } from '@ramu/shared/pullRequests'
 import { READINESS_ACTION, readinessStep } from '@ramu/shared/pullRequestReadiness'
@@ -51,7 +64,13 @@ import { useChat, useStore } from '../../../runtime/store'
 import { canWriteHost } from '../../../runtime/viewerAccess'
 import { openPullRequestThread } from '../../../runtime/pullRequestThread'
 import { useSay } from '../../../i18n'
-import { Header, HeaderButton, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
+import {
+  Header,
+  HeaderMenu,
+  Screen,
+  PageScrollView as ScrollView,
+  type HeaderMenuAction,
+} from '../../../components/Screen'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { Button, Card, Chip, ConnectionDot, Divider, Pill, Segmented, Sheet, T, Toggle } from '../../../components/ui'
 import { BottomSearch } from '../../../components/BottomSearch'
@@ -59,6 +78,7 @@ import {
   ACTION_BAR_SPACE,
   PullRequestActionBar,
   PullRequestIdentity,
+  type PullRequestBarAction,
   PullRequestNote,
   PullRequestReadinessCard,
   PullRequestWorkRow,
@@ -77,6 +97,28 @@ const METHOD_LABEL: Record<MergeMethod, string> = {
   squash: 'Squash and merge',
   merge: 'Create a merge commit',
   rebase: 'Rebase and merge',
+}
+
+/** The icon each next step leads with in the action bar. */
+const STEP_ICON: Partial<Record<PullRequestNextStep, LucideIcon>> = {
+  merge: GitMerge,
+  'fix-checks': Wrench,
+  'resolve-conflicts': RotateCcw,
+  'update-branch': RotateCcw,
+  'address-comments': MessageSquare,
+  'mark-ready': CircleCheck,
+  review: Bot,
+}
+
+/** One entry of the pull request's menu: the native header menu on iOS, a sheet elsewhere. */
+interface MenuEntry {
+  key: string
+  label: string
+  icon: LucideIcon
+  symbol: HeaderMenuAction['icon']
+  section: 'state' | 'people' | 'link' | 'end'
+  destructive?: boolean
+  run: () => void
 }
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
@@ -429,11 +471,13 @@ export default function PullRequestScreen() {
     }
   }
 
-  /** A repository in no project is cloned on the host and added as one; the folder screen picks where. */
+  /** A repository in no project is cloned on the host and added as one; the folder screen picks where it goes. */
   const cloneAsProject = () => {
     if (!outside) return
     store.select(computerId)
-    router.push({ pathname: '/folders', params: { clone: outside } })
+    // The pull request's own service host, so a clone address the host's account cannot find still points there.
+    const forge = forgeRepoOf(url)?.host
+    router.push({ pathname: '/folders', params: { clone: outside, ...(forge ? { forge } : {}) } })
   }
   /** The Overview's one action, as on the desktop: fixes go to the thread on it, or a new one catches up first. */
   const takeStep = () => {
@@ -519,18 +563,154 @@ export default function PullRequestScreen() {
     [],
   )
 
+  // The bar's one prominent action: finishing the review being written, the next step, cloning a repository no project
+  // holds, then merging or reopening.
+  const stepAction = READINESS_ACTION[step]
+  const primary: PullRequestBarAction | null = !pr
+    ? null
+    : tab === 'files' && canReview
+      ? {
+          key: 'finish-review',
+          icon: Send,
+          title: pending.length ? say('Finish review · {0}', { 0: pending.length }) : say('Finish review'),
+          onPress: () => {
+            setReviewError(null)
+            setFinishing(true)
+          },
+        }
+      : open && canWrite && stepAction
+        ? { key: step, icon: STEP_ICON[step], title: say(stepAction), onPress: takeStep }
+        : open && canWrite && outside
+          ? { key: 'clone', icon: FolderGit2, title: say('Clone as project'), onPress: cloneAsProject }
+          : open && canWrite && !pr.draft
+            ? { key: 'merge', icon: GitMerge, title: say('Merge…'), onPress: () => setMerging(true) }
+            : pr.state === 'closed' && canWrite
+              ? { key: 'reopen', icon: RotateCcw, title: say('Reopen'), onPress: () => void act({ kind: 'reopen' }) }
+              : null
+  // Everything the bar's button is not, so nothing the desktop offers is out of reach; links work offline too.
+  const stateEntries: (MenuEntry | null)[] =
+    pr && open && canWrite
+      ? [
+          primary?.key !== 'merge' && !pr.draft
+            ? {
+                key: 'merge',
+                label: say('Merge…'),
+                icon: GitMerge,
+                symbol: 'arrow.triangle.merge',
+                section: 'state',
+                run: () => setMerging(true),
+              }
+            : null,
+          primary?.key !== 'mark-ready' && pr.draft
+            ? {
+                key: 'ready',
+                label: say('Ready for review'),
+                icon: CircleCheck,
+                symbol: 'checkmark.circle',
+                section: 'state',
+                run: () => void act({ kind: 'ready' }),
+              }
+            : null,
+          primary?.key !== 'update-branch' &&
+          primary?.key !== 'resolve-conflicts' &&
+          (pr.mergeable === 'behind' || (pr.mergeable === 'conflicts' && !outside))
+            ? {
+                key: 'update',
+                label: pr.mergeable === 'conflicts' ? say('Resolve conflicts') : say('Update branch'),
+                icon: RotateCcw,
+                symbol: 'arrow.triangle.2.circlepath',
+                section: 'state',
+                run: () => void updateBranch(),
+              }
+            : null,
+          !pr.draft && supportsPullRequest(service, 'draft')
+            ? {
+                key: 'draft',
+                label: say('Back to draft'),
+                icon: PencilLine,
+                symbol: 'pencil',
+                section: 'state',
+                run: () => void act({ kind: 'draft' }),
+              }
+            : null,
+          ...(['reviewers', 'labels', 'assignees'] as const)
+            .filter((kind) => supportsPullRequest(service, kind))
+            .map((kind): MenuEntry => ({
+              key: kind,
+              label: say(kind === 'reviewers' ? 'Reviewers…' : kind === 'labels' ? 'Labels…' : 'Assignees…'),
+              icon: kind === 'reviewers' ? Users : kind === 'labels' ? Tag : UserPlus,
+              symbol: kind === 'reviewers' ? 'person.2' : kind === 'labels' ? 'tag' : 'person.badge.plus',
+              section: 'people',
+              run: () => {
+                setError(null)
+                setPeople(kind)
+              },
+            })),
+        ]
+      : []
+  const menuEntries: (MenuEntry | null)[] = !pr
+    ? []
+    : [
+        ...stateEntries,
+        {
+          key: 'service',
+          label: say('Open on {0}', { 0: FORGE_NAMES[service] }),
+          icon: ExternalLink,
+          symbol: 'safari',
+          section: 'link',
+          run: () => void Linking.openURL(pr.url).catch(() => {}),
+        },
+        {
+          key: 'copy',
+          label: say('Copy link'),
+          icon: Copy,
+          symbol: 'link',
+          section: 'link',
+          run: () => void Clipboard.setStringAsync(pr.url),
+        },
+        {
+          key: 'share',
+          label: say('Share'),
+          icon: ShareIcon,
+          symbol: 'square.and.arrow.up',
+          section: 'link',
+          run: () => void Share.share({ url: pr.url, message: `${pr.title}\n${pr.url}` }).catch(() => {}),
+        },
+        open && canWrite
+          ? {
+              key: 'close',
+              label: say('Close pull request'),
+              icon: X,
+              symbol: 'xmark.circle',
+              section: 'end',
+              destructive: true,
+              run: () => confirmClose(pr.number),
+            }
+          : null,
+      ]
+  const menu = menuEntries.filter((entry) => entry !== null)
+  const sections = (['state', 'people', 'link', 'end'] as const)
+    .map((section) => menu.filter((entry) => entry.section === section))
+    .filter((entries) => entries.length)
+
   return (
     <Screen bg="canvas">
+      {/* Compact, as the services' phones lead: the number, then the repository and whether the host is in reach. */}
       <Header
         title={pr ? pullRequestRef(service, pr.number) : say('Pull request')}
-        subtitle={pr?.title}
+        subtitle={[outside ?? forgeRepoOf(url)?.repo, online ? null : say('Offline')].filter(Boolean).join(' · ')}
         right={
           pr ? (
-            <HeaderButton
-              icon={ExternalLink}
-              label={say('Open on {0}', { 0: FORGE_NAMES[service] })}
-              systemIcon="safari"
-              onPress={() => void Linking.openURL(pr.url).catch(() => {})}
+            <HeaderMenu
+              label={say('Pull request actions')}
+              onPress={() => setMore(true)}
+              actions={menu.map((entry) => ({
+                label: entry.label,
+                icon: entry.symbol,
+                section: entry.section,
+                destructive: entry.destructive,
+                onPress: entry.run,
+              }))}
             />
           ) : null
         }
@@ -579,9 +759,7 @@ export default function PullRequestScreen() {
                 </View>
               ) : null}
               {!online ? (
-                <PullRequestNote>
-                  {say('Offline · showing what this phone last read. Reconnect to the host to act on it.')}
-                </PullRequestNote>
+                <PullRequestNote>{say('Showing what this phone last read of this pull request.')}</PullRequestNote>
               ) : null}
               {outside && open ? (
                 <PullRequestNote icon={FolderGit2}>
@@ -698,7 +876,7 @@ export default function PullRequestScreen() {
                             onPress: () => void sendThreadsToAgent(thread.taskId),
                           }
                         : null,
-                      outside && canWrite
+                      outside && canWrite && primary?.key !== 'clone'
                         ? {
                             key: 'clone',
                             icon: FolderGit2,
@@ -937,24 +1115,17 @@ export default function PullRequestScreen() {
       {pr ? (
         <PullRequestActionBar
           busy={!!busy}
-          primary={
-            tab === 'files' && canReview
-              ? {
-                  title: pending.length ? say('Finish review · {0}', { 0: pending.length }) : say('Finish review'),
-                  onPress: () => {
-                    setReviewError(null)
-                    setFinishing(true)
-                  },
-                }
-              : open && canWrite && READINESS_ACTION[step]
-                ? { title: say(READINESS_ACTION[step]!), onPress: takeStep }
-                : open && canWrite && !pr.draft
-                  ? { title: say('Merge…'), onPress: () => setMerging(true) }
-                  : pr.state === 'closed' && canWrite
-                    ? { title: say('Reopen'), onPress: () => void act({ kind: 'reopen' }) }
-                    : null
+          primary={primary}
+          shortcut={
+            thread ? { icon: MessagesSquare, label: say('Open thread'), onPress: () => openTask(thread.taskId) } : null
           }
-          onMore={open && canWrite ? () => setMore(true) : undefined}
+          note={
+            !online
+              ? { text: say('Offline · reconnect to act on it') }
+              : !canWrite
+                ? { icon: Eye, text: say('View only') }
+                : null
+          }
         />
       ) : null}
       {commenting ? (
@@ -1035,88 +1206,23 @@ export default function PullRequestScreen() {
       ) : null}
       {pr ? (
         <Sheet open={more} onClose={() => setMore(false)} title={say('Pull request actions')}>
-          {(() => {
-            // What the bar's one button is not, so nothing the desktop offers is out of reach.
-            const later = (work: () => void) => () => {
-              setMore(false)
-              // iOS presents the next sheet only once this one has gone.
-              setTimeout(work, 300)
-            }
-            const options = [
-              step !== 'merge' && !pr.draft
-                ? { key: 'merge', icon: GitMerge, title: say('Merge…'), onPress: later(() => setMerging(true)) }
-                : null,
-              step !== 'mark-ready' && pr.draft
-                ? { key: 'ready', title: say('Ready for review'), onPress: later(() => void act({ kind: 'ready' })) }
-                : null,
-              step !== 'update-branch' &&
-              step !== 'resolve-conflicts' &&
-              (pr.mergeable === 'behind' || (pr.mergeable === 'conflicts' && !outside))
-                ? {
-                    key: 'update',
-                    icon: RotateCcw,
-                    title: pr.mergeable === 'conflicts' ? say('Resolve conflicts') : say('Update branch'),
-                    onPress: later(() => void updateBranch()),
-                  }
-                : null,
-              {
-                key: 'service',
-                icon: ExternalLink,
-                title: say('Open on {0}', { 0: FORGE_NAMES[service] }),
-                onPress: later(() => void Linking.openURL(pr.url).catch(() => {})),
-              },
-            ].filter((option) => option !== null)
-            return (
-              <SheetGroup>
-                {options.map((option) => (
-                  <SheetOption
-                    key={option.key}
-                    icon={'icon' in option ? option.icon : undefined}
-                    title={option.title}
-                    onPress={option.onPress}
-                  />
-                ))}
-              </SheetGroup>
-            )
-          })()}
-          {(['reviewers', 'labels', 'assignees'] as const).some((kind) => supportsPullRequest(service, kind)) ? (
-            <SheetGroup>
-              {(['reviewers', 'labels', 'assignees'] as const)
-                .filter((kind) => supportsPullRequest(service, kind))
-                .map((kind) => (
-                  <SheetOption
-                    key={kind}
-                    title={say(kind === 'reviewers' ? 'Reviewers…' : kind === 'labels' ? 'Labels…' : 'Assignees…')}
-                    onPress={() => {
-                      setMore(false)
-                      setError(null)
-                      // iOS presents the next sheet only once this one has gone.
-                      setTimeout(() => setPeople(kind), 300)
-                    }}
-                  />
-                ))}
+          {sections.map((entries) => (
+            <SheetGroup key={entries[0]!.section}>
+              {entries.map((entry) => (
+                <SheetOption
+                  key={entry.key}
+                  icon={entry.icon}
+                  title={entry.label}
+                  danger={entry.destructive}
+                  onPress={() => {
+                    setMore(false)
+                    // iOS presents the next sheet or alert only once this one has gone.
+                    setTimeout(entry.run, 300)
+                  }}
+                />
+              ))}
             </SheetGroup>
-          ) : null}
-          <SheetGroup>
-            {!pr.draft && supportsPullRequest(service, 'draft') ? (
-              <SheetOption
-                title={say('Back to draft')}
-                onPress={() => {
-                  setMore(false)
-                  void act({ kind: 'draft' })
-                }}
-              />
-            ) : null}
-            <SheetOption
-              icon={X}
-              title={say('Close pull request')}
-              danger
-              onPress={() => {
-                setMore(false)
-                setTimeout(() => confirmClose(pr.number), 300)
-              }}
-            />
-          </SheetGroup>
+          ))}
         </Sheet>
       ) : null}
       {people && pr ? (
