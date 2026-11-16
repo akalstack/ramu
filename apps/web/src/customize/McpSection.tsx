@@ -635,6 +635,7 @@ function ServerDetail({
   return (
     <Dialog
       title={displayName(connection.name)}
+      closable
       confirmLabel={granted ? t('Save') : t('Turn on')}
       confirmDisabled={!canAdminister || !connection.enabled || !tools?.length}
       busy={busy === connection.id}

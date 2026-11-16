@@ -31,8 +31,14 @@ export function useToolSync() {
   const { invoke } = useHost()
   const { on } = useHostRuntime()
   const [status, setStatus] = useState<ToolSyncStatus | null>(null)
+  // One change raises several events; a slower answer to an earlier read must not undo a later one.
+  const latest = useRef(0)
   const load = useCallback(() => {
-    void invoke('toolSync.status').then(setStatus, () => {})
+    const request = ++latest.current
+    void invoke('toolSync.status').then(
+      (next) => request === latest.current && setStatus(next),
+      () => {},
+    )
   }, [invoke])
   useEffect(() => {
     load()
@@ -173,7 +179,13 @@ export function AvailableOn({ toolKey, status }: { toolKey: string; status: Tool
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null)
   const tool = status?.portable[toolKey]
-  const availability = status?.availability[toolKey]
+  // The choice just made shows at once and stays until this host's status says the same, or the save fails.
+  const [chosenNow, setChosenNow] = useState<{ value: ToolAvailability | null } | null>(null)
+  const saved = status?.availability[toolKey]
+  const availability = chosenNow ? (chosenNow.value ?? undefined) : saved
+  useEffect(() => {
+    if (chosenNow && JSON.stringify(chosenNow.value ?? undefined) === JSON.stringify(saved)) setChosenNow(null)
+  }, [chosenNow, saved])
   const connected = other(computers, host.id)
   const connectedKey = connected.map((computer) => computer.id).join(',')
   useEffect(() => {
@@ -209,6 +221,7 @@ export function AvailableOn({ toolKey, status }: { toolKey: string; status: Tool
   const save = async (next: ToolAvailability | null, sendTo: OtherHost[]) => {
     setBusy(true)
     setMessage(null)
+    setChosenNow({ value: next })
     try {
       await host.invoke('toolSync.setAvailability', toolKey, next)
       const needing = sendTo.filter((entry) => entry.state !== 'same' && entry.state !== 'waiting')
@@ -224,6 +237,7 @@ export function AvailableOn({ toolKey, status }: { toolKey: string; status: Tool
         setMessage({ text: t('Sent to {0} for review there.', { 0: sent.join(', ') }) })
       }
     } catch (cause) {
+      setChosenNow(null)
       setMessage({ text: errorText(cause), error: true })
     } finally {
       setBusy(false)
@@ -292,7 +306,9 @@ export function useRemoveElsewhere(toolKey: string, status: ToolSyncStatus | nul
   const computers = useComputers()
   const kept = !!status?.availability[toolKey]
   const offered = !!status?.portable[toolKey] && (kept || other(computers, host.id).length > 0)
-  const [on, setOn] = useState(kept)
+  // Follows whether the tool is kept elsewhere, which may load after the dialog opens, until the person chooses.
+  const [choice, setOn] = useState<boolean | null>(null)
+  const on = choice ?? kept
   return {
     offered,
     on,
