@@ -28,7 +28,7 @@ Use the host's LAN or VPN address, never `localhost`. The host must stay awake a
 - **Hosts:** several hosts connect at once. Each has a switch that turns its connection off and on, keeping its pairing.
 - **Offline:** drafts and an outbox stay on the phone and send in order when the host is back. A send that may or may not have arrived is marked **uncertain** and never retried by itself.
 
-On an iPad or an Android tablet, a thread, settings, forms and their bottom buttons keep to one centered reading column; the tab lists sit under their large titles at full width, as do code, diffs and conflicts; iPad shows the tabs as a sidebar. Screens rotate and follow Split View and resizable windows.
+On an iPad or an Android tablet, a thread, settings, forms and their bottom buttons keep to one centered reading column; the tab lists sit under their large titles at full width, as do code, diffs and conflicts; iPad shows the tabs as a sidebar. On a window at least 900 points wide (an iPad or Android tablet in landscape, a 13-inch iPad either way) an open thread sits beside the thread list: picking another thread swaps it in place, and the open one stays marked. Narrower windows show one screen at a time. Screens rotate and follow Split View and resizable windows.
 
 A viewer pairing can read and answer requests but change nothing. A device's access lapses after 90 days without use.
 

@@ -46,6 +46,8 @@ import {
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../../../theme'
 import { belowHeader } from '../../../components/UndoToast'
+import { ThreadSplit } from '../../../components/SplitPane'
+import { useInDetailPane } from '../../../components/paneContext'
 import { ChatFindBar, FIND_BAR_HEIGHT } from '../../../components/ChatFindBar'
 import { quoteNeedles } from '../../../runtime/textMark'
 import { MAKE_PAGE_PROMPT } from '@ramu/shared/artifacts'
@@ -151,9 +153,18 @@ function keepsSettings(chat: Chat, m: import('../../../components/Composer').Mod
   })
 }
 
+/** On a wide window the thread sits beside the thread list; another thread picked there replaces this one in place. */
 export default function ChatScreen() {
-  const tr = useSay()
   const { id } = useLocalSearchParams<{ id: string }>()
+  return (
+    <ThreadSplit id={id}>
+      <ChatView key={id} id={id} />
+    </ThreadSplit>
+  )
+}
+
+function ChatView({ id }: { id: string }) {
+  const tr = useSay()
   const chat = useChat(id)
   const hostIdentities = useHostIdentities(chat?.computerId)
   const { seeFailure } = useAutomation()
@@ -292,8 +303,10 @@ export default function ChatScreen() {
   }, [keyboard.height])
   const cover = ios ? coverFor(keyboard.height) : 0
   metrics.current.cover = cover
-  // Native scroll-edge chrome overlays the list; UIKit supplies its top inset.
-  const topInset = ios ? insets.top + (Number(Platform.Version) >= 26 ? 54 : 44) : 0
+  // Native scroll-edge chrome overlays the list; UIKit supplies its top inset. Beside the thread list the page draws its
+  // own header above the list instead, as on Android.
+  const inPane = useInDetailPane()
+  const topInset = ios && !inPane ? insets.top + (Number(Platform.Version) >= 26 ? 54 : 44) : 0
   // Where UIKit rests a chat that fits on screen: read from the list while it is short, since the bar's real height can
   // differ from the guess above.
   const measuredRest = useRef<number | null>(null)
@@ -1695,7 +1708,8 @@ export default function ChatScreen() {
                   top={topInset}
                   bottom={composerHeight}
                 />
-                {ios ? null : <TopFade visible={scrolled} color={c.window} />}
+                {/* Beside the thread list the header is part of the page, and a fade from the top would wash it out. */}
+                {ios || inPane ? null : <TopFade visible={scrolled} color={c.window} />}
                 {finding ? (
                   <ChatFindBar
                     rows={pageRows}
@@ -2110,7 +2124,12 @@ export default function ChatScreen() {
         ) : null}
         <Presence
           visible={Boolean(toast)}
-          style={{ position: 'absolute', left: space.l, right: space.l, top: belowHeader(insets.top) }}
+          style={{
+            position: 'absolute',
+            left: space.l,
+            right: space.l,
+            top: inPane ? insets.top + 56 + space.s * 3 : belowHeader(insets.top),
+          }}
         >
           <View pointerEvents="none">
             <Glass

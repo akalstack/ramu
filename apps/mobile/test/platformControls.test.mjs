@@ -109,6 +109,8 @@ function load(file, os, overrides = {}, globals = {}) {
       ReadableColumn: 'ReadableColumn',
       ReadableScrollView: 'ScrollView',
     },
+    // A phone: no list beside the thread, so rows push the thread and headers stay native.
+    './paneContext': { useThreadPicker: () => null, useInDetailPane: () => false },
     './transcript': mobileTranscript,
     './chatViewport': chatViewport,
     './transcriptChanges': transcriptChanges,

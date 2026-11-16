@@ -36,6 +36,7 @@ import { Glass, floatingChrome } from './Glass'
 import { Button, IconButton, T, tap, type Icon } from './ui'
 import { useReadableColumn } from './ReadableColumn'
 import { useSay } from '../i18n'
+import { useInDetailPane } from './paneContext'
 
 const BAR = 44
 // ScrollViewMarker is a react-native-screens "gamma" view: its native side is only compiled when pods are
@@ -242,6 +243,8 @@ export function Header({
   const insets = useSafeAreaInsets()
   const { c } = useTheme()
   const headerSurface = (scrolled ?? (large ? collapsed : false)) ? c.raised2 : c.window
+  // Beside the thread list the native bar would span both panes, so the page draws its own and the list holds Back.
+  const inPane = useInDetailPane()
   const { width } = useWindowDimensions()
   // Centered between the back button and up to two trailing items (one glass capsule).
   const titleWidth = Math.max(120, Math.min(220, width - 220))
@@ -319,7 +322,7 @@ export function Header({
       ]
     })
   // Keep the native bar and native back button. The title is a leading toolbar item, not UIKit's centered titleView.
-  if (Platform.OS === 'ios' && align !== 'center' && (!large || subtitle)) {
+  if (!inPane && Platform.OS === 'ios' && align !== 'center' && (!large || subtitle)) {
     const count = (children: ReactNode): number =>
       Children.toArray(children).reduce<number>((total, child) => {
         if (!isValidElement(child)) return total
@@ -399,7 +402,7 @@ export function Header({
       </>
     )
   }
-  if (Platform.OS === 'android') {
+  if (!inPane && Platform.OS === 'android') {
     return (
       <Stack.Screen
         options={{
@@ -446,7 +449,7 @@ export function Header({
       />
     )
   }
-  if (Platform.OS === 'ios') {
+  if (!inPane && Platform.OS === 'ios') {
     // iOS 26 large titles require a transparent native bar; their scroll view supplies the native edge treatment.
     const underlap = !!large || scrollEdge
     const background =
@@ -528,7 +531,7 @@ export function Header({
   }
   const leading =
     left ??
-    (back ? (
+    (back && !inPane ? (
       <HeaderButton
         icon={modal ? X : ChevronLeft}
         label={modal ? say('Close') : say('Back')}
@@ -537,6 +540,7 @@ export function Header({
     ) : null)
   return (
     <View style={{ paddingTop: insets.top + space.s, paddingBottom: space.s }}>
+      {inPane ? <Stack.Screen options={{ headerShown: false }} /> : null}
       <View
         style={{ minHeight: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.l, gap: space.s }}
       >

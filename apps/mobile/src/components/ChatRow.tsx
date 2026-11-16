@@ -36,6 +36,7 @@ import { useStore } from '../runtime/store'
 import { threadSelection, useThreadSelection } from '../runtime/threadSelection'
 import { PULL_REQUEST_STAGE_LABEL, PULL_REQUEST_STAGE_TONE } from '@ramu/shared/pullRequests'
 import { PullRequestGlyph } from './PullRequestParts'
+import { useThreadPicker } from './paneContext'
 
 /** Statuses where the thread waits on the person. */
 const WAITING = new Set(['approval', 'input', 'blocked', 'turn-limit'])
@@ -99,6 +100,9 @@ export const ChatRow = memo(function ChatRow({
       )
   const online = store.isOnline(chat.computerId)
   const selection = useThreadSelection()
+  // Beside an open thread, a row opens its thread in place of that one, and the open thread's row stays marked.
+  const picker = useThreadPicker()
+  const open = picker?.openId === chat.id
   const selecting = !!selectable && selection.on && !chat.pending
   const picked = selecting && selection.ids.has(chat.id)
   const [shortKey, fullKey] = status ? SHORT[status.kind] : []
@@ -175,12 +179,16 @@ export const ChatRow = memo(function ChatRow({
                 }
           }
           onPress={() => {
+            if (picker && !selecting) return picker.open(chat.id)
             if (!selecting) return router.push({ pathname: '/chat/[id]', params: { id: chat.id } })
             tap()
             threadSelection.toggle(chat.id)
           }}
-          accessibilityState={selecting ? { selected: picked } : undefined}
-          style={{ alignItems: detail ? 'flex-start' : 'center', paddingVertical: 10 }}
+          accessibilityState={selecting ? { selected: picked } : open ? { selected: true } : undefined}
+          style={[
+            { alignItems: detail ? 'flex-start' : 'center', paddingVertical: 10 },
+            open ? { backgroundColor: c.accentSoft } : null,
+          ]}
           accessibilityLabel={[
             chat.title,
             fullKey ? strings[fullKey] : chat.pending ? state?.text : null,
