@@ -114,10 +114,14 @@ a {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: color-mix(in srgb, var(--window) 72%, transparent);
-  backdrop-filter: blur(24px) saturate(1.6);
-  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  background: color-mix(in srgb, var(--window) 70%, transparent);
+  /* The build merges a -webkit- copy in the same rule and drops this one, so older Safari's copy sits below. */
+  backdrop-filter: blur(16px) saturate(1.5);
   border-bottom: 1px solid var(--line);
+}
+/* Safari before 18 reads only the prefixed property. */
+header.nav {
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
 }
 .nav-inner {
   display: flex;
@@ -1311,8 +1315,19 @@ main > section {
 
 /* Marquee ------------------------------------------------------- */
 
-.marquee {
+main > .services {
+  max-width: none;
   margin-top: clamp(80px, 10vw, 120px);
+  padding: 0;
+}
+.services-title {
+  margin: 0 auto 18px;
+  padding: 0 var(--pad);
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+.marquee {
   overflow: hidden;
   position: relative;
   border-block: 1px solid var(--line);
@@ -1335,20 +1350,46 @@ main > section {
   right: 0;
   background: linear-gradient(-90deg, var(--window), transparent);
 }
+/* The trailing padding matches the gap, so shifting by half the doubled list loops without a jump. */
 .marquee-track {
   display: flex;
+  align-items: center;
   gap: 56px;
   width: max-content;
-  padding: 20px 0;
+  padding: 20px 56px 20px 0;
   will-change: transform;
-  animation: scroll 40s linear infinite;
+  animation: scroll 50s linear infinite;
 }
-.marquee-track span {
-  font-family: var(--display);
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--muted);
+.marquee:hover .marquee-track {
+  animation-play-state: paused;
+}
+.service {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   white-space: nowrap;
+}
+.service img {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  opacity: 0.9;
+}
+.service span {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.service b {
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--soft);
+}
+.service small {
+  font-size: 11.5px;
+  color: var(--muted);
 }
 @keyframes scroll {
   to {

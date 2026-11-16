@@ -4,7 +4,7 @@ import { Demo } from '@/components/demo'
 import Icon from '@/components/icon.astro'
 import { ProviderLogo } from '@/components/provider-logo'
 import { LinkButton } from '@/components/site-button'
-import { AKALSTACK, MOBILE_SETUP, PROVIDERS, RELEASES, REPO } from '@/lib/site'
+import { AKALSTACK, MOBILE_SETUP, PROVIDERS, RELEASES, REPO, SERVICES } from '@/lib/site'
 
 const title = 'Ramu — Describe it. Ramu ships it.'
 const description =
@@ -48,8 +48,6 @@ const SAFELY = [
   'The thread hears how its push went from your Git host’s checks',
   'Uptime is watched, and an outage opens an incident thread',
 ]
-
-const PLATFORMS = ['Vercel', 'Netlify', 'Railway', 'Fly.io', 'Cloudflare', 'Supabase', 'GitHub', 'GitLab', 'Bitbucket', 'Azure DevOps', 'Expo']
 
 const WHY = [
   {
@@ -168,11 +166,25 @@ const WORK = [
         <Demo client:load />
       </section>
 
-      <div class="marquee" aria-label={`Works with ${PLATFORMS.join(', ')}`}>
-        <div class="marquee-track" aria-hidden="true">
-          {[...PLATFORMS, ...PLATFORMS].map((name) => <span>{name}</span>)}
+      <section class="services" aria-labelledby="services-title">
+        <p id="services-title" class="services-title">Ships to your hosting accounts. Works with your Git host.</p>
+        <ul class="sr-only">{SERVICES.map((svc) => <li>{svc.name}: {svc.role}</li>)}</ul>
+        <div class="marquee" aria-hidden="true">
+          <div class="marquee-track">
+            {
+              [...SERVICES, ...SERVICES].map((svc) => (
+                <span class="service">
+                  <img src={svc.logo} alt="" width="22" height="22" />
+                  <span>
+                    <b>{svc.name}</b>
+                    <small>{svc.role}</small>
+                  </span>
+                </span>
+              ))
+            }
+          </div>
         </div>
-      </div>
+      </section>
 
       <section class="section" id="why">
         <div class="section-head center reveal">
