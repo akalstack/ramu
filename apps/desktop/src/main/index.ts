@@ -399,7 +399,8 @@ async function main() {
     [join(import.meta.dirname, '../../assets/icon.png'), join(import.meta.dirname, '../../../../assets/icon.png')].find(
       (path) => existsSync(path),
     ) ?? ''
-  // In development the dock icon comes from the patched Electron.app (scripts/dev-icon.mjs), so the glass icon is not replaced by a flat PNG.
+  // Development runs the stock Electron.app, whose dock icon is Electron's; packaged builds keep the bundle's glass icon.
+  if (icon && !app.isPackaged) app.dock?.setIcon(icon)
 
   const win = new BrowserWindow({
     ...(icon ? { icon } : {}),

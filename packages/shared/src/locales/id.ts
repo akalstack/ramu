@@ -1161,7 +1161,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Check for Updates…': 'Periksa pembaruan…',
   'Settings…': 'Pengaturan…',
   Reset: 'Atur ulang',
-  'Put back the default': 'Kembalikan nilai bawaan',
   'Reset layout sizes?': 'Atur ulang ukuran tata letak?',
   'Restore default model sets?': 'Pulihkan set model bawaan?',
   'Reset this section to defaults?': 'Atur ulang bagian ini ke bawaan?',

@@ -337,24 +337,13 @@ export function HostNotice({ host, name, children }: { host: Host; name?: string
   )
 }
 
-/**
- * Under a changed row: a dot, the thread whose agent changed it (which opens that thread), and Reset when it differs
- * from the default the host advertises.
- */
-function ChangeLine({
-  mark,
-  computerId,
-  onReset,
-}: {
-  mark?: AgentSettingMark
-  computerId: string
-  onReset?: () => void
-}) {
+/** Under a row an agent changed: a dot and the thread whose agent changed it, which opens that thread. */
+function ChangeLine({ mark, computerId }: { mark?: AgentSettingMark; computerId: string }) {
   const say = useSay()
   const { c } = useTheme()
   const store = useStore()
   const router = useRouter()
-  if (!mark && !onReset) return null
+  if (!mark) return null
   return (
     <View
       style={{
@@ -367,31 +356,17 @@ function ChangeLine({
       }}
     >
       <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: c.accent }} />
-      {mark ? (
-        <Pressable
-          accessibilityRole="link"
-          style={{ flexShrink: 1 }}
-          onPress={() =>
-            router.push({ pathname: '/chat/[id]', params: { id: store.resolveChat(computerId, mark.taskId) } })
-          }
-        >
-          <T size={font.caption} tone="muted" numberOfLines={1}>
-            {say('Changed by an agent in {0}', { '0': mark.thread })}
-          </T>
-        </Pressable>
-      ) : null}
-      {onReset ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={say('Put back the default')}
-          hitSlop={space.s}
-          onPress={onReset}
-        >
-          <T size={font.caption} tone="accent" weight="500">
-            {say('Reset')}
-          </T>
-        </Pressable>
-      ) : null}
+      <Pressable
+        accessibilityRole="link"
+        style={{ flexShrink: 1 }}
+        onPress={() =>
+          router.push({ pathname: '/chat/[id]', params: { id: store.resolveChat(computerId, mark.taskId) } })
+        }
+      >
+        <T size={font.caption} tone="muted" numberOfLines={1}>
+          {say('Changed by an agent in {0}', { '0': mark.thread })}
+        </T>
+      </Pressable>
     </View>
   )
 }
@@ -399,25 +374,18 @@ function ChangeLine({
 /** A page's groups of computer-side rows, each row with its change line. */
 function rowGroups(groups: RowGroup[], host: Host, locked: boolean, language: Language) {
   if (host.state.status !== 'ready') return null
-  const { settings, marks } = host.state
+  const { marks } = host.state
   return groups.map((group) => (
     <View key={group.title ?? 'rows'}>
       {group.title ? <SectionLabel>{translate(language, group.title)}</SectionLabel> : null}
       <Card style={{ marginHorizontal: space.l }}>
-        {group.rows.map((row, index) => {
-          const reset = locked ? [] : rowDefaultEdits([row], settings, host.read)
-          return (
-            <View key={row.path}>
-              {index ? <Divider inset={space.l} /> : null}
-              <HostRow row={row} host={host} disabled={locked} />
-              <ChangeLine
-                mark={marks.find((entry) => entry.path === row.path)}
-                computerId={host.computerId}
-                onReset={reset.length ? () => host.setAll(reset) : undefined}
-              />
-            </View>
-          )
-        })}
+        {group.rows.map((row, index) => (
+          <View key={row.path}>
+            {index ? <Divider inset={space.l} /> : null}
+            <HostRow row={row} host={host} disabled={locked} />
+            <ChangeLine mark={marks.find((entry) => entry.path === row.path)} computerId={host.computerId} />
+          </View>
+        ))}
       </Card>
     </View>
   ))

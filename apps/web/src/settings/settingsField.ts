@@ -18,12 +18,3 @@ export const SettingsThreadContext = createContext<{
   open: (taskId: string) => void
   has: (taskId: string) => boolean
 } | null>(null)
-
-/**
- * Whether a row's draft value differs from the default its host advertises, and putting that default back into the
- * draft. Absent outside the Settings panel.
- */
-export const SettingsDefaultsContext = createContext<{
-  changed: (path: string) => boolean
-  reset: (path: string) => void
-} | null>(null)

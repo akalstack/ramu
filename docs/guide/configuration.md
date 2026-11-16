@@ -10,7 +10,7 @@ The host keeps its settings in `settings.json` in its data folder, beside `ramu.
 
 ### Defaults and Advanced
 
-In Settings, on the desktop and the phone, a row whose value differs from its default shows a dot and its own **Reset**, which puts the default back. The reset button at the foot of a page asks, then puts back every row on that page. Rows few people change, such as how long archived threads and unused memories are kept, sit under a closed **Advanced** fold; searching for one opens it.
+In Settings, on the desktop and the phone, the reset button at the foot of a page asks, then puts back every row on that page. Rows few people change, such as how long archived threads and unused memories are kept, sit under a closed **Advanced** fold; searching for one opens it.
 
 ### Asking an agent to change a setting
 
