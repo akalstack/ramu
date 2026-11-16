@@ -3975,6 +3975,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Sends when {0} is back': 'Terkirim saat {0} kembali',
   'Sending…': 'Mengirim…',
   'Not sent: {0}': 'Belum terkirim: {0}',
+  'The message before it was not sent.': 'Pesan sebelumnya belum terkirim.',
   'Waiting for {0}': 'Menunggu {0}',
   'Messages send when it reconnects': 'Pesan terkirim saat tersambung lagi',
   '{0} is not reachable. Keep writing: messages wait on this device and send in order when it reconnects. They never interrupt a running turn.':
@@ -5326,8 +5327,12 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Buka halaman ini di aplikasi seluler untuk memuatnya di perangkat ini.',
   'Open in browser': 'Buka di browser',
   'This page did not load on this phone.': 'Halaman ini tidak termuat di ponsel ini.',
-  'It runs on the host’s localhost. Start the dev server on all addresses (for example with --host 0.0.0.0) and allow it through the host’s firewall, or go back to the host browser.':
-    'Halaman ini berjalan di localhost milik host. Jalankan dev server di semua alamat (misalnya dengan --host 0.0.0.0) dan izinkan lewat firewall host, atau kembali ke browser host.',
+  'Check that the dev server is still running on the host, or go back to the host browser.':
+    'Pastikan server pengembangan masih berjalan di host, atau kembali ke browser host.',
+  'From port {0} on the host, for this phone only. Closes in 30 minutes or when you leave.':
+    'Dari port {0} di host, hanya untuk ponsel ini. Ditutup dalam 30 menit atau saat Anda keluar.',
+  'This phone reaches the host through a tunnel, so the page cannot open here.':
+    'Ponsel ini terhubung ke host melalui tunnel, jadi halaman ini tidak bisa dibuka di sini.',
   'Check that this phone can reach the address, or go back to the host browser.':
     'Pastikan ponsel ini dapat menjangkau alamat tersebut, atau kembali ke browser host.',
   'Open in the host browser': 'Buka di browser host',

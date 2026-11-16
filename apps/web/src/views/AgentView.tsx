@@ -145,9 +145,10 @@ import { PendingSettingsChange } from './agent/components/PendingSettingsChange'
 import { PendingSubmission } from './agent/components/PendingSubmission'
 import { SteeringMessage } from './agent/components/SteeringMessage'
 import {
-  pendingSubmissionVisible,
   splitSteering,
+  unechoedSubmissions,
   type PendingSubmission as Submission,
+  type SubmissionPayload,
 } from './agent/lib/pendingSubmission'
 
 /** A chat with an agent: its transcript, the message box and the side panels for sub-agents and asides. */
@@ -204,10 +205,20 @@ export const AgentView = memo(function AgentView({
   const consumeDraft = useDraftPersistence(draftKey.chat(view.sessionId), draft, host.id)
   /** The sent message being edited in place. The composer and its draft are left alone. */
   const [editing, setEditing] = useState<MessageEdit | null>(null)
-  const [configuring, setConfiguring] = useState(false)
-  const [pendingSubmission, setPendingSubmission] = useState<Submission | null>(null)
+  // Messages shown the moment they are sent, until the host echoes them; a failed one waits for Retry, Edit or Remove.
+  const [submissions, setSubmissions] = useState<Submission[]>([])
+  const shownSubmissions = useMemo(
+    () => unechoedSubmissions(submissions, sourceEvents, queued),
+    [submissions, sourceEvents, queued],
+  )
+  useEffect(() => {
+    if (shownSubmissions.length === submissions.length) return
+    const echoed = new Set(submissions.filter((item) => !shownSubmissions.includes(item)).map((item) => item.id))
+    setSubmissions((current) => current.filter((item) => !echoed.has(item.id)))
+  }, [shownSubmissions, submissions])
+  // Reordering the host's queue waits while a send is on its way, so the new message lands where it was sent.
+  const configuring = submissions.some((item) => item.state === 'sending')
   const { tray: trayQueued, steering } = splitSteering(queued)
-  const showingSubmission = pendingSubmissionVisible(pendingSubmission, sourceEvents, queued)
   const [dropping, setDropping] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   const { scroller, stick, onScroll } = useTranscriptScroll({
@@ -371,7 +382,11 @@ export const AgentView = memo(function AgentView({
   const [savingTeammate, setSavingTeammate] = useState<AgentTask | null>(null)
   const working = session?.state === 'running' || session?.state === 'starting'
   const compacting = session?.state !== 'stopped' && session?.state !== 'failed' && isCompacting(events)
-  const activityLabel = compacting ? 'Compacting context…' : agentActivityLabel(session?.state, events)
+  // From the moment a message is sent, so the end of the chat does not wait for the host to report the turn.
+  const activityLabel = compacting
+    ? 'Compacting context…'
+    : (agentActivityLabel(session?.state, events) ??
+      (shownSubmissions.some((item) => item.state !== 'failed') ? 'Sending…' : null))
   const turns = useMemo(() => toTurns(blocks, events), [blocks, events])
   const { hiddenTurns, pageTurns, showEarlierTurns } = useTurnPaging({
     view,
@@ -682,52 +697,99 @@ export const AgentView = memo(function AgentView({
         stick.current = true
         return
       }
-      stick.current = true
-      scrollToEnd.current?.()
-      setPendingSubmission({
+      // The message box clears and the message shows at once; the host's copy replaces it when it arrives.
+      const item: Submission = {
+        id: crypto.randomUUID(),
         text: submitted,
         attachments: submittedFiles,
         afterEvent: sourceEvents.length,
         queuedIds: queued.map((message) => message.id),
-      })
-      setConfiguring(true)
+        state: 'sending',
+        payload: {
+          outgoing,
+          mode,
+          context,
+          compactFirst: compacting,
+          reviews: attached.map((group) => ({ reviewId: group.review.id, ids: group.ids })),
+        },
+      }
+      const consumed = consumeDraft()
+      if (!consumed.persisted)
+        notifyError(translate('Message sent, but the local draft could not be cleared.'), 'Draft')
+      if (consumed.unchanged) setDraft((current) => (current === submitted ? '' : current))
+      setAttachments((current) => current.filter((file) => !submittedFiles.some((sent) => sent.id === file.id)))
+      clearContent()
+      setKeepHistoryFor(null)
+      stick.current = true
+      scrollToEnd.current?.()
+      submissionsRef.current = [...submissionsRef.current, item]
+      setSubmissions(submissionsRef.current)
+      deliver(item.id)
+    }, true)
+  const submissionsRef = useRef(submissions)
+  submissionsRef.current = submissions
+  const updateSubmission = (id: string, patch: Partial<Submission>) => {
+    submissionsRef.current = submissionsRef.current.map((item) => (item.id === id ? { ...item, ...patch } : item))
+    setSubmissions(submissionsRef.current)
+  }
+  const applySettingsRef = useRef(applyPendingSettings)
+  applySettingsRef.current = applyPendingSettings
+  const sending = useRef<Promise<void>>(Promise.resolve())
+  /** Sends go out one at a time in the order they were written; one held behind a failed send waits with it. */
+  const deliver = (id: string) => {
+    const run = async () => {
+      const list = submissionsRef.current
+      const index = list.findIndex((entry) => entry.id === id)
+      const item = list[index]
+      if (!item || item.state !== 'sending') return
+      if (list.slice(0, index).some((entry) => entry.state === 'failed')) {
+        updateSubmission(id, { state: 'failed', error: translate('The message before it was not sent.') })
+        return
+      }
+      const payload: SubmissionPayload = item.payload
+      const files = item.attachments.map((file) => file.id)
       try {
-        await applyPendingSettings()
+        await applySettingsRef.current()
         // The message queues behind the compaction and goes out once it finishes, as after a typed /compact.
-        if (compacting) await invoke('agent.submit', view.sessionId, '/compact', 'queue', [], [])
-        if (attached.length) {
+        if (payload.compactFirst) await invoke('agent.submit', view.sessionId, '/compact', 'queue', [], [])
+        if (payload.reviews.length) {
           // Review comments go out with this message, as one request to the agent.
-          for (const [index, group] of attached.entries())
+          for (const [at, group] of payload.reviews.entries())
             await invoke(
               'reviews.sendComments',
-              group.review.id,
+              group.reviewId,
               group.ids,
-              index === 0 ? outgoing : '',
-              index === 0 ? submittedFiles.map((file) => file.id) : [],
-              index === 0 ? context : [],
+              at === 0 ? payload.outgoing : '',
+              at === 0 ? files : [],
+              at === 0 ? payload.context : [],
             )
-        } else
-          await invoke(
-            'agent.submit',
-            view.sessionId,
-            outgoing,
-            mode,
-            submittedFiles.map((file) => file.id),
-            context,
-          )
-        const consumed = consumeDraft()
-        if (!consumed.persisted)
-          notifyError(translate('Message sent, but the local draft could not be cleared.'), 'Draft')
-        if (consumed.unchanged) setDraft((current) => (current === submitted ? '' : current))
-        setAttachments((current) => current.filter((file) => !submittedFiles.some((sent) => sent.id === file.id)))
-        clearContent()
-        setKeepHistoryFor(null)
-        stick.current = true
-      } finally {
-        setPendingSubmission(null)
-        setConfiguring(false)
+        } else await invoke('agent.submit', view.sessionId, payload.outgoing, payload.mode, files, payload.context)
+        updateSubmission(id, { state: 'sent' })
+      } catch (error) {
+        updateSubmission(id, { state: 'failed', error: errorText(error) })
       }
-    }, true)
+    }
+    sending.current = sending.current.then(run, run)
+  }
+  const retrySubmission = (id: string) => {
+    if (viewOnly) return
+    updateSubmission(id, {
+      state: 'sending',
+      error: undefined,
+      afterEvent: sourceEvents.length,
+      queuedIds: queued.map((message) => message.id),
+    })
+    deliver(id)
+  }
+  const removeSubmission = (id: string) => {
+    submissionsRef.current = submissionsRef.current.filter((item) => item.id !== id)
+    setSubmissions(submissionsRef.current)
+  }
+  const editSubmission = (item: Submission) => {
+    removeSubmission(item.id)
+    recallIntoComposer(item.attachments, item.text)
+    requestAnimationFrame(() => focusComposer(root.current))
+  }
 
   const transcript: TranscriptContext = {
     sessionId: view.sessionId,
@@ -901,7 +963,7 @@ export const AgentView = memo(function AgentView({
                         onScroll={onScroll}
                         data-working={working || undefined}
                         aria-label={translate('Conversation')}
-                        className={`scroll-fade-y px-6 pt-3 pb-7 outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--line)] ${showingSubmission ? 'motion-safe:scroll-smooth' : ''}`}
+                        className={`scroll-fade-y px-6 pt-3 pb-7 outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--line)] ${shownSubmissions.length ? 'motion-safe:scroll-smooth' : ''}`}
                       >
                         {hiddenTurns > 0 && (
                           <Button
@@ -966,11 +1028,16 @@ export const AgentView = memo(function AgentView({
                               />
                             </MessageScrollerItem>
                           ))}
-                          {showingSubmission && pendingSubmission && (
-                            <MessageScrollerItem messageId="pending-submission">
-                              <PendingSubmission submission={pendingSubmission} />
+                          {shownSubmissions.map((item) => (
+                            <MessageScrollerItem key={item.id} messageId={`pending-submission-${item.id}`}>
+                              <PendingSubmission
+                                submission={item}
+                                onRetry={() => retrySubmission(item.id)}
+                                onEdit={() => editSubmission(item)}
+                                onRemove={() => removeSubmission(item.id)}
+                              />
                             </MessageScrollerItem>
-                          )}
+                          ))}
                           {activityLabel && (compacting || !statusGroup) && (
                             <ChatStatus label={translate(activityLabel)} compacting={compacting} />
                           )}
@@ -1188,7 +1255,7 @@ export const AgentView = memo(function AgentView({
                           )}
                         </>
                       }
-                      disabled={configuring || !session}
+                      disabled={!session}
                       controls={
                         session &&
                         (joining ? (
@@ -1215,7 +1282,7 @@ export const AgentView = memo(function AgentView({
                       onAlternateSubmit={
                         busyAgent && supportsSteering && !hostOffline ? (context) => send(opposite, context) : undefined
                       }
-                      alternateDisabled={configuring || !session}
+                      alternateDisabled={!session}
                       alternateLabel={opposite === 'queue' ? 'Queue' : 'Steer'}
                       placeholder={
                         hostOffline
