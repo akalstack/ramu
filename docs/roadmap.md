@@ -6,10 +6,10 @@ Every item needs scoped tests and typechecks for the packages it touches. Deskto
 
 ## Release
 
-- macOS signing and notarization in CI, and signed auto-update. The Apple Developer account is in place; the release workflow signs once the repository has the Developer ID certificate and App Store Connect API key secrets listed in [Releasing](contributing/releasing.md#signing-and-packaged-checks). Turn on `APP_AUTO_UPDATE` in `packages/shared/src/updates.ts` after a signed build installs on a second Mac.
+- macOS signing and notarization in CI, and signed auto-update. The repository holds the Developer ID certificate (Ahmad Safar, team `CZ63H443SZ`, valid to 2027-12-15) and App Store Connect API key secrets listed in [Releasing](contributing/releasing.md#signing-and-packaged-checks). Confirm a release run's signed, notarized macOS build, then turn on `APP_AUTO_UPDATE` in `packages/shared/src/updates.ts` after it installs on a second Mac.
 - Linux: the first release run builds x64 and arm64 `.deb`, `.rpm` and AppImage. Install the `.rpm` on Fedora and start the AppImage on Ubuntu 24.04 (its AppArmor user-namespace limit can block Electron's sandbox) by hand; only the `.deb` is smoke-tested in CI.
 - Windows: the port is under way on the `windows-port` branch (CI on Windows, the local service over a named pipe). Next are the server's shell, terminal and path handling, packaging, and a hands-on run in a Windows 11 VM.
-- Mobile distribution: the Expo project, app ID `com.akalstack.ramu` and Android push (FCM) are set up. EAS holds the Android upload keystore and the Play submission key (`play-submit@akalstack-ramu`). Remaining: upload the first production `.aab` to Play's internal track by hand (later releases use `eas:release:android`), and on the Apple side an APNs key for iOS push and the first build to TestFlight.
+- Mobile distribution, held until the app is ready to publish: the Expo project, app ID `com.akalstack.ramu` and Android push (FCM) are set up. EAS holds the Android upload keystore and the Play submission key (`play-submit@akalstack-ramu`); a production `.aab` (0.1.0, versionCode 1) is built but not uploaded. Apple has both bundle IDs (`com.akalstack.ramu`, `com.akalstack.ramu.activities`), an APNs key and an App Store Connect API key. When publishing: create the Play app, upload the first `.aab` to the internal track by hand (later releases use `eas:release:android`) and invite the submission key; give EAS the APNs key, create the App Store Connect app record and send the first build to TestFlight.
 
 ## Implementation
 
