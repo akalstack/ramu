@@ -5,9 +5,9 @@
   </picture>
 </p>
 
-<h3 align="center">Describe it. Ramu builds it, ships it and keeps it working.</h3>
+<h3 align="center">Describe it. Ramu ships it.</h3>
 
-<p align="center">A free, open-source workspace for coding with agents, on desktop and phone.<br />Your agents, your accounts, your computer.</p>
+<p align="center">The free, open-source workspace where your coding agents build the app, put it online and keep it running.<br />On desktop and phone, with accounts you own.</p>
 
 <p align="center">
   <a href="https://github.com/akalstack/ramu/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-8b5cf6" alt="License: MIT" /></a>
@@ -35,15 +35,16 @@ Open a project, say what you want, review the result. Defaults work out of the b
 
 ## Why Ramu
 
-| | |
-| --- | --- |
-| 🚀 **One sentence to a live app** | Ramu asks a few questions, picks a stack and builds until the build and tests pass. Then it deploys to *your* Vercel, Netlify, Railway or Fly.io account (phone apps go through the stores with EAS), with a preview for every pull request and **Roll back** when something breaks. [Shipping →](docs/guide/shipping.md) |
-| 🎯 **Work that finishes itself** | For longer tasks the agent sets a goal and keeps going across turns and providers. Ramu calls it done only when the checks pass and the changes are really in the repo. Add your own check, like your test suite. [Goals →](docs/guide/goals.md) |
-| 🔁 **Usage limits don't stop you** | Rank your providers. When one runs out, the thread moves to the next with its context, and comes back when your first choice has room. If all are limited, Ramu waits and resumes, even after a restart. |
+|                                    |                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🚀 **One sentence to a live app**  | Ramu asks a few questions, picks a stack and builds until the build and tests pass. Then it deploys to _your_ Vercel, Netlify, Railway or Fly.io account (phone apps go through the stores with EAS), with a preview for every pull request and **Roll back** when something breaks. [Shipping →](docs/guide/shipping.md) |
+| 🎯 **Work that finishes itself**   | For longer tasks the agent sets a goal and keeps going across turns and providers. Ramu calls it done only when the checks pass and the changes are really in the repo. Add your own check, like your test suite. [Goals →](docs/guide/goals.md)                                                                          |
+| 🔁 **Usage limits don't stop you** | Rank your providers. When one runs out, the thread moves to the next with its context, and comes back when your first choice has room. If all are limited, Ramu waits and resumes, even after a restart.                                                                                                                  |
 
 ## What's inside
 
 **🤖 Agents that keep going**
+
 - Schedules, webhooks, queued messages and long commands keep running after you close the window. Recaps tell you what happened.
 - `@`-mention another model into a thread, delegate to helpers on any provider, or save custom agents for repeat jobs.
 - Ask a second model for advice or a review. Select text to quote it or ask a quick question.
@@ -51,10 +52,12 @@ Open a project, say what you want, review the result. Defaults work out of the b
 - Memory, preferences, skills and lessons are shared across providers. Agents can search old threads for past fixes.
 
 **📄 Artifacts you keep**
+
 - Agents make apps, docs, diagrams, slide decks, dashboards, designs and short motion videos, right in the thread.
 - Keep them under **Artifacts**, edit them in place, open them on your phone, and export to Word, PowerPoint, PDF or MP4. [Artifacts →](docs/guide/artifacts.md)
 
 **🛠️ A full workspace**
+
 - Monaco editor, split terminals, recorded diffs, inline review comments and selective undo.
 - Git branches, staging, stashes, sync and worktrees, across several repos in one folder.
 - GitHub, GitLab, Bitbucket and Azure DevOps: start from an issue, open a pull request, hand failing checks back to an agent.
@@ -64,12 +67,14 @@ Open a project, say what you want, review the result. Defaults work out of the b
 - Shared MCP tools with per-thread approval, themes, English and Bahasa Indonesia.
 
 **🌐 Shipping and running**
+
 - Deploy to Vercel, Netlify, Railway, Fly.io, Cloudflare, Supabase and more. Previews go out on their own; production waits for your OK and runs migrations first. [Deploying →](docs/guide/deploy.md)
 - **Run on this computer** for demos and home use: no hosting account, just a public address through a tunnel.
 - [Plugins](docs/guide/plugins.md) add a service in one install: its skills, MCP servers, CLI and credential, for every provider. Browse them at [getramu.dev/plugins](https://getramu.dev/plugins).
 - CI through pull requests, deploy results read from your Git host's checks, and an incident thread when the live site stops answering.
 
 **📱 Anywhere**
+
 - **Phone app** for iOS and Android: chat, review, Git, terminals, artifacts and approvals, with push notifications. Not in the stores yet; [build it from source](apps/mobile/README.md).
 - **Several hosts** from one desktop: continue a thread on another machine.
 - **Your network:** LAN, Tailscale, NetBird, SSH or your own tunnel. [Remote hosts →](docs/guide/remote-hosts.md)
@@ -87,11 +92,11 @@ Every feature has a page in the [guide](docs/README.md#guide).
 
 For the phone, see the [mobile guide](apps/mobile/README.md).
 
-| Platform | Builds |
-| --- | --- |
-| macOS | arm64, x64 |
-| Linux | x64, arm64 · `.deb`, `.rpm`, AppImage, ZIP |
-| Windows | in progress |
+| Platform | Builds                                     |
+| -------- | ------------------------------------------ |
+| macOS    | arm64, x64                                 |
+| Linux    | x64, arm64 · `.deb`, `.rpm`, AppImage, ZIP |
+| Windows  | in progress                                |
 
 Ramu is in **alpha**. Builds are unsigned for now, so you install updates by hand. The AppImage needs FUSE 2: `sudo apt install libfuse2t64` on Ubuntu 24.04+, `libfuse2` on 22.04.
 
@@ -111,13 +116,13 @@ pnpm dev
 
 Built with Electron, React, React Native and TypeScript. Start with the [architecture](docs/contributing/architecture.md).
 
-| Command | What it does |
-| --- | --- |
-| `pnpm dev` | Start with hot reload |
-| `pnpm check` | Format, lint, type-check, test and build |
-| `pnpm test:desktop-smoke` | Desktop startup check with simulated providers |
-| `pnpm make` | Build installers for this platform |
-| `pnpm server serve` | Run the workspace server without the desktop app (after `pnpm build`) |
+| Command                   | What it does                                                          |
+| ------------------------- | --------------------------------------------------------------------- |
+| `pnpm dev`                | Start with hot reload                                                 |
+| `pnpm check`              | Format, lint, type-check, test and build                              |
+| `pnpm test:desktop-smoke` | Desktop startup check with simulated providers                        |
+| `pnpm make`               | Build installers for this platform                                    |
+| `pnpm server serve`       | Run the workspace server without the desktop app (after `pnpm build`) |
 
 - Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 - [Report a bug or request a feature](https://github.com/akalstack/ramu/issues/new/choose).

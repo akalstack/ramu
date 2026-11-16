@@ -2,20 +2,21 @@
 import '@/styles/global.css'
 import { Backdrop } from '@/components/backdrop'
 import { Demo } from '@/components/demo'
+import Icon from '@/components/icon.astro'
 import { ProviderLogo } from '@/components/provider-logo'
 import { LinkButton } from '@/components/site-button'
 import { AKALSTACK, MOBILE_SETUP, PROVIDERS, RELEASES, REPO } from '@/lib/site'
 
-const title = 'Ramu — Describe it. Ramu puts it online.'
+const title = 'Ramu — Describe it. Ramu ships it.'
 const description =
   'Describe an app and Ramu builds it, puts it online and keeps it working, on accounts you own. For developers: a new project, deploy, CI and previews in one flow, with the coding agents you already use. Free and open source, with an iOS and Android companion.'
 const canonical = new URL('/', Astro.site)
 // Shorter copy for link previews (WhatsApp, Slack, X...), which cut the description after a line or two.
-const shareTitle = 'Ramu: Describe it. Ramu puts it online.'
+const shareTitle = 'Ramu: Describe it. Ramu ships it.'
 const shareDescription =
-  'Ramu builds your app, puts it online and keeps it working, on accounts you own. Free and open source, with Claude Code, Codex, Cursor and more.'
+  'Your coding agents build the app, put it online and keep it running, on accounts you own. Free and open source, with Claude Code, Codex, Cursor and more.'
 const ogImage = new URL('/og.png', Astro.site).href
-const ogImageAlt = 'Ramu: Describe it. Ramu builds it, puts it online and keeps it working, on accounts you own.'
+const ogImageAlt = 'Ramu: Describe it. Ramu ships it.'
 
 const structuredData = {
   '@context': 'https://schema.org',
@@ -35,67 +36,48 @@ const structuredData = {
 
 /** The person's path from an idea to a live app, as Ramu runs it today. */
 const PATH = [
-  {
-    title: 'Say what you want',
-    body: 'Type it into the same box as any task. Ramu asks at most three questions, each with a recommended answer, and proposes a stack in one line you accept or change.',
-  },
-  {
-    title: 'Ramu makes the project',
-    body: 'It runs the framework’s own generator in a new folder, commits, and gives the thread a goal: the build and tests pass and the main page loads.',
-  },
-  {
-    title: 'Watch it take shape',
-    body: 'The app opens in the browser panel as soon as it serves. Questions come as cards; anything only you know is asked once and kept with the project.',
-  },
-  {
-    title: 'Deploy to your account',
-    body: 'One sheet picks the target, signs in to your account, publishes the repository and sets the variables the app needs, with its Postgres database made on your own account too. Then it shows the live address.',
-  },
-  {
-    title: 'Keep changing it',
-    body: 'Each change arrives as a pull request with CI and a preview address. Merging deploys it, and a failed deployment wakes the thread that made it, with the build log.',
-  },
+  { title: 'Say what you want', body: 'At most three questions, each with a suggested answer. Then a stack in one line.' },
+  { title: 'Ramu makes the project', body: 'It runs the framework’s own generator, commits, and sets a goal: build and tests pass.' },
+  { title: 'Watch it take shape', body: 'The app opens in the browser panel as soon as it runs. Questions come as cards.' },
+  { title: 'Deploy to your account', body: 'One sheet signs in, publishes the repo, sets variables and makes the database. Then the live address.' },
+  { title: 'Keep changing it', body: 'Each change is a pull request with CI and a preview. Merging ships it.' },
 ]
 
 const SAFELY = [
-  'Previews deploy without asking, and CI that GitHub or GitLab requires before merging',
-  'Production always asks you first, and runs your migrations before it goes out',
-  'The thread hears how its push went, from the checks your Git host lists',
-  'Uptime watched on the live address, with an incident thread when it goes down',
+  'Previews deploy on their own',
+  'Production asks you first, and runs migrations before it ships',
+  'The thread hears how its push went from your Git host’s checks',
+  'Uptime is watched, and an outage opens an incident thread',
 ]
 
-const PLATFORMS = ['Vercel', 'Netlify', 'Railway', 'Fly.io', 'Cloudflare', 'Supabase']
+const PLATFORMS = ['Vercel', 'Netlify', 'Railway', 'Fly.io', 'Cloudflare', 'Supabase', 'GitHub', 'GitLab', 'Bitbucket', 'Azure DevOps', 'Expo']
+
+const WHY = [
+  {
+    icon: 'rocket',
+    title: 'One sentence to a live app',
+    body: 'Ramu asks, builds until the tests pass, and deploys to your own hosting account.',
+  },
+  {
+    icon: 'target',
+    title: 'Work that finishes itself',
+    body: 'Longer tasks get a goal. Ramu calls it done only when the checks really pass.',
+  },
+  {
+    icon: 'shuffle',
+    title: 'Limits don’t stop you',
+    body: 'When one provider runs out, the next picks up the thread with its context.',
+  },
+] as const
 
 const WORK = [
-  {
-    title: 'Keep going through usage limits',
-    body: 'Set your preferred provider order. Ramu switches with visible thread context when a limit is reached, and switches back once your first choice has room again. If all are limited, it waits and resumes when capacity returns, even after a restart.',
-  },
-  {
-    title: 'Keep what agents make',
-    body: 'Docs, diagrams, decks, dashboards, designs, motion videos and small apps open from the sidebar or your phone, with versions, editing in place (live, with someone you share it with) and exports to Word, PowerPoint, PDF and MP4.',
-  },
-  {
-    title: 'Get another model’s perspective',
-    body: 'Let your agent consult a second model for advice and review. Delegate tasks to helpers across providers, with optional isolated checkouts.',
-  },
-  {
-    title: 'Give longer tasks a goal',
-    body: 'Keep an objective moving across turns and provider changes. Pause, resume, and set continuation limits so you stay in control.',
-  },
-  {
-    title: 'Carry knowledge between agents',
-    body: 'Share project knowledge and preferences across providers. Read, edit, and restore earlier versions of your notes.',
-  },
-  {
-    title: 'Turn finished work into lessons',
-    body: 'Capture reusable skills and lessons from completed tasks. Choose automatic updates or review them first, with revision history.',
-  },
-  {
-    title: 'Leave work running',
-    body: 'Threads and terminals keep running when you close the window. Schedule recurring tasks, recover unfinished threads after a restart, and catch up with recaps.',
-  },
-]
+  { icon: 'moon', title: 'Leave it running', body: 'Threads, terminals and schedules keep going after you close the window. Recaps catch you up.' },
+  { icon: 'users', title: 'Bring in another model', body: 'Ask a second model for a review, or hand tasks to helpers on any provider.' },
+  { icon: 'brain', title: 'Memory that carries over', body: 'Notes, preferences, skills and lessons are shared by every provider.' },
+  { icon: 'layers', title: 'Artifacts you keep', body: 'Docs, decks, dashboards, designs and videos. Export to Word, PowerPoint, PDF or MP4.' },
+  { icon: 'globe', title: 'Browser and devices', body: 'Agents drive a browser, your screen, or an iOS and Android simulator. You can watch and stop.' },
+  { icon: 'branch', title: 'Git, done for you', body: 'Branches, worktrees and pull requests on GitHub, GitLab, Bitbucket and Azure DevOps.' },
+] as const
 ---
 
 <!doctype html>
@@ -129,7 +111,7 @@ const WORK = [
     <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
   </head>
   <body>
-    <a class="skip" href="#path">Skip to content</a>
+    <a class="skip" href="#why">Skip to content</a>
 
     <header class="nav">
       <div class="nav-inner">
@@ -137,12 +119,12 @@ const WORK = [
           <img src="/wordmark.svg" alt="Ramu" height="22" />
         </a>
         <nav class="nav-links" aria-label="Primary">
+          <a href="#why">Why Ramu</a>
           <a href="#path">How it works</a>
-          <a href="#providers">Accounts</a>
-          <a href="#work">Agents</a>
-          <a href="#review">Review</a>
+          <a href="#work">Features</a>
           <a href="#mobile">Mobile</a>
-          <a href={`${REPO}#guides`}>Docs</a>
+          <a href="/plugins">Plugins</a>
+          <a href={`${REPO}/blob/main/docs/README.md#guide`}>Docs</a>
           <a class="nav-cta" href="#download">Download</a>
         </nav>
       </div>
@@ -150,34 +132,119 @@ const WORK = [
 
     <main>
       <section class="hero" id="top">
+        <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
         <Backdrop client:idle />
-        <h1>Describe it. Ramu builds it, puts it online and keeps it working.</h1>
+        <a class="pill" href={RELEASES}>
+          <span class="pill-dot" aria-hidden="true"></span>
+          Free and open source · Alpha
+          <span aria-hidden="true">→</span>
+        </a>
+        <h1>Describe it. <span class="grad">Ramu ships it.</span></h1>
         <p class="hero-sub">
-          On accounts you own, with the coding agents you already use. When one reaches its usage limit, the next picks up
-          the thread with its context, so the work doesn't stop.
+          Your coding agents build the app, put it online and keep it running. On accounts you own, free and open
+          source.
         </p>
         <div class="hero-actions">
-          <LinkButton tone="primary" href="#download">Get Ramu</LinkButton>
-          <LinkButton href={REPO}>Read the source</LinkButton>
-          <span class="hero-note">MIT licensed · Desktop + iOS and Android companion</span>
+          <LinkButton tone="primary" href="#download">Download Ramu</LinkButton>
+          <LinkButton href={REPO}>View on GitHub</LinkButton>
+        </div>
+        <div class="works-with">
+          <span>Works with</span>
+          <ul>
+            {
+              PROVIDERS.map((p) => (
+                <li title={p.name}>
+                  <ProviderLogo provider={p} size={28} />
+                  <span>{p.name}</span>
+                </li>
+              ))
+            }
+          </ul>
         </div>
         <Demo client:load />
       </section>
 
-      <section class="section section-split" id="path">
-        <div class="section-head sticky">
-          <h2>From an idea to a live app.</h2>
-          <p>
-            The same path whether you have never opened a terminal or ship every day. A developer can start at any step:
-            Deploy on an existing project, or Set up CI alone.
-          </p>
+      <div class="marquee" aria-label={`Works with ${PLATFORMS.join(', ')}`}>
+        <div class="marquee-track" aria-hidden="true">
+          {[...PLATFORMS, ...PLATFORMS].map((name) => <span>{name}</span>)}
         </div>
-        <ol class="rows">
+      </div>
+
+      <section class="section" id="why">
+        <div class="section-head center reveal">
+          <span class="eyebrow">Why Ramu</span>
+          <h2>Less babysitting. More shipping.</h2>
+        </div>
+        <ul class="why">
           {
-            PATH.map((step) => (
-              <li>
-                <h3>{step.title}</h3>
-                <p>{step.body}</p>
+            WHY.map((w, i) => (
+              <li class="card reveal" style={`--d:${i * 90}ms`}>
+                <div class={`viz viz-${i}`} aria-hidden="true">
+                  {i === 0 && (
+                    <>
+                      <span class="viz-prompt">“A booking page for my barbershop”</span>
+                      <span class="viz-arrow" />
+                      <span class="viz-live">
+                        <i />
+                        barbershop.vercel.app
+                      </span>
+                    </>
+                  )}
+                  {i === 1 && (
+                    <ul class="viz-checks">
+                      <li>Build passes</li>
+                      <li>12 tests pass</li>
+                      <li>Changes are in the repo</li>
+                      <li class="viz-done">Goal met</li>
+                    </ul>
+                  )}
+                  {i === 2 && (
+                    <div class="viz-meters">
+                      <div class="vm vm-a">
+                        <ProviderLogo provider={PROVIDERS[0]!} size={22} />
+                        <span class="vm-track">
+                          <span class="vm-fill" />
+                        </span>
+                        <span class="vm-tag">Limit</span>
+                      </div>
+                      <div class="vm vm-b">
+                        <ProviderLogo provider={PROVIDERS[1]!} size={22} />
+                        <span class="vm-track">
+                          <span class="vm-fill" />
+                        </span>
+                        <span class="vm-tag">Picks up</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div class="card-body">
+                  <span class="card-icon">
+                    <Icon name={w.icon} />
+                  </span>
+                  <h3>{w.title}</h3>
+                  <p>{w.body}</p>
+                </div>
+              </li>
+            ))
+          }
+        </ul>
+      </section>
+
+      <section class="section section-split" id="path">
+        <div class="section-head sticky reveal">
+          <span class="eyebrow">How it works</span>
+          <h2>From an idea to a live app.</h2>
+          <p>New to code or shipping daily, it’s the same path. Developers can start at any step.</p>
+        </div>
+        <ol class="timeline">
+          {
+            PATH.map((step, i) => (
+              <li class="reveal" style={`--d:${i * 70}ms`}>
+                <span class="step-num">{i + 1}</span>
+                <div>
+                  <h3>{step.title}</h3>
+                  <p>{step.body}</p>
+                </div>
               </li>
             ))
           }
@@ -185,30 +252,43 @@ const WORK = [
       </section>
 
       <section class="section section-split" id="safely">
-        <div class="section-head">
-          <h2>Every change, safely.</h2>
-          <p>
-            Ramu works on a branch and opens a pull request for each change, so you see it running before anyone else
-            does. Merging is what puts it live.
-          </p>
+        <div class="section-head reveal">
+          <span class="eyebrow">Ship safely</span>
+          <h2>Every change, reviewed before it’s live.</h2>
+          <p>Ramu works on a branch and opens a pull request. You see it running before anyone else does.</p>
+          <ul class="checks">{SAFELY.map((line) => <li>{line}</li>)}</ul>
         </div>
-        <ul class="checks">{SAFELY.map((line) => <li>{line}</li>)}</ul>
+        <figure class="pr reveal" aria-label="Example pull request with checks and a preview">
+          <figcaption>
+            <span class="pr-badge">Open</span>
+            <b>Add booking reminders</b>
+            <span class="pr-num">#24</span>
+          </figcaption>
+          <ul class="pr-checks">
+            <li class="ok">CI · build and test<span>Passed</span></li>
+            <li class="ok">Preview deployed<span>barbershop-git-reminders.vercel.app</span></li>
+            <li class="wait">Production<span>Waits for you</span></li>
+          </ul>
+          <div class="pr-actions">
+            <span class="pr-merge">Merge and deploy</span>
+            <span class="pr-note">Migrations run first</span>
+          </div>
+        </figure>
       </section>
 
       <section class="section" id="providers">
-        <div class="section-head">
+        <div class="section-head center reveal">
+          <span class="eyebrow">Your accounts</span>
           <h2>Your agents. Your accounts. Their official tools.</h2>
           <p>
-            Ramu runs Claude Code, Codex, OpenCode, Cursor, and Antigravity through each provider's own CLI, SDK, or
-            runtime, signed in with the plan or API key you already have. Your app runs on hosting and data accounts you
-            own, which you can take anywhere. Ramu is free, resells nothing and runs no hosting, so each provider bills
-            you exactly as before. Keys you save stay in your computer's keychain.
+            Ramu runs each agent through its own CLI or SDK, signed in with the plan you already pay for. Ramu resells
+            nothing and hosts nothing. Keys stay in your keychain.
           </p>
         </div>
         <ul class="ingredients">
           {
-            PROVIDERS.map((p) => (
-              <li>
+            PROVIDERS.map((p, i) => (
+              <li class="reveal" style={`--d:${i * 60}ms`}>
                 <ProviderLogo provider={p} size={40} />
                 <div>
                   <h3>{p.name}</h3>
@@ -218,25 +298,21 @@ const WORK = [
             ))
           }
         </ul>
-        <div class="section-head">
-          <ul class="checks">
-            <li>Through their own CLI, with your account kept on your computer: {PLATFORMS.join(', ')}</li>
-          </ul>
-        </div>
       </section>
 
-      <section class="section section-split" id="work">
-        <div class="section-head sticky">
-          <h2>Less restarting. More finishing.</h2>
-          <p>
-            Keep the objective, conversation, and project knowledge together as the work continues. Your computer must
-            stay awake. Provider capabilities vary.
-          </p>
+      <section class="section" id="work">
+        <div class="section-head center reveal">
+          <span class="eyebrow">Features</span>
+          <h2>Everything around the agent, in one window.</h2>
+          <p>Editor, terminals, Git and review beside the thread. Your computer stays awake; features vary by provider.</p>
         </div>
-        <ul class="rows">
+        <ul class="grid">
           {
-            WORK.map((w) => (
-              <li>
+            WORK.map((w, i) => (
+              <li class="card tile reveal" style={`--d:${(i % 3) * 80}ms`}>
+                <span class="card-icon">
+                  <Icon name={w.icon} />
+                </span>
                 <h3>{w.title}</h3>
                 <p>{w.body}</p>
               </li>
@@ -246,19 +322,17 @@ const WORK = [
       </section>
 
       <section class="section section-split" id="review">
-        <div class="section-head">
-          <h2>See what changed. Decide what stays.</h2>
-          <p>
-            Review recorded changes for each turn and send inline feedback to your agent. Undo selected changes with
-            conflict checks to protect later edits.
-          </p>
+        <div class="section-head reveal">
+          <span class="eyebrow">Review</span>
+          <h2>See what changed. Keep what you like.</h2>
+          <p>Every turn’s changes are recorded. Comment inline to steer the agent, or undo just the parts you don’t want.</p>
           <ul class="checks">
-            <li>Monaco editor and split terminals beside the thread</li>
-            <li>Branches, staging, stashes, and sync</li>
-            <li>Unsent drafts kept per thread across restarts</li>
+            <li>Monaco editor and split terminals</li>
+            <li>Branches, staging, stashes and sync</li>
+            <li>Drafts saved per thread</li>
           </ul>
         </div>
-        <figure class="diff" aria-label="Example diff with a review comment">
+        <figure class="diff reveal" aria-label="Example diff with a review comment">
           <figcaption>
             <span>src/middleware/limit.ts</span>
             <span class="diff-stat"><b class="add">+42</b> <b class="del">−3</b></span>
@@ -275,55 +349,63 @@ const WORK = [
       </section>
 
       <section class="section section-split" id="mobile">
-        <div class="section-head">
-          <h2>Step away from your desk. Stay with the work.</h2>
-          <p>
-            Pair the iOS or Android companion with your computer. Follow live agent progress, send the next instruction,
-            and respond when an agent needs you.
-          </p>
-          <LinkButton className="mt-5" href={MOBILE_SETUP}>Set up mobile</LinkButton>
-        </div>
-        <div class="section-head">
+        <div class="section-head reveal">
+          <span class="eyebrow">Mobile</span>
+          <h2>Step away. Stay with the work.</h2>
+          <p>Pair the iOS or Android app with your computer. Follow progress, answer questions and approve from anywhere.</p>
           <ul class="checks">
-            <li>Chat, choose models, and manage goals</li>
-            <li>Review diffs and send comments to your agent</li>
-            <li>Stage changes, commit, and sync with Git</li>
-            <li>Use live terminals and switch between paired computers</li>
+            <li>Chat, models and goals</li>
+            <li>Diffs, comments and Git</li>
+            <li>Live terminals on every paired computer</li>
+            <li>Push notifications when an agent needs you</li>
           </ul>
-          <p>Agents run on your computer. Keep it awake and reachable while you connect from your phone.</p>
+          <LinkButton className="mt-6" href={MOBILE_SETUP}>Set up mobile</LinkButton>
+        </div>
+        <div class="phone-wrap reveal">
+          <div class="phone" aria-label="The Ramu phone app asking to approve a production deploy" role="img">
+            <div class="phone-notch"></div>
+            <div class="phone-head"><span>‹</span><b>Barbershop booking</b><span>⋯</span></div>
+            <div class="phone-body">
+              <div class="pm pm-user">Add reminder emails a day before.</div>
+              <div class="pm pm-agent">Done. 14 tests pass and the preview is up.</div>
+              <div class="pm-tool"><span>Run</span> pnpm test · 14 passed</div>
+              <div class="pm-card">
+                <b>Deploy to production?</b>
+                <span>Vercel · migrations run first</span>
+                <div class="pm-btns"><i>Not now</i><i class="on">Allow once</i></div>
+              </div>
+            </div>
+            <div class="phone-compose">Message…</div>
+          </div>
         </div>
       </section>
 
       <section class="section section-split" id="source">
-        <div class="section-head">
-          <h2>Your workspace, open to build on.</h2>
-          <p>
-            MIT licensed, with a desktop app, mobile companion, and a workspace server you can run headless. Read the
-            code, contribute, or make it your own.
-          </p>
-          <LinkButton className="mt-5" href={REPO}>Browse the source</LinkButton>
+        <div class="section-head reveal">
+          <span class="eyebrow">Open source</span>
+          <h2>Yours to read, run and change.</h2>
+          <p>MIT licensed: the desktop app, the phone app, and a workspace server you can run headless.</p>
+          <LinkButton className="mt-6" href={REPO}>Browse the source</LinkButton>
         </div>
-        <div class="terminal" role="img" aria-label="Terminal commands to run Ramu from source">
-          <pre><code><span class="t-dim">$ </span>git clone {REPO}.git{'\n'}<span class="t-dim">$ </span>cd ramu{'\n'}<span class="t-dim">$ </span>pnpm install --frozen-lockfile{'\n'}<span class="t-dim">$ </span>pnpm dev{'\n'}<span class="t-ok">ready</span> <span class="t-dim">Node 24, pnpm 11.21.0</span></code></pre>
+        <div class="terminal reveal" role="img" aria-label="Terminal commands to run Ramu from source">
+          <div class="term-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <pre><code><span class="tl"><span class="t-dim">$ </span>git clone {REPO}.git</span><span class="tl"><span class="t-dim">$ </span>cd ramu</span><span class="tl"><span class="t-dim">$ </span>pnpm install --frozen-lockfile</span><span class="tl"><span class="t-dim">$ </span>pnpm dev</span><span class="tl"><span class="t-ok">ready</span> <span class="t-dim">Node 24, pnpm 11.21.0</span></span></code></pre>
         </div>
       </section>
 
       <section class="download" id="download">
-        <div class="download-inner">
+        <div class="download-inner reveal">
+          <img class="download-logo" src="/ramu-logo.svg" alt="" width="56" height="56" />
           <h2>Bring your next idea to Ramu.</h2>
-          <p>
-            Download the desktop alpha, connect a provider, and describe what you want, or open a repository you already
-            have. Add the mobile companion to keep up from your phone.
-          </p>
+          <p>Download the desktop alpha, connect a provider and say what you want.</p>
           <div class="hero-actions">
-            <LinkButton tone="primary" href={RELEASES}>macOS (Apple silicon and Intel)</LinkButton>
-            <LinkButton href={RELEASES}>Linux (x64 and arm64)</LinkButton>
-            <LinkButton href={MOBILE_SETUP}>iOS and Android setup</LinkButton>
+            <LinkButton tone="primary" href={RELEASES}>macOS · Apple silicon and Intel</LinkButton>
+            <LinkButton href={RELEASES}>Linux · x64 and arm64</LinkButton>
+            <LinkButton href={MOBILE_SETUP}>iOS and Android</LinkButton>
           </div>
           <p class="download-fine">
-            Installers and SHA-256 checksums are on GitHub Releases. macOS builds are unsigned and not notarized; install
-            alpha updates manually. Linux GUI validation is pending. Windows is experimental, with no release downloads.
-            See the <a href={`${REPO}/blob/main/docs/guide/providers.md`}>provider setup guide</a>.
+            Installers and checksums are on GitHub Releases. Alpha builds are unsigned, so updates install by hand.
+            Windows is coming. See <a href={`${REPO}/blob/main/docs/guide/providers.md`}>provider setup</a>.
           </p>
         </div>
       </section>
@@ -345,5 +427,23 @@ const WORK = [
         <a href="https://trakteer.id/akalstack">Trakteer</a>
       </nav>
     </footer>
+    <script>
+      // Fade sections in as they scroll into view. Without script or with reduced motion, everything stays visible.
+      const items = document.querySelectorAll('.reveal')
+      if ('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        document.documentElement.classList.add('motion')
+        const io = new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) {
+              if (!entry.isIntersecting) continue
+              entry.target.classList.add('is-in')
+              io.unobserve(entry.target)
+            }
+          },
+          { rootMargin: '0px 0px -8% 0px' },
+        )
+        items.forEach((el) => io.observe(el))
+      }
+    </script>
   </body>
 </html>
