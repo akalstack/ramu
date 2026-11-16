@@ -79,7 +79,8 @@ export const codexAdapter = defineAdapter({
   },
   // The ACP adapter takes no skill roots from the client, but Codex scans `.agents/skills` in the chat's folder.
   skillsLaunch: (_exportDir, cwd) => ({ linkDirs: cwd ? [join(cwd, '.agents', 'skills')] : [] }),
-  updatePlan({ config, binary, findExecutable, runtimeHome }) {
+  pinsVersion: true,
+  updatePlan({ config, binary, findExecutable, runtimeHome, version }) {
     if (!findExecutable(binary)) throw new Error('Select an installed CLI before updating it.')
     if (config.codex?.binary?.trim() || process.env.RAMU_CODEX_BIN)
       throw new Error('Update this custom Codex installation with its package manager.')
@@ -87,7 +88,7 @@ export const codexAdapter = defineAdapter({
     // installation selected by npm's prefix. Existing native processes keep running.
     return {
       command: findExecutable(process.platform === 'win32' ? 'npm.cmd' : 'npm') ?? 'npm',
-      args: ['install', '--prefix', runtimeHome, '--no-audit', '--no-fund', '@openai/codex@latest'],
+      args: ['install', '--prefix', runtimeHome, '--no-audit', '--no-fund', `@openai/codex@${version ?? 'latest'}`],
     }
   },
 })

@@ -110,6 +110,8 @@ export interface AppPreferences extends WorkspaceDefaults {
   providerBinaries: ProviderConfiguration
   providerUpdateChecks: boolean
   appUpdateChecks: boolean
+  /** Offer a provider CLI or Ramu release only once it has been out a day (`UPDATE_WAIT_MS`). */
+  updateWait: boolean
   appAutoUpdate: boolean
   /** Sidebar chat list: one flat list by recent activity, with project names, instead of groups per project. */
   recentChatMode: boolean
@@ -199,6 +201,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   providerBinaries: {},
   providerUpdateChecks: true,
   appUpdateChecks: true,
+  updateWait: true,
   appAutoUpdate: false,
   keepAwake: false,
   keepAwakeWhen: 'plugged-in',

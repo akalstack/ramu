@@ -558,6 +558,13 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
   },
   {
     section: 'system',
+    title: 'Wait a day before offering updates',
+    path: 'updateWait',
+    help: 'New provider CLI and Ramu releases are offered once they have been out 24 hours, so a bad release is usually pulled before it reaches you. You can still install one now.',
+    words: 'security supply chain delay cooldown release age 24 hours compromised',
+  },
+  {
+    section: 'system',
     title: 'Check app updates',
     path: 'appUpdateChecks',
     help: 'The background service checks while Ramu is closed.',

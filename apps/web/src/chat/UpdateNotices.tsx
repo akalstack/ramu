@@ -1,12 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, Download, Loader2 } from 'lucide-react'
+import { Check, Clock, Download, Loader2 } from 'lucide-react'
 import type { Computer } from '@ramu/shared/types'
 import { providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
-import { pendingProviderUpdates, providerUpdateKey, type PendingProviderUpdate } from '@ramu/shared/updates'
+import {
+  hoursUntil,
+  pendingProviderUpdates,
+  providerUpdateKey,
+  type AppUpdateStatus,
+  type PendingProviderUpdate,
+} from '@ramu/shared/updates'
 import { notify, type AppToastData } from '@/components/app-toaster'
 import { ProviderIcon } from '../models/ProviderIcon'
 import { Dialog } from '../Menu'
 import { Button } from '@/components/desktop-button'
+import { cn } from 'cn'
 import { bridge, invokeUncachedOn } from '../ipc'
 import { ownHostId } from '../hosts'
 import { useComputers } from '../workspace/computers'
@@ -21,11 +28,17 @@ const RECHECK_MS = 30 * 60_000
 type Host = Pick<Computer, 'id' | 'name' | 'local' | 'running'>
 
 /** One thing the notice can update: a provider CLI on a host, or Ramu itself on another host. */
-type Job =
+type Job = (
   { kind: 'provider'; host: string; update: PendingProviderUpdate } | { kind: 'ramu'; host: string; version: string }
+) & {
+  /** A release still inside its waiting period, installed at the person's choice; `until` is when it would be offered. */
+  now?: true
+  until?: string | null
+}
 
 const jobKey = (job: Job) =>
-  job.kind === 'provider' ? providerUpdateKey(job.update) : `ramu:${job.host}:${job.version}`
+  (job.kind === 'provider' ? providerUpdateKey(job.update) : `ramu:${job.host}:${job.version}`) +
+  (job.now ? ':now' : '')
 const jobName = (job: Job) => (job.kind === 'provider' ? providerName(job.update.provider) : 'Ramu')
 
 /**
@@ -46,7 +59,7 @@ export function UpdateNotices({ providerChecks }: { providerChecks: boolean }) {
   const several = hosts.length > 1
   const nameOf = (id: string) => hosts.find((host) => host.id === id)?.name || t('This host')
   const [statuses, setStatuses] = useState<ReadonlyMap<string, ProviderStatus[]>>(new Map())
-  const [releases, setReleases] = useState<ReadonlyMap<string, string | null>>(new Map())
+  const [releases, setReleases] = useState<ReadonlyMap<string, Pick<AppUpdateStatus, 'release' | 'waiting'>>>(new Map())
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set())
   const [progress, setProgress] = useState<{ done: number; total: number; current: string } | null>(null)
   const [confirming, setConfirming] = useState<Job[] | null>(null)
@@ -64,7 +77,7 @@ export function UpdateNotices({ providerChecks }: { providerChecks: boolean }) {
     )
   const readRelease = (host: string) =>
     void invokeUncachedOn(host, 'updates.status').then(
-      (status) => setReleases((current) => new Map(current).set(host, status.release?.version ?? null)),
+      (status) => setReleases((current) => new Map(current).set(host, status)),
       () => {},
     )
   useEffect(() => {
@@ -100,7 +113,7 @@ export function UpdateNotices({ providerChecks }: { providerChecks: boolean }) {
     )
     return hosts
       .flatMap((host): Job[] => {
-        const version = host.local ? null : releases.get(host.id)
+        const version = host.local ? null : releases.get(host.id)?.release?.version
         return [
           ...providers
             .filter((update) => update.host === host.id)
@@ -112,6 +125,35 @@ export function UpdateNotices({ providerChecks }: { providerChecks: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the connected hosts
   }, [statuses, releases, dismissed, key])
 
+  // Releases out less than a day, listed so one can still be installed now.
+  const waiting = useMemo<Job[]>(
+    () =>
+      hosts.flatMap((host): Job[] => {
+        const ramu = host.local ? null : releases.get(host.id)?.waiting
+        return [
+          ...(statuses.get(host.id) ?? [])
+            .filter((status) => status.waitingVersion && status.updateCommand && !status.updating)
+            .map((status): Job => ({
+              kind: 'provider',
+              host: host.id,
+              update: {
+                host: host.id,
+                provider: status.provider,
+                binary: status.binary,
+                version: status.version,
+                latest: status.waitingVersion!,
+              },
+              now: true,
+              until: status.waitingUntil ?? null,
+            })),
+          ...(ramu
+            ? [{ kind: 'ramu', host: host.id, version: ramu.version, now: true, until: ramu.settlesAt } as const]
+            : []),
+        ]
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the connected hosts
+    [statuses, releases, key],
+  )
   const where = (job: Job) => (several ? `${jobName(job)} (${nameOf(job.host)})` : jobName(job))
   const shown = useRef('')
   const run = async (list: Job[]) => {
@@ -129,9 +171,10 @@ export function UpdateNotices({ providerChecks }: { providerChecks: boolean }) {
           setProgress({ done, total: list.length, current: where(job) })
           mark(job, 'running')
           try {
-            if (job.kind === 'provider') await invokeUncachedOn(host, 'providers.update', job.update.provider)
+            if (job.kind === 'provider')
+              await invokeUncachedOn(host, 'providers.update', job.update.provider, !!job.now)
             else {
-              const result = await invokeUncachedOn(host, 'updates.apply')
+              const result = await invokeUncachedOn(host, 'updates.apply', !!job.now)
               if (result.outcome === 'unavailable') throw new Error(result.message)
               restarted.push(`${nameOf(host)}: ${result.message}`)
             }
@@ -189,12 +232,12 @@ export function UpdateNotices({ providerChecks }: { providerChecks: boolean }) {
     const busy = list.some(
       (job) => job.kind === 'ramu' && (hosts.find((host) => host.id === job.host)?.running ?? 0) > 0,
     )
-    if (busy) setConfirming(list)
+    if (busy || list.some((job) => job.now)) setConfirming(list)
     else void run(list)
   }
   const pick = () => setPicking(latest.current.jobs)
-  const latest = useRef({ jobs, start, pick })
-  latest.current = { jobs, start, pick }
+  const latest = useRef({ jobs, start, pick, waiting: waiting.length > 0 })
+  latest.current = { jobs, start, pick, waiting: waiting.length > 0 }
 
   // The notice follows the list: something new pops it up again, a shorter list updates it quietly.
   useEffect(() => {
@@ -260,7 +303,8 @@ export function UpdateNotices({ providerChecks }: { providerChecks: boolean }) {
     const action = one ? t('Update') : t('Update all')
     const install = () => latest.current.start(latest.current.jobs)
     // Several updates can also be taken one at a time, from the list.
-    const choose = one ? undefined : { label: t('Choose'), onClick: () => latest.current.pick() }
+    const choose =
+      one && !latest.current.waiting ? undefined : { label: t('Choose'), onClick: () => latest.current.pick() }
     // Dismissing hides these versions; a provider's is hidden on its host for every device, and a newer one comes back.
     const dismiss = () => {
       const current = latest.current.jobs
@@ -320,7 +364,13 @@ export function UpdateNotices({ providerChecks }: { providerChecks: boolean }) {
             ? t('Update {0}?', { 0: nameOf(confirming[0]!.host) })
             : t('Install {0} updates?', { 0: confirming.length })
         }
-        confirmLabel={confirming.length === 1 ? t('Update') : t('Update all')}
+        confirmLabel={
+          confirming.some((job) => job.now)
+            ? t('Install it anyway')
+            : confirming.length === 1
+              ? t('Update')
+              : t('Update all')
+        }
         onCancel={() => setConfirming(null)}
         onConfirm={() => {
           const list = confirming
@@ -328,12 +378,27 @@ export function UpdateNotices({ providerChecks }: { providerChecks: boolean }) {
           void run(list)
         }}
       >
-        <p className="m-0 text-caption text-muted-foreground">
-          {t(
-            'Ramu restarts on {0}, where threads are working. Threads continue after the restart when Continue threads after restart is on.',
-            { 0: busyHosts.map((host) => `${host.name} (${host.running})`).join(', ') },
-          )}
-        </p>
+        {confirming.some((job) => job.now) && (
+          <p className="m-[0_0_8px] text-caption text-muted-foreground">
+            {t(
+              '{0} came out less than a day ago. Ramu waits a day before offering a release, because a bad one is usually pulled by then.',
+              {
+                0: confirming
+                  .filter((job) => job.now)
+                  .map((job) => `${jobName(job)} ${job.kind === 'ramu' ? job.version : job.update.latest}`)
+                  .join(', '),
+              },
+            )}
+          </p>
+        )}
+        {busyHosts.length > 0 && (
+          <p className="m-0 text-caption text-muted-foreground">
+            {t(
+              'Ramu restarts on {0}, where threads are working. Threads continue after the restart when Continue threads after restart is on.',
+              { 0: busyHosts.map((host) => `${host.name} (${host.running})`).join(', ') },
+            )}
+          </p>
+        )}
         <ul className="m-[8px_0_0] pl-4 text-caption">
           {[...new Set(confirming.map((job) => job.host))].map((host) => (
             <li key={host}>
@@ -432,6 +497,63 @@ export function UpdateNotices({ providerChecks }: { providerChecks: boolean }) {
               })}
           </section>
         ))}
+        {waiting.length > 0 && (
+          <section className="flex flex-col gap-0.5" aria-label={t('Waiting a day')}>
+            <h4 className="m-0 flex items-center gap-1.5 px-1 pb-0.5 text-caption font-medium text-muted-foreground">
+              <Clock size={12} aria-hidden="true" /> {t('Waiting a day')}
+            </h4>
+            {waiting.map((job) => {
+              const state = rows.get(jobKey(job))
+              return (
+                <div
+                  key={jobKey(job)}
+                  className="flex min-h-11 items-center gap-2.5 rounded-(--radius-s) px-1.5 hover:bg-hover"
+                >
+                  {job.kind === 'provider' ? (
+                    <ProviderIcon provider={job.update.provider} size={18} />
+                  ) : (
+                    <Download size={16} className="flex-none text-muted-foreground" />
+                  )}
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-control font-medium text-foreground">
+                      {`${where(job)} ${job.kind === 'ramu' ? job.version : job.update.latest}`}
+                    </span>
+                    <span
+                      className={cn(
+                        'truncate text-caption',
+                        typeof state === 'object' ? 'text-bad' : 'text-muted-foreground',
+                      )}
+                      title={typeof state === 'object' ? state.error : undefined}
+                    >
+                      {typeof state === 'object'
+                        ? state.error
+                        : job.until
+                          ? t('Out less than a day; offered in {0}h', { '0': hoursUntil(job.until) })
+                          : t('Out less than a day')}
+                    </span>
+                  </span>
+                  {state === 'running' ? (
+                    <Loader2 size={13} className="flex-none animate-spin text-muted-foreground" />
+                  ) : state === 'done' ? (
+                    <span className="flex flex-none items-center gap-1 text-caption text-ok">
+                      <Check size={13} /> {t('Updated')}
+                    </span>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      className="flex-none"
+                      disabled={running}
+                      onClick={() => start([job])}
+                    >
+                      {t('Update now')}
+                    </Button>
+                  )}
+                </div>
+              )
+            })}
+          </section>
+        )}
       </div>
     </Dialog>
   )

@@ -1407,7 +1407,7 @@ async function main() {
       if (choice.response === 0) desktopUpdater.install()
       return
     }
-    if (['updates.status', 'updates.check', 'updates.download'].includes(method)) {
+    if (['updates.status', 'updates.check', 'updates.skipWait', 'updates.download'].includes(method)) {
       updateStatus = (await runtimeInvoke(runtime, method, args)) as AppUpdateStatus
       await desktopUpdater.prepare(updateStatus!)
       return updateView(updateStatus!)

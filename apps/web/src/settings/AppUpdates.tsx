@@ -2,10 +2,10 @@ import { useSettingsEvents, useSettingsInvoke } from './SettingsScope'
 import { SettingsRow, SettingsTitle } from '@/components/settings-row'
 import { errorText } from '../lib/errors'
 import { useEffect, useState } from 'react'
-import { Download, RefreshCw } from 'lucide-react'
+import { Clock, Download, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
-import { APP_AUTO_UPDATE, type AppUpdateStatus } from '@ramu/shared/updates'
+import { APP_AUTO_UPDATE, hoursUntil, type AppUpdateStatus } from '@ramu/shared/updates'
 import type { AppPreferences, BackgroundStatus } from '@ramu/shared/types'
 import { ramu } from '../ipc'
 import { notifyError } from '../chat/Notifications'
@@ -31,7 +31,9 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
       clearInterval(timer)
     }
   }, [invoke, on])
-  const act = async (method: 'updates.check' | 'updates.download' | 'updates.restart' | 'background.restart') => {
+  const act = async (
+    method: 'updates.check' | 'updates.skipWait' | 'updates.download' | 'updates.restart' | 'background.restart',
+  ) => {
     setBusy(true)
     setError(null)
     try {
@@ -44,6 +46,8 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
     }
   }
   const working = busy || state?.phase === 'checking' || state?.phase === 'downloading'
+  // Installing a release out less than a day asks once more, on the same button.
+  const [confirmNow, setConfirmNow] = useState(false)
   return (
     <div className="settings-form [&_p]:m-[0_0_8px] [&_>_p.muted]:m-[12px_0] [&_>_p.muted]:leading-[1.55] flex flex-col gap-0">
       <SettingsRow className="">
@@ -81,6 +85,51 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
           onCheckedChange={(appUpdateChecks) => onChange({ ...value, appUpdateChecks })}
         />
       </SettingsRow>
+      <SettingsRow setting="updateWait" className="settings-toggle">
+        <span>
+          <SettingsTitle>{t('Wait a day before offering updates')}</SettingsTitle>
+          <span className="muted text-muted-foreground block block small text-caption">
+            {t(
+              'New provider CLI and Ramu releases are offered once they have been out 24 hours, so a bad release is usually pulled before it reaches you. You can still install one now.',
+            )}
+          </span>
+        </span>
+        <Switch
+          aria-label={t('Wait a day before offering updates')}
+          checked={value.updateWait}
+          onCheckedChange={(updateWait) => onChange({ ...value, updateWait })}
+        />
+      </SettingsRow>
+      {state?.waiting && (
+        <SettingsRow>
+          <span className="flex min-w-0 items-start gap-2">
+            <Clock size={14} className="mt-1 flex-none text-muted-foreground" aria-hidden="true" />
+            <span>
+              <strong>{t('{0} is waiting', { '0': `Ramu ${state.waiting.version}` })}</strong>
+              <span className="muted text-muted-foreground block small text-caption">
+                {t('Out less than a day; offered in {0}h. A bad release is usually pulled by then.', {
+                  '0': hoursUntil(state.waiting.settlesAt),
+                })}
+              </span>
+              <a className="small text-caption" href={state.waiting.notesUrl} target="_blank" rel="noreferrer">
+                {t('Release notes ↗')}
+              </a>
+            </span>
+          </span>
+          <Button
+            variant={confirmNow ? 'destructive' : 'ghost'}
+            disabled={working}
+            onBlur={() => setConfirmNow(false)}
+            onClick={() => {
+              if (!confirmNow) return setConfirmNow(true)
+              setConfirmNow(false)
+              void act('updates.skipWait')
+            }}
+          >
+            {confirmNow ? t('Install it anyway') : t('Update now')}
+          </Button>
+        </SettingsRow>
+      )}
       {APP_AUTO_UPDATE && (
         <SettingsRow setting="appAutoUpdate" className="settings-toggle">
           <span>
@@ -143,7 +192,7 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
           )}
         </SettingsRow>
       )}
-      {!state?.release && state?.checkedAt && (
+      {!state?.release && !state?.waiting && state?.checkedAt && (
         <p className="muted text-muted-foreground small text-caption">
           {t('No newer release is available for this platform.')}
         </p>

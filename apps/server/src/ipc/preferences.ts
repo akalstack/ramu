@@ -244,6 +244,7 @@ export const appPreferences = z.object({
   providerBinaries: providerBinaries.default({}),
   providerUpdateChecks: z.boolean().default(true),
   appUpdateChecks: z.boolean().default(true),
+  updateWait: z.boolean().default(true),
   appAutoUpdate: z.boolean().default(false),
   keepAwake: z.boolean().default(false),
   keepAwakeWhen: z.enum(['plugged-in', 'always']).default('plugged-in'),

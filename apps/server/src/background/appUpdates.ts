@@ -4,7 +4,7 @@ import { open } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { newerVersion } from '@ramu/shared/version'
-import { APP_AUTO_UPDATE, type AppRelease, type AppUpdateStatus } from '@ramu/shared/updates'
+import { APP_AUTO_UPDATE, UPDATE_WAIT_MS, type AppRelease, type AppUpdateStatus } from '@ramu/shared/updates'
 import type { AppPreferences } from '@ramu/shared/types'
 
 export const RAMU_RELEASES = 'https://github.com/akalstack/ramu/releases'
@@ -67,11 +67,15 @@ export class AppUpdateService {
   private generation = 0
   private abort = new AbortController()
   private state: AppUpdateStatus
+  /** The newer release found while it is still waiting, and the one the person chose to install without waiting. */
+  private held: AppRelease | null = null
+  private accepted: string | null = null
   readonly directory: string
   constructor(
     userData: string,
     currentVersion: string,
-    private preferences: () => Pick<AppPreferences, 'appUpdateChecks' | 'appAutoUpdate'>,
+    private preferences: () => Pick<AppPreferences, 'appUpdateChecks' | 'appAutoUpdate'> &
+      Partial<Pick<AppPreferences, 'updateWait'>>,
     private emit: (state: AppUpdateStatus) => void,
   ) {
     this.directory = join(userData, 'app-updates')
@@ -162,8 +166,28 @@ export class AppUpdateService {
         const text = await response.text()
         if (text.length > 2_000_000) throw new Error('Release response too large')
         const release = parseAppRelease(JSON.parse(text))
-        if (release && newerVersion(release.version, this.state.currentVersion))
+        const settles = release ? Date.parse(release.publishedAt) + UPDATE_WAIT_MS : 0
+        const waits =
+          !!release &&
+          this.preferences().updateWait !== false &&
+          release.version !== this.accepted &&
+          settles > Date.now()
+        this.held = waits ? release : null
+        if (release && waits && newerVersion(release.version, this.state.currentVersion))
+          // A release out less than a day is named, not offered: a bad one is usually pulled within hours.
           this.change({
+            phase: ready ? 'ready' : 'idle',
+            checkedAt: new Date().toISOString(),
+            waiting: {
+              version: release.version,
+              notesUrl: release.notesUrl,
+              settlesAt: new Date(settles).toISOString(),
+            },
+            ...(ready ? {} : { release: null }),
+          })
+        else if (release && newerVersion(release.version, this.state.currentVersion))
+          this.change({
+            waiting: null,
             phase: ready && release.version === this.state.release?.version ? 'ready' : 'available',
             release,
             checkedAt: new Date().toISOString(),
@@ -172,6 +196,7 @@ export class AppUpdateService {
           this.change({
             phase: ready ? 'ready' : 'idle',
             checkedAt: new Date().toISOString(),
+            waiting: null,
             ...(ready ? {} : { release: null }),
           })
       } catch (error) {
@@ -186,6 +211,17 @@ export class AppUpdateService {
       this.running = undefined
     })
     return this.running
+  }
+  /** Offers the waiting release now, at the person's choice; it stays offered on later checks. */
+  async skipWait(): Promise<AppUpdateStatus> {
+    if (!this.held) await this.check()
+    const release = this.held
+    if (!release) return this.status()
+    this.accepted = release.version
+    this.held = null
+    if (this.state.phase !== 'ready') this.change({ phase: 'available', release, waiting: null })
+    else this.change({ waiting: null })
+    return this.status()
   }
   download(): Promise<AppUpdateStatus> {
     if (this.downloading) return this.downloading

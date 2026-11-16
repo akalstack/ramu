@@ -68,9 +68,12 @@ export const registerBackgroundHandlers: RegisterHandlers = ({
   'updates.status': { args: z.tuple([]), run: () => updates.status() },
   'updates.check': { args: z.tuple([]), run: () => updates.check() },
   'updates.download': { args: z.tuple([]), run: () => updates.download() },
+  'updates.skipWait': { args: z.tuple([]), run: () => updates.skipWait() },
   'updates.apply': {
-    args: z.tuple([]),
-    run: async () => {
+    args: z.tuple([z.boolean().optional()]),
+    run: async (now?: boolean) => {
+      // `now` installs a release still inside its waiting period, at the person's choice.
+      if (now) await updates.skipWait()
       const { result, restartService } = await hostUpdates.apply()
       // The asking device gets the answer first; the service manager then starts the new build.
       if (restartService) setTimeout(() => host.restartService?.(), 1000)

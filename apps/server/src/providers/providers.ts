@@ -27,9 +27,11 @@ import {
 } from './providerBinaries'
 import type { ProviderApiKeyStore } from './apiKeyStore'
 import { supportsApiKey } from '@ramu/shared/providers/apiKeys'
+import { offeredVersion, recordSeen, settlesAt, type SeenVersions } from '@ramu/shared/updates'
 
 type Release = { version: string; checkedAt: string; downloadUrl?: string }
 type Cache = Partial<Record<AgentProvider, Release>>
+type Seen = Partial<Record<AgentProvider, SeenVersions>>
 export { parseProviderVersion }
 import { newerVersion } from '@ramu/shared/version'
 import { launchCompatibility } from './launchCompatibility'
@@ -69,19 +71,23 @@ export class ProviderService {
   private statusCache?: { key: string; at: number; result: Promise<ProviderStatus[]> }
   private statusConfiguration = ''
   private releases: Cache
+  /** When each provider's releases were first seen, which is when their waiting period starts. */
+  private seen: Seen
   private dismissed: Record<string, boolean>
   private updating = new Map<AgentProvider, Promise<ProviderStatus>>()
   private updateErrors = new Map<AgentProvider, string>()
   /** Kept ability checks, shown with each provider's compatibility; the host sets this. */
   abilityChecks: (provider: AgentProvider) => import('@ramu/shared/providers/abilities').AbilityCheck[] = () => []
   constructor(
-    private preferences: () => Pick<AppPreferences, 'providerBinaries' | 'providerUpdateChecks'>,
+    private preferences: () => Pick<AppPreferences, 'providerBinaries' | 'providerUpdateChecks'> &
+      Partial<Pick<AppPreferences, 'updateWait'>>,
     private read: <T>(key: string, fallback: T) => T,
     private write: (key: string, value: unknown) => void,
     private emit: (statuses: ProviderStatus[]) => void,
     private activity?: ActivityService,
   ) {
     this.releases = read<Cache>('provider-releases', {})
+    this.seen = read<Seen>('provider-versions-seen', {})
     this.dismissed = read<Record<string, boolean>>('provider-updates-dismissed', {})
     this.settingsChanged()
   }
@@ -292,12 +298,30 @@ export class ProviderService {
     this.statusCache = undefined
     this.onLoginChange?.(provider, accountId)
   }
-  /** Shell-free updater, shared by manual actions and the detached service timer. */
-  update(provider: AgentProvider): Promise<ProviderStatus> {
+  private noteRelease(provider: AgentProvider, release: Release) {
+    this.seen[provider] = recordSeen(this.seen[provider] ?? {}, release.version)
+  }
+  /** The release offered now: the newest, or with waiting on, the newest that has been out a day. */
+  private offered(provider: AgentProvider, latest: string) {
+    return offeredVersion(this.seen[provider] ?? {}, latest, {
+      wait: this.preferences().updateWait !== false,
+      pins: !!providerAdapter(provider).pinsVersion,
+    })
+  }
+  /**
+   * Shell-free updater, shared by manual actions and the detached service timer. It installs the release that has
+   * waited; a CLI that can only update to its newest release is held while that one is still waiting, checked again
+   * just before it runs. `now` installs the newest release at once, for a fix that cannot wait.
+   */
+  update(provider: AgentProvider, now = false): Promise<ProviderStatus> {
     const pending = this.updating.get(provider)
     if (pending) return pending
+    const waiting = this.preferences().updateWait !== false && !now
+    const pins = !!providerAdapter(provider).pinsVersion
     // Never install a release this policy already knows cannot work; the card explains the manual path instead.
-    const known = this.releases[provider]?.version
+    const known =
+      (waiting ? this.offered(provider, this.releases[provider]?.version ?? '') : null) ??
+      this.releases[provider]?.version
     const target = launchCompatibility.target(provider, known ?? null)
     if (target?.status === 'incompatible')
       return Promise.reject(
@@ -308,7 +332,28 @@ export class ProviderService {
     const controller = new AbortController()
     const update = async () => {
       const config = this.preferences().providerBinaries
+      let version: string | undefined
+      if (waiting) {
+        // Read the newest release again: one published since the last check must not slip in through the updater.
+        const current = this.releases[provider]?.version
+        const fresh = await latestProviderRelease(provider, current ?? null).catch(() => this.releases[provider])
+        if (fresh) {
+          this.releases[provider] = { ...fresh }
+          this.noteRelease(provider, fresh)
+          this.write('provider-releases', this.releases)
+          this.write('provider-versions-seen', this.seen)
+        }
+        const offered = fresh ? this.offered(provider, fresh.version) : null
+        if (!offered || (!pins && offered !== fresh?.version)) {
+          const firstSeen = fresh ? this.seen[provider]?.[fresh.version] : undefined
+          throw new Error(
+            `${fresh?.version ?? 'The newest release'} came out less than a day ago${firstSeen ? ` and is offered from ${settlesAt(firstSeen)}` : ''}. Choose Update now to install it anyway.`,
+          )
+        }
+        if (pins) version = offered
+      }
       const plan = providerAdapter(provider).updatePlan({
+        version,
         config,
         binary: providerBinary(provider, config),
         findExecutable,
@@ -367,8 +412,9 @@ export class ProviderService {
   private key(s: ProviderStatus) {
     return `${s.provider}:${s.binary}:${s.latestVersion}`
   }
+  /** Updates to offer, and releases still waiting out their day so devices can say when they come (or install now). */
   notices(statuses: ProviderStatus[]) {
-    return statuses.filter((s) => s.updateAvailable && !this.dismissed[this.key(s)])
+    return statuses.filter((s) => (s.updateAvailable || s.waitingVersion) && !this.dismissed[this.key(s)])
   }
   dismiss(status: ProviderStatus) {
     this.dismissed[this.key(status)] = true
@@ -443,6 +489,7 @@ export class ProviderService {
           try {
             release = await latestProviderRelease(provider, version)
             this.releases[provider] = release
+            this.noteRelease(provider, release)
           } catch (reason) {
             error = `Latest version check failed: ${(reason as Error).message}`
           }
@@ -473,10 +520,17 @@ export class ProviderService {
             }),
           )
         }
+        // What is offered is the release that has waited; a newer one still waiting is reported beside it.
+        const offered = release ? this.offered(provider, release.version) : null
+        const firstSeen = release ? this.seen[provider]?.[release.version] : undefined
+        const waitingVersion =
+          release && version && offered !== release.version && newerVersion(release.version, version)
+            ? release.version
+            : undefined
         const compatibility = installed ? launchCompatibility.observe(provider, binary, version) : null
         const updateCompatibility =
-          installed && version && release && newerVersion(release.version, version)
-            ? launchCompatibility.target(provider, release.version)
+          installed && version && offered && newerVersion(offered, version)
+            ? launchCompatibility.target(provider, offered)
             : null
         const setup = providerSetup(provider, version)
         const quoted =
@@ -501,9 +555,10 @@ export class ProviderService {
           accountsSupported: supportsProviderAccounts(provider),
           updating: this.updating.has(provider),
           ...(this.updateErrors.has(provider) ? { updateError: this.updateErrors.get(provider) } : {}),
-          latestVersion: release?.version ?? null,
+          latestVersion: offered ?? (waitingVersion ? version : (release?.version ?? null)),
           checkedAt: release?.checkedAt ?? null,
-          updateAvailable: !!(installed && version && release && newerVersion(release.version, version)),
+          updateAvailable: !!(installed && version && offered && newerVersion(offered, version)),
+          ...(waitingVersion ? { waitingVersion, ...(firstSeen ? { waitingUntil: settlesAt(firstSeen) } : {}) } : {}),
           ...(error ? { error } : {}),
           ...(versionError ? { versionError } : {}),
           ...(release?.downloadUrl ? { downloadUrl: release.downloadUrl } : {}),
@@ -511,7 +566,10 @@ export class ProviderService {
         }
       }),
     )
-    if (checkLatest && !this.closed) this.write('provider-releases', this.releases)
+    if (checkLatest && !this.closed) {
+      this.write('provider-releases', this.releases)
+      this.write('provider-versions-seen', this.seen)
+    }
     return statuses
   }
   close() {

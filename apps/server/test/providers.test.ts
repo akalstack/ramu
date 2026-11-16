@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { latestProviderRelease, newerVersion, parseProviderVersion, ProviderService } from '../src/providers/providers'
@@ -28,12 +28,15 @@ beforeEach(() => {
     `#!/usr/bin/env node
 const fs=require('fs');fs.appendFileSync(${JSON.stringify(join(dir, 'calls'))},JSON.stringify({args:process.argv.slice(2),helper:process.env.ANTIGRAVITY_HARNESS_PATH})+'\\n');
 if(process.argv.includes('--version')) console.log('custom-cli 1.2.3');
+else if(process.argv[2]==='update') process.exit(0);
 else require('readline').createInterface({input:process.stdin}).on('line',line=>{const m=JSON.parse(line);console.log(JSON.stringify({jsonrpc:'2.0',id:m.id,result:{protocolVersion:1,agentInfo:{name:'Antigravity',version:'1.2.3'}}}));});
 `,
   )
   chmodSync(bin, 0o755)
   preferences = {
     ...DEFAULT_APP_PREFERENCES,
+    // Most tests are about checking and installing; waiting a day has its own tests below.
+    updateWait: false,
     providerBinaries: {
       'claude-code': { binary: bin },
       codex: { binary: bin },
@@ -316,4 +319,50 @@ it('reads one provider and its logins without probing the others', async () => {
   expect(status).toMatchObject({ provider: 'codex', installed: true, version: '1.2.3' })
   expect(Object.keys(status.signIn ?? {}).sort()).toEqual(['default', 'work'])
   for (const [provider, probe] of probes) expect(probe).toHaveBeenCalledTimes(provider === 'codex' ? 1 : 0)
+})
+
+describe('waiting a day before an update is offered', () => {
+  const calls = () =>
+    (existsSync(join(dir, 'calls')) ? readFileSync(join(dir, 'calls'), 'utf8') : '')
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as { args: string[] })
+  it('names a release seen less than a day ago instead of offering it, and offers it once it has waited', async () => {
+    mockReleases()
+    preferences = { ...preferences, updateWait: true }
+    create()
+    const fresh = (await service.status(undefined, true)).find((s) => s.provider === 'claude-code')!
+    expect(fresh).toMatchObject({ updateAvailable: false, waitingVersion: '1.4.0', latestVersion: '1.2.3' })
+    expect(Date.parse(fresh.waitingUntil!)).toBeGreaterThan(Date.now() + 23 * 3_600_000)
+    // The same release, seen two days ago.
+    service.close()
+    store.set('provider-versions-seen', {
+      'claude-code': { '1.4.0': new Date(Date.now() - 2 * 86_400_000).toISOString() },
+    })
+    create()
+    const settled = (await service.status(undefined, true)).find((s) => s.provider === 'claude-code')!
+    expect(settled).toMatchObject({ updateAvailable: true, latestVersion: '1.4.0' })
+    expect(settled.waitingVersion).toBeUndefined()
+  })
+  it('holds a self-updating CLI while its newest release waits, and installs it at once when asked', async () => {
+    mockReleases()
+    preferences = { ...preferences, updateWait: true }
+    create()
+    await expect(service.update('claude-code')).rejects.toThrow('less than a day ago')
+    expect(calls().some((call) => call.args[0] === 'update')).toBe(false)
+    await service.update('claude-code', true)
+    expect(calls().some((call) => call.args[0] === 'update')).toBe(true)
+  })
+  it('pins Codex to the exact release that has waited', () => {
+    const plan = providerAdapter('codex').updatePlan({
+      config: {},
+      binary: 'codex',
+      findExecutable: (command) => `/usr/bin/${command}`,
+      runtimeHome: '/tmp/runtime',
+      installRuntime: async () => {},
+      version: '1.3.0',
+    })
+    expect('args' in plan && plan.args.at(-1)).toBe('@openai/codex@1.3.0')
+  })
 })

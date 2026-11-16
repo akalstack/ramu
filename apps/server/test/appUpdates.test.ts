@@ -176,3 +176,34 @@ it('cancels a download without staging partial files and permits another downloa
   expect(await downloading).toMatchObject({ phase: 'available', error: null, downloadedBytes: 0 })
   expect((await service.download()).phase).toBe('ready')
 })
+it('names a release out less than a day instead of offering it, until the person installs it now', async () => {
+  const release = { ...fixture('zip'), published_at: new Date(Date.now() - 3_600_000).toISOString() }
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify(release))),
+  )
+  const { service } = make()
+  const waiting = await service.check()
+  expect(waiting).toMatchObject({ phase: 'idle', release: null, waiting: { version: '0.2.0' } })
+  expect(Date.parse(waiting.waiting!.settlesAt)).toBeGreaterThan(Date.now() + 22 * 3_600_000)
+  expect(await service.skipWait()).toMatchObject({ phase: 'available', release: { version: '0.2.0' }, waiting: null })
+  // The choice holds on the next check.
+  expect((await service.check()).phase).toBe('available')
+})
+it('offers a fresh release at once when waiting is off', async () => {
+  const release = { ...fixture('zip'), published_at: new Date().toISOString() }
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify(release))),
+  )
+  const dir = mkdtempSync(join(tmpdir(), 'ramu updates '))
+  dirs.push(dir)
+  const service = new AppUpdateService(
+    dir,
+    '0.1.0',
+    () => ({ appUpdateChecks: false, appAutoUpdate: false, updateWait: false }),
+    vi.fn(),
+  )
+  services.push(service)
+  expect((await service.check()).phase).toBe('available')
+})

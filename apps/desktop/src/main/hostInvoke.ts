@@ -71,6 +71,7 @@ export const isHostInvokeAllowed = (method: unknown): method is string =>
     // Keeping that host current: its own Ramu release and its provider CLIs.
     'updates.status',
     'updates.check',
+    'updates.skipWait',
     'updates.apply',
     'providers.updates',
     'providers.update',

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, Linking, Pressable, View } from 'react-native'
 import type { AgentProvider, HostUpdateResult } from '@ramu/shared/types'
-import { hostUpdateSummary, type HostUpdateSummary } from '@ramu/shared/updates'
+import { hostUpdateSummary, hoursUntil, type HostUpdateSummary, type WaitingUpdate } from '@ramu/shared/updates'
 import { providerName } from '@ramu/shared/providers/providers'
 import { useStore } from '../runtime/store'
 import { useSay } from '../i18n'
@@ -119,11 +119,43 @@ export function HostUpdates({ hostId, name, running }: { hostId: string; name: s
       {action(updating ? say('Updating…') : say('Update'), onPress)}
     </View>
   )
+  // A release out less than a day: installing it now is a choice, asked once.
+  const installNow = (entry: WaitingUpdate) => {
+    const label = `${entry.provider === 'ramu' ? 'Ramu' : providerName(entry.provider)} ${entry.version}`
+    Alert.alert(
+      say('Install {0} now?', { 0: label }),
+      say(
+        '{0} came out less than a day ago. Ramu waits a day before offering a release, because a bad one is usually pulled by then.',
+        { 0: label },
+      ),
+      [
+        { text: say('Cancel'), style: 'cancel' },
+        {
+          text: say('Install it anyway'),
+          style: 'destructive',
+          onPress: () => {
+            const provider = entry.provider
+            setBusy(provider)
+            const run =
+              provider === 'ramu'
+                ? store.invoke(hostId, 'updates.apply', true).then(report)
+                : store.invoke(hostId, 'providers.update', provider, true).then(() => {})
+            run
+              .catch((error) => Alert.alert(name, error instanceof Error ? error.message : String(error)))
+              .finally(() => {
+                setBusy(null)
+                load()
+              })
+          },
+        },
+      ],
+    )
+  }
   const count = summary.providers.length + (summary.nextVersion ? 1 : 0)
   return (
     <View style={{ gap: space.xs }}>
       <T size={font.caption} tone="muted">
-        {line.join(' · ') || (count ? '' : say('Up to date'))}
+        {line.join(' · ') || (count || summary.waiting.length ? '' : say('Up to date'))}
       </T>
       {summary.nextVersion
         ? row(
@@ -143,6 +175,41 @@ export function HostUpdates({ hostId, name, running }: { hostId: string; name: s
           () => void updateProviders(entry.provider),
         ),
       )}
+      {summary.waiting.map((entry) => (
+        <View
+          key={`waiting:${entry.provider}`}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 34 }}
+        >
+          <View style={{ flex: 1 }}>
+            <T size={font.control} numberOfLines={1}>
+              {`${entry.provider === 'ramu' ? 'Ramu' : providerName(entry.provider)} ${entry.version}`}
+            </T>
+            <T size={font.caption} tone="muted" numberOfLines={1}>
+              {entry.until
+                ? say('Out less than a day; offered in {0}h', { 0: hoursUntil(entry.until) })
+                : say('Out less than a day')}
+            </T>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={6}
+            disabled={!!busy}
+            onPress={() => installNow(entry)}
+            style={({ pressed }) => ({
+              minHeight: 30,
+              justifyContent: 'center',
+              paddingHorizontal: space.s + 2,
+              borderRadius: radius.full,
+              backgroundColor: pressed ? c.pressed : 'transparent',
+              opacity: busy ? 0.6 : 1,
+            })}
+          >
+            <T size={font.control} weight="500" tone="muted">
+              {busy === entry.provider ? say('Updating…') : say('Update now')}
+            </T>
+          </Pressable>
+        </View>
+      ))}
       {summary.providers.length > 1 ? (
         <View style={{ flexDirection: 'row' }}>
           {action(

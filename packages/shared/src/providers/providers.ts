@@ -57,6 +57,9 @@ export interface ProviderStatus {
   version: string | null
   latestVersion: string | null
   updateAvailable: boolean
+  /** A newer release still inside its waiting period, and when it will be offered; `latestVersion` is what is offered. */
+  waitingVersion?: string
+  waitingUntil?: string
   checkedAt: string | null
   error?: string
   versionError?: string

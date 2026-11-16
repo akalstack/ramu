@@ -146,8 +146,8 @@ export const registerProviderHandlers: RegisterHandlers = ({
         providers.loginCommand(provider, config),
     },
     'providers.update': {
-      args: z.tuple([agentSettings.shape.provider]),
-      run: (provider: ProviderStatus['provider']) => providers.update(provider),
+      args: z.tuple([agentSettings.shape.provider, z.boolean().optional()]),
+      run: (provider: ProviderStatus['provider'], now?: boolean) => providers.update(provider, now),
     },
     'providers.updates': { args: z.tuple([]), run: () => providers.updates() },
     'providers.dismissUpdate': {

@@ -115,7 +115,7 @@ it('gives memory a unit, in megabytes under a gigabyte', () => {
   expect(memorySize(11.4 * 1024 ** 3)).toBe('11 GB')
 })
 
-it('puts a row\'s CPU on the same whole-host scale as the bar', () => {
+it("puts a row's CPU on the same whole-host scale as the bar", () => {
   expect(cpuPercent(8, 8)).toBe('1%')
   expect(cpuPercent(3, 8)).toBe('0%')
   expect(cpuPercent(400, 8)).toBe('50%')

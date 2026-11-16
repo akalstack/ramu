@@ -937,7 +937,10 @@ export interface RamuMethods extends ArtifactMethods {
   'updates.download'(): Promise<AppUpdateStatus>
   'updates.restart'(): Promise<void>
   /** Installs the newest release on this host: through its desktop app, or by rebuilding a headless source checkout. Owner devices only. */
-  'updates.apply'(): import('./types').HostUpdateResult
+  /** Offers a release still inside its waiting period now. */
+  'updates.skipWait'(): Promise<AppUpdateStatus>
+  /** `now` installs a release still inside its waiting period. */
+  'updates.apply'(now?: boolean): import('./types').HostUpdateResult
   /** Quits and reopens the desktop app; the background service keeps running. */
   'app.relaunch'(): void
   /** Chats working or waiting for the user. */
@@ -1315,7 +1318,8 @@ export interface RamuMethods extends ArtifactMethods {
     variable: string,
     key: string | null,
   ): Promise<void>
-  'providers.update'(provider: ProviderStatus['provider']): Promise<ProviderStatus>
+  /** Installs the release that has waited a day; `now` installs the newest at once. */
+  'providers.update'(provider: ProviderStatus['provider'], now?: boolean): Promise<ProviderStatus>
   /** Live ability checks for each provider's chosen login on its installed version, plus whether checks are running. */
   /** The checks, Shared MCP checks and the media services with a saved key. */
   'abilities.checks'(): {

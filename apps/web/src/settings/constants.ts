@@ -16,6 +16,7 @@ export const RESET_KEYS: Partial<Record<SettingsSection, (keyof AppPreferences)[
   devices: ['testDevices'],
   system: [
     'appUpdateChecks',
+    'updateWait',
     'appAutoUpdate',
     'keepAwake',
     'keepAwakeWhen',

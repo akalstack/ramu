@@ -298,11 +298,11 @@ export function ProviderSettings({
       setError(errorText(reason))
     }
   }
-  const update = async (provider: AgentProvider) => {
+  const update = async (provider: AgentProvider, now = false) => {
     setUpdating(provider)
     setError(null)
     try {
-      await invoke('providers.update', provider)
+      await invoke('providers.update', provider, now)
       await refresh(false, false, [provider])
     } catch (reason) {
       setError(errorText(reason))
@@ -426,6 +426,7 @@ export function ProviderSettings({
               mcpRechecking={(id) => rechecking === `${provider}:${id}`}
               onMcpRecheck={canShare ? (id) => void recheck(provider, id) : undefined}
               onUpdate={() => void update(provider)}
+              onUpdateNow={() => void update(provider, true)}
               stale={stale && !!status}
               checking={checking.has(provider)}
               onCheckAgain={() => void refresh(false, false, [provider])}

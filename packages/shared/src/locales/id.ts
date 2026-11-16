@@ -5694,6 +5694,23 @@ export const indonesian: Readonly<Record<string, string>> = {
   Export: 'Ekspor',
   'Choose where to put it': 'Pilih tempatnya',
   'Put it here': 'Taruh di sini',
+  'Install {0} now?': 'Pasang {0} sekarang?',
+  'Wait a day before offering updates': 'Tunggu sehari sebelum menawarkan pembaruan',
+  'New provider CLI and Ramu releases are offered once they have been out 24 hours, so a bad release is usually pulled before it reaches you. You can still install one now.':
+    'Rilis baru CLI provider dan Ramu ditawarkan setelah 24 jam, jadi rilis yang buruk biasanya sudah ditarik sebelum sampai ke kamu. Kamu tetap bisa memasangnya sekarang.',
+  'New provider and Ramu releases are offered once they have been out 24 hours. You can still install one now.':
+    'Rilis baru provider dan Ramu ditawarkan setelah 24 jam. Kamu tetap bisa memasangnya sekarang.',
+  '{0} is waiting': '{0} sedang menunggu',
+  'Out less than a day; offered in {0}h. A bad release is usually pulled by then.':
+    'Rilis kurang dari sehari; ditawarkan dalam {0} jam. Rilis yang buruk biasanya sudah ditarik saat itu.',
+  'Out less than a day. A bad release is usually pulled by then.':
+    'Rilis kurang dari sehari. Rilis yang buruk biasanya sudah ditarik saat itu.',
+  'Install it anyway': 'Tetap pasang',
+  'Waiting a day': 'Menunggu sehari',
+  'Out less than a day; offered in {0}h': 'Rilis kurang dari sehari; ditawarkan dalam {0} jam',
+  'Out less than a day': 'Rilis kurang dari sehari',
+  '{0} came out less than a day ago. Ramu waits a day before offering a release, because a bad one is usually pulled by then.':
+    '{0} dirilis kurang dari sehari lalu. Ramu menunggu sehari sebelum menawarkan rilis, karena rilis yang buruk biasanya sudah ditarik saat itu.',
   'Restarts {0}': 'Memulai ulang {0}',
   'Update all providers ({0})': 'Perbarui semua provider ({0})',
   Choose: 'Pilih',

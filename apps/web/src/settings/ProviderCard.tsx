@@ -3,7 +3,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { FolderOpen, RefreshCw } from 'lucide-react'
+import { Clock, FolderOpen, RefreshCw } from 'lucide-react'
+import { hoursUntil } from '@ramu/shared/updates'
 import {
   accountDisplayName,
   providerAccountRows,
@@ -60,6 +61,7 @@ export function ProviderCard({
   mcpRechecking,
   onMcpRecheck,
   onUpdate,
+  onUpdateNow,
   onBrowse,
   models,
   stale = false,
@@ -97,6 +99,8 @@ export function ProviderCard({
   mcpRechecking?: (id: string) => boolean
   onMcpRecheck?: (id: string) => void
   onUpdate: () => void
+  /** Installs a release still inside its waiting period. */
+  onUpdateNow?: () => void
   onBrowse: (key: 'binary' | 'harness') => void
   /** The control for which of this provider's models are listed. */
   models?: ReactNode
@@ -108,6 +112,8 @@ export function ProviderCard({
   onUpdateRamu?: () => void
 }) {
   const [advanced, setAdvanced] = useState(false)
+  // Installing a release out less than a day asks once more, on the same button.
+  const [confirmNow, setConfirmNow] = useState(false)
   const accounts = supportsProviderAccounts(provider),
     config = { [provider]: preferences ?? { binary: '' } },
     order = accounts ? providerAccountRows(config, provider) : ['default'],
@@ -324,6 +330,37 @@ export function ProviderCard({
             </a>
           </SettingsRow>
         ))}
+      {enabled && canUpdate && status?.installed && status.waitingVersion && onUpdateNow && (
+        <SettingsRow>
+          <span className="flex min-w-0 items-start gap-2">
+            <Clock size={14} className="mt-0.5 flex-none text-muted-foreground" aria-hidden="true" />
+            <SettingsLabel
+              title={t('{0} is waiting', { '0': status.waitingVersion })}
+              help={
+                status.waitingUntil
+                  ? t('Out less than a day; offered in {0}h. A bad release is usually pulled by then.', {
+                      '0': hoursUntil(status.waitingUntil),
+                    })
+                  : t('Out less than a day. A bad release is usually pulled by then.')
+              }
+            />
+          </span>
+          <Button
+            variant={confirmNow ? 'destructive' : 'ghost'}
+            size="sm"
+            className="flex-none"
+            disabled={updating !== null || status.updating}
+            onBlur={() => setConfirmNow(false)}
+            onClick={() => {
+              if (!confirmNow) return setConfirmNow(true)
+              setConfirmNow(false)
+              onUpdateNow()
+            }}
+          >
+            {confirmNow ? t('Install it anyway') : t('Update now')}
+          </Button>
+        </SettingsRow>
+      )}
       {enabled && models}
       {enabled && incompatible && status.installed && (
         <SettingsRow className="settings-stack">

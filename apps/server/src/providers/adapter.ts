@@ -41,6 +41,8 @@ export interface UpdateContext {
   runtimeHome: string
   /** Downloads and activates Ramu's managed runtime (Antigravity). */
   installRuntime: () => Promise<void>
+  /** The exact release to install, for an adapter that can pin one (`pinsVersion`); otherwise the newest. */
+  version?: string
 }
 
 /**
@@ -148,6 +150,8 @@ export interface ProviderAdapter {
   skillsLaunch?(exportDir: string, cwd?: string): SkillsLaunch
   /** Decides how to update; throws when this installation cannot be updated by Ramu. */
   updatePlan(ctx: UpdateContext): UpdatePlan
+  /** The update installs the exact `version` it is given, so an older release that has waited can be installed. */
+  readonly pinsVersion?: boolean
 }
 
 type AdapterDefaults = Pick<ProviderAdapter, 'searchDirs' | 'probeVersion'>

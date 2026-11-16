@@ -776,6 +776,13 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
       rows: [
         {
           kind: 'toggle',
+          path: 'updateWait',
+          title: 'Wait a day before offering updates',
+          help: 'New provider and Ramu releases are offered once they have been out 24 hours. You can still install one now.',
+          words: 'security supply chain delay cooldown release age 24 hours compromised',
+        },
+        {
+          kind: 'toggle',
           path: 'appUpdateChecks',
           title: 'Check app updates',
           help: 'Look for new Ramu releases on the host.',
