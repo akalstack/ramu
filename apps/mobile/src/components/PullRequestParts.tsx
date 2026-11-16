@@ -1,12 +1,17 @@
 import { View } from 'react-native'
 import {
+  Bot,
   CircleCheck,
   CircleDot,
   CircleX,
+  Eye,
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
   GitPullRequestDraft,
+  MessageSquare,
+  MessageSquareReply,
+  TriangleAlert,
 } from 'lucide-react-native'
 import type { PullRequestStage, PullRequestSummary } from '@ramu/shared/types'
 import {
@@ -15,7 +20,7 @@ import {
   pullRequestGlyph,
   type PullRequestTone,
 } from '@ramu/shared/pullRequests'
-import { font, useTheme } from '../theme'
+import { font, radius, useTheme } from '../theme'
 import { useSay } from '../i18n'
 import { T } from './ui'
 
@@ -75,13 +80,56 @@ export function PullRequestGlyph({
   )
 }
 
-/** The stage's words in its colour, for rows and headers. */
+/** One mark per stage, the same as the desktop's, so the pill reads at a glance. */
+const STAGE_ICON: Record<PullRequestStage, typeof CircleX> = {
+  'replies-ready': MessageSquareReply,
+  'agent-working': Bot,
+  conflicts: TriangleAlert,
+  'checks-failing': CircleX,
+  'changes-requested': MessageSquare,
+  draft: GitPullRequestDraft,
+  'checks-pending': CircleDot,
+  'review-required': Eye,
+  ready: CircleCheck,
+  merged: GitMerge,
+  closed: GitPullRequestClosed,
+}
+
+/** The stage as a small tinted pill with its mark, for rows and headers, as the desktop draws it. */
 export function StageText({ stage, size = font.caption }: { stage: PullRequestStage; size?: number }) {
   const say = useSay()
+  const { c } = useTheme()
+  const tone = PULL_REQUEST_STAGE_TONE[stage]
+  const Icon = STAGE_ICON[stage]
+  const color = tone === 'muted' ? c.muted : c[tone]
+  const wash =
+    tone === 'ok'
+      ? c.okWash
+      : tone === 'warn'
+        ? c.warnWash
+        : tone === 'bad'
+          ? c.badWash
+          : tone === 'accent'
+            ? c.accentWash
+            : c.fill
   return (
-    <T size={size} tone={PULL_REQUEST_STAGE_TONE[stage]} numberOfLines={1} style={{ flexShrink: 0 }}>
-      {say(PULL_REQUEST_STAGE_LABEL[stage])}
-    </T>
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: radius.full,
+        backgroundColor: wash,
+        flexShrink: 0,
+      }}
+    >
+      <Icon size={size - 1} color={color} strokeWidth={2.2} />
+      <T size={size - 1} weight="600" tone={tone} numberOfLines={1}>
+        {say(PULL_REQUEST_STAGE_LABEL[stage])}
+      </T>
+    </View>
   )
 }
 

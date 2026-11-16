@@ -339,7 +339,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
           {/* Who and where on one line, then what it waits on: the order a reviewer reads a pull request in. */}
           <div className="flex flex-col gap-1.5 pl-[28px] text-caption text-muted-foreground">
             <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
-              <StageChip stage={stage} className="rounded-full bg-fill px-2 leading-5 font-medium" />
+              <StageChip stage={stage} className="px-2 leading-5" />
               {pr.author && <span className="text-foreground">{pr.author}</span>}
               <span className="inline-flex min-w-0 items-center gap-1">
                 {pr.author ? t('wants to merge') : null}
@@ -361,7 +361,8 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
               pr.requestedReviewers.length > 0 ||
               (pr.additions !== undefined && pr.deletions !== undefined)) && (
               <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                <ChecksLine checks={pr.checks} />
+                {/* The stage pill already says when checks fail or run; repeat them only when it is about something else. */}
+                {stage !== 'checks-failing' && stage !== 'checks-pending' && <ChecksLine checks={pr.checks} />}
                 {pr.reviewDecision === 'approved' && (
                   <span className="inline-flex items-center gap-1 text-ok">
                     <CircleCheck size={11} aria-hidden="true" />

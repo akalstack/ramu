@@ -258,7 +258,6 @@ export function PullRequestsPage() {
               {repoLabel(entry)} {pullRequestRef(entry.service, pr.number)}
             </span>
             {checksAside && <ChecksMark checks={pr.checks} />}
-            <StageChip stage={entry.stage} />
             {!!pr.openThreads && (
               <span className="inline-flex flex-none items-center gap-0.5" title={t('Open review threads')}>
                 <MessageSquare size={10} aria-hidden="true" />
@@ -280,6 +279,8 @@ export function PullRequestsPage() {
               </span>
             )}
           </span>
+          {/* Where it stands, always at the line's end so a list of them scans down one column. */}
+          <StageChip stage={entry.stage} />
           {manyHosts && (
             <span
               className="inline-flex max-w-[112px] flex-none items-center gap-1"

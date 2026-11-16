@@ -1,4 +1,17 @@
-import { GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
+import {
+  Bot,
+  CircleCheck,
+  CircleDot,
+  CircleX,
+  Eye,
+  GitMerge,
+  GitPullRequest,
+  GitPullRequestClosed,
+  GitPullRequestDraft,
+  MessageSquare,
+  MessageSquareReply,
+  TriangleAlert,
+} from 'lucide-react'
 import type { PullRequestStage, PullRequestSummary } from '@ramu/shared/types'
 import {
   PULL_REQUEST_STAGE_LABEL,
@@ -23,6 +36,29 @@ const TONE_FILL: Record<PullRequestTone, string> = {
   bad: 'bg-bad',
   muted: 'bg-muted-foreground',
   accent: 'bg-brand',
+}
+
+const TONE_PILL: Record<PullRequestTone, string> = {
+  ok: 'bg-(--ok-wash) text-ok',
+  warn: 'bg-(--warn-wash) text-warn',
+  bad: 'bg-(--bad-wash) text-bad',
+  muted: 'bg-fill text-muted-foreground',
+  accent: 'bg-(--accent-wash) text-brand',
+}
+
+/** One mark per stage, so the pill reads at a glance even before its words. */
+const STAGE_ICON: Record<PullRequestStage, typeof CircleX> = {
+  'replies-ready': MessageSquareReply,
+  'agent-working': Bot,
+  conflicts: TriangleAlert,
+  'checks-failing': CircleX,
+  'changes-requested': MessageSquare,
+  draft: GitPullRequestDraft,
+  'checks-pending': CircleDot,
+  'review-required': Eye,
+  ready: CircleCheck,
+  merged: GitMerge,
+  closed: GitPullRequestClosed,
 }
 
 const GLYPHS = {
@@ -89,10 +125,18 @@ export function PullRequestIcon({
   )
 }
 
-/** The stage as a small coloured label, for lists and headers. */
+/** The stage as a small tinted pill with its mark, the one place a list row or header says where a pull request stands. */
 export function StageChip({ stage, className }: { stage: PullRequestStage; className?: string }) {
+  const Icon = STAGE_ICON[stage]
   return (
-    <span className={cn('flex-none text-caption', TONE_TEXT[PULL_REQUEST_STAGE_TONE[stage]], className)}>
+    <span
+      className={cn(
+        'inline-flex flex-none items-center gap-1 rounded-full px-1.5 text-[11px] leading-[18px] font-medium whitespace-nowrap',
+        TONE_PILL[PULL_REQUEST_STAGE_TONE[stage]],
+        className,
+      )}
+    >
+      <Icon size={11} strokeWidth={2.2} aria-hidden="true" />
       {stageLabel(stage)}
     </span>
   )
