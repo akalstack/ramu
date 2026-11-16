@@ -14,6 +14,8 @@ Ramu runs the agent tools you already use, with your own accounts.
 
 A new profile opens a short setup that finds installed tools and offers their sign-ins. **Settings → Providers** handles sign-in, accounts, updates and executable paths (`RAMU_CLAUDE_BIN`, `RAMU_CODEX_BIN`, `RAMU_OPENCODE_BIN`, `RAMU_CURSOR_BIN`, `RAMU_ANTIGRAVITY_BIN`). Ramu stores no provider passwords.
 
+Newer provider CLIs, and newer Ramu releases on every connected host, come as one notice: **Update all**, or **Choose** to update one at a time from a list grouped by host. **Settings → Providers** has **Update all** beside each provider's own **Update**, and a host card on the phone lists each update with its own button. With **Wait a day before offering updates** on (the default, in **Settings → System**), a release is offered once it has been out 24 hours, so a bad release is usually pulled before it reaches you. For provider CLIs the day counts from when the host first saw the version; for Ramu, from its GitHub release. Codex installs exactly the version that waited; CLIs that update themselves are held until their newest release has waited. A waiting release shows when it will be offered, and **Update now** installs it at once after a confirmation.
+
 A provider card says nothing about its version while Ramu can use it, including a version no one has tested yet. When the installed version cannot be used with this Ramu release, the card says so in red with the fix: **Update to** a tested release, **Update Ramu** for a bundled runtime, **Change executable path**, or **Check again**.
 
 ## Models
