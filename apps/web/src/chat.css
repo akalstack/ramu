@@ -697,6 +697,15 @@ button.chat-activity-row:hover {
   color: var(--muted);
   font-size: var(--font-caption);
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A row's label (Goal set, Advisor finished) reads whole on one line; only the details after it give way, and a label
+   that can run long (an error) marks itself `truncate`. */
+.chat-activity-row > :not(.chat-activity-meta, .truncate, svg, .caret) {
+  flex: none;
+  white-space: nowrap;
 }
 /* One-line rows (goals, advisor, questions, tools) stack tightly instead of taking a full block gap each. */
 .turn

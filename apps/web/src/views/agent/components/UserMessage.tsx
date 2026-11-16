@@ -152,7 +152,7 @@ export function UserMessage({
         title={translate("Open the advisor's answer")}
       >
         <Lightbulb size={13} />
-        <span>
+        <span className={advice.failed ? 'min-w-0 truncate' : undefined}>
           {advice.failed
             ? translate('The advisor could not answer: {0}', { '0': advice.body })
             : translate('Advice delivered to the agent')}
