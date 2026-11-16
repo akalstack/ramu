@@ -3,12 +3,15 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { Clock, FolderOpen, RefreshCw } from 'lucide-react'
+import { Clock, FolderOpen, Info, RefreshCw } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { InlineAction } from '@/components/inline-action'
 import { hoursUntil } from '@ramu/shared/updates'
 import {
   accountDisplayName,
   providerAccountRows,
   providerName,
+  SUBSCRIPTION_TERMS,
   supportsProviderAccounts,
   type ProviderStatus,
 } from '@ramu/shared/providers/providers'
@@ -26,6 +29,7 @@ import type { AgentProvider } from '@ramu/shared/types'
 import { useState, type ReactNode } from 'react'
 import type { SharedMcpAccountReadiness } from '@ramu/shared/mcp'
 import { t } from '../i18n'
+import { invoke as openOnThisComputer } from '../ipc'
 import { ProviderIcon } from '../models/ProviderIcon'
 import { SettingsField, SettingTitleHosts } from './SettingsScope'
 import type { useAccountUsage } from './Usage'
@@ -117,6 +121,7 @@ export function ProviderCard({
   const accounts = supportsProviderAccounts(provider),
     config = { [provider]: preferences ?? { binary: '' } },
     order = accounts ? providerAccountRows(config, provider) : ['default'],
+    subscriptionLogins = order.filter((id) => status?.signIn?.[id]?.signedIn && !status.signIn[id]?.apiKey).length,
     sensors = useSensors(
       useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
       useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -257,6 +262,7 @@ export function ProviderCard({
                 )}
                 <SettingTitleHosts path={`providerBinaries.${provider}.accountOrder`} />
               </p>
+              {subscriptionLogins > 0 && <SubscriptionTermsNote provider={provider} />}
               <ProviderAddAccount provider={provider} preferences={preferences} onAdd={onAddAccount} />
             </div>
           )}
@@ -471,5 +477,28 @@ export function ProviderCard({
         </Collapsible>
       )}
     </section>
+  )
+}
+
+/**
+ * Beside Add account once a subscription is signed in: a login per side of life, such as personal and work, is
+ * ordinary; several of one person's own subscriptions used to get past limits is what the providers' terms bar.
+ */
+function SubscriptionTermsNote({ provider }: { provider: AgentProvider }) {
+  const terms = SUBSCRIPTION_TERMS[provider]
+  if (!terms) return null
+  return (
+    <Alert role="note" className="flex items-start gap-2 px-3 py-2 text-caption">
+      <Info size={14} aria-hidden className="mt-0.5 flex-none text-muted-foreground" />
+      <AlertDescription className="text-caption text-muted-foreground">
+        {t(
+          'Separate {0} logins for personal and work are fine. Stacking several of your own subscriptions to get past usage limits can break {1}’s terms, so Ramu never switches between subscriptions on its own.',
+          { 0: providerName(provider), 1: terms.owner },
+        )}{' '}
+        <InlineAction onClick={() => void openOnThisComputer('app.openExternal', terms.url)}>
+          {t('Read the terms')}
+        </InlineAction>
+      </AlertDescription>
+    </Alert>
   )
 }

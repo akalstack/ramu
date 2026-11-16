@@ -190,3 +190,13 @@ export function modelStepLabel(
   const effortName = effort ? (EFFORT_NAMES[effort] ?? effort.charAt(0).toUpperCase() + effort.slice(1)) : ''
   return `${name} ${effortName}`.trim()
 }
+
+/**
+ * Whose terms cover a provider's subscription sign-in, and where to read them. A login each for personal and work is
+ * ordinary; stacking one person's own subscriptions to get around their limits is what these terms bar.
+ */
+export const SUBSCRIPTION_TERMS: Partial<Record<AgentProvider, { owner: string; url: string }>> = {
+  'claude-code': { owner: 'Anthropic', url: 'https://www.anthropic.com/legal/consumer-terms' },
+  codex: { owner: 'OpenAI', url: 'https://openai.com/policies/terms-of-use/' },
+  cursor: { owner: 'Cursor', url: 'https://cursor.com/terms-of-service' },
+}

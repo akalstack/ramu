@@ -6893,6 +6893,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Restart background service': 'Mulai ulang layanan latar belakang',
   'GitHub needs a comment to request changes.': 'GitHub memerlukan komentar untuk meminta perubahan.',
   'Add a comment first.': 'Tambahkan komentar terlebih dahulu.',
+  'Separate {0} logins for personal and work are fine. Stacking several of your own subscriptions to get past usage limits can break {1}’s terms, so Ramu never switches between subscriptions on its own.':
+    'Login {0} terpisah untuk pribadi dan kerja tidak masalah. Menumpuk beberapa langganan milik sendiri untuk melewati batas pemakaian dapat melanggar ketentuan {1}, jadi Ramu tidak pernah berpindah antarlangganan dengan sendirinya.',
+  'Read the terms': 'Baca ketentuannya',
   'The host checks the token, keeps it in its credential store and sends it only to {0}.':
     'Host memeriksa token, menyimpannya di penyimpanan kredensialnya dan hanya mengirimnya ke {0}.',
   optional: 'opsional',
