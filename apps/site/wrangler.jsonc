@@ -1,0 +1,15 @@
+{
+  // getramu.dev: the Astro build in ./dist served as static assets on Cloudflare Workers, as akalstack.com is.
+  // Deploy with `pnpm --filter @ramu/site run deploy` after `plugins:sync` when the plugin index changed.
+  "name": "ramu-site",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./dist",
+  },
+  // Cloudflare creates the DNS records and HTTPS certificates for these.
+  "routes": [
+    { "pattern": "getramu.dev", "custom_domain": true },
+    { "pattern": "www.getramu.dev", "custom_domain": true },
+  ],
+}
