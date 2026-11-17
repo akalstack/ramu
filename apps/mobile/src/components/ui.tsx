@@ -118,7 +118,9 @@ export function T({
 export function IconButton({
   icon: I,
   onPress,
+  onLongPress,
   label,
+  hint,
   size = 36,
   tone = 'soft',
   filled,
@@ -127,7 +129,9 @@ export function IconButton({
 }: {
   icon: Icon
   onPress?: () => void
+  onLongPress?: () => void
   label: string
+  hint?: string
   size?: number
   tone?: Tone
   filled?: boolean
@@ -139,6 +143,7 @@ export function IconButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityHint={hint}
       disabled={disabled}
       accessibilityState={{ disabled: !!disabled }}
       hitSlop={6}
@@ -146,6 +151,7 @@ export function IconButton({
         tap()
         onPress?.()
       }}
+      onLongPress={onLongPress}
       style={({ pressed }) => [
         {
           opacity: disabled ? 0.4 : 1,

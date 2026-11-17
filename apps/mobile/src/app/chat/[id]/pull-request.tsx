@@ -698,6 +698,7 @@ export default function PullRequestScreen() {
       {/* Compact, as the services' phones lead: the number, then the repository and whether the host is in reach. */}
       <Header
         title={pr ? pullRequestRef(service, pr.number) : say('Pull request')}
+        search
         subtitle={[outside ?? forgeRepoOf(url)?.repo, online ? null : say('Offline')].filter(Boolean).join(' · ')}
         right={
           pr ? (

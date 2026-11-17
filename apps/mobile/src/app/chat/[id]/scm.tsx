@@ -891,6 +891,7 @@ export default function SourceControl() {
     <Screen bg="canvas">
       <Header
         title={tr('Source Control')}
+        search={tab === 'changes' && changeCount > 8}
         subtitle={
           project
             ? `${project.name} · ${chat?.mode === 'worktree' ? tr('worktree') : tr('current checkout')}`

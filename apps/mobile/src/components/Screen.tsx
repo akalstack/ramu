@@ -1,11 +1,12 @@
 import { pastScrollEdge } from '../runtime/scrollSurface'
 import { LegendList, type LegendListProps, type LegendListRef } from '@legendapp/list/react-native'
-import { goBackOrHome } from '../runtime/navigation'
+import { backHistory, goBackOrHome, screenTitles } from '../runtime/navigation'
 import {
   Children,
   Fragment,
   isValidElement,
   useCallback,
+  useRef,
   useState,
   type ComponentProps,
   type ReactNode,
@@ -14,6 +15,7 @@ import {
 import {
   Alert,
   Platform,
+  StyleSheet,
   UIManager,
   Pressable,
   ScrollView,
@@ -28,9 +30,10 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Stack, useRouter } from 'expo-router'
+import { MenuView, type MenuComponentRef } from '@react-native-menu/menu'
+import { Stack, useNavigation, useRoute, useRouter } from 'expo-router'
 import { ScrollViewMarker } from 'react-native-screens/experimental'
-import { ChevronLeft, MoreHorizontal, X } from 'lucide-react-native'
+import { ArrowLeft, ChevronLeft, MoreHorizontal, X } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { Glass, floatingChrome } from './Glass'
 import { Button, IconButton, T, tap, type Icon } from './ui'
@@ -206,6 +209,48 @@ function ButtonGroup({ children }: { children: ReactNode }) {
 }
 
 /**
+ * Android's bar has no back history of its own, so its Back keeps the iOS shortcut: a tap goes back, and holding it lists
+ * the earlier screens to jump straight to one.
+ */
+function AndroidBack() {
+  const say = useSay()
+  const router = useRouter()
+  const navigation = useNavigation()
+  const menu = useRef<MenuComponentRef>(null)
+  const history = backHistory(navigation.getState() ?? { routes: [] })
+  return (
+    <View>
+      {/* The menu only anchors the list to the button; the button above it takes every touch. */}
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <MenuView
+          ref={menu}
+          style={StyleSheet.absoluteFill}
+          actions={history.map((entry) => ({ id: String(entry.count), title: entry.label }))}
+          onPressAction={({ nativeEvent }) => router.dismiss(Number(nativeEvent.event))}
+        >
+          <View style={StyleSheet.absoluteFill} />
+        </MenuView>
+      </View>
+      <IconButton
+        icon={ArrowLeft}
+        label={say('Back')}
+        hint={history.length > 1 ? say('Hold to choose an earlier screen') : undefined}
+        tone="text"
+        onPress={() => goBackOrHome(router)}
+        onLongPress={
+          history.length > 1
+            ? () => {
+                tap()
+                menu.current?.show()
+              }
+            : undefined
+        }
+      />
+    </View>
+  )
+}
+
+/**
  * Compact native bars reserve an opaque surface so scrolling content stays below their controls.
  * Native large-title screens retain UIKit's scroll-edge transition.
  * Android/web use the shared header spacing below.
@@ -222,6 +267,7 @@ export function Header({
   align = 'left',
   scrollEdge = false,
   scrolled,
+  search = false,
 }: {
   title?: ReactNode
   subtitle?: ReactNode
@@ -237,6 +283,8 @@ export function Header({
   scrollEdge?: boolean
   /** Raised header surface once content moves beneath a dialog or native navigation bar. */
   scrolled?: boolean
+  /** The screen puts a native search button in this bar (`BottomSearch placement="header"`), so the title leaves it room. */
+  search?: boolean
 }) {
   const say = useSay()
   const router = useRouter()
@@ -246,6 +294,11 @@ export function Header({
   // Beside the thread list the native bar would span both panes, so the page draws its own and the list holds Back.
   const inPane = useInDetailPane()
   const { width } = useWindowDimensions()
+  // Names this screen in the back menus of the screens opened after it. Route keys are unique, so writing on every render
+  // is idempotent, and a closed screen's entry is never looked up again.
+  const routeKey = useRoute().key
+  const label = typeof title === 'string' && title ? title : typeof subtitle === 'string' ? subtitle : ''
+  if (label) screenTitles.set(routeKey, label)
   // Centered between the back button and up to two trailing items (one glass capsule).
   const titleWidth = Math.max(120, Math.min(220, width - 220))
   const close = () => goBackOrHome(router)
@@ -331,15 +384,20 @@ export function Header({
       }, 0)
     // Reserve the window margins, the back button and each trailing button with the spacing UIKit keeps around it; a
     // wider title makes the bar fold the trailing buttons into one.
-    const available = Math.max(48, Math.min(520, width - 64 - (back || modal ? BAR + 12 : 0) - count(right) * 52))
+    const available = Math.max(
+      48,
+      Math.min(520, width - 64 - (back || modal ? BAR + 12 : 0) - (count(right) + (search ? 1 : 0)) * 52),
+    )
     return (
       <>
         <Stack.Screen
           options={{
             headerShown: true,
             headerTransparent: false,
-            headerTitle: '',
-            headerBackVisible: false,
+            // UIKit's own Back stays, so holding it lists the earlier screens; the title it shows there is this one.
+            title: label,
+            headerBackVisible: back && !modal,
+            headerBackButtonDisplayMode: 'minimal',
             headerStyle: { backgroundColor: headerSurface },
             scrollEdgeEffects: scrollEdges,
             headerTintColor: c.text,
@@ -351,16 +409,14 @@ export function Header({
           style={{ backgroundColor: headerSurface, color: c.text, shadowColor: 'transparent' }}
           largeStyle={{ backgroundColor: headerSurface, shadowColor: 'transparent' }}
         />
-        <Stack.Title>{''}</Stack.Title>
+        {/* The title is drawn as the leading item below; an empty title view keeps UIKit from centering it again. */}
+        <Stack.Title asChild>
+          <View />
+        </Stack.Title>
         <Stack.Toolbar key="header-left" placement="left">
-          {back || modal ? (
-            <Stack.Toolbar.Button
-              icon={modal ? 'xmark' : 'chevron.left'}
-              tintColor={c.text}
-              accessibilityLabel={modal ? say('Close') : say('Back')}
-              onPress={close}
-            >
-              {modal ? say('Close') : say('Back')}
+          {modal ? (
+            <Stack.Toolbar.Button icon="xmark" tintColor={c.text} accessibilityLabel={say('Close')} onPress={close}>
+              {say('Close')}
             </Stack.Toolbar.Button>
           ) : null}
           <Stack.Toolbar.View hidesSharedBackground>
@@ -436,11 +492,16 @@ export function Header({
               : '',
           headerTitleStyle: { fontSize: 17, fontWeight: '600' },
           headerTitleAlign: align,
-          headerBackVisible: back && !modal,
+          headerBackVisible: false,
           headerLeft: modal
             ? () => <HeaderButton icon={X} label={say('Close')} onPress={close} />
-            : left
-              ? () => <View style={{ flexDirection: 'row', alignItems: 'center' }}>{left}</View>
+            : (back && router.canGoBack()) || left
+              ? () => (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, marginRight: space.s }}>
+                    {back && router.canGoBack() ? <AndroidBack /> : null}
+                    {left}
+                  </View>
+                )
               : undefined,
           headerRight: right
             ? () => <View style={{ flexDirection: 'row', alignItems: 'center' }}>{right}</View>

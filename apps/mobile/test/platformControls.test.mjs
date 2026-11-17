@@ -22,7 +22,7 @@ import * as sharedViewerAccess from '../../../packages/shared/src/viewerAccess.t
 import * as viewerAccess from '../src/runtime/viewerAccess.ts'
 import * as scheduleModel from '../src/runtime/scheduleModel.ts'
 import * as branchActions from '../src/runtime/branchActions.ts'
-import { goBackOrHome } from '../src/runtime/navigation.ts'
+import * as navigation from '../src/runtime/navigation.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -126,7 +126,12 @@ function load(file, os, overrides = {}, globals = {}) {
       translate: (_language, text, params = {}) =>
         text.replace(/\{(\w+)\}/g, (_, key) => String(params[key] ?? `{${key}}`)),
     },
-    'expo-router': { Stack, useLocalSearchParams: () => ({}), useRouter: () => ({ push() {} }), useFocusEffect() {} },
+    'expo-router': {
+      Stack,
+      useLocalSearchParams: () => ({}),
+      useRouter: () => ({ push() {}, canGoBack: () => true }),
+      useFocusEffect() {},
+    },
     'lucide-react-native': components,
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
     'react-native-screens/experimental': {},
@@ -153,6 +158,7 @@ function load(file, os, overrides = {}, globals = {}) {
       GlassView: 'NativeGlass',
     },
     'expo-blur': { BlurView: 'BlurView' },
+    '@react-native-menu/menu': { MenuView: 'MenuView' },
     // Sheets size their hosted content to the sheet; a fixed phone width keeps their trees plain to inspect.
     './hostedWidth': { useHostedWidth: () => ({ width: 390, onLayout() {} }) },
     ...overrides,
@@ -161,8 +167,10 @@ function load(file, os, overrides = {}, globals = {}) {
   mocks['expo-router'] = {
     Stack,
     useLocalSearchParams: () => ({}),
-    useRouter: () => ({ push() {} }),
+    useRouter: () => ({ push() {}, canGoBack: () => true }),
     useFocusEffect() {},
+    useRoute: () => ({ key: 'screen' }),
+    useNavigation: () => ({ getState: () => ({ routes: [{ key: 'screen' }] }) }),
     ...mocks['expo-router'],
   }
   const code = ts.transpileModule(readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8'), {
@@ -245,7 +253,7 @@ function load(file, os, overrides = {}, globals = {}) {
           { get: (target, key) => (key in target ? target[key] : String(key)) },
         )
       if (id.endsWith('/viewerAccess')) return viewerAccess
-      if (id.endsWith('/navigation')) return { goBackOrHome }
+      if (id.endsWith('/navigation')) return navigation
       if (id.endsWith('/composerDrafts')) return explorerDrafts
       if (id.endsWith('/routingChoices')) return routingChoices
       if (id.endsWith('/explorerNavigation')) return explorerNavigation
@@ -730,6 +738,10 @@ test('Android top bars lay leading items in a row, and the main create action fl
   const { Header } = load('components/Screen.tsx', 'android')
   const left = Header({ title: 'Threads', left: 'tools' }).props.options.headerLeft()
   assert.equal(left.props.style.flexDirection, 'row')
+  // Android's Back is the app's own, so holding it can list the earlier screens as iOS does.
+  assert.equal(Header({ title: 'Files' }).props.options.headerBackVisible, false)
+  const back = nodes(Header({ title: 'Files' }).props.options.headerLeft())
+  assert.ok(back.some((node) => node.type?.name === 'AndroidBack'))
   const ui = {
     './ui': { T: 'T', tap() {} },
     'react-native-reanimated': {
@@ -765,7 +777,10 @@ test('iOS composite titles use a bounded leading item in the native bar', () => 
   assert.equal(subtitle.props.numberOfLines, 1)
   assert.equal(title.props.style.textAlign, 'left')
   assert.equal(subtitle.props.style.textAlign, 'left')
-  assert.ok(nodes(tree).some((node) => node.type === 'ToolbarButton' && node.props.icon === 'chevron.left'))
+  // UIKit's own Back stays beside the title, so holding it lists the earlier screens by this screen's title.
+  assert.equal(options.headerBackVisible, true)
+  assert.equal(options.title, 'A long thread title')
+  assert.ok(!nodes(tree).some((node) => node.type === 'ToolbarButton' && node.props.icon === 'chevron.left'))
   assert.equal(Screen({ children: 'body', scrollable: false }).props.style.paddingTop, undefined)
 })
 
@@ -799,8 +814,8 @@ test('native chat toolbar actions receive taps and keep their supplied symbols',
   })
   const tree = screen.Header({ title: 'Thread', scrollEdge: true, right: actions })
   const native = nodes(tree).filter((node) => node.type === 'ToolbarButton')
-  assert.equal(native.length, 2)
-  assert.equal(native[1].props.accessibilityLabel, 'Source Control')
+  assert.equal(native.length, 1)
+  assert.equal(native[0].props.accessibilityLabel, 'Source Control')
   const menu = find(tree, 'ToolbarMenu')
   assert.equal(menu.props.icon, 'ellipsis')
   find(menu, 'ToolbarMenuAction').props.onPress()
