@@ -20,6 +20,8 @@
         "luxon",
         "node-pty",
         "playwright-core",
+        "quickjs-emscripten-core",
+        "@jitl/quickjs-wasmfile-release-sync",
         "undici",
         "zod",
         "@electron-forge/*",
