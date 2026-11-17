@@ -143,7 +143,8 @@ beforeEach(() => {
            INSERT INTO tasks (id, project_id, title, mode, status, created_at) VALUES ('t', 'p', 'T', 'current', 'idle', 0),
            ('t2', 'p', 'T2', 'current', 'idle', 0);`)
 })
-afterEach(() => rmSync(tmp, { recursive: true, force: true }))
+// Helper checkouts can still be writing when a test ends; on a slow runner rm then sees ENOTEMPTY, which retries clear.
+afterEach(() => rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }))
 
 describe('AgentService', () => {
   it('keeps a completed turn idle when its attached provider is stopped during shutdown', async () => {
