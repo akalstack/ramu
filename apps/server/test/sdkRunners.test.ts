@@ -366,7 +366,7 @@ describe('OpenCode 2 helpers', () => {
       JSON.stringify({ mcp: { servers: { mine: { type: 'remote', url: 'x' } } } }),
     )
     const config = JSON.parse(env.OPENCODE_CONFIG_CONTENT!)
-    expect(Object.keys(config.mcp.servers)).toEqual(['mine', 'ramu'])
+    expect(Object.keys(config.mcp.servers)).toEqual(['mine', 'ramu', 'ramu_tools'])
     expect(config.mcp.servers.ramu.headers).toEqual({ Authorization: 'Bearer t' })
     // OpenCode 2 ignores the v1 `permission` key; the switch is a session permission.
     expect(config.permission).toBeUndefined()
@@ -542,6 +542,8 @@ describe('OpenCode Allow edits', () => {
   it.each([
     ['ramu_ask_user', false],
     ['ramu_browser_click', false],
+    ['ramu_tools_settings_change', false],
+    ['ramu_tools_schedule_create', true],
     ['shared_mcp_Linear-abc123__list_issues', false],
     ['ramu_schedule_create', true],
     ['ramu_other_tool', true],

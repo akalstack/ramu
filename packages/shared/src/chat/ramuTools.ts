@@ -138,10 +138,16 @@ const clip = (value: string, n = 80) => {
 }
 const quote = (value: string | undefined) => (value ? `“${clip(value)}”` : undefined)
 
+/**
+ * The bare tool in an OpenCode name: `ramu_<tool>` for the tools it lists directly, `ramu_tools_<tool>` for the rest,
+ * reached through its execute tool.
+ */
+export const openCodeRamuName = (name: string): string | undefined => /^ramu_(?:tools_)?(.+)$/.exec(name)?.[1]
+
 /** Which Ramu tool a call is, however the provider names it: Claude's `mcp__ramu__x`, Codex's `x` on the `ramu` server, OpenCode's `ramu_x`. */
 export function ramuTool(tool: CallSource): RamuToolCall | null {
   const claude = /^mcp__ramu__(.+)$/.exec(tool.name)?.[1]
-  const opencode = /^ramu_(.+)$/.exec(tool.name)?.[1]
+  const opencode = openCodeRamuName(tool.name)
   const name =
     claude ??
     (opencode && KNOWN.has(opencode) ? opencode : undefined) ??

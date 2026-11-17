@@ -32,6 +32,7 @@ import type {
 } from '@ramu/shared/types'
 import type { HelperHistory } from '../agent/helperHistory'
 import { mcpCallSkipsCard } from '../agent/toolApprovals'
+import { RAMU_NAMESPACE, RamuToolClient, codexDynamicTools, dynamicToolResponse, mcpShaped } from './codexDynamicTools'
 import { EXTERNAL_MCP_SERVER } from '../mcp/sessionTools'
 
 // Wire messages are validated by the app-server. Only the consumed fields cross into our domain.
@@ -127,8 +128,12 @@ export class CodexRpc {
       this.write({ id, method, params })
     })
   }
-  async initialize(): Promise<void> {
-    await this.request('initialize', { clientInfo: { name: 'ramu', title: 'Ramu', version: '0.0.1' } })
+  /** `experimental` opts into the app-server's experimental fields, which dynamic tools need. */
+  async initialize(experimental = false): Promise<void> {
+    await this.request('initialize', {
+      clientInfo: { name: 'ramu', title: 'Ramu', version: '0.0.1' },
+      ...(experimental ? { capabilities: { experimentalApi: true } } : {}),
+    })
     this.write({ method: 'initialized', params: {} })
   }
   async close(): Promise<void> {
@@ -195,6 +200,10 @@ class CodexSession implements CodexRunner {
   private readonly requestScope = randomUUID()
   private rpc!: CodexRpc
   private connection?: McpConnection
+  /** Answers Codex's calls to the dynamic tools; see codexDynamicTools.ts. */
+  private ramuTools?: RamuToolClient
+  /** Ends dynamic tool calls still waiting when the chat stops. */
+  private readonly toolCalls = new AbortController()
   private threadId = ''
   private turnId = ''
   /** Tokens the current turn's model calls used so far; null outside a turn or before Codex reports any. */
@@ -225,6 +234,8 @@ class CodexSession implements CodexRunner {
   ) {}
   setTools(connection: McpConnection): void {
     this.connection = connection
+    void this.ramuTools?.close()
+    this.ramuTools = new RamuToolClient(connection)
   }
   async mcpStatus() {
     if (!this.rpc || !this.threadId || this.stopped) return configuredMcpStatus(this.scope, this.connection)
@@ -315,7 +326,11 @@ class CodexSession implements CodexRunner {
         this.emit({ kind: 'state', state: 'failed' })
       }
     }
-    await this.rpc.initialize()
+    // A new thread declares the tools an agent must always see as dynamic tools; Codex keeps them with the thread, so a
+    // resumed one has them already. Without them (no endpoint, or it can't be read) the MCP copies still serve.
+    const dynamicTools =
+      !resume && !this.readOnly && this.ramuTools ? await this.ramuTools.list().then(codexDynamicTools, () => []) : []
+    await this.rpc.initialize(dynamicTools.length > 0)
     // The first reading, before any turn has run; failures only mean no gauge yet.
     void this.rpc.request('account/rateLimits/read', {}).then(
       (result) => this.reportUsage(result.rateLimits),
@@ -333,6 +348,7 @@ class CodexSession implements CodexRunner {
         ...(this.settings.serviceTier === 'fast' ? { config: { 'features.fast_mode': true } } : {}),
         approvalPolicy: this.policies().approvalPolicy,
         sandbox: this.readOnly ? 'read-only' : full ? 'danger-full-access' : 'workspace-write',
+        ...(dynamicTools.length ? { dynamicTools } : {}),
       })
       .catch((e: Error) => {
         // Codex lets one client write to a conversation at a time; the Codex app or CLI may have it open.
@@ -400,7 +416,20 @@ class CodexSession implements CodexRunner {
       this.emit({ kind: 'request-resolved', requestId: id, outcome: 'cancelled' })
     }
     this.pending.clear()
-    await this.rpc?.close()
+    this.toolCalls.abort()
+    await Promise.all([this.rpc?.close(), this.ramuTools?.close()])
+  }
+  /** One dynamic tool call, run on Ramu's own endpoint; a failure goes back to the model as the tool's answer. */
+  private async callDynamicTool(p: Wire): Promise<Wire> {
+    const failed = (text: string) => ({ contentItems: [{ type: 'inputText', text }], success: false })
+    if (p.namespace !== RAMU_NAMESPACE || typeof p.tool !== 'string' || !this.ramuTools)
+      return failed(`Unknown tool ${String(p.tool)}`)
+    try {
+      const args = p.arguments && typeof p.arguments === 'object' ? (p.arguments as Record<string, unknown>) : {}
+      return dynamicToolResponse(await this.ramuTools.call(p.tool, args, this.toolCalls.signal))
+    } catch (error) {
+      return failed(error instanceof Error ? error.message : String(error))
+    }
   }
   replyPermission(id: string, allow: boolean): void {
     const req = this.pending.get(id)
@@ -577,7 +606,7 @@ class CodexSession implements CodexRunner {
       this.emit({ kind: 'text', text, messageId: key, ...tag })
     }
     if (method !== 'item/started' && method !== 'item/completed') return
-    const item = p.item ?? {},
+    const item = mcpShaped(p.item ?? {}),
       complete = method === 'item/completed'
     if (item.type === 'agentMessage' && complete && item.text) {
       this.messages.delete(`${threadId}:${item.id}`)
@@ -772,6 +801,8 @@ class CodexSession implements CodexRunner {
             message: `Could not display ${p.serverName ?? 'MCP server'} input request: ${String(error)}`,
           })
         }
+      } else if (m.method === 'item/tool/call') {
+        void this.callDynamicTool(p).then((result) => this.rpc.write({ id: m.id, result }))
       } else this.rpc.write({ id: m.id, error: { code: -32601, message: `Ramu does not support ${m.method}` } })
       return
     }
@@ -814,7 +845,7 @@ class CodexSession implements CodexRunner {
       this.emit({ kind: 'text', text, messageId: p.itemId })
     }
     if (m.method === 'item/started' || m.method === 'item/completed') {
-      const item = p.item ?? {}
+      const item = mcpShaped(p.item ?? {})
       const complete = m.method === 'item/completed'
       if (item.type === 'agentMessage' && item.delivery === 'async' && item.questions?.length && complete) {
         this.messages.delete(item.id)
@@ -983,7 +1014,8 @@ function replayCodexAgent(agentId: string, turns: Wire[], emit: (event: AgentEve
       })
   }
   for (const turn of turns)
-    for (const item of turn.items ?? []) {
+    for (const raw of turn.items ?? []) {
+      const item = mcpShaped(raw)
       replay(item, false)
       if (item.type === 'agentMessage' || !['inProgress', 'running'].includes(item.status)) replay(item, true)
     }

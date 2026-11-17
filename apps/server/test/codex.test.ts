@@ -14,6 +14,11 @@ import {
   toolOfOtherItem,
 } from '../src/providers/codex'
 import { SessionInUse } from '../src/agent/agentRunner'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
+import { z } from 'zod'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { DEFAULT_AGENT_SETTINGS, type AgentEvent } from '@ramu/shared/types'
 
 let tmp: string
@@ -65,6 +70,11 @@ rl.on('line', line => {
       send({id:910,method:'item/commandExecution/requestApproval',params:{threadId:'thread-1',command:'pnpm test'}});
       send({id:911,method:'mcpServer/elicitation/request',params:{threadId:'thread-1',serverName:'ramu',mode:'form',message:'Allow tool?',requestedSchema:{type:'object',properties:{}},_meta:{codex_approval_kind:'mcp_tool_call'}}});
       send({id:912,method:'item/commandExecution/requestApproval',params:{threadId:'thread-1',command:['bash','-lc','rm -rf ~/notes']}});
+      return;
+    }
+    if (text === 'dynamic call') {
+      send({method:'item/started',params:{threadId:'thread-1',item:{type:'dynamicToolCall',id:'dyn-1',namespace:'ramu',tool:'ask_user',arguments:{question:'Ship it?'},status:'inProgress',contentItems:null,success:null}}});
+      send({id:930,method:'item/tool/call',params:{threadId:'thread-1',turnId:'turn-1',callId:'dyn-1',namespace:'ramu',tool:'ask_user',arguments:{question:'Ship it?'}}});
       return;
     }
     if (text === 'edits gate') {
@@ -237,6 +247,63 @@ describe('Codex app-server wire adapter', () => {
       )
     } finally {
       await runner.stop()
+    }
+  })
+  it('declares the always-loaded Ramu tools as dynamic tools and answers their calls through Ramu’s endpoint', async () => {
+    const asked: string[] = []
+    const headers: string[] = []
+    const http = createServer(async (req, res) => {
+      headers.push(String(req.headers.authorization))
+      const server = new McpServer({ name: 'ramu', version: 'test' })
+      server.registerTool(
+        'ask_user',
+        { description: 'Ask the person', inputSchema: { question: z.string() } },
+        ({ question }) => {
+          asked.push(question)
+          return { content: [{ type: 'text', text: 'Yes' }] }
+        },
+      )
+      server.registerTool('memory_save', { description: 'Save a memory', inputSchema: {} }, () => ({ content: [] }))
+      const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
+      res.on('close', () => void transport.close())
+      await server.connect(transport)
+      let body = ''
+      for await (const chunk of req) body += chunk
+      await transport.handleRequest(req, res, body ? JSON.parse(body) : undefined)
+    })
+    await new Promise<void>((done) => http.listen(0, '127.0.0.1', done))
+    const port = (http.address() as AddressInfo).port
+    const events: AgentEvent[] = []
+    const runner = createCodexRunner(
+      scope,
+      { ...DEFAULT_AGENT_SETTINGS, provider: 'codex', access: 'edits' },
+      (event) => events.push(event),
+    )
+    runner.setTools!({ url: `http://127.0.0.1:${port}/mcp`, token: 'chat-token' })
+    try {
+      await runner.start('dynamic call', null)
+      await vi.waitFor(() => expect(messages().find((message) => message.id === 930)?.result).toBeDefined())
+      expect(messages().find((message) => message.method === 'initialize').params.capabilities).toEqual({
+        experimentalApi: true,
+      })
+      const declared = messages().find((message) => message.method === 'thread/start').params.dynamicTools
+      expect(declared).toEqual([
+        expect.objectContaining({
+          type: 'namespace',
+          name: 'ramu',
+          tools: [expect.objectContaining({ type: 'function', name: 'ask_user', deferLoading: false })],
+        }),
+      ])
+      expect(messages().find((message) => message.id === 930).result).toEqual({
+        contentItems: [{ type: 'inputText', text: 'Yes' }],
+        success: true,
+      })
+      expect(asked).toEqual(['Ship it?'])
+      expect(headers.every((header) => header === 'Bearer chat-token')).toBe(true)
+      expect(events).toContainEqual(expect.objectContaining({ kind: 'tool-use', name: 'ask_user', summary: 'ramu' }))
+    } finally {
+      await runner.stop()
+      http.close()
     }
   })
   it('answers MCP approvals Ramu decides itself in Allow edits, and asks for the rest', async () => {

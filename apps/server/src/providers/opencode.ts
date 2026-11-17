@@ -1,4 +1,4 @@
-import { ramuTool } from '@ramu/shared/chat/ramuTools'
+import { openCodeRamuName, ramuTool } from '@ramu/shared/chat/ramuTools'
 import { mcpCallSkipsCard, selfGatedRamuTool, type McpCallServer } from '../agent/toolApprovals'
 import { ownedEnvironment, trackProcess } from '../agent/processOwners'
 import { addTokens } from './turnTokens'
@@ -59,19 +59,22 @@ export function openCodeServerEnv(
     config.skills = legacy ? { ...config.skills, paths: merged } : merged
   }
   const mcp = config.mcp && typeof config.mcp === 'object' && !Array.isArray(config.mcp) ? config.mcp : {}
+  const ramu = {
+    type: 'remote',
+    headers: { Authorization: `Bearer ${connection?.token}` },
+    // Questions and helpers can wait a long time for the user.
+    timeout: { execution: 3_600_000 },
+  }
   if (connection)
     config.mcp = {
       ...mcp,
       servers: {
         ...repoServers,
         ...(mcp.servers && typeof mcp.servers === 'object' ? mcp.servers : {}),
-        ramu: {
-          type: 'remote',
-          url: connection.url,
-          headers: { Authorization: `Bearer ${connection.token}` },
-          // Questions and helpers can wait a long time for the user.
-          timeout: { execution: 3_600_000 },
-        },
+        // The tools an agent must always see are listed directly (codemode off); the rest are reached through execute.
+        // Both keep the `ramu` prefix that the transcript and approvals recognise (see openCodeMcpCall).
+        ramu: { ...ramu, url: toolSubsetUrl(connection.url, 'always'), codemode: false },
+        ramu_tools: { ...ramu, url: toolSubsetUrl(connection.url, 'deferred') },
       },
     }
   return Object.keys(config).length ? { OPENCODE_CONFIG_CONTENT: JSON.stringify(config) } : {}
@@ -119,10 +122,17 @@ export function openCodePermissions(connection: McpConnection | undefined, acces
 export function openCodeMcpCall(action: string): { server: McpCallServer; tool: string } {
   const shared = /^shared_mcp_(.+)$/.exec(action)?.[1]
   if (shared) return { server: 'shared_mcp', tool: shared }
-  const ramu = /^ramu_(.+)$/.exec(action)?.[1]
+  const ramu = openCodeRamuName(action)
   return ramu && (ramuTool({ name: `mcp__ramu__${ramu}`, summary: '' }) || selfGatedRamuTool(ramu))
     ? { server: 'ramu', tool: ramu }
     : { server: 'other', tool: action }
+}
+
+/** Ramu's tool endpoint serving only part of its catalog. */
+const toolSubsetUrl = (url: string, tools: 'always' | 'deferred') => {
+  const parsed = new URL(url)
+  parsed.searchParams.set('tools', tools)
+  return parsed.toString()
 }
 
 /** `provider/model` as Ramu stores it; the model part may itself contain slashes. */

@@ -15,6 +15,7 @@ describe('Ramu tool calls', () => {
     })
     expect(ramuTool({ name: 'memory_search', summary: 'ramu', input: '{"query":"tabs"}' })?.name).toBe('memory_search')
     expect(ramuTool(use('ramu_skill_read', { id: 's1' }))?.name).toBe('skill_read')
+    expect(ramuTool(use('ramu_tools_skill_read', { id: 's1' }))?.name).toBe('skill_read')
     expect(ramuTool(use('memory_search', { query: 'x' }))).toBeNull()
     expect(ramuTool(use('mcp__other__memory_search'))).toBeNull()
     expect(ramuTool(use('mcp__ramu__made_up'))).toBeNull()

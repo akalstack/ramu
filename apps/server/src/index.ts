@@ -1832,7 +1832,8 @@ const mcpHttp = createServer(async (req, res) => {
   const token = req.headers.authorization?.replace(/^Bearer /, '')
   const connection = token ? sessions.get(token) : undefined
   const source = connection?.session
-  if (!source || (req.url !== '/mcp' && req.url !== '/mcp/external') || stopping) {
+  const [mcpPath, mcpQuery] = (req.url ?? '').split('?')
+  if (!source || (mcpPath !== '/mcp' && mcpPath !== '/mcp/external') || stopping) {
     res.writeHead(401).end()
     return
   }
@@ -1840,7 +1841,7 @@ const mcpHttp = createServer(async (req, res) => {
     res.writeHead(405).end()
     return
   }
-  if (req.url === '/mcp/external') {
+  if (mcpPath === '/mcp/external') {
     // External tools stay off the trusted Ramu registry: a separate endpoint and server name, gated by Shared MCP policy.
     try {
       await externalTools.serve(externalSource(source), req, res, await body(req))
@@ -1850,7 +1851,13 @@ const mcpHttp = createServer(async (req, res) => {
     return
   }
   const target = new McpServer({ name: 'ramu', version: '0.1.0' })
-  const registry = new ToolRegistry(target, connection!.toolSearch)
+  // OpenCode lists the always-loaded tools from one entry and reaches the rest through execute from another.
+  const subset = new URLSearchParams(mcpQuery ?? '').get('tools')
+  const registry = new ToolRegistry(
+    target,
+    connection!.toolSearch,
+    subset === 'always' || subset === 'deferred' ? subset : undefined,
+  )
   // A review chat about learned memories gets Ramu's memory and skill tools and nothing else: later registrations are ignored.
   const review = summaries.isReviewChat(source.taskId)
   if (review)

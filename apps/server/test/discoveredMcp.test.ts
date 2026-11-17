@@ -67,7 +67,12 @@ it('keeps the user config and Ramu server ahead of repository servers in OpenCod
   )
   const servers = JSON.parse(env.OPENCODE_CONFIG_CONTENT!).mcp.servers
   expect(servers.db.url).toBe('https://mine')
-  expect(Object.keys(servers).sort()).toEqual(['db', 'docs', 'ramu'])
+  expect(Object.keys(servers).sort()).toEqual(['db', 'docs', 'ramu', 'ramu_tools'])
+  // The always-loaded tools are listed directly; the rest stay behind OpenCode's execute.
+  expect(servers.ramu).toMatchObject({ url: 'http://x/mcp?tools=always', codemode: false })
+  expect(servers.ramu_tools.url).toBe('http://x/mcp?tools=deferred')
+  expect(servers.ramu_tools.codemode).toBeUndefined()
+  expect(servers.ramu_tools.headers).toEqual({ Authorization: 'Bearer t' })
 })
 
 it('uses original repository MCPs for every provider while keeping checkout definitions first', () => {

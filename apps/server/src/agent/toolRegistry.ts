@@ -30,6 +30,10 @@ const CORE = new Set([
   'run_script',
   'codex_pre_tool_use',
 ])
+/** The tools an agent must always see, loaded up front where the provider lets Ramu choose (codex_pre_tool_use is a hook). */
+export const ALWAYS_LOADED: ReadonlySet<string> = new Set([...CORE].filter((name) => name !== 'codex_pre_tool_use'))
+/** A part of the catalog an endpoint serves: the always-loaded tools, or everything else. */
+export type ToolSubset = 'always' | 'deferred'
 const words = (text: string): string[] => text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
 const ALIASES: Record<string, string> = {
   memory: 'remember recall preferences knowledge notes',
@@ -54,6 +58,8 @@ export class ToolRegistry {
   constructor(
     private readonly target: McpServer,
     private readonly deferred: boolean,
+    /** Serve only part of the catalog, for a provider that loads the two parts differently (OpenCode). */
+    private readonly subset?: ToolSubset,
   ) {
     this.server = new Proxy(target, {
       get: (object, key) => (key === 'registerTool' ? this.register.bind(this) : Reflect.get(object, key, object)),
@@ -64,6 +70,7 @@ export class ToolRegistry {
     config: { description?: string; inputSchema?: z.ZodRawShape },
     handler: Entry['handler'],
   ) {
+    if (this.subset && ALWAYS_LOADED.has(name) !== (this.subset === 'always')) return { remove: () => {} }
     const schema = z.object(config.inputSchema ?? {})
     this.entries.set(name, { name, description: config.description ?? '', schema, handler })
     if (!this.deferred || CORE.has(name))

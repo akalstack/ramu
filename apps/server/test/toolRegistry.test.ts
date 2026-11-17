@@ -138,3 +138,20 @@ it('lists every tool directly for a provider with its own tool search, marking t
     await client.close()
   }
 })
+
+it.each(['always', 'deferred'] as const)('serves only the %s part of the catalog when asked', async (subset) => {
+  const server = new McpServer({ name: 'ramu', version: 'test' })
+  const registry = new ToolRegistry(server, false, subset)
+  for (const name of ['ask_user', 'memory_save'])
+    registry.server.registerTool(name, { description: name, inputSchema: {} }, () => ({ content: [] }))
+  const client = new Client({ name: 'test', version: '1' })
+  const [left, right] = InMemoryTransport.createLinkedPair()
+  await Promise.all([server.connect(left), client.connect(right)])
+  try {
+    expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(
+      subset === 'always' ? ['ask_user'] : ['memory_save'],
+    )
+  } finally {
+    await client.close()
+  }
+})
