@@ -765,6 +765,46 @@ main > section {
   color: var(--accent);
 }
 
+/* Store badges --------------------------------------------------- */
+
+.stores {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+.download .stores {
+  justify-content: center;
+  margin-top: 10px;
+}
+.store {
+  display: inline-flex;
+  border-radius: 8px;
+  transition: transform 0.15s;
+}
+.store:hover {
+  transform: translateY(-1px);
+}
+.store:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+/* Both badges at the same height, as the stores' guidelines ask; the image's width follows its artwork. */
+.store img {
+  display: block;
+  height: 46px;
+  width: auto;
+}
+.stores-note {
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.stores-note a {
+  color: var(--accent);
+}
+
 /* Footer --------------------------------------------------------- */
 
 .footer {

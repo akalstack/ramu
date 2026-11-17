@@ -4,6 +4,7 @@ import { Demo } from '@/components/demo'
 import Icon from '@/components/icon.astro'
 import { ProviderLogo } from '@/components/provider-logo'
 import { LinkButton } from '@/components/site-button'
+import StoreBadges from '@/components/store-badges.astro'
 import { AKALSTACK, MOBILE_SETUP, PROVIDERS, RELEASES, REPO, SERVICES } from '@/lib/site'
 
 const title = 'Ramu — Describe it. Ramu ships it.'
@@ -375,7 +376,8 @@ const WORK = [
             <li>Live terminals on every paired computer</li>
             <li>Push notifications when an agent needs you</li>
           </ul>
-          <LinkButton className="mt-6" href={MOBILE_SETUP}>Set up mobile</LinkButton>
+          <StoreBadges />
+          <p class="stores-note">Or <a href={MOBILE_SETUP}>build it from source</a>.</p>
         </div>
         <div class="phone-wrap reveal">
           <div class="phone" aria-label="The Ramu phone app asking to approve a production deploy" role="img">
@@ -417,8 +419,8 @@ const WORK = [
           <div class="hero-actions">
             <LinkButton tone="primary" href={RELEASES}>macOS · Apple silicon and Intel</LinkButton>
             <LinkButton href={RELEASES}>Linux · x64 and arm64</LinkButton>
-            <LinkButton href={MOBILE_SETUP}>iOS and Android</LinkButton>
           </div>
+          <StoreBadges />
           <p class="download-fine">
             Installers and checksums are on GitHub Releases. Alpha builds are unsigned, so updates install by hand.
             Windows is coming. See <a href={`${REPO}/blob/main/docs/guide/providers.md`}>provider setup</a>.

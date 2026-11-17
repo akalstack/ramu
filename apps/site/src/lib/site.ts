@@ -22,6 +22,25 @@ export const AKALSTACK = 'https://akalstack.com'
 export const RELEASES = `${REPO}/releases`
 export const MOBILE_SETUP = `${REPO}/blob/main/apps/mobile/README.md`
 
+/* The phone app's store pages. Each badge is the store's own artwork, unchanged. Google Play's address comes from the package name; the App Store's needs the numeric
+   Apple ID that App Store Connect gives the app, and until it is set the badge opens the phone setup guide. */
+const PACKAGE = 'com.akalstack.ramu'
+const APPLE_ID = ''
+export const STORES = [
+  {
+    label: 'Download on the App Store',
+    badge: '/badges/app-store.svg',
+    width: 120,
+    href: APPLE_ID ? `https://apps.apple.com/app/id${APPLE_ID}` : MOBILE_SETUP,
+  },
+  {
+    label: 'Get it on Google Play',
+    badge: '/badges/google-play.png',
+    width: 134,
+    href: `https://play.google.com/store/apps/details?id=${PACKAGE}`,
+  },
+]
+
 export type Provider = { id: string; name: string; logo: string; signIn: string }
 
 export const PROVIDERS: Provider[] = [

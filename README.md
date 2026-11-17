@@ -75,7 +75,7 @@ Open a project, say what you want, review the result. Defaults work out of the b
 
 **📱 Anywhere**
 
-- **Phone app** for iOS and Android: chat, review, Git, terminals, artifacts and approvals, with push notifications. Not in the stores yet; [build it from source](apps/mobile/README.md).
+- **Phone app** for iOS and Android: chat, review, Git, terminals, artifacts and approvals, with push notifications. On [Google Play](https://play.google.com/store/apps/details?id=com.akalstack.ramu) and the App Store, or [build it from source](apps/mobile/README.md).
 - **Several hosts** from one desktop: continue a thread on another machine.
 - **Your network:** LAN, Tailscale, NetBird, SSH or your own tunnel. [Remote hosts →](docs/guide/remote-hosts.md)
 - **Headless server** and a `ramu` CLI for servers and terminals.
@@ -90,7 +90,10 @@ Every feature has a page in the [guide](docs/README.md#guide).
 2. Sign in to a provider ([setup](docs/guide/providers.md)).
 3. Open a folder or start a thread.
 
-For the phone, see the [mobile guide](apps/mobile/README.md).
+For the phone, install the app and pair it with your computer ([mobile guide](apps/mobile/README.md)):
+
+<a href="apps/mobile/README.md"><img src="apps/site/public/badges/app-store.svg" alt="Download on the App Store" height="44" /></a>&nbsp;
+<a href="https://play.google.com/store/apps/details?id=com.akalstack.ramu"><img src="apps/site/public/badges/google-play.png" alt="Get it on Google Play" height="44" /></a>
 
 | Platform | Builds                                     |
 | -------- | ------------------------------------------ |
