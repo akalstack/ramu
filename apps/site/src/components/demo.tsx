@@ -66,20 +66,24 @@ export function Demo() {
   const [run, setRun] = useState(0)
   const [played, setPlayed] = useState(0)
   const [typed, setTyped] = useState(0)
+  const [sent, setSent] = useState(false)
   const target = TARGETS.find((entry) => entry.id === targetId)!
   const all = steps(target)
   const last = all.length - 1
   const step = reduced ? last : played
   const chars = reduced ? PROMPT.length : typed
+  const isSent = reduced || sent
 
   useEffect(() => {
     if (reduced) return
     setPlayed(0)
     setTyped(0)
+    setSent(false)
     const typing = PROMPT.length * TYPE_MS
     const timers = Array.from({ length: PROMPT.length }, (_, i) =>
       window.setTimeout(() => setTyped(i + 1), TYPE_MS * (i + 1)),
     )
+    timers.push(window.setTimeout(() => setSent(true), typing + 350))
     for (let i = 1; i <= last; i++) {
       timers.push(window.setTimeout(() => setPlayed(i), typing + 500 + 900 * i + (i >= 7 ? 600 : 0)))
     }
@@ -116,11 +120,11 @@ export function Demo() {
               {all.slice(0, step + 1).map((s, i) => {
                 if (s.kind === 'user')
                   return (
-                    <li key={i} className="msg msg-user">
-                      <span aria-hidden="true">{s.text.slice(0, chars)}</span>
-                      {chars < s.text.length && <span className="caret" aria-hidden="true" />}
-                      <span className="sr-only">{s.text}</span>
-                    </li>
+                    isSent && (
+                      <li key={i} className="msg msg-user">
+                        {s.text}
+                      </li>
+                    )
                   )
                 if (s.kind === 'ask')
                   return (
@@ -151,6 +155,14 @@ export function Demo() {
                 )
               })}
             </ol>
+            {/* The prompt is typed here, left to right as in the app, then sent into the thread. */}
+            <div className="composer" aria-hidden="true">
+              <span className={`composer-text${isSent ? ' is-empty' : ''}`}>
+                {isSent ? 'Ask for a change…' : PROMPT.slice(0, chars)}
+                {!isSent && <span className="caret" />}
+              </span>
+              <span className={`composer-send${!isSent && chars > 0 ? ' is-ready' : ''}`}>↑</span>
+            </div>
           </div>
 
           <aside className="demo-side">
