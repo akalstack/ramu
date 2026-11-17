@@ -220,12 +220,12 @@ it('retains a removable definition when credential cleanup fails and clears only
   expect(values.size).toBe(0)
 })
 
-it('reports each login as not checked, approval needed or ready, and unsupported without a connection', async () => {
+it('reports each login as not checked, approval needed or ready, and nothing without a connection', async () => {
   const { invoke, input, status } = fixture()
   for (const accountId of ['a', 'b'])
     invoke('mcp.account', { provider: 'codex', accountId, shareApprovals: accountId === 'a' })
   const readiness = (accountId: string) => status().readiness?.find((entry) => entry.accountId === accountId)
-  expect(readiness('a')?.status).toBe('unsupported')
+  expect(readiness('a')).toBeUndefined()
   const connection = invoke('mcp.save', input) as SharedMcpConnection
   expect(readiness('a')).toMatchObject({ status: 'not-checked', checkedAt: null })
   const selection = { provider: 'codex' as const, accountId: 'a', projectId: 'project' }

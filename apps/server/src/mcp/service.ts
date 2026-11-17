@@ -190,14 +190,18 @@ export class SharedMcpService {
     )
   }
 
-  /** Readiness per set-up login, from the last verified catalog and the approvals; nothing is contacted here. */
+  /**
+   * Readiness per set-up login, from the last verified catalog and the approvals; nothing is contacted here. A login no
+   * shared connection is offered to has nothing to report, so it gets no entry rather than one that reads as broken.
+   */
   private readiness(state: SharedMcpPolicyState): SharedMcpAccountReadiness[] {
-    return state.accounts.map((account) => {
+    return state.accounts.flatMap((account) => {
       const connections = this.applicable(state, account.provider).map((connection) => ({
         connectionId: connection.id,
         name: connection.name,
         ...this.connectionReadiness(connection, account.provider, account.accountId),
       }))
+      if (!connections.length) return []
       const order: SharedMcpAccountReadiness['status'][] = [
         'sign-in-required',
         'approval-needed',
@@ -205,27 +209,25 @@ export class SharedMcpService {
         'not-checked',
         'ready',
       ]
-      const worst = connections.length
-        ? order.find((status) => connections.some((entry) => entry.status === status))!
-        : 'unsupported'
+      const worst = order.find((status) => connections.some((entry) => entry.status === status))!
       const reasons: Record<SharedMcpAccountReadiness['status'], string> = {
         ready: 'Every shared connection for this login is checked and approved.',
         'approval-needed': 'Review access for this login on a connection.',
         'sign-in-required': 'A connection needs its service sign-in before this login can use it.',
-        unsupported: runtimeLacksHttpMcp(account.provider)
-          ? 'This runtime does not accept HTTP MCP servers, so it cannot reach shared connections.'
-          : 'No shared connection is enabled for this provider.',
+        unsupported: 'This runtime does not accept HTTP MCP servers, so it cannot reach shared connections.',
         'not-checked': 'A connection has not been checked since Ramu started or changed it.',
       }
       const times = connections.flatMap((entry) => (entry.checkedAt === null ? [] : [entry.checkedAt]))
-      return {
-        provider: account.provider,
-        accountId: account.accountId,
-        status: worst,
-        checkedAt: times.length ? Math.max(...times) : null,
-        reason: reasons[worst],
-        connections: connections.map(({ connectionId, name, status }) => ({ connectionId, name, status })),
-      }
+      return [
+        {
+          provider: account.provider,
+          accountId: account.accountId,
+          status: worst,
+          checkedAt: times.length ? Math.max(...times) : null,
+          reason: reasons[worst],
+          connections: connections.map(({ connectionId, name, status }) => ({ connectionId, name, status })),
+        },
+      ]
     })
   }
 
