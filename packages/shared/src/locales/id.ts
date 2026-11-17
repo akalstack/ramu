@@ -573,6 +573,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'MCP approval needed': 'MCP perlu persetujuan',
   'MCP sign-in required': 'MCP perlu login',
   'MCP unsupported': 'MCP tidak didukung',
+  '{0} is newer than any release tested with Ramu, so automatic updates wait for it.':
+    '{0} lebih baru dari rilis mana pun yang sudah diuji dengan Ramu, jadi pembaruan otomatis menunggunya.',
   'MCP not checked': 'MCP belum diperiksa',
   '{0} · checked {1}': '{0} · diperiksa {1}',
   'Check MCP access again for {0}': 'Periksa ulang akses MCP untuk {0}',

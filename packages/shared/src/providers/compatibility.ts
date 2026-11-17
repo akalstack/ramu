@@ -2,7 +2,10 @@ import type { AgentProvider } from '../types'
 import { newerVersion } from '../version'
 
 // Bundled, versioned compatibility policy for the runtime Ramu actually launches. A missing rule means Unverified:
-// never invent a version range to fill a matrix. The evaluator is separate from installed/enabled, sign-in and
+// never invent a version range to fill a matrix. A Supported or Limited rule covers one release line: from a tested
+// release up to the next major version, which is where providers make breaking changes, so the weekly patch and minor
+// releases in between stay covered while a new major waits for its own probe. Date-numbered releases have no major and
+// may stay open-ended. The evaluator is separate from installed/enabled, sign-in and
 // update-available state, and it never grants a capability; negotiated capabilities stay authoritative.
 
 export type CompatibilityStatus = 'supported' | 'limited' | 'incompatible' | 'unverified'
@@ -30,6 +33,8 @@ export interface CompatibilityRule {
   affects?: string[]
   /** A version or range worth moving to; it must itself fall in a supported rule of the same policy. */
   recommend?: string
+  /** The newest release actually probed in this range; required for Supported and Limited rules. */
+  tested?: string
   evidence: string
 }
 
@@ -48,7 +53,10 @@ export interface CompatibilityResult {
   affects?: string[]
   recommend?: string
   evidence?: string
-  /** The newest supported release, when the observed one is newer. Providers update faster than Ramu can test them. */
+  /**
+   * The newest release probed: in a matching rule, that rule's; outside every rule, the newest supported one when the
+   * observed release is newer. Providers update faster than Ramu can test them.
+   */
   testedVersion?: string
   /** When the runtime was observed, so a stale result stays visibly stale. */
   checkedAt?: string
@@ -105,6 +113,7 @@ export function evaluateCompatibility(
       ruleId: rule.id,
       ...(rule.affects ? { affects: rule.affects } : {}),
       ...(rule.recommend ? { recommend: rule.recommend } : {}),
+      ...(rule.tested ? { testedVersion: rule.tested } : {}),
       evidence: rule.evidence,
     }
   }
@@ -118,9 +127,18 @@ export function evaluateCompatibility(
 
 function newestSupported(rules: CompatibilityRule[]): string | undefined {
   let newest: string | undefined
-  for (const rule of rules)
-    if (rule.status === 'supported' && rule.min && (!newest || order(rule.min, newest) === 1)) newest = rule.min
+  for (const rule of rules) {
+    const tested = rule.tested ?? rule.min
+    if (rule.status === 'supported' && tested && (!newest || order(tested, newest) === 1)) newest = tested
+  }
   return newest
+}
+
+/** The first release of the next major line, for a semver version; null for date-numbered releases. */
+export function nextMajor(version: string): string | null {
+  if (DATE.test(version)) return null
+  const major = SEMVER.exec(version)?.[1]
+  return major === undefined ? null : `${Number(major) + 1}.0.0`
 }
 
 /** Problems that make a policy unsafe to ship: bad ranges, overlapping rules, and recommendations it would itself reject. */
@@ -138,6 +156,15 @@ export function validatePolicy(policy: CompatibilityPolicy): string[] {
       if (o === null) problems.push(`${rule.id}: min and below use different version styles`)
       else if (o >= 0) problems.push(`${rule.id}: empty range`)
     }
+    if (rule.status === 'incompatible') continue
+    if (!rule.tested) problems.push(`${rule.id}: a ${rule.status} rule names the release it was tested on`)
+    else if (inRange(rule.tested, rule) !== true)
+      problems.push(`${rule.id}: tested ${rule.tested} is outside its range`)
+    // Claiming a release line nobody probed is guessing: a working rule ends at the next major at the latest.
+    const floor = rule.min ?? rule.tested
+    const ceiling = floor ? nextMajor(floor) : null
+    if (ceiling && (!rule.below || (order(rule.below, ceiling) ?? 1) > 0))
+      problems.push(`${rule.id}: a ${rule.status} range ends by ${ceiling}, the next major release`)
   }
   const same = (a: CompatibilityRule, b: CompatibilityRule) => a.provider === b.provider && a.runtime === b.runtime
   for (const [i, a] of policy.rules.entries())
@@ -162,4 +189,12 @@ function overlaps(a: CompatibilityRule, b: CompatibilityRule): boolean {
     return o === null ? false : o < 0
   }
   return lowBelowHigh(a.min, b.below) && lowBelowHigh(b.min, a.below)
+}
+
+/**
+ * Whether an automatic update may install a release: never one proven incompatible, and never one past every tested
+ * release line, such as a new major. Pressing Update still installs the latter; automatic updates wait for a probe.
+ */
+export function automaticallyInstallable(target: CompatibilityResult | null | undefined): boolean {
+  return target?.status !== 'incompatible' && target?.reason !== 'newer-than-tested'
 }

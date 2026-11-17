@@ -27,6 +27,7 @@ import {
 } from './providerBinaries'
 import type { ProviderApiKeyStore } from './apiKeyStore'
 import { supportsApiKey } from '@ramu/shared/providers/apiKeys'
+import { automaticallyInstallable } from '@ramu/shared/providers/compatibility'
 import { offeredVersion, recordSeen, settlesAt, type SeenVersions } from '@ramu/shared/updates'
 
 type Release = { version: string; checkedAt: string; downloadUrl?: string }
@@ -118,7 +119,7 @@ export class ProviderService {
           for (const status of statuses)
             if (
               status.updateAvailable &&
-              status.updateCompatibility?.status !== 'incompatible' &&
+              automaticallyInstallable(status.updateCompatibility) &&
               this.preferences().providerBinaries[status.provider]?.autoUpdate
             )
               await this.update(status.provider).catch(() => {})

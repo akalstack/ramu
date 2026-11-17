@@ -1,65 +1,40 @@
 import { expect, it } from 'vitest'
 import { evaluateCompatibility, validatePolicy } from '@ramu/shared/providers/compatibility'
+import type { AgentProvider } from '@ramu/shared/types'
 import { COMPATIBILITY_POLICY, COMPATIBILITY_RUNTIME } from '../src/providers/compatibilityPolicy'
+
+const evaluate = (provider: AgentProvider, version: string | null) =>
+  evaluateCompatibility(COMPATIBILITY_POLICY, provider, COMPATIBILITY_RUNTIME[provider]!, version)
 
 it('the bundled policy is valid and only audited runtimes are evaluated', () => {
   expect(validatePolicy(COMPATIBILITY_POLICY)).toEqual([])
   expect(Object.keys(COMPATIBILITY_RUNTIME)).toEqual(['codex', 'opencode', 'claude-code', 'antigravity', 'cursor'])
 })
 
-it('marks the exact Codex release that was probed as supported and every other release unverified', () => {
-  const evaluate = (observedVersion: string | null) =>
-    evaluateCompatibility(COMPATIBILITY_POLICY, 'codex', 'app-server', observedVersion)
-  expect(evaluate('0.163.0')).toMatchObject({ status: 'supported', ruleId: 'codex-app-server-0.163.0' })
-  expect(evaluate('0.162.1')).toMatchObject({ status: 'supported', ruleId: 'codex-app-server-0.162.1' })
-  expect(evaluate('0.150.0')).toMatchObject({ status: 'supported', ruleId: 'codex-app-server-0.150.0' })
-  expect(evaluate('0.163.1').status).toBe('unverified')
-  expect(evaluate('0.162.0').status).toBe('unverified')
-  expect(evaluate('0.151.0').status).toBe('unverified')
-  expect(evaluate('0.162.9').status).toBe('unverified')
-  expect(evaluate(null).status).toBe('unverified')
+it('covers each tested release line through its later patches and minors, and stops at the next major', () => {
+  const lines: [AgentProvider, string, string, string, string][] = [
+    // provider, oldest tested, a later release in the line, the next major, older than anything tested
+    ['claude-code', '2.1.308', '2.4.0', '3.0.0', '2.1.0'],
+    ['codex', '0.150.0', '0.199.3', '1.0.0', '0.149.0'],
+    ['opencode', '2.1.3', '2.9.0', '3.0.0', '1.14.19'],
+    ['antigravity', '1.4.3', '1.6.2', '2.0.0', '1.3.0'],
+  ]
+  for (const [provider, oldest, later, major, older] of lines) {
+    expect(evaluate(provider, oldest).status).toBe('supported')
+    expect(evaluate(provider, later).status).toBe('supported')
+    expect(evaluate(provider, major)).toMatchObject({ status: 'unverified', reason: 'newer-than-tested' })
+    expect(evaluate(provider, older)).toMatchObject({ status: 'unverified', reason: 'no-rule' })
+    expect(evaluate(provider, null).status).toBe('unverified')
+  }
 })
 
-it('says a release newer than anything tested is newer, not merely unknown', () => {
-  const result = evaluateCompatibility(COMPATIBILITY_POLICY, 'codex', COMPATIBILITY_RUNTIME.codex!, '99.0.0')
-  expect(result).toMatchObject({ status: 'unverified', reason: 'newer-than-tested', testedVersion: '0.167.0' })
-  expect(evaluateCompatibility(COMPATIBILITY_POLICY, 'codex', COMPATIBILITY_RUNTIME.codex!, '0.100.0').reason).toBe(
-    'no-rule',
-  )
+it('reports the newest release probed in the line', () => {
+  expect(evaluate('antigravity', '1.5.3')).toMatchObject({ ruleId: 'antigravity-acp-1', testedVersion: '1.5.0' })
+  expect(evaluate('codex', '0.168.0')).toMatchObject({ ruleId: 'codex-app-server-0', testedVersion: '0.167.0' })
 })
 
-it('marks the OpenCode 2 release that was probed as supported; OpenCode 1 and other releases stay unverified', () => {
-  const evaluate = (version: string | null) =>
-    evaluateCompatibility(COMPATIBILITY_POLICY, 'opencode', COMPATIBILITY_RUNTIME.opencode!, version)
-  expect(evaluate('2.1.3')).toMatchObject({ status: 'supported', ruleId: 'opencode-http-2.1.3' })
-  expect(evaluate('2.1.4').status).toBe('unverified')
-  expect(evaluate('1.4.0').status).toBe('unverified')
-})
-
-it('marks the Claude Code executable that was probed with the pinned SDK as supported; other releases stay unverified', () => {
-  const evaluate = (version: string | null) =>
-    evaluateCompatibility(COMPATIBILITY_POLICY, 'claude-code', COMPATIBILITY_RUNTIME['claude-code']!, version)
-  expect(evaluate('2.1.308')).toMatchObject({ status: 'supported', ruleId: 'claude-code-sdk-2.1.308' })
-  expect(evaluate('2.1.309').status).toBe('unverified')
-  expect(evaluate('2.1.0').status).toBe('unverified')
-  expect(evaluate(null).status).toBe('unverified')
-})
-
-it('evaluates the Antigravity ACP runtime it was probed on, and leaves other releases unverified', () => {
-  const evaluate = (version: string | null) =>
-    evaluateCompatibility(COMPATIBILITY_POLICY, 'antigravity', COMPATIBILITY_RUNTIME.antigravity!, version)
-  expect(COMPATIBILITY_RUNTIME.antigravity).toBe('acp')
-  expect(evaluate('1.4.3')).toMatchObject({ status: 'supported', ruleId: 'antigravity-acp-1.4.3' })
-  expect(evaluate('1.4.4').status).toBe('unverified')
-  expect(evaluate('1.5.0')).toMatchObject({ status: 'supported', ruleId: 'antigravity-acp-1.5.0' })
-  expect(evaluate('1.5.1').status).toBe('unverified')
-  expect(evaluate(null).status).toBe('unverified')
-})
-
-it('evaluates the Cursor build it was probed on by its date-style version', () => {
-  const evaluate = (version: string | null) =>
-    evaluateCompatibility(COMPATIBILITY_POLICY, 'cursor', COMPATIBILITY_RUNTIME.cursor!, version)
-  expect(evaluate('2026.11.05-86047df')).toMatchObject({ status: 'supported', ruleId: 'cursor-acp-2026.11.05' })
-  expect(evaluate('2026.11.06-aaaaaaa').status).toBe('unverified')
-  expect(evaluate('2026.10.30-bbbbbbb').status).toBe('unverified')
+it('covers Cursor builds from the first one probed, by their date-style version', () => {
+  expect(evaluate('cursor', '2026.11.05-86047df')).toMatchObject({ status: 'supported', ruleId: 'cursor-acp' })
+  expect(evaluate('cursor', '2026.12.01-aaaaaaa').status).toBe('supported')
+  expect(evaluate('cursor', '2026.10.30-bbbbbbb').status).toBe('unverified')
 })

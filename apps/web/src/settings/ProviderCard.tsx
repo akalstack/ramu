@@ -39,6 +39,7 @@ import { ProviderLoginRow } from './ProviderLoginRow'
 import { ProviderCompatibility } from './ProviderCompatibility'
 import { ProviderAbilities } from './AbilitySettings'
 import { compatibilityPlan } from './compatibilityPlan'
+import { automaticallyInstallable } from '@ramu/shared/providers/compatibility'
 
 const BROWSE_BUTTON_CLASS = `${SECONDARY_BUTTON_CLASS} icon p-0 size-(--action-size) flex-none justify-center`
 
@@ -293,7 +294,13 @@ export function ProviderCard({
           <SettingsRow setting={`providerBinaries.${provider}.autoUpdate`}>
             <SettingsLabel
               title={t(provider === 'antigravity' ? 'Auto-update runtime' : 'Auto-update CLI')}
-              help={t('Applies to new threads. Running threads stay connected.')}
+              help={
+                status?.updateAvailable && status.latestVersion && !automaticallyInstallable(status.updateCompatibility)
+                  ? t('{0} is newer than any release tested with Ramu, so automatic updates wait for it.', {
+                      '0': status.latestVersion,
+                    })
+                  : t('Applies to new threads. Running threads stay connected.')
+              }
             />
             <span className="flex flex-none items-center gap-2.5">
               {((status?.updateAvailable && status.updateCompatibility?.status !== 'incompatible') ||
