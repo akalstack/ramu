@@ -356,8 +356,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       drafts: readDrafts() ?? saved.drafts,
     }
   })
+  // The latest state, written only by `change`. Copying `state` here on render would be wrong: React can render this
+  // provider with an older state while a later update waits (a keystroke renders before a pending network update), and
+  // a change made then would build on that older copy, dropping a just-queued message or the draft Send compares.
   const ref = useRef(state)
-  ref.current = state
   const connections = useRef(
     new Map<string, { client: HostClient; controller: AbortController; generation: number; live?: boolean }>(),
   )
