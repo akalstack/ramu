@@ -104,6 +104,9 @@ export function ComputerSettings({
       setBusy(false)
     }
   }
+  // A host that cannot run computer use at all (Linux, Windows) says so once instead of in every row and note.
+  const unsupported =
+    !!status && !status.enabled && !status.runtime.available && status.runtime.reason === 'unsupported'
   if (readOnly)
     return (
       <p role="status" className="text-caption text-muted-foreground">
@@ -122,7 +125,7 @@ export function ComputerSettings({
           onCheckedChange={stageAgentUse}
         />
       </SettingsRow>
-      {status?.apps && (
+      {status?.apps && !unsupported && (
         <SettingsRow>
           <SettingsLabel title={t('App control')} help={t(appControlHelp(status))} />
           {!(!status.apps.available && status.apps.reason === 'unsupported') && (
@@ -189,11 +192,13 @@ export function ComputerSettings({
         canWrite={canWrite}
         visible={!!status?.enabled && !!status.apps?.available}
       />
-      <p className="m-[0_0_12px] text-caption text-muted-foreground">
-        {t(
-          'macOS asks for Screen Recording and Accessibility the first time. Where supported, display control pauses when you use the mouse or keyboard. Choose Take control to step in. Turning this off ends every thread’s access.',
-        )}
-      </p>
+      {!unsupported && (
+        <p className="m-[0_0_12px] text-caption text-muted-foreground">
+          {t(
+            'macOS asks for Screen Recording and Accessibility the first time. Where supported, display control pauses when you use the mouse or keyboard. Choose Take control to step in. Turning this off ends every thread’s access.',
+          )}
+        </p>
+      )}
       <SettingsRow>
         <SettingsLabel
           title={t('Reset defaults')}

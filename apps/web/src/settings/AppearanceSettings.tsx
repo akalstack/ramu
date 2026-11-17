@@ -151,12 +151,15 @@ export function AppearanceSettings({
         title="Reduce motion"
         description="Turn off interface animations. Your system’s reduced motion setting always applies."
       />
-      <ToggleRow
-        {...toggleProps}
-        setting="fontSmoothing"
-        title="Crisper text"
-        description="Use lighter text rendering on macOS."
-      />
+      {/* Font smoothing is a macOS rendering control; other systems draw text the same either way. */}
+      {navigator.userAgent.includes('Mac') && (
+        <ToggleRow
+          {...toggleProps}
+          setting="fontSmoothing"
+          title="Crisper text"
+          description="Use lighter text rendering on macOS."
+        />
+      )}
       <SettingsRow>
         <SettingsLabel
           title={t('Layout sizes')}

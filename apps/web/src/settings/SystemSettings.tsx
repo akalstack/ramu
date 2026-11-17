@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
 import { Input } from '@/components/ui/input'
 import type { AppPreferences } from '@ramu/shared/types'
@@ -24,6 +25,12 @@ export function SystemSettings({
 }) {
   const invoke = useSettingsInvoke()
   const toggleProps = { draft, onChange, busy }
+  const [awakeSupported, setAwakeSupported] = useState(true)
+  useEffect(() => {
+    void invoke('background.keepAwake')
+      .then((status) => setAwakeSupported(status.supported))
+      .catch(() => {})
+  }, [invoke])
   return (
     <div className={SETTINGS_FORM_CLASS}>
       <SettingsGroupTitle>{t('Background service')}</SettingsGroupTitle>
@@ -54,7 +61,7 @@ export function SystemSettings({
         </Button>
       </div>
       <BackgroundControls onInstalled={() => onChange((current) => ({ ...current, keepAwake: true }))} />
-      <KeepAwakeSettings {...toggleProps} />
+      <KeepAwakeSettings {...toggleProps} supported={awakeSupported} />
       <SettingsGroupTitle>{t('Daily recaps')}</SettingsGroupTitle>
       <ToggleRow
         {...toggleProps}

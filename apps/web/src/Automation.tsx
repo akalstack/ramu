@@ -941,6 +941,8 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
       setBusy(false)
     }
   }
+  // Only the desktop on macOS installs a login item; older hosts omit the platform, so they keep the switch.
+  const loginSupported = !status?.platform || status.platform === 'darwin'
   // Running is the normal state and the status bar already shows when it is not; only a stopped service needs a prompt here.
   if (compact)
     return connected ? null : (
@@ -983,13 +985,15 @@ export function BackgroundControls({ compact = false, onInstalled }: { compact?:
         <span>
           <strong>{t('Start at login')}</strong>
           <span className="muted text-muted-foreground small text-caption block block">
-            {t('macOS starts the background service when you sign in.')}
+            {loginSupported
+              ? t('macOS starts the background service when you sign in.')
+              : t('Starting the service at login is available on macOS.')}
           </span>
         </span>
         <Switch
           aria-label={t('Start at login')}
           checked={status?.loginEnabled ?? false}
-          disabled={busy || !connected}
+          disabled={busy || !connected || !loginSupported}
           onCheckedChange={(checked) =>
             void act(async () => {
               const result = await invoke('background.login', checked)

@@ -2570,6 +2570,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Stop background service': 'Hentikan layanan latar belakang',
   'Start at login': 'Mulai saat login',
   'macOS starts the background service when you sign in.': 'macOS memulai layanan latar belakang saat kamu login.',
+  'Starting the service at login is available on macOS.': 'Memulai layanan saat login tersedia di macOS.',
+  'Keeping the host awake is available on macOS.': 'Menjaga host tetap aktif tersedia di macOS.',
   'Agents run in the background, even when Ramu is closed.':
     'Agent tetap bekerja di latar belakang meski Ramu ditutup.',
   'Threads and schedules keep running when Ramu closes. The host must stay awake.':
