@@ -51,6 +51,8 @@ it('evaluates the Antigravity ACP runtime it was probed on, and leaves other rel
   expect(COMPATIBILITY_RUNTIME.antigravity).toBe('acp')
   expect(evaluate('1.4.3')).toMatchObject({ status: 'supported', ruleId: 'antigravity-acp-1.4.3' })
   expect(evaluate('1.4.4').status).toBe('unverified')
+  expect(evaluate('1.5.0')).toMatchObject({ status: 'supported', ruleId: 'antigravity-acp-1.5.0' })
+  expect(evaluate('1.5.1').status).toBe('unverified')
   expect(evaluate(null).status).toBe('unverified')
 })
 

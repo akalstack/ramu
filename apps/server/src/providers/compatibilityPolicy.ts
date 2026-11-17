@@ -130,6 +130,16 @@ export const COMPATIBILITY_POLICY: CompatibilityPolicy = {
         "Google's antigravity-acp 1.4.3 (agy_acp_server.par as Ramu downloads it) on macOS, 2026-11-08: ACP initialize answered protocol version 1 with agentInfo 1.4.3, loadSession, session list and resume, and its four sign-in methods, with no model call and no sign-in.",
     },
     {
+      id: 'antigravity-acp-1.5.0',
+      provider: 'antigravity',
+      runtime: 'acp',
+      min: '1.5.0',
+      below: '1.5.1',
+      status: 'supported',
+      evidence:
+        "Google's antigravity-acp 1.5.0 (agy_acp_server.par as Ramu downloads it) on macOS, 2026-11-17: ACP initialize answered protocol version 1 with agentInfo 1.5.0, loadSession, session list and resume, HTTP and SSE MCP, and its four sign-in methods, with no model call and no sign-in.",
+    },
+    {
       id: 'cursor-acp-2026.11.05',
       provider: 'cursor',
       runtime: 'acp',
