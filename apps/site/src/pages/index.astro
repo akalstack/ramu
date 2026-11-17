@@ -3,6 +3,7 @@ import '@/styles/global.css'
 import { Demo } from '@/components/demo'
 import Icon from '@/components/icon.astro'
 import { ProviderLogo } from '@/components/provider-logo'
+import Footer from '@/components/footer.astro'
 import { LinkButton } from '@/components/site-button'
 import StoreBadges from '@/components/store-badges.astro'
 import { AKALSTACK, MOBILE_SETUP, PROVIDERS, RELEASES, REPO, SERVICES } from '@/lib/site'
@@ -416,7 +417,7 @@ const WORK = [
 
       <section class="download" id="download">
         <div class="download-inner reveal">
-          <img class="download-logo" src="/ramu-logo.svg" alt="" width="56" height="56" />
+          <img class="download-logo" src="/favicon.svg" alt="" width="64" height="64" />
           <h2>Bring your next idea to Ramu.</h2>
           <p>Download the desktop alpha, connect a provider and say what you want.</p>
           <div class="hero-actions">
@@ -432,22 +433,7 @@ const WORK = [
       </section>
     </main>
 
-    <footer class="footer">
-      <img src="/ramu-logo.svg" alt="Ramu" height="22" />
-      <span>
-        Made by <a href={AKALSTACK}>Akalstack</a>. MIT licensed. Provider names and logos belong to their owners.
-      </span>
-      <nav aria-label="Footer">
-        <a href={REPO}>GitHub</a>
-        <a href={RELEASES}>Releases</a>
-        <a href={`${REPO}/blob/main/CONTRIBUTING.md`}>Contributing</a>
-        <a href={`${REPO}/blob/main/SECURITY.md`}>Security</a>
-        <a href={`${AKALSTACK}/privacy`}>Privacy</a>
-        <a href={`${AKALSTACK}/terms`}>Terms</a>
-        <a href="https://github.com/sponsors/akalstack">Sponsor</a>
-        <a href="https://trakteer.id/akalstack">Trakteer</a>
-      </nav>
-    </footer>
+    <Footer />
     <script>
       // Fade sections in as they scroll into view. Without script or with reduced motion, everything stays visible.
       const items = document.querySelectorAll('.reveal')

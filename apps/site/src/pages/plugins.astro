@@ -1,7 +1,8 @@
 ---
 import '@/styles/global.css'
+import Footer from '@/components/footer.astro'
 import { LinkButton } from '@/components/site-button'
-import { AKALSTACK, REPO } from '@/lib/site'
+import { REPO } from '@/lib/site'
 import data from '../data/plugins.json'
 
 const title = 'Plugins — Ramu'
@@ -196,17 +197,7 @@ const adds = (plugin: (typeof data.plugins)[number]) =>
       </section>
     </main>
 
-    <footer class="footer">
-      <img src="/ramu-logo.svg" alt="Ramu" height="22" />
-      <span>Made by <a href={AKALSTACK}>Akalstack</a>. MIT licensed. Service names belong to their owners.</span>
-      <nav aria-label="Footer">
-        <a href={REPO}>GitHub</a>
-        <a href="/schema/plugin.json">Manifest schema</a>
-        <a href={`${REPO}/blob/main/SECURITY.md`}>Security</a>
-        <a href={`${AKALSTACK}/privacy`}>Privacy</a>
-        <a href={`${AKALSTACK}/terms`}>Terms</a>
-      </nav>
-    </footer>
+    <Footer />
     <script>
       const input = document.getElementById('plugin-search') as HTMLInputElement | null
       const cards = [...document.querySelectorAll<HTMLElement>('.plugin-card')]

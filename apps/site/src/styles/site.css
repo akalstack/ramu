@@ -852,30 +852,68 @@ main > section {
 /* Footer --------------------------------------------------------- */
 
 .footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 24px;
   max-width: var(--max);
-  margin: 0 auto;
-  padding: 32px var(--pad) 40px;
+  margin: clamp(48px, 7vw, 80px) auto 0;
+  padding: 0 var(--pad) 32px;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 13px;
 }
-.footer img {
-  height: 18px;
+.footer-top {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
+  gap: 32px;
+  padding: 40px 0;
+  border-top: 1px solid var(--line);
+}
+.footer-brand img {
+  display: block;
+  height: 20px;
   width: auto;
 }
-.footer nav {
+.footer-brand p {
+  margin-top: 14px;
+  max-width: 32ch;
+  line-height: 1.55;
+}
+.footer-col {
   display: flex;
-  gap: 18px;
-  margin-left: auto;
+  flex-direction: column;
+  gap: 10px;
+}
+.footer-col h2 {
+  margin-bottom: 4px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.footer-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
 }
 .footer a {
   text-decoration: none;
+  transition: color 0.15s;
 }
 .footer a:hover {
   color: var(--text);
+}
+@media (max-width: 760px) {
+  .footer-top {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .footer-brand {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 420px) {
+  .footer-top {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1009,17 +1047,19 @@ main > section {
   line-height: 1;
   letter-spacing: -0.045em;
 }
+/* A sheen that loops with no seam: the gradient starts and ends on the same color, and each cycle moves it exactly
+   one tile (a 200% tile shifted by -200% moves 2x the element's width). */
 .grad {
-  background: linear-gradient(100deg, var(--accent) 0%, #fff 35%, var(--accent) 55%, #8f7cf0 80%);
-  background-size: 220% 100%;
+  background: linear-gradient(90deg, var(--accent) 0%, #8f7cf0 25%, #fff 50%, #8f7cf0 75%, var(--accent) 100%);
+  background-size: 200% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: shine 7s linear infinite;
+  animation: shine 8s linear infinite;
 }
 @keyframes shine {
   to {
-    background-position: -220% 0;
+    background-position: -200% 0;
   }
 }
 .hero-sub {
