@@ -15,6 +15,9 @@ import { FilePath } from './FilePath'
 import { ReviewThread } from './ReviewThread'
 import { DISCUSSION_COUNT_CLASS, ICON_BUTTON_CLASS } from './styles'
 import { useHost } from '../workspace/HostProvider'
+import { reviewImageType } from '@ramu/shared/review/reviewImages'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { ReviewBinaryNote, ReviewImageDiff } from './ReviewImageDiff'
 
 export function ReviewFileCard({
   file,
@@ -52,6 +55,9 @@ export function ReviewFileCard({
   const [draft, setDraft] = useReviewDraft(`${review.id}:${file.id}:text`, ''),
     [editing, setEditing] = useReviewDraft<string | null>(`${review.id}:${file.id}:editing`, null)
   const draftRef = useRef<HTMLTextAreaElement>(null)
+  // A picture compares as pictures; an SVG, which is also text, can switch to its source diff, as GitHub's does.
+  const image = Boolean(reviewImageType(file.path))
+  const [source, setSource] = useState(false)
   useEffect(() => {
     const reveal = (event: Event) => {
       if ((event as CustomEvent).detail?.fileId === file.id) setCollapsed(false)
@@ -276,10 +282,23 @@ export function ReviewFileCard({
       </header>
       {!collapsed && (
         <>
-          {file.binary ? (
-            <p className="review-binary m-0 p-3 text-control text-muted-foreground">
-              {t('This binary or large file has no text diff.')}
-            </p>
+          {image && !file.binary && (
+            <ToggleGroup
+              size="sm"
+              spacing={0.5}
+              value={[source ? 'source' : 'rendered']}
+              onValueChange={(next) => next[0] && setSource(next[0] === 'source')}
+              aria-label={t('Show the image or its source')}
+              className="px-3 pt-3"
+            >
+              <ToggleGroupItem value="rendered">{t('Rendered')}</ToggleGroupItem>
+              <ToggleGroupItem value="source">{t('Source')}</ToggleGroupItem>
+            </ToggleGroup>
+          )}
+          {image && (file.binary || !source) ? (
+            <ReviewImageDiff reviewId={review.id} file={file} />
+          ) : file.binary ? (
+            <ReviewBinaryNote file={file} />
           ) : (
             <ReviewDiff
               visible={visible}

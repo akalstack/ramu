@@ -26,7 +26,8 @@ const call = async (host: string, method: string, ...args: unknown[]) => {
   return undefined
 }
 vi.mock('../src/ipc', () => ({ invokeOn: call, invokeUncachedOn: call }))
-const { copyBetweenHosts, formatSize } = await import('../src/sidebar/explorer/transfer')
+const { copyBetweenHosts } = await import('../src/sidebar/explorer/transfer')
+const { formatSize } = await import('@ramu/shared/formatSize')
 
 beforeEach(() => {
   calls.length = 0

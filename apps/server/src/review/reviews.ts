@@ -1,6 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
-import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync, rmSync } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -23,6 +23,7 @@ import {
 } from './reviewLive'
 import { reviewCommentOutdated } from '@ramu/shared/review/reviewOutdated'
 import { reviewLineStats } from './reviewStats'
+import { MAX_REVIEW_IMAGE_BYTES, reviewImageType } from '@ramu/shared/review/reviewImages'
 import {
   type AgentScope,
   type Attachment,
@@ -40,6 +41,8 @@ interface SnapshotFile {
   hash: string
   content: string
   binary: boolean
+  /** Bytes, kept for binary files, whose review shows sizes instead of line counts. */
+  size?: number
   mode?: number
   /** Missing from a Git checkout's working tree although HEAD still has it. */
   deleted?: true
@@ -152,6 +155,10 @@ export class ReviewService {
     mkdirSync(root, { recursive: true, mode: 0o700 })
     this.undo = new RunUndo(join(root, 'undo'))
   }
+  /** Image bytes by digest, shared by every run that saw the same picture. */
+  private imagePath(hash: string): string {
+    return join(this.root, 'images', hash)
+  }
   recover(): void {
     for (const review of this.stored()) {
       if (review.state === 'recording')
@@ -175,6 +182,12 @@ export class ReviewService {
         })
       } catch {}
     }
+    // Nothing is recording at startup, so a picture no saved run names belongs to a deleted thread or a failed run.
+    const kept = new Set(this.stored().flatMap((review) => review.files.flatMap((f) => [f.oldHash, f.newHash])))
+    try {
+      for (const name of readdirSync(join(this.root, 'images')))
+        if (!kept.has(name)) rmSync(this.imagePath(name), { force: true })
+    } catch {}
   }
   list(sessionId?: string): ChangeReview[] {
     // Empty captures remain internal run boundaries, never pair-review entries.
@@ -216,6 +229,23 @@ export class ReviewService {
       return await operation
     } finally {
       this.statsTasks.delete(id)
+    }
+  }
+  /** One side of a changed image as a data URL, or null when the run kept no picture for it. */
+  image(id: string, fileId: string, side: 'old' | 'new'): string | null {
+    const file = this.get(id).files.find((f) => f.id === fileId)
+    const type = file && reviewImageType(file.path)
+    if (!file || !type || (side === 'old' ? file.status === 'added' : file.status === 'deleted')) return null
+    if (!file.binary) {
+      const text = side === 'old' ? file.oldContent : file.newContent
+      return `data:${type};base64,${Buffer.from(text).toString('base64')}`
+    }
+    const hash = side === 'old' ? file.oldHash : file.newHash
+    if (!hash || !/^[0-9a-f]{64}$/.test(hash)) return null
+    try {
+      return `data:${type};base64,${readFileSync(this.imagePath(hash)).toString('base64')}`
+    } catch {
+      return null
     }
   }
   private update(review: ChangeReview): void {
@@ -393,6 +423,7 @@ export class ReviewService {
               oldHash: old?.hash,
               newHash: current?.hash,
               oldMode: old?.mode,
+              ...(old?.binary || current?.binary ? { oldSize: old?.size, newSize: current?.size } : {}),
             })
           }
           const files = await reviewLineStats(changed, this.root).catch(() => changed)
@@ -458,7 +489,8 @@ export class ReviewService {
     if (!info.isFile()) return
     const base = { repoId: root.repoId, repoName: root.repoName, path }
     // Track large/binary files by digest; text diffs are bounded to 1 MB each.
-    if (info.size > 50000000) return { ...base, hash: `${info.size}:${info.mtimeMs}`, content: '', binary: true }
+    if (info.size > 50000000)
+      return { ...base, hash: `${info.size}:${info.mtimeMs}`, content: '', binary: true, size: info.size }
     return this.entryFromBytes(base, await readSettledFile(absolute), budget, info.mode & 0o777)
   }
   private entryFromBytes(
@@ -473,11 +505,21 @@ export class ReviewService {
     // Past the shared text budget a file is tracked by digest only, so one large repo can't drop review cards for the rest.
     const overBudget = budget.total + content.length > 50000000
     if (!overBudget) budget.total += content.length
+    const hash = createHash('sha256').update(bytes).digest('hex')
+    // A changed picture is shown before and after, so its bytes are kept; text images (SVG) already keep their content.
+    if (binary && reviewImageType(base.path) && bytes.length <= MAX_REVIEW_IMAGE_BYTES) {
+      const path = this.imagePath(hash)
+      if (!existsSync(path)) {
+        mkdirSync(join(this.root, 'images'), { recursive: true, mode: 0o700 })
+        writeFileSync(path, bytes, { mode: 0o600 })
+      }
+    }
     return {
       ...base,
-      hash: createHash('sha256').update(bytes).digest('hex'),
+      hash,
       content: overBudget ? '' : content,
       binary: binary || overBudget,
+      ...(binary || overBudget ? { size: bytes.length } : {}),
       mode,
     }
   }

@@ -267,6 +267,28 @@ describe('saved reviews and live workspaces', () => {
     await service.complete('session')
     expect(service.get(id).files.map((f) => `${f.repoName}:${f.path}`)).toEqual(['backend:notes.md'])
   })
+  it('keeps a changed picture on both sides and draws an SVG from its saved source', async () => {
+    const png = (byte: number) => Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, byte])
+    writeFileSync(join(cwd, 'logo.png'), png(1))
+    writeFileSync(join(cwd, 'icon.svg'), '<svg width="1"/>')
+    const id = await service.begin(review.taskId, { cwd } as never)
+    service.bind(id, 'session')
+    writeFileSync(join(cwd, 'logo.png'), png(2))
+    writeFileSync(join(cwd, 'icon.svg'), '<svg width="2"/>')
+    writeFileSync(join(cwd, 'new.png'), png(3))
+    await service.complete('session')
+    const files = service.get(id).files
+    const logo = files.find((f) => f.path === 'logo.png')!
+    expect(logo).toMatchObject({ binary: true, oldSize: 6, newSize: 6 })
+    expect(service.image(id, logo.id, 'old')).toBe(`data:image/png;base64,${png(1).toString('base64')}`)
+    expect(service.image(id, logo.id, 'new')).toBe(`data:image/png;base64,${png(2).toString('base64')}`)
+    const added = files.find((f) => f.path === 'new.png')!
+    expect(service.image(id, added.id, 'old')).toBeNull()
+    const svg = files.find((f) => f.path === 'icon.svg')!
+    expect(service.image(id, svg.id, 'old')).toBe(
+      `data:image/svg+xml;base64,${Buffer.from('<svg width="1"/>').toString('base64')}`,
+    )
+  })
   it('supports snapshots without a Git branch or target', async () => {
     expect(await service.branches(review.id)).toEqual([
       { repoId: 'general', repoName: 'Thread files', currentBranch: null, targetBranch: null, recordedBranch: null },

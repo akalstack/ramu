@@ -910,6 +910,8 @@ export interface RamuMethods extends ArtifactMethods {
   'reviews.branches'(id: string): ReviewBranchState[]
   'reviews.inspect'(id: string): ReviewFileState[]
   'reviews.compareCurrent'(id: string, fileId: string): ChangeFile
+  /** One side of a changed image as a data URL, or null when the run kept no picture for it. */
+  'reviews.image'(id: string, fileId: string, side: 'old' | 'new'): string | null
   'reviews.locate'(id: string, fileId: string, path: string): void
   'reviews.comment'(
     id: string,

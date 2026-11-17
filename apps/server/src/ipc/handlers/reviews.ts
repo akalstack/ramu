@@ -34,6 +34,10 @@ export const registerReviewHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, id]),
       run: (reviewId: string, fileId: string) => reviews.compareCurrent(reviewId, fileId),
     },
+    'reviews.image': {
+      args: z.tuple([id, id, z.enum(['old', 'new'])]),
+      run: (reviewId: string, fileId: string, side: 'old' | 'new') => reviews.image(reviewId, fileId, side),
+    },
     'reviews.locate': {
       args: z.tuple([id, id, relPath]),
       run: (reviewId: string, fileId: string, path: string) => reviews.locate(reviewId, fileId, path),

@@ -10,6 +10,9 @@ export interface ChangeFile {
   oldHash?: string
   newHash?: string
   oldMode?: number
+  /** Bytes on each side of a binary file, whose review shows sizes rather than line counts. */
+  oldSize?: number
+  newSize?: number
   addedLines?: number
   removedLines?: number
 }

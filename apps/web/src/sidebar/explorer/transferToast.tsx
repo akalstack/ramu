@@ -1,7 +1,8 @@
 import { notify } from '@/components/app-toaster'
 import { t } from '../../i18n'
 import { TOAST_MS } from '../../chat/notificationCenter'
-import { formatSize, type TransferProgress } from './transfer'
+import { formatSize } from '@ramu/shared/formatSize'
+import type { TransferProgress } from './transfer'
 
 const describe = (progress: TransferProgress) =>
   progress.totalFiles === 1

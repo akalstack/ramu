@@ -7,12 +7,15 @@ import { ChevronDown, ChevronRight, MessageSquarePlus, Undo2, X } from 'lucide-r
 import { font, radius, space, useTheme } from '../../../theme'
 import { useChat, useStore } from '../../../runtime/store'
 import { type ChangedFile } from '../../../runtime/types'
-import type { ChangeReview, ReviewComment } from '@ramu/shared/types'
+import type { ChangeFile, ChangeReview, ReviewComment } from '@ramu/shared/types'
+import { formatSize } from '@ramu/shared/formatSize'
+import { reviewImageType } from '@ramu/shared/review/reviewImages'
+import { ReviewImageCompare } from '../../../components/ReviewImageCompare'
 import { changedFile } from '../../../runtime/diff'
 import { GlassButton, Header, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
 import { ReadableColumn } from '../../../components/ReadableColumn'
 import { BottomFade, floatingChrome } from '../../../components/Glass'
-import { Button, Card, Divider, Pill, Sheet, T, tap } from '../../../components/ui'
+import { Button, Card, Divider, Pill, Segmented, Sheet, T, tap } from '../../../components/ui'
 import { SheetGroup, SheetOption, useSheetInputStyle } from '../../../components/SheetOptions'
 import { useOpenFile } from '../../../runtime/openFile'
 import { DiffLines } from '../../../components/DiffLines'
@@ -20,6 +23,8 @@ import { useSay } from '../../../i18n'
 
 function FileDiff({
   file,
+  source,
+  review,
   open,
   onToggle,
   onOpenFile,
@@ -28,6 +33,9 @@ function FileDiff({
   onRemove,
 }: {
   file: ChangedFile
+  /** The run's record of the file: whether it is binary, its sizes and, for an image, what to draw. */
+  source?: ChangeFile
+  review?: { id: string; computerId: string }
   open: boolean
   onToggle: () => void
   onOpenFile?: () => void
@@ -45,6 +53,14 @@ function FileDiff({
     deleted: ['D', 'bad', c.badWash],
   } as const
   const [letter, tone, wash] = badge[file.status]
+  const binary = Boolean(source?.binary)
+  const image = Boolean(source && review && reviewImageType(file.path))
+  // An SVG is a picture and text: it opens as the picture, and its source diff is one tap away.
+  const [view, setView] = useState<'rendered' | 'source'>('rendered')
+  const sizes = [source?.oldSize, source?.newSize]
+    .filter((size): size is number => size !== undefined)
+    .map(formatSize)
+    .join(' → ')
   return (
     <Card>
       <Pressable
@@ -73,12 +89,20 @@ function FileDiff({
             {file.repo} · {dir}
           </T>
         </View>
-        <T size={font.caption + 1} mono tone="ok">
-          +{file.additions}
-        </T>
-        <T size={font.caption + 1} mono tone="bad">
-          −{file.deletions}
-        </T>
+        {binary ? (
+          <T size={font.caption} tone="muted">
+            {say('Binary')}
+          </T>
+        ) : (
+          <>
+            <T size={font.caption + 1} mono tone="ok">
+              +{file.additions}
+            </T>
+            <T size={font.caption + 1} mono tone="bad">
+              −{file.deletions}
+            </T>
+          </>
+        )}
       </Pressable>
       {open ? (
         <>
@@ -97,11 +121,32 @@ function FileDiff({
               </T>
             </Pressable>
           ) : null}
-          <DiffLines
-            file={file}
-            onLine={onLine}
-            marked={new Set(comments.filter((x) => x.scope !== 'file').map((x) => `${x.side}:${x.line}`))}
-          />
+          {image && !binary ? (
+            <Segmented
+              small
+              value={view}
+              onChange={setView}
+              options={[
+                { key: 'rendered', label: say('Rendered') },
+                { key: 'source', label: say('Source') },
+              ]}
+              style={{ marginHorizontal: space.m, marginTop: space.s }}
+            />
+          ) : null}
+          {image && (binary || view === 'rendered') ? (
+            <ReviewImageCompare computerId={review!.computerId} reviewId={review!.id} file={source!} />
+          ) : binary ? (
+            <T size={font.control} tone="muted" style={{ padding: space.m }}>
+              {say('This binary or large file has no text diff.')}
+              {sizes ? `  ${sizes}` : ''}
+            </T>
+          ) : (
+            <DiffLines
+              file={file}
+              onLine={onLine}
+              marked={new Set(comments.filter((x) => x.scope !== 'file').map((x) => `${x.side}:${x.line}`))}
+            />
+          )}
           {comments.map((x) => (
             <View
               key={x.id}
@@ -393,6 +438,8 @@ export default function Changes() {
           <FileDiff
             key={f.path}
             file={f}
+            source={detail?.files.find((x) => x.id === f.fileId)}
+            review={detail && chat ? { id: detail.id, computerId: chat.computerId } : undefined}
             comments={review?.comments.filter((x) => x.fileId === f.fileId && x.author === 'human') ?? []}
             onRemove={(id) =>
               void action(() => store.invoke(chat!.computerId, 'reviews.removeComment', review!.id, id))
