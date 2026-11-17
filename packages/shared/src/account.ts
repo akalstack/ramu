@@ -1,5 +1,6 @@
 // The optional Ramu account, as hosts, phones and the service agree on it: where it is, its limits, and the shapes its
-// API returns. An account is access only where the person at a host chose it: a listed host asks before pairing each
+// API returns. The account service keeps its own copy of the limits, trust values and relay message shape
+// (src/apps/ramu/protocol.ts in its repository), so change both together and only in ways shipped apps still read. An account is access only where the person at a host chose it: a listed host asks before pairing each
 // device unless it was set to let the same account's devices connect, with the access chosen there.
 
 export const ACCOUNT_URL = 'https://account.akalstack.com'
