@@ -1627,7 +1627,7 @@ async function performInvoke(
   } else if (method === 'device.describe') {
     // This computer itself needs no description; a paired device tells what it runs on, bounded and checked.
     if (device) devices.describe(device.id, deviceOsSchema.parse(args?.[0]))
-    value = {}
+    value = undefined
   } else if (method === 'device.requestPermission') {
     if (!device) throw new Error('This computer already has every permission.')
     if (!isDevicePermission(args?.[0])) throw new Error('Invalid permission')
@@ -1708,7 +1708,7 @@ async function performInvoke(
   } else if (method === 'hostBrowser.phoneForwardClose') {
     if (!remote || !device) throw new InvokeRefused('Only the phone that opened a forward can close it.')
     phoneForwards.close(device.id, z.tuple([z.string().uuid()]).parse(args)[0])
-    value = {}
+    value = undefined
   } else if (method === 'hostTools.offer') {
     // Another host's tools only wait here for a review by the person on this host; nothing installs or is removed.
     if (!remote || device?.kind !== 'host') throw new InvokeRefused('Only a paired host can make this call.')
@@ -1757,9 +1757,9 @@ async function performInvoke(
     if (remote) throw new Error('Network access is managed from the host running Ramu')
     value = await networkMethod(method, args)
   } else if (method === 'background.stop') {
-    return { value: {}, after: () => void stop(true) }
+    return { value: undefined, after: () => void stop(true) }
   } else if (method === 'background.restart') {
-    return { value: {}, after: () => void stop() }
+    return { value: undefined, after: () => void stop() }
   } else {
     const dispatch = async () => await origin.run({ network: remote, deviceId }, () => dispatcher.invoke(method, args))
     value = operationKey

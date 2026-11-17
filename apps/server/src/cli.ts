@@ -491,6 +491,8 @@ if (command === 'start') {
       rows = await call<Status[]>('terminalThreads.status', [id])
     }
     print(id ? rows[0] : rows, () => {
+      if (!rows.length)
+        console.log('No threads started from a terminal here. Run ramu thread start --project <name> <prompt>.')
       for (const row of rows)
         console.log(`${row.threadId}  ${row.state.padEnd(12)}  ${row.title}${row.error ? `  (${row.error})` : ''}`)
       if (id && rows[0]?.latest) console.log(`\n${rows[0].latest}`)
