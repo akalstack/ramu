@@ -13,7 +13,7 @@ export function changesItem(review: ChangeReview): ChangesItem {
           ? { added: 0, removed: 0 }
           : lineChanges(file.oldContent, file.newContent)
         : { added: file.addedLines, removed: file.removedLines }
-    return { id: file.id, path: file.path, additions: counted.added, deletions: counted.removed }
+    return { id: file.id, path: file.path, additions: counted.added, deletions: counted.removed, binary: !!file.binary }
   })
   return {
     kind: 'changes',

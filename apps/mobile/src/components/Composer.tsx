@@ -313,9 +313,12 @@ export function ModelChip({
           setQuery('')
           setOpen(true)
         }}
+        // It gives way first, so Compact and Send keep their room on a narrow phone: the model's name truncates.
         style={({ pressed }) => ({
           flexDirection: 'row',
           alignItems: 'center',
+          flexShrink: 1,
+          minWidth: 0,
           gap: 4,
           height: 34,
           paddingHorizontal: space.m - 2,
@@ -324,11 +327,17 @@ export function ModelChip({
         })}
       >
         <ProviderIcon provider={value.provider} size={14} />
-        <T size={font.control} weight="500" tone="soft" numberOfLines={1} style={{ marginLeft: 2, maxWidth: 140 }}>
+        <T
+          size={font.control}
+          weight="500"
+          tone="soft"
+          numberOfLines={1}
+          style={{ marginLeft: 2, maxWidth: 140, flexShrink: 1 }}
+        >
           {label}
         </T>
         {effort ? (
-          <T size={font.control} tone="muted">
+          <T size={font.control} tone="muted" numberOfLines={1} style={{ flexShrink: 0 }}>
             {effort}
           </T>
         ) : null}
@@ -1401,7 +1410,7 @@ export function Composer({
           />
           <ModelChip value={model} onChange={onModel} computerId={computerId} limited={limited} />
 
-          <View style={{ flex: 1 }} />
+          <View style={{ flex: 1, minWidth: 0 }} />
           {/* Dictation sits beside sending, where the words it writes go next. */}
           {mic.kind !== 'hidden' ? (
             <MicButton

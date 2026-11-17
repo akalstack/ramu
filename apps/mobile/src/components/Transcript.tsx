@@ -2074,6 +2074,10 @@ function ChangesCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: '
           <T size={font.caption} tone="muted">
             {say('Changes undone')}
           </T>
+        ) : item.files.every((file) => file.binary) ? (
+          <T size={font.caption} tone="muted">
+            {say('Binary')}
+          </T>
         ) : (
           stats(item.additions, item.deletions)
         )}
@@ -2106,7 +2110,13 @@ function ChangesCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: '
               <T size={font.caption} numberOfLines={1} ellipsizeMode="head" style={{ flex: 1 }}>
                 {file.path}
               </T>
-              {stats(file.additions, file.deletions)}
+              {file.binary ? (
+                <T size={font.caption} tone="muted">
+                  {say('Binary')}
+                </T>
+              ) : (
+                stats(file.additions, file.deletions)
+              )}
             </Pressable>
           ))}
       {!single && item.files.length > 3 ? (

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, renameSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync, renameSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -252,6 +252,20 @@ describe('saved reviews and live workspaces', () => {
       targetBranch: 'main',
       recordedBranch: 'main',
     })
+  })
+  it("lists a file once when the workspace folder holds another of the run's repositories", async () => {
+    const inner = join(cwd, 'backend')
+    mkdirSync(inner)
+    writeFileSync(join(inner, 'notes.md'), 'one\n')
+    vi.spyOn(ws, 'listBindings').mockReturnValue([
+      { repoId: 'outer', repoName: 'workspace', cwd },
+      { repoId: 'inner', repoName: 'backend', cwd: inner },
+    ] as never)
+    const id = await service.begin(review.taskId, { cwd } as never)
+    service.bind(id, 'session')
+    writeFileSync(join(inner, 'notes.md'), 'two\n')
+    await service.complete('session')
+    expect(service.get(id).files.map((f) => `${f.repoName}:${f.path}`)).toEqual(['backend:notes.md'])
   })
   it('supports snapshots without a Git branch or target', async () => {
     expect(await service.branches(review.id)).toEqual([

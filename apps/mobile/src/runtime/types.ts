@@ -151,7 +151,8 @@ export type TranscriptItem = (
       id: string
       /** The change review this card opens, as on the desktop's end-of-turn Changes card. */
       reviewId: string
-      files: { id: string; path: string; additions: number; deletions: number }[]
+      /** `binary`: no line counts, as on the desktop, which says Binary instead. */
+      files: { id: string; path: string; additions: number; deletions: number; binary: boolean }[]
       additions: number
       deletions: number
       undone: boolean

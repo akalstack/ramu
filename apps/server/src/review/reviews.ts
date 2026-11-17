@@ -2,7 +2,7 @@ import { randomUUID, createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { gunzip, gzip } from 'node:zlib'
 import { z } from 'zod'
@@ -96,15 +96,17 @@ async function dirtyPaths(root: { cwd: string }): Promise<{ paths: string[]; hea
     return { paths: await list(['ls-files', '-z', '--cached', '--others', '--exclude-standard']), head: false }
   }
 }
-async function walkFolder(cwd: string): Promise<string[]> {
+/** `skip`: folders another root of the run records, so a workspace folder holding its repositories lists each file once. */
+async function walkFolder(cwd: string, skip: ReadonlySet<string> = new Set()): Promise<string[]> {
   const paths: string[] = []
   const walk = async (dir: string) => {
     for (const entry of await readdir(join(cwd, dir), { withFileTypes: true })) {
       if (['.git', 'node_modules', 'vendor', 'dist', 'build'].includes(entry.name) || entry.isSymbolicLink()) continue
       const path = dir ? `${dir}/${entry.name}` : entry.name
       if (paths.length >= 10000) throw new Error('Too many files to snapshot this run')
-      if (entry.isDirectory()) await walk(path)
-      else if (entry.isFile()) paths.push(path)
+      if (entry.isDirectory()) {
+        if (!skip.has(resolve(cwd, path))) await walk(path)
+      } else if (entry.isFile()) paths.push(path)
     }
   }
   await walk('')
@@ -413,7 +415,12 @@ export class ReviewService {
     const budget = { total: 0 }
     for (const root of roots) {
       const dirty = await dirtyPaths(root)
-      const paths = dirty?.paths ?? (await walkFolder(root.cwd))
+      const paths =
+        dirty?.paths ??
+        (await walkFolder(
+          root.cwd,
+          new Set(roots.map((other) => resolve(other.cwd)).filter((cwd) => cwd !== resolve(root.cwd))),
+        ))
       for (const path of paths) {
         const entry = await this.readEntry(root, path, budget)
         if (entry) result.push(entry)
