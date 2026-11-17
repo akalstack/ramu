@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { SETTINGS_MENU } from '@ramu/shared/settingsMenu'
-import { searchSettings } from '../src/settings/settingsSearch'
+import { desktopPageLabel, searchSettings } from '../src/settings/settingsSearch'
 
 const label = (section: string) => SETTINGS_MENU.find((entry) => entry.id === section)!.label
 const first = (query: string, translate = (text: string) => text) => searchSettings(query, translate, label)[0]
@@ -42,4 +42,13 @@ it('finds rows agents can change by the same titles the page shows', () => {
     section: 'editor',
     title: 'Default terminal position',
   })
+})
+
+it('names Customize as the page for plugin results, which the desktop keeps out of Settings', () => {
+  expect(searchSettings('plugins', (text) => text, desktopPageLabel)[0]).toMatchObject({
+    kind: 'page',
+    section: 'plugins',
+    label: 'Customize',
+  })
+  for (const result of searchSettings('e', (text) => text, desktopPageLabel)) expect(result.label).toBeTruthy()
 })

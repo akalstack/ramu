@@ -1,4 +1,4 @@
-import type { SettingsMenuId } from '@ramu/shared/settingsMenu'
+import { SETTINGS_MENU, type SettingsMenuId } from '@ramu/shared/settingsMenu'
 import { SETTINGS_CATALOG, SETTINGS_VIEWS } from '@ramu/shared/settingsCatalog'
 import { fuzzy } from '../lib/fuzzy'
 
@@ -51,3 +51,7 @@ export function searchSettings(
     .slice(0, 12)
     .map(({ score: _score, ...result }) => result)
 }
+
+/** The page a result is on, as the desktop names it: Plugins are kept in Customize, not in the Settings menu. */
+export const desktopPageLabel = (section: SettingsMenuId) =>
+  section === 'plugins' ? 'Customize' : SETTINGS_MENU.find((entry) => entry.id === section)!.label

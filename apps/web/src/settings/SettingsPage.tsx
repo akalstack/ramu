@@ -32,13 +32,14 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { SearchInput } from '../SearchInput'
-import { searchSettings, type SettingsSearchResult } from './settingsSearch'
+import { desktopPageLabel, searchSettings, type SettingsSearchResult } from './settingsSearch'
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useComputers } from '../workspace/computers'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { PermissionNeeded } from './DevicePermissions'
 import { revealFound } from '../lib/revealFound'
 import { openArchivedThreads } from '../sidebar/projects/threadLists'
+import { openCustomize } from '../customize/openCustomize'
 
 export const SETTINGS_GROUPS = SETTINGS_MENU_GROUPS
 
@@ -110,13 +111,16 @@ export function SettingsPage({
     host.current?.querySelector('.settings-page-content')?.scrollTo({ top: 0 })
   }, [section])
   const q = query.trim()
-  const results = searchSettings(q, t, (section) => SETTINGS_SECTIONS.find((item) => item.id === section)!.label)
+  const results = searchSettings(q, t, desktopPageLabel)
   const choose = (result: SettingsSearchResult) => {
-    if (result.kind === 'page') return open({ section: result.section, title: result.title })
+    // Plugins live in Customize on the desktop, so their results open it instead of a Settings page.
+    if (result.kind === 'page' && result.section !== 'plugins')
+      return open({ section: result.section, title: result.title })
     setQuery('')
     // Unsaved changes keep Settings open beneath the view rather than discarding them.
     if (!hasChanges) onClose()
-    openArchivedThreads()
+    if (result.kind === 'page') openCustomize('plugins')
+    else openArchivedThreads()
   }
   /**
    * Scrolls to the row with this title and highlights it. A section can still be loading its host settings, so the row is
