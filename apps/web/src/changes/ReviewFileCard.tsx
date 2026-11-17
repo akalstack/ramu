@@ -15,9 +15,10 @@ import { FilePath } from './FilePath'
 import { ReviewThread } from './ReviewThread'
 import { DISCUSSION_COUNT_CLASS, ICON_BUTTON_CLASS } from './styles'
 import { useHost } from '../workspace/HostProvider'
-import { reviewImageType } from '@ramu/shared/review/reviewImages'
+import { reviewRichKind } from '@ramu/shared/review/reviewRich'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { ReviewBinaryNote, ReviewImageDiff } from './ReviewImageDiff'
+import { ReviewBinaryNote } from './ReviewImageDiff'
+import { ReviewRichDiff } from './ReviewRichDiff'
 
 export function ReviewFileCard({
   file,
@@ -55,8 +56,9 @@ export function ReviewFileCard({
   const [draft, setDraft] = useReviewDraft(`${review.id}:${file.id}:text`, ''),
     [editing, setEditing] = useReviewDraft<string | null>(`${review.id}:${file.id}:editing`, null)
   const draftRef = useRef<HTMLTextAreaElement>(null)
-  // A picture compares as pictures; an SVG, which is also text, can switch to its source diff, as GitHub's does.
-  const image = Boolean(reviewImageType(file.path))
+  // Pictures, prose, tables, notebooks and models open drawn, as GitHub's rich diffs do; when the file is also text
+  // (an SVG, Markdown, CSV, a notebook) its source diff is one switch away.
+  const rich = reviewRichKind(file.path)
   const [source, setSource] = useState(false)
   useEffect(() => {
     const reveal = (event: Event) => {
@@ -282,21 +284,21 @@ export function ReviewFileCard({
       </header>
       {!collapsed && (
         <>
-          {image && !file.binary && (
+          {rich && !file.binary && (
             <ToggleGroup
               size="sm"
               spacing={0.5}
               value={[source ? 'source' : 'rendered']}
               onValueChange={(next) => next[0] && setSource(next[0] === 'source')}
-              aria-label={t('Show the image or its source')}
+              aria-label={t('Show the file drawn or as source')}
               className="px-3 pt-3"
             >
               <ToggleGroupItem value="rendered">{t('Rendered')}</ToggleGroupItem>
               <ToggleGroupItem value="source">{t('Source')}</ToggleGroupItem>
             </ToggleGroup>
           )}
-          {image && (file.binary || !source) ? (
-            <ReviewImageDiff reviewId={review.id} file={file} />
+          {rich && (file.binary || !source) ? (
+            <ReviewRichDiff kind={rich} reviewId={review.id} file={file} />
           ) : file.binary ? (
             <ReviewBinaryNote file={file} />
           ) : (

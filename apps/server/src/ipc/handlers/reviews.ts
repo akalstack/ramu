@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { FileContext } from '@ramu/shared/types'
 import type { ReviewService } from '../../review/reviews'
 import { lockCheckouts } from '../helpers'
-import { attachmentIds, fileContext, id, relPath } from '../schemas'
+import { attachmentIds, fileContext, id, modelViewerLabels, relPath } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
 const commentInput = z.object({
@@ -37,6 +37,11 @@ export const registerReviewHandlers: RegisterHandlers = (ctx) => {
     'reviews.image': {
       args: z.tuple([id, id, z.enum(['old', 'new'])]),
       run: (reviewId: string, fileId: string, side: 'old' | 'new') => reviews.image(reviewId, fileId, side),
+    },
+    'reviews.modelViewer': {
+      args: z.tuple([id, id, z.enum(['old', 'new']), modelViewerLabels]),
+      run: (reviewId: string, fileId: string, side: 'old' | 'new', labels: z.infer<typeof modelViewerLabels>) =>
+        reviews.modelViewer(reviewId, fileId, side, labels),
     },
     'reviews.locate': {
       args: z.tuple([id, id, relPath]),

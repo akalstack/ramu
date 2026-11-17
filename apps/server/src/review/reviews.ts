@@ -23,7 +23,10 @@ import {
 } from './reviewLive'
 import { reviewCommentOutdated } from '@ramu/shared/review/reviewOutdated'
 import { reviewLineStats } from './reviewStats'
-import { MAX_REVIEW_IMAGE_BYTES, reviewImageType } from '@ramu/shared/review/reviewImages'
+import { reviewImageType } from '@ramu/shared/review/reviewImages'
+import { MAX_REVIEW_KEPT_BYTES, reviewKeepsBytes } from '@ramu/shared/review/reviewRich'
+import { modelViewerHtml } from '../interactive/modelViewer'
+import type { ModelViewerLabels } from '@ramu/shared/interactive'
 import {
   type AgentScope,
   type Attachment,
@@ -247,6 +250,29 @@ export class ReviewService {
     } catch {
       return null
     }
+  }
+  /** One side of a changed 3D model in the host's model viewer, or null when the run kept no copy of it. */
+  async modelViewer(
+    id: string,
+    fileId: string,
+    side: 'old' | 'new',
+    labels: ModelViewerLabels,
+  ): Promise<string | null> {
+    const file = this.get(id).files.find((f) => f.id === fileId)
+    if (!file || !/\.(glb|gltf)$/i.test(file.path)) return null
+    if (side === 'old' ? file.status === 'added' : file.status === 'deleted') return null
+    let bytes: Buffer
+    if (!file.binary) bytes = Buffer.from(side === 'old' ? file.oldContent : file.newContent)
+    else {
+      const hash = side === 'old' ? file.oldHash : file.newHash
+      if (!hash || !/^[0-9a-f]{64}$/.test(hash)) return null
+      try {
+        bytes = readFileSync(this.imagePath(hash))
+      } catch {
+        return null
+      }
+    }
+    return modelViewerHtml(bytes, labels)
   }
   private update(review: ChangeReview): void {
     this.db
@@ -506,8 +532,8 @@ export class ReviewService {
     const overBudget = budget.total + content.length > 50000000
     if (!overBudget) budget.total += content.length
     const hash = createHash('sha256').update(bytes).digest('hex')
-    // A changed picture is shown before and after, so its bytes are kept; text images (SVG) already keep their content.
-    if (binary && reviewImageType(base.path) && bytes.length <= MAX_REVIEW_IMAGE_BYTES) {
+    // A changed picture or model is shown before and after, so its bytes are kept; text ones already keep their content.
+    if (binary && reviewKeepsBytes(base.path) && bytes.length <= MAX_REVIEW_KEPT_BYTES) {
       const path = this.imagePath(hash)
       if (!existsSync(path)) {
         mkdirSync(join(this.root, 'images'), { recursive: true, mode: 0o700 })

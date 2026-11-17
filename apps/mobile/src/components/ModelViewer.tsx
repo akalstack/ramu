@@ -4,6 +4,7 @@ import { Box } from 'lucide-react-native'
 import { interactiveHtml } from '@ramu/shared/interactive'
 import { interactiveThemeVariables } from '@ramu/shared/interactiveTheme'
 import type { Attachment } from '@ramu/shared/types'
+import type { ModelViewerLabels } from '@ramu/shared/interactive'
 import { useStore } from '../runtime/store'
 import { useSay } from '../i18n'
 import { font, radius, space, useTheme } from '../theme'
@@ -52,8 +53,30 @@ export function ModelTile({ file, computerId }: { file: Attachment; computerId: 
 }
 
 function ModelSheetViewer({ file, computerId }: { file: Attachment; computerId: string }) {
-  const say = useSay()
   const store = useStore()
+  return (
+    <HostModelFrame
+      instance={`model:${file.id}`}
+      title={file.name}
+      load={(labels) => store.invoke(computerId, 'attachments.modelViewer', file.id, labels)}
+    />
+  )
+}
+
+/**
+ * The host's 3D viewer for one model, the same one the desktop shows. `load` asks the host for it with the viewer's
+ * words; a null answer means the host has no copy. `instance` names the model, so the viewer loads once per model.
+ */
+export function HostModelFrame({
+  instance,
+  title,
+  load,
+}: {
+  instance: string
+  title: string
+  load: (labels: ModelViewerLabels) => Promise<string | null>
+}) {
+  const say = useSay()
   const { c, scheme } = useTheme()
   const [document, setDocument] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -79,28 +102,29 @@ function ModelSheetViewer({ file, computerId }: { file: Attachment; computerId: 
   )
   useEffect(() => {
     let alive = true
-    store
-      .invoke(computerId, 'attachments.modelViewer', file.id, {
-        triangles: say('{0} triangles'),
-        size: say('{0} m'),
-        animation: say('Animation {0}'),
-        still: say('No animation'),
-        failed: say('This model could not be read.'),
-      })
-      .then(
-        (html) => {
-          if (alive) setDocument(html)
-        },
-        () => {
-          if (alive) setError(say('Connect to this host to open the model.'))
-        },
-      )
+    setDocument(null)
+    setError('')
+    load({
+      triangles: say('{0} triangles'),
+      size: say('{0} m'),
+      animation: say('Animation {0}'),
+      still: say('No animation'),
+      failed: say('This model could not be read.'),
+    }).then(
+      (html) => {
+        if (!alive) return
+        if (html) setDocument(html)
+        else setError(say('This run kept no copy of this model.'))
+      },
+      () => {
+        if (alive) setError(say('Connect to this host to open the model.'))
+      },
+    )
     return () => {
       alive = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [file.id, computerId] by design; the viewer's words are read once when it opens
-  }, [file.id, computerId])
-  const instance = `model:${file.id}`
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per model; the viewer's words are read when it opens
+  }, [instance])
   const html = useMemo(
     () => (document ? interactiveHtml(document, instance, null, theme) : ''),
     [document, instance, theme],
@@ -122,7 +146,7 @@ function ModelSheetViewer({ file, computerId }: { file: Attachment; computerId: 
   return (
     <InteractiveFrame
       html={html}
-      title={file.name}
+      title={title}
       instance={instance}
       height={height}
       theme={theme}

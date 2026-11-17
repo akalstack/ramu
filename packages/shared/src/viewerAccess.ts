@@ -79,6 +79,7 @@ const viewerMethods = new Set([
   'reviews.branches',
   'reviews.inspect',
   'reviews.image',
+  'reviews.modelViewer',
   'notifications.register',
   'notifications.unregister',
   'liveActivity.status',

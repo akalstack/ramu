@@ -289,6 +289,17 @@ describe('saved reviews and live workspaces', () => {
       `data:image/svg+xml;base64,${Buffer.from('<svg width="1"/>').toString('base64')}`,
     )
   })
+  it("opens each side of a changed 3D model in the model viewer from the run's own copy", async () => {
+    const glb = (byte: number) => Buffer.from([0x67, 0x6c, 0x54, 0x46, 0, byte])
+    const id = await service.begin(review.taskId, { cwd } as never)
+    service.bind(id, 'session')
+    writeFileSync(join(cwd, 'robot.glb'), glb(1))
+    await service.complete('session')
+    const model = service.get(id).files.find((f) => f.path === 'robot.glb')!
+    const labels = { triangles: '', size: '', animation: '', still: '', failed: '' }
+    expect(await service.modelViewer(id, model.id, 'old', labels)).toBeNull()
+    expect(await service.modelViewer(id, model.id, 'new', labels)).toContain(glb(1).toString('base64'))
+  }, 60_000)
   it('supports snapshots without a Git branch or target', async () => {
     expect(await service.branches(review.id)).toEqual([
       { repoId: 'general', repoName: 'Thread files', currentBranch: null, targetBranch: null, recordedBranch: null },

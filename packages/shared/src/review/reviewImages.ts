@@ -11,9 +11,6 @@ const REVIEW_IMAGE_TYPES: Record<string, string> = {
   svg: 'image/svg+xml',
 }
 
-/** Larger images keep only their size and digest, so a run full of assets cannot fill the host's disk. */
-export const MAX_REVIEW_IMAGE_BYTES = 10 * 1024 * 1024
-
 export function reviewImageType(path: string): string | undefined {
   const extension = /\.([^./\\]+)$/.exec(path)?.[1]?.toLowerCase()
   return extension ? REVIEW_IMAGE_TYPES[extension] : undefined

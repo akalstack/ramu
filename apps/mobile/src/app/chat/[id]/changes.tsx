@@ -9,8 +9,8 @@ import { useChat, useStore } from '../../../runtime/store'
 import { type ChangedFile } from '../../../runtime/types'
 import type { ChangeFile, ChangeReview, ReviewComment } from '@ramu/shared/types'
 import { formatSize } from '@ramu/shared/formatSize'
-import { reviewImageType } from '@ramu/shared/review/reviewImages'
-import { ReviewImageCompare } from '../../../components/ReviewImageCompare'
+import { reviewRichKind } from '@ramu/shared/review/reviewRich'
+import { ReviewRichDiff } from '../../../components/ReviewRichDiff'
 import { changedFile } from '../../../runtime/diff'
 import { GlassButton, Header, Screen, PageScrollView as ScrollView } from '../../../components/Screen'
 import { ReadableColumn } from '../../../components/ReadableColumn'
@@ -54,8 +54,8 @@ function FileDiff({
   } as const
   const [letter, tone, wash] = badge[file.status]
   const binary = Boolean(source?.binary)
-  const image = Boolean(source && review && reviewImageType(file.path))
-  // An SVG is a picture and text: it opens as the picture, and its source diff is one tap away.
+  const rich = source && review ? reviewRichKind(file.path) : undefined
+  // Pictures, prose, tables, notebooks and models open drawn; when the file is also text its source diff is a tap away.
   const [view, setView] = useState<'rendered' | 'source'>('rendered')
   const sizes = [source?.oldSize, source?.newSize]
     .filter((size): size is number => size !== undefined)
@@ -121,7 +121,7 @@ function FileDiff({
               </T>
             </Pressable>
           ) : null}
-          {image && !binary ? (
+          {rich && !binary ? (
             <Segmented
               small
               value={view}
@@ -133,8 +133,8 @@ function FileDiff({
               style={{ marginHorizontal: space.m, marginTop: space.s }}
             />
           ) : null}
-          {image && (binary || view === 'rendered') ? (
-            <ReviewImageCompare computerId={review!.computerId} reviewId={review!.id} file={source!} />
+          {rich && (binary || view === 'rendered') ? (
+            <ReviewRichDiff kind={rich} computerId={review!.computerId} reviewId={review!.id} file={source!} />
           ) : binary ? (
             <T size={font.control} tone="muted" style={{ padding: space.m }}>
               {say('This binary or large file has no text diff.')}
