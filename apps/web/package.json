@@ -16,7 +16,7 @@
     "@ramu/contracts": "workspace:*",
     "@ramu/shared": "workspace:*",
     "@shadcn/react": "^0.3.1",
-    "@shikijs/monaco": "^4.5.0",
+    "@shikijs/monaco": "^4.6.0",
     "dompurify": "^3.4.17",
     "pele": "^1.13.0",
     "qrcode": "1.5.4",
