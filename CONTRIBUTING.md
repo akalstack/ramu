@@ -35,7 +35,6 @@ A pnpm workspace. Each package has its own `src`, `test`, and `typecheck`/`test`
 | `apps/server` | Workspace server and `ramu` CLI: agents, providers, files, Git, terminals, schedules, database |
 | `apps/mobile` | Expo phone app for iOS and Android ([README](apps/mobile/README.md)) |
 | `apps/site` | The getramu.dev website |
-| `apps/account` | The optional Ramu account service: sign-in, sealed settings backups, Your hosts |
 | `packages/contracts` | Wire protocol: versions, capabilities, request encoding |
 | `packages/client-runtime` | Node client for a workspace server (local socket or authenticated WebSocket) |
 | `packages/shared` | Domain types, the API method table, and pure helpers |

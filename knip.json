@@ -45,9 +45,6 @@
     "apps/server": {
       "ignoreBinaries": ["osascript", "ssh-keygen", "ffprobe"],
       "ignoreDependencies": ["@dagrejs/dagre", "chart.js", "react", "react-dom"]
-    },
-    "apps/account": {
-      "entry": ["src/worker.ts"]
     }
   },
   "ignoreIssues": {
