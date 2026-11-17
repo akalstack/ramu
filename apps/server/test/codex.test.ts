@@ -229,7 +229,12 @@ describe('Codex app-server wire adapter', () => {
     )
     try {
       await runner.start('full gate', null)
-      await vi.waitFor(() => expect(events.some((event) => event.kind === 'permission-request')).toBe(true))
+      // The two answered requests and the asked one arrive together; under load the question can come first.
+      await vi.waitFor(() => {
+        expect(events.some((event) => event.kind === 'permission-request')).toBe(true)
+        expect(messages().some((message) => message.id === 910 && message.result)).toBe(true)
+        expect(messages().some((message) => message.id === 911 && message.result)).toBe(true)
+      })
       expect(messages().find((message) => message.method === 'thread/start').params).toMatchObject({
         approvalPolicy: 'untrusted',
         sandbox: 'danger-full-access',

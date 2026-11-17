@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, expect, it, vi } from 'vitest'
@@ -297,7 +297,20 @@ it('gives back devices an earlier run of Ramu held, since Simlock keeps renewing
       ),
   )
   const real = await vi.importActual<typeof import('../src/testDevice/simlock')>('../src/testDevice/simlock')
-  await new real.SimlockHost(() => ({}), exec, http as unknown as typeof fetch).ready()
+  // The real host checks Simlock is installed, so give it an installed copy apart from this machine's own.
+  const tools = mkdtempSync(join(tmpdir(), 'ramu-tools-'))
+  vi.stubEnv('RAMU_TOOLS_DIR', tools)
+  for (const file of ['node_modules/simlock/dist/cli/main.js', 'node_modules/.bin/agent-device']) {
+    const path = join(real.simlockToolDir(), file)
+    mkdirSync(join(path, '..'), { recursive: true })
+    writeFileSync(path, '')
+  }
+  try {
+    await new real.SimlockHost(() => ({}), exec, http as unknown as typeof fetch).ready()
+  } finally {
+    vi.unstubAllEnvs()
+    rmSync(tools, { recursive: true, force: true })
+  }
   expect(calls).toContainEqual(['token', 'revoke', 'tok_old'])
   expect(calls).not.toContainEqual(['token', 'revoke', 'tok_mine'])
   expect(calls).toContainEqual(['release', 'lease-old'])
