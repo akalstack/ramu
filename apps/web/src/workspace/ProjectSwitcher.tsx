@@ -1,8 +1,8 @@
 import { isGlobalPage } from '@ramu/shared/types'
 import { t, useLanguage } from '../i18n'
-import { Check, ChevronDown, Folder, FolderPlus, GitBranch, Laptop } from 'lucide-react'
+import { Check, ChevronDown, Folder, FolderPlus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { Dropdown, Menu, type MenuEntry } from '../Menu'
+import { Menu, type MenuEntry } from '../Menu'
 import { projectCtx, worktreeCtx, useWorkspace } from './workspace'
 import { useAddProject } from './addProject'
 import { SearchInput } from '../SearchInput'
@@ -102,8 +102,6 @@ export function ProjectSwitcher() {
       onSelect: () => void addProject.add(),
     },
   )
-  const isolated = ws.workspaces.filter((entry) => entry.projectId === project?.id)
-  const current = project ? projectCtx(project.id) : ''
   return (
     <div className="workspace-scope [&_.project-switch-trigger]:text-muted-foreground [&_.project-switch-trigger]:font-medium [&_.project-switch-trigger]:m-0 [&_.project-switch-trigger]:w-auto [&_.project-switch-trigger]:min-w-0 [&_.project-switch-trigger]:max-w-[180px] [&_.project-switch-trigger]:bg-transparent [&_.project-switch-trigger]:[border-color:transparent] [&_.project-switch-trigger:hover:not(:disabled)]:text-foreground [&_.project-switch-trigger:hover:not(:disabled)]:bg-hover [&_.checkout-switch-trigger]:m-0 [&_.checkout-switch-trigger]:w-auto [&_.checkout-switch-trigger]:min-w-0 [&_.checkout-switch-trigger]:p-[4px_6px] [&_.checkout-switch-trigger]:text-caption [&_.checkout-switch-trigger]:whitespace-nowrap [&_.checkout-switch-trigger]:max-w-[180px] [&_.checkout-switch-trigger]:overflow-hidden [&_.sidebar-checkout]:m-0 [&_.sidebar-checkout]:w-auto [&_.sidebar-checkout]:min-w-0 [&_.sidebar-checkout]:p-[4px_6px] [&_.sidebar-checkout]:text-caption [&_.sidebar-checkout]:whitespace-nowrap [&_.sidebar-checkout]:max-w-[180px] [&_.sidebar-checkout]:overflow-hidden flex items-center gap-0.5 flex-initial min-w-0 max-w-[min(360px,30vw)] mr-2 [-webkit-app-region:no-drag]">
       <Menu
@@ -133,23 +131,62 @@ export function ProjectSwitcher() {
         }
         items={items}
       />
-      {project &&
-        (isolated.length ? (
-          <Dropdown
-            label={t('Switch checkout')}
-            className="checkout-switch-trigger"
-            icon={workspace === current ? <Laptop size={13} /> : <GitBranch size={13} />}
-            value={workspace ?? current}
-            options={[
-              { value: current, label: t('Current checkout') },
-              ...isolated.map((entry) => ({ value: worktreeCtx(entry.id), label: entry.name })),
-            ]}
-            onChange={(context) => {
-              const previous = lastWorkspace.current[context]
-              ws.openTask(valid(previous, project.id) ? previous! : context)
-            }}
-          />
-        ) : null)}
     </div>
+  )
+}
+
+/**
+ * The status bar's checkout label, which also switches between the project's checkout and its worktrees. Worktrees are
+ * named after their thread, so the label says only which kind is open and the menu names them.
+ */
+export function CheckoutSwitcher({ taskId, isolated, path }: { taskId: string; isolated: boolean; path: string }) {
+  useLanguage()
+  const hostStorage = hostStorageFor(useHost().id)
+  const ws = useWorkspace()
+  const project = ws.projectOf(taskId)
+  const label = isolated ? t('Isolated worktree') : t('Current checkout')
+  const worktrees = project ? ws.workspaces.filter((entry) => entry.projectId === project.id) : []
+  if (!project || !worktrees.length)
+    return (
+      <span className="status-checkout flex-none text-muted-foreground p-[0_6px_2px]" title={path}>
+        {label}
+      </span>
+    )
+  const workspace = ws.workspaceOf(taskId)
+  const open = (context: string) => {
+    if (context === workspace) return
+    const previous = readLocations(hostStorage).workspaces[context]
+    const task = previous ? ws.task(previous) : undefined
+    ws.openTask(task && task.status !== 'archived' && ws.projectOf(previous!)?.id === project.id ? previous! : context)
+  }
+  const choice = (context: string, name: string): MenuEntry => ({
+    key: context,
+    selected: context === workspace,
+    label: (
+      <>
+        <span className="min-w-0 flex-1 truncate text-left">{name}</span>
+        {context === workspace && <Check size={13} />}
+      </>
+    ),
+    onSelect: () => open(context),
+  })
+  return (
+    <Menu
+      label={t('Switch checkout')}
+      className="status-checkout flex-none gap-1 rounded-(--radius-s) border-0 bg-transparent text-caption text-muted-foreground hover:bg-hover hover:text-soft"
+      menuClassName="w-[300px] max-w-[calc(100vw_-_16px)] max-h-[min(420px,_calc(100vh_-_16px))] overflow-y-auto p-1"
+      align="start"
+      icon={
+        <span className="flex items-center gap-1" title={path}>
+          {label}
+          <ChevronDown size={12} aria-hidden />
+        </span>
+      }
+      items={[
+        choice(projectCtx(project.id), t('Current checkout')),
+        { key: 'separator', separator: true },
+        ...worktrees.map((entry) => choice(worktreeCtx(entry.id), entry.name)),
+      ]}
+    />
   )
 }

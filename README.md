@@ -23,6 +23,10 @@
   <a href="CONTRIBUTING.md"><b>Contributing</b></a>
 </p>
 
+<p align="center">
+  <img src="assets/screenshots/hero.webp" width="100%" alt="Ramu on desktop with a finished Claude Code thread, threads from five agents across four projects in the sidebar and the changed files in the Explorer, next to the same thread in the phone app" />
+</p>
+
 ---
 
 Ramu puts your coding agents, editor, terminals, Git and review in one window. Bring **Claude Code, Codex, OpenCode, Cursor or Antigravity** with the plans you already pay for.

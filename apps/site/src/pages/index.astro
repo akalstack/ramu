@@ -1,6 +1,5 @@
 ---
 import '@/styles/global.css'
-import { Demo } from '@/components/demo'
 import Icon from '@/components/icon.astro'
 import { ProviderLogo } from '@/components/provider-logo'
 import Footer from '@/components/footer.astro'
@@ -168,7 +167,30 @@ const WORK = [
             }
           </ul>
         </div>
-        <Demo client:load />
+        <figure class="showcase">
+          <div class="showcase-window">
+            <img
+              src="/screens/desktop.webp"
+              width="2160"
+              height="1350"
+              alt="Ramu on desktop: a finished Claude Code thread that added reminder emails with tests, threads from five agents across four projects in the sidebar, and the changed files in the Explorer"
+              fetchpriority="high"
+              decoding="async"
+            />
+          </div>
+          <div class="device showcase-phone">
+            <div class="device-frame">
+              <img
+                src="/screens/phone-thread.webp"
+                width="804"
+                height="1748"
+                alt="The same thread open in the Ramu phone app"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+          </div>
+        </figure>
       </section>
 
       <section class="services" aria-labelledby="services-title">
@@ -384,20 +406,17 @@ const WORK = [
           <p class="stores-note">Or <a href={MOBILE_SETUP}>build it from source</a>.</p>
         </div>
         <div class="phone-wrap reveal">
-          <div class="phone" aria-label="The Ramu phone app asking to approve a production deploy" role="img">
-            <div class="phone-notch"></div>
-            <div class="phone-head"><span>‹</span><b>Barbershop booking</b><span>⋯</span></div>
-            <div class="phone-body">
-              <div class="pm pm-user">Add reminder emails a day before.</div>
-              <div class="pm pm-agent">Done. 14 tests pass and the preview is up.</div>
-              <div class="pm-tool"><span>Run</span> pnpm test · 14 passed</div>
-              <div class="pm-card">
-                <b>Deploy to production?</b>
-                <span>Vercel · migrations run first</span>
-                <div class="pm-btns"><i>Not now</i><i class="on">Allow once</i></div>
-              </div>
+          <div class="device">
+            <div class="device-frame">
+              <img
+                src="/screens/phone-threads.webp"
+                width="804"
+                height="1748"
+                alt="The Ramu phone app listing threads by project, with one deploy waiting for approval and plan usage at the top"
+                loading="lazy"
+                decoding="async"
+              />
             </div>
-            <div class="phone-compose">Message…</div>
           </div>
         </div>
       </section>

@@ -200,3 +200,30 @@ it('leaves out and then drops the readings of a login that was removed', () => {
   service.update([{ ...base, usedPercent: 11 }])
   expect(stored.at(-1)!.map((reading) => reading.accountId ?? 'default')).toEqual(['default', 'second'])
 })
+
+it('shows RAMU_FAKE_USAGE readings in place of saved ones, before logins can be checked', () => {
+  const saved: UsageReading = {
+    provider: 'codex',
+    window: 'weekly',
+    usedPercent: 100,
+    status: 'limited',
+    plan: 'free',
+    updatedAt: 1,
+  }
+  process.env.RAMU_FAKE_USAGE = JSON.stringify([{ provider: 'codex', window: 'weekly', usedPercent: 27 }])
+  try {
+    const service = new UsageService(
+      () => [saved],
+      () => {},
+      () => {},
+      () => {
+        throw new Error('Preferences are not loaded yet')
+      },
+    )
+    expect(service.list().map((reading) => [reading.window, reading.usedPercent, reading.status])).toEqual([
+      ['weekly', 27, 'ok'],
+    ])
+  } finally {
+    delete process.env.RAMU_FAKE_USAGE
+  }
+})

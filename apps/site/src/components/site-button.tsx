@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react'
 import { cn } from 'cn'
-import { Button as RegistryButton, buttonVariants } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 
 /** The site's two button looks, laid over the registry Button: filled purple, or a quiet translucent fill. */
 const TONES = {
@@ -18,21 +18,6 @@ export function LinkButton({ tone = 'quiet', className, ...props }: ComponentPro
         buttonVariants(),
         'h-[38px] rounded-[var(--radius-row)] px-4 text-[14px] font-[560] no-underline',
         TONES[tone],
-        className,
-      )}
-      {...props}
-    />
-  )
-}
-
-/** A small in-page control, such as the demo's Replay. */
-export function Button({ className, ...props }: ComponentProps<typeof RegistryButton>) {
-  return (
-    <RegistryButton
-      size="sm"
-      className={cn(
-        'h-auto rounded-[var(--radius-s)] px-2.5 py-[5px] text-[12px] font-normal disabled:opacity-40',
-        TONES.quiet,
         className,
       )}
       {...props}

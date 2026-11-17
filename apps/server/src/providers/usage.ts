@@ -15,12 +15,12 @@ export class UsageService {
     // For providers known only at a limit, a notice is the one reading Ramu can stand behind.
     this.readings = load().filter((reading) => reading.source === 'notice' || !usageOnlyAtLimit(reading.provider))
     // Lets screenshots and UI work show gauges without a live account: RAMU_FAKE_USAGE='[{"provider":"codex","window":"five_hour","usedPercent":40}]'.
+    // The fake readings replace the saved ones outright: merging would ask `known`, whose preferences the server has
+    // not loaded yet while it builds this service.
     if (process.env.RAMU_FAKE_USAGE)
       try {
-        this.update(
-          (JSON.parse(process.env.RAMU_FAKE_USAGE) as Partial<UsageReading>[]).map(
-            (r) => ({ status: 'ok', updatedAt: Date.now(), ...r }) as UsageReading,
-          ),
+        this.readings = (JSON.parse(process.env.RAMU_FAKE_USAGE) as Partial<UsageReading>[]).map(
+          (r) => ({ status: 'ok', updatedAt: Date.now(), ...r }) as UsageReading,
         )
       } catch {}
   }

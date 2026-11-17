@@ -2719,7 +2719,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Isolated workspace': 'Workspace terpisah',
   'Isolated worktree': 'Worktree terpisah',
   'Isolated worktrees': 'Worktree terpisah',
-  'Active isolated worktree': 'Worktree terpisah aktif',
   "Worktree setup didn't finish for": 'Penyiapan worktree belum selesai untuk',
   'Ramu will create a branch and worktree for each repository:':
     'Ramu membuat branch dan worktree untuk tiap repositori:',

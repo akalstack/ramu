@@ -86,7 +86,7 @@ import { SettingsPanel } from './settings/SettingsPanel'
 import { ArchivedThreadsDialog } from './sidebar/ArchivedThreads'
 import { openArchivedThreads } from './sidebar/projects/threadLists'
 import { UsageFooter, UsageRings } from './settings/Usage'
-import { ProjectSwitcher } from './workspace/ProjectSwitcher'
+import { CheckoutSwitcher, ProjectSwitcher } from './workspace/ProjectSwitcher'
 import { runProjectAction, useProjectActions, WindowActions } from './WindowActions'
 import { SearchChats } from './chat/SearchChats'
 import { useGitChangeCount } from './git/useGitChangeCount'
@@ -1031,14 +1031,6 @@ function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode 
             </span>
           ))}
         {task && identity && <IdentityChip identity={identity} className="no-drag [-webkit-app-region:no-drag]" />}
-        {task?.mode === 'worktree' && (
-          <span
-            className="chip tabular-nums text-caption bg-hover rounded-full p-[1px_8px] text-soft whitespace-nowrap header-worktree max-w-[180px] min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-            title={t('Active isolated worktree')}
-          >
-            {ws.workspaces.find((workspace) => workspace.id === task.workspaceId)?.name ?? t('Isolated worktree')}
-          </span>
-        )}
         {computers && computers.computers.length > 1 && host && (
           <span className="max-w-40 truncate text-caption text-muted-foreground" title={host.name}>
             {host.name}
@@ -1221,9 +1213,7 @@ function StatusBar({ usage }: { usage?: ReactNode }) {
           />
         </>
       )}
-      <span className="status-checkout flex-none text-muted-foreground p-[0_6px_2px]" title={binding.cwd}>
-        {binding.mode === 'current' ? t('Current checkout') : t('Isolated worktree')}
-      </span>
+      <CheckoutSwitcher taskId={taskId} isolated={binding.mode !== 'current'} path={binding.cwd} />
       <span className="grow flex-1 min-w-0 text-left" />
       {usage}
       <AppUpdateButton />

@@ -49,6 +49,7 @@
     }
   },
   "ignoreIssues": {
-    "apps/web/src/components/ui/**": ["exports", "types"]
+    "apps/web/src/components/ui/**": ["exports", "types"],
+    "apps/site/src/components/ui/**": ["exports", "types"]
   }
 }
