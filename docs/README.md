@@ -31,7 +31,7 @@ For people working on Ramu. Start with [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 - [Architecture](contributing/architecture.md): how a call travels from the UI to the server, and where code goes.
 - [Code conventions](contributing/code-style.md), [UI development](contributing/ui.md), [Localization](contributing/localization.md).
-- [Releasing](contributing/releasing.md).
+- [Packaging](contributing/packaging.md): build and test installers.
 - [Roadmap](roadmap.md): unfinished work.
 
 Security and remote access are in [SECURITY.md](../SECURITY.md).

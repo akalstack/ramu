@@ -19,8 +19,8 @@ Project search uses your `rg` if installed, otherwise the ripgrep inside the bun
 ## Checks
 
 - Run `pnpm check` before submitting. It runs Prettier (`pnpm format` fixes it), ESLint (`pnpm lint`), knip (`pnpm knip`, unused code and dependencies), typechecks, tests and builds. For one package, use `pnpm --filter @ramu/server test` (or `typecheck`).
-- For desktop behavior, run `pnpm build` then `pnpm test:desktop-smoke` on macOS. It's the single startup check, with an isolated profile and simulated providers. Add focused unit or integration tests for behavior changes (see [AGENTS.md](AGENTS.md)).
-- For packaging changes, build and test the installer with `pnpm make`.
+- For desktop behavior, run `pnpm build` then `pnpm test:desktop-smoke` (on Linux, `xvfb-run -a pnpm test:desktop-smoke`). It's the single startup check, with an isolated profile and simulated providers. Add focused unit or integration tests for behavior changes (see [AGENTS.md](AGENTS.md)).
+- For packaging changes, build and test the installer with `pnpm make` ([Packaging](docs/contributing/packaging.md)).
 
 Live-provider tests are opt-in and may use paid model calls. Report which checks ran and include screenshots for UI changes. Keep generated output, private logs, credentials, and personal repositories out of commits.
 
@@ -44,6 +44,6 @@ A pnpm workspace. Each package has its own `src`, `test`, and `typecheck`/`test`
 
 Read the [architecture overview](docs/contributing/architecture.md) before a large change. It shows how a call travels from the UI to the server and where new code belongs. Import shared code as `@ramu/shared/<module>`. Server code must not import Electron or `apps/desktop`. The desktop reaches the server through `@ramu/client-runtime`. See [headless server](docs/guide/remote-hosts.md).
 
-Follow the [code conventions](docs/contributing/code-style.md) and keep changes focused. See also [UI development](docs/contributing/ui.md), [localization](docs/contributing/localization.md), [the roadmap](docs/roadmap.md) and [release maintenance](docs/contributing/releasing.md).
+Follow the [code conventions](docs/contributing/code-style.md) and keep changes focused. See also [UI development](docs/contributing/ui.md), [localization](docs/contributing/localization.md), [the roadmap](docs/roadmap.md) and [packaging](docs/contributing/packaging.md).
 
 Contributions use the [MIT license](LICENSE). Follow the [Code of Conduct](CODE_OF_CONDUCT.md). For vulnerabilities, follow [SECURITY.md](SECURITY.md).

@@ -168,12 +168,12 @@ Outside services stay out of callers, IPC and the UI. They live on the server, t
 
 ### Adding a platform
 
-Use the platform's own plugin in Claude's directory when there is one. Otherwise add a plugin with a CLI in `akalstack/ramu-plugins`: its credential and the CLI's read-only prefixes ([Plugins](../guide/plugins.md)). Teach `packages/shared/src/deployActions.ts` the CLI's preview and production commands. A stack that should recommend it names it as `deployTarget`, with its name in `DEPLOY_TARGETS` and its plugin in `DEPLOY_TARGET_PLUGINS`, and its mark in `BRAND_IDS` (`packages/shared/src/brands.ts`). Then add the platform to [Deploying an app](../guide/deploy.md) and its live checks to the [roadmap's Acceptance](../roadmap.md#acceptance).
+Use the platform's own plugin in Claude's directory when there is one. Otherwise add a plugin with a CLI in `akalstack/ramu-plugins`: its credential and the CLI's read-only prefixes ([Plugins](../guide/plugins.md)). Teach `packages/shared/src/deployActions.ts` the CLI's preview and production commands. A stack that should recommend it names it as `deployTarget`, with its name in `DEPLOY_TARGETS` and its plugin in `DEPLOY_TARGET_PLUGINS`, and its mark in `BRAND_IDS` (`packages/shared/src/brands.ts`). Then add the platform to [Deploying an app](../guide/deploy.md), and say in the pull request which live deploys you ran.
 
 ## Testing
 
 - `pnpm check`: format, lint, knip, typecheck, unit tests, release-script tests, build. CI runs it on macOS and Linux. While working, run only the scoped checks for the package you touched (`pnpm --filter @ramu/web test`, `typecheck`, and so on).
-- `pnpm test:desktop-smoke`: one desktop startup check with simulated providers and an isolated profile (macOS). Run after `pnpm build`. Release checks also run it against the packaged macOS app.
+- `pnpm test:desktop-smoke`: one desktop startup check with simulated providers and an isolated profile. Run after `pnpm build` on macOS, or under `xvfb-run` on Linux. CI and release builds also run it against the packaged macOS app and the installed Linux `.deb` ([Packaging](packaging.md#test-a-packaged-build)).
 - Server tests are in `apps/server/test`, mirroring `src` by file name.
 
 ## Code quality

@@ -28,13 +28,15 @@ Add or update focused tests for behavior changes and bug fixes in the package's 
 
 Run relevant tests and typechecks for affected packages, such as `pnpm --filter @ramu/web test` and `pnpm --filter @ramu/web typecheck`. Report what ran and any checks you could not complete. Documentation-only changes need formatting and link checks.
 
-For desktop-facing changes, run `pnpm build` followed by `pnpm test:desktop-smoke`. Do not rebuild while smoke runs. Keep `scripts/smoke/desktop-smoke.mjs` as the single desktop startup check; do not add another desktop e2e or performance suite. Docs, test-only, mobile-only and site-only changes need no desktop smoke. See [Architecture](docs/contributing/architecture.md#testing) and [Releasing](docs/contributing/releasing.md) for broader validation and packaged-app checks.
+For desktop-facing changes, run `pnpm build` followed by `pnpm test:desktop-smoke`. Do not rebuild while smoke runs. Keep `scripts/smoke/desktop-smoke.mjs` as the single desktop startup check; do not add another desktop e2e or performance suite. Docs, test-only, mobile-only and site-only changes need no desktop smoke. See [Architecture](docs/contributing/architecture.md#testing) and [Packaging](docs/contributing/packaging.md) for broader validation and packaged-app checks.
 
 ## Planning docs
 
 Unfinished work lives only in [the roadmap](docs/roadmap.md). Plans describe unfinished work: the human need and how the delivery makes that person's work easier (steps removed, context carried over, mistakes prevented), the full intended delivery, existing services to extend and acceptance checks. Keep later options separate. Validate with a representative task: the person finishes it with less effort than before.
 
-Remove completed items and delete finished plans. Put lasting behavior in feature guides, remaining checks or blockers in [the roadmap](docs/roadmap.md) or an active plan, and update links. Do not keep completed-plan ledgers.
+Remove completed items and delete finished plans. Put lasting behavior in feature guides and blockers in [the roadmap](docs/roadmap.md), and update links. Do not keep completed-plan ledgers.
+
+Public docs are for people using and contributing to Ramu. Checks that need a physical device, a paid account or a second host, and maintainer-only release steps, are kept by the maintainers outside this repository; name any such check you could not run in your pull request instead of adding it to the docs.
 
 ## Shared working tree
 

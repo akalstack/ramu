@@ -84,7 +84,7 @@ Open a project, say what you want, review the result. The defaults work as they 
 - **Your network:** LAN, Tailscale, NetBird, SSH or your own tunnel. [Remote hosts →](docs/guide/remote-hosts.md)
 - **Headless server** and a `ramu` CLI for servers and terminals.
 
-> Some features depend on the provider. Agents run on your computer, and on a Mac Ramu can keep it awake while they work. Crash reports are off by default and never leave your computer ([diagnostics](docs/guide/diagnostics.md)).
+> Some features depend on the provider. Agents run on your computer, and Ramu can keep it awake while they work (macOS and Linux). Crash reports are off by default and never leave your computer ([diagnostics](docs/guide/diagnostics.md)).
 
 Every feature has a page in the [guide](docs/README.md#guide).
 

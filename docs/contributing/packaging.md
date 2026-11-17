@@ -1,66 +1,48 @@
-# Releases
+# Packaging
 
-Electron Forge builds installers. GitHub Actions targets macOS arm64, macOS x64, Linux x64 and Linux arm64 (`ubuntu-24.04-arm`), adds SHA-256 checksums, and creates a draft release. Publishing is manual. Windows packaging is not in the release matrix.
+Electron Forge builds the desktop installers. Official releases are built by `.github/workflows/release.yml` for macOS arm64 and x64 and Linux x64 and arm64, each with SHA-256 checksums. Windows is not packaged yet ([roadmap](../roadmap.md#to-build)).
 
-## Repository setup
-
-Enable GitHub Actions and private vulnerability reporting. Require CI on the default branch. The release workflow's final job needs repository contents write permission. Local helpers use an authenticated GitHub CLI (`gh auth login`).
-
-`private: true` in `package.json` prevents npm publishing. It doesn't affect desktop releases.
-
-## Prepare
-
-Choose a version, then review the generated notes:
+## Build installers
 
 ```sh
-pnpm release:prepare 0.1.0 --dry-run
-pnpm release:prepare 0.1.0
-pnpm check
-pnpm test:desktop-smoke # macOS, simulated providers
+pnpm install --frozen-lockfile
+pnpm make                # installers for this machine's platform and architecture
+pnpm make --arch=arm64   # or pick the architecture
 ```
 
-Preparation updates the version in the root and every workspace `package.json` (the desktop app reads its own) and writes `releases/v0.1.0.md`. It doesn't commit, tag, push or publish. Replace the generated scaffold with user-facing changes and install limitations. A version-only change doesn't need a lockfile update.
+`pnpm make` builds the app first and writes installers to `dist/make`. `pnpm package` builds the app bundle without installers (`dist/Ramu-<platform>-<arch>`).
 
-Docs check: compare `README.md`, `docs/guide/` and `apps/mobile/README.md` with what the release ships (platforms, install and pairing steps, Settings names, commands that still exist). Fix drift before tagging.
+| Platform | Output | Needs |
+| --- | --- | --- |
+| macOS | `.dmg`, ZIP | Xcode Command Line Tools |
+| Linux | `.deb`, `.rpm`, AppImage, ZIP | `fakeroot` and `dpkg` (`.deb`), `rpm` (`.rpm`), `squashfs-tools` (AppImage) |
 
-## Draft
+To build only one Linux format, pass a maker: `pnpm make --targets=@electron-forge/maker-deb`. The AppImage maker downloads the AppImage runtime for the target architecture from GitHub. Running an AppImage needs FUSE 2: `sudo apt install libfuse2t64` on Ubuntu 24.04 and later, `libfuse2` on 22.04.
 
-Commit the intended release files, create a matching tag, and push it:
+`pnpm release:assets <platform> <arch>` (for example `darwin arm64` or `linux x64`) collects the installers and a checksum file into `dist/release`. Clear it between builds.
+
+## Test a packaged build
+
+The desktop smoke test runs against a packaged app when you point it at the executable:
 
 ```sh
-git commit -m "chore: prepare v0.1.0"
-git tag -a v0.1.0 -m "Ramu v0.1.0"
-git push origin HEAD
-git push origin v0.1.0
-pnpm release:draft v0.1.0 --dry-run
-pnpm release:draft v0.1.0
-gh run list --workflow release.yml
+RAMU_PACKAGED_EXECUTABLE="$PWD/dist/Ramu-darwin-arm64/Ramu.app/Contents/MacOS/Ramu" pnpm test:desktop-smoke
 ```
 
-The helper requires a clean tree, matching version and notes, a local tag at HEAD, and that tag on `origin`. The workflow must exist on GitHub's default branch. Review every target's notes, installers and checksums before publishing the draft. Prerelease tags create prerelease drafts. Never move a published tag. Use a new version for corrections.
+On Linux, `scripts/smoke/linux-deb-smoke.sh` installs the built `.deb` with `apt`, as a person would, and runs the same smoke under a virtual display (`xvfb`). CI runs it on every push. The smoke uses simulated providers, so live sign-in, start at login and real model calls still need a hands-on run.
 
-## Signing and packaged checks
+## Sign a macOS build
 
-CI macOS builds stay unsigned until the repository has these secrets: `MACOS_CERTIFICATE_P12` (base64 Developer ID Application `.p12`), `MACOS_CERTIFICATE_PASSWORD`, `RAMU_SIGN_IDENTITY`, and for notarization `APPLE_API_KEY_P8` (base64 `.p8`), `APPLE_API_KEY_ID` and `APPLE_API_ISSUER`. With them, `scripts/release/macos-signing.sh` imports the certificate into a temporary keychain and stages the key (Forge reads `APPLE_API_KEY` as a file path). After `pnpm make` it verifies `codesign`, Gatekeeper (`spctl`) and the stapled ticket, and then deletes the keychain and key. Without the certificate it skips every step. Locally, export `RAMU_SIGN_IDENTITY` and the `APPLE_API_*` variables yourself.
+Builds are unsigned unless signing variables are set. To sign and notarize your own build, export `RAMU_SIGN_IDENTITY` (a Developer ID Application identity in your keychain) and, for notarization, `APPLE_API_KEY` (path to a `.p8` App Store Connect key), `APPLE_API_KEY_ID` and `APPLE_API_ISSUER` before `pnpm make`. Check the result with `codesign --verify --deep --strict`, `spctl --assess --type execute` and `xcrun stapler validate` on `Ramu.app`. Release builds do the same in `scripts/release/macos-signing.sh`.
 
-Test signed installers on another machine. Simulated checks don't cover live provider sign-in, login startup or real model calls. Linux packaged GUI checks are separate.
+## Versions and updates
 
-Each Linux target builds a `.deb`, an `.rpm`, an AppImage and a ZIP. The runner needs `fakeroot` and `dpkg` for the `.deb`, `rpm` (for `rpmbuild`) for the `.rpm`, and `squashfs-tools` (for `mksquashfs`) for the AppImage. The AppImage maker also downloads the AppImage runtime for the target architecture from GitHub. CI and release builds smoke test only the installed `.deb` (`scripts/smoke/linux-deb-smoke.sh`). Running the AppImage needs FUSE 2: `sudo apt install libfuse2t64` on Ubuntu 24.04 and later, `sudo apt install libfuse2` on Ubuntu 22.04.
+`pnpm release:prepare <version>` sets the version in every workspace `package.json` and writes a notes scaffold in `releases/`. The desktop app reads its own version.
 
-`pnpm make` writes installers to `dist/make`. On the matching build machine, `pnpm release:assets darwin arm64` (or `darwin x64`, `linux x64`, `linux arm64`) collects installers and checksums in `dist/release`. Clear old collected artifacts before rebuilding.
+The app checks `akalstack/ramu` for stable releases and skips drafts and prereleases: a tag with a hyphen (`v0.2.0-alpha.1`) is installed by hand, and a plain `vX.Y.Z` is the channel updates follow. A download needs a matching ZIP and checksum file. Installing in place needs a signed macOS app, so `APP_AUTO_UPDATE` in `packages/shared/src/updates.ts` stays `false` while releases are unsigned. Settings then links to the release for a manual install.
 
-For packaged macOS checks, run `RAMU_PACKAGED_EXECUTABLE=/path/to/Ramu pnpm test:desktop-smoke`.
+With it on, **Auto-update Ramu** downloads an update but doesn't restart by itself. **Restart app** leaves the service and threads running. **Restart app & service** switches to the bundled service, stops agents and recovers unfinished threads by the saved recovery setting. A healthy older service is not restarted when the app opens.
 
-## Updates and the background service
+## Phone app
 
-The app checks stable releases from `akalstack/ramu`, skipping drafts and prereleases. Tags with a hyphen (`v0.2.0-alpha.1`) publish as prereleases and are installed by hand. A plain `vX.Y.Z` tag is the stable channel that updates reach. Downloads require a matching ZIP and checksum file. Automatic installation requires a signed macOS app and compatible signed ZIP. Unsigned macOS and other platforms install by hand.
-
-Auto-update stays off (`APP_AUTO_UPDATE` in `packages/shared/src/updates.ts`) until builds are signed with an Apple Developer ID. The service still checks for releases, and Settings links to the GitHub release for a manual install. Once signed builds ship, set the flag to `true` to restore the **Auto-update Ramu** setting and in-app downloads.
-
-When on, **Auto-update Ramu** downloads updates but doesn't restart on its own. **Restart app** leaves the service and threads running. **Restart app & service** switches to the bundled service, stops agents, and recovers unfinished threads according to the saved recovery setting. A healthy older service is not restarted on app launch.
-
-The service owns macOS keep-awake behavior. First-time login startup enables it once. Later choices are kept. **Plugged in only** is the default power policy. Display and manual sleep remain available.
-
-## Website
-
-getramu.dev is `apps/site`, served as static assets by the `ramu-site` Cloudflare Worker (`apps/site/wrangler.jsonc`). After a change, run `RAMU_PLUGINS_INDEX=<checkout of akalstack/ramu-plugins> pnpm --filter @ramu/site plugins:sync` if the plugin index changed, then `pnpm --filter @ramu/site run deploy`, which builds and uploads it. Cloudflare manages the `getramu.dev` and `www.getramu.dev` records and certificates.
+The phone app is built with Expo and EAS; see [its README](../../apps/mobile/README.md#development). `pnpm --filter @ramu/mobile export:ios` and `export:android` bundle the JavaScript for each platform without a native build, a quick check that the app still bundles.

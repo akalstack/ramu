@@ -53,5 +53,3 @@ pnpm --filter @ramu/mobile test
 pnpm --filter @ramu/mobile typecheck
 pnpm --filter @ramu/mobile web   # phone-sized browser preview
 ```
-
-Checks that need a physical phone are in [VERIFICATION.md](VERIFICATION.md).
