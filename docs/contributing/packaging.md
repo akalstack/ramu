@@ -39,7 +39,7 @@ Without signing variables the app is signed ad hoc, so its signature verifies bu
 
 `pnpm release:prepare <version>` sets the version in every workspace `package.json` and writes a notes scaffold in `releases/`. The desktop app reads its own version.
 
-The app checks `akalstack/ramu` for stable releases and skips drafts and prereleases: a tag with a hyphen (`v0.2.0-alpha.1`) is installed by hand, and a plain `vX.Y.Z` is the channel updates follow. A download needs a matching ZIP and checksum file. Installing in place needs a signed macOS app, so `APP_AUTO_UPDATE` in `packages/shared/src/updates.ts` stays `false` while releases are unsigned. Settings then links to the release for a manual install.
+The app checks `akalstack/ramu` for stable releases and skips drafts and prereleases: a tag with a hyphen (`v0.2.0-alpha.1`) is installed by hand, and a plain `vX.Y.Z` is the channel updates follow. A download needs a matching ZIP and checksum file. `APP_AUTO_UPDATE` in `packages/shared/src/updates.ts` stays `false` until a signed release has updated itself in place. Settings then links to the release for a manual install.
 
 With it on, **Auto-update Ramu** downloads an update but doesn't restart by itself. **Restart app** leaves the service and threads running. **Restart app & service** switches to the bundled service, stops agents and recovers unfinished threads by the saved recovery setting. A healthy older service is not restarted when the app opens.
 
