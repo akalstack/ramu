@@ -61,8 +61,11 @@
         font-weight: 700;
         letter-spacing: -0.035em;
       }
-      h1 .dot {
-        color: #7d6cff;
+      h1 .grad {
+        background: linear-gradient(100deg, #7d6cff 0%, #d9d2ff 45%, #8f7cf0 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
       }
       .sub {
         position: relative;
@@ -70,7 +73,7 @@
         font-size: 30px;
         line-height: 1.3;
         color: #a1a1a8;
-        max-width: 30ch;
+        max-width: 34ch;
       }
       .foot {
         position: relative;
@@ -106,8 +109,8 @@
     <div class="glow"></div>
     <div class="grid"></div>
     <img class="logo" src="../public/ramu-logo.svg" alt="" />
-    <h1>Describe it. Ramu puts it online<span class="dot">.</span></h1>
-    <p class="sub">Ramu builds your app, puts it online and keeps it working, on accounts you own.</p>
+    <h1>Describe it.<br /><span class="grad">Ramu ships it.</span></h1>
+    <p class="sub">Your coding agents build the app, put it online and keep it running. On accounts you own.</p>
     <div class="foot">
       <div class="providers">
         <img src="../../web/src/assets/providers/claude.svg" alt="" />
