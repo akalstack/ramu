@@ -49,17 +49,16 @@ module.exports = {
       /^\/node_modules\/\.cache(\/|$)/,
     ],
     // Hardened runtime with the entitlements file, so the signed app has its own stable Screen Recording and Accessibility identity.
-    ...(process.env.RAMU_SIGN_IDENTITY
-      ? {
-          osxSign: {
-            identity: process.env.RAMU_SIGN_IDENTITY,
-            optionsForFile: () => ({
-              hardenedRuntime: true,
-              entitlements: join(repoRoot, 'apps', 'desktop', 'build', 'entitlements.mac.plist'),
-            }),
-          },
-        }
-      : {}),
+    // Without a Developer ID the whole bundle is signed ad hoc ('-'): Electron's own signature breaks once the app is
+    // assembled, and Apple Silicon refuses a downloaded app whose signature does not verify as "damaged".
+    osxSign: {
+      identity: process.env.RAMU_SIGN_IDENTITY || '-',
+      ...(process.env.RAMU_SIGN_IDENTITY ? {} : { identityValidation: false }),
+      optionsForFile: () => ({
+        hardenedRuntime: true,
+        entitlements: join(repoRoot, 'apps', 'desktop', 'build', 'entitlements.mac.plist'),
+      }),
+    },
     ...(process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER
       ? {
           osxNotarize: {

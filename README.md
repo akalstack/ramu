@@ -105,7 +105,7 @@ For the phone, install the app and pair it with your computer ([mobile guide](ap
 | Linux    | x64, arm64 · `.deb`, `.rpm`, AppImage, ZIP |
 | Windows  | in progress                                |
 
-Ramu is in **alpha**. Builds are unsigned for now, so you install updates by hand. The AppImage needs FUSE 2: `sudo apt install libfuse2t64` on Ubuntu 24.04+, `libfuse2` on 22.04.
+Ramu is in **alpha**. macOS builds are not notarized yet: the first time, open Ramu from **System Settings → Privacy & Security → Open Anyway**, and install updates by hand. The AppImage needs FUSE 2: `sudo apt install libfuse2t64` on Ubuntu 24.04+, `libfuse2` on 22.04.
 
 ### Run from source
 

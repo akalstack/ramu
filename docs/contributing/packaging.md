@@ -33,7 +33,7 @@ On Linux, `scripts/smoke/linux-deb-smoke.sh` installs the built `.deb` with `apt
 
 ## Sign a macOS build
 
-Builds are unsigned unless signing variables are set. To sign and notarize your own build, export `RAMU_SIGN_IDENTITY` (a Developer ID Application identity in your keychain) and, for notarization, `APPLE_API_KEY` (path to a `.p8` App Store Connect key), `APPLE_API_KEY_ID` and `APPLE_API_ISSUER` before `pnpm make`. Check the result with `codesign --verify --deep --strict`, `spctl --assess --type execute` and `xcrun stapler validate` on `Ramu.app`. Release builds do the same in `scripts/release/macos-signing.sh`.
+Without signing variables the app is signed ad hoc, so its signature verifies but macOS asks the person to allow it once in **Privacy & Security**. To sign and notarize your own build, export `RAMU_SIGN_IDENTITY` (a Developer ID Application identity in your keychain) and, for notarization, `APPLE_API_KEY` (path to a `.p8` App Store Connect key), `APPLE_API_KEY_ID` and `APPLE_API_ISSUER` before `pnpm make`. Check the result with `codesign --verify --deep --strict`, `spctl --assess --type execute` and `xcrun stapler validate` on `Ramu.app`. Release builds do the same in `scripts/release/macos-signing.sh`.
 
 ## Versions and updates
 
