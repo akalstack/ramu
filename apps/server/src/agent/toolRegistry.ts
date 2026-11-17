@@ -19,6 +19,13 @@ const CORE = new Set([
   'set_goal',
   'get_goal',
   'update_goal',
+  // Registered only when the advisor setting is on, whose instructions ask for calls at fixed points in every task.
+  'advisor',
+  'wait_for_advice',
+  // The parent and sub-agent channel: a question it cannot find gets answered in chat, where the other side never sees it.
+  'ask_parent',
+  'message_parent',
+  'answer_subagent',
   'codex_pre_tool_use',
 ])
 const words = (text: string): string[] => text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []

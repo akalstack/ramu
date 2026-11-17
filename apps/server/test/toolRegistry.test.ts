@@ -90,3 +90,28 @@ it.each([false, true])('accepts larger discovery requests with deferred tools %s
     await server.close()
   }
 })
+
+it('keeps the advisor and sub-agent channel listed when other tools are deferred', async () => {
+  const server = new McpServer({ name: 'ramu', version: 'test' })
+  const registry = new ToolRegistry(server, true)
+  for (const name of ['advisor', 'wait_for_advice', 'ask_parent', 'message_parent', 'answer_subagent', 'memory_read'])
+    registry.server.registerTool(name, { description: name, inputSchema: {} }, () => ({ content: [] }))
+  registry.expose()
+  const client = new Client({ name: 'test', version: '1' })
+  const [left, right] = InMemoryTransport.createLinkedPair()
+  await Promise.all([server.connect(left), client.connect(right)])
+  try {
+    expect((await client.listTools()).tools.map((tool) => tool.name).sort()).toEqual([
+      'advisor',
+      'answer_subagent',
+      'ask_parent',
+      'message_parent',
+      'tool_invoke',
+      'tool_search',
+      'wait_for_advice',
+    ])
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
