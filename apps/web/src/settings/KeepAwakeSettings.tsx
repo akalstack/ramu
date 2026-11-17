@@ -3,27 +3,18 @@ import { Dropdown } from '../Menu'
 import { t } from '../i18n'
 import { ToggleRow, type DraftProps } from './ToggleRow'
 
-/** One shared host preference, available in System and Computer use. `supported` is false on hosts that cannot hold it. */
+/** One shared host preference, available in System and Computer use, left out on hosts that cannot hold it. */
 export function KeepAwakeSettings({ supported = true, ...props }: DraftProps & { supported?: boolean }) {
   const { draft, onChange } = props
   const toggleProps = props
-  if (!supported)
-    return (
-      <ToggleRow
-        {...toggleProps}
-        setting="keepAwake"
-        title="Keep host awake"
-        description="Keeping the host awake is available on macOS."
-        disabled
-      />
-    )
+  if (!supported) return null
   return (
     <>
       <ToggleRow
         {...toggleProps}
         setting="keepAwake"
         title="Keep host awake"
-        description="Stop your Mac sleeping from idle while the service runs. Display sleep and manual sleep still work."
+        description="Stop the host sleeping from idle while the service runs. The display can still turn off."
       />
       {draft.keepAwake && (
         <SettingsRow setting="keepAwakeWhen">

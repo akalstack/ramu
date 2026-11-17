@@ -1025,8 +1025,8 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Kirim file atau seleksi aktif di setiap pesan, beserta path tab lain yang terbuka. Perubahan yang belum disimpan ikut dikirim.',
   'Show recent threads and unfinished work on Home. Uses model tokens to write the summary.':
     'Tampilkan thread terbaru dan pekerjaan yang belum selesai di Beranda. Memakai token model untuk menulis ringkasan.',
-  'Stop your Mac sleeping from idle while the service runs. Display sleep and manual sleep still work.':
-    'Cegah Mac tidur saat idle selama layanan berjalan. Layar mati dan tidur manual tetap berfungsi.',
+  'Stop the host sleeping from idle while the service runs. The display can still turn off.':
+    'Cegah host tidur saat idle selama layanan berjalan. Layar tetap bisa mati.',
   'Applies to project notes that were never used. Notes you wrote and essential memories are kept.':
     'Berlaku untuk catatan proyek yang tidak pernah dipakai. Catatan yang kamu tulis dan memori penting tetap disimpan.',
   'Goals resume after a usage limit resets, and Stop pauses them. Changes also apply to goals already running.':
@@ -2569,9 +2569,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Start background service': 'Mulai layanan latar belakang',
   'Stop background service': 'Hentikan layanan latar belakang',
   'Start at login': 'Mulai saat login',
-  'macOS starts the background service when you sign in.': 'macOS memulai layanan latar belakang saat kamu login.',
-  'Starting the service at login is available on macOS.': 'Memulai layanan saat login tersedia di macOS.',
-  'Keeping the host awake is available on macOS.': 'Menjaga host tetap aktif tersedia di macOS.',
+  'Start the background service when you sign in.': 'Mulai layanan latar belakang saat kamu login.',
   'Agents run in the background, even when Ramu is closed.':
     'Agent tetap bekerja di latar belakang meski Ramu ditutup.',
   'Threads and schedules keep running when Ramu closes. The host must stay awake.':

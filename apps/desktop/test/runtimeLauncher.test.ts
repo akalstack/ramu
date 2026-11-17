@@ -1,11 +1,30 @@
 import { expect, it } from 'vitest'
-import { pinnedRuntime } from '../src/main/runtimeLauncher'
+import { pinnedRuntime, systemdUnit } from '../src/main/runtimeLauncher'
 
 it('does not snapshot a development Electron.app with a daemon outside its bundle', () => {
   const dir = '/tmp/ramu-user-data'
   const daemonPath = '/project/out/main/daemon.js',
     executable = '/project/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'
   expect(pinnedRuntime(dir, daemonPath, executable)).toEqual({ daemonPath, executable })
+})
+
+it('does not snapshot a development Electron on Linux, whose daemon is in the repository', () => {
+  const daemonPath = '/project/apps/desktop/out/main/daemon.js',
+    executable = '/project/node_modules/electron/dist/electron'
+  expect(pinnedRuntime('/tmp/ramu-user-data', daemonPath, executable, 'linux')).toEqual({ daemonPath, executable })
+})
+
+it('writes a systemd user service that restarts only a crashed service and keeps paths with spaces and % intact', () => {
+  const unit = systemdUnit(
+    '/home/me/Ramu Data/Ramu',
+    '/home/me/Ramu Data/resources/daemon.js',
+    { RAMU_USER_DATA: '/home/me/100% "Ramu"' },
+    '/home/me/Ramu Data/background.log',
+  )
+  expect(unit).toContain('ExecStart="/home/me/Ramu Data/Ramu" "/home/me/Ramu Data/resources/daemon.js"')
+  expect(unit).toContain('Environment="RAMU_USER_DATA=/home/me/100%% \\"Ramu\\""')
+  expect(unit).toContain('Restart=on-failure')
+  expect(unit).toContain('WantedBy=default.target')
 })
 
 it('reports a live pre-WebSocket service without replacing it or leaking an unsupported socket', async () => {

@@ -86,7 +86,7 @@ Restart=on-failure
 WantedBy=default.target
 ```
 
-On macOS the desktop app installs its own background service.
+The desktop app installs its own background service with **Settings → Background & updates → Start at login**: a LaunchAgent on macOS, a systemd user service on Linux. **Keep host awake** stops the host suspending from idle while the service runs (`caffeinate` on macOS, a `systemd-inhibit` sleep lock on Linux); **Plugged in only** lets a laptop sleep on battery.
 
 ### Keeping hosts up to date
 

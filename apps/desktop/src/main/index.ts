@@ -88,7 +88,14 @@ import type { DeviceOs } from '@ramu/shared/types'
 import { ComputerBroadcaster } from './computerBroadcast'
 import { ComputerRegistry, LOCAL } from './computers'
 import { BrowserImporter, IMPORT_SOURCE_IDS, type ImportSourceId } from './browserImport'
-import { ensureRuntime, waitForRuntimeExit, loginService, loginEnabled, loginPreferred } from './runtimeLauncher'
+import {
+  ensureRuntime,
+  waitForRuntimeExit,
+  loginService,
+  loginEnabled,
+  loginPreferred,
+  loginSupported,
+} from './runtimeLauncher'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'ramu-content', privileges: { standard: true, secure: true } },
@@ -206,6 +213,7 @@ async function main() {
     seal: (text) => safeStorage.encryptString(text).toString('base64'),
     open: (text) => safeStorage.decryptString(Buffer.from(text, 'base64')),
   })
+  const canStartAtLogin = loginSupported()
   const setLoginService = async (enabled: boolean) => {
     const firstInstall = enabled && !existsSync(join(userData, 'background-ever-installed.json'))
     loginService(userData, daemonPath, enabled)
@@ -219,7 +227,7 @@ async function main() {
   if (
     app.isPackaged &&
     !process.env.RAMU_USER_DATA &&
-    process.platform === 'darwin' &&
+    loginSupported() &&
     loginPreferred(userData) !== false &&
     !loginEnabled(userData)
   )
@@ -1370,6 +1378,7 @@ async function main() {
       return {
         ...status,
         loginEnabled: !remote && loginEnabled(userData),
+        loginSupported: !remote && canStartAtLogin,
         bundledVersion: app.getVersion(),
         bundledBuild: runtimeBuild(daemonPath),
         updateAvailable: !remote && status.build !== runtimeBuild(daemonPath),

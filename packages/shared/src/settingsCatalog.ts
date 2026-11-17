@@ -318,7 +318,7 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     section: 'system',
     title: 'Keep host awake',
     path: 'keepAwake',
-    help: 'Stop your Mac sleeping from idle while the service runs. Display sleep and manual sleep still work.',
+    help: 'Stop the host sleeping from idle while the service runs. The display can still turn off.',
     words: 'sleep awake caffeinate power battery background installed login',
   },
   { section: 'system', title: 'Background service', words: 'daemon login startup' },
@@ -548,7 +548,7 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     help: 'What to do when you commit and push while on the default branch.',
     words: 'feature branch current main push',
   },
-  { section: 'system', title: 'Start at login', words: 'startup launch macos service' },
+  { section: 'system', title: 'Start at login', words: 'startup launch macos linux systemd service' },
   {
     section: 'system',
     title: 'When to keep awake',

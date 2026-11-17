@@ -16,7 +16,6 @@ Every change needs scoped tests and typechecks for the packages it touches; desk
 
 - **Transport:** bounded replay and snapshot recovery for every resource, and defined connection outcomes (current, synchronizing, disconnected, authorization rejected, outcome unknown) that keep drafts and queued messages; non-retriable mutations report an unknown outcome and reconcile. Start from measurements on real networks ([Architecture](contributing/architecture.md#transport)).
 - **Windows:** the `windows-port` branch reaches the local service over a named pipe, finds provider CLIs, `gh` and ripgrep, reads memory and processes, keeps the host awake, and packages a Squirrel installer with Ramu's icon, its shortcuts and `ramu://` links handed to the running app. Left: a hands-on run of the installed app in a Windows 11 VM (terminal, agents, pairing a phone, computer use refused with its reason), fixing what that finds, then merging the branch.
-- **Linux host startup:** **Start at login** and **Keep host awake** work only on macOS (a LaunchAgent and `caffeinate`); on Linux both switches are disabled with that reason. A Linux host whose threads and schedules should outlive a closed window needs a systemd user service that also works from the AppImage, and an idle-sleep inhibitor that honours **Plugged in only**. Check: on Ubuntu 24.04, turn both on, sign out and back in, and a schedule runs with the window closed and the screen idle.
 - **Presenting from the phone:** **Present** a deck on a display the phone is connected to (AirPlay or a cable), with speaker notes on the phone ([Artifacts](guide/artifacts.md)).
 - **Site screenshots:** a real capture from a release build beside each step of **From an idea to a live app** (`apps/site`). Claim "anyone can ship an app" only after the non-coder task under [Acceptance](#acceptance) passes with real people, and an improvement over another application only with matched-task evidence.
 
@@ -53,7 +52,7 @@ The code is in; each check needs a real device, account or second host and stays
 ### Desktop builds
 
 - **Packaged and signed builds:** upgrading real profiles, browser session import with a real keychain (Chrome, Edge, Brave, Vivaldi and Arc on macOS; Brave and Vivaldi through the Linux keyring), computer-use permission identity, theme and system-appearance changes, background-terminal stop timing, installation on a second Mac.
-- **Linux desktop:** the installed app on a real GNOME or KDE desktop (Wayland and X11), with the sandbox, on Ubuntu 24.04.
+- **Linux desktop:** the installed app on a real GNOME or KDE desktop (Wayland and X11), with the sandbox, on Ubuntu 24.04; with **Start at login** and **Keep host awake** on, the service is back after signing out and in, from the `.deb` and the AppImage, and the laptop does not suspend from idle while plugged in but does on battery under **Plugged in only**.
 - **Presenting on two displays:** **Present** puts the deck on the external display and **Presenter notes** on the laptop, following each slide; Escape closes both.
 - **Artifact exports:** a Slides PowerPoint export opens in PowerPoint and Keynote with its notes, its PDF and images match the deck, and a Doc's Word export opens in Word and Pages.
 

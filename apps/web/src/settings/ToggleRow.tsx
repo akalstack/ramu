@@ -41,15 +41,14 @@ export function ToggleRow({
   draft,
   onChange,
   busy,
-  disabled = false,
-}: DraftProps & { setting: ToggleKey; title: string; description: string; disabled?: boolean }) {
+}: DraftProps & { setting: ToggleKey; title: string; description: string }) {
   return (
     <SettingsRow setting={setting}>
       <SettingsLabel title={t(title)} help={t(description)} />
       <Switch
         aria-label={t(title)}
         checked={draft[setting]}
-        disabled={busy || disabled}
+        disabled={busy}
         onCheckedChange={(checked) => onChange({ ...draft, [setting]: checked })}
       />
     </SettingsRow>

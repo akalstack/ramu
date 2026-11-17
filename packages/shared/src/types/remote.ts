@@ -10,6 +10,8 @@ export interface BackgroundStatus {
   startedAt: number
   /** Whether the service starts at login; the desktop adds it for the host on this computer. */
   loginEnabled?: boolean
+  /** Whether this computer can start the service at login; the desktop adds it for its own host. */
+  loginSupported?: boolean
   version?: string
   build?: string
   bundledVersion?: string

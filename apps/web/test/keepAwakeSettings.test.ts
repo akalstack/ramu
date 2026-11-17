@@ -15,7 +15,7 @@ vi.mock('../src/i18n', () => ({ useLanguage() {}, t: (text: string) => text }))
 it('edits the shared keep-awake preference and preserves its power policy', () => {
   const draft = { ...DEFAULT_APP_PREFERENCES, keepAwake: false, keepAwakeWhen: 'plugged-in' as const }
   const onChange = vi.fn()
-  const children = KeepAwakeSettings({ draft, onChange, busy: false }).props.children
+  const children = KeepAwakeSettings({ draft, onChange, busy: false })!.props.children
   const toggle = children[0]
   const switchControl = ToggleRow(toggle.props).props.children[1]
   switchControl.props.onCheckedChange(true)
@@ -28,4 +28,11 @@ it('edits the shared keep-awake preference and preserves its power policy', () =
   )
   expect(on).toContain('When to keep awake')
   expect(on).toContain('Plugged in only (recommended)')
+})
+
+it('leaves the row out on a host that cannot keep itself awake', () => {
+  const draft = { ...DEFAULT_APP_PREFERENCES, keepAwake: true }
+  expect(
+    renderToStaticMarkup(createElement(KeepAwakeSettings, { draft, onChange: vi.fn(), busy: false, supported: false })),
+  ).toBe('')
 })
