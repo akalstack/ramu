@@ -56,9 +56,9 @@ it('catalogs only registered capabilities and preserves handler scope errors', a
   expect((await registry.invoke('memory_read', { id: 'foreign' }, {})).isError).toBe(true)
 })
 
-it.each([false, true])('accepts larger discovery requests with deferred tools %s', async (deferred) => {
+it('accepts larger discovery requests from a deferred catalog', async () => {
   const server = new McpServer({ name: 'ramu', version: 'test' })
-  const registry = new ToolRegistry(server, deferred)
+  const registry = new ToolRegistry(server, true)
   for (let i = 0; i < 105; i++)
     registry.server.registerTool(`memory_${i}`, { description: 'Search memory', inputSchema: {} }, () => ({
       content: [],
@@ -113,5 +113,28 @@ it('keeps the advisor and sub-agent channel listed when other tools are deferred
   } finally {
     await client.close()
     await server.close()
+  }
+})
+
+it('lists every tool directly for a provider with its own tool search, marking the ones that must always load', async () => {
+  const server = new McpServer({ name: 'ramu', version: 'test' })
+  const registry = new ToolRegistry(server, false)
+  registry.server.registerTool('schedule_pause', { description: 'Pause a schedule', inputSchema: {} }, () => ({
+    content: [],
+  }))
+  registry.server.registerTool('ask_user', { description: 'Ask the person', inputSchema: {} }, () => ({
+    content: [],
+  }))
+  registry.expose()
+  const client = new Client({ name: 'test', version: '1' })
+  const [left, right] = InMemoryTransport.createLinkedPair()
+  await Promise.all([server.connect(left), client.connect(right)])
+  try {
+    const tools = (await client.listTools()).tools
+    expect(tools.map((tool) => tool.name)).toEqual(['schedule_pause', 'ask_user'])
+    expect(tools.find((tool) => tool.name === 'ask_user')?._meta).toEqual({ 'anthropic/alwaysLoad': true })
+    expect(tools.find((tool) => tool.name === 'schedule_pause')?._meta).toBeUndefined()
+  } finally {
+    await client.close()
   }
 })

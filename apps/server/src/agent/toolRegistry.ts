@@ -67,7 +67,13 @@ export class ToolRegistry {
     const schema = z.object(config.inputSchema ?? {})
     this.entries.set(name, { name, description: config.description ?? '', schema, handler })
     if (!this.deferred || CORE.has(name))
-      return this.target.registerTool(name, config, async (args, extra) => handler(args as never, extra as never))
+      return this.target.registerTool(
+        name,
+        // Listed directly, a provider with its own tool search (Claude) may still defer it; the tools an agent must
+        // always see load up front instead. Other providers ignore the marker.
+        CORE.has(name) ? { ...config, _meta: { 'anthropic/alwaysLoad': true } } : config,
+        async (args, extra) => handler(args as never, extra as never),
+      )
     return { remove: () => this.entries.delete(name) }
   }
   search(query: string, limit = 5) {
@@ -114,7 +120,9 @@ export class ToolRegistry {
       }
     }
   }
+  /** Adds tool_search and tool_invoke; only a deferred catalog needs them, since otherwise every tool is listed. */
   expose() {
+    if (!this.deferred) return
     this.target.registerTool(
       'tool_search',
       {

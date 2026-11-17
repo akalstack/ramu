@@ -98,6 +98,12 @@ export interface NativeFeatures {
    * inside it, so the thread keeps its own.
    */
   toolScripts?: boolean
+  /**
+   * The runtime keeps MCP tools out of the prompt and finds them on demand itself (Claude's ToolSearch, Codex's
+   * tool_search, OpenCode's execute catalog). Ramu then lists its tools directly instead of behind its own tool_search,
+   * which would only add a second search and hide each tool's name from the runtime's approvals.
+   */
+  toolSearch?: boolean
 }
 
 /** The smallest context window that counts as the long_context ability. */

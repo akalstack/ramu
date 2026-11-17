@@ -205,7 +205,7 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     section: 'chats',
     title: 'Load tools on demand',
     path: 'intelligence.toolSearch',
-    help: 'Keep optional Ramu tools out of the prompt until the agent needs them. Applies to new provider sessions.',
+    help: 'For providers without their own tool search (Antigravity and Cursor), keep optional Ramu tools out of the prompt until the agent needs them. Claude, Codex and OpenCode always do this themselves. Applies to new provider sessions.',
     words: 'tool search tokens deferred optional ramu',
   },
   {

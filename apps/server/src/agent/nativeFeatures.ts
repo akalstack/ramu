@@ -21,3 +21,11 @@ export function usesRamuQuestionTools(asyncQuestions: boolean, s: AgentSessionIn
 export function usesRamuToolScripts(s: AgentSessionInfo): boolean {
   return !providerAdapter(s.provider).native?.toolScripts
 }
+
+/** Whether the provider finds MCP tools on demand itself, so Ramu lists its tools directly. */
+export const nativeToolSearch = (s: AgentSessionInfo): boolean => !!providerAdapter(s.provider).native?.toolSearch
+
+/** Ramu's own tool_search serves a chat when the setting is on and its provider has no tool search of its own. */
+export function usesRamuToolSearch(preference: boolean, s: AgentSessionInfo): boolean {
+  return preference && !nativeToolSearch(s)
+}

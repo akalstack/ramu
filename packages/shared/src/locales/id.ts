@@ -1058,8 +1058,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Ask me first': 'Tanya dulu',
   'Used for learning reviews and memory cleanup. A cheaper model keeps token use low.':
     'Dipakai untuk tinjauan pembelajaran dan pembersihan memori. Model yang lebih hemat menjaga pemakaian token tetap rendah.',
-  'Keep optional Ramu tools out of the prompt until the agent needs them. Applies to new provider sessions.':
-    'Tool Ramu opsional tidak dimasukkan ke prompt sampai agent membutuhkannya. Berlaku untuk sesi provider baru.',
+  'For providers without their own tool search (Antigravity and Cursor), keep optional Ramu tools out of the prompt until the agent needs them. Claude, Codex and OpenCode always do this themselves. Applies to new provider sessions.':
+    'Untuk provider tanpa pencarian tool sendiri (Antigravity dan Cursor), tool Ramu opsional tidak dimasukkan ke prompt sampai agent membutuhkannya. Claude, Codex, dan OpenCode selalu melakukannya sendiri. Berlaku untuk sesi provider baru.',
   'Load tools on demand': 'Muat tool saat dibutuhkan',
   'Save something to shared memory': 'Simpan sesuatu ke memori bersama',
   'Ask the agent to forget a memory': 'Minta agent melupakan sebuah memori',

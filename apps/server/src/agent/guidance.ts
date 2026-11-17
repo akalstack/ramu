@@ -4,7 +4,7 @@ import { BACKGROUND_PREAMBLE } from '@ramu/shared/chat/agentTasks'
 import { QUESTION_INPUT_GUIDANCE, QUESTION_PREAMBLE } from '@ramu/shared/chat/questions'
 import { ADVISOR_PREAMBLE } from './advisor'
 import { TOOL_PRESENTATION_PREAMBLE, USER_MESSAGE_PREAMBLE } from './agentInstructions'
-import { TOOL_DISCOVERY_INSTRUCTIONS } from '../intelligence'
+import { NATIVE_TOOL_DISCOVERY_INSTRUCTIONS, TOOL_DISCOVERY_INSTRUCTIONS } from '../intelligence'
 import { NATIVE_SUBAGENT_PREAMBLE } from './constants'
 import { NO_AGENT_CREDITS_GUIDANCE } from '@ramu/shared/workspace/agentCredits'
 
@@ -28,6 +28,8 @@ export interface GuidanceSections {
   nativeSubagentNote: boolean
   memory: string | undefined
   toolSearch: boolean
+  /** The provider finds MCP tools on demand itself, so Ramu's tools are listed but may not be in view. */
+  nativeToolSearch?: boolean
   learning: string | undefined
   /** User-written rules, labelled as the user's own instructions. */
   rules?: string | undefined
@@ -52,8 +54,10 @@ export function sessionGuidance(sections: GuidanceSections): string {
   if (sections.nativeSubagentNote) instructions += `\n\n${NATIVE_SUBAGENT_PREAMBLE}`
   if (sections.memory) instructions += `\n\n${sections.memory}`
   instructions += `\n\n${BACKGROUND_TERMINAL_GUIDE}`
-  if (sections.toolSearch) instructions += `\n\n${INTERACTIVE_GUIDE}`
+  // Whichever search defers the tools, the agent still needs to know artifacts exist.
+  if (sections.toolSearch || sections.nativeToolSearch) instructions += `\n\n${INTERACTIVE_GUIDE}`
   if (sections.toolSearch) instructions += `\n\n${TOOL_DISCOVERY_INSTRUCTIONS}`
+  else if (sections.nativeToolSearch) instructions += `\n\n${NATIVE_TOOL_DISCOVERY_INSTRUCTIONS}`
   if (sections.learning) instructions += `\n\n${sections.learning}`
   if (sections.browser) instructions += `\n\n${sections.browser}`
   if (sections.noCredits) instructions += `\n\n${NO_AGENT_CREDITS_GUIDANCE}`

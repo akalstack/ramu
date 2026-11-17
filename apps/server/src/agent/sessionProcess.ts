@@ -30,7 +30,7 @@ import { alwaysAskHooks, claudeHooks, createCanUseTool, readOnlyBashHooks } from
 import { ramuFileHooks } from './ramuFiles'
 import { claudeLaunchOptions } from './claudeOptions'
 import { sessionGuidance } from './guidance'
-import { usesRamuQuestionTools } from './nativeFeatures'
+import { nativeToolSearch, usesRamuQuestionTools, usesRamuToolSearch } from './nativeFeatures'
 import { buildHandoff, handoffBudgetBytes, DEFAULT_CONTEXT_TOKENS, type BuiltHandoff } from './handoff'
 import { ProviderSessions, pendingHandoff, planHandoff } from './providerSessions'
 import { classifyLimit } from '../providers/limitClassifier'
@@ -423,7 +423,8 @@ export class SessionProcess {
           // Antigravity's sub-agent tool cannot be switched off; Cursor's and OpenCode's are, at launch.
           s.provider === 'antigravity' && this.host.nativeSubagentsOff(s),
         memory: this.host.memoryInstructions()?.(s),
-        toolSearch: this.host.preferences()?.intelligence?.toolSearch !== false,
+        toolSearch: usesRamuToolSearch(this.host.preferences()?.intelligence?.toolSearch !== false, s),
+        nativeToolSearch: nativeToolSearch(s),
         learning: this.host.learningInstructions()?.(s, { checkpoint: !carried?.built.includesCheckpoint }),
         rules: rulesText,
         browser: connection.browserInstructions,

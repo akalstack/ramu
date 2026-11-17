@@ -68,6 +68,8 @@ export const codexAdapter = defineAdapter({
     }),
   native: {
     blockingQuestions: true,
+    // tool_search is always on in the app-server and always defers MCP tools.
+    toolSearch: true,
     // Built-in tools of the app-server. Image generation depends on the login and model: the check decides.
     abilities: [
       { ability: 'image_generation', via: { tool: 'image_gen' } },

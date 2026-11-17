@@ -107,7 +107,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { registerQuestionTools } from './agent/questionTools'
 import { registerSecretTools } from './agent/secretTools'
 import { SecretFiles } from './agent/secretFiles'
-import { usesRamuQuestionTools, usesRamuToolScripts } from './agent/nativeFeatures'
+import { usesRamuQuestionTools, usesRamuToolScripts, usesRamuToolSearch } from './agent/nativeFeatures'
 import { registerAdvisorTools } from './agent/advisor'
 import { registerGoalTools } from './agent/goals'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
@@ -2343,7 +2343,10 @@ agents.toolConnection = (session) => {
     browser: browserPreferences,
     toolSearch:
       !summaries.isReviewChat(session.taskId) &&
-      (workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).intelligence?.toolSearch ?? true),
+      usesRamuToolSearch(
+        workspace.getAppState<Partial<AppPreferences>>('app-preferences', {}).intelligence?.toolSearch ?? true,
+        session,
+      ),
   })
   const review = summaries.isReviewChat(session.taskId)
   const projectId = projectOf(session)

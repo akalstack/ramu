@@ -37,7 +37,7 @@ export function EfficiencySettings({ value, onChange }: Props) {
         <SettingsLabel
           title={t('Load tools on demand')}
           help={t(
-            'Keep optional Ramu tools out of the prompt until the agent needs them. Applies to new provider sessions.',
+            'For providers without their own tool search (Antigravity and Cursor), keep optional Ramu tools out of the prompt until the agent needs them. Claude, Codex and OpenCode always do this themselves. Applies to new provider sessions.',
           )}
         />
         <Switch

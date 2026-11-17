@@ -1074,7 +1074,11 @@ describe('AgentService', () => {
         provider,
       })
       await until(() => service.get(chat.id).state === 'idle')
-      expect(connections[0]?.instructions).toContain('tool_search')
+      // Codex and OpenCode find MCP tools with their own search; Cursor and Antigravity use Ramu's.
+      if (provider === 'codex' || provider === 'opencode') {
+        expect(connections[0]?.instructions).toContain('your own tool search')
+        expect(connections[0]?.instructions).not.toContain('tool_invoke')
+      } else expect(connections[0]?.instructions).toContain('tool_search')
       if (provider !== 'codex') expect(prompts[0]).toContain('Shared memory instructions fixture')
       service.stopAll()
     },

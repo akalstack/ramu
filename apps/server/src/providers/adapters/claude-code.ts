@@ -60,6 +60,7 @@ export const claudeCodeAdapter = defineAdapter({
   loginArgs: ['auth', 'login'],
   native: {
     advisor: true,
+    toolSearch: true,
     blockingQuestions: true,
     abilities: [
       { ability: 'web_search', via: { tool: 'WebSearch' } },
