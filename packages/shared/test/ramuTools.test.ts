@@ -57,6 +57,30 @@ describe('Ramu tool calls', () => {
     })
   })
 
+  it('reads a script by the Shared MCP tools it called, most used first, and its failure', () => {
+    const call = ramuTool(use('ramu_run_script', { code: 'return 1' }))!
+    expect(call.name).toBe('run_script')
+    expect(
+      describeRamuTool(
+        call,
+        JSON.stringify({ result: [], calls: { 'linear-1a2b3c__list_issues': 10, 'linear-1a2b3c__get_issue': 117 } }),
+      ),
+    ).toEqual({
+      icon: 'terminal',
+      done: 'Ran a script',
+      running: 'Running a script',
+      subject: 'linear: get_issue ×117 · linear: list_issues ×10',
+      facts: [{ label: 'Calls', value: '127' }],
+    })
+    expect(
+      describeRamuTool(call, JSON.stringify({ error: 'Declined', calls: { 'sentry-abcdef__find': 1 } })).facts,
+    ).toEqual([
+      { label: 'Calls', value: '1' },
+      { label: 'Failed', value: 'Declined' },
+    ])
+    expect(describeRamuTool(call).subject).toBeUndefined()
+  })
+
   it('unwraps tool_invoke', () => {
     const call = ramuTool(
       use('mcp__ramu__tool_invoke', { name: 'memory_save', arguments: { title: 'Tabs', kind: 'user' } }),

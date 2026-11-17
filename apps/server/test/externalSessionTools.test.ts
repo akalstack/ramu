@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { ToolRegistry } from '../src/agent/toolRegistry'
+import { registerScriptTools } from '../src/agent/scriptTools'
 import { fileURLToPath } from 'node:url'
 import { dirname } from 'node:path'
 import { openDb } from '../src/db'
@@ -153,4 +156,43 @@ it('closes a chat’s earlier gateway when it switches login, and every gateway 
   expect(created.map((entry) => entry.closed)).toEqual([true, false, false])
   await tools.closeSession('thread')
   expect(created.map((entry) => entry.closed)).toEqual([true, false, true])
+})
+
+it('runs a script’s calls through the same gateway, asking for each call and reporting a declined one', async () => {
+  const { service, connection, source } = fixture()
+  const inspection = await service.check(connection.id, { provider: 'codex', accountId: 'a', projectId: 'project' })
+  service.approve({
+    connectionId: connection.id,
+    revision: inspection.revision,
+    catalogRevision: inspection.catalogRevision,
+    provider: 'codex',
+    accountId: 'a',
+    scope: connection.scope,
+    tools: [{ name: 'inspect_environment', action: 'read', approval: 'always' }],
+  })
+  const asked: string[] = []
+  const tools = new ExternalSessionTools(
+    () => service,
+    async (_session, title) => (asked.push(title), asked.length === 1),
+    async () => null,
+  )
+  cleanup.push(() => tools.close())
+  const registry = new ToolRegistry(new McpServer({ name: 'test', version: '1' }), false)
+  registerScriptTools(registry.server, (name, args, signal) => tools.invokeByName(source, name, args, signal))
+  const name = `mcp__shared_mcp__${(await tools.list(source))[0]!.name}`
+  const result = await registry.invoke(
+    'run_script',
+    {
+      code: `const first = await call(${JSON.stringify(name)})
+             log(first.providerTokenPresent)
+             await call(${JSON.stringify(name)})`,
+    },
+    { signal: new AbortController().signal } as Parameters<ToolRegistry['invoke']>[2],
+  )
+  const report = JSON.parse((result.content[0] as { text: string }).text)
+  expect(asked).toEqual(['Fixture: inspect_environment', 'Fixture: inspect_environment'])
+  expect(result.isError).toBe(true)
+  expect(report.error).toMatch(/declined/)
+  expect(report.log).toEqual(['false'])
+  expect(Object.values(report.calls)).toEqual([2])
 })

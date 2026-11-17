@@ -16,3 +16,8 @@ export function nativeAdvisorModel(prefs: AppPreferences | undefined, s: AgentSe
 export function usesRamuQuestionTools(asyncQuestions: boolean, s: AgentSessionInfo): boolean {
   return asyncQuestions || !providerAdapter(s.provider).native?.blockingQuestions
 }
+
+/** Ramu's run_script serves a chat unless its provider already runs code that calls MCP tools. */
+export function usesRamuToolScripts(s: AgentSessionInfo): boolean {
+  return !providerAdapter(s.provider).native?.toolScripts
+}

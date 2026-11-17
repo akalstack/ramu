@@ -4,7 +4,12 @@ import { connectionApplies } from './policy'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import { CallToolRequestSchema, ListToolsRequestSchema, type Tool } from '@modelcontextprotocol/sdk/types.js'
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  type CallToolResult,
+  type Tool,
+} from '@modelcontextprotocol/sdk/types.js'
 import type { SharedMcpConnection } from '@ramu/shared/mcp'
 import { redactSecrets } from '../memory/secrets'
 import type { ExternalMcpGateway } from './gateway'
@@ -250,6 +255,25 @@ export class ExternalSessionTools {
     return { server, result }
   }
 
+  /**
+   * One call by the provider-safe name the agent sees, from the agent directly or from its `run_script`. Every call goes
+   * through the chat's gateway, which checks the grant and catalog revision and asks the person when the tool needs it.
+   */
+  async invokeByName(
+    source: ExternalSessionSource,
+    name: string,
+    args: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<CallToolResult> {
+    // Parallel calls resolve their tool from the list the model just saw; only a miss reads the catalogs again.
+    const recent = this.recent.get(this.key(source))
+    let entry =
+      recent && Date.now() - recent.at < RECENT_MS ? recent.entries.find((item) => item.name === name) : undefined
+    if (!entry) entry = (await this.list(source, signal)).find((item) => item.name === name)
+    if (!entry) throw new Error('Unknown or unapproved external tool. Review access in Settings → Agent setup.')
+    return this.gateway(source).invoke(entry.connectionId, entry.catalogRevision, entry.tool.name, args, signal)
+  }
+
   private build(source: ExternalSessionSource) {
     const server = new Server({ name: EXTERNAL_MCP_SERVER, version: '0.1.0' }, { capabilities: { tools: {} } })
     server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => ({
@@ -270,20 +294,9 @@ export class ExternalSessionTools {
     server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       const failure = (message: string) => ({ isError: true, content: [{ type: 'text' as const, text: message }] })
       try {
-        // Parallel calls resolve their tool from the list the model just saw; only a miss reads the catalogs again.
-        // The gateway re-checks the catalog revision and the grant on every call either way.
-        const key = this.key(source)
-        const recent = this.recent.get(key)
-        let entry =
-          recent && Date.now() - recent.at < RECENT_MS
-            ? recent.entries.find((item) => item.name === request.params.name)
-            : undefined
-        if (!entry) entry = (await this.list(source, extra.signal)).find((item) => item.name === request.params.name)
-        if (!entry) return failure('Unknown or unapproved external tool. Review access in Settings → Agent setup.')
-        return await this.gateway(source).invoke(
-          entry.connectionId,
-          entry.catalogRevision,
-          entry.tool.name,
+        return await this.invokeByName(
+          source,
+          request.params.name,
           (request.params.arguments ?? {}) as Record<string, unknown>,
           extra.signal,
         )

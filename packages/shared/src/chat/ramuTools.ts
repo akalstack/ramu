@@ -95,6 +95,7 @@ const KNOWN = new Set([
   'artifact_records',
   'artifact_published',
   'artifact_run',
+  'run_script',
 ])
 
 /** Calls whose result Ramu already draws somewhere else in the chat: a card, the question dock, the goal tray. */
@@ -432,10 +433,29 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
       )
     case 'artifact_run':
       return reply('Ran an artifact', 'Running an artifact', 'sparkles', text(args.run) ?? quote(text(args.task)))
+    case 'run_script': {
+      const made = Object.entries(record(data.calls)).flatMap(([name, n]) =>
+        typeof n === 'number' ? [[sharedToolLabel(name), n] as const] : [],
+      )
+      const total = made.reduce((sum, [, n]) => sum + n, 0)
+      const top = made
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 2)
+        .map(([name, n]) => (n > 1 ? `${name} ×${n}` : name))
+        .join(' · ')
+      return reply('Ran a script', 'Running a script', 'terminal', top || undefined, [
+        ...(total ? [{ label: 'Calls', value: String(total) }] : []),
+        ...(text(data.error) ? [{ label: 'Failed', value: clip(text(data.error)!, 160) }] : []),
+      ])
+    }
     default:
       return reply('Used', 'Using', 'wrench', call.name.replace(/_/g, ' '))
   }
 }
+
+/** A Shared MCP tool's provider-safe name (`linear-1a2b3c__get_issue`) as a person reads it: `linear: get_issue`. */
+const sharedToolLabel = (name: string) =>
+  name.replace(/^(?:mcp__)?shared_mcp(?:__|\.|_)/, '').replace(/^(.+?)-[0-9a-f]{6}__/, '$1: ')
 
 const command = (value: unknown) => {
   const line = text(value)

@@ -93,6 +93,11 @@ export interface NativeFeatures {
   terminals?: boolean
   /** Abilities other providers' threads can borrow through Ramu's ability tools, and that this provider's own threads have. */
   abilities?: AbilityDeclaration[]
+  /**
+   * The runtime runs code that calls MCP tools itself (OpenCode's `execute`). Ramu's `run_script` would only run nested
+   * inside it, so the thread keeps its own.
+   */
+  toolScripts?: boolean
 }
 
 /** The smallest context window that counts as the long_context ability. */

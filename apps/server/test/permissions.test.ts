@@ -207,3 +207,10 @@ it('keeps file-changing tools away from a read-only session while Bash is decide
   expect(await call('Bash', { command: 'npm install' })).toMatchObject({ behavior: 'deny' })
   expect(pending.size).toBe(0)
 })
+
+it('lets run_script through without a second card, since the gateway asks for each call inside it', async () => {
+  const { call, pending, events } = fixture('edits')
+  expect(await call('mcp__ramu__run_script', { code: 'return 1' })).toMatchObject({ behavior: 'allow' })
+  expect(pending.size).toBe(0)
+  expect(events).toEqual([])
+})

@@ -26,6 +26,8 @@ const CORE = new Set([
   'ask_parent',
   'message_parent',
   'answer_subagent',
+  // Only registered when the chat has Shared MCP tools; an agent that never finds it makes one call per turn.
+  'run_script',
   'codex_pre_tool_use',
 ])
 const words = (text: string): string[] => text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []

@@ -62,6 +62,7 @@ import { openHeadlessPage } from './interactive/pageHeadless'
 import type { ArtifactInfo } from '@ramu/shared/artifacts'
 import type { TunnelChoice } from '@ramu/shared/types'
 import { registerThemeTools } from './themeTools'
+import { registerScriptTools } from './agent/scriptTools'
 import { SettingsChanges } from './settings/settingsChanges'
 import { registerSettingsTools } from './settings/settingsTools'
 import type { SettingsSnapshot } from '@ramu/shared/settingsCompatibility'
@@ -106,7 +107,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { registerQuestionTools } from './agent/questionTools'
 import { registerSecretTools } from './agent/secretTools'
 import { SecretFiles } from './agent/secretFiles'
-import { usesRamuQuestionTools } from './agent/nativeFeatures'
+import { usesRamuQuestionTools, usesRamuToolScripts } from './agent/nativeFeatures'
 import { registerAdvisorTools } from './agent/advisor'
 import { registerGoalTools } from './agent/goals'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
@@ -1880,6 +1881,11 @@ const mcpHttp = createServer(async (req, res) => {
   if (!review) registerThemeTools(server, (theme) => agents.themeProposed(source.id, theme))
   if (!review) registerSettingsTools(server, source.id, settingsChanges)
   if (!review) registerAbilityTools(server, abilities, source)
+  // Only where a script has something to call: Shared MCP tools this chat may use, on a provider without its own scripts.
+  if (!review && usesRamuToolScripts(source) && hasExternalConnections(getSharedMcp(), externalSource(source)))
+    registerScriptTools(server, (name, args, signal) =>
+      externalTools.invokeByName(externalSource(source), name, args, signal),
+    )
   if (!review)
     registerBrowserTools(
       server,

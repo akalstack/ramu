@@ -31,9 +31,16 @@ export default defineConfig({
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/main/index.ts'), daemon: resolve(__dirname, '../server/src/index.ts') },
         // Playwright ships its own runtime files; keep it as a packaged production dependency.
+        // QuickJS loads its .wasm file from beside its own module, so it stays a packaged dependency too.
         // ws probes these optional native accelerators inside try/catch. Leave resolution to Node
         // so Vite's development-only missing-peer stubs cannot throw before ws can fall back.
-        external: ['playwright-core', 'bufferutil', 'utf-8-validate'],
+        external: [
+          'playwright-core',
+          'quickjs-emscripten-core',
+          '@jitl/quickjs-wasmfile-release-sync',
+          'bufferutil',
+          'utf-8-validate',
+        ],
         output: { entryFileNames: '[name].js' },
       },
     },
