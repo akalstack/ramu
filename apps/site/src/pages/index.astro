@@ -39,14 +39,14 @@ const PATH = [
   { title: 'Say what you want', body: 'At most three questions, each with a suggested answer. Then a stack in one line.' },
   { title: 'Ramu makes the project', body: 'It runs the framework’s own generator, commits, and sets a goal: build and tests pass.' },
   { title: 'Watch it take shape', body: 'The app opens in the browser panel as soon as it runs. Questions come as cards.' },
-  { title: 'Deploy to your account', body: 'Install your host’s plugin once. Previews go out; production waits for your OK. Then the live address.' },
-  { title: 'Keep changing it', body: 'Each change is a pull request with CI and a preview. Merging ships it.' },
+  { title: 'Deploy to your account', body: 'Install your host’s plugin once. Production always waits for your OK. Then the live address.' },
+  { title: 'Keep changing it', body: 'Each change is a pull request with CI. Merging ships it when your host deploys from the repo.' },
 ]
 
 const SAFELY = [
-  'Previews deploy on their own',
+  'Previews and CI show up as checks on the pull request',
   'Production asks you first, and runs migrations before it ships',
-  'The thread hears how its push went from your Git host’s checks',
+  'After a push, the thread hears how its checks went',
   'Uptime is watched, and an outage opens an incident thread',
 ]
 
@@ -72,9 +72,12 @@ const WORK = [
   { icon: 'moon', title: 'Leave it running', body: 'Threads, terminals and schedules keep going after you close the window. Recaps catch you up.' },
   { icon: 'users', title: 'Bring in another model', body: 'Ask a second model for a review, or hand tasks to helpers on any provider.' },
   { icon: 'brain', title: 'Memory that carries over', body: 'Notes, preferences, skills and lessons are shared by every provider.' },
-  { icon: 'layers', title: 'Artifacts you keep', body: 'Docs, decks, dashboards, designs and videos. Export to Word, PowerPoint, PDF or MP4.' },
-  { icon: 'globe', title: 'Browser and devices', body: 'Agents drive a browser, your screen, or an iOS and Android simulator. You can watch and stop.' },
-  { icon: 'branch', title: 'Git, done for you', body: 'Branches, worktrees and pull requests on GitHub, GitLab, Bitbucket and Azure DevOps.' },
+  { icon: 'layers', title: 'Artifacts you keep', body: 'Apps, docs, diagrams, slides, dashboards, designs and motion. Export to Word, PowerPoint, PDF or video.' },
+  { icon: 'puzzle', title: 'Plugins', body: 'One install adds a service’s skills, tools and CLI for every agent. You review it before anything installs.' },
+  { icon: 'id', title: 'Identities', body: 'Work and personal Git authors and logins, picked per project, so nothing is switched by hand.' },
+  { icon: 'globe', title: 'Browser and devices', body: 'Agents drive a browser, your screen, or their own iOS Simulator or Android emulator. Watch or take over.' },
+  { icon: 'branch', title: 'Git, done for you', body: 'Branches, worktrees, pull requests and reviews on GitHub, GitLab, Bitbucket and Azure DevOps.' },
+  { icon: 'server', title: 'Any computer', body: 'Run agents on another machine over your network, Tailscale, SSH or a tunnel, or headless on a server.' },
 ] as const
 ---
 
@@ -287,8 +290,8 @@ const WORK = [
             <li class="wait">Production<span>Waits for you</span></li>
           </ul>
           <div class="pr-actions">
-            <span class="pr-merge">Merge and deploy</span>
-            <span class="pr-note">Migrations run first</span>
+            <span class="pr-merge">Merge…</span>
+            <span class="pr-note">Production asks you first</span>
           </div>
         </figure>
       </section>
@@ -321,7 +324,7 @@ const WORK = [
         <div class="section-head center reveal">
           <span class="eyebrow">Features</span>
           <h2>Everything around the agent, in one window.</h2>
-          <p>Editor, terminals, Git and review beside the thread. Your computer stays awake; features vary by provider.</p>
+          <p>Editor, terminals, Git and review beside the thread. Some features depend on the provider.</p>
         </div>
         <ul class="grid">
           {

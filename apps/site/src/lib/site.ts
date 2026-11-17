@@ -45,12 +45,12 @@ export const PROVIDERS: Provider[] = [
   { id: 'claude', name: 'Claude Code', logo: claudeLogo, signIn: 'Install Claude Code and sign in' },
   { id: 'codex', name: 'Codex', logo: openaiLogo, signIn: 'Install Codex and sign in' },
   { id: 'opencode', name: 'OpenCode', logo: opencodeLogo, signIn: 'Connect your model provider' },
-  { id: 'cursor', name: 'Cursor', logo: cursorLogo, signIn: 'Sign in with your Cursor account' },
+  { id: 'cursor', name: 'Cursor', logo: cursorLogo, signIn: 'Log in, or use a Cursor API key' },
   {
     id: 'antigravity',
     name: 'Antigravity',
     logo: antigravityLogo,
-    signIn: 'Sign in with Google in Settings',
+    signIn: 'Ramu installs it, then sign in with Google',
   },
 ]
 

@@ -31,7 +31,7 @@ Ramu puts your coding agents, editor, terminals, Git and review in one window. B
 - **No subscription.** Ramu is free and resells nothing.
 - **Nothing to host.** Agents run on your own computer.
 
-Open a project, say what you want, review the result. Defaults work out of the box; **Settings** holds the rest.
+Open a project, say what you want, review the result. The defaults work as they are, and **Settings** has the rest.
 
 ## Why Ramu
 
@@ -54,7 +54,7 @@ Open a project, say what you want, review the result. Defaults work out of the b
 **📄 Artifacts you keep**
 
 - Agents make apps, docs, diagrams, slide decks, dashboards, designs and short motion videos, right in the thread.
-- Keep them under **Artifacts**, edit them in place, open them on your phone, and export to Word, PowerPoint, PDF or MP4. [Artifacts →](docs/guide/artifacts.md)
+- Keep them under **Artifacts**, edit them in place, open them on your phone, and export to Word, PowerPoint, PDF or video. [Artifacts →](docs/guide/artifacts.md)
 
 **🛠️ A full workspace**
 
@@ -68,10 +68,10 @@ Open a project, say what you want, review the result. Defaults work out of the b
 
 **🌐 Shipping and running**
 
-- Deploy with each platform's own plugin (Vercel, Netlify, Railway, Cloudflare, Fly.io); Ramu has no platform code of its own. Previews go out on their own; production waits for your OK and runs migrations first. [Deploying →](docs/guide/deploy.md)
+- Deploy with each platform's own plugin: Vercel, Netlify, Railway, Cloudflare or Fly.io. Ramu keeps the part an agent shouldn't decide alone: production always waits for your OK, and migrations run first. [Deploying →](docs/guide/deploy.md)
 - **Run on this computer** for demos and home use: no hosting account, just a public address through a tunnel.
 - [Plugins](docs/guide/plugins.md) add a service in one install: its skills, MCP servers, CLI and credential, for every provider. Browse them at [getramu.dev/plugins](https://getramu.dev/plugins).
-- CI through pull requests, deploy results read from your Git host's checks, and an incident thread when the live site stops answering.
+- **Set up CI** in one pull request. After a push, the thread hears how its checks went (GitHub and GitLab). When the live site stops answering, an incident thread opens and your phone is told.
 
 **📱 Anywhere**
 
@@ -80,7 +80,7 @@ Open a project, say what you want, review the result. Defaults work out of the b
 - **Your network:** LAN, Tailscale, NetBird, SSH or your own tunnel. [Remote hosts →](docs/guide/remote-hosts.md)
 - **Headless server** and a `ramu` CLI for servers and terminals.
 
-> Provider features vary. Agents run on your computer, so keep it awake while they work. Crash reports are off by default and never leave your computer ([diagnostics](docs/guide/diagnostics.md)).
+> Some features depend on the provider. Agents run on your computer, and on a Mac Ramu can keep it awake while they work. Crash reports are off by default and never leave your computer ([diagnostics](docs/guide/diagnostics.md)).
 
 Every feature has a page in the [guide](docs/README.md#guide).
 
@@ -127,8 +127,11 @@ Built with Electron, React, React Native and TypeScript. Start with the [archite
 | `pnpm make`               | Build installers for this platform                                    |
 | `pnpm server serve`       | Run the workspace server without the desktop app (after `pnpm build`) |
 
+> [!NOTE]
+> **Ramu is in a stability push.** The most helpful thing you can send is a fix: a bug, a crash, something slow, a missing test, a docs mistake or a translation. Those get reviewed first, and we're grateful for every one. New features stay with the core team until the push is over. Got an idea? Start a thread in [Ideas](https://github.com/akalstack/ramu/discussions/categories/ideas) so we can talk it through before anyone writes code.
+
 - Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
-- [Report a bug or request a feature](https://github.com/akalstack/ramu/issues/new/choose).
+- [Report a bug](https://github.com/akalstack/ramu/issues/new/choose).
 - Report vulnerabilities through [SECURITY.md](SECURITY.md).
 - Planned work lives in [the roadmap](docs/roadmap.md).
 
