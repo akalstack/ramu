@@ -31,6 +31,8 @@ import type {
   McpConnection,
 } from '@ramu/shared/types'
 import type { HelperHistory } from '../agent/helperHistory'
+import { mcpCallSkipsCard } from '../agent/toolApprovals'
+import { EXTERNAL_MCP_SERVER } from '../mcp/sessionTools'
 
 // Wire messages are validated by the app-server. Only the consumed fields cross into our domain.
 type Wire = Record<string, any>
@@ -743,11 +745,18 @@ class CodexSession implements CodexRunner {
         this.emit({ kind: 'state', state: 'needs-input' })
       } else if (
         m.method === 'mcpServer/elicitation/request' &&
-        this.settings.access === 'full' &&
         !this.readOnly &&
-        (p._meta?.codex_approval_kind === 'mcp_tool_call' || id.startsWith('mcp_tool_call_approval_'))
+        (p._meta?.codex_approval_kind === 'mcp_tool_call' || id.startsWith('mcp_tool_call_approval_')) &&
+        (this.settings.access === 'full' ||
+          mcpCallSkipsCard(
+            this.settings.access,
+            p.serverName === 'ramu' ? 'ramu' : p.serverName === EXTERNAL_MCP_SERVER ? 'shared_mcp' : 'other',
+            typeof p._meta?.tool_name === 'string' ? p._meta.tool_name : '',
+            p._meta?.tool_params && typeof p._meta.tool_params === 'object' ? p._meta.tool_params : undefined,
+          ))
       ) {
-        // Under the approval policy full access now uses, Codex also asks before MCP tool calls; full access allows them.
+        // Codex asks before MCP tool calls under the approval policies Ramu uses. Full access allows them all; otherwise
+        // Ramu answers the calls it already decides on the host, the same way for every provider (toolApprovals.ts).
         this.rpc.write({ id: m.id, result: { action: 'accept', content: {}, _meta: null } })
       } else if (m.method === 'mcpServer/elicitation/request') {
         try {

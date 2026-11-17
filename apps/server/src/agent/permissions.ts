@@ -6,6 +6,7 @@ import { readsOnly } from './autoCommandRules'
 import type { AgentEvent, AgentQuestion, AgentSessionState, AgentSettings } from '@ramu/shared/types'
 import { summarizeInput } from './toolSummaries'
 import type { PendingRequest } from './types'
+import { mcpCallSkipsCard } from './toolApprovals'
 
 /** What the permission callback needs from the service. */
 export interface PermissionHost {
@@ -119,40 +120,11 @@ export function createCanUseTool({
             ? { behavior: 'allow', updatedInput: toolInput }
             : { behavior: 'deny', message: 'This review thread can only use Ramu memory and skill tools.' },
         )
-      // Auto and Full access trust the app-owned MCP server, including tools discovered through tool_invoke.
-      // Their handlers still enforce session scope and any tool-specific checks.
-      if ((settings.access === 'auto' || settings.access === 'full') && /^mcp__ramu__/.test(toolName))
-        return resolve({ behavior: 'allow', updatedInput: toolInput })
-      // Shared MCP tools are authorized again on the host for every call, and its gateway asks the person itself when
-      // the approval requires it, so asking here too would show two cards for one call. Review chats never get here.
-      // run_script reaches nothing but those same Shared MCP calls, each through that gateway.
-      if (/^mcp__shared_mcp__/.test(toolName) || toolName === 'mcp__ramu__run_script')
-        return resolve({ behavior: 'allow', updatedInput: toolInput })
-      // Browser handlers enforce their own run-scoped approval, including deferred calls. Asking twice would grant
-      // nothing extra; the browser approval never authorizes another app tool or a native provider browser.
-      // Computer tools do the same: enabling computer use is the grant, and their handlers ask on their own when it is off.
-      if (
-        /^mcp__ramu__(browser|computer)_/.test(toolName) ||
-        (toolName === 'mcp__ramu__tool_invoke' &&
-          typeof toolInput.name === 'string' &&
-          /^(browser|computer)_/.test(toolInput.name))
-      )
-        return resolve({ behavior: 'allow', updatedInput: toolInput })
-      // Starting threads, continuing in a worktree and adding a project show Ramu's own approval card outside Full access.
-      // Settings changes wait in their own card for Apply outside Full access, and finding settings only reads.
-      if (
-        /^mcp__ramu__(thread_start|thread_continue_in_worktree|project_add|settings_find|settings_change)$/.test(
-          toolName,
-        )
-      )
-        return resolve({ behavior: 'allow', updatedInput: toolInput })
-      // These scoped tools only manage questions; they never authorize file or command access.
-      // request_secret only shows the person a card; what the agent then runs with the file still asks as usual.
-      if (
-        /^mcp__ramu__(ask_user|request_secret|question_status|wait_for_answer|close_question|advisor|wait_for_advice|set_goal|get_goal|update_goal|tool_search|tool_result_read|memory_read|session_recall|session_search)$/.test(
-          toolName,
-        )
-      )
+      // The same rule every provider follows: Auto and Full trust Ramu's own server, a tool that asks the person itself
+      // needs no second card, and Shared MCP calls are asked for by their gateway. See toolApprovals.ts.
+      const ramuName = /^mcp__ramu__(.+)$/.exec(toolName)?.[1]
+      const server = ramuName ? 'ramu' : /^mcp__shared_mcp__/.test(toolName) ? 'shared_mcp' : 'other'
+      if (mcpCallSkipsCard(settings.access, server, ramuName ?? toolName, toolInput))
         return resolve({ behavior: 'allow', updatedInput: toolInput })
       // Full access runs as bypassPermissions, where Claude only calls this for its own safety checks, an ask rule in
       // the person's settings, or Ramu's dangerous-command hook. Each needs the person, once, for this exact call.

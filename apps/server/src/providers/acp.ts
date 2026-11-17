@@ -1,3 +1,4 @@
+import { mcpCallSkipsCard, selfGatedRamuTool, type McpCallServer } from '../agent/toolApprovals'
 import { ownedEnvironment, trackProcess } from '../agent/processOwners'
 import { modelLegacyMetadata } from './modelLifecycle'
 import { modelContextWindow } from './modelContext'
@@ -77,6 +78,37 @@ function isRamuCall(call: Wire | undefined, provider: AcpProvider): boolean {
       ? /^(?:Run )?([\w]+)\??$/.exec(call.title ?? '')?.[1]
       : undefined)
   return typeof name === 'string' && !!ramuTool({ name: name.replace(/^mcp_ramu_/, 'mcp__ramu__'), summary: '' })
+}
+
+/**
+ * The Ramu or Shared MCP tool a permission request is for, from the same qualified identities isRamuCall trusts (and
+ * Antigravity's bare `Run <tool>?` title for Ramu tools). Its arguments only say which tool a tool_invoke call runs.
+ */
+function acpMcpCall(
+  call: Wire | undefined,
+  provider: AcpProvider,
+): { server: McpCallServer; tool: string; input?: Wire } {
+  if (!call) return { server: 'other', tool: '' }
+  const structured = call._meta?.claudeCode?.toolName ?? call.rawInput?._toolName ?? call.name
+  const input = call.rawInput && typeof call.rawInput === 'object' ? (call.rawInput as Wire) : undefined
+  // A single-underscore or bare name could belong to another server whose name starts with ramu, so it only counts
+  // for a tool Ramu knows; `mcp__ramu__` names the server exactly.
+  const known = (tool: string | undefined) =>
+    tool && (ramuTool({ name: `mcp__ramu__${tool}`, summary: '' }) || selfGatedRamuTool(tool, input))
+      ? { server: 'ramu' as const, tool, input }
+      : undefined
+  if (typeof structured === 'string') {
+    const shared = /^mcp_{1,2}shared_mcp_{1,2}(.+)$/.exec(structured)?.[1]
+    if (shared) return { server: 'shared_mcp', tool: shared, input }
+    const exact = /^mcp__ramu__(.+)$/.exec(structured)?.[1]
+    if (exact) return { server: 'ramu', tool: exact, input }
+    return known(/^(?:mcp_)?ramu_(.+)$/.exec(structured)?.[1]) ?? { server: 'other', tool: structured }
+  }
+  const titled =
+    provider === 'antigravity' && (!call.kind || call.kind === 'other')
+      ? /^(?:Run )?(?:mcp_ramu_)?([\w]+)\??$/.exec(call.title ?? '')?.[1]
+      : undefined
+  return known(titled) ?? { server: 'other', tool: '' }
 }
 
 export function acpCommand(provider: AcpProvider): { command: string; args: string[] } {
@@ -999,6 +1031,11 @@ class AcpSession implements AgentRunner {
           (this.settings.access === 'auto' &&
             !!this.connection &&
             isRamuCall(p.toolCall, this.settings.provider as AcpProvider)) ||
+          // The calls Ramu decides on the host need no card in any mode, the same way for every provider.
+          (!!this.connection &&
+            (({ server, tool, input }) => mcpCallSkipsCard(this.settings.access, server, tool, input))(
+              acpMcpCall(p.toolCall, this.settings.provider as AcpProvider),
+            )) ||
           (this.settings.access === 'edits' && p.toolCall?.kind === 'edit'))
       ) {
         this.replyPermission(id, true)

@@ -67,6 +67,15 @@ rl.on('line', line => {
       send({id:912,method:'item/commandExecution/requestApproval',params:{threadId:'thread-1',command:['bash','-lc','rm -rf ~/notes']}});
       return;
     }
+    if (text === 'edits gate') {
+      const ask = (id, serverName, tool_name, tool_params) => send({id,method:'mcpServer/elicitation/request',params:{threadId:'thread-1',serverName,mode:'form',message:'Allow tool?',requestedSchema:{type:'object',properties:{}},_meta:{codex_approval_kind:'mcp_tool_call',tool_name,tool_params}}});
+      ask(921, 'ramu', 'ask_user', {});
+      ask(922, 'shared_mcp', 'Linear-abc123__list_issues', {});
+      ask(923, 'ramu', 'tool_invoke', {name:'browser_click',arguments:{}});
+      ask(924, 'ramu', 'schedule_create', {});
+      ask(925, 'github', 'create_issue', {});
+      return;
+    }
     if (text === 'limit') { send({method:'turn/completed',params:{threadId:'thread-1',turn:{id:'turn-1',status:'failed',error:{message:'Limit reached',codexErrorInfo:'usageLimitExceeded'}}}}); return; }
     if (text.startsWith('compact counts')) {
       const usage = (n) => send({method:'thread/tokenUsage/updated',params:{threadId:'thread-1',turnId:'turn-1',tokenUsage:{last:{totalTokens:n},modelContextWindow:258400}}});
@@ -226,6 +235,23 @@ describe('Codex app-server wire adapter', () => {
       await vi.waitFor(() =>
         expect(messages().find((message) => message.id === 912)?.result).toEqual({ decision: 'decline' }),
       )
+    } finally {
+      await runner.stop()
+    }
+  })
+  it('answers MCP approvals Ramu decides itself in Allow edits, and asks for the rest', async () => {
+    const events: AgentEvent[] = []
+    const runner = createCodexRunner(
+      scope,
+      { ...DEFAULT_AGENT_SETTINGS, provider: 'codex', access: 'edits' },
+      (event) => events.push(event),
+    )
+    try {
+      await runner.start('edits gate', null)
+      await vi.waitFor(() => expect(events.filter((event) => event.kind === 'elicitation')).toHaveLength(2))
+      for (const id of [921, 922, 923])
+        expect(messages().find((message) => message.id === id)?.result, String(id)).toMatchObject({ action: 'accept' })
+      for (const id of [924, 925]) expect(messages().some((message) => message.id === id && message.result)).toBe(false)
     } finally {
       await runner.stop()
     }

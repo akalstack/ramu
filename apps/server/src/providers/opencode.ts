@@ -1,3 +1,5 @@
+import { ramuTool } from '@ramu/shared/chat/ramuTools'
+import { mcpCallSkipsCard, selfGatedRamuTool, type McpCallServer } from '../agent/toolApprovals'
 import { ownedEnvironment, trackProcess } from '../agent/processOwners'
 import { addTokens } from './turnTokens'
 import { permissionKey } from '../agent/permissionApprovals'
@@ -108,6 +110,19 @@ export function openCodePermissions(connection: McpConnection | undefined, acces
         : []
   if (connection?.nativeSubagents === false) rules.push({ action: 'task', resource: '*', effect: 'deny' })
   return rules
+}
+
+/**
+ * The MCP tool an OpenCode permission request is for: OpenCode names it `<server>_<tool>`. A `ramu_` name could belong
+ * to another server whose name starts with ramu, so it only counts for a tool Ramu knows.
+ */
+export function openCodeMcpCall(action: string): { server: McpCallServer; tool: string } {
+  const shared = /^shared_mcp_(.+)$/.exec(action)?.[1]
+  if (shared) return { server: 'shared_mcp', tool: shared }
+  const ramu = /^ramu_(.+)$/.exec(action)?.[1]
+  return ramu && (ramuTool({ name: `mcp__ramu__${ramu}`, summary: '' }) || selfGatedRamuTool(ramu))
+    ? { server: 'ramu', tool: ramu }
+    : { server: 'other', tool: action }
 }
 
 /** `provider/model` as Ramu stores it; the model part may itself contain slashes. */
@@ -647,7 +662,10 @@ export class OpenCodeSession implements AgentRunner {
           (this.settings.access === 'full' ||
             this.settings.access === 'auto' ||
             this.readOnly ||
-            this.connection?.restricted)
+            this.connection?.restricted ||
+            // The calls Ramu decides on the host need no card, the same way for every provider.
+            (!!this.connection &&
+              (({ server, tool }) => mcpCallSkipsCard(this.settings.access, server, tool))(openCodeMcpCall(d.action))))
         ) {
           void this.client?.permission
             .reply({

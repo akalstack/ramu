@@ -616,6 +616,33 @@ it.each([
   await until(() => events.some((event) => event.kind === 'result'))
 })
 
+it.each([
+  ['antigravity', { title: 'Run mcp_ramu_ask_user?' }],
+  ['antigravity', { name: 'mcp_shared_mcp_Linear-abc123__list_issues' }],
+  ['cursor', { rawInput: { _toolName: 'mcp__ramu__tool_invoke', name: 'browser_click', arguments: {} } }],
+  ['cursor', { rawInput: { _toolName: 'mcp__ramu__run_script', code: 'return 1' } }],
+] as const)('Allow edits answers calls Ramu decides itself from %s: %j', async (provider, call) => {
+  vi.stubEnv('RAMU_PERMISSION_CALL', JSON.stringify(call))
+  await start('tool', provider, 'edits', null, false, ramuConnection)
+  await until(() => events.some((event) => event.kind === 'result'))
+  expect(events.some((event) => event.kind === 'permission-request')).toBe(false)
+  expect(log().find((message) => message.id === 900).result.outcome.optionId).toBe('yes')
+})
+
+it.each([
+  { _meta: { claudeCode: { toolName: 'mcp__ramu__schedule_create' } } },
+  { rawInput: { _toolName: 'mcp__ramu__tool_invoke', name: 'schedule_create', arguments: {} } },
+  { name: 'mcp__external__ask_user' },
+  { kind: 'execute', title: 'Run mcp_ramu_ask_user?', rawInput: { command: 'echo hello' } },
+])('Allow edits still asks for Ramu changes and other tools: %j', async (call) => {
+  vi.stubEnv('RAMU_PERMISSION_CALL', JSON.stringify(call))
+  await start('tool', 'antigravity', 'edits', null, false, ramuConnection)
+  await until(() => events.some((event) => event.kind === 'permission-request'))
+  expect(log().some((message) => message.id === 900)).toBe(false)
+  runner!.replyPermission('900', false)
+  await until(() => events.some((event) => event.kind === 'result'))
+})
+
 it.each([false, true])('selects advertised native Auto in Antigravity (legacy modes: %s)', async (legacy) => {
   vi.stubEnv('RAMU_EXTRA_MODES', JSON.stringify([{ value: 'auto', name: 'Auto' }]))
   if (legacy) vi.stubEnv('RAMU_LEGACY_MODES', '1')

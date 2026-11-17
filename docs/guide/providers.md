@@ -58,7 +58,7 @@ An artifact you allow to use AI calls the host's signed-in providers, never a ke
 
 ## Access modes
 
-- **Allow edits:** the agent edits files in the project and asks before other actions, where the provider supports asking.
+- **Allow edits:** the agent edits files in the project and asks before other actions, where the provider supports asking. Ramu tools that ask you themselves (questions, starting threads, settings changes, the browser and computer) and tools of your [MCP servers](working-with-agents.md#rules-and-mcp), whose approvals Ramu applies on every call, never show a second card from the provider. This works the same in every provider.
 - **Auto:** Ramu's own tools run without asking. Everything else follows the provider's automatic review, so risky commands still ask.
 - **Full access:** commands and edits run without asking, except the few that can destroy work or the machine: deleting outside the thread's folders, a whole project or `.git`, `git reset --hard`, `git clean -f`, force-pushes and other history rewrites, running as administrator, formatting disks, and shutting down. Those ask once each, with the reason, and can't be saved as rules. Claude's own safety checks and ask rules in your Claude settings still ask too. Cursor's SDK can't pause a command, so Cursor threads in Full access never ask. Use it only for work you trust.
 

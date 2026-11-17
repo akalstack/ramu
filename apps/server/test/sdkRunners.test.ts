@@ -538,6 +538,41 @@ describe('OpenCode Auto', () => {
   })
 })
 
+describe('OpenCode Allow edits', () => {
+  it.each([
+    ['ramu_ask_user', false],
+    ['ramu_browser_click', false],
+    ['shared_mcp_Linear-abc123__list_issues', false],
+    ['ramu_schedule_create', true],
+    ['ramu_other_tool', true],
+    ['github_create_issue', true],
+  ] as const)('answers MCP calls Ramu decides itself and asks for the rest: %s', async (action, asks) => {
+    const { client, replies } = fakeOpenCode(action, ['*'])
+    const events: AgentEvent[] = []
+    const runner = new OpenCodeSession(
+      scope,
+      { ...DEFAULT_AGENT_SETTINGS, provider: 'opencode', access: 'edits' },
+      (event) => events.push(event),
+      false,
+      async () => client as never,
+    )
+    runner.setTools({ url: 'http://127.0.0.1:1/mcp', token: 'test' })
+    try {
+      await runner.start('Do it', null)
+      if (asks) {
+        await settle(events, 'permission-request')
+        expect(replies).toEqual([])
+        runner.replyPermission('p1', false)
+      } else await settle(events)
+      await vi.waitFor(() =>
+        expect(replies).toEqual([{ sessionID: 'session-1', requestID: 'p1', decision: asks ? 'reject' : 'once' }]),
+      )
+    } finally {
+      await runner.stop()
+    }
+  })
+})
+
 describe('OpenCode tool results', () => {
   it('marks a command that exits non-zero as failed, and shows images a tool returned', async () => {
     const { client } = fakeOpenCode('bash')
