@@ -8,7 +8,7 @@ import remarkGfm from 'remark-gfm'
 import { FileText, Image as ImageIcon, SquareTerminal } from 'lucide-react'
 import type { AgentContent } from '@ramu/shared/types'
 import { agentContent, inlineMedia, resourceDownload } from '@ramu/shared/chat/agentContent'
-import { useHost } from '../workspace/HostProvider'
+import { ChatImage, ChatMarkdownImage, useChatImage } from './ChatImage'
 import { monaco } from '../editor/monaco'
 import { t, useLanguage } from '../i18n'
 import { editorThemeName } from '../editor/editorTheme'
@@ -34,38 +34,13 @@ function AgentImage({ content, taskId }: { content: Extract<AgentContent, { type
     return normalized?.type === 'image' ? inlineMedia(normalized.mimeType, normalized.data, 'image') : undefined
     // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [content.mimeType, content.data, content.uri] by design; the values it reads beyond these are current as of that run
   }, [content.mimeType, content.data, content.uri])
-  const { invoke } = useHost()
-  const [src, setSrc] = useState(inline)
+  const src = useChatImage(inline ?? content.uri, taskId)
   const [failed, setFailed] = useState(false)
-  useEffect(() => {
-    let active = true
-    setSrc(inline)
-    setFailed(false)
-    if (!inline && taskId && content.uri && !/^https?:\/\//i.test(content.uri)) {
-      void invoke('files.resolveLink', taskId, content.uri)
-        .then((file) => (file ? invoke('files.image', taskId, file.repoId, file.path) : undefined))
-        .then(
-          (image) => {
-            if (active) setSrc(image)
-          },
-          () => {
-            if (active) setFailed(true)
-          },
-        )
-    }
-    return () => {
-      active = false
-    }
-  }, [inline, taskId, content.uri, invoke])
+  useEffect(() => setFailed(false), [src])
   return (
     <figure className="agent-image m-0 space-y-2">
       {src && !failed ? (
-        <img
-          src={src}
-          alt={content.alt ?? t('Agent image')}
-          className="block max-w-full max-h-80 object-contain rounded-(--radius-s) bg-fill"
-          onError={() => setFailed(true)}
-        />
+        <ChatImage src={src} alt={content.alt ?? t('Agent image')} onError={() => setFailed(true)} />
       ) : (
         <div className="flex items-center gap-2 p-3 bg-fill rounded-(--radius-s) text-muted-foreground">
           <ImageIcon size={16} />
@@ -155,6 +130,9 @@ export function AgentContentView({
                       <ChatLink href={href} taskId={taskId}>
                         {children}
                       </ChatLink>
+                    ),
+                    img: ({ src, alt }) => (
+                      <ChatMarkdownImage src={typeof src === 'string' ? src : undefined} alt={alt} taskId={taskId} />
                     ),
                   }}
                 >

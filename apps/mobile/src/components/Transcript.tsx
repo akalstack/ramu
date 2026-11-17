@@ -1,4 +1,5 @@
 import { MEDIA_SERVICE_NAMES } from '@ramu/shared/types/media'
+import { ImagePreview } from './ImagePreview'
 import { MessageSelectionMenuContext, TextMarkContext, nativeMarkdown } from './NativeMarkdown'
 import { markSource } from '../runtime/textMark'
 import { ContinuedCard } from './ContinueOnHost'
@@ -369,12 +370,10 @@ function MessageActions({
   )
 }
 
-/** An image in the chat: fits the column, keeps its aspect ratio, and opens full screen when tapped. */
+/** An image in the chat: fits the column, keeps its aspect ratio, and opens large when tapped. */
 function ImageBlock({ uri, alt, size }: { uri: string; alt?: string; size?: number }) {
-  const say = useSay()
   const { c } = useTheme()
   const [ratio, setRatio] = useState(4 / 3)
-  const [full, setFull] = useState(false)
   useEffect(() => {
     Image.getSize(
       uri,
@@ -385,35 +384,17 @@ function ImageBlock({ uri, alt, size }: { uri: string; alt?: string; size?: numb
     )
   }, [uri])
   return (
-    <>
-      <Pressable
-        accessibilityRole="imagebutton"
-        accessibilityLabel={alt ?? say('Image')}
-        onPress={() => {
-          tap()
-          setFull(true)
-        }}
-      >
-        <Image
-          source={{ uri }}
-          resizeMode="cover"
-          style={
-            size
-              ? { width: size, height: size, borderRadius: radius.s, backgroundColor: c.fill }
-              : { width: '100%', maxWidth: 360, aspectRatio: ratio, borderRadius: radius.m, backgroundColor: c.fill }
-          }
-        />
-      </Pressable>
-      <Sheet open={full} onClose={() => setFull(false)} title={alt ?? say('Image')}>
-        <Card style={{ marginHorizontal: space.l, padding: space.s }}>
-          <Image
-            source={{ uri }}
-            resizeMode="contain"
-            style={{ width: '100%', aspectRatio: ratio, maxHeight: 520, borderRadius: radius.s }}
-          />
-        </Card>
-      </Sheet>
-    </>
+    <ImagePreview uri={uri} alt={alt}>
+      <Image
+        source={{ uri }}
+        resizeMode="cover"
+        style={
+          size
+            ? { width: size, height: size, borderRadius: radius.s, backgroundColor: c.fill }
+            : { width: '100%', maxWidth: 360, aspectRatio: ratio, borderRadius: radius.m, backgroundColor: c.fill }
+        }
+      />
+    </ImagePreview>
   )
 }
 

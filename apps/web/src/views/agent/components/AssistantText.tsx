@@ -1,3 +1,4 @@
+import { ChatMarkdownImage } from '../../../chat/ChatImage'
 import { chatMarkdownComponents } from '../../../chat/ChatMarkdown'
 import { ChatLink } from '../../../chat/ChatReferences'
 import { parseThreadReference, remarkChatReferences, SKILL_REFERENCE_PREFIX } from '@ramu/shared/chat/chatReferences'
@@ -55,6 +56,10 @@ export const AssistantText = memo(function AssistantText({
         <ChatLink href={href} taskId={taskId}>
           {children}
         </ChatLink>
+      ),
+      // A workspace image is fetched from the host, and any image opens larger, as on the phone.
+      img: ({ src, alt }) => (
+        <ChatMarkdownImage src={typeof src === 'string' ? src : undefined} alt={alt} taskId={taskId} />
       ),
       // Agents name files in backticks far more often than as links; a path there opens like a linked one. Code
       // blocks go through pre, which reads its source itself, so only inline code reaches here.

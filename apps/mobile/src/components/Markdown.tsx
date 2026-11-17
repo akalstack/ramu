@@ -11,6 +11,7 @@ import { inlineCodeFileLink, localFileLink } from '@ramu/shared/workspace/fileLi
 import { font, radius, space, useTheme } from '../theme'
 import { UITextView } from '@bsky.app/react-native-uitextview'
 import { selectedText, type TextRun } from '../runtime/selectedText'
+import { ImagePreview } from './ImagePreview'
 import { NativeMarkdown, TextMarkContext, nativeMarkdown } from './NativeMarkdown'
 import { markSource } from '../runtime/textMark'
 import { markdownBlocks, nativeMarkdownSource, splitCodeFences } from '../runtime/nativeMarkdownSource'
@@ -260,12 +261,14 @@ function MarkdownImage({ src, alt }: { src: string; alt: string }) {
   }, [uri])
   if (!uri) return <Text style={{ color: c.muted, fontSize: font.control }}>{alt || src}</Text>
   return (
-    <Image
-      source={{ uri }}
-      accessibilityLabel={alt}
-      resizeMode="contain"
-      style={{ width: '100%', aspectRatio: ratio, maxHeight: 420, borderRadius: radius.m, backgroundColor: c.fill }}
-    />
+    <ImagePreview uri={uri} alt={alt}>
+      <Image
+        source={{ uri }}
+        accessibilityLabel={alt}
+        resizeMode="contain"
+        style={{ width: '100%', aspectRatio: ratio, maxHeight: 420, borderRadius: radius.m, backgroundColor: c.fill }}
+      />
+    </ImagePreview>
   )
 }
 
@@ -452,8 +455,8 @@ export function closePartial(text: string): string {
 }
 
 /**
- * A reply in the native text view, with its closed code fences drawn as code blocks between the text, so a long code
- * line scrolls sideways instead of wrapping inside the prose. Highlights from a find mark each text part.
+ * A reply in the native text view, with its closed code fences drawn as code blocks and its images as tappable images
+ * between the text, so a long code line scrolls sideways and an image opens larger. Highlights from a find mark each text part.
  */
 function NativeParts({
   source,
@@ -489,6 +492,8 @@ function NativeParts({
       {parts.map((part, index) =>
         part.kind === 'code' ? (
           <CodeBlock key={index} source={part.source} hint={part.lang} />
+        ) : part.kind === 'image' ? (
+          <MarkdownImage key={index} src={part.src} alt={part.alt} />
         ) : (
           draw(part.source, index)
         ),
