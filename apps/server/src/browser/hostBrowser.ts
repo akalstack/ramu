@@ -1,0 +1,537 @@
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join, dirname } from 'node:path'
+import { createRequire } from 'node:module'
+import { spawn } from 'node:child_process'
+import { chromium } from 'playwright-core'
+import type {
+  BrowserBridgeCommand,
+  BrowserBridgeRequest,
+  BrowserHumanInput,
+  BrowserTabAdjust,
+} from '@ramu/shared/browserBridge'
+import { BrowserProfiles } from './browserProfiles'
+import { BrowserImporter, type ImportSourceId } from './browserImport'
+import { browserImportSources } from './browserImportSources'
+import { BrowserRuntime } from './browserRuntime'
+import { executeBrowserBridge } from './browserBridge'
+import { HostGuestFactory } from './hostGuest'
+import { BrowserDownloads } from './browserDownloads'
+import { randomUUID } from 'node:crypto'
+import type { BrowserTabInfo } from '@ramu/shared/types/browser'
+
+const HOST = 'execution-host'
+/** A viewer frame larger than this (base64 characters, about 3 MB of image) is refused rather than streamed to a phone. */
+export const MAX_VIEWER_FRAME_CHARS = 4 * 1024 * 1024
+export interface HostedBrowserBackend {
+  prepare?(): Promise<void>
+  selected(): boolean
+  status(): { available: boolean; location: 'execution-host-chromium'; reason?: string }
+  request(threadId: string, runId: string, command: BrowserBridgeCommand): Promise<unknown>
+  endRun(threadId: string, runId: string): void
+}
+/** Host-owned browser. Paired owner devices share terminal-style access; tabs remain scoped to their thread. */
+export type BrowserEngine = 'auto' | 'chromium'
+export class HostBrowser implements HostedBrowserBackend {
+  /** `auto` uses the desktop app's own native browser while it is connected; `chromium` always uses this host's. */
+  private engine: BrowserEngine = 'auto'
+  private nativeAvailable: () => boolean = () => false
+  private readonly profiles: BrowserProfiles
+  private factory?: HostGuestFactory
+  private runtime?: BrowserRuntime
+  private preparation?: Promise<void>
+  private setupEpoch = 0
+  private setupAbort?: AbortController
+  private reason = 'The browser starts automatically when you open a tab.'
+  private readonly grants = new Map<string, { device: string; thread: string; expires: number }>()
+  private readonly heartbeats = new Map<string, NodeJS.Timeout>()
+  private captures = 0
+  private readonly liveRequests = new Set<string>()
+  private readonly viewerEpoch = new Map<string, number>()
+  private readonly frameTimes = new Map<string, number>()
+  private readonly pending = new Map<symbol, { thread: string; run: string; cancel(): void }>()
+  private readonly profileReviews = new Map<
+    string,
+    { id: string; name: string; remove: boolean; tabs: string; expires: number }
+  >()
+  constructor(
+    private readonly root: string,
+    private readonly changed: () => void,
+    private readonly present: (tab: BrowserTabInfo) => void = () => {},
+    private readonly ownerDevice: (device: string) => boolean = () => false,
+  ) {
+    this.profiles = new BrowserProfiles(join(root, 'profiles.json'))
+    try {
+      this.engine = readFileSync(join(root, 'engine'), 'utf8') === 'chromium' ? 'chromium' : 'auto'
+    } catch {}
+  }
+  /** Tells the host when a native desktop browser is connected, so `auto` can prefer it. */
+  useNativeWhen(available: () => boolean) {
+    this.nativeAvailable = available
+  }
+  /** Whether the browser agents and viewers use is this host's Chromium rather than the connected desktop's. */
+  selected() {
+    return this.engine === 'chromium' || !this.nativeAvailable()
+  }
+  /** Re-announces which browser is in use, after a desktop connects or leaves. */
+  announce() {
+    this.changed()
+  }
+  setEngine(engine: BrowserEngine) {
+    if (engine !== 'auto' && engine !== 'chromium') throw new Error('Choose Automatic or Host Chromium.')
+    mkdirSync(this.root, { recursive: true, mode: 0o700 })
+    writeFileSync(join(this.root, 'engine'), engine, { mode: 0o600 })
+    this.engine = engine
+    this.changed()
+  }
+  async prepare(): Promise<void> {
+    await this.setup()
+  }
+  status() {
+    return {
+      available: !!this.runtime,
+      engine: this.engine,
+      selected: this.selected(),
+      location: 'execution-host-chromium' as const,
+      ...(!this.runtime ? { reason: this.reason } : {}),
+    }
+  }
+  setup(): Promise<void> {
+    this.preparation ??= this.initialize().finally(() => {
+      this.preparation = undefined
+    })
+    return this.preparation
+  }
+  private async initialize(): Promise<void> {
+    if (this.runtime) return
+    const abort = new AbortController()
+    this.setupAbort = abort
+    const epoch = this.setupEpoch
+    try {
+      // Use an explicitly administered path or Playwright's installed compatible Chromium, never an agent path.
+      const executable = process.env.RAMU_BROWSER_EXECUTABLE || chromium.executablePath()
+      if (!existsSync(executable)) {
+        if (process.env.RAMU_BROWSER_EXECUTABLE)
+          throw new Error(
+            'RAMU_BROWSER_EXECUTABLE does not name an installed browser. Correct it on the owning host and retry Setup.',
+          )
+        this.reason = 'Downloading compatible Chromium on the execution host…'
+        this.changed()
+        const cli = join(dirname(createRequire(import.meta.url).resolve('playwright-core/package.json')), 'cli.js')
+        await new Promise<void>((resolve, reject) => {
+          const child = spawn(process.execPath, [cli, 'install', 'chromium'], {
+            stdio: 'ignore',
+            windowsHide: true,
+            timeout: 150_000,
+            signal: abort.signal,
+            env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+          })
+          child.once('error', () =>
+            reject(new Error('Chromium download could not start. Retry Setup on the owning host.')),
+          )
+          child.once('exit', (code) =>
+            code === 0
+              ? resolve()
+              : reject(
+                  new Error(
+                    'Chromium installation did not finish. Check host storage and network access, then retry Setup.',
+                  ),
+                ),
+          )
+        })
+        if (!existsSync(executable))
+          throw new Error('The Chromium installer finished without its executable. Retry Setup on the owning host.')
+      }
+      const factory = new HostGuestFactory(join(this.root, 'profiles'), executable)
+      try {
+        await factory.preflight()
+      } catch {
+        await factory.close()
+        throw new Error(
+          'Chromium could not start with its sandbox enabled. Check host permissions and dependencies, then retry Setup.',
+        )
+      }
+      if (epoch !== this.setupEpoch) {
+        await factory.close()
+        throw new Error('Host browser setup was cancelled.')
+      }
+      this.factory = factory
+      this.runtime = new BrowserRuntime(
+        factory,
+        () => this.profiles.ids(),
+        this.changed,
+        (id) => !this.profiles.isBusy(id),
+        new BrowserDownloads(join(this.root, 'downloads'), this.changed),
+      )
+      this.runtime.startIdleSweep()
+      // A copy the person never kept before a restart is not left behind.
+      void this.imports().cleanup()
+      this.reason = ''
+      this.changed()
+    } catch (error) {
+      this.reason = error instanceof Error ? error.message : String(error)
+      throw error
+    } finally {
+      if (this.setupAbort === abort) this.setupAbort = undefined
+    }
+  }
+  private ready(): BrowserRuntime {
+    if (!this.runtime) throw new Error(this.reason)
+    return this.runtime
+  }
+  async request(threadId: string, runId: string, command: BrowserBridgeCommand): Promise<unknown> {
+    if (this.pending.size >= 8) throw new Error('The host browser is busy. Wait for its current operations.')
+    return new Promise((resolve, reject) => {
+      const key = Symbol()
+      const finish = (error?: Error, value?: unknown) => {
+        if (!this.pending.delete(key)) return
+        clearTimeout(timer)
+        if (error) reject(error)
+        else resolve(value)
+      }
+      const timer = setTimeout(
+        () => finish(new Error('The browser operation timed out and may have run. Inspect before acting again.')),
+        30_000,
+      )
+      timer.unref()
+      this.pending.set(key, {
+        thread: threadId,
+        run: runId,
+        cancel: () => finish(new Error('The browser run ended. Inspect before acting again.')),
+      })
+      void this.prepare()
+        .then(() => {
+          if (!this.pending.has(key)) return
+          return executeBrowserBridge(
+            this.ready(),
+            HOST,
+            {
+              requestId: 'host-runtime',
+              clientId: 'host-runtime',
+              threadId,
+              runId,
+              expiresAt: Date.now() + 30_000,
+              command,
+            } satisfies BrowserBridgeRequest,
+            () => this.profiles.catalog(),
+          )
+        })
+        .then(
+          (value) => {
+            if (this.pending.has(key)) {
+              if (command.kind === 'present' && value) this.present(value as BrowserTabInfo)
+              else if (command.kind === 'open' && command.presentation === 'foreground' && value)
+                this.present((value as { tab: BrowserTabInfo }).tab)
+            }
+            finish(undefined, value)
+          },
+          (error) => finish(error instanceof Error ? error : new Error('Browser operation failed.')),
+        )
+    })
+  }
+  endRun(threadId: string, runId: string): void {
+    for (const operation of [...this.pending.values()])
+      if (operation.thread === threadId && operation.run === runId) operation.cancel()
+    this.runtime?.endRun({ hostId: HOST, threadId, runId })
+  }
+  catalog() {
+    return this.profiles.catalog()
+  }
+  createProfile(name: string) {
+    const profile = this.profiles.create(name)
+    this.changed()
+    return profile
+  }
+  renameProfile(id: string, name: string) {
+    this.profiles.rename(id, name)
+    this.changed()
+  }
+  private async clearProfileData(id: string): Promise<void> {
+    if (this.factory) await this.factory.clearProfile(id)
+    else await rm(join(this.root, 'profiles', id), { recursive: true, force: true })
+  }
+  private importer?: BrowserImporter
+  /** Copies sign-ins from this host's own browsers into a new profile; cookie values never leave this process. */
+  private imports(): BrowserImporter {
+    this.importer ??= new BrowserImporter({
+      profiles: this.profiles,
+      home: homedir(),
+      setCookie: (id, cookie) => {
+        if (!this.factory) throw new Error(this.reason)
+        return this.factory.importCookie(id, cookie)
+      },
+      flush: (id) => this.factory?.flushProfile(id) ?? Promise.resolve(),
+      clearData: (id) => this.clearProfileData(id),
+    })
+    return this.importer
+  }
+  importSources() {
+    return browserImportSources()
+  }
+  importProfiles(source: ImportSourceId) {
+    return this.imports().profiles(source)
+  }
+  importInspect(source: ImportSourceId, profileId: string) {
+    return this.imports().inspect(source, profileId)
+  }
+  importCancel(token: string) {
+    this.imports().cancel(token)
+  }
+  async importRun(token: string, domains: string[], name: string) {
+    // The copy writes into Chromium's own profile directory, so the browser has to be installed and running.
+    await this.prepare()
+    const staged = await this.imports().run(token, domains, name)
+    this.changed()
+    return staged
+  }
+  importKeep(profileId: string) {
+    const kept = this.imports().keep(profileId)
+    this.changed()
+    return kept
+  }
+  async importDiscard(profileId: string) {
+    await this.imports().discard(profileId)
+    this.changed()
+  }
+  /** Open tabs of a profile as a stable key. Without a running browser there are none, and its data can still be cleared. */
+  private profileTabs(id: string): string {
+    return (this.runtime?.list() ?? [])
+      .filter((tab) => tab.profileId === id)
+      .map((tab) => tab.id)
+      .sort()
+      .join(',')
+  }
+  reviewProfile(id: string, remove: boolean) {
+    if (remove) this.profiles.requireCustom(id)
+    const profile = this.catalog().profiles.find((profile) => profile.id === id && !profile.temporary)
+    if (!profile) throw new Error('Choose a persistent browser profile.')
+    for (const [token, review] of this.profileReviews)
+      if (review.expires < Date.now()) this.profileReviews.delete(token)
+    if (this.profileReviews.size >= 20) throw new Error('Finish the pending profile reviews first.')
+    const tabs = this.profileTabs(id)
+    const token = randomUUID()
+    this.profileReviews.set(token, { id, name: profile.name, remove, tabs, expires: Date.now() + 5 * 60_000 })
+    return { token, id, name: profile.name, tabs: tabs ? tabs.split(',').length : 0, remove }
+  }
+  async confirmProfile(token: string, resetDefault: (id: string) => Promise<void>): Promise<void> {
+    const review = this.profileReviews.get(token)
+    this.profileReviews.delete(token)
+    if (!review || review.expires < Date.now()) throw new Error('Review this profile change again.')
+    const runtime = this.runtime
+    if (
+      this.profileTabs(review.id) !== review.tabs ||
+      this.catalog().profiles.find((profile) => profile.id === review.id)?.name !== review.name
+    )
+      throw new Error('The profile or its tabs changed. Review the action again.')
+    await this.profiles.withLock(review.id, async () => {
+      const clear = async () => {
+        await this.clearProfileData(review.id)
+        if (review.remove) {
+          await resetDefault(review.id)
+          this.profiles.remove(review.id)
+        }
+      }
+      await (runtime ? runtime.withClosedProfile(review.id, clear) : clear())
+    })
+    this.changed()
+  }
+  downloads(device: string, thread: string) {
+    return this.authorized(device, thread).listDownloads({ hostId: HOST, threadId: thread })
+  }
+  allowDownload(device: string, thread: string, tabId: string) {
+    return this.controlled(device, thread, tabId).prepareHumanDownload(tabId, { hostId: HOST, threadId: thread })
+  }
+  readDownload(device: string, thread: string, downloadId: string, offset: number) {
+    return this.authorized(device, thread).readDownloadAsHuman(downloadId, { hostId: HOST, threadId: thread }, offset)
+  }
+  cancelDownload(device: string, thread: string, downloadId: string) {
+    return this.authorized(device, thread).cancelDownload(downloadId, { hostId: HOST, threadId: thread })
+  }
+  async open(device: string, thread: string, url: string, profileId?: string) {
+    const runtime = this.authorized(device, thread)
+    this.touch(device)
+    return runtime.open({ hostId: HOST, threadId: thread }, url, profileId, { kind: 'human', deviceId: device })
+  }
+  private controlled(device: string, thread: string, tabId: string) {
+    const runtime = this.authorized(device, thread)
+    runtime.requireHumanDevice(tabId, device, { hostId: HOST, threadId: thread })
+    this.touch(device)
+    return runtime
+  }
+  closeTab(device: string, thread: string, tabId: string): void {
+    this.controlled(device, thread, tabId).close(tabId)
+  }
+  history(device: string, thread: string, tabId: string, direction: 'back' | 'forward' | 'reload') {
+    return this.controlled(device, thread, tabId)[direction](tabId)
+  }
+  adjust(device: string, thread: string, tabId: string, change: BrowserTabAdjust) {
+    return this.controlled(device, thread, tabId).adjustAsHuman(tabId, device, change, {
+      hostId: HOST,
+      threadId: thread,
+    })
+  }
+  focus(device: string, thread: string, tabId: string) {
+    return this.controlled(device, thread, tabId).focusedFieldForHuman(tabId, device, {
+      hostId: HOST,
+      threadId: thread,
+    })
+  }
+  fit(device: string, thread: string, tabId: string, size: { width: number; height: number } | null) {
+    return this.controlled(device, thread, tabId).fitToViewer(tabId, device, size, { hostId: HOST, threadId: thread })
+  }
+  dialog(device: string, thread: string, tabId: string) {
+    return this.authorized(device, thread).dialogForAgent(tabId, { hostId: HOST, threadId: thread })
+  }
+  answerDialog(device: string, thread: string, tabId: string, dialogId: string, accept: boolean, text?: string) {
+    return this.controlled(device, thread, tabId).handleDialogAsHuman(tabId, dialogId, accept, text, device)
+  }
+  grant(device: string, thread: string): void {
+    this.ready()
+    for (const grant of this.grants.values()) if (grant.expires <= Date.now()) this.revoke(grant.device, grant.thread)
+    if (this.grants.size >= 100 && !this.grants.has(JSON.stringify([device, thread])))
+      throw new Error('Remove a browser device grant before adding another.')
+    this.grants.set(JSON.stringify([device, thread]), { device, thread, expires: Date.now() + 60 * 60_000 })
+  }
+  grantsList() {
+    return [...this.grants.values()].filter((grant) => grant.expires > Date.now()).map((grant) => ({ ...grant }))
+  }
+  revoke(device: string, thread: string): void {
+    this.viewerEpoch.set(device, (this.viewerEpoch.get(device) ?? 0) + 1)
+    this.grants.delete(JSON.stringify([device, thread]))
+    this.runtime?.controllerDisconnected(device)
+    const timer = this.heartbeats.get(device)
+    if (timer) clearTimeout(timer)
+    this.heartbeats.delete(device)
+  }
+  private authorized(device: string, thread: string): BrowserRuntime {
+    if (device !== 'local' && !this.ownerDevice(device)) {
+      const grant = this.grants.get(JSON.stringify([device, thread]))
+      if (!grant || grant.expires <= Date.now()) {
+        this.revoke(device, thread)
+        throw new Error(
+          'Browser viewing is not granted for this device and thread. Ask the owning host to grant it in Browser settings.',
+        )
+      }
+    }
+    return this.ready()
+  }
+  private touch(device: string): void {
+    const previous = this.heartbeats.get(device)
+    if (previous) clearTimeout(previous)
+    const timer = setTimeout(() => {
+      this.heartbeats.delete(device)
+      this.runtime?.controllerDisconnected(device)
+      this.frameTimes.delete(device)
+    }, 5000)
+    timer.unref()
+    this.heartbeats.set(device, timer)
+  }
+  list(device: string, thread: string) {
+    const runtime = this.authorized(device, thread)
+    this.touch(device)
+    return runtime.list({ hostId: HOST, threadId: thread }, device)
+  }
+  read(device: string, thread: string, tabId: string) {
+    return this.authorized(device, thread).inspectForAgent(tabId, 'viewer', { hostId: HOST, threadId: thread })
+  }
+  upload(
+    device: string,
+    thread: string,
+    tabId: string,
+    generation: number,
+    snapshot: number,
+    ref: number,
+    file: { name: string; data: string },
+  ) {
+    return this.authorized(device, thread).uploadAsHuman(
+      tabId,
+      device,
+      generation,
+      { hostId: HOST, threadId: thread },
+      snapshot,
+      ref,
+      file,
+    )
+  }
+  async frame(device: string, thread: string, tabId: string) {
+    const runtime = this.authorized(device, thread)
+    this.touch(device)
+    const now = Date.now()
+    if (this.captures >= 2 || now - (this.frameTimes.get(device) ?? 0) < 450)
+      throw new Error('Wait before requesting another browser frame.')
+    this.frameTimes.set(device, now)
+    this.captures++
+    try {
+      const image = await runtime.captureForViewer(tabId, { hostId: HOST, threadId: thread })
+      if (image.data.length > MAX_VIEWER_FRAME_CHARS)
+        throw new Error('This page is too large to stream. Make the page smaller and try again.')
+      return image
+    } finally {
+      this.captures--
+    }
+  }
+  async nextFrame(device: string, thread: string, tabId: string, after: number) {
+    const runtime = this.authorized(device, thread)
+    const key = JSON.stringify([device, thread, tabId])
+    if (this.liveRequests.size >= 16 || this.liveRequests.has(key)) throw new Error('The browser viewer is busy.')
+    const epoch = this.viewerEpoch.get(device) ?? 0
+    this.touch(device)
+    this.liveRequests.add(key)
+    try {
+      const frame = await runtime.nextFrameForViewer(tabId, { hostId: HOST, threadId: thread }, after)
+      if (this.authorized(device, thread) !== runtime || (this.viewerEpoch.get(device) ?? 0) !== epoch)
+        throw new Error('The browser viewer disconnected.')
+      return frame
+    } finally {
+      this.liveRequests.delete(key)
+    }
+  }
+  take(device: string, thread: string, tabId: string) {
+    const runtime = this.authorized(device, thread)
+    if (!runtime.list({ hostId: HOST, threadId: thread }).some((tab) => tab.id === tabId))
+      throw new Error('That tab belongs to another thread.')
+    const tab = runtime.takeControl(tabId, device)
+    this.touch(device)
+    return tab
+  }
+  release(device: string, thread: string, tabId: string, runId?: string) {
+    const runtime = this.authorized(device, thread)
+    if (!runtime.list({ hostId: HOST, threadId: thread }).some((tab) => tab.id === tabId))
+      throw new Error('That tab belongs to another thread.')
+    return runId ? runtime.giveToAgent(tabId, device, runId) : runtime.releaseForNextRun(tabId, device)
+  }
+  async input(device: string, thread: string, tabId: string, generation: number, input: BrowserHumanInput) {
+    const runtime = this.authorized(device, thread)
+    this.touch(device)
+    await runtime.inputAsHuman(tabId, device, generation, { hostId: HOST, threadId: thread }, input)
+  }
+  async navigate(device: string, thread: string, tabId: string, url: string) {
+    return this.controlled(device, thread, tabId).navigate(tabId, url)
+  }
+  disconnect(device: string): void {
+    this.viewerEpoch.set(device, (this.viewerEpoch.get(device) ?? 0) + 1)
+    this.runtime?.controllerDisconnected(device)
+    const timer = this.heartbeats.get(device)
+    if (timer) clearTimeout(timer)
+    this.heartbeats.delete(device)
+  }
+  async close(): Promise<void> {
+    this.setupEpoch++
+    this.setupAbort?.abort()
+    for (const operation of [...this.pending.values()]) operation.cancel()
+    for (const timer of this.heartbeats.values()) clearTimeout(timer)
+    this.heartbeats.clear()
+    this.grants.clear()
+    this.frameTimes.clear()
+    this.viewerEpoch.clear()
+    this.profileReviews.clear()
+    this.runtime?.closeAll()
+    this.runtime = undefined
+    const factory = this.factory
+    this.factory = undefined
+    await factory?.close()
+    this.reason = 'The browser starts automatically when you open a tab.'
+    this.changed()
+  }
+}

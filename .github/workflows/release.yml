@@ -1,0 +1,133 @@
+name: Draft release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing pushed tag matching package.json and releases/<tag>.md
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+      - name: Require a version tag and release notes
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          node --input-type=module -e "import { versionOf } from './scripts/release/release.mjs'; const t=process.env.RELEASE_TAG; if(t !== 'v'+versionOf(t)) throw new Error('Expected a v-prefixed version tag')"
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "$RELEASE_TAG^{commit}")"
+          node scripts/release/release.mjs verify "$RELEASE_TAG"
+  build:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            platform: darwin
+            arch: arm64
+          - os: macos-15-intel
+            platform: darwin
+            arch: x64
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    env:
+      MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      RAMU_SIGN_IDENTITY: ${{ secrets.RAMU_SIGN_IDENTITY }}
+      APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@v6
+      - name: Install ripgrep
+        run: if [ "$RUNNER_OS" = Linux ]; then sudo apt-get update && sudo apt-get install -y ripgrep; else brew install ripgrep; fi
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      # dpkg and fakeroot build the .deb, rpm provides rpmbuild, squashfs-tools provides mksquashfs for the AppImage.
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y fakeroot dpkg rpm squashfs-tools
+      - name: Prepare macOS signing (skipped without secrets)
+        if: runner.os == 'macOS'
+        run: scripts/release/macos-signing.sh setup
+      - run: pnpm make --arch=${{ matrix.arch }}
+      - name: Verify macOS signature and notarization
+        if: runner.os == 'macOS'
+        run: scripts/release/macos-signing.sh verify "${{ github.workspace }}/dist/Ramu-darwin-${{ matrix.arch }}/Ramu.app"
+      - name: Smoke test packaged macOS app
+        if: runner.os == 'macOS'
+        env:
+          RAMU_PACKAGED_EXECUTABLE: ${{ github.workspace }}/dist/Ramu-darwin-${{ matrix.arch }}/Ramu.app/Contents/MacOS/Ramu
+        run: pnpm test:desktop-smoke
+      - name: Smoke test installed Linux package
+        if: runner.os == 'Linux'
+        run: scripts/smoke/linux-deb-smoke.sh
+      - name: Remove signing material
+        if: always() && runner.os == 'macOS'
+        run: scripts/release/macos-signing.sh cleanup
+      - run: pnpm release:assets ${{ matrix.platform }} ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installers-${{ matrix.platform }}-${{ matrix.arch }}
+          path: dist/release/*
+          if-no-files-found: error
+          retention-days: 14
+  draft:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: installers-*
+          path: dist/release
+          merge-multiple: true
+      - name: Verify downloaded checksums
+        working-directory: dist/release
+        run: sha256sum --check SHA256SUMS-*.txt
+      - name: Create or update a draft, then attach installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          if gh release view "$RELEASE_TAG" --json isDraft > /tmp/ramu-release.json; then
+            node -e "if (!JSON.parse(require('fs').readFileSync('/tmp/ramu-release.json')).isDraft) throw new Error('Refusing to change a published release')"
+            gh release edit "$RELEASE_TAG" --title "Ramu $RELEASE_TAG" --notes-file "releases/$RELEASE_TAG.md"
+          else
+            prerelease=()
+            if [[ "$RELEASE_TAG" == *-* ]]; then prerelease=(--prerelease); fi
+            gh release create "$RELEASE_TAG" --draft --verify-tag --title "Ramu $RELEASE_TAG" --notes-file "releases/$RELEASE_TAG.md" "${prerelease[@]}"
+          fi
+          gh release upload "$RELEASE_TAG" dist/release/* --clobber
+          echo "Draft ready for review. Publish it manually from GitHub Releases."

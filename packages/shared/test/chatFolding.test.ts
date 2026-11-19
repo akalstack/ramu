@@ -1,0 +1,62 @@
+import { expect, it } from 'vitest'
+import { foldChatTurn, type ChatBlock, type ToolUse, type ToolResult } from '../src/chat/chatFolding'
+import type { AgentEvent } from '../src/types'
+const tool = (id: string): ToolUse => ({ kind: 'tool-use', toolUseId: id, name: 'Bash', summary: id })
+const result = (id: string, isError = false): ToolResult => ({
+  kind: 'tool-result',
+  toolUseId: id,
+  summary: id,
+  isError,
+})
+const answer: ChatBlock = { kind: 'event', event: { kind: 'text', text: 'Final answer' } }
+const event = (event: AgentEvent): ChatBlock => ({ kind: 'event', event })
+it('keeps failures visible while retaining successful calls and their final answer', () => {
+  const calls = [tool('success'), tool('failure'), tool('missing')]
+  const results = new Map([
+    ['success', result('success')],
+    ['failure', result('failure', true)],
+  ])
+  const folded = foldChatTurn([{ kind: 'tools', tools: calls }, answer], new Map(), results)
+  expect(folded.folded).toEqual([{ kind: 'tools', tools: [calls[0]] }])
+  expect(folded.kept).toEqual([{ kind: 'tools', tools: [calls[1], calls[2]] }])
+  expect(folded.answer).toEqual([answer])
+  expect(results.get('failure')?.summary).toBe('failure')
+})
+it('keeps unfinished background tools out of completed work', () => {
+  const call = tool('background')
+  expect(
+    foldChatTurn(
+      [{ kind: 'tools', tools: [call] }, answer],
+      new Map(),
+      new Map([['background', { ...result('background'), running: true }]]),
+    ).kept,
+  ).toHaveLength(1)
+})
+it('retains pending or declined permissions, and folds approved ones', () => {
+  const permission = (id: string) =>
+    event({ kind: 'permission-request', requestId: id, toolName: 'Bash', title: id, detail: '' })
+  const pending = permission('pending'),
+    denied = permission('denied'),
+    allowed = permission('allowed'),
+    allowedUser = permission('allowed-user'),
+    allowedAuto = permission('allowed-auto')
+  const folded = foldChatTurn(
+    [pending, denied, allowed, allowedUser, allowedAuto, answer],
+    new Map([
+      ['denied', 'denied'],
+      ['allowed', 'allowed'],
+      ['allowed-user', 'allowed-user'],
+      ['allowed-auto', 'allowed-auto'],
+    ]),
+    new Map(),
+  )
+  expect(folded.kept).toEqual([pending, denied])
+  expect(folded.folded).toEqual([allowed, allowedUser, allowedAuto])
+})
+it('keeps a teammate’s card in view once it reports, unlike a finished helper', () => {
+  const helper = event({ kind: 'agent', agentId: 'h', name: 'Explore', status: 'completed' })
+  const mate = event({ kind: 'agent', agentId: 'm', name: 'Opus 5.5', teammate: 'review', status: 'completed' })
+  const folded = foldChatTurn([helper, mate, answer], new Map(), new Map())
+  expect(folded.folded).toEqual([helper])
+  expect(folded.kept).toEqual([mate])
+})

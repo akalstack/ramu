@@ -1,0 +1,150 @@
+import { syncRepositories } from './syncRepositories'
+import { applyCommitScope, chooseCommit } from './CommitDialog'
+import { withGitBusy } from './gitBusy'
+import { openCreatePullRequest } from './CreatePullRequestHost'
+import { t } from '../i18n'
+import { reportGitJob } from './reportGitJob'
+import { DEFAULT_AGENT_SETTINGS } from '@ramu/shared/types'
+import { invoke } from '../ipc'
+import { notifyError } from '../chat/Notifications'
+import { errorText } from '../workspace/TaskPane'
+import type { WorkspaceApi } from '../workspace/workspace'
+import type { RamuBridge } from '@ramu/shared/api'
+
+/** A Source Control repository section that can run its own Commit & Push (with whatever message is typed there). */
+export interface CommitTarget {
+  taskId: string
+  repoId: string
+  staged: () => number
+  /** Every change, staged or not. */
+  changes: () => number
+  focused: () => boolean
+  commitAndPush: (pullRequest?: boolean) => Promise<void>
+}
+
+const SEVERAL = () =>
+  t('Several repositories have changes. Click one in Source Control, then press the shortcut again.')
+const NOTHING = () => t('There is nothing to commit.')
+
+/** Staged changes win; with nothing staged anywhere, any repository with changes counts. Focus picks between several. */
+function pick<T>(
+  entries: T[],
+  staged: (entry: T) => boolean,
+  changed: (entry: T) => boolean,
+  focused: (entry: T) => boolean,
+): T | 'several' | null {
+  const pool = entries.some(staged) ? entries.filter(staged) : entries.filter(changed)
+  return pool.find(focused) ?? (pool.length === 1 ? pool[0]! : pool.length ? 'several' : null)
+}
+
+const targets = new Set<CommitTarget>()
+export function registerCommitTarget(target: CommitTarget) {
+  targets.add(target)
+  return () => {
+    targets.delete(target)
+  }
+}
+
+/**
+ * The Commit & Push shortcut, with VS Code's smart-commit rule: what is staged gets committed; with nothing staged,
+ * every change is staged first (as T3 Code's Commit & push does). It runs through the open Source Control panel when
+ * there is one (using any message typed there), otherwise directly with an AI-drafted message.
+ * When several repositories qualify and none is focused, it opens Source Control instead of guessing.
+ */
+export async function commitAndPush(
+  ws: WorkspaceApi,
+  ctx: string,
+  pullRequest = false,
+  /** The host of `ws` (`useHost().invoke`); the window's own host by default. */
+  hostInvoke: RamuBridge['invoke'] = invoke,
+) {
+  const showScm = (message: string) => {
+    ws.setSidebar('scm')
+    notifyError(message, t('Commit & Push'))
+  }
+  const mounted = [...targets].filter((target) => target.taskId === ctx)
+  if (mounted.length) {
+    const target = pick(
+      mounted,
+      (entry) => entry.staged() > 0,
+      (entry) => entry.changes() > 0,
+      (entry) => entry.focused(),
+    )
+    if (target && target !== 'several') return target.commitAndPush(pullRequest)
+    return showScm(target ? SEVERAL() : NOTHING())
+  }
+  const bindings = (ws.bindings[ctx] ?? []).filter((binding) => binding.setupState === 'ready' && !binding.folderOnly)
+  const states = (
+    await Promise.allSettled(
+      bindings.map(async (binding) => ({ binding, status: await hostInvoke('git.status', ctx, binding.repoId) })),
+    )
+  ).flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []))
+  const hasStaged = (state: (typeof states)[number]) =>
+    state.status.entries.some((entry) => entry.staged && entry.staged !== 'unmerged')
+  const target = pick(
+    states,
+    hasStaged,
+    (state) => state.status.entries.length > 0,
+    () => false,
+  )
+  if (!target || target === 'several') return showScm(target ? SEVERAL() : NOTHING())
+  const { binding, status } = target
+  if (status.operation || status.entries.some((entry) => entry.staged === 'unmerged' || entry.unstaged === 'unmerged'))
+    return showScm(t('Resolve the conflicts in {0} first.', { '0': binding.repoName }))
+  if (!status.branch || !status.remote)
+    return showScm(t('{0} has no branch with a remote to push to.', { '0': binding.repoName }))
+  const plan = await chooseCommit({
+    taskId: ctx,
+    repoId: binding.repoId,
+    repoName: binding.repoName,
+    status,
+    action: 'push',
+    message: '',
+    pullRequest,
+  })
+  if (!plan) return
+  const branchOptions = plan.branch
+  if ((branchOptions.newBranch || branchOptions.autoBranch) && Object.values(ws.dirty).some(Boolean))
+    return showScm(t('Save or close unsaved files before changing files or branches.'))
+  let pushedTo = status.branch!
+  const run = async () => {
+    await applyCommitScope(ctx, binding.repoId, status, plan.paths, hostInvoke)
+    const draft = plan.message.trim()
+      ? { message: plan.message, fingerprint: undefined, branch: undefined as string | undefined }
+      : await hostInvoke('git.generateCommit', ctx, binding.repoId, DEFAULT_AGENT_SETTINGS, !!branchOptions.autoBranch)
+    if (!draft.message.trim()) throw new Error(t('Could not draft a commit message.'))
+    await hostInvoke(
+      'git.commit',
+      ctx,
+      binding.repoId,
+      draft.message,
+      draft.fingerprint,
+      undefined,
+      branchOptions.autoBranch && draft.branch ? { ...branchOptions, newBranch: draft.branch } : branchOptions,
+    )
+    pushedTo = branchOptions.autoBranch
+      ? ((await hostInvoke('git.commitBranchInfo', ctx, binding.repoId)).branch ?? status.branch!)
+      : (branchOptions.newBranch ?? status.branch!)
+    if (plan.action === 'sync') await syncRepositories(hostInvoke, ctx, [binding])
+    else if (plan.action === 'push') await hostInvoke('git.push', ctx, binding.repoId, pushedTo)
+    return draft.message.split('\n')[0]!
+  }
+  const work = withGitBusy(ctx, binding.repoId, run).finally(() => window.dispatchEvent(new Event('ramu:git-updated')))
+  void reportGitJob(work, {
+    id: `git-job:${ctx}:${binding.repoId}`,
+    success: (subject) => t('Pushed “{0}” to {1}', { '0': subject, '1': pushedTo }),
+    failure: { message: errorText, description: t('Commit & Push') },
+    toastSuccess: true,
+  })
+  if (
+    plan.pullRequest &&
+    (await work.then(
+      () => true,
+      () => false,
+    ))
+  ) {
+    await openCreatePullRequest(ctx, binding.repoId)
+    return
+  }
+  await work.catch(() => {})
+}

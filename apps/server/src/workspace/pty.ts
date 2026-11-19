@@ -1,0 +1,634 @@
+import { basename } from 'node:path'
+// PTY-backed terminals. Each terminal is started in a binding's cwd and keeps that reference.
+import { randomUUID } from 'node:crypto'
+import * as nodePty from 'node-pty'
+import type { BackgroundTerminalHistory, BackgroundTerminalRecord } from './backgroundTerminalHistory'
+import { planResume } from '@ramu/shared/sync/streamSync'
+import { removalCommands, type TaskRemovalReview } from '@ramu/shared/chat/taskRemoval'
+
+import type { TerminalInfo, BackgroundTerminalInfo, BackgroundTerminalState } from '@ramu/shared/api'
+import { userEnvironment } from '../userEnvironment'
+import { OWNER_ENV } from '@ramu/shared/servers'
+export type { TerminalInfo, BackgroundTerminalInfo } from '@ramu/shared/api'
+
+interface BackgroundMeta {
+  command: string
+  startedAt: number
+  endedAt: number | null
+  exitCode: number | null
+  stopRequested: boolean
+  forced: boolean
+  stoppedBy?: 'user' | 'agent'
+  startedBy?: 'helper'
+}
+
+interface Entry extends TerminalInfo {
+  pty: nodePty.IPty
+  shell: string
+  output: string
+  cursor: number
+  bg?: BackgroundMeta
+}
+
+const MAX_COMMAND = 4000
+
+/** A command's leading words, without arguments that may carry paths or secrets: `pnpm dev`, not its flags. */
+function commandName(command: string): string {
+  const words = command.trim().split(/\s+/)
+  const program = basename(words[0] ?? '')
+  const task = words[1]
+  return task && /^[a-z][a-z:_-]*$/i.test(task) ? `${program} ${task}` : program
+}
+
+/** `resume` says how `output` relates to what the viewer shows: nothing missed, the missed tail, or all held output again. */
+export type TerminalSnapshot = {
+  output: string
+  cursor: number
+  exited: boolean
+  resume: 'live' | 'replay' | 'snapshot'
+}
+
+/** Why a wait on background commands returned. */
+export type BackgroundWaitReason = 'exited' | 'matched' | 'quiet' | 'timeout'
+
+export type BackgroundWaitOptions = {
+  /** `any` returns when the first command settles; `all` when every one has. */
+  mode: 'any' | 'all'
+  /** A command settles early when its output contains one of these, compared without terminal colors. */
+  includes: string[]
+  /** Match only output written after the wait began, rather than all output still held. */
+  newOutputOnly: boolean
+  /** Return once none of the commands has written anything for this long. */
+  quietMs?: number
+  timeoutMs: number
+  signal?: AbortSignal
+}
+
+export type BackgroundWaitResult = {
+  reason: BackgroundWaitReason
+  waitedMs: number
+  matched?: { id: string; text: string }
+  commands: (BackgroundTerminalInfo & { output: string })[]
+}
+
+const WAIT_TAIL = 4000
+// CSI and OSC sequences: colors, cursor moves and titles that would split the words an agent waits for.
+// eslint-disable-next-line no-control-regex
+const ANSI = /\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-Z\\-_])/g
+const plain = (text: string) => text.replace(ANSI, '').replace(/\r(?!\n)/g, '\n')
+
+export class TerminalService {
+  private readonly terms = new Map<string, Entry>()
+  private readonly watchers = new Map<string, Set<() => void>>()
+  /** How many agent waits each command has open; devices show the command as awaited while any is. */
+  private readonly awaited = new Map<string, number>()
+  private readonly history = new Map<string, BackgroundTerminalRecord>()
+  private readonly checkpoints = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly warned = new Set<string>()
+  private readonly removing = new Set<string>()
+
+  constructor(
+    private readonly onData: (id: string, data: string, cursor: number) => void,
+    private readonly onExit: (id: string, code: number) => void,
+    /** A shell was opened, ended or closed in this workspace; every device re-reads the list. */
+    private readonly onChange: (taskId: string) => void = () => {},
+    private readonly storage?: BackgroundTerminalHistory,
+  ) {
+    for (const record of storage?.load() ?? []) this.history.set(record.id, record)
+  }
+
+  open(taskId: string, repoId: string | null, cwd: string, cols = 80, rows = 24): TerminalInfo {
+    this.assertTaskAvailable(taskId)
+    return info(this.start(taskId, repoId, cwd, cols, rows))
+  }
+
+  private start(
+    taskId: string,
+    repoId: string | null,
+    cwd: string,
+    cols: number,
+    rows: number,
+    command?: string,
+    id = randomUUID(),
+    startedBy?: 'helper',
+  ): Entry {
+    const shell = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh')
+    const win = process.platform === 'win32'
+    const args = command ? (win ? ['-Command', command] : ['-lc', command]) : win ? [] : ['-l']
+    const pty = nodePty.spawn(shell, args, {
+      name: 'xterm-256color',
+      cwd,
+      cols,
+      rows,
+      // Names the terminal, so a server it starts and detaches still shows under its thread.
+      env: userEnvironment({ TERM_PROGRAM: 'Ramu', [OWNER_ENV]: id }, cwd) as Record<string, string>,
+    })
+    const entry: Entry = { id, taskId, repoId, cwd, exited: false, pty, shell, output: '', cursor: 0 }
+    if (command) {
+      entry.background = true
+      entry.bg = {
+        command,
+        startedAt: Date.now(),
+        endedAt: null,
+        exitCode: null,
+        stopRequested: false,
+        forced: false,
+        ...(startedBy ? { startedBy } : {}),
+      }
+    }
+    this.terms.set(entry.id, entry)
+    pty.onData((d) => {
+      entry.cursor += d.length
+      entry.output = (entry.output + d).slice(-256_000)
+      this.onData(entry.id, d, entry.cursor)
+      this.notify(entry.id)
+      if (entry.bg && this.terms.has(entry.id) && !this.checkpoints.has(entry.id)) {
+        const timer = setTimeout(() => {
+          this.checkpoints.delete(entry.id)
+          this.checkpoint(entry)
+        }, 1000)
+        timer.unref()
+        this.checkpoints.set(entry.id, timer)
+      }
+    })
+    pty.onExit(({ exitCode }) => {
+      entry.exited = true
+      if (entry.bg) {
+        entry.bg.endedAt = Date.now()
+        entry.bg.exitCode = exitCode
+        this.checkpoint(entry)
+      }
+      this.onExit(entry.id, exitCode)
+      this.onChange(entry.taskId)
+      this.notify(entry.id)
+    })
+    queueMicrotask(() => this.onChange(taskId))
+    return entry
+  }
+
+  /**
+   * Starts a persistent command for a thread. Launching the same command in the same folder while it still runs returns
+   * the running one, so a retried request never starts a second server.
+   */
+  launchBackground(
+    taskId: string,
+    repoId: string | null,
+    cwd: string,
+    command: string,
+    startedBy?: 'helper',
+  ): BackgroundTerminalInfo {
+    this.assertTaskAvailable(taskId)
+    const text = command.trim()
+    if (!text || text.length > MAX_COMMAND) throw new Error('Command must be 1 to 4000 characters.')
+    const running = [...this.terms.values()].find(
+      (e) => e.bg && !e.exited && e.taskId === taskId && e.repoId === repoId && e.cwd === cwd && e.bg.command === text,
+    )
+    if (running) return backgroundInfo(running)
+    const id = randomUUID()
+    const prepared: BackgroundTerminalRecord = {
+      id,
+      taskId,
+      repoId,
+      cwd,
+      command: text,
+      state: 'unknown',
+      startedAt: Date.now(),
+      endedAt: null,
+      exitCode: null,
+      cursor: 0,
+      output: '',
+      ...(startedBy ? { startedBy } : {}),
+      capabilities: { inspect: true, stop: false, forceStop: false, input: false },
+    }
+    // Record intent before spawning. A storage failure must never leave an untracked command running.
+    this.storage?.save(prepared)
+    this.history.set(id, prepared)
+    try {
+      const entry = this.start(taskId, repoId, cwd, 80, 24, text, id, startedBy)
+      this.checkpoint(entry, true)
+      return backgroundInfo(entry)
+    } catch (error) {
+      this.destroy(id, false)
+      throw error
+    }
+  }
+
+  /** The thread's persistent commands, running first then newest first. */
+  /** Live terminals and commands by process, for Resources. Named as the thread names them; arguments never leave here. */
+  processes(): { pid: number; taskId: string; id: string; kind: 'terminal' | 'command'; name: string }[] {
+    return [...this.terms.values()]
+      .filter((entry) => !entry.exited && entry.taskId !== 'provider-setup')
+      .map((entry) => ({
+        pid: entry.pty.pid,
+        taskId: entry.taskId,
+        id: entry.id,
+        kind: entry.bg ? ('command' as const) : ('terminal' as const),
+        name: entry.bg ? commandName(entry.bg.command) : basename(entry.shell),
+      }))
+  }
+
+  listBackground(taskId: string): BackgroundTerminalInfo[] {
+    const records = new Map(
+      [...this.history.values()].filter((record) => record.taskId === taskId).map((record) => [record.id, record]),
+    )
+    for (const record of [...this.terms.values()].filter((e) => e.bg && e.taskId === taskId).map(backgroundInfo))
+      records.set(record.id, { ...record, output: '' })
+    return [...records.values()]
+      .map(({ output: _output, ...record }) =>
+        this.awaited.has(record.id) ? { ...record, agentWaiting: true as const } : record,
+      )
+      .sort((a, b) => Number(isLive(b)) - Number(isLive(a)) || b.startedAt - a.startedAt)
+  }
+
+  /** Rejects any id that is not a persistent command owned by this thread. */
+  inspectBackground(taskId: string, id: string): BackgroundTerminalInfo & { output: string } {
+    const saved = this.history.get(id)
+    if (!this.terms.has(id) && saved?.taskId === taskId) return { ...saved, capabilities: { ...saved.capabilities } }
+    const e = this.ownedBackground(taskId, id)
+    return { ...backgroundInfo(e), output: e.output }
+  }
+
+  /**
+   * Waits until background commands exit, print one of the expected texts, go quiet or run out of time. Each check reads
+   * the held output, so text printed before the wait began counts unless `newOutputOnly` is set.
+   */
+  waitBackground(taskId: string, ids: string[], options: BackgroundWaitOptions): Promise<BackgroundWaitResult> {
+    const unique = [...new Set(ids)]
+    // Ownership is checked up front so a wait never hangs on a command from another thread.
+    for (const id of unique) this.inspectBackground(taskId, id)
+    const started = Date.now()
+    const from = new Map(unique.map((id) => [id, options.newOutputOnly ? (this.terms.get(id)?.cursor ?? 0) : 0]))
+    const needles = options.includes.map((text) => text.toLowerCase())
+    let lastOutput = started
+    const cursors = new Map(unique.map((id) => [id, this.terms.get(id)?.cursor ?? 0]))
+
+    const since = (id: string) => {
+      const e = this.terms.get(id)
+      if (!e) return this.history.get(id)?.output ?? ''
+      // `output` keeps only the newest characters, so the start cursor maps to an index from its end.
+      return e.output.slice(Math.max(0, e.output.length - (e.cursor - from.get(id)!)))
+    }
+    const settled = (id: string): { text?: string } | null => {
+      const e = this.terms.get(id)
+      if (needles.length) {
+        const text = plain(since(id)).toLowerCase()
+        const hit = needles.findIndex((needle) => text.includes(needle))
+        if (hit >= 0) return { text: options.includes[hit] }
+      }
+      return !e || e.exited ? {} : null
+    }
+    const snapshot = (id: string) => {
+      const info = this.inspectBackground(taskId, id)
+      return { ...info, output: plain(since(id)).slice(-WAIT_TAIL) }
+    }
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => finish('timeout'), options.timeoutMs)
+      let quiet: ReturnType<typeof setInterval> | undefined
+      let done = false
+      const finish = (reason: BackgroundWaitReason, matched?: { id: string; text: string }) => {
+        if (done) return
+        done = true
+        cleanup()
+        resolve({
+          reason,
+          waitedMs: Date.now() - started,
+          ...(matched ? { matched } : {}),
+          commands: unique.map(snapshot),
+        })
+      }
+      const abort = () => {
+        if (done) return
+        done = true
+        cleanup()
+        reject(new Error('Stopped waiting because the turn was stopped.'))
+      }
+      const check = () => {
+        let moved = false
+        for (const id of unique) {
+          const cursor = this.terms.get(id)?.cursor ?? 0
+          if (cursor !== cursors.get(id)) moved = true
+          cursors.set(id, cursor)
+        }
+        if (moved) lastOutput = Date.now()
+        const states = unique.map((id) => ({ id, state: settled(id) }))
+        const match = states.find((entry) => entry.state?.text)
+        if (options.mode === 'any') {
+          if (match) return finish('matched', { id: match.id, text: match.state!.text! })
+          if (states.some((entry) => entry.state)) return finish('exited')
+        } else if (states.every((entry) => entry.state)) {
+          return match ? finish('matched', { id: match.id, text: match.state!.text! }) : finish('exited')
+        }
+        if (options.quietMs !== undefined && Date.now() - lastOutput >= options.quietMs) return finish('quiet')
+      }
+      const cleanup = () => {
+        clearTimeout(timer)
+        clearInterval(quiet)
+        options.signal?.removeEventListener('abort', abort)
+        for (const id of unique) {
+          this.watchers.get(id)?.delete(check)
+          const left = (this.awaited.get(id) ?? 1) - 1
+          if (left > 0) this.awaited.set(id, left)
+          else this.awaited.delete(id)
+        }
+        this.onChange(taskId)
+      }
+      options.signal?.addEventListener('abort', abort, { once: true })
+      for (const id of unique) {
+        const set = this.watchers.get(id) ?? new Set()
+        set.add(check)
+        this.watchers.set(id, set)
+        this.awaited.set(id, (this.awaited.get(id) ?? 0) + 1)
+      }
+      this.onChange(taskId)
+      if (options.signal?.aborted) return abort()
+      // Silence has no event of its own, so it is checked on a short tick while a quiet limit is set.
+      if (options.quietMs !== undefined) quiet = setInterval(check, Math.min(1000, options.quietMs))
+      check()
+    })
+  }
+
+  private notify(id: string): void {
+    for (const watcher of [...(this.watchers.get(id) ?? [])]) watcher()
+  }
+
+  /**
+   * Asks the command's own process group to end (SIGTERM; SIGKILL when `force`). Safe to repeat and safe after the
+   * command already ended; the final output and exit outcome stay readable.
+   */
+  stopBackground(taskId: string, id: string, force = false, by: 'user' | 'agent' = 'agent'): BackgroundTerminalInfo {
+    const e = this.ownedBackground(taskId, id)
+    const bg = e.bg!
+    // A person's stop is the one that sticks, even when the agent asked first or a stop is already in flight.
+    if (!e.exited && by === 'user' && bg.stoppedBy !== 'user') {
+      bg.stoppedBy = 'user'
+      this.checkpoint(e)
+      this.onChange(e.taskId)
+    }
+    if (e.exited || bg.forced || (bg.stopRequested && !force)) return backgroundInfo(e)
+    if (force && !bg.stopRequested) throw new Error('Try a normal stop before force stop.')
+    if (force && process.platform === 'win32') throw new Error('Force stop is unavailable on this host.')
+    bg.stoppedBy = bg.stoppedBy === 'user' ? 'user' : by
+    bg.stopRequested = true
+    bg.forced = force
+    this.checkpoint(e)
+    this.signalGroup(e, force ? 'SIGKILL' : 'SIGTERM')
+    this.onChange(e.taskId)
+    return backgroundInfo(e)
+  }
+
+  /** The pty child leads its own session, so its pid names the group holding every descendant. */
+  private signalGroup(e: Entry, signal: 'SIGTERM' | 'SIGKILL'): void {
+    try {
+      if (process.platform === 'win32') e.pty.kill()
+      else process.kill(-e.pty.pid, signal)
+    } catch {
+      try {
+        e.pty.kill(signal)
+      } catch {
+        // Already gone; the exit event settles the state.
+      }
+    }
+  }
+
+  private ownedBackground(taskId: string, id: string): Entry {
+    const e = this.terms.get(id)
+    if (!e?.bg || e.taskId !== taskId) throw new Error(`Unknown background terminal ${id}`)
+    return e
+  }
+
+  list(taskId: string): TerminalInfo[] {
+    const records = new Map(
+      [...this.history.values()]
+        .filter((entry) => entry.taskId === taskId)
+        .map((entry) => [entry.id, savedInfo(entry)]),
+    )
+    for (const entry of this.terms.values()) if (entry.taskId === taskId) records.set(entry.id, info(entry))
+    return [...records.values()]
+  }
+
+  /**
+   * The held output, and the cursor it ends at. With `since` (the cursor a client already shows), only what came after
+   * it when the held tail still covers that, so a reconnecting viewer fetches the gap instead of the whole buffer.
+   * Output ends at `cursor`, so a client can place it from `cursor - output.length` either way.
+   */
+  snapshot(id: string, since?: number): TerminalSnapshot {
+    const saved = this.history.get(id)
+    const entry = !this.terms.has(id) && saved ? { ...saved, exited: true } : { ...this.require(id) }
+    // The held tail is the replayable window; a cursor it no longer covers (or from the future) gets all of it again.
+    const held = entry.output.length
+    const plan = planResume(
+      { epoch: id, cursor: since ?? null },
+      { epoch: id, first: entry.cursor - held, last: entry.cursor },
+      { maxReplayItems: Infinity, maxReplayBytes: Infinity },
+    )
+    const output =
+      plan.kind === 'live'
+        ? ''
+        : plan.kind === 'replay'
+          ? entry.output.slice(-(entry.cursor - plan.from + 1))
+          : entry.output
+    return { output, cursor: entry.cursor, exited: entry.exited, resume: plan.kind }
+  }
+
+  get(id: string): TerminalInfo | undefined {
+    const e = this.terms.get(id)
+    return e ? info(e) : this.history.has(id) ? savedInfo(this.history.get(id)!) : undefined
+  }
+
+  write(id: string, data: string): void {
+    const entry = this.require(id)
+    if (entry.exited) throw new Error('This terminal has ended. Its output is read-only.')
+    entry.pty.write(data)
+  }
+
+  resize(id: string, cols: number, rows: number): void {
+    if (!this.terms.has(id) && this.history.has(id)) return
+    const e = this.require(id)
+    if (!e.exited) e.pty.resize(cols, rows)
+  }
+
+  close(id: string): void {
+    const e = this.terms.get(id)
+    if (!e) return
+    // Closing a view of a running persistent command only detaches it; stopping is its own action.
+    if (e.bg && !e.exited) return
+    this.destroy(id)
+  }
+
+  /** True while something other than the login shell itself holds the terminal's foreground. */
+  busy(id: string): boolean {
+    const e = this.terms.get(id)
+    if (!e || e.exited) return false
+    // Closing a persistent command's output only detaches the view; it cannot terminate that command.
+    if (e.bg) return false
+    const name = (value: string) =>
+      value
+        .split(/[\\/]/)
+        .pop()!
+        .replace(/^-/, '')
+        .replace(/\.exe$/i, '')
+    try {
+      return name(e.pty.process) !== name(e.shell)
+    } catch {
+      return false
+    }
+  }
+
+  closeTask(taskId: string, options: { keepHistory?: boolean } = {}): void {
+    if (!options.keepHistory) this.storage?.removeTask(taskId)
+    for (const [id, e] of this.terms) if (e.taskId === taskId) this.destroy(id, options.keepHistory ?? false)
+    if (!options.keepHistory)
+      for (const [id, record] of this.history) if (record.taskId === taskId) this.history.delete(id)
+  }
+
+  assertTaskAvailable(taskId: string): void {
+    if (this.removing.has(taskId)) throw new Error('This thread is being deleted. Wait for deletion to finish.')
+  }
+
+  async withTaskRemoval<T>(taskIds: string[], action: () => Promise<T>): Promise<T> {
+    for (const id of taskIds) this.assertTaskAvailable(id)
+    taskIds.forEach((id) => this.removing.add(id))
+    try {
+      return await action()
+    } finally {
+      taskIds.forEach((id) => this.removing.delete(id))
+    }
+  }
+
+  reviewRemoval(taskId: string, removeWorktrees: boolean, review?: TaskRemovalReview): void {
+    const commands = removalCommands(this.listBackground(taskId))
+    if (commands.some((command) => !review?.backgroundIds.includes(command.id)))
+      throw new Error(
+        'Background commands changed or need review. Review the current commands before deleting this thread.',
+      )
+    if (commands.some((command) => command.state === 'unknown')) {
+      if (removeWorktrees)
+        throw new Error(
+          'A background command has unknown status. Keep the worktree and verify the command on its host before removing files.',
+        )
+      if (!review?.forgetUnknown)
+        throw new Error(
+          'Commands with unknown status cannot be stopped. Deleting this thread forgets their saved records and keeps its files.',
+        )
+    }
+  }
+
+  async stopForRemoval(taskId: string, timeoutMs = 3000): Promise<void> {
+    const commands = this.listBackground(taskId).filter(isLive)
+    for (const command of commands) this.stopBackground(taskId, command.id)
+    const deadline = Date.now() + timeoutMs
+    while (commands.some((command) => this.terms.get(command.id)?.exited === false)) {
+      if (Date.now() >= deadline)
+        throw new Error(
+          'Background commands are still stopping. Open Background terminals and use Force stop if available, then try deleting again.',
+        )
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    }
+  }
+
+  closeAll(): void {
+    for (const id of [...this.terms.keys()]) this.destroy(id)
+  }
+
+  /** Ends and forgets a terminal, persistent commands included (thread removal, shutdown). */
+  private destroy(id: string, preserve = true): void {
+    const e = this.terms.get(id)
+    if (!e) return
+    if (preserve) this.checkpoint(e)
+    clearTimeout(this.checkpoints.get(id))
+    this.checkpoints.delete(id)
+    this.terms.delete(id)
+    if (!e.exited) {
+      if (e.bg) this.signalGroup(e, 'SIGKILL')
+      else e.pty.kill()
+    }
+    const saved = this.history.get(id)
+    if (preserve && saved)
+      this.history.set(id, {
+        ...backgroundInfo(e),
+        output: e.output.slice(-64_000),
+        state: e.exited ? backgroundInfo(e).state : 'unknown',
+        capabilities: { inspect: true, stop: false, forceStop: false, input: false },
+      })
+    this.onChange(e.taskId)
+  }
+
+  private require(id: string): Entry {
+    const e = this.terms.get(id)
+    if (!e) throw new Error(`Unknown terminal ${id}`)
+    return e
+  }
+
+  private checkpoint(entry: Entry, strict = false): void {
+    if (!entry.bg || !this.terms.has(entry.id)) return
+    clearTimeout(this.checkpoints.get(entry.id))
+    this.checkpoints.delete(entry.id)
+    const record = { ...backgroundInfo(entry), output: entry.output.slice(-64_000) }
+    try {
+      this.storage?.save(record)
+      this.history.set(entry.id, record)
+      const ordered = [...this.history.values()]
+        .filter((saved) => saved.taskId === entry.taskId)
+        .sort((a, b) => b.startedAt - a.startedAt || b.id.localeCompare(a.id))
+      for (const old of ordered.slice(100))
+        if (old.state === 'exited' || old.state === 'failed') {
+          this.history.delete(old.id)
+          this.terms.delete(old.id)
+        }
+      this.warned.delete(entry.id)
+    } catch (error) {
+      if (strict) throw error
+      if (!this.warned.has(entry.id)) console.warn('Could not checkpoint background terminal history.', error)
+      this.warned.add(entry.id)
+    }
+  }
+}
+
+function savedInfo(record: BackgroundTerminalRecord): TerminalInfo {
+  return {
+    id: record.id,
+    taskId: record.taskId,
+    repoId: record.repoId,
+    cwd: record.cwd,
+    exited: true,
+    background: true,
+  }
+}
+
+function info({ id, taskId, repoId, cwd, exited, background }: Entry): TerminalInfo {
+  return { id, taskId, repoId, cwd, exited, ...(background ? { background } : {}) }
+}
+
+const isLive = (b: BackgroundTerminalInfo) => b.state === 'running' || b.state === 'stopping'
+
+function backgroundInfo(e: Entry): BackgroundTerminalInfo {
+  const bg = e.bg!
+  const state: BackgroundTerminalState = !e.exited
+    ? bg.stopRequested
+      ? 'stopping'
+      : 'running'
+    : bg.stopRequested || bg.exitCode === 0
+      ? 'exited'
+      : 'failed'
+  return {
+    id: e.id,
+    taskId: e.taskId,
+    repoId: e.repoId,
+    cwd: e.cwd,
+    command: bg.command,
+    state,
+    startedAt: bg.startedAt,
+    endedAt: bg.endedAt,
+    exitCode: bg.exitCode,
+    cursor: e.cursor,
+    ...(bg.stoppedBy ? { stoppedBy: bg.stoppedBy } : {}),
+    ...(bg.startedBy ? { startedBy: bg.startedBy } : {}),
+    capabilities: {
+      inspect: true,
+      stop: !e.exited,
+      forceStop: !e.exited && process.platform !== 'win32',
+      input: !e.exited,
+    },
+  }
+}

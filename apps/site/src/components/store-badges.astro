@@ -1,0 +1,13 @@
+---
+import { STORES } from '@/lib/site'
+---
+
+<div class="stores">
+  {
+    STORES.map((store) => (
+      <a class="store" href={store.href}>
+        <img src={store.badge} alt={store.label} width={store.width} height="40" />
+      </a>
+    ))
+  }
+</div>

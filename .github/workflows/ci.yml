@@ -1,0 +1,45 @@
+name: CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # Every commit on main gets its own result; branches keep only their latest run.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+jobs:
+  check:
+    name: Check (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@v6
+      - name: Install ripgrep
+        run: if [ "$RUNNER_OS" = Linux ]; then sudo apt-get update && sudo apt-get install -y ripgrep; else brew install ripgrep; fi
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      # One desktop startup smoke test uses an isolated profile and simulated providers.
+      - if: runner.os == 'macOS'
+        run: pnpm test:desktop-smoke
+      # On Linux the same smoke runs against the packaged app, installed from its .deb; only the release builds rpm and AppImage.
+      - if: runner.os == 'Linux'
+        run: sudo apt-get install -y fakeroot dpkg && pnpm make --arch=x64 --targets=@electron-forge/maker-deb
+      - if: runner.os == 'Linux'
+        run: scripts/smoke/linux-deb-smoke.sh
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: failure-${{ matrix.os }}
+          path: output/desktop-smoke/
+          if-no-files-found: ignore
+          retention-days: 7

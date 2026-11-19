@@ -1,0 +1,58 @@
+[
+  {
+    "id": "cursor-limit-reply-with-reset",
+    "synthetic": true,
+    "origin": "apps/server/test/acp.test.ts line 67 limitreply",
+    "provider": "cursor",
+    "channel": "reply",
+    "toolCalls": 0,
+    "text": "You've hit your usage limit. Resets at 5pm.",
+    "expect": {
+      "limited": true,
+      "confidence": "high",
+      "source": "provider",
+      "resetsAtIso": "2026-10-18T10:00:00.000Z",
+      "assumedZone": true
+    }
+  },
+  {
+    "id": "cursor-limit-reply-with-tool-calls",
+    "synthetic": true,
+    "origin": "apps/server/test/acp.test.ts isLimitReply(\"...\", 1)",
+    "provider": "cursor",
+    "channel": "reply",
+    "toolCalls": 1,
+    "text": "You've hit your usage limit.",
+    "expect": {
+      "limited": false
+    }
+  },
+  {
+    "id": "cursor-usage-limit-reached-reply",
+    "synthetic": true,
+    "origin": "apps/server/test/acp.test.ts \"Usage limit reached for this model\"",
+    "provider": "cursor",
+    "channel": "reply",
+    "toolCalls": 0,
+    "text": "Usage limit reached for this model",
+    "expect": {
+      "limited": true,
+      "confidence": "low",
+      "source": "generic"
+    }
+  },
+  {
+    "id": "cursor-quota-error",
+    "synthetic": true,
+    "origin": "apps/server/test/acp.test.ts line 66 \"quota exceeded 429\"",
+    "provider": "cursor",
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "quota exceeded 429",
+    "expect": {
+      "limited": true,
+      "confidence": "high",
+      "source": "provider"
+    }
+  }
+]

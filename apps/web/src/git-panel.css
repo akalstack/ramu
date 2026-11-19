@@ -1,0 +1,68 @@
+/* Preserve the compact Git sidebar controls and the full-width commit action. */
+.git-branch-row .dropdown-trigger.git-branch-btn {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 0;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 6px;
+  gap: 6px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  font-size: var(--font-control);
+  font-weight: 500;
+  justify-content: flex-start;
+}
+.git-branch-row .dropdown-trigger.git-branch-btn:is(:hover, [data-popup-open]):not(:disabled) {
+  background: var(--hover);
+}
+.git-branch-row .git-branch-btn > svg:last-child {
+  margin-left: 0;
+}
+.git-branch-row .git-branch-btn > [data-slot='select-value'] {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scm-repo .commit-input-wrap {
+  position: relative;
+  margin: 4px 0 8px;
+}
+.scm-repo .commit-msg {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 36px 8px 10px;
+  line-height: 18px;
+  background: var(--fill);
+  border-color: transparent;
+  border-radius: var(--radius-s);
+  font-size: var(--font-control);
+  resize: vertical;
+}
+.scm-repo .commit-ai {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+}
+.scm-ai-settings [data-slot='collapsible-trigger'] {
+  height: auto;
+  min-height: 28px;
+  padding: 0 4px;
+  gap: 6px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: var(--font-caption);
+  font-weight: 400;
+}
+.scm-ai-settings [data-slot='collapsible-trigger']:hover {
+  background: var(--hover);
+}

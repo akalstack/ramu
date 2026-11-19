@@ -1,0 +1,141 @@
+export type Direction = 'left' | 'right' | 'up' | 'down'
+export interface TerminalGestureState {
+  active: boolean
+  direction: Direction | null
+  speed: number
+  progress: number
+  steps: number
+  x: number
+  y: number
+}
+export const HOLD_MS = 300
+const DEAD_ZONE = 12
+const MAX_DRAG = 112
+const SLOWEST_REPEAT_MS = 450
+const FASTEST_REPEAT_MS = 70
+
+/** Hold-and-drag cursor control. A direction sends one key at once; distance then sets the repeat rate. */
+export class TerminalGesture {
+  private started: number | null = null
+  private active = false
+  private x = 0
+  private y = 0
+  private direction: Direction | null = null
+  private speed = 0
+  private progress = 0
+  private lastTick = 0
+
+  begin(x: number, y: number, now: number) {
+    this.cancel()
+    this.started = now
+    this.lastTick = now
+    this.x = x
+    this.y = y
+  }
+  cancel() {
+    this.started = null
+    this.active = false
+    this.direction = null
+    this.speed = 0
+    this.progress = 0
+  }
+  move(x: number, y: number, now: number) {
+    if (this.started === null) return
+    const dx = x - this.x,
+      dy = y - this.y
+    if (!this.active) {
+      if (now - this.started < HOLD_MS) {
+        // Ordinary swipes remain normal terminal scrolling/selection.
+        if (Math.hypot(dx, dy) > 8) this.cancel()
+        return
+      }
+      this.active = true
+      this.lastTick = now
+    }
+    const distance = Math.max(Math.abs(dx), Math.abs(dy))
+    let direction: Direction | null = null
+    if (distance > DEAD_ZONE) {
+      // Small diagonal drift must not switch between history and cursor motion.
+      const horizontal = this.direction === 'left' || this.direction === 'right'
+      const vertical = this.direction === 'up' || this.direction === 'down'
+      const useX = horizontal
+        ? Math.abs(dy) < Math.abs(dx) * 1.25
+        : vertical
+          ? Math.abs(dx) > Math.abs(dy) * 1.25
+          : Math.abs(dx) >= Math.abs(dy)
+      direction = useX ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down'
+    }
+    if (direction !== this.direction) {
+      // Picking a direction sends its first key on the next frame; the gauge then paces the repeats.
+      this.progress = direction ? 1 : 0
+      this.lastTick = now
+    }
+    this.direction = direction
+    this.speed = direction ? Math.min(1, (distance - DEAD_ZONE) / (MAX_DRAG - DEAD_ZONE)) : 0
+  }
+  tick(now: number): TerminalGestureState {
+    if (this.started !== null && !this.active && now - this.started >= HOLD_MS) {
+      this.active = true
+      this.lastTick = now
+    }
+    let steps = 0
+    if (this.active && this.direction) {
+      // Never catch up in a burst after a dropped frame or background pause.
+      const elapsed = Math.max(0, Math.min(64, now - this.lastTick))
+      const interval = SLOWEST_REPEAT_MS * Math.pow(FASTEST_REPEAT_MS / SLOWEST_REPEAT_MS, this.speed)
+      this.progress += elapsed / interval
+      if (this.progress >= 1) {
+        steps = 1
+        this.progress %= 1
+      }
+    }
+    this.lastTick = now
+    return {
+      active: this.active,
+      direction: this.direction,
+      speed: this.speed,
+      progress: steps ? 1 : this.progress,
+      steps,
+      x: this.x,
+      y: this.y,
+    }
+  }
+}
+
+export function arrowSequence(direction: Direction, applicationCursorKeys = false): string {
+  const suffix = { up: 'A', down: 'B', right: 'C', left: 'D' }[direction]
+  return '\x1b' + (applicationCursorKeys ? 'O' : '[') + suffix
+}
+
+/**
+ * Where the cursor pad sits: at a fixed place on the right edge, centred on the terminal, so the eye always finds it in
+ * the same spot. Only when the finger holds over that spot does it move above the finger (or below it, without room).
+ */
+export function gestureOverlayPosition(x: number, y: number, width: number, height: number, size = 112) {
+  const margin = 12,
+    gap = 24
+  const clamp = (value: number, available: number) =>
+    Math.max(0, Math.min(value, Math.max(0, available - size - margin)))
+  const left = clamp(width - size - margin, width)
+  let top = clamp((height - size) / 2, height)
+  const underFinger = x >= left - gap && y >= top - gap && y <= top + size + gap
+  if (underFinger) top = y - gap - size >= margin ? y - gap - size : clamp(y + gap, height)
+  return { left, top: Math.max(0, top) }
+}
+
+/** The phone terminal's text sizes; pinching moves between them and the phone remembers the choice. */
+export const TERMINAL_FONT = { min: 9, max: 22, default: 13 } as const
+
+/** The size a pinch arrives at: the starting size scaled by how far the fingers moved apart, whole and within bounds. */
+export function pinchFontSize(start: number, startDistance: number, distance: number): number {
+  if (!(startDistance > 0) || !(distance > 0)) return start
+  return Math.min(TERMINAL_FONT.max, Math.max(TERMINAL_FONT.min, Math.round((start * distance) / startDistance)))
+}
+
+/** A stored size, or the default when it is missing or out of bounds. */
+export function terminalFontSize(stored: unknown): number {
+  const value = Number(stored)
+  return Number.isInteger(value) && value >= TERMINAL_FONT.min && value <= TERMINAL_FONT.max
+    ? value
+    : TERMINAL_FONT.default
+}

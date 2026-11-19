@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["RamuSpeechModule"]
+  },
+  "android": {
+    "modules": ["dev.ramu.speech.RamuSpeechModule"]
+  }
+}

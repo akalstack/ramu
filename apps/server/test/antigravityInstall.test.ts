@@ -1,0 +1,193 @@
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, expect, it } from 'vitest'
+import { installAntigravity, resolveAntigravityAsset } from '../src/providers/antigravityInstall'
+import {
+  antigravityFileNames,
+  configureProviderAccounts,
+  managedAntigravity,
+  providerBinary,
+  providerEnvironment,
+  providerRuntimeHome,
+} from '../src/providers/providerBinaries'
+
+let root: string
+beforeEach(() => {
+  root = mkdtempSync(join(tmpdir(), 'ramu-agy-'))
+  configureProviderAccounts(join(root, 'provider-accounts'))
+})
+afterEach(() => rmSync(root, { recursive: true, force: true }))
+
+const registry = {
+  version: '1.4.0',
+  distribution: {
+    binary: {
+      'darwin-aarch64': { archive: 'https://dl.google.com/agy/mac-arm64.zip', sha256: 'A'.repeat(64) },
+      'linux-x86_64': { archive: 'https://dl.google.com/agy/linux-x64.zip', sha256: 'b'.repeat(64) },
+      'windows-x86_64': { archive: 'https://dl.google.com/agy/win-x64.zip', sha256: 'c'.repeat(64) },
+      'linux-aarch64': { archive: 'https://evil.example/agy.zip', sha256: 'd'.repeat(64) },
+      'darwin-x86_64': { archive: 'https://dl.google.com/agy/mac-x64.zip' },
+    },
+  },
+}
+
+it('picks the archive for this platform and trusts only Google downloads, plain versions and listed checksums', () => {
+  expect(resolveAntigravityAsset(registry, 'darwin', 'arm64')).toEqual({
+    version: '1.4.0',
+    archive: 'https://dl.google.com/agy/mac-arm64.zip',
+    sha256: 'a'.repeat(64),
+  })
+  expect(resolveAntigravityAsset(registry, 'linux', 'x64')?.archive).toContain('linux-x64')
+  expect(resolveAntigravityAsset(registry, 'win32', 'x64')?.archive).toContain('win-x64')
+  expect(resolveAntigravityAsset(registry, 'linux', 'arm64')).toBeNull()
+  expect(resolveAntigravityAsset(registry, 'darwin', 'x64')).toBeNull()
+  expect(resolveAntigravityAsset({ ...registry, version: '../1.4.0' }, 'darwin', 'arm64')).toBeNull()
+})
+
+const fakeArchive = (names: string[]) => async (_url: string, file: string) => {
+  const dir = mkdtempSync(join(root, 'zip-'))
+  for (const name of names) writeFileSync(join(dir, name), '#!/bin/sh\n')
+  execFileSync('zip', ['-q', '-j', file, ...names.map((name) => join(dir, name))])
+}
+const asset = { version: '1.4.0', archive: 'https://dl.google.com/agy/x.zip' }
+const hasZip = (() => {
+  try {
+    execFileSync('zip', ['-v'], { stdio: 'ignore' })
+    return process.platform !== 'win32'
+  } catch {
+    return false
+  }
+})()
+
+it.skipIf(!hasZip)(
+  "installs into Ramu's own directory, activates it, and the runtime resolves with its helper",
+  async () => {
+    const names = antigravityFileNames(),
+      probed: string[] = []
+    expect(managedAntigravity()).toBeNull()
+    const result = await installAntigravity({
+      asset,
+      download: fakeArchive([names.executable, names.harness]),
+      probe: async (exe, harness) => {
+        probed.push(exe, harness)
+      },
+    })
+    expect(result).toEqual({ version: '1.4.0', installed: true })
+    expect(probed[0]).not.toContain('versions')
+    const runtime = managedAntigravity()!
+    expect(runtime.executable).toBe(join(providerRuntimeHome('antigravity'), 'versions', '1.4.0', names.executable))
+    expect(providerBinary('antigravity', {})).toBe(runtime.executable)
+    expect(providerEnvironment('antigravity', {}).ANTIGRAVITY_HARNESS_PATH).toBe(runtime.harness)
+    expect(readdirSync(providerRuntimeHome('antigravity')).filter((entry) => entry.startsWith('.stage-'))).toEqual([])
+    // The same version is not downloaded again.
+    expect(
+      await installAntigravity({
+        asset,
+        download: async () => {
+          throw new Error('should not download')
+        },
+      }),
+    ).toEqual({ version: '1.4.0', installed: false })
+  },
+)
+it.skipIf(!hasZip)('keeps one previous version for rollback and drops older ones', async () => {
+  const names = antigravityFileNames(),
+    files = fakeArchive([names.executable, names.harness]),
+    probe = async () => {}
+  for (const version of ['1.1.0', '1.2.0', '1.3.0'])
+    await installAntigravity({ asset: { ...asset, version }, download: files, probe })
+  expect(readdirSync(join(providerRuntimeHome('antigravity'), 'versions')).sort()).toEqual(['1.2.0', '1.3.0'])
+  expect(managedAntigravity()?.version).toBe('1.3.0')
+})
+it.skipIf(!hasZip)('never activates an archive that is incomplete or fails its handshake', async () => {
+  const names = antigravityFileNames()
+  await expect(
+    installAntigravity({ asset, download: fakeArchive([names.executable]), probe: async () => {} }),
+  ).rejects.toThrow('missing')
+  await expect(
+    installAntigravity({
+      asset,
+      download: fakeArchive([names.executable, names.harness]),
+      probe: async () => {
+        throw new Error('The downloaded runtime did not answer.')
+      },
+    }),
+  ).rejects.toThrow('did not answer')
+  expect(managedAntigravity()).toBeNull()
+  expect(existsSync(join(providerRuntimeHome('antigravity'), 'versions', '1.4.0'))).toBe(false)
+  expect(readdirSync(providerRuntimeHome('antigravity')).filter((entry) => entry.startsWith('.stage-'))).toEqual([])
+})
+it.skipIf(!hasZip)('never unpacks a download whose checksum differs from the registry', async () => {
+  const names = antigravityFileNames()
+  await expect(
+    installAntigravity({
+      asset: { ...asset, sha256: '0'.repeat(64) },
+      download: fakeArchive([names.executable, names.harness]),
+      probe: async () => {},
+    }),
+  ).rejects.toThrow('checksum')
+  expect(managedAntigravity()).toBeNull()
+})
+it.skipIf(process.env.RAMU_LIVE_INSTALL !== '1')(
+  "installs Google's real runtime and it answers the ACP handshake",
+  async () => {
+    const result = await installAntigravity()
+    expect(result.installed).toBe(true)
+    expect(managedAntigravity()?.version).toBe(result.version)
+  },
+  15 * 60_000,
+)
+
+it('rejects an already cancelled install without downloading or creating staging files', async () => {
+  const controller = new AbortController()
+  controller.abort()
+  await expect(installAntigravity({ asset, signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' })
+  expect(managedAntigravity()).toBeNull()
+  expect(existsSync(providerRuntimeHome('antigravity'))).toBe(false)
+})
+
+it('cancels an in-progress download and removes its staging files', async () => {
+  const controller = new AbortController()
+  let started!: () => void
+  const ready = new Promise<void>((resolve) => {
+    started = resolve
+  })
+  const work = installAntigravity({
+    asset,
+    signal: controller.signal,
+    download: async (_url, file, signal) => {
+      writeFileSync(file, 'partial download')
+      started()
+      await new Promise<void>((_resolve, reject) =>
+        signal!.addEventListener('abort', () => reject(signal!.reason), { once: true }),
+      )
+    },
+  })
+  await ready
+  controller.abort()
+  await expect(work).rejects.toMatchObject({ name: 'AbortError' })
+  expect(managedAntigravity()).toBeNull()
+  expect(readdirSync(providerRuntimeHome('antigravity'))).toEqual([])
+})
+
+it.skipIf(!hasZip)('preserves the active runtime when cancelled before activation', async () => {
+  const names = antigravityFileNames(),
+    download = fakeArchive([names.executable, names.harness])
+  await installAntigravity({ asset, download, probe: async () => {} })
+  const controller = new AbortController()
+  await expect(
+    installAntigravity({
+      asset: { ...asset, version: '1.5.0' },
+      download,
+      signal: controller.signal,
+      probe: async () => {
+        controller.abort()
+      },
+    }),
+  ).rejects.toMatchObject({ name: 'AbortError' })
+  expect(managedAntigravity()?.version).toBe(asset.version)
+  expect(readdirSync(join(providerRuntimeHome('antigravity'), 'versions'))).toEqual([asset.version])
+  expect(readdirSync(providerRuntimeHome('antigravity')).filter((entry) => entry.startsWith('.stage-'))).toEqual([])
+})

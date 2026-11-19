@@ -1,0 +1,86 @@
+[
+  {
+    "id": "claude-structured-api-error",
+    "synthetic": true,
+    "origin": "apps/server/test/agent.test.ts (isUsageLimit test) and agent/claudeStreamPump.ts",
+    "provider": "claude-code",
+    "channel": "error",
+    "toolCalls": 0,
+    "value": {
+      "api_error": "usage_limit_reached"
+    },
+    "expect": {
+      "limited": true,
+      "confidence": "high",
+      "source": "structured"
+    }
+  },
+  {
+    "id": "claude-result-json",
+    "synthetic": true,
+    "origin": "apps/server/test/agent.test.ts fakeQuery result \"usage_limit_reached\"",
+    "provider": "claude-code",
+    "channel": "error",
+    "toolCalls": 0,
+    "value": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": true,
+      "result": "usage_limit_reached"
+    },
+    "expect": {
+      "limited": true,
+      "confidence": "high",
+      "source": "structured"
+    }
+  },
+  {
+    "id": "claude-rate-limit-rejected",
+    "synthetic": true,
+    "origin": "apps/server/src/agent/claudeStreamPump.ts (rate_limit_info.status rejected)",
+    "provider": "claude-code",
+    "channel": "error",
+    "toolCalls": 0,
+    "value": {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "rejected"
+      }
+    },
+    "expect": {
+      "limited": true,
+      "confidence": "high",
+      "source": "structured"
+    }
+  },
+  {
+    "id": "claude-hit-your-limit-text",
+    "synthetic": true,
+    "origin": "apps/server/src/agent/usageLimit.ts previous regex \"hit your.*(usage|spend|limit)\"",
+    "provider": "claude-code",
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "You've hit your limit. Resets at 5pm.",
+    "expect": {
+      "limited": true,
+      "confidence": "high",
+      "source": "provider",
+      "resetsAtIso": "2026-10-18T10:00:00.000Z",
+      "assumedZone": true
+    }
+  },
+  {
+    "id": "claude-bare-rate-limit-is-low",
+    "synthetic": true,
+    "origin": "apps/server/src/agent/usageLimit.ts previous regex \"rate limit\"",
+    "provider": "claude-code",
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "There was a rate limit problem",
+    "expect": {
+      "limited": true,
+      "confidence": "low",
+      "source": "generic"
+    }
+  }
+]

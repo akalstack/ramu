@@ -1,0 +1,36 @@
+/* Fixed recovery palette: these colors are independent of every candidate theme token. */
+.theme-recovery-bar {
+  background: #202024;
+  color: #f5f5f7;
+  border: 1px solid #55555c;
+}
+.theme-recovery-button {
+  font: inherit;
+  font-size: var(--font-body);
+  line-height: 1.4;
+  padding: 4px 10px;
+  border: 1px solid #77777f;
+  border-radius: 6px;
+  background: transparent;
+  color: #f5f5f7;
+  cursor: pointer;
+}
+.theme-recovery-button:hover:not(:disabled) {
+  background: #303035;
+}
+.theme-recovery-button[data-variant='solid'] {
+  background: #f5f5f7;
+  color: #17171a;
+  border-color: transparent;
+}
+.theme-recovery-button[data-variant='solid']:hover:not(:disabled) {
+  background: #ffffff;
+}
+.theme-recovery-button:focus-visible {
+  outline: 2px solid #f5f5f7;
+  outline-offset: 2px;
+}
+.theme-recovery-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

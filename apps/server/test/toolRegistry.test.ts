@@ -1,0 +1,166 @@
+import { expect, it } from 'vitest'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { z } from 'zod'
+import { ToolRegistry } from '../src/agent/toolRegistry'
+
+it('defers optional schemas, discovers newly registered tools and validates invocation through real MCP', async () => {
+  const server = new McpServer({ name: 'ramu', version: 'test' })
+  const registry = new ToolRegistry(server, true)
+  const called: number[] = []
+  registry.server.registerTool(
+    'schedule_pause',
+    { description: 'Pause an existing schedule', inputSchema: { id: z.number().int().positive() } },
+    ({ id }) => {
+      called.push(id)
+      return { content: [{ type: 'text', text: 'paused' }] }
+    },
+  )
+  registry.server.registerTool('memory_read', { description: 'Read a shared memory', inputSchema: {} }, () => ({
+    content: [],
+  }))
+  registry.expose()
+  const client = new Client({ name: 'test', version: '1' })
+  const [left, right] = InMemoryTransport.createLinkedPair()
+  await Promise.all([server.connect(left), client.connect(right)])
+  try {
+    expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(['tool_search', 'tool_invoke'])
+    const found = await client.callTool({ name: 'tool_search', arguments: { query: 'pause schedule' } })
+    expect(found.content).toEqual([expect.objectContaining({ text: expect.stringContaining('schedule_pause') })])
+    const invalid = await client.callTool({
+      name: 'tool_invoke',
+      arguments: { name: 'schedule_pause', arguments: { id: -1 } },
+    })
+    expect(invalid.isError).toBe(true)
+    expect(called).toEqual([])
+    const valid = await client.callTool({
+      name: 'tool_invoke',
+      arguments: { name: 'schedule_pause', arguments: { id: 2 } },
+    })
+    expect(valid.isError).not.toBe(true)
+    expect(called).toEqual([2])
+    expect((await registry.invoke('provider_shell', {}, {})).isError).toBe(true)
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+it('catalogs only registered capabilities and preserves handler scope errors', async () => {
+  const registry = new ToolRegistry(new McpServer({ name: 'ramu', version: 'test' }), true)
+  registry.server.registerTool('memory_read', { description: 'Read memory', inputSchema: { id: z.string() } }, () => {
+    throw new Error('Another project')
+  })
+  expect(registry.search('shell')).toEqual([])
+  expect((await registry.invoke('memory_read', { id: 'foreign' }, {})).isError).toBe(true)
+})
+
+it('accepts larger discovery requests from a deferred catalog', async () => {
+  const server = new McpServer({ name: 'ramu', version: 'test' })
+  const registry = new ToolRegistry(server, true)
+  for (let i = 0; i < 105; i++)
+    registry.server.registerTool(`memory_${i}`, { description: 'Search memory', inputSchema: {} }, () => ({
+      content: [],
+    }))
+  registry.expose()
+  const client = new Client({ name: 'test', version: '1' })
+  const [left, right] = InMemoryTransport.createLinkedPair()
+  await Promise.all([server.connect(left), client.connect(right)])
+  try {
+    const tools = (await client.listTools()).tools
+    expect(tools.find((tool) => tool.name === 'tool_search')!.inputSchema.properties).toMatchObject({
+      query: { maxLength: 4000 },
+      limit: { maximum: 100, default: 5 },
+    })
+    for (const limit of [undefined, 20, 100]) {
+      const result = await client.callTool({
+        name: 'tool_search',
+        arguments: { query: 'memory '.repeat(100), ...(limit === undefined ? {} : { limit }) },
+      })
+      expect(result.isError).not.toBe(true)
+      expect(JSON.parse((result.content as { text: string }[])[0]!.text)).toHaveLength(limit ?? 5)
+    }
+    for (const args of [{ limit: 101 }, { limit: 0 }, { limit: 1.5 }, { query: 'x'.repeat(4001) }]) {
+      const result = await client.callTool({ name: 'tool_search', arguments: { query: '', ...args } })
+      expect(result.isError).toBe(true)
+    }
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+it('keeps the advisor and sub-agent channel listed when other tools are deferred', async () => {
+  const server = new McpServer({ name: 'ramu', version: 'test' })
+  const registry = new ToolRegistry(server, true)
+  for (const name of ['advisor', 'wait_for_advice', 'ask_parent', 'message_parent', 'answer_subagent', 'memory_read'])
+    registry.server.registerTool(name, { description: name, inputSchema: {} }, () => ({ content: [] }))
+  registry.expose()
+  const client = new Client({ name: 'test', version: '1' })
+  const [left, right] = InMemoryTransport.createLinkedPair()
+  await Promise.all([server.connect(left), client.connect(right)])
+  try {
+    expect((await client.listTools()).tools.map((tool) => tool.name).sort()).toEqual([
+      'advisor',
+      'answer_subagent',
+      'ask_parent',
+      'message_parent',
+      'tool_invoke',
+      'tool_search',
+      'wait_for_advice',
+    ])
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+it('lists every tool directly for a provider with its own tool search, marking the ones that must always load', async () => {
+  const server = new McpServer({ name: 'ramu', version: 'test' })
+  const registry = new ToolRegistry(server, false)
+  registry.server.registerTool('schedule_pause', { description: 'Pause a schedule', inputSchema: {} }, () => ({
+    content: [],
+  }))
+  registry.server.registerTool('ask_user', { description: 'Ask the person', inputSchema: {} }, () => ({
+    content: [],
+  }))
+  registry.expose()
+  const client = new Client({ name: 'test', version: '1' })
+  const [left, right] = InMemoryTransport.createLinkedPair()
+  await Promise.all([server.connect(left), client.connect(right)])
+  try {
+    const tools = (await client.listTools()).tools
+    expect(tools.map((tool) => tool.name)).toEqual(['schedule_pause', 'ask_user'])
+    expect(tools.find((tool) => tool.name === 'ask_user')?._meta).toEqual({ 'anthropic/alwaysLoad': true })
+    expect(tools.find((tool) => tool.name === 'schedule_pause')?._meta).toBeUndefined()
+  } finally {
+    await client.close()
+  }
+})
+
+it.each(['always', 'deferred'] as const)('serves only the %s part of the catalog when asked', async (subset) => {
+  const server = new McpServer({ name: 'ramu', version: 'test' })
+  const registry = new ToolRegistry(server, false, subset)
+  for (const name of ['ask_user', 'memory_save'])
+    registry.server.registerTool(name, { description: name, inputSchema: {} }, () => ({ content: [] }))
+  const client = new Client({ name: 'test', version: '1' })
+  const [left, right] = InMemoryTransport.createLinkedPair()
+  await Promise.all([server.connect(left), client.connect(right)])
+  try {
+    expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(
+      subset === 'always' ? ['ask_user'] : ['memory_save'],
+    )
+  } finally {
+    await client.close()
+  }
+})
+
+it('refuses a second tool under a name already registered', () => {
+  const registry = new ToolRegistry(new McpServer({ name: 'ramu', version: 'test' }), true)
+  const tool = () => ({ content: [] })
+  registry.server.registerTool('review_reply', { description: 'Pull request reply', inputSchema: {} }, tool)
+  expect(() =>
+    registry.server.registerTool('review_reply', { description: 'Change review reply', inputSchema: {} }, tool),
+  ).toThrow(/already registered/)
+})

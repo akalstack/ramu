@@ -1,0 +1,1224 @@
+import { ResourcesStatus } from './chat/ResourcesStatus'
+import { receivePluginLink } from './settings/pluginLinks'
+import { PendingThreadDelivery } from './composer/WaitingThreads'
+import { ToolSyncDelivery } from './customize/toolSync'
+import { useHostWriteAccess } from './composer/useHostWriteAccess'
+import { ownHostId } from './hosts'
+import { openBrowser, presentBrowser } from './views/browserPane'
+import { animateThreadListChange } from './workspace/threadListMotion'
+import { offerThreadUndo } from './sidebar/projects/threadUndo'
+import { Onboarding } from './onboarding/Onboarding'
+import { offerPairLink } from './pairLink'
+import { BackgroundActivity } from './chat/BackgroundActivity'
+import { AppUpdateButton } from './settings/AppUpdates'
+import { animatePanelChange, cancelPanelMotion } from './workspace/panelMotion'
+import { errorText } from './lib/errors'
+import { useSidebarWidth } from './workspace/panelLayout'
+import { t, useLanguage } from './i18n'
+import { Kbd } from '@/components/ui/kbd'
+import { ProviderSetupTerminal } from './models/ProviderSetupTerminal'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import { SeparatorOverlay, usePanelRef, type Layout, type PanelSize } from 'react-resizable-panels'
+import { Button } from '@/components/desktop-button'
+import { Input } from '@/components/ui/input'
+import {
+  AppWindow,
+  Blocks,
+  CalendarClock,
+  Inbox,
+  MessagesSquare,
+  SquarePen,
+  Archive,
+  Files,
+  GitBranch,
+  GitPullRequest,
+  MessageCircle,
+  Pencil,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRight,
+  SquareTerminal,
+  Globe,
+  LayoutGrid,
+  Monitor,
+  Search,
+} from 'lucide-react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { buildCommands, formatKeys, useKeybindings } from './commands'
+import { AccountMenuButton } from './sidebar/AccountMenuButton'
+import { Palette } from './palette/Palette'
+import type { PaletteMode } from './palette/sources'
+import { copyText, invoke, ramu } from './ipc'
+import { useHeldShells, useUnseenTerminalOutput } from './workspace/terminalActivity'
+import { Menu, useContextMenu } from './Menu'
+import { RepositoryPicker } from './git/RepositoryPicker'
+import { syncRepositories } from './git/syncRepositories'
+import { ProtectedSyncDialog } from './git/ProtectedSyncDialog'
+import { useQuery } from '@tanstack/react-query'
+import { repositoryQueryKey } from './git/repositoryQueryKey'
+import { queryInvokerFor } from './git/hostQuery'
+import { BranchPicker, SyncButton, useAutoFetch } from './git/GitControls'
+import { isGitBusy, useGitBusy, withGitBackground, withGitBusy } from './git/gitBusy'
+import { CommitBranchDialog } from './git/CommitBranchDialog'
+import { CommitDialog } from './git/CommitDialog'
+import { CreatePullRequestHost } from './git/CreatePullRequestHost'
+import { openPublishRepository, PublishRepositoryHost } from './git/PublishRepositoryHost'
+import { PairingRequestDialog } from './settings/PairingRequestDialog'
+import { PermissionRequestDialog } from './settings/PermissionRequestDialog'
+import { PairBackDialog } from './settings/PairBackDialog'
+import { IdentityMismatchDialog } from './settings/IdentityMismatchDialog'
+import { Notifications, notifyError } from './chat/Notifications'
+import { SummaryHost } from './summaries/SummaryHost'
+import { TitleTooltips } from './TitleTooltips'
+import { AppSettingsProvider, useAppSettings } from './settings/AppSettings'
+import { ModelSetsProvider } from './models/ModelSets'
+import type { SettingsSection } from './settings/SettingsPage'
+import { SchedulesPage } from './Automation'
+import { PagesPage } from './pages/PagesPage'
+import { PageNotices } from './pages/PageNotices'
+import { InboxPage } from './inbox/InboxPage'
+import { PullRequestsPage, usePullRequestsWaiting } from './git/PullRequestsPage'
+import { useInboxModel } from './inbox/useBrief'
+import { LiveView } from './liveView/LiveView'
+import { openComputer } from './chat/openComputer'
+import { AUTO_PROJECT, DEFAULT_SIDEBAR_WIDTH, NO_PROJECT, SIDEBAR_WIDTH_RANGE, isGlobalPage } from '@ramu/shared/types'
+import { SettingsPanel } from './settings/SettingsPanel'
+import { ArchivedThreadsDialog } from './sidebar/ArchivedThreads'
+import { openArchivedThreads } from './sidebar/projects/threadLists'
+import { UsageFooter, UsageRings } from './settings/Usage'
+import { CheckoutSwitcher, ProjectSwitcher } from './workspace/ProjectSwitcher'
+import { runProjectAction, useProjectActions, WindowActions } from './WindowActions'
+import { SearchChats } from './chat/SearchChats'
+import { useGitChangeCount } from './git/useGitChangeCount'
+import { CommitPushButton } from './git/CommitPushButton'
+import { CreateEntryDialog } from './workspace/CreateEntryDialog'
+import { AddProjectDialog } from './workspace/AddProjectDialog'
+import { HomePage, NewThread } from './NewThread'
+import { BootScreen, Wordmark } from './Brand'
+import { paneFadeIn } from './workspace/paneMotion'
+import { ComputerSwitcher, useComputers } from './workspace/computers'
+import { useAddProject } from './workspace/addProject'
+import { HostProjects } from './sidebar/HostProjects'
+import { HostNavigation } from './workspace/HostNavigation'
+import { ActiveHostSettings } from './settings/hostPreferences'
+import { HostSelectionProvider, useHostSelection } from './workspace/HostSelection'
+import { useHost } from './workspace/HostProvider'
+import { useProjectIdentity } from './workspace/identities'
+import { IdentityChip } from './settings/IdentityChip'
+import { TaskPane } from './workspace/TaskPane'
+import { CustomizePage } from './customize/CustomizePage'
+import { CUSTOMIZE_EVENT, openCustomize, type CustomizeTarget } from './customize/openCustomize'
+import {
+  isWorkspaceCtx,
+  worktreeCtx,
+  projectCtx,
+  useHostRuntime,
+  useWorkspace,
+  WorkspaceProvider,
+} from './workspace/workspace'
+
+export function App({ onReady }: { onReady?: () => void }) {
+  useLanguage()
+
+  return (
+    <AppSettingsProvider>
+      <HostSelectionProvider>
+        {(activeHost) => (
+          <>
+            <HostNavigation />
+            <WorkspaceProvider activeHost={activeHost}>
+              {(loaded) =>
+                loaded ? (
+                  <ActiveHostSettings>
+                    <ModelSetsProvider>
+                      <ReadyShell onReady={onReady} />
+                    </ModelSetsProvider>
+                  </ActiveHostSettings>
+                ) : (
+                  <BootScreen />
+                )
+              }
+            </WorkspaceProvider>
+          </>
+        )}
+      </HostSelectionProvider>
+    </AppSettingsProvider>
+  )
+}
+
+function ReadyShell({ onReady }: { onReady?: () => void }) {
+  useLanguage()
+  const { id: host } = useHost()
+
+  useEffect(() => {
+    onReady?.()
+  }, [onReady])
+  return (
+    <>
+      <Shell />
+      <LiveView />
+      <Onboarding key={host} />
+    </>
+  )
+}
+
+function Shell() {
+  const language = useLanguage()
+
+  const ws = useWorkspace()
+  const computers = useComputers()
+  const hostEvents = useHostRuntime()
+  const { activeHost, select } = useHostSelection()
+  const { id: shownHost, invoke: hostInvoke } = useHost()
+  const { ui } = ws
+  const addProject = useAddProject()
+  const [createScheduleRequested, setCreateScheduleRequested] = useState(false)
+  const [palette, setPalette] = useState<PaletteMode | null>(null)
+  const [sidebarHidden, setSidebarHidden] = useState(false)
+  const toggleSidebar = () =>
+    animatePanelChange(
+      () => setSidebarHidden((hidden) => !hidden),
+      'sidebar',
+      () => !!document.querySelector('.shell.no-sidebar'),
+    )
+  const { preferences } = useAppSettings()
+  // The sidebar width is shared by every host's window (device-wide); `preferences.sidebarWidth` only seeds it.
+  const [sidebarWidth, setSidebarWidth] = useSidebarWidth(preferences.sidebarWidth)
+  const currentSidebarWidth = useRef(sidebarWidth)
+  currentSidebarWidth.current = sidebarWidth
+  // The sidebar, main area and tools column are panels of one group. Their default sizes always mirror the
+  // current ones, so the group keeps them when another panel joins or leaves.
+  const sidebarPanel = usePanelRef()
+  const [navWidth, setNavWidth] = useState(sidebarWidth)
+  const [expandedWidth, setExpandedWidth] = useState(sidebarWidth)
+  const onSidebarResize = (size: PanelSize) => {
+    const width = Math.round(size.inPixels)
+    setNavWidth(width)
+    const collapsed = sidebarPanel.current?.isCollapsed() ?? width === 0
+    if (width > 0 && !collapsed) setExpandedWidth(width)
+    setSidebarHidden((hidden) => (hidden === collapsed ? hidden : collapsed))
+  }
+  // Dragging remembers sizes: the sidebar width and the tools column are device-wide layout sizes.
+  const onShellLayout = (_layout: Layout, meta: { isUserInteraction: boolean }) => {
+    if (!meta.isUserInteraction) return
+    const sidebar = Math.round(sidebarPanel.current?.getSize().inPixels ?? 0)
+    if (sidebar > 0 && sidebar !== currentSidebarWidth.current) setSidebarWidth(sidebar)
+  }
+  useLayoutEffect(() => {
+    const panel = sidebarPanel.current
+    if (!panel) return
+    const toggling = sidebarHidden !== panel.isCollapsed()
+    // The sidebar lands in one step and fades in when it comes back; the chat list inside is too heavy to reflow every frame.
+    const fade = toggling && !sidebarHidden ? paneFadeIn(document.getElementById('workspace-sidebar')) : undefined
+    if (sidebarHidden && !panel.isCollapsed()) panel.collapse()
+    if (!sidebarHidden && panel.isCollapsed()) panel.expand()
+    return fade
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [sidebarHidden] by design; the values it reads beyond these are current as of that run
+  }, [sidebarHidden])
+  // Settings → reset layout sizes (and any other change of the saved width) applies to the live panel.
+  useEffect(() => {
+    const panel = sidebarPanel.current
+    if (panel && !panel.isCollapsed() && Math.abs(panel.getSize().inPixels - sidebarWidth) > 1)
+      panel.resize(sidebarWidth)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [sidebarWidth] by design; the values it reads beyond these are current as of that run
+  }, [sidebarWidth])
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>('appearance')
+  const [settingsTarget, setSettingsTarget] = useState<string | undefined>()
+  const [settingsHost, setSettingsHost] = useState<string | undefined>()
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [searchingChats, setSearchingChats] = useState(false)
+  const [archivedOpen, setArchivedOpen] = useState(false)
+  useEffect(() => {
+    const open = () => setArchivedOpen(true)
+    window.addEventListener('ramu:archived', open)
+    return () => window.removeEventListener('ramu:archived', open)
+  }, [])
+  // Customize opens on the section asked for, from the rail, a thread or an old Settings link.
+  const [customizeTarget, setCustomizeTarget] = useState<CustomizeTarget>({ section: 'plugins' })
+  useEffect(() => {
+    const show = (event: Event) => {
+      const target = (event as CustomEvent<CustomizeTarget | undefined>).detail
+      if (target?.section) setCustomizeTarget(target)
+      ws.setSidebar('customize')
+    }
+    window.addEventListener(CUSTOMIZE_EVENT, show)
+    return () => window.removeEventListener(CUSTOMIZE_EVENT, show)
+  }, [ws])
+  useEffect(() => {
+    const open = (event: Event) => {
+      const detail = (event as CustomEvent<{ section?: SettingsSection; target?: string; host?: string }>).detail
+      // Plugins moved to Customize; links that still ask for them land there.
+      if (detail?.section === 'plugins') {
+        openCustomize('plugins')
+        return
+      }
+      setSettingsSection(detail?.section ?? 'appearance')
+      setSettingsTarget(detail?.target)
+      setSettingsHost(detail?.host)
+      setSettingsOpen(true)
+    }
+    const off = ramu.on('menu:action', ({ action }) => {
+      window.dispatchEvent(
+        new CustomEvent('ramu:settings', {
+          detail:
+            action === 'check-updates' ? { section: 'system', target: 'Check app updates' } : { section: 'appearance' },
+        }),
+      )
+      if (action === 'check-updates')
+        void invoke('updates.check').catch((reason) => notifyError(errorText(reason), 'Updates'))
+    })
+    const offLink = ramu.on('pair:link', ({ link }) => {
+      offerPairLink(link)
+      window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'remote' } }))
+    })
+    const offPluginLink = ramu.on('plugin:link', ({ link }) => {
+      if (receivePluginLink(link))
+        window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'plugins' } }))
+    })
+    window.addEventListener('ramu:settings', open)
+    return () => {
+      off()
+      offLink()
+      offPluginLink()
+      window.removeEventListener('ramu:settings', open)
+    }
+  }, [])
+
+  // Saved project actions join the command list, so they show in the palette and their shortcuts work everywhere.
+  const actionContext = ui.activeTaskId
+  const projectActions = useProjectActions(actionContext ? ws.projectOf(actionContext)?.id : undefined)
+  const commands = useMemo(
+    () => [
+      ...buildCommands(
+        {
+          ...ws,
+          newTask: (projectId) => {
+            if (projectId === undefined && computers?.scope) select(computers.scope, { kind: 'new' })
+            else ws.newTask(projectId)
+          },
+        },
+        {
+          defaultTerminalDock: preferences.defaultTerminalDock,
+          invoke: hostInvoke,
+          openPalette: setPalette,
+          toggleSidebar,
+          addProject: () => void addProject.add(),
+          createSchedule: () => {
+            setSidebarHidden(false)
+            setCreateScheduleRequested(true)
+            ws.setSidebar('schedules')
+          },
+          showSidebar: (tab) => {
+            if (tab === 'projects' || tab === 'schedules') setSidebarHidden(false)
+            ws.setSidebar(tab)
+          },
+          showSearch: () => {
+            ws.setSidebar('search')
+            window.dispatchEvent(new Event('ramu:focus-search'))
+          },
+        },
+      ),
+      // ⌘K is left to the editor's own chords while a file has focus.
+      {
+        id: 'chat.archived',
+        title: t('Show archived threads'),
+        category: t('Thread'),
+        run: openArchivedThreads,
+      },
+      {
+        id: 'chat.search',
+        title: t('Search threads'),
+        category: t('Thread'),
+        keys: 'mod+k',
+        run: () => setSearchingChats(true),
+        when: () => !document.activeElement?.closest('.monaco-editor'),
+      },
+      ...(actionContext
+        ? projectActions.map((action) => ({
+            id: `action.${action.id}`,
+            title: t('Run action: {0}', { '0': action.name }),
+            category: t('Actions'),
+            keys: action.keys,
+            run: () => runProjectAction(ws, actionContext, action),
+          }))
+        : []),
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [ws, computers?.scope, select, hostInvoke, language, actionContext, ...] by design; the values it reads beyond these are current as of that run
+    [
+      ws,
+      computers?.scope,
+      select,
+      hostInvoke,
+      language,
+      actionContext,
+      projectActions,
+      addProject.busy,
+      preferences.defaultTerminalDock,
+    ],
+  )
+  useKeybindings(commands, palette === null && !settingsOpen && !searchingChats)
+  useEffect(() => {
+    const openFile = () => setPalette('files')
+    window.addEventListener('ramu:open-file', openFile)
+    return () => window.removeEventListener('ramu:open-file', openFile)
+  }, [])
+  // The palette's own shortcuts still close it while it is open.
+  useEffect(() => {
+    if (palette === null) return
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
+        e.preventDefault()
+        setPalette(null)
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [palette])
+
+  useEffect(
+    () =>
+      ramu.on('browser:present', (tab) => {
+        presentBrowser(ws, activeHost, tab)
+      }),
+    [activeHost, ws],
+  )
+  useEffect(
+    () =>
+      hostEvents.on('hostBrowser:present', (tab) => {
+        presentBrowser(ws, activeHost, { ...tab, hostId: activeHost })
+      }),
+    [hostEvents, activeHost, ws],
+  )
+
+  // A clicked link the person chose to open in the integrated browser opens as a tab in the thread on screen; with no
+  // thread open there is nowhere to put it, so it goes to their own browser instead of being lost.
+  useEffect(
+    () =>
+      ramu.on('browser:open-link', ({ url }) => {
+        const taskId = ws.ui.activeTaskId
+        if (taskId) ws.openView(taskId, { kind: 'browser', url })
+        else void ramu.invoke('app.openExternal', url).catch(() => {})
+      }),
+    [ws],
+  )
+
+  // The start screen shows for New chat, and when nothing is open yet.
+  useEffect(() => {
+    const show = () => ws.setSidebar('artifacts')
+    window.addEventListener('ramu:open-page', show)
+    return () => window.removeEventListener('ramu:open-page', show)
+  }, [ws])
+  const globalPage = isGlobalPage(ui.sidebar)
+  const workspaceTool = ui.sidebar === 'explorer' || ui.sidebar === 'search' || ui.sidebar === 'scm' ? ui.sidebar : null
+  // Chats with nothing open is the home page: the start box and a line leading to the Inbox. New chat without a project lands here too.
+  const landing = ui.sidebar === 'projects' && !ui.activeTaskId
+  // Auto exists only on the home page; a project pane never opens for it.
+  const composingProject = ws.composing === AUTO_PROJECT ? NO_PROJECT : ws.composing
+  const startProject = globalPage || landing ? null : (composingProject ?? (!ui.activeTaskId ? NO_PROJECT : null))
+  const panes = new Map<string, string>()
+  for (const id of ui.openTaskIds) {
+    const workspace = ws.workspaceOf(id)
+    if (!panes.has(workspace) || id === ui.activeTaskId) panes.set(workspace, id)
+  }
+  const startContext = startProject
+    ? ws.composingWorkspace
+      ? worktreeCtx(ws.composingWorkspace)
+      : projectCtx(startProject)
+    : null
+  // New chat in a project always runs in that project's pane, so it has the same rail and tools as its chats.
+  if (startContext && (panes.has(startContext) || startProject !== NO_PROJECT)) panes.set(startContext, startContext)
+
+  // A host keeps many threads open. Each pane mounts the first time it is shown, so bringing a host on screen builds
+  // the one thread it opens, not all of them; a pane then stays mounted, keeping its scroll and editors.
+  const visiblePane =
+    [...panes].find(
+      ([workspace, taskId]) =>
+        !globalPage && !landing && (startProject ? workspace === startContext : ui.activeTaskId === taskId),
+    )?.[0] ?? null
+  const [shownPanes, setShownPanes] = useState({ host: shownHost, workspaces: new Set<string>() })
+  if (shownPanes.host !== shownHost || (visiblePane && !shownPanes.workspaces.has(visiblePane))) {
+    const earlier = shownPanes.host === shownHost ? shownPanes.workspaces : []
+    setShownPanes({ host: shownHost, workspaces: new Set([...earlier, ...(visiblePane ? [visiblePane] : [])]) })
+  }
+
+  const gitChanges = useGitChangeCount(ui.activeTaskId, ws.bindings[ui.activeTaskId ?? ''] ?? [])
+  const activeWorkspace = ui.activeTaskId ? ws.workspaceOf(ui.activeTaskId) : null
+  const activePanelState = ws.taskUi[activeWorkspace ?? '']
+  const terminalShown =
+    !globalPage &&
+    !landing &&
+    !startProject &&
+    !!activePanelState?.views.some((view) => view.kind === 'terminal') &&
+    (activePanelState.terminalOpen ?? true) &&
+    ((activePanelState.terminalDock ?? preferences.defaultTerminalDock) === 'bottom' ||
+      activePanelState.views.some((view) => view.id === activePanelState.activeViewId && view.kind === 'terminal'))
+  const browserShown =
+    !globalPage &&
+    !landing &&
+    !startProject &&
+    !!ui.activeTaskId &&
+    ws.workspaceVisible(ui.activeTaskId) &&
+    !!activePanelState?.views.some((view) => view.id === activePanelState.activeViewId && view.kind === 'browser')
+  const unsavedFiles = new Set(
+    [...(ws.taskUi[ui.activeTaskId ?? '']?.views ?? []), ...(ws.taskUi[activeWorkspace ?? '']?.views ?? [])]
+      .filter((view) => view.kind === 'file' && ws.dirty[view.id])
+      .map((view) => view.id),
+  ).size
+  // Output from a terminal nobody is looking at: a dot on the Terminal button until the panel is opened.
+  // Only this workspace's terminals count, and a freshly opened shell's startup output doesn't (see terminalActivity).
+  const { activity, terminals } = useHostRuntime()
+  const terminalUnseen = useUnseenTerminalOutput(activity, activeWorkspace)
+  const heldShells = useHeldShells(activity, activeWorkspace)
+  useLayoutEffect(
+    () => activity.setShownTerminal(terminalShown ? activeWorkspace : null),
+    [activity, terminalShown, activeWorkspace],
+  )
+  // What the Brief holds, so the badge and the list always agree.
+  const inboxCount = useInboxModel({ everyHost: true }).model.needsYou
+  const pullsWaiting = usePullRequestsWaiting()
+  const attentionChats = ws.tasks.filter(
+    (task) => task.status !== 'archived' && (ws.unread.has(task.id) || task.status === 'needs-input'),
+  ).length
+  const badge = (count: number, compact = false) =>
+    count > 0 && (
+      <span
+        className={`activity-badge absolute grid place-items-center rounded-(--radius-row) [background:var(--primary)] [color:var(--primary-ink)] font-semibold leading-[1] tabular-nums pointer-events-none ${compact ? 'right-[-4px] bottom-[-3px] min-w-3 h-3 px-0.5 [box-shadow:0_0_0_1px_var(--window)] text-[length:8px]' : 'right-[-3px] bottom-[-2px] min-w-4 h-4 p-[0_4px] [box-shadow:0_0_0_2px_var(--window)] text-[length:10px]'}`}
+        aria-hidden="true"
+      >
+        {count > 99 ? '99+' : count}
+      </span>
+    )
+
+  const rightShown = terminalShown || !!workspaceTool || (!!ui.activeTaskId && ws.workspaceVisible(ui.activeTaskId))
+  const toolButtons = (
+    <nav
+      key={shownHost}
+      className="workspace-tool-buttons [&_button[aria-pressed=true]]:text-brand [&_button[aria-pressed=true]]:bg-brand-wash [&_.icon]:[transition:background-color_140ms_ease,_color_140ms_ease] [&_>_button]:relative [&_>_button]:overflow-visible flex flex-none items-center ml-auto [-webkit-app-region:no-drag] gap-1"
+      aria-label={t('Workspace controls')}
+      onKeyDown={(event) => {
+        const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+        const target = event.target as HTMLElement
+        if (!step || target.getAttribute('aria-haspopup') || target.closest('[role=menu]')) return
+        const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]
+        const next = buttons[buttons.indexOf(target as HTMLButtonElement) + step]
+        if (!next) return
+        event.preventDefault()
+        next.focus()
+      }}
+    >
+      <ProjectSwitcher />
+      {(
+        [
+          { id: 'explorer', label: 'Explorer', keys: 'mod+shift+e', Icon: Files },
+          { id: 'search', label: 'Search', keys: 'mod+shift+f', Icon: Search },
+          { id: 'scm', label: 'Source Control', keys: 'ctrl+shift+g', Icon: GitBranch },
+        ] as const
+      ).map(({ id, label, keys, Icon }) => (
+        <Button
+          variant="secondary"
+          key={id}
+          className={`ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center${workspaceTool === id ? ' active' : ''}`}
+          aria-label={t(label)}
+          aria-description={
+            id === 'scm' && gitChanges
+              ? `${gitChanges} ${t('Changes')}`
+              : id === 'explorer' && unsavedFiles
+                ? `${unsavedFiles} ${t('Unsaved changes')}`
+                : undefined
+          }
+          aria-pressed={workspaceTool === id}
+          title={`${t(label)} (${formatKeys(keys)})${id === 'scm' && gitChanges ? ` · ${gitChanges} ${t('Changes')}` : id === 'explorer' && unsavedFiles ? ` · ${unsavedFiles} ${t('Unsaved changes')}` : ''}`}
+          onClick={() => ws.setSidebar(workspaceTool === id ? 'projects' : id)}
+        >
+          <Icon size={16} />
+          {badge(id === 'scm' ? gitChanges : id === 'explorer' ? unsavedFiles : 0, true)}
+        </Button>
+      ))}
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center"
+        aria-label={t('Terminal')}
+        aria-pressed={terminalShown}
+        title={
+          terminalShown
+            ? t('Hide terminal')
+            : heldShells
+              ? t('Show terminal · {0} opened on another device', { 0: heldShells })
+              : t('Show terminal')
+        }
+        disabled={!ui.activeTaskId}
+        onClick={() => {
+          const id = ui.activeTaskId
+          if (!id) return
+          const state = activePanelState
+          if (terminalShown) ws.setTerminalPanel(id, { terminalOpen: false })
+          else {
+            // Shells another device opened here join as tabs now, instead of a new shell.
+            const held = activeWorkspace ? activity.releaseShells(activeWorkspace) : []
+            for (const shell of held) {
+              terminals.queueAdopt(activeWorkspace!, shell)
+              ws.openView(id, { kind: 'terminal' })
+            }
+            const terminal = state?.views.findLast((view) => view.kind === 'terminal')
+            if (held.length) ws.setTerminalPanel(id, { terminalOpen: true })
+            else if (terminal) ws.activateView(id, terminal.id)
+            else ws.openView(id, { kind: 'terminal' })
+          }
+        }}
+      >
+        <SquareTerminal data-icon="inline-start" />
+        {terminalUnseen && !terminalShown && (
+          <span
+            role="status"
+            aria-label={t('New terminal output')}
+            className="absolute right-[3px] bottom-[3px] size-1.5 rounded-full bg-primary pointer-events-none"
+          />
+        )}
+      </Button>
+      {/* Agents open the browser and the computer themselves, and the chat's activity tray shows them while they run,
+          so opening one by hand is rare: one menu instead of two always-present icons. */}
+      <Menu
+        label={t('Open browser or computer')}
+        icon={<LayoutGrid size={16} aria-hidden />}
+        align="end"
+        disabled={!ui.activeTaskId}
+        className={`ghost bg-transparent border-transparent hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center ${browserShown ? 'text-brand bg-brand-wash' : 'text-muted-foreground'}`}
+        items={[
+          ...(typeof window.ramu?.invoke === 'function' && activeHost === ownHostId()
+            ? [
+                {
+                  key: 'browser',
+                  label: (
+                    <span className="inline-flex items-center gap-2">
+                      <Globe size={14} aria-hidden />
+                      {browserShown ? t('Hide browser') : t('Show browser')}
+                    </span>
+                  ),
+                  onSelect: () => {
+                    const id = ui.activeTaskId
+                    if (!id) return
+                    if (browserShown) ws.hideWorkspace(id)
+                    else openBrowser(ws, id)
+                  },
+                },
+              ]
+            : []),
+          {
+            key: 'computer',
+            label: (
+              <span className="inline-flex items-center gap-2">
+                <Monitor size={14} aria-hidden />
+                {t('Open computer')}
+                <span className="ml-auto pl-4 text-caption text-muted-foreground">{formatKeys('mod+alt+m')}</span>
+              </span>
+            ),
+            onSelect: () => {
+              if (ui.activeTaskId) void openComputer(hostInvoke as never, ui.activeTaskId)
+            },
+          },
+        ]}
+      />
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center"
+        aria-expanded={rightShown}
+        aria-pressed={rightShown}
+        aria-label={rightShown ? t('Hide workspace') : t('Show workspace')}
+        title={`${rightShown ? t('Hide workspace') : t('Show workspace')} (${formatKeys('mod+alt+b')})`}
+        disabled={!ui.activeTaskId}
+        onClick={() => {
+          if (ui.activeTaskId) ws.toggleRightPanel(ui.activeTaskId)
+        }}
+      >
+        <PanelRight data-icon="inline-start" />
+      </Button>
+    </nav>
+  )
+  // With the sidebar hidden, chats that want attention show on its toggle instead.
+  /** One page on the sidebar's rail; choosing the page that is open goes back to the threads, except Inbox. */
+  const railButton = (
+    page: 'projects' | 'inbox' | 'pulls' | 'schedules' | 'artifacts' | 'customize',
+    Icon: typeof Inbox,
+    label: string,
+    waiting: number,
+    keys?: string,
+  ) => {
+    const active = page === 'projects' ? !isGlobalPage(ui.sidebar) : ui.sidebar === page
+    return (
+      <Button
+        key={page}
+        variant="ghost"
+        size="icon-sm"
+        className={`relative overflow-visible size-9 flex-none justify-center border-transparent bg-transparent p-0 hover:bg-hover hover:text-foreground ${active ? 'text-foreground' : 'text-muted-foreground'}`}
+        aria-pressed={active}
+        aria-label={label}
+        aria-description={waiting ? t('{0} waiting', { 0: waiting }) : undefined}
+        title={keys ? `${label} (${keys})` : label}
+        onClick={() => ws.setSidebar(page === 'projects' || (active && page !== 'inbox') ? 'projects' : page)}
+      >
+        {active && (
+          <span
+            className="absolute top-1/2 -left-1 h-5 w-[3px] -translate-y-1/2 rounded-full bg-(--primary)"
+            aria-hidden="true"
+          />
+        )}
+        <Icon size={18} />
+        {badge(waiting, true)}
+      </Button>
+    )
+  }
+
+  const sidebarToggle = (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground icon p-0 size-(--action-size) flex-none justify-center sidebar-toggle aria-expanded:bg-transparent aria-expanded:hover:bg-hover aria-expanded:text-muted-foreground aria-expanded:hover:text-foreground [&:hover:not(:disabled)]:text-foreground [-webkit-app-region:no-drag] relative overflow-visible [&_*]:[-webkit-app-region:no-drag] flex-none z-30 [-webkit-app-region:no-drag] text-muted-foreground"
+      aria-expanded={!sidebarHidden}
+      aria-controls="workspace-sidebar"
+      aria-label={sidebarHidden ? t('Show sidebar') : t('Hide sidebar')}
+      aria-description={sidebarHidden && attentionChats ? `${attentionChats} ${t('Threads')}` : undefined}
+      title={t('{0} sidebar ({1})', { '0': sidebarHidden ? t('Show') : t('Hide'), '1': formatKeys('mod+b') })}
+      onClick={toggleSidebar}
+    >
+      {sidebarHidden ? <PanelLeftOpen size={16} strokeWidth={1.6} /> : <PanelLeftClose size={16} strokeWidth={1.6} />}
+      {sidebarHidden && badge(attentionChats)}
+    </Button>
+  )
+
+  return (
+    <div
+      onPointerDownCapture={(event) => {
+        if ((event.target as HTMLElement).closest('[role="separator"]')) cancelPanelMotion()
+      }}
+      className={`shell [&.no-sidebar_.sidebar]:opacity-0 [&.no-sidebar_.sidebar]:invisible [&_.sidebar_>_*]:min-w-[calc(var(--sidebar-w,_312px)_-_14px)] [&.no-sidebar_.main]:ml-[var(--island-gap)] relative h-full bg-window [--titlebar-h:44px] [--nav-width:var(--sidebar-w,_312px)] ${sidebarHidden ? ' no-sidebar' : ''}`}
+      style={{ '--sidebar-w': `${expandedWidth}px`, '--nav-width': `${navWidth}px` } as React.CSSProperties}
+    >
+      <div className="app-titlebar [&_>_.task-header]:flex-1 [&_>_.task-header]:min-w-0 [&_>_.task-header]:h-[44px] [&_>_.task-header]:p-[0_10px_0_12px] [&_>_.task-header]:bg-transparent [&_>_.task-header]:[border:0] absolute inset-[0_0_auto] z-20 h-[var(--titlebar-h)] flex items-center [-webkit-app-region:drag] pr-[var(--island-gap)]">
+        <div
+          className="sidebar-titlebar @container flex flex-none items-center gap-2 min-w-0 h-full pr-2 pl-[max(16px,_calc(var(--window-controls-inset,_0px)_+_8px))]"
+          style={{ width: sidebarHidden ? 'calc(var(--window-controls-inset, 0px) + 44px)' : 'var(--nav-width)' }}
+        >
+          {!sidebarHidden && (
+            <>
+              <Button
+                variant="secondary"
+                type="button"
+                className="bg-fill hover:bg-fill-hover wordmark-link min-w-0 shrink [&:hover:not(:disabled)]:bg-transparent [&:hover:not(:disabled)]:[border:0] [&:hover_.app-wordmark]:opacity-100 bg-transparent [border:0] p-0 min-h-0 rounded-(--radius-s) cursor-pointer [-webkit-app-region:no-drag]"
+                aria-label={t('Home')}
+                title={t('Home')}
+                onClick={() => ws.showHome()}
+              >
+                <Wordmark className="app-wordmark block max-w-full [opacity:0.94]" height={15} />
+              </Button>
+            </>
+          )}
+          <div className="ml-auto flex items-center">{sidebarToggle}</div>
+        </div>
+        {globalPage ? (
+          <header className="task-header [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_.chat-switch-btn:hover_.header-secondary]:text-soft [&_.header-center]:flex [&_.header-center]:items-center [&_.header-center]:gap-2 [&_.header-center]:flex-1 [&_.header-center]:min-w-0 [&_.header-center]:overflow-hidden [&::after]:[content:''] [&::after]:flex-1 [&_.header-title]:relative [&_.header-title]:top-[-1px] [&_.header-title]:leading-[20px] [&_.header-secondary]:relative [&_.header-secondary]:top-[-1px] [&_.header-secondary]:leading-[20px] [&_.header-meta]:relative [&_.header-meta]:top-[-1px] [&_.header-meta]:leading-[20px] [&_.header-meta]:shrink-0 [&_.header-meta]:max-w-[25%] [&_.header-meta]:overflow-hidden [&_.header-meta]:text-ellipsis [&_.chat-switch-btn]:justify-start [&_.chat-switch-btn]:w-[fit-content] [&_.chat-switch-btn]:max-w-[none] [&_.chat-switch-btn]:flex-initial [&_.chat-switch-btn_.header-title]:flex-initial [&_.chat-switch-btn_.header-title]:min-w-0 [&_.chat-switch-btn_.header-title]:max-w-[none] [&_.chat-switch-btn_.header-title]:text-left [&_.chat-switch-btn_.header-secondary]:flex-initial [&_.chat-switch-btn_.header-secondary]:min-w-0 [&_.chat-switch-btn_.header-secondary]:max-w-[none] [&_.chat-switch-btn_.header-secondary]:text-left [&:has(.workspace-tool-buttons)::after]:hidden [&_.workspace-tool-buttons]:ml-auto [&_.header-center_>_svg]:flex-none [&_.header-center_.chat-switch-btn]:max-w-full [&_.header-center_.chat-switch-btn]:min-w-0 flex-none flex items-center gap-2.5 p-[0_12px_0_16px] [-webkit-app-region:drag] min-w-0 h-[46px] [border-bottom-color:var(--line)] [border-bottom:0]">
+            <span className="header-title [.chat-switch-btn_&]:min-w-0 [.chat-switch-btn_&]:max-w-[none] font-medium text-body text-soft overflow-hidden text-ellipsis whitespace-nowrap max-w-full cursor-default">
+              {ui.sidebar === 'inbox'
+                ? t('Inbox')
+                : ui.sidebar === 'pulls'
+                  ? t('Pull requests')
+                  : ui.sidebar === 'artifacts'
+                    ? t('Artifacts')
+                    : ui.sidebar === 'customize'
+                      ? t('Customize')
+                      : t('Schedules')}
+            </span>
+          </header>
+        ) : (
+          <TaskHeader key={shownHost} starting={!!startProject || landing} tools={toolButtons} />
+        )}
+      </div>
+      <ResizablePanelGroup
+        orientation="horizontal"
+        id="shell"
+        onLayoutChanged={onShellLayout}
+        resizePreviewMode={terminalShown ? 'separator' : undefined}
+      >
+        <SeparatorOverlay className="bg-[var(--pane-border-active)] -translate-x-[1.5px]" style={{ width: 4 }} />
+        <ResizablePanel
+          id="sidebar"
+          panelRef={sidebarPanel}
+          groupResizeBehavior="preserve-pixel-size"
+          collapsible
+          collapsedSize={0}
+          minSize={SIDEBAR_WIDTH_RANGE[0]}
+          maxSize={SIDEBAR_WIDTH_RANGE[1]}
+          defaultSize={sidebarWidth}
+          onResize={onSidebarResize}
+        >
+          <aside
+            id="workspace-sidebar"
+            className="sidebar flex flex-col min-w-0 min-h-0 overflow-hidden mt-[var(--titlebar-h)] h-[calc(100%_-_var(--titlebar-h))] bg-transparent opacity-100 visible"
+            aria-hidden={sidebarHidden}
+            inert={sidebarHidden}
+          >
+            {/* One child, so the sidebar's width rule (kept through its collapse animation) applies to rail and
+                content together. */}
+            <div className="flex min-h-0 flex-1 flex-row">
+              {/* The app's pages as a vertical rail along the sidebar's edge, as VS Code's activity bar: the threads keep
+                the sidebar's full height and width, and the active page is marked by a bar on its edge. */}
+              <nav className="flex w-11 flex-none flex-col items-center gap-1 pt-0.5 pb-2" aria-label={t('Pages')}>
+                {railButton('projects', MessagesSquare, t('Threads'), 0)}
+                {railButton('inbox', Inbox, t('Inbox'), inboxCount, formatKeys('mod+shift+i'))}
+                {railButton('pulls', GitPullRequest, t('Pull requests'), pullsWaiting)}
+                {railButton('schedules', CalendarClock, t('Schedules'), 0)}
+                {railButton('artifacts', AppWindow, t('Artifacts'), 0)}
+                {railButton('customize', Blocks, t('Customize'), 0)}
+                <AccountMenuButton
+                  onOpen={(section) => {
+                    setSettingsSection(section)
+                    setSettingsOpen(true)
+                  }}
+                />
+              </nav>
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                <nav
+                  className="sidebar-nav flex flex-col gap-px p-[2px_8px_6px_2px] flex-none"
+                  aria-label={t('Activity')}
+                >
+                  <ComputerSwitcher />
+                  <div className="sidebar-actions @container flex items-center gap-1">
+                    <Button
+                      variant="secondary"
+                      className="bg-fill hover:bg-fill-hover nav-btn [&:hover:not(:disabled)]:bg-accent [&:hover:not(:disabled)]:[border:none] [&:hover:not(:disabled)]:text-foreground [&.active]:bg-accent [&.active]:text-foreground relative overflow-visible [&_.activity-badge]:[position:static] [&_.activity-badge]:ml-auto [&_.activity-badge]:[box-shadow:none] flex-1 min-w-0 bg-transparent [border:none] rounded-(--radius-row) text-body leading-5 text-soft gap-[9px] min-h-8 p-[5px_8px] justify-start"
+                      onClick={() => (computers?.scope ? select(computers.scope, { kind: 'new' }) : ws.newTask())}
+                    >
+                      <SquarePen data-icon="inline-start" />{' '}
+                      <span className="grow flex-1 min-w-0 truncate text-left">{t('New thread')}</span>{' '}
+                      <Kbd className="hidden @min-[230px]:inline-flex">{formatKeys('mod+n')}</Kbd>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="ghost bg-transparent border-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover icon p-0 size-(--action-size) flex-none justify-center sidebar-search"
+                      aria-label={t('Search threads')}
+                      title={`${t('Search threads')} (${formatKeys('mod+k')})`}
+                      onClick={() => setSearchingChats(true)}
+                    >
+                      <Search size={16} />
+                    </Button>
+                  </div>
+                </nav>
+                <div className="sidebar-body [&:has(.scm-panel)]:flex [&:has(.scm-panel)]:overflow-hidden [&:has(.explorer-panel)]:flex [&:has(.explorer-panel)]:overflow-hidden flex-1 overflow-auto min-h-0">
+                  <HostProjects />
+                </div>
+                <div className="sidebar-footer flex flex-col gap-1.5 p-[6px_8px_8px_2px] flex-none">
+                  {!sidebarHidden && <UsageFooter />}
+                </div>
+              </div>
+            </div>
+          </aside>
+        </ResizablePanel>
+        {!sidebarHidden && (
+          <ResizableHandle
+            aria-label={t('Resize sidebar')}
+            className="bg-transparent"
+            onDoubleClick={() => {
+              sidebarPanel.current?.resize(DEFAULT_SIDEBAR_WIDTH)
+              setSidebarWidth(DEFAULT_SIDEBAR_WIDTH)
+            }}
+          />
+        )}
+        <ResizablePanel id="main" minSize={360}>
+          <main className="main flex flex-col min-w-0 min-h-0 overflow-hidden mt-[var(--titlebar-h)] mr-[var(--island-gap)] h-[calc(100%_-_var(--titlebar-h)_-_var(--island-gap))] bg-canvas rounded-(--radius-m) [box-shadow:inset_0_1px_0_rgb(var(--ink)_/_0.025),_0_8px_28px_rgba(0,_0,_0,_0.28)]">
+            <div key={`task-area:${shownHost}`} className="task-area flex-1 min-h-0 flex">
+              {landing && <HomePage />}
+              {ui.sidebar === 'inbox' && <InboxPage />}
+              {ui.sidebar === 'artifacts' && <PagesPage />}
+              {ui.sidebar === 'pulls' && <PullRequestsPage />}
+              {ui.sidebar === 'customize' && <CustomizePage initial={customizeTarget} />}
+              {ui.sidebar === 'schedules' && (
+                <SchedulesPage
+                  createRequested={createScheduleRequested}
+                  onCreateHandled={() => setCreateScheduleRequested(false)}
+                />
+              )}
+              {startProject && !panes.has(startContext!) && (
+                <NewThread projectId={startProject} onProjectChange={(id) => ws.newTask(id)} />
+              )}
+
+              {[...panes]
+                .filter(([workspace]) => shownPanes.workspaces.has(workspace))
+                .map(([workspace, taskId]) => (
+                  <TaskPane key={workspace} taskId={taskId} visible={workspace === visiblePane} />
+                ))}
+            </div>
+            <StatusBar key={`status:${shownHost}`} usage={sidebarHidden ? <UsageRings /> : null} />
+          </main>
+        </ResizablePanel>
+      </ResizablePanelGroup>
+      {settingsOpen && (
+        <SettingsPanel
+          key={`settings:${shownHost}`}
+          initialSection={settingsSection}
+          initialTarget={settingsTarget}
+          initialHost={settingsHost}
+          shortcuts={commands
+            .filter((command) => command.keys)
+            .map((command) => ({ title: command.title, category: command.category, keys: command.keys! }))}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      {palette && <Palette ws={ws} commands={commands} mode={palette} onClose={() => setPalette(null)} />}
+      {searchingChats && <SearchChats onClose={() => setSearchingChats(false)} />}
+      {archivedOpen && <ArchivedThreadsDialog key={`archived:${shownHost}`} onClose={() => setArchivedOpen(false)} />}
+      <Notifications />
+      <PageNotices />
+      <PendingThreadDelivery />
+      <ToolSyncDelivery />
+      <PairingRequestDialog />
+      <PermissionRequestDialog />
+      <PairBackDialog />
+      <IdentityMismatchDialog />
+      <TitleTooltips />
+      <Fragment key={`dialogs:${shownHost}`}>
+        <ProviderSetupTerminal />
+        <SummaryHost />
+        <CommitBranchDialog />
+        <ProtectedSyncDialog />
+        <CommitDialog />
+        <CreatePullRequestHost />
+        <PublishRepositoryHost />
+        <CreateEntryDialog />
+        <AddProjectDialog />
+      </Fragment>
+    </div>
+  )
+}
+
+function TaskHeader({ starting, tools }: { starting: boolean; tools?: ReactNode }) {
+  const { viewOnly, canWrite } = useHostWriteAccess()
+  useLanguage()
+  const computers = useComputers()
+  const { activeHost } = useHostSelection()
+  const { invoke } = useHost()
+  const host = computers?.computers.find((c) => c.id === activeHost)
+
+  const ws = useWorkspace()
+  const ctx = ws.ui.activeTaskId
+  // Which identity the thread acts as sits with its title, beside the worktree and host it runs in: context, not an action.
+  const identity = useProjectIdentity(activeHost, ws.tasks.find((entry) => entry.id === ctx)?.projectId)
+  const isProject = !!ctx && isWorkspaceCtx(ctx)
+  const task = !starting && ctx && !isProject ? ws.task(ctx) : undefined
+  const project = ctx ? ws.projectOf(ctx) : undefined
+  const [renaming, setRenaming] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const input = useRef<HTMLInputElement>(null)
+
+  useEffect(() => setRenaming(false), [ctx])
+  useEffect(() => input.current?.select(), [renaming])
+
+  const rename = async (title: string) => {
+    if (!canWrite()) return
+    setRenaming(false)
+    if (!canWrite() || !task || !title.trim() || title.trim() === task.title) return
+    try {
+      await invoke('tasks.rename', task.id, title)
+      await ws.refresh()
+    } catch (e) {
+      setError(errorText(e))
+    }
+  }
+
+  const contextMenu = useContextMenu(
+    'Thread actions',
+    task
+      ? [
+          {
+            key: 'copy-id',
+            label: t('Copy thread ID'),
+            onSelect: () => void copyText(task.id).catch((reason) => setError(errorText(reason))),
+          },
+          ...(!viewOnly
+            ? [
+                {
+                  key: 'rename',
+                  label: (
+                    <>
+                      <Pencil size={14} />
+                      {t('Rename')}
+                    </>
+                  ),
+                  onSelect: () => {
+                    if (canWrite()) setRenaming(true)
+                  },
+                },
+                {
+                  key: 'archive',
+                  label: (
+                    <>
+                      <Archive size={14} />
+                      {t('Archive')}
+                    </>
+                  ),
+                  onSelect: async () => {
+                    let archived = false
+                    await animateThreadListChange(async () => {
+                      if (!canWrite()) return
+                      await invoke('tasks.archive', task.id, true)
+                      archived = true
+                      ws.forgetTask(task.id)
+                      await ws.refresh()
+                    })
+                    if (archived)
+                      offerThreadUndo('archived', 1, () =>
+                        animateThreadListChange(async () => {
+                          if (!canWrite()) return
+                          await invoke('tasks.archive', task.id, false)
+                          await ws.refresh()
+                        }),
+                      )
+                  },
+                },
+              ]
+            : []),
+        ]
+      : [],
+  )
+
+  return (
+    <header
+      className="task-header [&_button]:[-webkit-app-region:no-drag] [&_input]:[-webkit-app-region:no-drag] [&_.chat-switch-btn:hover_.header-secondary]:text-soft [&_.header-center]:flex [&_.header-center]:items-center [&_.header-center]:gap-2 [&_.header-center]:flex-1 [&_.header-center]:min-w-0 [&_.header-center]:overflow-hidden [&::after]:[content:''] [&::after]:flex-1 [&_.header-title]:relative [&_.header-title]:top-[-1px] [&_.header-title]:leading-[20px] [&_.header-secondary]:relative [&_.header-secondary]:top-[-1px] [&_.header-secondary]:leading-[20px] [&_.header-meta]:relative [&_.header-meta]:top-[-1px] [&_.header-meta]:leading-[20px] [&_.header-meta]:shrink-0 [&_.header-meta]:max-w-[25%] [&_.header-meta]:overflow-hidden [&_.header-meta]:text-ellipsis [&_.chat-switch-btn]:justify-start [&_.chat-switch-btn]:w-[fit-content] [&_.chat-switch-btn]:max-w-[none] [&_.chat-switch-btn]:flex-initial [&_.chat-switch-btn_.header-title]:flex-initial [&_.chat-switch-btn_.header-title]:min-w-0 [&_.chat-switch-btn_.header-title]:max-w-[none] [&_.chat-switch-btn_.header-title]:text-left [&_.chat-switch-btn_.header-secondary]:flex-initial [&_.chat-switch-btn_.header-secondary]:min-w-0 [&_.chat-switch-btn_.header-secondary]:max-w-[none] [&_.chat-switch-btn_.header-secondary]:text-left [&:has(.workspace-tool-buttons)::after]:hidden [&_.workspace-tool-buttons]:ml-auto [&_.header-center_>_svg]:flex-none [&_.header-center_.chat-switch-btn]:max-w-full [&_.header-center_.chat-switch-btn]:min-w-0 flex-none flex items-center gap-2.5 p-[0_12px_0_16px] [-webkit-app-region:drag] min-w-0 h-[46px] [border-bottom-color:var(--line)] [border-bottom:0]"
+      onContextMenu={task ? contextMenu.onContextMenu : undefined}
+    >
+      <div className="header-center">
+        {(starting || task) && (
+          <MessageCircle size={16} className="relative -top-px text-muted-foreground" aria-hidden="true" />
+        )}
+        {starting && (
+          <span className="header-title [.chat-switch-btn_&]:min-w-0 [.chat-switch-btn_&]:max-w-[none] font-medium text-body text-soft overflow-hidden text-ellipsis whitespace-nowrap max-w-full cursor-default">
+            {t('New thread')}
+          </span>
+        )}
+        {!starting && isProject && project && ctx && (
+          <span
+            className="header-title [.chat-switch-btn_&]:min-w-0 [.chat-switch-btn_&]:max-w-[none] font-medium text-body text-soft overflow-hidden text-ellipsis whitespace-nowrap max-w-full cursor-default"
+            title={project.root ?? undefined}
+          >
+            {ws.titleOf(ctx)}
+          </span>
+        )}
+        {task &&
+          (renaming ? (
+            <Input
+              ref={input}
+              className="inline-edit flex-1 min-w-0 p-[2px_6px] text-body font-medium text-soft bg-canvas [border-color:var(--line-strong)] header-edit max-w-[420px] no-drag [-webkit-app-region:no-drag]"
+              readOnly={viewOnly}
+              aria-label={t('Thread title')}
+              maxLength={200}
+              defaultValue={task.title}
+              onBlur={(e) => void rename(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void rename(e.currentTarget.value)
+                if (e.key === 'Escape') setRenaming(false)
+              }}
+            />
+          ) : (
+            <span
+              className="header-title [.chat-switch-btn_&]:min-w-0 [.chat-switch-btn_&]:max-w-[none] font-medium text-body text-soft overflow-hidden text-ellipsis whitespace-nowrap max-w-full cursor-default no-drag [-webkit-app-region:no-drag]"
+              title={`${task.title} (${t('Double-click to rename')})`}
+              onDoubleClick={() => {
+                if (canWrite()) setRenaming(true)
+              }}
+            >
+              {task.title}
+            </span>
+          ))}
+        {task && identity && <IdentityChip identity={identity} className="no-drag [-webkit-app-region:no-drag]" />}
+        {computers && computers.computers.length > 1 && host && (
+          <span className="max-w-40 truncate text-caption text-muted-foreground" title={host.name}>
+            {host.name}
+          </span>
+        )}
+        {error && <span className="error text-bad small text-caption">{error}</span>}
+      </div>
+      {ctx && isProject && !starting && (
+        // No chat header here; Source Control's badge already counts the changes, so only Commit & Push is added.
+        <div className="project-git flex flex-none items-center no-drag [-webkit-app-region:no-drag]">
+          <CommitPushButton taskId={ctx} />
+        </div>
+      )}
+      {ctx && project && !starting && <WindowActions ctx={ctx} projectId={project.id} />}
+      {tools}
+      {contextMenu.menu}
+    </header>
+  )
+}
+
+function StatusBar({ usage }: { usage?: ReactNode }) {
+  useLanguage()
+
+  const ws = useWorkspace()
+  const { id: host, invoke } = useHost()
+  const { on } = useHostRuntime()
+  const taskId = ws.ui.activeTaskId
+  const state = taskId ? ws.taskUi[taskId] : undefined
+  const view = state?.views.find((v) => v.id === state.activeViewId)
+  const repos = taskId ? (ws.bindings[taskId] ?? []).filter((b) => b.setupState === 'ready' && !b.folderOnly) : []
+  // Following the open tab by default; picking a repository here overrides it until the tab changes.
+  const [picked, setPicked] = useState<string | null>(null)
+  useEffect(() => {
+    setPicked(null)
+  }, [taskId, view?.id])
+  // A project folder that is not a repository (one holding several) has no branch, so the bar follows a repository:
+  // the one picked or open, else the first, never the folder before it.
+  const gitBindings = taskId ? (ws.bindings[taskId] ?? []).filter((b) => !b.folderOnly) : []
+  const repoId =
+    [picked, view && 'repoId' in view ? view.repoId : undefined].find(
+      (id) => id && gitBindings.some((b) => b.repoId === id),
+    ) ?? gitBindings[0]?.repoId
+  const binding = taskId && repoId ? ws.binding(taskId, repoId) : undefined
+  const call = queryInvokerFor(host)
+  const statusQuery = useQuery({
+    queryKey: repositoryQueryKey(host, 'git.status', binding),
+    queryFn: () => call('git.status', taskId!, binding!.repoId),
+    enabled: !!taskId && binding?.setupState === 'ready',
+  })
+  const branchesQuery = useQuery({
+    queryKey: repositoryQueryKey(host, 'git.branches', binding),
+    queryFn: () => call('git.branches', taskId!, binding!.repoId),
+    enabled: !!taskId && binding?.setupState === 'ready',
+  })
+  const { refetch: refreshStatus } = statusQuery
+  const { refetch: refreshBranches } = branchesQuery
+  const checkoutCwd = binding?.cwd
+  const checkoutRepo = binding?.repoId
+  const checkoutReady = binding?.setupState === 'ready'
+  const status = binding?.setupState === 'ready' ? (statusQuery.data ?? null) : null
+  const branches = binding?.setupState === 'ready' ? (branchesQuery.data ?? []) : []
+  const busy = useGitBusy(taskId, binding?.repoId)
+  const { preferences } = useAppSettings()
+  const [syncAll, setSyncAll] = useState(false)
+  const autoPullContext = useRef({ taskId, repoId, allowed: false })
+  autoPullContext.current = {
+    taskId,
+    repoId,
+    allowed: preferences.autoPull && !busy && !Object.values(ws.dirty).some(Boolean),
+  }
+  const autoFetch = useCallback(
+    async (opening: boolean) => {
+      if (!taskId || !binding || binding.setupState !== 'ready') return
+      // Queued with user actions on this repo: skipped while one runs, and a user action that arrives waits for it.
+      await withGitBackground(taskId, binding.repoId, async () => {
+        const current = autoPullContext.current
+        const mayPull =
+          !opening &&
+          current.allowed &&
+          !isGitBusy(taskId, binding.repoId) &&
+          current.taskId === taskId &&
+          current.repoId === binding.repoId
+        if (await invoke('git.refreshRemote', taskId, binding.repoId, mayPull))
+          window.dispatchEvent(new Event('ramu:git-updated'))
+      })
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [taskId, binding?.repoId, binding?.setupState, invoke] by design; the values it reads beyond these are current as of that run
+    [taskId, binding?.repoId, binding?.setupState, invoke],
+  )
+  useAutoFetch(binding?.setupState === 'ready' ? autoFetch : null)
+
+  useEffect(() => {
+    if (!taskId || !checkoutRepo || !checkoutReady) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const refresh = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        void refreshStatus({ cancelRefetch: false })
+        void refreshBranches({ cancelRefetch: false })
+      }, 150)
+    }
+    const off = on('fs:changed', ({ cwd }) => {
+      if (cwd === checkoutCwd && !isGitBusy(taskId, checkoutRepo)) refresh()
+    })
+    window.addEventListener('ramu:git-updated', refresh)
+    return () => {
+      off()
+      clearTimeout(timer)
+      window.removeEventListener('ramu:git-updated', refresh)
+    }
+  }, [taskId, checkoutRepo, checkoutCwd, checkoutReady, on, refreshStatus, refreshBranches])
+
+  if (!binding || !taskId)
+    return (
+      <footer className="status-bar [&_.strong]:text-soft [&_>_.strong]:flex-none [&_.status-branch]:max-w-[220px] [&_.status-branch]:[border:0] [&_.status-branch]:rounded-(--radius-s) [&_.status-branch]:bg-transparent [&_.status-branch]:text-caption [&_.status-branch]:leading-[18px] [&_.status-branch]:text-soft [&_.status-branch]:w-auto [&_.status-branch]:flex-initial [&_.status-branch]:gap-[5px] [&_.status-branch]:h-[22px] [&_.status-branch]:min-h-[22px] [&_.status-branch]:p-[0_6px] [&_.path]:min-w-0 [&_.path]:overflow-hidden [&_.path]:text-ellipsis [&_.path]:whitespace-nowrap [&_>_.status-project]:max-w-[220px] [&_>_.status-project]:min-w-0 [&_>_.status-project]:overflow-hidden [&_>_.status-project]:text-ellipsis [&_>_.status-project]:whitespace-nowrap [&_>_.status-project]:flex-none [&_>_.status-project]:inline-flex [&_>_.status-project]:items-center [&_>_.status-project]:h-[22px] [&_>_.status-project]:p-[0_6px] [&_>_.status-project]:leading-[18px] [&_[data-slot='select-trigger'].status-branch]:w-auto [&_[data-slot='select-trigger'].status-branch]:flex-initial [&_[data-slot='select-trigger'].status-branch]:gap-[5px] [&_[data-slot='select-trigger'].status-branch]:h-[22px] [&_[data-slot='select-trigger'].status-branch]:min-h-[22px] [&_[data-slot='select-trigger'].status-branch]:p-[0_6px] [&_.status-branch_[data-slot=select-value]]:flex-initial [&_.status-branch_>_svg:last-child]:ml-0 [&_.sync-button]:h-[22px] [&_.sync-button]:min-h-[22px] [&_.sync-button]:p-[0_6px] [&_.sync-button]:gap-[5px] [&_.sync-button]:rounded-(--radius-s) [&_.sync-button]:text-caption [&_.sync-button]:text-soft [&_.sync-button]:tabular-nums [&_.sync-button]:flex-none [&_.sync-button:hover:not(:disabled)]:text-foreground [&_.status-repo]:w-auto [&_.status-repo]:flex-initial [&_.status-repo]:h-[22px] [&_.status-repo]:min-h-[22px] [&_.status-repo]:p-[0_6px] [&_.status-repo]:gap-[5px] [&_.status-repo]:max-w-[240px] [&_.status-repo]:[border:0] [&_.status-repo]:rounded-(--radius-s) [&_.status-repo]:bg-transparent [&_.status-repo]:text-caption [&_.status-repo]:font-semibold [&_[data-slot='select-trigger'].status-repo]:w-auto [&_[data-slot='select-trigger'].status-repo]:flex-initial [&_[data-slot='select-trigger'].status-repo]:h-[22px] [&_[data-slot='select-trigger'].status-repo]:min-h-[22px] [&_[data-slot='select-trigger'].status-repo]:p-[0_6px] [&_[data-slot='select-trigger'].status-repo]:gap-[5px] [&_[data-slot='select-trigger'].status-repo]:max-w-[240px] [&_[data-slot='select-trigger'].status-repo]:[border:0] [&_[data-slot='select-trigger'].status-repo]:rounded-(--radius-s) [&_[data-slot='select-trigger'].status-repo]:bg-transparent [&_[data-slot='select-trigger'].status-repo]:text-caption [&_[data-slot='select-trigger'].status-repo]:font-semibold [&_.status-repo:hover]:bg-hover [&_.status-checkout]:inline-flex [&_.status-checkout]:items-center [&_.status-checkout]:h-[22px] [&_.status-checkout]:p-[0_6px] [&_.status-checkout]:leading-[18px] tabular-nums flex items-center text-caption flex-none text-muted-foreground min-w-0 h-7 bg-transparent gap-0.5 p-[0_6px] [border-top:1px_solid_var(--line)]">
+        <span className="grow flex-1 min-w-0 text-left" />
+        {usage}
+        <AppUpdateButton />
+        <ResourcesStatus />
+        <BackgroundActivity />
+      </footer>
+    )
+  const run = async (action: () => Promise<unknown>, needsSaved = false, repository = binding) => {
+    try {
+      if (needsSaved && Object.values(ws.dirty).some(Boolean))
+        throw new Error(t('Save or close unsaved editor buffers before switching branches or pulling.'))
+      await withGitBusy(taskId, repository.repoId, action)
+    } catch (e) {
+      notifyError(errorText(e), `Git · ${repository.repoName}`)
+    } finally {
+      window.dispatchEvent(new Event('ramu:git-updated'))
+    }
+  }
+  const ready = binding.setupState === 'ready'
+  const project = ws.projectOf(taskId)
+  return (
+    <footer className="status-bar [&_.strong]:text-soft [&_>_.strong]:flex-none [&_.status-branch]:max-w-[220px] [&_.status-branch]:[border:0] [&_.status-branch]:rounded-(--radius-s) [&_.status-branch]:bg-transparent [&_.status-branch]:text-caption [&_.status-branch]:leading-[18px] [&_.status-branch]:text-soft [&_.status-branch]:w-auto [&_.status-branch]:flex-initial [&_.status-branch]:gap-[5px] [&_.status-branch]:h-[22px] [&_.status-branch]:min-h-[22px] [&_.status-branch]:p-[0_6px] [&_.path]:min-w-0 [&_.path]:overflow-hidden [&_.path]:text-ellipsis [&_.path]:whitespace-nowrap [&_>_.status-project]:max-w-[220px] [&_>_.status-project]:min-w-0 [&_>_.status-project]:overflow-hidden [&_>_.status-project]:text-ellipsis [&_>_.status-project]:whitespace-nowrap [&_>_.status-project]:flex-none [&_>_.status-project]:inline-flex [&_>_.status-project]:items-center [&_>_.status-project]:h-[22px] [&_>_.status-project]:p-[0_6px] [&_>_.status-project]:leading-[18px] [&_[data-slot='select-trigger'].status-branch]:w-auto [&_[data-slot='select-trigger'].status-branch]:flex-initial [&_[data-slot='select-trigger'].status-branch]:gap-[5px] [&_[data-slot='select-trigger'].status-branch]:h-[22px] [&_[data-slot='select-trigger'].status-branch]:min-h-[22px] [&_[data-slot='select-trigger'].status-branch]:p-[0_6px] [&_.status-branch_[data-slot=select-value]]:flex-initial [&_.status-branch_>_svg:last-child]:ml-0 [&_.sync-button]:h-[22px] [&_.sync-button]:min-h-[22px] [&_.sync-button]:p-[0_6px] [&_.sync-button]:gap-[5px] [&_.sync-button]:rounded-(--radius-s) [&_.sync-button]:text-caption [&_.sync-button]:text-soft [&_.sync-button]:tabular-nums [&_.sync-button]:flex-none [&_.sync-button:hover:not(:disabled)]:text-foreground [&_.status-repo]:w-auto [&_.status-repo]:flex-initial [&_.status-repo]:h-[22px] [&_.status-repo]:min-h-[22px] [&_.status-repo]:p-[0_6px] [&_.status-repo]:gap-[5px] [&_.status-repo]:max-w-[240px] [&_.status-repo]:[border:0] [&_.status-repo]:rounded-(--radius-s) [&_.status-repo]:bg-transparent [&_.status-repo]:text-caption [&_.status-repo]:font-semibold [&_[data-slot='select-trigger'].status-repo]:w-auto [&_[data-slot='select-trigger'].status-repo]:flex-initial [&_[data-slot='select-trigger'].status-repo]:h-[22px] [&_[data-slot='select-trigger'].status-repo]:min-h-[22px] [&_[data-slot='select-trigger'].status-repo]:p-[0_6px] [&_[data-slot='select-trigger'].status-repo]:gap-[5px] [&_[data-slot='select-trigger'].status-repo]:max-w-[240px] [&_[data-slot='select-trigger'].status-repo]:[border:0] [&_[data-slot='select-trigger'].status-repo]:rounded-(--radius-s) [&_[data-slot='select-trigger'].status-repo]:bg-transparent [&_[data-slot='select-trigger'].status-repo]:text-caption [&_[data-slot='select-trigger'].status-repo]:font-semibold [&_.status-repo:hover]:bg-hover [&_.status-checkout]:inline-flex [&_.status-checkout]:items-center [&_.status-checkout]:h-[22px] [&_.status-checkout]:p-[0_6px] [&_.status-checkout]:leading-[18px] tabular-nums flex items-center text-caption flex-none text-muted-foreground min-w-0 h-7 bg-transparent gap-0.5 p-[0_6px] [border-top:1px_solid_var(--line)]">
+      {repos.length > 1 ? (
+        <RepositoryPicker
+          taskId={taskId}
+          bindings={repos}
+          value={binding.repoId}
+          onChange={setPicked}
+          pullMode={preferences.pullMode}
+          syncing={syncAll}
+          onSyncAll={(repositories) => {
+            setSyncAll(true)
+            void run(() => syncRepositories(invoke, taskId, repositories), true).finally(() => setSyncAll(false))
+          }}
+          onSync={(repository) => void run(() => syncRepositories(invoke, taskId, [repository]), true, repository)}
+          onPublishRepository={(repository) =>
+            void openPublishRepository(taskId, repository.repoId, repository.repoName)
+          }
+          onBranchChange={(repository, branch) =>
+            void run(() => invoke('git.checkout', taskId, repository.repoId, branch), true, repository)
+          }
+        />
+      ) : (
+        <span className="strong font-semibold status-project" title={project?.name}>
+          {project && project.name !== binding.repoName ? `${project.name} / ${binding.repoName}` : binding.repoName}
+        </span>
+      )}
+      {repos.length <= 1 && (
+        <>
+          <BranchPicker
+            binding={binding}
+            status={status}
+            branches={branches}
+            busy={busy || !ready}
+            className="status-branch"
+            onChange={(branch) => void run(() => invoke('git.checkout', taskId, binding.repoId, branch), true)}
+          />
+          <SyncButton
+            status={status}
+            busy={busy || !ready}
+            pullMode={preferences.pullMode}
+            className="status-sync"
+            onSync={() => void run(() => syncRepositories(invoke, taskId, [binding]), true)}
+            onPublishRepository={() => void openPublishRepository(taskId, binding.repoId, binding.repoName)}
+          />
+        </>
+      )}
+      <CheckoutSwitcher taskId={taskId} isolated={binding.mode !== 'current'} path={binding.cwd} />
+      <span className="grow flex-1 min-w-0 text-left" />
+      {usage}
+      <AppUpdateButton />
+      <ResourcesStatus />
+      <BackgroundActivity />
+    </footer>
+  )
+}
