@@ -1,0 +1,123 @@
+import type { AgentEvent, ChatGoal, GoalCheck } from '../types'
+import { goalState, isLimitHold, isUserPaused } from '@ramu/shared/chat/goalHold'
+
+/**
+ * `verify-failed` is the goal's verification command failing after a completion claim; `stalled` is the block Ramu sets
+ * after continuations that changed nothing. Both are separate from `blocked` (the agent needs input), `paused` (the user
+ * paused it) and a provider's usage limit (a paused goal held by the limit), which is never a row here.
+ */
+export type GoalChangeType =
+  'set' | 'edited' | 'paused' | 'resumed' | 'blocked' | 'stalled' | 'verify-failed' | 'turn-limit' | 'cleared'
+export type GoalChange = { type: GoalChangeType; goal: ChatGoal }
+
+/** The start of the reason Ramu gives a goal it blocks for lack of progress. */
+export const STALL_REASON = 'No progress'
+/** A goal Ramu blocked because continuations changed nothing, as opposed to one the agent blocked for input. */
+export const isStallBlock = (goal: ChatGoal) =>
+  goal.status === 'blocked' && (goal.stall?.unchanged ?? 0) >= 2 && goal.reason.startsWith(STALL_REASON)
+
+export type CheckOutcome = { kind: 'passed' | 'timed-out' | 'unrunnable' | 'failed' } | { kind: 'exit'; code: number }
+
+/** How a verification run ended. */
+export function checkOutcome(check: GoalCheck): CheckOutcome {
+  if (check.ok) return { kind: 'passed' }
+  if (check.timedOut) return { kind: 'timed-out' }
+  if (check.code === null) return { kind: 'unrunnable' }
+  if (typeof check.code === 'number') return { kind: 'exit', code: check.code }
+  return { kind: 'failed' }
+}
+
+/** The outcome in a few English words, for surfaces that do not translate through `t`. */
+export function checkHow(check: GoalCheck): string {
+  const outcome = checkOutcome(check)
+  return outcome.kind === 'passed'
+    ? 'Passed'
+    : outcome.kind === 'timed-out'
+      ? 'Timed out'
+      : outcome.kind === 'unrunnable'
+        ? 'Could not run'
+        : outcome.kind === 'exit'
+          ? `Exit ${outcome.code}`
+          : 'Failed'
+}
+
+/** The end of a check's output: the last lines, trimmed, without the "Command exited…" line Ramu adds for the agent. */
+export function checkTail(check: GoalCheck, lines = 12, chars = 1200): string {
+  const body = check.output.replace(/^Command (?:timed out|could not run|exited with code \d+)\.\n?/, '').trim()
+  const tail = body.split('\n').slice(-lines).join('\n')
+  return tail.length > chars ? `…${tail.slice(-chars)}` : tail
+}
+
+export interface GoalFacts {
+  verify?: string
+  check?: { ok: boolean; command: string; how: string; outcome: CheckOutcome; tail: string }
+  evidence?: { checks: { name: string; passed: boolean }[]; changedFiles: string[] }
+}
+
+/** What a goal knows beyond its objective and reason: the verification command and its latest result, and the completion evidence. */
+export function goalFacts(goal: ChatGoal): GoalFacts {
+  const facts: GoalFacts = {}
+  if (goal.verify) facts.verify = goal.verify
+  if (goal.check)
+    facts.check = {
+      ok: goal.check.ok,
+      command: goal.check.command,
+      how: checkHow(goal.check),
+      outcome: checkOutcome(goal.check),
+      tail: goal.check.ok ? '' : checkTail(goal.check),
+    }
+  if (goal.evidence)
+    facts.evidence = {
+      checks: goal.evidence.checks.map(({ name, passed }) => ({ name, passed })),
+      changedFiles: goal.evidence.changedFiles,
+    }
+  return facts
+}
+
+/** The same facts as plain lines, for a surface without room for structure. */
+export function goalFactLines(goal: ChatGoal): string[] {
+  const { check, evidence } = goalFacts(goal)
+  const lines: string[] = []
+  if (check && !check.ok) lines.push(`${check.command} · ${check.how}`, ...(check.tail ? [check.tail] : []))
+  else if (check) lines.push(`Verified: ${check.command}`)
+  if (evidence) {
+    if (evidence.checks.length)
+      lines.push(`Checks: ${evidence.checks.map((c) => `${c.name} (${c.passed ? 'passed' : 'failed'})`).join(', ')}`)
+    if (evidence.changedFiles.length) lines.push(`Changed: ${evidence.changedFiles.join(', ')}`)
+  }
+  return lines
+}
+
+/**
+ * The goal events worth a line in the transcript. Every status tick is recorded, but the history only needs the turning points:
+ * a goal set or edited, paused, resumed, blocked, stalled, failing its verification, out of turns or cleared. Completion has its own row at the end of its turn,
+ * and provider waits and turn counts belong to the live tray.
+ */
+export function goalChanges(events: readonly AgentEvent[]): Map<AgentEvent, GoalChange> {
+  const changes = new Map<AgentEvent, GoalChange>()
+  let previous: ChatGoal | null = null
+  for (const event of events) {
+    if (event.kind !== 'goal') continue
+    const goal = event.goal
+    const add = (type: GoalChangeType, shown: ChatGoal) => {
+      changes.set(event, { type, goal: shown })
+    }
+    if (!goal) {
+      if (previous && previous.status !== 'completed') add('cleared', previous)
+    } else if (!previous || previous.id !== goal.id) {
+      if (goal.status !== 'completed') add('set', goal)
+    } else if (previous.status === 'completed') {
+      /* a finished goal is closed; its row is the completion */
+    } else if (goal.objective !== previous.objective) add('edited', goal)
+    else if (goal.check && !goal.check.ok && goal.check.at !== previous.check?.at) add('verify-failed', goal)
+    else if (goalState(goal) !== goalState(previous)) {
+      // A limit hold shares the paused status with a user pause, so compare the state, not the status.
+      if (isUserPaused(goal)) add('paused', goal)
+      else if (goal.status === 'blocked') add(isStallBlock(goal) ? 'stalled' : 'blocked', goal)
+      else if (goal.status === 'turn-limit') add('turn-limit', goal)
+      else if (goal.status === 'active' && !isLimitHold(previous)) add('resumed', goal)
+    }
+    previous = goal
+  }
+  return changes
+}

@@ -1,0 +1,118 @@
+{
+  "index": "https://github.com/akalstack/ramu-plugins",
+  "plugins": [
+    {
+      "name": "fly-cli",
+      "description": "Launch and deploy apps on Fly.io through flyctl, signed in with a token kept on the host.",
+      "homepage": "https://fly.io",
+      "author": "Akalstack",
+      "keywords": ["fly", "flyio", "deploy", "hosting"],
+      "category": "deploy",
+      "byRamu": true,
+      "signed": true,
+      "stacks": ["go", "rails"],
+      "adds": {
+        "skills": 1,
+        "credentials": ["Fly.io token"],
+        "cli": "fly"
+      }
+    },
+    {
+      "name": "grafana-data",
+      "description": "Read Grafana data sources in Ramu dashboards with a Viewer service account token.",
+      "homepage": "https://grafana.com",
+      "author": "Akalstack",
+      "keywords": ["grafana", "prometheus", "metrics", "observability", "dashboard"],
+      "category": "data",
+      "byRamu": true,
+      "signed": true,
+      "stacks": [],
+      "adds": {
+        "skills": 1,
+        "credentials": ["Grafana service account token"],
+        "dataSources": ["Grafana"]
+      }
+    },
+    {
+      "name": "amplitude-data",
+      "description": "Read Amplitude event counts in Ramu dashboards with a project's API key and secret key.",
+      "homepage": "https://amplitude.com",
+      "author": "Akalstack",
+      "keywords": ["amplitude", "analytics", "events", "product"],
+      "category": "data",
+      "byRamu": true,
+      "signed": true,
+      "stacks": [],
+      "adds": {
+        "skills": 1,
+        "credentials": ["Amplitude API key"],
+        "dataSources": ["Amplitude"]
+      }
+    },
+    {
+      "name": "salesforce-data",
+      "description": "Read Salesforce records with SOQL in Ramu dashboards, through your own connected app's sign-in.",
+      "homepage": "https://www.salesforce.com",
+      "author": "Akalstack",
+      "keywords": ["salesforce", "crm", "soql", "opportunities"],
+      "category": "data",
+      "byRamu": true,
+      "signed": true,
+      "stacks": [],
+      "adds": {
+        "skills": 1,
+        "credentials": ["Salesforce"],
+        "dataSources": ["Salesforce"]
+      }
+    },
+    {
+      "name": "meshy",
+      "description": "Make textured, rigged and animated 3D models for games with Meshy, on your Meshy API key.",
+      "homepage": "https://www.meshy.ai",
+      "author": "Akalstack",
+      "keywords": ["meshy", "3d", "model", "game", "glb", "rigging", "animation"],
+      "category": "media",
+      "byRamu": true,
+      "signed": true,
+      "stacks": [],
+      "adds": {
+        "skills": 1,
+        "mcpServers": 1,
+        "credentials": ["Meshy API key"],
+        "abilities": ["model_3d"]
+      }
+    },
+    {
+      "name": "tripo",
+      "description": "Make 3D models for games with Tripo from a description or a picture, and rig and animate them, on your Tripo API key.",
+      "homepage": "https://www.tripo3d.ai",
+      "author": "Akalstack",
+      "keywords": ["tripo", "3d", "model", "game", "glb", "image-to-3d", "animation"],
+      "category": "media",
+      "byRamu": true,
+      "signed": true,
+      "stacks": [],
+      "adds": {
+        "skills": 1,
+        "mcpServers": 1,
+        "credentials": ["Tripo API key"],
+        "abilities": ["model_3d"]
+      }
+    },
+    {
+      "name": "godot",
+      "description": "Build, check and export Godot 4 games through the godot command, including a web export that publishes like any static site.",
+      "homepage": "https://godotengine.org",
+      "author": "Akalstack",
+      "keywords": ["godot", "game", "engine", "gdscript", "3d", "2d", "export"],
+      "category": "games",
+      "byRamu": true,
+      "signed": true,
+      "stacks": [],
+      "adds": {
+        "skills": 1,
+        "cli": "godot"
+      }
+    }
+  ]
+}

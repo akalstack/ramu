@@ -1,0 +1,189 @@
+import { expect, it } from 'vitest'
+import type { Rule } from '@ramu/shared/types'
+import { buildSetupSnapshot, providerManagedServers, type SetupInputs } from '../src/agent/effectiveSetup'
+
+const rule = (patch: Partial<Rule>): Rule => ({
+  id: 'r',
+  name: 'Tests first',
+  body: 'Write the test first.',
+  projectId: null,
+  providers: [],
+  activation: 'always',
+  paths: [],
+  enabled: true,
+  revision: 1,
+  createdAt: 100,
+  updatedAt: 100,
+  ...patch,
+})
+const base = (patch: Partial<SetupInputs> = {}): SetupInputs => ({
+  sessionId: 's',
+  provider: 'claude-code',
+  accountId: 'default',
+  projectId: 'p1',
+  startedAt: 1000,
+  rules: [],
+  addedServers: [],
+  sharedSkills: [],
+  connections: [],
+  now: 2000,
+  ...patch,
+})
+
+it('lists only rules that reach the thread and separates delivered, changed and manual ones', () => {
+  const snapshot = buildSetupSnapshot(
+    base({
+      rules: [
+        rule({ id: 'a', name: 'Delivered' }),
+        rule({ id: 'b', name: 'Edited later', updatedAt: 1500 }),
+        rule({ id: 'c', name: 'Manual', activation: 'manual' }),
+        rule({ id: 'd', name: 'Other project', projectId: 'p2' }),
+        rule({ id: 'e', name: 'Other provider', providers: ['codex'] }),
+        rule({ id: 'f', name: 'Off', enabled: false }),
+      ],
+    }),
+  )
+  expect(snapshot.items.map((item) => [item.name, item.state])).toEqual([
+    ['Delivered', 'delivered'],
+    ['Edited later', 'needs-refresh'],
+    ['Manual', 'omitted'],
+  ])
+  expect(snapshot.rulesCharacters).toBe('Delivered'.length + 21 + 'Edited later'.length + 21)
+})
+
+it('confirms a server only when the live runtime reports it connected', () => {
+  const items = (runtimeServers?: { name: string; status: string }[]) =>
+    buildSetupSnapshot(base({ addedServers: ['docs', 'db'], ...(runtimeServers ? { runtimeServers } : {}) })).items.map(
+      (item) => [item.name, item.state],
+    )
+  expect(items([{ name: 'docs', status: 'connected' }])).toEqual([
+    ['docs', 'runtime-confirmed'],
+    ['db', 'configured'],
+  ])
+  expect(items([{ name: 'docs', status: 'failed' }])[0]).toEqual(['docs', 'configured'])
+  expect(items()).toEqual([
+    ['docs', 'configured'],
+    ['db', 'configured'],
+  ])
+})
+
+it('never calls Shared MCP loaded and gives the next step for an unready connection', () => {
+  const { items } = buildSetupSnapshot(
+    base({
+      connections: [
+        { name: 'Atlassian', status: 'ready' },
+        { name: 'Linear', status: 'approval-needed' },
+      ],
+    }),
+  )
+  expect(items.map((item) => [item.name, item.state])).toEqual([
+    ['Atlassian', 'configured'],
+    ['Linear', 'omitted'],
+  ])
+  expect(items[1]!.reason).toMatch(/Review access/)
+  expect(JSON.stringify(items)).not.toMatch(/Write the test first/)
+})
+
+it('flags a shared server or skill whose source changed after the thread started', () => {
+  const items = buildSetupSnapshot(
+    base({ addedServers: ['docs', 'db'], sharedSkills: ['review'], changedSources: ['server:db', 'skill:review'] }),
+  ).items
+  expect(items.map((item) => [item.name, item.state])).toEqual([
+    ['docs', 'configured'],
+    ['db', 'needs-refresh'],
+    ['review', 'needs-refresh'],
+  ])
+})
+
+it('leaves a path rule to Claude Code’s own rules files and counts it as text for other runtimes', () => {
+  const pathRule = rule({ name: 'API', activation: 'paths', paths: ['src/api/**'] })
+  const claude = buildSetupSnapshot(base({ rules: [pathRule] }))
+  expect(claude.items.map((item) => item.state)).toEqual(['not-observable'])
+  expect(claude.rulesCharacters).toBe(0)
+  const codex = buildSetupSnapshot(base({ provider: 'codex', rules: [pathRule] }))
+  expect(codex.items.map((item) => item.state)).toEqual(['delivered'])
+  expect(codex.rulesCharacters).toBeGreaterThan('API'.length + pathRule.body.length)
+})
+
+it('says how each runtime receives rules and omits them all when they are over its size', () => {
+  const reason = (provider: 'claude-code' | 'codex' | 'cursor') =>
+    buildSetupSnapshot(base({ provider, rules: [rule({})] })).items[0]!.reason
+  expect(reason('claude-code')).toContain('system prompt')
+  expect(reason('codex')).toContain('developer instructions')
+  expect(reason('cursor')).toContain('ahead of the first message')
+  const big = buildSetupSnapshot(base({ rules: [rule({ id: 'a', body: 'x'.repeat(25_000) })] }))
+  expect(big.items.map((item) => item.state)).toEqual(['omitted'])
+})
+
+it('marks a server only the provider reports as provider-managed, and never lists Ramu’s own servers', () => {
+  const { items } = buildSetupSnapshot(
+    base({
+      addedServers: ['docs'],
+      connections: [{ name: 'Shared docs', status: 'ready' }],
+      runtimeServers: [
+        { name: 'docs', status: 'connected' },
+        { name: 'Shared docs', status: 'connected' },
+        { name: 'ramu', status: 'connected' },
+        { name: 'claude.ai Figma', status: 'connected' },
+        { name: 'claude.ai Atlassian', status: 'needs-auth' },
+      ],
+    }),
+  )
+  const managed = items.filter((item) => item.reason.startsWith('Managed by the provider'))
+  expect(managed.map((item) => [item.name, item.state])).toEqual([
+    ['claude.ai Figma', 'runtime-confirmed'],
+    ['claude.ai Atlassian', 'configured'],
+  ])
+  expect(managed[0]!.reason).toContain('cannot share it')
+  expect(items.map((item) => item.name)).not.toContain('ramu')
+})
+
+it('lists provider-managed servers for later use, leaving out declared, shared and Ramu’s own', () => {
+  expect(
+    providerManagedServers({
+      addedServers: ['docs'],
+      connections: [{ name: 'Shared docs', status: 'ready' }],
+      runtimeServers: [
+        { name: 'docs', status: 'connected' },
+        { name: 'Shared docs', status: 'connected' },
+        { name: 'shared_mcp', status: 'connected' },
+        { name: 'claude.ai Figma', status: 'connected' },
+      ],
+    }).map((server) => server.name),
+  ).toEqual(['claude.ai Figma'])
+  expect(providerManagedServers({ addedServers: [], connections: [] })).toEqual([])
+})
+
+it('reports, per server, whether the MCP tools a skill asks for are ready for the thread', () => {
+  const snapshot = buildSetupSnapshot(
+    base({
+      addedServers: ['github', 'linear'],
+      runtimeServers: [
+        { name: 'github', status: 'connected' },
+        { name: 'linear', status: 'failed' },
+      ],
+      connections: [{ name: 'Atlassian', status: 'sign-in-required' }],
+      sharedSkills: ['triage', 'plain'],
+      skillTools: {
+        triage: [
+          'mcp__github__create_issue',
+          'mcp__linear__list_issues',
+          'mcp__shared_mcp__jira-1a2b3c__search',
+          'mcp__nowhere__thing',
+        ],
+        plain: [],
+      },
+    }),
+  )
+  const triage = snapshot.items.find((item) => item.kind === 'skill' && item.name === 'triage')!
+  expect(triage.requires?.map((r) => [r.server, r.status])).toEqual([
+    ['github', 'available'],
+    ['linear', 'not-connected'],
+    ['shared_mcp', 'sign-in-required'],
+    ['nowhere', 'missing'],
+  ])
+  expect(triage.reason).toContain("aren't ready")
+  const plain = snapshot.items.find((item) => item.kind === 'skill' && item.name === 'plain')!
+  expect(plain.requires).toBeUndefined()
+  expect(plain.reason).not.toContain("aren't ready")
+})

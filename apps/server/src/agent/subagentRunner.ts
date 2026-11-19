@@ -1,0 +1,934 @@
+import type { TeammateMode } from '@ramu/shared/types'
+import type { CustomAgent } from '@ramu/shared/customAgents'
+import { redactSecrets } from '../memory/secrets'
+import { selectSubagentSettings } from './subagentSelection'
+import type { BackgroundAnalysis } from './backgroundAnalysis'
+import { forwardedRequestId } from './childRequests'
+import { clipText, clipTextEnd } from '@ramu/shared/text'
+import { providerName } from '@ramu/shared/providers/providers'
+import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
+import type { Options } from '@anthropic-ai/claude-agent-sdk'
+import type {
+  FallbackStep,
+  AppPreferences,
+  AgentTask,
+  AgentTaskStatus,
+  AgentEvent,
+  AgentSessionInfo,
+  AgentSessionState,
+  ProviderCatalog,
+} from '@ramu/shared/types'
+import { ramuRunsHelpers, settingsKey, accountKey, nextStep } from '@ramu/shared/providers/routing'
+import {
+  SUBAGENT_PREAMBLE,
+  helperWork,
+  subagentNotePrompt,
+  taskReportPrompt,
+  teammateNotePrompt,
+} from '@ramu/shared/chat/agentTasks'
+import { applyIsolation, collectPatch, createIsolation, removeIsolation } from '../workspace/isolation'
+import { needsOwnCheckout, otherWriters } from './helperCheckout'
+import { helperRoleBrief, helperRoleReadOnly } from '@ramu/shared/chat/helperRoles'
+import type { ChildRun, SubagentInput, SubagentResult } from './types'
+
+import { FOREGROUND_WAIT_MS, ASK_WAIT_MS } from './constants'
+import { errorMessage } from './util'
+import { transcriptOf } from './handoff'
+import type { CatalogService } from './catalogService'
+import type { MessageDispatcher } from './messageDispatcher'
+import type { SessionProcess } from './sessionProcess'
+import type { SessionRecorder } from './sessionRecorder'
+import type { SessionRegistry } from './sessionRegistry'
+import type { UserRequests } from './userRequests'
+import type { FallbackRouter } from './fallbackRouter'
+import type { SessionStore } from './sessionStore'
+import type { AgentTasks } from './agentTasks'
+import type { ProviderWaits } from './providerWait'
+import type { AgentService } from '../agent'
+
+/** How long a helper about to share the checkout waits for a sibling started in the same step to show up. */
+const SIBLING_SETTLE_MS = 150
+/** Helpers one thread runs at once; more wait their turn rather than crowd the host and its usage limits. */
+const HELPERS_AT_ONCE = 3
+
+/** What SubagentRunner needs from the rest of the service. */
+export interface SubagentRunnerHost
+  extends
+    Pick<BackgroundAnalysis, 'analyze'>,
+    Pick<CatalogService, 'validateSettings'>,
+    Pick<MessageDispatcher, 'submit'>,
+    Pick<SessionProcess, 'launch' | 'stop'>,
+    Pick<SessionRecorder, 'record'>,
+    Pick<SessionRegistry, 'revisions' | 'transitioning'>,
+    Pick<UserRequests, 'childRequests'>,
+    Pick<
+      FallbackRouter,
+      'attempted' | 'policyOf' | 'routing' | 'subagentSettings' | 'withStep' | 'otherAccount' | 'freshAccountUsage'
+    >,
+    Pick<ProviderWaits, 'autoResumeOf' | 'providerWait'>,
+    Pick<SessionStore, 'createSession' | 'events' | 'get' | 'task'>,
+    Pick<AgentTasks, 'updateTask'> {
+  catalog(refresh?: boolean): Promise<ProviderCatalog[]>
+  isolationRoot(): AgentService['isolationRoot']
+  helperSetupNote(): AgentService['helperSetupNote']
+  preferences(): AppPreferences | undefined
+  shutdown(): AgentService['shutdown']
+}
+
+/** Sub-agents Ramu runs as sessions of their own: spawning, reporting back, mirroring into the parent chat, and redirecting native sub-agent tools. */
+const TEAMMATE_ROUNDS = 4
+
+function teammatePreamble(mode: TeammateMode): string {
+  return mode === 'review'
+    ? `You are a teammate the person added to this thread, working beside its main agent (the lead). You are read-only: read the files and the lead's latest changes and reply with concrete findings, most important first. Do not edit files. When you have nothing to add, say so briefly. ${TEAMMATE_TOOL}`
+    : `You are a teammate the person added to this thread, taking over from its main agent (the lead), which waits while you work. Make the change asked for in this checkout, then hand back with a short summary of what you changed and what is left, so the lead can continue without re-reading everything. ${TEAMMATE_TOOL}`
+}
+
+const TEAMMATE_TOOL =
+  'Your final reply goes to the lead as your report and shows in the thread, so keep it short: the answer in one or two sentences, then at most five bullets with file paths where they help. No headings, preamble or recap of what you read. To reach the lead before that, use teammate_message with to "lead".'
+
+/** Why a teammate exchange refuses another message until the person writes. */
+export const TEAMMATE_PAUSED = `The exchange with the teammate paused after ${TEAMMATE_ROUNDS} rounds without the person. Wait for them to write.`
+
+/** A result that is not the report ends with this, so the agent waits instead of polling for it. */
+export const HELPER_NEXT =
+  'The report arrives as a message. End your turn and do not poll; use ramu_agent_status only if the person asks.'
+
+/** A read-only custom agent or role reads and reports; it never edits and never needs its own checkout. */
+function helperReadOnly(input: SubagentInput): boolean {
+  return !!input.custom?.readOnly || helperRoleReadOnly(input.role)
+}
+
+function customPreamble(agent: CustomAgent): string {
+  return `You are the custom agent "${agent.name}": ${agent.description}\n${agent.instructions}${agent.readOnly ? '\nYou are read-only: read and report, never edit files.' : ''}`
+}
+
+export class SubagentRunner {
+  constructor(private readonly host: SubagentRunnerHost) {}
+
+  /** Sub-agents Ramu runs as sessions of their own, by child session id. */
+  readonly children = new Map<string, ChildRun>()
+
+  /** Native sub-agents already picked up again after a limit, so one is not continued twice. */
+  private readonly continued = new Set<string>()
+
+  /** The sub-agent's run ended: record its report and hand it to whoever is waiting, or message its chat. */
+  settleChild(id: string): void {
+    const run = this.children.get(id)
+    if (!run || run.settled || this.host.transitioning.has(id)) return
+    const state = this.host.get(id).state
+    if (state !== 'idle' && state !== 'failed' && state !== 'stopped') return
+    // A helper held at a usage limit is neither done nor failed: it waits with its login and the chat keeps it as running.
+    // With auto-resume off nothing will continue it, so it ends as stopped with the reason, and never as failed.
+    const held = !!this.host.providerWait(id)
+    if (held && this.host.autoResumeOf(id)) {
+      this.host.updateTask(run.parentId, id, {
+        summary: 'Limit reached · resumes automatically',
+        waitingFor: 'provider',
+      })
+      return
+    }
+    if (held) run.lastText ||= 'Stopped at a usage limit. Auto-resume is off for this thread.'
+    run.settled = true
+    run.asking?.('The sub-agent ended before an answer arrived.')
+    const status: AgentTaskStatus = held
+      ? 'stopped'
+      : state === 'idle'
+        ? 'completed'
+        : state === 'failed'
+          ? 'failed'
+          : 'stopped'
+    const error = this.host.events(id).findLast((e) => e.kind === 'error')
+    const failure = error?.kind === 'error' ? error.message : ''
+    const report = run.lastText || failure || (status === 'stopped' ? 'Stopped before it finished.' : '')
+    const finish = (note: string) => {
+      const text = `${report}${note}`
+      this.host.updateTask(run.parentId, id, {
+        status,
+        summary: text || undefined,
+        endedAt: Date.now(),
+        ...(status === 'failed' ? { error: failure || 'The sub-agent failed.' } : {}),
+        ...(run.isolation ? { canMessage: false } : {}),
+        ...(run.teammate ? { work: helperWork(this.host.events(id)) } : {}),
+      })
+      const result: SubagentResult = {
+        agentId: id,
+        name: run.name,
+        status,
+        report: text || 'It left no report.',
+        provider: this.host.get(id).provider,
+        model: this.host.get(id).settings.model,
+      }
+      if (run.waiter) {
+        const waiter = run.waiter
+        run.waiter = undefined
+        waiter(result)
+        return
+      }
+      if (run.teammate && !this.teammateRound(run.parentId)) {
+        // Kept, not dropped: Continue, or the person's next message, delivers it.
+        run.held = taskReportPrompt(run.name, status, result.report)
+        this.host.updateTask(run.parentId, id, { paused: true })
+        return
+      }
+      if (run.report) void this.reportToParent(run, taskReportPrompt(run.name, status, result.report))
+    }
+    // The task stays "running" in its chat until the work is back in the checkout, so the checkout stays reserved and the change capture waits.
+    if (run.isolation)
+      void this.finishIsolation(run, status).then(finish, (error) =>
+        finish(`\n\n(Bringing its changes back failed: ${errorMessage(error)})`),
+      )
+    else finish('')
+  }
+
+  /** Teammate reports since the person last wrote, per lead. */
+  private readonly teammateRounds = new Map<string, number>()
+
+  /** The person wrote to the lead or the teammate, so the exchange may go on. */
+  resetTeammateRounds(parentId: string) {
+    this.teammateRounds.delete(parentId)
+    this.suggestionDeclined.delete(parentId)
+    for (const [id, run] of this.children) {
+      if (run.parentId !== parentId || run.held === undefined) continue
+      const held = run.held
+      run.held = undefined
+      this.host.updateTask(parentId, id, { paused: false })
+      this.teammateRound(parentId)
+      void this.reportToParent(run, held)
+    }
+  }
+
+  /** Leads whose teammate suggestion the person turned down; they may suggest again once the person writes. */
+  readonly suggestionDeclined = new Set<string>()
+
+  /**
+   * Counts one message from the teammate to the lead, a report or a note. A back-and-forth costs a turn on each side,
+   * so it pauses for the person after a few rounds: false once it has.
+   */
+  private teammateRound(parentId: string): boolean {
+    const rounds = (this.teammateRounds.get(parentId) ?? 0) + 1
+    this.teammateRounds.set(parentId, rounds)
+    return rounds <= TEAMMATE_ROUNDS
+  }
+
+  /** The exchange already paused, so the lead should not wake the teammate again until the person writes. */
+  teammatePaused(parentId: string): boolean {
+    return (this.teammateRounds.get(parentId) ?? 0) >= TEAMMATE_ROUNDS
+  }
+
+  /**
+   * The lead asks a teammate and waits for its reply inside its own turn: `deliver` sends the question, and the
+   * teammate's next report comes back here instead of as a message. A reply that takes longer than an ask allows
+   * arrives as a message later, as any report does.
+   */
+  async askTeammate(
+    parentId: string,
+    childId: string,
+    deliver: () => Promise<void>,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    if (!this.wakeTeammate(parentId, childId)) throw new Error('That teammate is not in this thread.')
+    const run = this.children.get(childId)!
+    if (run.waiter) throw new Error('A question to that teammate is already waiting for its reply.')
+    if (!this.teammateRound(parentId)) throw new Error(TEAMMATE_PAUSED)
+    const reply = new Promise<string>((resolve) => {
+      const done = (text: string) => {
+        clearTimeout(timer)
+        signal?.removeEventListener('abort', cancel)
+        resolve(text)
+      }
+      const timer = setTimeout(() => {
+        run.waiter = undefined
+        done('No reply yet. Carry on; its reply arrives as a message when it finishes.')
+      }, ASK_WAIT_MS)
+      const cancel = () => {
+        run.waiter = undefined
+        done('The question was cancelled.')
+      }
+      signal?.addEventListener('abort', cancel, { once: true })
+      run.waiter = (result) => done(result.report)
+    })
+    try {
+      await deliver()
+    } catch (error) {
+      run.waiter = undefined
+      throw error
+    }
+    return reply
+  }
+
+  /** A teammate's note to the lead, sent with teammate_message before its report. */
+  async messageLead(childId: string, to: string, text: string): Promise<void> {
+    const run = this.children.get(childId)
+    if (!run?.teammate || run.settled) throw new Error('Only a working teammate can message the lead.')
+    if (to.trim().replace(/^@/, '').toLowerCase() !== 'lead') throw new Error('A teammate messages only "lead".')
+    if (!this.teammateRound(run.parentId)) throw new Error(TEAMMATE_PAUSED)
+    await this.reportToParent(run, teammateNotePrompt(run.name, text))
+  }
+
+  /** A teammate keeps its session across turns: a message wakes it, and its next report comes back again. */
+  wakeTeammate(parentId: string, childId: string): boolean {
+    let run = this.children.get(childId)
+    const marker = this.host.events(childId).findLast((event) => event.kind === 'teammate')
+    if (!run && marker?.kind === 'teammate') {
+      // After a restart the run is gone but the session remembers it is a teammate.
+      run = {
+        parentId,
+        name: marker.name,
+        teammate: marker.mode,
+        prompt: '',
+        report: true,
+        settled: true,
+        promptSeen: true,
+        lastText: '',
+        toolUses: 0,
+        startedAt: Date.now(),
+      }
+      this.children.set(childId, run)
+    }
+    if (!run?.teammate || run.parentId !== parentId) return false
+    run.settled = false
+    run.report = true
+    // Messaged now, so its next report may revive a lead that is not running, until the thread is stopped again.
+    run.leadRevision = this.host.revisions.get(parentId) ?? 0
+    // A finished card only goes back to running with a resume time; without one the update reads as stale progress.
+    this.host.updateTask(parentId, childId, { status: 'running', resumedAt: Date.now() })
+    return true
+  }
+
+  private readonly pendingStarts = new Map<symbol, string>()
+  /** The starts above that will write: a sibling being prepared counts as another writer before it has a session. */
+  private readonly pendingWriters = new Map<symbol, string>()
+  private readonly cancelledStarts = new Set<symbol>()
+
+  /** Stopping a thread cancels the sub-agents it was still choosing a model for, even when the thread itself had finished. */
+  cancelPendingStarts(parentId: string): void {
+    for (const [reservation, id] of this.pendingStarts) if (id === parentId) this.cancelledStarts.add(reservation)
+  }
+
+  async spawnSubagent(
+    parentId: string,
+    input: SubagentInput,
+    signal?: AbortSignal,
+    forced?: { step: FallbackStep; reason: string },
+  ): Promise<SubagentResult> {
+    const cap = HELPERS_AT_ONCE
+    const active = [...this.children.values()].filter((run) => run.parentId === parentId && !run.settled).length
+    const pending = [...this.pendingStarts.values()].filter((id) => id === parentId).length
+    if (active + pending >= cap)
+      throw new Error(`${cap} sub-agents are already running. Wait for one to finish, then try again.`)
+    const reservation = Symbol()
+    this.pendingStarts.set(reservation, parentId)
+    if (!helperReadOnly(input) && !input.teammate) this.pendingWriters.set(reservation, parentId)
+    try {
+      return await this.startSubagent(parentId, input, signal, forced, reservation)
+    } finally {
+      this.pendingStarts.delete(reservation)
+      this.pendingWriters.delete(reservation)
+      this.cancelledStarts.delete(reservation)
+    }
+  }
+
+  /** Starts a sub-agent as a session of its own on the provider and model routing picks. Foreground waits for its report. */
+  private async startSubagent(
+    parentId: string,
+    input: SubagentInput,
+    signal: AbortSignal | undefined,
+    forced: { step: FallbackStep; reason: string } | undefined,
+    reservation: symbol,
+  ): Promise<SubagentResult> {
+    const parent = this.host.get(parentId)
+    // Stopping the parent bumps this, even when it was idle and so stays idle: a start that began earlier is then stale.
+    const parentRevision = this.host.revisions.get(parentId) ?? 0
+    if (parent.parentId) throw new Error('A sub-agent cannot start sub-agents through Ramu. Use your own tools.')
+    // A helper the agent starts needs its live turn. A teammate the person adds does not: after a host restart (when
+    // every session is only a transcript), a stop or a failure, its report revives the lead instead.
+    const live = ['running', 'starting', 'idle', 'needs-input'].includes(parent.state)
+    if (this.host.shutdown() || (!live && !input.teammate)) throw new Error('This thread is not running.')
+    const cap = HELPERS_AT_ONCE
+    if ([...this.children.values()].filter((run) => run.parentId === parentId && !run.settled).length >= cap)
+      throw new Error(`${cap} sub-agents are already running. Wait for one to finish, then try again.`)
+    const target = input.settings
+      ? { settings: input.settings, reason: '', from: parent.provider }
+      : forced
+        ? {
+            settings: {
+              ...this.host.withStep(parent.settings, forced.step),
+              autoFallback: parent.settings.autoFallback,
+            },
+            reason: forced.reason,
+            from: parent.provider,
+          }
+        : await this.host.subagentSettings(parentId)
+    const catalogs = await this.host.catalog()
+    if (this.host.preferences()?.subagents.model === 'auto' && !input.settings && !forced) {
+      const selection = await selectSubagentSettings(
+        target.settings,
+        catalogs,
+        `${input.description}\n${input.prompt}`,
+        (...args) => this.host.analyze(...args),
+        signal,
+      )
+      target.settings = selection.settings
+      target.reason = [target.reason, selection.note].filter(Boolean).join('; ')
+    }
+    if (
+      signal?.aborted ||
+      this.cancelledStarts.has(reservation) ||
+      this.host.shutdown() ||
+      (this.host.get(parentId).state === 'stopped' && !input.teammate) ||
+      parentRevision !== (this.host.revisions.get(parentId) ?? 0)
+    )
+      throw new Error('Sub-agent start was cancelled.')
+    await this.host.validateSettings(target.settings)
+    const name = clipText(input.name?.trim() || input.description.trim() || 'Sub-agent', 80)
+    // Its own copy of the checkout whenever it would write beside another writer, so parallel work never collides.
+    const isolationRoot = this.host.isolationRoot()
+    const ownCheckout = () =>
+      needsOwnCheckout({
+        background: !!input.background,
+        readOnly: helperReadOnly(input),
+        teammate: !!input.teammate,
+        ...(input.isolation ? { requested: input.isolation } : {}),
+        otherWriters: otherWriters({
+          events: this.host.events(parentId),
+          running: [...this.children].filter(
+            ([id, other]) =>
+              other.parentId === parentId &&
+              !other.readOnly &&
+              ['starting', 'running', 'needs-input'].includes(this.host.get(id).state),
+          ).length,
+          starting: [...this.pendingWriters].filter(([key, id]) => key !== reservation && id === parentId).length,
+        }),
+      })
+    let separate = ownCheckout()
+    // A provider may report a sibling call a moment after this one; look once more before sharing the checkout.
+    if (!separate && !helperReadOnly(input) && !input.teammate) {
+      await new Promise((resolve) => setTimeout(resolve, SIBLING_SETTLE_MS))
+      separate = ownCheckout()
+    }
+    const isolation =
+      isolationRoot && separate
+        ? await createIsolation({
+            cwd: parent.cwd,
+            covers: parent.covers,
+            root: join(isolationRoot, randomUUID()),
+          })
+        : null
+    let child: ReturnType<typeof this.host.createSession>
+    try {
+      child = this.host.createSession(
+        parent.taskId,
+        isolation
+          ? { cwd: isolation.cwd, additionalDirs: isolation.additionalDirs, covers: isolation.covers }
+          : { cwd: parent.cwd, additionalDirs: parent.additionalDirs, covers: parent.covers },
+        target.settings,
+        'starting',
+        parentId,
+      )
+    } catch (error) {
+      // The copy is useless without a session to work in; do not leave worktrees behind.
+      if (isolation) await removeIsolation(isolation).catch(() => {})
+      throw error
+    }
+    // A helper never inherits Shared MCP access, so say what it starts without instead of leaving it to be discovered.
+    try {
+      const note = this.host.helperSetupNote()?.(child)
+      if (note)
+        this.host.record(child.id, {
+          kind: 'settings',
+          settings: target.settings,
+          reason: note,
+          handoff: false,
+        })
+    } catch {
+      // The note is informational; a helper still starts without it.
+    }
+    if (input.teammate) this.host.record(child.id, { kind: 'teammate', mode: input.teammate, name })
+    // Before the card, so the person's request heads the teammate's place in the thread.
+    if (input.personRequest?.trim())
+      this.host.record(parentId, {
+        kind: 'teammate-message',
+        teammateId: child.id,
+        name,
+        text: input.personRequest.trim(),
+      })
+    if (input.custom)
+      this.host.record(child.id, { kind: 'custom-agent', name: input.custom.name, readOnly: input.custom.readOnly })
+    if (input.role) this.host.record(child.id, { kind: 'helper-role', role: input.role })
+    const run: ChildRun = {
+      parentId,
+      name,
+      ...(input.teammate
+        ? { teammate: input.teammate, seenParent: this.host.events(parentId).length, leadRevision: parentRevision }
+        : {}),
+      ...(isolation ? { isolation } : {}),
+      ...(helperReadOnly(input) ? { readOnly: true } : {}),
+      ...(input.type ? { type: input.type } : {}),
+      prompt: input.prompt,
+      report: !!input.background,
+      settled: false,
+      promptSeen: false,
+      lastText: '',
+      toolUses: 0,
+      startedAt: Date.now(),
+    }
+    this.pendingStarts.delete(reservation)
+    this.pendingWriters.delete(reservation)
+    this.children.set(child.id, run)
+    this.host.attempted.set(child.id, new Set([settingsKey(target.settings, catalogs)]))
+    const settings = target.settings
+    this.host.updateTask(parentId, child.id, {
+      name,
+      agentType: input.type,
+      taskType: 'ramu_agent',
+      ...(input.custom ? { agentType: `custom: ${input.custom.name}` } : {}),
+      ...(input.teammate ? { teammate: input.teammate } : {}),
+      ...(input.role ? { role: input.role } : {}),
+      childSessionId: child.id,
+      status: 'running',
+      background: !!input.background,
+      prompt: input.prompt,
+      startedAt: run.startedAt,
+      address: child.id,
+      canStop: true,
+      canMessage: !isolation,
+      ...(isolation ? { isolated: true } : {}),
+      provider: settings.provider,
+      model: settings.model,
+      effort: settings.effort,
+      ...(target.reason
+        ? {
+            steps: [
+              { provider: target.from, reason: '', at: run.startedAt },
+              { provider: settings.provider, model: settings.model, reason: target.reason, at: run.startedAt },
+            ],
+          }
+        : {}),
+    })
+    // Its own request follows the context as its brief, so the context leaves it out.
+    const sofar = this.host
+      .events(parentId)
+      .filter((event) => !(event.kind === 'teammate-message' && event.teammateId === child.id))
+    const context = input.teammate
+      ? `<chat-context>\nThe conversation so far:\n${clipTextEnd(redactSecrets(transcriptOf(sofar)), 60_000)}\n</chat-context>\n\n`
+      : ''
+    this.host.launch(
+      child.id,
+      input.teammate
+        ? `${teammatePreamble(input.teammate)}\n\n${context}${input.prompt}`
+        : `${SUBAGENT_PREAMBLE}\n\n${input.custom ? `${customPreamble(input.custom)}\n\n` : ''}${input.role ? `${helperRoleBrief(input.role)}\n\n` : ''}${context}Task: ${input.description.trim()}\n\n${input.prompt}`,
+      null,
+      true,
+      [],
+    )
+    const done = (status: AgentTaskStatus, report: string): SubagentResult => ({
+      agentId: child.id,
+      name,
+      status,
+      report,
+      provider: this.host.get(child.id).provider,
+      model: this.host.get(child.id).settings.model,
+    })
+    if (input.background)
+      return {
+        ...done('running', 'Started in the background. Its report arrives as a message when it finishes.'),
+        next: HELPER_NEXT,
+      }
+    return new Promise<SubagentResult>((resolve) => {
+      const timer = setTimeout(() => {
+        if (run.waiter) {
+          run.waiter = undefined
+          run.report = true
+          resolve({
+            ...done('running', 'Still working after 45 minutes. Its report will arrive as a message when it finishes.'),
+            next: HELPER_NEXT,
+          })
+        }
+      }, FOREGROUND_WAIT_MS)
+      run.waiter = (result) => {
+        clearTimeout(timer)
+        resolve(result)
+      }
+      const onAbort = () => {
+        clearTimeout(timer)
+        if (!run.settled) this.host.stop(child.id)
+      }
+      if (signal?.aborted) onAbort()
+      else {
+        signal?.addEventListener('abort', onAbort, { once: true })
+        const settled = run.waiter
+        run.waiter = (result) => {
+          signal?.removeEventListener('abort', onAbort)
+          settled?.(result)
+        }
+      }
+    })
+  }
+
+  /** A note from a running sub-agent to its chat. It does not wait for a reply. */
+  async messageParent(childId: string, text: string): Promise<void> {
+    const run = this.children.get(childId)
+    if (!run || run.settled) throw new Error('Only a running sub-agent that Ramu started can message its parent.')
+    await this.reportToParent(run, subagentNotePrompt(run.name, 'says', childId, text))
+  }
+
+  /** A question from a running sub-agent to its chat; resolves with the answer, or a note to carry on if none comes. */
+  async askParent(childId: string, question: string, signal?: AbortSignal): Promise<string> {
+    const run = this.children.get(childId)
+    if (!run || run.settled) throw new Error('Only a running sub-agent that Ramu started can ask its parent.')
+    if (run.asking) throw new Error('A question is already waiting for an answer.')
+    const answered = new Promise<string>((resolve) => {
+      const timer = setTimeout(
+        () => resolve('No answer arrived. Carry on with your best judgment and say in your report what you assumed.'),
+        ASK_WAIT_MS,
+      )
+      const stop = () => resolve('The question was cancelled.')
+      signal?.addEventListener('abort', stop, { once: true })
+      run.asking = (answer) => {
+        clearTimeout(timer)
+        signal?.removeEventListener('abort', stop)
+        resolve(answer)
+      }
+    })
+    this.host.updateTask(run.parentId, childId, { waitingFor: 'input' })
+    const text = subagentNotePrompt(run.name, 'asks', childId, question)
+    if (run.waiter) {
+      // The chat is blocked on this sub-agent's call, so it could not answer: hand the question back as that call's result and let the report follow as a message.
+      const waiter = run.waiter
+      run.waiter = undefined
+      run.report = true
+      const child = this.host.get(childId)
+      waiter({
+        agentId: childId,
+        name: run.name,
+        status: 'running',
+        report: `${text}\n\nIt keeps waiting for your answer; its final report arrives as a message.`,
+        provider: child.provider,
+        model: child.settings.model,
+        next: 'Answer it with answer_subagent, then end your turn; its report arrives as a message.',
+      })
+    } else void this.reportToParent(run, text)
+    try {
+      return await answered
+    } finally {
+      run.asking = undefined
+      this.host.updateTask(run.parentId, childId, { waitingFor: null })
+    }
+  }
+
+  /** The chat's answer to a sub-agent that asked a question. */
+  answerSubagent(parentId: string, agentId: string, text: string): void {
+    const run = this.children.get(agentId)
+    if (!run || run.parentId !== parentId) throw new Error('Unknown sub-agent.')
+    if (!run.asking)
+      throw new Error(
+        'That sub-agent is not waiting for an answer. Use SendMessage-style messaging from its card instead.',
+      )
+    run.asking(text.trim())
+  }
+
+  /** A sub-agent that worked in its own copy: apply what it did to the checkout, or keep the copy and say where it is. */
+  private async finishIsolation(run: ChildRun, status: AgentTaskStatus): Promise<string> {
+    const isolation = run.isolation!
+    if (status === 'completed') {
+      const outcome = await applyIsolation(isolation)
+      const lines: string[] = []
+      if (outcome.applied)
+        lines.push(
+          `Its changes (${outcome.applied} ${outcome.applied === 1 ? 'file' : 'files'}) are applied to the checkout.`,
+        )
+      for (const failure of outcome.failed)
+        lines.push(
+          `Its changes in ${failure.repo} could not be applied (${failure.reason}); they are kept in ${outcome.kept.find((dir) => dir.includes(failure.repo)) ?? isolation.root}.`,
+        )
+      return lines.length ? `\n\n${lines.join('\n')}` : ''
+    }
+    let changed = 0
+    for (const repo of isolation.repos)
+      changed += (await collectPatch(repo).catch(() => ({ files: [] as string[] }))).files.length
+    if (!changed) {
+      await removeIsolation(isolation)
+      return ''
+    }
+    return `\n\nIt did not finish, so its ${changed} changed ${changed === 1 ? 'file was' : 'files were'} not applied. They are in ${isolation.root}.`
+  }
+
+  /** Delivers a background sub-agent's report as a message, once its chat can take one. */
+  private async reportToParent(
+    run: Pick<ChildRun, 'parentId' | 'leadRevision'>,
+    text: string,
+    attempts = 6,
+  ): Promise<void> {
+    const parentId = run.parentId
+    for (let attempt = 0; attempt < attempts && !this.host.shutdown(); attempt++) {
+      let state: AgentSessionState
+      try {
+        state = this.host.get(parentId).state
+      } catch {
+        return
+      }
+      // A chat that was stopped or closed is not woken up by a helper finishing, only by a teammate the person brought
+      // in after that and the thread was not stopped since.
+      const revives = run.leadRevision !== undefined && run.leadRevision === (this.host.revisions.get(parentId) ?? 0)
+      if (!revives && (state === 'stopped' || state === 'failed' || state === 'restored')) return
+      try {
+        await this.host.submit(parentId, text, 'steer')
+        return
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+      }
+    }
+  }
+
+  /** What a sub-agent says and does appears in its chat's panel, tagged with the agent; its approvals show in the chat itself. */
+  mirrorChild(id: string, run: ChildRun, e: AgentEvent, replacesMessageId?: string): void {
+    const parent = run.parentId
+    switch (e.kind) {
+      case 'user':
+        if (run.promptSeen) this.host.record(parent, { kind: 'user', text: e.text, agentId: id })
+        else run.promptSeen = true
+        break
+      case 'text':
+        run.lastText = e.text
+        this.host.record(
+          parent,
+          { kind: 'text', text: e.text, agentId: id, ...(e.messageId ? { messageId: `${id}:${e.messageId}` } : {}) },
+          replacesMessageId ? `${id}:${replacesMessageId}` : undefined,
+        )
+        break
+      case 'content':
+        this.host.record(parent, { ...e, agentId: id, ...(e.messageId ? { messageId: `${id}:${e.messageId}` } : {}) })
+        break
+      case 'plan':
+        this.host.record(parent, { ...e, agentId: id, messageId: `${id}:${e.messageId}` })
+        break
+      case 'turn-diff':
+        this.host.record(parent, { ...e, turnId: `${id}:${e.turnId}`, agentId: id })
+        break
+      case 'thinking':
+        this.host.record(
+          parent,
+          {
+            kind: 'thinking',
+            text: e.text,
+            agentId: id,
+            ...(e.messageId ? { messageId: `${id}:${e.messageId}` } : {}),
+          },
+          replacesMessageId ? `${id}:${replacesMessageId}` : undefined,
+        )
+        break
+      case 'error':
+        this.host.record(parent, { kind: 'error', message: e.message, agentId: id })
+        break
+      case 'tool-use':
+        if (
+          !this.host.events(parent).some((old) => old.kind === 'tool-use' && old.toolUseId === `${id}:${e.toolUseId}`)
+        )
+          run.toolUses++
+        this.host.record(parent, { ...e, toolUseId: `${id}:${e.toolUseId}`, agentId: id })
+        this.host.updateTask(parent, id, { lastTool: e.name, toolUses: run.toolUses })
+        break
+      case 'tool-result':
+        this.host.record(parent, { ...e, toolUseId: `${id}:${e.toolUseId}`, agentId: id })
+        break
+      case 'permission-request':
+        this.host.childRequests.set(forwardedRequestId(parent, id, e.requestId), {
+          parentId: parent,
+          childId: id,
+          requestId: e.requestId,
+        })
+        this.host.record(parent, {
+          ...e,
+          title: `${run.name}: ${e.title}`,
+          requestId: forwardedRequestId(parent, id, e.requestId),
+          requestSource: { sessionId: id, agentId: id, name: run.name, requestId: e.requestId },
+        })
+        break
+      case 'elicitation':
+        this.host.childRequests.set(forwardedRequestId(parent, id, e.requestId), {
+          parentId: parent,
+          childId: id,
+          requestId: e.requestId,
+        })
+        this.host.record(parent, {
+          ...e,
+          requestId: forwardedRequestId(parent, id, e.requestId),
+          requestSource: { sessionId: id, agentId: id, name: run.name, requestId: e.requestId },
+        })
+        break
+      case 'question':
+        this.host.childRequests.set(forwardedRequestId(parent, id, e.requestId), {
+          parentId: parent,
+          childId: id,
+          requestId: e.requestId,
+        })
+        this.host.record(parent, {
+          ...e,
+          requestId: forwardedRequestId(parent, id, e.requestId),
+          requestSource: { sessionId: id, agentId: id, name: run.name, requestId: e.requestId },
+        })
+        break
+      case 'question-state':
+        this.host.record(parent, { ...e, requestId: forwardedRequestId(parent, id, e.requestId) })
+        break
+      case 'request-resolved':
+        if (this.host.childRequests.delete(forwardedRequestId(parent, id, e.requestId)))
+          this.host.record(parent, { ...e, requestId: forwardedRequestId(parent, id, e.requestId) })
+        break
+      case 'settings': {
+        const task = this.host.task(parent, id)
+        const steps = task?.steps ?? [
+          {
+            provider: e.previous?.provider ?? e.settings.provider,
+            model: e.previous?.model,
+            reason: '',
+            at: run.startedAt,
+          },
+        ]
+        this.host.updateTask(parent, id, {
+          provider: e.settings.provider,
+          model: e.settings.model,
+          effort: e.settings.effort,
+          steps: [
+            ...steps,
+            { provider: e.settings.provider, model: e.settings.model, reason: e.reason, at: Date.now() },
+          ],
+        })
+        break
+      }
+    }
+  }
+
+  /** A native sub-agent died on a usage limit: pick its task up again on the next fallback, with what it had done. */
+  continueNative(id: string, task: AgentTask): void {
+    const prefs = this.host.preferences()
+    if (!prefs || this.children.has(task.agentId) || task.taskType === 'local_bash' || task.taskType === 'advisor')
+      return
+    const parent = this.host.get(id)
+    if (!parent.settings.autoFallback || parent.parentId || this.continued.has(task.agentId)) return
+    this.continued.add(task.agentId)
+    void (async () => {
+      const catalogs = await this.host.catalog()
+      await this.host.freshAccountUsage(parent.provider)
+      const routing = this.host.routing(parent.settings)
+      const policy = this.host.policyOf(catalogs, prefs)
+      const settings = { ...parent.settings, model: task.model ?? parent.settings.model }
+      const account = routing
+        ? this.host.otherAccount(
+            settings,
+            routing,
+            catalogs,
+            policy.switchAt,
+            new Set([accountKey(parent.provider, settings.accountId)]),
+          )
+        : null
+      const step = account
+        ? {
+            id: '',
+            provider: parent.provider,
+            model: settings.model,
+            effort: settings.effort,
+            serviceTier: settings.serviceTier,
+            accountId: account,
+          }
+        : nextStep(policy.order, {
+            usage: routing?.usage ?? [],
+            accounts: routing?.accounts,
+            catalogs,
+            switchAt: policy.switchAt,
+            attempted: new Set([settingsKey(parent.settings, catalogs)]),
+          })
+      if (!step) return
+      const lines = this.host
+        .events(id)
+        .filter((e) => e.agentId === task.agentId && e.kind !== 'agent')
+        .map((e) =>
+          e.kind === 'text'
+            ? `AGENT: ${e.text}`
+            : e.kind === 'tool-use'
+              ? `TOOL ${e.name}: ${e.summary}`
+              : e.kind === 'tool-result'
+                ? `RESULT: ${e.summary}`
+                : '',
+        )
+        .filter(Boolean)
+        .join('\n')
+      const prompt = `${task.prompt ?? task.name}\n\n<previous-attempt>\nA ${providerName(parent.provider)} sub-agent started this task and stopped when its usage limit was reached. What it had done so far:\n${clipTextEnd(lines, 30_000) || '(nothing recorded)'}\n</previous-attempt>\nContinue from where it stopped. Do not repeat finished work.`
+      this.host.updateTask(id, task.agentId, {
+        status: 'stopped',
+        summary: `Stopped: ${providerName(parent.provider)} limit reached. Continuing on ${providerName(step.provider)}.`,
+      })
+      await this.spawnSubagent(
+        id,
+        { description: task.name, prompt, type: task.agentType, background: true, name: task.name },
+        undefined,
+        { step, reason: `${providerName(parent.provider)} limit reached` },
+      )
+    })().catch((error) =>
+      this.host.record(id, {
+        kind: 'error',
+        message: `Could not continue ${task.name} on the fallback: ${errorMessage(error)}`,
+      }),
+    )
+  }
+
+  /** Claude's own Agent tool, when Ramu should run the sub-agent instead: the call is refused and the model is pointed at `ramu_agent`. */
+  subagentHooks(id: string): Options['hooks'] {
+    return {
+      PreToolUse: [
+        {
+          matcher: 'Agent|Task',
+          hooks: [
+            async (input) => {
+              if (input.hook_event_name !== 'PreToolUse') return {}
+              let decision: Awaited<ReturnType<FallbackRouter['subagentSettings']>>
+              try {
+                decision = await this.host.subagentSettings(id)
+              } catch {
+                return {}
+              }
+              if (!decision.redirect) return {}
+              const where = `${providerName(decision.settings.provider)}${decision.settings.model ? ` ${decision.settings.model}` : ''}`
+              return {
+                hookSpecificOutput: {
+                  hookEventName: 'PreToolUse' as const,
+                  permissionDecision: 'deny' as const,
+                  permissionDecisionReason: `Sub-agents run through Ramu here, on ${where}${decision.reason ? ` because ${decision.reason}` : ''}. Call the ramu_agent tool with the same description, prompt, type and background arguments instead of the Agent tool.`,
+                },
+              }
+            },
+          ],
+        },
+      ],
+    }
+  }
+
+  /**
+   * Codex's hook asks before one of its own sub-agents starts. A refusal tells the model to call `ramu_agent` instead,
+   * the same as for Claude's Agent tool; no answer lets Codex's own sub-agent run.
+   */
+  async codexSpawnDecision(id: string): Promise<{ deny: true; reason: string } | null> {
+    const session = this.host.get(id)
+    if (session.provider !== 'codex' || session.parentId) return null
+    let decision: Awaited<ReturnType<FallbackRouter['subagentSettings']>>
+    try {
+      decision = await this.host.subagentSettings(id)
+    } catch {
+      return null
+    }
+    if (!decision.redirect) return null
+    const where = `${providerName(decision.settings.provider)}${decision.settings.model ? ` ${decision.settings.model}` : ''}`
+    return {
+      deny: true,
+      reason: `Sub-agents run through Ramu here, on ${where}${decision.reason ? ` because ${decision.reason}` : ''}. Call the ramu_agent tool with the same description, prompt and type instead of spawn_agent.`,
+    }
+  }
+
+  /** Whether Codex's own sub-agent tools should be off, so every sub-agent goes through `ramu_agent`. */
+  nativeSubagentsOff(s: AgentSessionInfo): boolean {
+    const prefs = this.host.preferences()
+    return !!prefs && !s.parentId && ramuRunsHelpers(prefs.subagents)
+  }
+}

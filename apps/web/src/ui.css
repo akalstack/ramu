@@ -1,0 +1,56 @@
+/* Tailwind utilities without preflight: Monaco and xterm own their resets. */
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@source "./";
+@theme inline {
+  --color-window: var(--window);
+  --color-canvas: var(--canvas);
+  --color-raised: var(--raised);
+  --color-soft: var(--soft);
+  --color-brand: var(--accent);
+  --color-brand-wash: var(--accent-wash);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --color-fill: var(--fill);
+  --color-fill-hover: var(--fill-hover);
+  --color-hover: var(--hover);
+  --color-line: var(--line);
+  --color-edge: var(--edge);
+  --color-primary-hover: var(--primary-hover);
+  --font-sans: var(--sans);
+  --font-mono: var(--mono);
+  --text-caption: var(--font-caption);
+  --text-control: var(--font-control);
+  --text-body: var(--font-body);
+  --text-chat: var(--font-chat);
+  --text-heading: var(--font-heading);
+  --text-hero: var(--font-hero);
+  --color-background: var(--canvas);
+  --color-search-match: color-mix(in srgb, var(--accent) 28%, var(--canvas));
+  --color-foreground: var(--text);
+  --color-card: var(--raised-2);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--raised);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-ink);
+  --color-secondary: var(--subtle);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--subtle);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--pressed);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--bad);
+  --color-border: var(--line-strong);
+  --color-input: transparent;
+  --color-ring: var(--accent);
+  /* shadcn's scale maps onto Ramu's one radius scale (styles.css :root). */
+  --radius-sm: var(--radius-xs);
+  --radius-md: var(--radius-s);
+  --radius-lg: var(--radius-row);
+  --radius-xl: var(--radius-m);
+}

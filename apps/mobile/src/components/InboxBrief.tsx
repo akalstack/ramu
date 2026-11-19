@@ -1,0 +1,281 @@
+import { PULL_REQUEST_STAGE_LABEL } from '@ramu/shared/pullRequests'
+import { useState } from 'react'
+import { Pressable, View } from 'react-native'
+import {
+  ChevronRight,
+  CircleAlert,
+  CircleCheck,
+  GitMerge,
+  GitPullRequest,
+  KeyRound,
+  MemoryStick,
+  MessageCircleQuestion,
+  Newspaper,
+  ShieldCheck,
+  Target,
+} from 'lucide-react-native'
+import {
+  blockerTally,
+  blockerTallyLine,
+  BRIEF_ROWS,
+  briefRowHost,
+  briefRowLook,
+  briefRows,
+  finishedSince,
+  TALLY_MIN_THREADS,
+  type BriefMark,
+  type BriefRow,
+  type InboxModel,
+} from '@ramu/shared/hostInbox'
+import { retryThread, stopIdleThreads } from '@ramu/shared/chat/threadActions'
+import { gigabytes } from '@ramu/shared/resources'
+import { useSay } from '../i18n'
+import { useAutomation } from '../runtime/automation'
+import { inboxBlockerText } from '../runtime/inboxBlockerText'
+import { useStore } from '../runtime/store'
+import type { Chat } from '../runtime/types'
+import { font, space, useTheme } from '../theme'
+import { Nothing } from './InboxParts'
+import { InputRequests } from './InputRequests'
+import { useOpenThread } from './paneContext'
+import { Button, Divider, ROW_INSET, T, tap } from './ui'
+
+const MARK: Record<BriefMark, typeof CircleAlert> = {
+  failed: CircleAlert,
+  conflicts: GitMerge,
+  'pull-request': GitPullRequest,
+  approval: ShieldCheck,
+  question: MessageCircleQuestion,
+  connector: KeyRound,
+  goal: Target,
+  memory: MemoryStick,
+  recap: Newspaper,
+}
+
+type Invoke = (hostId: string, method: string, ...args: unknown[]) => Promise<unknown>
+
+function BriefRowView({ row, divider, where }: { row: BriefRow; divider: boolean; where: (chat: Chat) => string }) {
+  const say = useSay()
+  const { c } = useTheme()
+  const openThread = useOpenThread()
+  const store = useStore()
+  const auto = useAutomation()
+  const [busy, setBusy] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [error, setError] = useState('')
+  const hostId = briefRowHost(row)
+  const taskId = row.kind === 'recap' ? row.recap.item.taskId : row.kind === 'low-memory' ? '' : row.chat.taskId
+  const chat = store.chats.find((entry) => entry.computerId === hostId && entry.taskId === taskId)
+  const computer = store.computers.find((entry) => entry.id === hostId)
+  const viewOnly = computer?.access === 'viewer'
+  const online = computer?.status === 'online'
+  const run = (work: () => Promise<unknown>) => {
+    setBusy(true)
+    setError('')
+    void work()
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)))
+      .finally(() => setBusy(false))
+  }
+  const go = () => {
+    if (chat) openThread(chat.id)
+  }
+  const invoke = store.invoke as unknown as Invoke
+  const request =
+    row.kind === 'blocker' && (row.blocker.kind === 'approval' || row.blocker.kind === 'question')
+      ? row.chat.inputSummary?.requests[0]
+      : undefined
+  const off = busy || !online
+  const title =
+    row.kind === 'recap'
+      ? row.recap.item.title
+      : row.kind === 'low-memory'
+        ? say('{0} is low on memory', { 0: computer?.name ?? '' })
+        : (chat?.title ?? '')
+  const detail =
+    row.kind === 'recap'
+      ? row.recap.item.detail
+      : row.kind === 'low-memory'
+        ? row.memory.low.idleThreads.length
+          ? say('{0} idle threads use {1} GB', {
+              0: row.memory.low.idleThreads.length,
+              1: gigabytes(row.memory.low.idleBytes),
+            })
+          : say('{0} GB free', { 0: gigabytes(row.memory.low.availableBytes) })
+        : row.kind === 'failure'
+          ? say('Failed')
+          : row.kind === 'pull-request'
+            ? `#${row.chat.pullRequest!.number} · ${say(PULL_REQUEST_STAGE_LABEL[row.chat.pullRequest!.stage])}`
+            : (request?.title && say(request.title)) ||
+              inboxBlockerText(row.blocker, store.language === 'id' ? 'id' : 'en')
+  const look = briefRowLook(row)
+  const Mark = MARK[look.mark]
+  const toneColor = look.tone === 'bad' ? c.bad : look.tone === 'warn' ? c.warn : c.muted
+  const actions = viewOnly ? null : row.kind === 'failure' ? (
+    <>
+      <Button title={say('Retry')} disabled={off} onPress={() => run(() => retryThread(invoke, { hostId, taskId }))} />
+      <Button
+        kind="secondary"
+        title={say('Mark done')}
+        disabled={off}
+        onPress={() => run(() => invoke(hostId, 'tasks.done', taskId, true).then(() => store.refresh(hostId)))}
+      />
+    </>
+  ) : row.kind === 'low-memory' ? (
+    row.memory.low.idleThreads.length ? (
+      <Button
+        title={say('Stop idle')}
+        disabled={off}
+        onPress={() => run(() => stopIdleThreads(invoke, hostId, row.memory.low.idleThreads))}
+      />
+    ) : null
+  ) : row.kind === 'recap' ? (
+    <Button
+      kind="secondary"
+      title={say('Mark done')}
+      disabled={off}
+      onPress={() => run(() => auto.actRecap(hostId, row.recap.item, 'done'))}
+    />
+  ) : request?.kind === 'approval' ? (
+    <Button
+      title={say('Allow once')}
+      disabled={off}
+      onPress={() =>
+        run(() =>
+          invoke(hostId, 'agent.replyPermission', request.sessionId, request.requestId, true, undefined, 'once'),
+        )
+      }
+    />
+  ) : request?.choices ? (
+    request.choices.options.map((option) => (
+      <Button
+        key={option}
+        kind="secondary"
+        title={option}
+        disabled={off}
+        onPress={() =>
+          run(() =>
+            invoke(hostId, 'agent.replyQuestion', request.sessionId, request.requestId, {
+              [request.choices!.key]: option,
+            }),
+          )
+        }
+      />
+    ))
+  ) : request ? (
+    <Button
+      kind="secondary"
+      title={open ? say('Hide') : say('Answer')}
+      disabled={!online}
+      onPress={() => setOpen((value) => !value)}
+    />
+  ) : null
+  const place = chat ? where(chat) : ''
+  // Tapping the row opens the thread; the buttons under it finish the step from here.
+  return (
+    <View>
+      {divider ? <Divider inset={ROW_INSET} /> : null}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={[title, detail, place].filter(Boolean).join(', ')}
+        accessibilityState={{ disabled: !chat }}
+        disabled={!chat}
+        onPress={() => {
+          tap()
+          go()
+        }}
+        style={({ pressed }) => ({
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: space.m,
+          paddingHorizontal: space.l,
+          paddingTop: space.m,
+          paddingBottom: actions || error ? space.s : space.m,
+          backgroundColor: pressed ? c.pressed : 'transparent',
+        })}
+      >
+        <Mark size={16} color={toneColor} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <T weight="500" numberOfLines={1}>
+            {title}
+          </T>
+          <T size={font.caption} tone="muted" numberOfLines={2}>
+            <T size={font.caption} tone={look.tone === 'neutral' ? 'muted' : look.tone}>
+              {detail}
+            </T>
+            {place ? ` · ${place}` : ''}
+          </T>
+        </View>
+        {chat ? <ChevronRight size={16} color={c.placeholder} /> : null}
+      </Pressable>
+      {error || actions || (open && chat) ? (
+        <View style={{ paddingLeft: ROW_INSET, paddingRight: space.l, paddingBottom: space.m, gap: space.s }}>
+          {error ? (
+            <T size={font.caption} tone="bad">
+              {error}
+            </T>
+          ) : null}
+          {actions ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>{actions}</View> : null}
+          {open && chat ? <InputRequests chat={chat} /> : null}
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+/** Inbox's first tab: what needs the person now, most urgent first, across every host, with the usual step one tap away. */
+export function InboxBrief({ inbox, where }: { inbox: InboxModel; where: (chat: Chat) => string }) {
+  const say = useSay()
+  const auto = useAutomation()
+  const [all, setAll] = useState(false)
+  const rows = briefRows(inbox)
+  const shown = all ? rows : rows.slice(0, BRIEF_ROWS)
+  const finished = finishedSince(inbox, auto.visit)
+  if (!rows.length)
+    return (
+      <Nothing
+        icon={CircleCheck}
+        title={say('You are all caught up')}
+        detail={
+          finished
+            ? say('{0} finished since your last visit.', { 0: finished })
+            : say('Questions, approvals, failures and recaps that need a decision show up here.')
+        }
+      />
+    )
+  return (
+    <View style={{ gap: space.s }}>
+      {finished || inbox.waiting.length >= TALLY_MIN_THREADS ? (
+        <T tone="muted" size={font.caption} style={{ paddingHorizontal: space.l, paddingTop: space.s }}>
+          {[
+            inbox.waiting.length >= TALLY_MIN_THREADS ? blockerTallyLine(blockerTally(inbox.waiting), say) : '',
+            finished ? say('{0} finished since your last visit.', { 0: finished }) : '',
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </T>
+      ) : null}
+      <View>
+        {shown.map((row, index) => (
+          <BriefRowView
+            key={JSON.stringify([
+              row.kind,
+              briefRowHost(row),
+              row.kind === 'recap' ? row.recap.item.id : row.kind === 'low-memory' ? '' : row.chat.taskId,
+            ])}
+            row={row}
+            divider={index > 0}
+            where={where}
+          />
+        ))}
+      </View>
+      {rows.length > shown.length ? (
+        <Button
+          kind="ghost"
+          title={`${say('See all')} · ${rows.length}`}
+          onPress={() => setAll(true)}
+          style={{ alignSelf: 'flex-start', marginHorizontal: space.l }}
+        />
+      ) : null}
+    </View>
+  )
+}

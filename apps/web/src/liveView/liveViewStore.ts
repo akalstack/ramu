@@ -1,0 +1,58 @@
+import { useSyncExternalStore } from 'react'
+import type { LivePosition, LiveSurface, LiveViewPin } from '@ramu/shared/liveView'
+
+const KEY = 'ramu.live-view'
+const listeners = new Set<() => void>()
+const read = (): LiveViewPin | null => {
+  try {
+    return JSON.parse(localStorage.getItem(KEY) ?? 'null') as LiveViewPin | null
+  } catch {
+    return null
+  }
+}
+let pin = read()
+const write = (next: LiveViewPin | null) => {
+  pin = next
+  try {
+    if (next) localStorage.setItem(KEY, JSON.stringify(next))
+    else localStorage.removeItem(KEY)
+  } catch {
+    /* The view still works for this session. */
+  }
+  for (const listener of listeners) listener()
+}
+
+/** Float: the person asks for a live view of this thread. It stays pinned to the thread until closed. */
+export const floatLiveView = (hostId: string, taskId: string, pinned?: LiveSurface) =>
+  write({
+    hostId,
+    taskId,
+    ...(pinned ? { pinned } : {}),
+    ...(pin?.position ? { position: pin.position } : {}),
+    hideFromSharing: pin?.hideFromSharing ?? true,
+  })
+export const closeLiveView = () => write(null)
+export const pinLiveSurface = (pinned: LiveSurface | undefined) => {
+  if (!pin) return
+  const { pinned: _old, ...rest } = pin
+  write(pinned ? { ...rest, pinned } : rest)
+}
+export const placeLiveView = (position: LivePosition) => pin && write({ ...pin, position })
+export const setLiveWindow = (open: boolean, hideFromSharing = pin?.hideFromSharing ?? true) =>
+  pin && write({ ...pin, window: open, hideFromSharing })
+
+// The live view window and the main window share this pin: a change in one shows in the other.
+globalThis.window?.addEventListener('storage', (event) => {
+  if (event.key !== KEY) return
+  pin = read()
+  for (const listener of listeners) listener()
+})
+
+export const useLiveViewPin = () =>
+  useSyncExternalStore(
+    (listener) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    () => pin,
+  )

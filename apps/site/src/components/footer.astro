@@ -1,0 +1,56 @@
+---
+import { AKALSTACK, MOBILE_SETUP, RELEASES, REPO } from '@/lib/site'
+
+const COLUMNS = [
+  {
+    title: 'Product',
+    links: [
+      { label: 'Download', href: RELEASES },
+      { label: 'Mobile', href: MOBILE_SETUP },
+      { label: 'Plugins', href: '/plugins' },
+      { label: 'Docs', href: `${REPO}/blob/main/docs/README.md#guide` },
+    ],
+  },
+  {
+    title: 'Project',
+    links: [
+      { label: 'GitHub', href: REPO },
+      { label: 'Contributing', href: `${REPO}/blob/main/CONTRIBUTING.md` },
+      { label: 'Security', href: `${REPO}/blob/main/SECURITY.md` },
+      { label: 'Plugin schema', href: '/schema/plugin.json' },
+    ],
+  },
+  {
+    title: 'Support',
+    links: [
+      { label: 'GitHub Sponsors', href: 'https://github.com/sponsors/akalstack' },
+      { label: 'Trakteer', href: 'https://trakteer.id/akalstack' },
+      { label: 'Privacy', href: `${AKALSTACK}/privacy` },
+      { label: 'Terms', href: `${AKALSTACK}/terms` },
+    ],
+  },
+]
+---
+
+<footer class="footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <a href="/" aria-label="Ramu home"><img src="/wordmark.svg" alt="Ramu" width="92" height="20" /></a>
+      <p>Describe it. Ramu ships it. Free and open source, on desktop and phone.</p>
+    </div>
+    {
+      COLUMNS.map((col) => (
+        <nav class="footer-col" aria-label={col.title}>
+          <h2>{col.title}</h2>
+          {col.links.map((link) => (
+            <a href={link.href}>{link.label}</a>
+          ))}
+        </nav>
+      ))
+    }
+  </div>
+  <div class="footer-bottom">
+    <span>© {new Date().getFullYear()} <a href={AKALSTACK}>Akalstack</a>. MIT licensed.</span>
+    <span>Product and service names and logos belong to their owners.</span>
+  </div>
+</footer>

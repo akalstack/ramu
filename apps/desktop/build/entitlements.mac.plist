@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <!-- Hardened runtime exceptions that Electron's V8 needs. -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <!-- The detached Node daemon and the Claude SDK executables load native modules signed by other teams. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <!-- Computer use sends Quartz events through osascript; the OS still asks the person for Accessibility itself. -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+    <!-- Dictation records the microphone only while the person is recording; the OS still asks for permission. -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+  </dict>
+</plist>

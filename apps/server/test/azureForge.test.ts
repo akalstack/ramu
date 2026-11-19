@@ -1,0 +1,743 @@
+import { afterEach, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import {
+  azureApi,
+  azureMergeOptions,
+  htmlText,
+  parseAzureRemote,
+  parseChecks,
+  parseListPullRequest,
+  parsePullRequest,
+  parseRepositories,
+  parseThreads,
+  pullRequestAction,
+  pullRequestFiles,
+  pullRequestTimeline,
+  reviewDecision,
+  comment,
+  editComment,
+  lineComment,
+  react,
+  rerunChecks,
+  setThreadStatus,
+  updatePullRequest,
+  withdrawReview,
+} from '../src/workspace/forge/azure'
+import { FILES_PAGE } from '../src/workspace/forge/adapter'
+import { AzureCredentials, azureCredential } from '../src/workspace/forge/azureCredentials'
+import { BitbucketCredentials } from '../src/workspace/forge/bitbucketCredentials'
+import { HostCredentialStore } from '../src/credentials/store'
+import { adapterFor, adapterForOrigin } from '../src/workspace/forge/route'
+
+const repo = { organization: 'acme', project: 'Web App', repo: 'site' }
+const dirs: string[] = []
+afterEach(() => {
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+})
+
+it('reads organization, project and repository from every Azure Repos remote form, and nothing else', () => {
+  const expected = { organization: 'acme', project: 'Web App', repo: 'site' }
+  expect(parseAzureRemote('https://dev.azure.com/acme/Web%20App/_git/site')).toEqual(expected)
+  expect(parseAzureRemote('https://acme@dev.azure.com/acme/Web%20App/_git/site')).toEqual(expected)
+  expect(parseAzureRemote('https://acme.visualstudio.com/Web%20App/_git/site')).toEqual(expected)
+  expect(parseAzureRemote('https://acme.visualstudio.com/DefaultCollection/Web%20App/_git/site')).toEqual(expected)
+  expect(parseAzureRemote('git@ssh.dev.azure.com:v3/acme/Web%20App/site')).toEqual(expected)
+  expect(parseAzureRemote('ssh://git@ssh.dev.azure.com/v3/acme/Web%20App/site')).toEqual(expected)
+  expect(parseAzureRemote('acme@vs-ssh.visualstudio.com:v3/acme/Web%20App/site')).toEqual(expected)
+  // A repository named like its project may leave the project out.
+  expect(parseAzureRemote('https://dev.azure.com/acme/_git/site')).toEqual({ ...expected, project: 'site' })
+  expect(parseAzureRemote('https://user:secret@dev.azure.com/acme/p/_git/site')).toBeNull()
+  expect(parseAzureRemote('https://github.com/acme/site.git')).toBeNull()
+  expect(parseAzureRemote('https://dev.azure.com/acme/p')).toBeNull()
+  expect(parseAzureRemote('https://dev.azure.com/acme/%2E%2E/_git/site')).toBeNull()
+})
+
+it('routes Azure DevOps origins and checkouts to their own adapter', async () => {
+  expect((await adapterForOrigin('dev.azure.com')).id).toBe('azure')
+  expect((await adapterForOrigin('acme.visualstudio.com')).id).toBe('azure')
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-azure-route-'))
+  dirs.push(dir)
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'git@ssh.dev.azure.com:v3/acme/web/site'], { cwd: dir })
+  expect((await adapterFor(dir)).id).toBe('azure')
+})
+
+it('reads the latest status per context and every build policy as checks', () => {
+  const checks = parseChecks(
+    [
+      { id: 1, state: 'pending', context: { name: 'lint', genre: 'ci' } },
+      { id: 2, state: 'failed', context: { name: 'lint', genre: 'ci' }, targetUrl: 'https://ci/2' },
+      { id: 3, state: 'succeeded', context: { name: 'scan' } },
+    ],
+    [
+      {
+        status: 'rejected',
+        configuration: { type: { id: '0609b952-1397-4640-95ec-e00a01b2c241' }, settings: { displayName: 'PR build' } },
+        context: { buildId: 42 },
+      },
+      {
+        status: 'notApplicable',
+        configuration: { type: { id: '0609b952-1397-4640-95ec-e00a01b2c241' } },
+      },
+      // Reviewer counts and other policies are not builds.
+      { status: 'rejected', configuration: { type: { id: 'reviewers', displayName: 'Minimum reviewers' } } },
+    ],
+    repo,
+  )
+  expect(checks).toEqual([
+    { name: 'ci/lint', state: 'failure', url: 'https://ci/2' },
+    { name: 'PR build', state: 'failure', url: 'https://dev.azure.com/acme/Web%20App/_build/results?buildId=42' },
+    { name: 'scan', state: 'success', url: null },
+  ])
+})
+
+it('maps votes and required reviewers onto the shared review decision and pull request shape', () => {
+  expect(reviewDecision([{ vote: 10 }, { vote: -5 }])).toBe('changes-requested')
+  expect(reviewDecision([{ vote: 10 }, { vote: 0, isRequired: true }])).toBe('review-required')
+  expect(reviewDecision([{ vote: 5 }, { vote: 0 }])).toBe('approved')
+  expect(reviewDecision([{ vote: 0 }])).toBe('review-required')
+  expect(reviewDecision([])).toBeNull()
+  const pr = parsePullRequest(
+    {
+      pullRequestId: 7,
+      title: 'Fix login',
+      status: 'completed',
+      isDraft: false,
+      sourceRefName: 'refs/heads/fix/login',
+      targetRefName: 'refs/heads/main',
+      lastMergeSourceCommit: { commitId: 'abc123' },
+    },
+    [],
+    repo,
+  )
+  expect(pr).toMatchObject({
+    number: 7,
+    url: 'https://dev.azure.com/acme/Web%20App/_git/site/pullrequest/7',
+    state: 'merged',
+    baseBranch: 'main',
+    headBranch: 'fix/login',
+    headCommit: 'abc123',
+    reviewDecision: null,
+  })
+})
+
+const listRow = {
+  pullRequestId: 7,
+  title: 'Fix login',
+  status: 'active' as const,
+  sourceRefName: 'refs/heads/fix/login',
+  targetRefName: 'refs/heads/main',
+  lastMergeSourceCommit: { commitId: 'abc123' },
+  createdBy: { id: 'u-ana', displayName: 'Ana' },
+  reviewers: [
+    { id: 'u-bo', displayName: 'Bo', vote: 10 },
+    { id: 'g-team', displayName: 'Web Team', vote: 0, isContainer: true },
+  ],
+  mergeStatus: 'conflicts' as const,
+  creationDate: '2026-01-02T00:00:00Z',
+}
+
+it('lists pull requests grouped by the viewer’s part in them, with their merge status', () => {
+  expect(parseListPullRequest(listRow, repo, 'u-ana')).toMatchObject({
+    number: 7,
+    url: 'https://dev.azure.com/acme/Web%20App/_git/site/pullrequest/7',
+    author: 'Ana',
+    fork: false,
+    reviewDecision: 'approved',
+    checks: null,
+    mergeable: 'conflicts',
+    openThreads: null,
+    requestedReviewers: ['Bo', 'Web Team'],
+    group: 'mine',
+    updatedAt: Date.parse('2026-01-02T00:00:00Z'),
+  })
+  expect(parseListPullRequest(listRow, repo, 'u-bo').group).toBe('review')
+  expect(parseListPullRequest({ ...listRow, forkSource: {}, mergeStatus: 'queued' }, repo, null)).toMatchObject({
+    group: 'other',
+    fork: true,
+    mergeable: 'unknown',
+  })
+})
+
+it('offers the merge types branch policy allows and explains what blocks completion', () => {
+  const limit = {
+    status: 'approved' as const,
+    configuration: {
+      type: { id: 'FA4E907D-C16B-4A4C-9DFA-4916E5D171AB' },
+      isBlocking: true,
+      settings: { allowSquash: true, allowNoFastForward: false, allowRebase: true },
+    },
+  }
+  const clean = { ...listRow, mergeStatus: 'succeeded' as const }
+  expect(azureMergeOptions(clean, [], [limit])).toEqual({
+    methods: ['squash', 'rebase'],
+    blockers: [],
+    canDeleteBranch: true,
+  })
+  expect(azureMergeOptions(clean, [], []).methods).toEqual(['squash', 'merge', 'rebase'])
+  const options = azureMergeOptions(
+    { ...listRow, isDraft: true },
+    [{ name: 'Build', state: 'failure', url: null }],
+    [
+      limit,
+      { status: 'queued', configuration: { type: { id: 'fd2167ab-b0be-447a-8ec8-39368250530e' }, isBlocking: true } },
+      { status: 'running', configuration: { type: { id: '0609b952-1397-4640-95ec-e00a01b2c241' }, isBlocking: true } },
+      { status: 'queued', configuration: { type: { id: 'optional-policy' }, isBlocking: false } },
+    ],
+  )
+  expect(options.blockers).toEqual([
+    'It is a draft. Publish it for review first.',
+    'It has conflicts with its target branch.',
+    'Some checks are failing.',
+    'Branch policies are blocking it: required reviewers or comments are missing.',
+    'Required builds are still running.',
+  ])
+})
+
+it('reads threads without system notes, resolved by status, with every member’s comment trusted', () => {
+  const threads = parseThreads([
+    {
+      id: 1,
+      status: 'fixed',
+      threadContext: { filePath: '/src/a.ts', rightFileStart: { line: 12 } },
+      comments: [
+        { id: 1, content: ' Handle null ', author: { displayName: 'Rina' }, publishedDate: '2026-01-02T00:00:00Z' },
+        { id: 2, content: 'Done', author: { displayName: 'Ana' } },
+      ],
+    },
+    { id: 2, status: 'active', comments: [{ id: 1, content: 'Ahmad voted 10', commentType: 'system' }] },
+    { id: 3, status: 'active', isDeleted: true, comments: [{ id: 1, content: 'gone' }] },
+    { id: 4, status: 'active', comments: [{ id: 1, content: 'Why?', author: { displayName: 'Eve' } }] },
+    {
+      id: 5,
+      comments: [{ id: 1, content: 'Build passed', author: { displayName: 'Web App Build Service (acme)' } }],
+    },
+  ])
+  expect(threads.map((thread) => [thread.id, thread.resolved, thread.resolvable, thread.outdated])).toEqual([
+    ['1', true, true, false],
+    ['4', false, true, false],
+    ['5', false, false, false],
+  ])
+  expect(threads[0]).toMatchObject({ path: 'src/a.ts', line: 12 })
+  expect(threads[0]!.comments[0]).toEqual({
+    id: '1/1',
+    author: 'Rina',
+    bot: false,
+    trusted: true,
+    body: 'Handle null',
+    createdAt: Date.parse('2026-01-02T00:00:00Z'),
+  })
+  expect(threads[2]!.comments[0]!.bot).toBe(true)
+})
+
+it('treats a completion whose reply was lost as done when Azure DevOps shows it completed', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-azure-merge-'))
+  dirs.push(dir)
+  execFileSync('git', ['init', '-q', '-b', 'fix/login'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'https://dev.azure.com/acme/Web%20App/_git/site'], { cwd: dir })
+  vi.stubEnv('AZURE_DEVOPS_EXT_PAT', 'pat')
+  let completedAfter = true
+  let reads = 0
+  const patches: unknown[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.startsWith('https://dev.azure.com/acme/Web%20App/_apis/git/repositories/site/pullrequests/7?')) {
+        if (init?.method === 'PATCH') {
+          patches.push(JSON.parse(String(init.body)))
+          return new Response('', { status: 502 })
+        }
+        reads++
+        return new Response(
+          JSON.stringify({ ...listRow, status: reads > 1 && completedAfter ? 'completed' : 'active' }),
+        )
+      }
+      return new Response('', { status: 404 })
+    }),
+  )
+  const url = 'https://dev.azure.com/acme/Web%20App/_git/site/pullrequest/7'
+  try {
+    await expect(
+      pullRequestAction(dir, url, { kind: 'merge', method: 'squash', deleteBranch: true }),
+    ).resolves.toBeUndefined()
+    expect(patches[0]).toEqual({
+      status: 'completed',
+      lastMergeSourceCommit: { commitId: 'abc123' },
+      completionOptions: { mergeStrategy: 'squash', deleteSourceBranch: true },
+    })
+    completedAfter = false
+    reads = 0
+    await expect(pullRequestAction(dir, url, { kind: 'merge', method: 'merge', deleteBranch: false })).rejects.toThrow(
+      'Azure DevOps answered 502',
+    )
+    await expect(pullRequestAction(dir, url, { kind: 'update-branch' })).rejects.toThrow('cannot update')
+  } finally {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  }
+})
+
+it('never keeps the organization Azure puts in clone addresses, and skips disabled repositories', () => {
+  const repos = parseRepositories([
+    {
+      name: 'site',
+      remoteUrl: 'https://acme@dev.azure.com/acme/Web%20App/_git/site',
+      project: { name: 'Web App', visibility: 'private', lastUpdateTime: '2026-10-01T00:00:00Z' },
+    },
+    { name: 'old', remoteUrl: 'https://dev.azure.com/acme/x/_git/old', isDisabled: true, project: { name: 'x' } },
+  ])
+  expect(repos).toEqual([
+    {
+      fullName: 'Web App/site',
+      description: null,
+      private: true,
+      cloneUrl: 'https://dev.azure.com/acme/Web%20App/_git/site',
+      updatedAt: Date.parse('2026-10-01T00:00:00Z'),
+    },
+  ])
+})
+
+it('reads work item descriptions as text', () => {
+  expect(htmlText('<div>Steps:<br>1. Open &amp; log in</div><p>Expect &lt;ok&gt;</p>')).toBe(
+    'Steps:\n1. Open & log in\nExpect <ok>',
+  )
+})
+
+it('signs requests with the token only, to dev.azure.com with an API version, and explains a refused token', async () => {
+  const seen: { url: string; auth: string }[] = []
+  const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+    seen.push({ url, auth: String((init?.headers as Record<string, string>).Authorization) })
+    // A refused token gets a sign-in page with 203.
+    return seen.length === 2 ? new Response('<html>', { status: 203 }) : new Response('{"value":[]}')
+  }) as unknown as typeof globalThis.fetch
+  await azureApi({ token: 'pat', fetch }, '/acme/_apis/git/repositories?$top=1')
+  expect(seen[0]).toEqual({
+    url: 'https://dev.azure.com/acme/_apis/git/repositories?$top=1&api-version=7.1',
+    auth: `Basic ${Buffer.from(':pat').toString('base64')}`,
+  })
+  await expect(azureApi({ token: 'old', fetch }, '/acme/_apis/connectionData')).rejects.toThrow(/did not accept/)
+})
+
+it("uses the Azure CLI's token from the environment, with its organization", async () => {
+  expect(await azureCredential({ AZURE_DEVOPS_EXT_PAT: 'p', AZURE_DEVOPS_ORG: 'acme' })).toEqual({
+    token: 'p',
+    organization: 'acme',
+    source: 'environment',
+  })
+  expect(await azureCredential({})).toBeNull()
+})
+
+it('keeps hosting secrets in the credential store and only the shown field in state', async () => {
+  const secrets = new Map<string, string>()
+  const store = new HostCredentialStore(async (_service, key) => ({
+    setPassword: async (value: string) => void secrets.set(key, value),
+    getPassword: async () => secrets.get(key) ?? null,
+    deletePassword: async () => secrets.delete(key),
+  }))
+  store.verify = async () => {}
+  const state = new Map<string, unknown>()
+  const get = (key: string, fallback: unknown) => (state.get(key) ?? fallback) as never
+  const set = (key: string, value: unknown) => void state.set(key, value)
+  const azure = new AzureCredentials(get, set, store)
+  expect(azure.saved()).toBeNull()
+  await azure.save({ organization: 'acme', token: 'secret-pat' })
+  expect(azure.saved()).toEqual({ organization: 'acme' })
+  expect(JSON.stringify([...state.values()])).not.toContain('secret-pat')
+  expect(await new AzureCredentials(get, set, store).read()).toEqual({ organization: 'acme', token: 'secret-pat' })
+  await azure.remove()
+  expect(azure.saved()).toBeNull()
+  // A Bitbucket credential saved before keeps its email under the same key.
+  const bitbucket = new BitbucketCredentials(get, set, store)
+  await bitbucket.save({ email: 'a@b.co', token: 'tok' })
+  expect(state.get('bitbucket-credential')).toMatchObject({ email: 'a@b.co' })
+  expect(bitbucket.saved()).toEqual({ email: 'a@b.co' })
+})
+
+it('lists the latest iteration’s files with renames, without diffs when it names no commits, and says when more follow', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-azure-files-'))
+  dirs.push(dir)
+  execFileSync('git', ['init', '-q', '-b', 'fix/login'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'https://dev.azure.com/acme/Web%20App/_git/site'], { cwd: dir })
+  vi.stubEnv('AZURE_DEVOPS_EXT_PAT', 'pat')
+  const base = 'https://dev.azure.com/acme/Web%20App/_apis/git/repositories/site/pullrequests/7/iterations'
+  let nextTop: number | undefined
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === `${base}?api-version=7.1`) return new Response(JSON.stringify({ value: [{ id: 1 }, { id: 3 }] }))
+      if (url === `${base}/3/changes?$top=${FILES_PAGE}&api-version=7.1`)
+        return new Response(
+          JSON.stringify({
+            changeEntries: [
+              { item: { path: '/src', gitObjectType: 'tree' }, changeType: 'edit' },
+              { item: { path: '/src/a.ts', gitObjectType: 'blob' }, changeType: 'edit' },
+              {
+                item: { path: '/src/new.ts', gitObjectType: 'blob' },
+                changeType: 'edit, rename',
+                originalPath: '/src/old.ts',
+              },
+              { item: { path: '/README.md', gitObjectType: 'blob' }, changeType: 'add' },
+              { item: { path: '/gone.ts', gitObjectType: 'blob' }, changeType: 'delete' },
+              { item: { path: '/odd.ts', gitObjectType: 'blob' }, changeType: 'undelete' },
+            ],
+            ...(nextTop ? { nextSkip: FILES_PAGE, nextTop } : {}),
+          }),
+        )
+      return new Response('', { status: 404 })
+    }),
+  )
+  const url = 'https://dev.azure.com/acme/Web%20App/_git/site/pullrequest/7'
+  const none = { additions: 0, deletions: 0, patch: null }
+  try {
+    expect(await pullRequestFiles(dir, url)).toEqual({
+      files: [
+        { path: 'src/a.ts', status: 'modified', ...none },
+        { path: 'src/new.ts', previousPath: 'src/old.ts', status: 'renamed', ...none },
+        { path: 'README.md', status: 'added', ...none },
+        { path: 'gone.ts', status: 'removed', ...none },
+        { path: 'odd.ts', status: 'changed', ...none },
+      ],
+      more: false,
+    })
+    nextTop = 100
+    expect((await pullRequestFiles(dir, url)).more).toBe(true)
+  } finally {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  }
+})
+
+it('builds each file’s patch and counts from its versions at the merge base and the source commit', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-azure-patches-'))
+  dirs.push(dir)
+  execFileSync('git', ['init', '-q', '-b', 'fix/login'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'https://dev.azure.com/acme/Web%20App/_git/site'], { cwd: dir })
+  vi.stubEnv('AZURE_DEVOPS_EXT_PAT', 'pat')
+  const repo = 'https://dev.azure.com/acme/Web%20App/_apis/git/repositories/site'
+  const base = `${repo}/pullrequests/7/iterations`
+  const texts: Record<string, string> = {
+    'base:/src/a.ts': 'one\ntwo\nthree\n',
+    'head:/src/a.ts': 'one\n2\nthree\nfour\n',
+    'base:/src/old.ts': 'keep\n',
+    'head:/src/new.ts': 'keep\nmore\n',
+    'head:/README.md': '# Site\n',
+    'base:/gone.ts': 'bye\n',
+    'base:/logo.png': 'PNG\x00\x00',
+    'head:/logo.png': 'PNG\x00\x01',
+  }
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === `${base}?api-version=7.1`)
+        return new Response(
+          JSON.stringify({
+            value: [
+              { id: 1, sourceRefCommit: { commitId: 'old' }, commonRefCommit: { commitId: 'base' } },
+              { id: 2, sourceRefCommit: { commitId: 'head' }, commonRefCommit: { commitId: 'base' } },
+            ],
+          }),
+        )
+      if (url === `${base}/2/changes?$top=${FILES_PAGE}&api-version=7.1`)
+        return new Response(
+          JSON.stringify({
+            changeEntries: [
+              { item: { path: '/src/a.ts' }, changeType: 'edit' },
+              { item: { path: '/src/new.ts' }, changeType: 'edit, rename', originalPath: '/src/old.ts' },
+              { item: { path: '/README.md' }, changeType: 'add' },
+              { item: { path: '/gone.ts' }, changeType: 'delete' },
+              { item: { path: '/logo.png' }, changeType: 'edit' },
+              { item: { path: '/missing.ts' }, changeType: 'edit' },
+            ],
+          }),
+        )
+      const item = new URL(url)
+      if (item.pathname.endsWith('/site/items')) {
+        const text = texts[`${item.searchParams.get('versionDescriptor.version')}:${item.searchParams.get('path')}`]
+        return text === undefined ? new Response('', { status: 404 }) : new Response(text)
+      }
+      return new Response('', { status: 404 })
+    }),
+  )
+  try {
+    const { files } = await pullRequestFiles(dir, 'https://dev.azure.com/acme/Web%20App/_git/site/pullrequest/7')
+    expect(files).toEqual([
+      {
+        path: 'src/a.ts',
+        status: 'modified',
+        additions: 2,
+        deletions: 1,
+        patch: '@@ -1,3 +1,4 @@\n one\n-two\n+2\n three\n+four',
+      },
+      {
+        path: 'src/new.ts',
+        previousPath: 'src/old.ts',
+        status: 'renamed',
+        additions: 1,
+        deletions: 0,
+        patch: '@@ -1 +1,2 @@\n keep\n+more',
+      },
+      { path: 'README.md', status: 'added', additions: 1, deletions: 0, patch: '@@ -0,0 +1 @@\n+# Site' },
+      { path: 'gone.ts', status: 'removed', additions: 0, deletions: 1, patch: '@@ -1 +0,0 @@\n-bye' },
+      // A binary file, and one that cannot be read, stay listed without a patch.
+      { path: 'logo.png', status: 'modified', additions: 0, deletions: 0, patch: null },
+      { path: 'missing.ts', status: 'modified', additions: 0, deletions: 0, patch: null },
+    ])
+  } finally {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  }
+})
+
+it('reads a pull request’s threads as its timeline: comments, votes, reviewers, status and pushes, oldest first', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-azure-timeline-'))
+  dirs.push(dir)
+  execFileSync('git', ['init', '-q', '-b', 'fix/login'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'https://dev.azure.com/acme/Web%20App/_git/site'], { cwd: dir })
+  vi.stubEnv('AZURE_DEVOPS_EXT_PAT', 'pat')
+  const at = (minute: number) => new Date(Date.UTC(2026, 10, 8, 10, minute)).toISOString()
+  const identities = { '1': { displayName: 'Ana' }, '2': { displayName: 'Bo' }, '3': { displayName: 'Cy' } }
+  const system = (id: number, minute: number, properties: Record<string, string>) => ({
+    id,
+    publishedDate: at(minute),
+    identities,
+    properties: Object.fromEntries(Object.entries(properties).map(([key, value]) => [key, { $value: value }])),
+    comments: [
+      {
+        id: 1,
+        commentType: 'system',
+        content: 'Microsoft.VisualStudio.Services.TFS updated',
+        publishedDate: at(minute),
+      },
+    ],
+  })
+  let threads: unknown[] = [
+    system(10, 9, {
+      CodeReviewThreadType: 'StatusUpdate',
+      CodeReviewStatus: 'Completed',
+      CodeReviewStatusUpdatedByIdentity: '1',
+    }),
+    system(11, 8, {
+      CodeReviewThreadType: 'StatusUpdate',
+      CodeReviewStatus: 'Active',
+      CodeReviewStatusUpdatedByIdentity: '1',
+    }),
+    system(12, 7, {
+      CodeReviewThreadType: 'StatusUpdate',
+      CodeReviewStatus: 'Abandoned',
+      CodeReviewStatusUpdatedByIdentity: '1',
+    }),
+    system(13, 6, { CodeReviewThreadType: 'RefUpdate', CodeReviewRefUpdatedByIdentity: '1' }),
+    system(14, 5, { CodeReviewThreadType: 'VoteUpdate', CodeReviewVoteResult: '-10', CodeReviewVotedByIdentity: '3' }),
+    system(15, 4, { CodeReviewThreadType: 'VoteUpdate', CodeReviewVoteResult: '0', CodeReviewVotedByIdentity: '2' }),
+    system(16, 3, { CodeReviewThreadType: 'VoteUpdate', CodeReviewVoteResult: '5', CodeReviewVotedByIdentity: '2' }),
+    system(17, 2, {
+      CodeReviewThreadType: 'ReviewersUpdate',
+      CodeReviewReviewersUpdatedAddedIdentity: '[2,3]',
+      CodeReviewReviewersUpdatedByIdentity: '1',
+    }),
+    system(18, 2, { CodeReviewThreadType: 'PolicyStatusUpdate' }),
+    { id: 19, isDeleted: true, comments: [{ id: 1, commentType: 'text', content: 'gone', publishedDate: at(1) }] },
+    {
+      id: 20,
+      publishedDate: at(1),
+      comments: [
+        {
+          id: 1,
+          commentType: 'text',
+          content: `${'Rename this. '.repeat(20)}\nMore`,
+          publishedDate: at(1),
+          author: { displayName: 'Bo' },
+        },
+        { id: 2, commentType: 'text', content: 'Done', publishedDate: at(4), author: { displayName: 'Ana' } },
+        { id: 3, commentType: 'text', content: 'old', isDeleted: true, publishedDate: at(4) },
+      ],
+    },
+  ]
+  const requested: string[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      requested.push(url)
+      return new Response(JSON.stringify({ value: threads }))
+    }),
+  )
+  const url = 'https://dev.azure.com/acme/Web%20App/_git/site/pullrequest/7'
+  try {
+    const events = await pullRequestTimeline(dir, url)
+    expect(requested).toEqual([
+      'https://dev.azure.com/acme/Web%20App/_apis/git/repositories/site/pullrequests/7/threads?api-version=7.1',
+    ])
+    expect(events.map((event) => [event.kind, event.actor, event.verdict ?? null])).toEqual([
+      ['comment', 'Bo', null],
+      ['review-requested', 'Ana', null],
+      ['review-requested', 'Ana', null],
+      ['review', 'Bo', 'approved'],
+      ['comment', 'Ana', null],
+      ['review', 'Cy', 'changes-requested'],
+      ['commit', 'Ana', null],
+      ['closed', 'Ana', null],
+      ['reopened', 'Ana', null],
+      ['merged', 'Ana', null],
+    ])
+    expect([events[1]!.text, events[2]!.text]).toEqual(['Bo', 'Cy'])
+    expect(events[0]).toMatchObject({ at: Date.parse(at(1)), url: `${url}?discussionId=20` })
+    expect(events[0]!.text).toHaveLength(200)
+    expect(events[0]!.text?.endsWith('…')).toBe(true)
+    threads = Array.from({ length: 60 }, (_, i) => ({
+      id: i,
+      comments: [{ id: 1, commentType: 'text', content: `note ${i}`, publishedDate: at(60 - i) }],
+    }))
+    const latest = await pullRequestTimeline(dir, url)
+    expect(latest).toHaveLength(50)
+    expect([latest[0]!.text, latest[49]!.text]).toEqual(['note 49', 'note 0'])
+  } finally {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  }
+})
+
+/** A checkout on the Web App project's `site` repository and a fake Azure DevOps that records every request. */
+function fakeAzure(answer: (method: string, path: string) => Response | undefined) {
+  const dir = mkdtempSync(join(tmpdir(), 'ramu-azure-write-'))
+  dirs.push(dir)
+  execFileSync('git', ['init', '-q', '-b', 'fix/login'], { cwd: dir })
+  execFileSync('git', ['remote', 'add', 'origin', 'https://dev.azure.com/acme/Web%20App/_git/site'], { cwd: dir })
+  vi.stubEnv('AZURE_DEVOPS_EXT_PAT', 'pat')
+  const calls: [string, string, unknown][] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      const path = url.replace('https://dev.azure.com/acme', '').replace('/Web%20App/_apis', '')
+      calls.push([method, path, init?.body ? JSON.parse(String(init.body)) : undefined])
+      return (
+        answer(method, path.replace(/[?&]api-version=[^&]*$/, '')) ??
+        new Response(method === 'GET' ? '{"value":[]}' : '{}')
+      )
+    }),
+  )
+  return {
+    dir,
+    calls,
+    done: () => {
+      vi.unstubAllGlobals()
+      vi.unstubAllEnvs()
+    },
+  }
+}
+
+const prUrl = 'https://dev.azure.com/acme/Web%20App/_git/site/pullrequest/7'
+const pr = '/git/repositories/site/pullrequests/7'
+const json = (value: unknown) => new Response(JSON.stringify(value))
+
+it('maps every thread status onto Azure DevOps’s own, and keeps comment ids as thread/comment', async () => {
+  const fake = fakeAzure((method, path) =>
+    method === 'POST' && path === `${pr}/threads` ? json({ id: 31, comments: [{ id: 1 }] }) : undefined,
+  )
+  try {
+    for (const status of ['active', 'resolved', 'wont-fix', 'by-design', 'closed'] as const)
+      await setThreadStatus(fake.dir, prUrl, '5', status)
+    expect(fake.calls.map((call) => call[2])).toEqual([
+      { status: 'active' },
+      { status: 'fixed' },
+      { status: 'wontFix' },
+      { status: 'byDesign' },
+      { status: 'closed' },
+    ])
+    await expect(comment(fake.dir, prUrl, 'Tests pass')).resolves.toBe('31/1')
+    expect(fake.calls.at(-1)?.[2]).toEqual({
+      comments: [{ parentCommentId: 0, content: 'Tests pass', commentType: 1 }],
+      status: 'active',
+    })
+    await lineComment(fake.dir, prUrl, { path: 'src/a.ts', line: 9, startLine: 7, body: 'Use', suggestion: 'x()' })
+    expect(fake.calls.at(-1)?.[2]).toMatchObject({
+      comments: [{ content: 'Use\n\n```suggestion\nx()\n```' }],
+      threadContext: {
+        filePath: '/src/a.ts',
+        rightFileStart: { line: 7, offset: 1 },
+        rightFileEnd: { line: 9, offset: 1 },
+      },
+    })
+    await lineComment(fake.dir, prUrl, { path: 'src/a.ts', line: 3, side: 'old', body: 'Gone' })
+    expect(fake.calls.at(-1)?.[2]).toMatchObject({
+      threadContext: { leftFileStart: { line: 3 }, leftFileEnd: { line: 3 } },
+    })
+    await editComment(fake.dir, prUrl, '31/2', 'Edited')
+    expect(fake.calls.at(-1)).toEqual(['PATCH', `${pr}/threads/31/comments/2?api-version=7.1`, { content: 'Edited' }])
+    await expect(editComment(fake.dir, prUrl, '31', 'x')).rejects.toThrow('not an Azure DevOps comment id')
+  } finally {
+    fake.done()
+  }
+})
+
+it('likes through the preview endpoint, refuses other reactions and assignees, and resets the vote to withdraw', async () => {
+  const fake = fakeAzure((method, path) => {
+    if (path === '/_apis/connectionData') return json({ authenticatedUser: { id: 'u-me' } })
+    return undefined
+  })
+  try {
+    await react(fake.dir, prUrl, '31/2', 'thumbs-up', true)
+    expect(fake.calls.at(-1)).toEqual([
+      'DELETE',
+      `${pr}/threads/31/comments/2/likes?api-version=7.1-preview.1`,
+      undefined,
+    ])
+    await expect(react(fake.dir, prUrl, '31/2', 'heart', false)).rejects.toThrow('only likes')
+    await expect(updatePullRequest(fake.dir, prUrl, { assignees: { add: ['bo'], remove: [] } })).rejects.toThrow(
+      'Azure DevOps has no assignees.',
+    )
+    await withdrawReview(fake.dir, prUrl)
+    expect(fake.calls.at(-1)).toEqual(['PUT', `${pr}/reviewers/u-me?api-version=7.1`, { vote: 0 }])
+    await updatePullRequest(fake.dir, prUrl, {
+      title: 'T',
+      base: 'next',
+      labels: { add: ['bug'], remove: ['old one'] },
+    })
+    expect(fake.calls.slice(-3)).toEqual([
+      ['PATCH', `${pr}?api-version=7.1`, { title: 'T', targetRefName: 'refs/heads/next' }],
+      ['POST', `${pr}/labels?api-version=7.1-preview.1`, { name: 'bug' }],
+      ['DELETE', `${pr}/labels/old%20one?api-version=7.1-preview.1`, undefined],
+    ])
+  } finally {
+    fake.done()
+  }
+})
+
+it('sets auto-complete as the viewer and queues only failed build validations again', async () => {
+  const build = '0609b952-1397-4640-95ec-e00a01b2c241'
+  const fake = fakeAzure((method, path) => {
+    if (path === '/_apis/connectionData') return json({ authenticatedUser: { id: 'u-me' } })
+    if (method === 'GET' && path === pr) return json({ ...listRow, repository: { project: { id: 'p1' } } })
+    if (path.startsWith('/policy/evaluations?'))
+      return json({
+        value: [
+          { evaluationId: 'e1', status: 'rejected', configuration: { type: { id: build } } },
+          { evaluationId: 'e2', status: 'approved', configuration: { type: { id: build } } },
+          { evaluationId: 'e3', status: 'broken', configuration: { type: { id: build } } },
+          { evaluationId: 'e4', status: 'rejected', configuration: { type: { id: 'other' } } },
+        ],
+      })
+    return undefined
+  })
+  try {
+    await pullRequestAction(fake.dir, prUrl, { kind: 'auto-merge', method: 'squash', deleteBranch: true })
+    expect(fake.calls.at(-1)).toEqual([
+      'PATCH',
+      `${pr}?api-version=7.1`,
+      {
+        autoCompleteSetBy: { id: 'u-me' },
+        completionOptions: { mergeStrategy: 'squash', deleteSourceBranch: true },
+      },
+    ])
+    await expect(rerunChecks(fake.dir, prUrl)).resolves.toBe(2)
+    expect(fake.calls.slice(-2)).toEqual([
+      ['PATCH', '/policy/evaluations/e1?api-version=7.1-preview.1', undefined],
+      ['PATCH', '/policy/evaluations/e3?api-version=7.1-preview.1', undefined],
+    ])
+  } finally {
+    fake.done()
+  }
+})

@@ -1,0 +1,17 @@
+node_modules/
+dist/
+out/
+output/
+pnpm-lock.yaml
+patches/
+assets/
+apps/mobile/ios/
+apps/mobile/android/
+apps/mobile/src/assets/
+apps/web/src/assets/
+packages/shared/src/locales/
+packages/shared/src/rpcResults.generated.ts
+releases/
+*.min.js
+*.md
+.astro/

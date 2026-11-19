@@ -1,0 +1,279 @@
+import { taskAccountId } from '../providers/providerBinaries'
+import { supportsProviderAccounts } from '@ramu/shared/providers/providers'
+import { randomUUID } from 'node:crypto'
+import {
+  DEFAULT_AGENT_SETTINGS,
+  type AgentScope,
+  type AgentSessionInfo,
+  type AgentSettings,
+  type Attachment,
+  type MessageOrigin,
+} from '@ramu/shared/types'
+import { stepKey } from '@ramu/shared/providers/routing'
+import { goalInstructions, goalState } from './goals'
+import { WRITING_STATES } from './constants'
+import { userEvent } from './inputQueue'
+import { RECORDED_ACCOUNT_PROVIDERS } from './settings'
+import type { MessageDispatcher } from './messageDispatcher'
+import type { GoalManager } from './goalManager'
+import type { SessionProcess } from './sessionProcess'
+import type { ProviderWaits } from './providerWait'
+import type { SessionRecorder } from './sessionRecorder'
+import type { SessionRegistry } from './sessionRegistry'
+import type { UserRequests } from './userRequests'
+import type { FallbackRouter } from './fallbackRouter'
+import type { SessionStore } from './sessionStore'
+import type { AgentService } from '../agent'
+import type { Db } from '../db'
+
+/** What SessionStarter needs from the rest of the service. */
+export interface SessionStarterHost
+  extends
+    Pick<
+      MessageDispatcher,
+      | 'capturing'
+      | 'goalCommand'
+      | 'updateQueue'
+      | 'wakeWorkspaceQueue'
+      | 'workspaceBusy'
+      | 'workspaceQueue'
+      | 'workspaceReservations'
+    >,
+    Pick<GoalManager, 'controlGoal' | 'getGoal' | 'goalPreferences'>,
+    Pick<SessionProcess, 'fail' | 'goalPolicySent' | 'launch' | 'refreshProviderTools' | 'rulesUpdate'>,
+    Pick<ProviderWaits, 'providerWait' | 'scheduleProvider'>,
+    Pick<SessionRecorder, 'record' | 'setState'>,
+    Pick<
+      SessionRegistry,
+      'activeWriter' | 'draining' | 'finalizing' | 'live' | 'revisions' | 'runners' | 'transitioning'
+    >,
+    Pick<UserRequests, 'hasBlockingQuestions'>,
+    Pick<import('./catalogService').CatalogService, 'validateLaunch' | 'validateSettings'>,
+    Pick<
+      FallbackRouter,
+      | 'attempted'
+      | 'attemptedAccounts'
+      | 'lowConfidenceRetried'
+      | 'noteRoute'
+      | 'route'
+      | 'switchBeforeSend'
+      | 'withStep'
+    >,
+    Pick<SessionStore, 'createSession' | 'get' | 'hasRunningTasks' | 'isRecoveryPending' | 'queuePaused' | 'queued'> {
+  reviewHooks(): AgentService['reviewHooks']
+  shutdown(): AgentService['shutdown']
+  toolConnection(): AgentService['toolConnection']
+  setupOmissions(): AgentService['setupOmissions']
+  rulesInstructions(): AgentService['rulesInstructions']
+}
+
+/** Starting a chat and sending it follow-ups. */
+export class SessionStarter {
+  constructor(
+    private readonly host: SessionStarterHost,
+    private readonly db: Db,
+  ) {}
+
+  async startReviewed(
+    taskId: string,
+    scope: AgentScope,
+    prompt: string,
+    settings: AgentSettings = DEFAULT_AGENT_SETTINGS,
+    attachments: Attachment[] = [],
+  ): Promise<AgentSessionInfo> {
+    if (this.host.shutdown()) throw new Error('Application is shutting down')
+    if (supportsProviderAccounts(settings.provider) && settings.accountId === undefined) {
+      // The login comes from the project's identity, looked up now: its own, or one for every identity.
+      const accountId = taskAccountId(settings.provider, taskId)
+      if (RECORDED_ACCOUNT_PROVIDERS.has(settings.provider) || accountId !== 'default')
+        settings = { ...settings, accountId }
+    }
+    // Keep the requested model unless its usage requires falling back.
+    const route = await this.host.route(settings, taskId)
+    const requested = settings
+    if (route) settings = this.host.withStep(settings, route.step)
+    // Every new thread passes the same check, whoever starts it: the composer, a schedule, an agent or another host.
+    await this.host.validateSettings(settings)
+    const started = await this.startRouted(taskId, scope, prompt, settings, attachments)
+    if (route) this.host.noteRoute(started.id, requested, settings, route.reason)
+    return started
+  }
+
+  private async startRouted(
+    taskId: string,
+    scope: AgentScope,
+    prompt: string,
+    settings: AgentSettings,
+    attachments: Attachment[],
+  ): Promise<AgentSessionInfo> {
+    if (this.host.workspaceBusy(scope.covers)) {
+      const session = this.host.createSession(taskId, scope, settings, 'idle')
+      this.host.updateQueue(
+        session.id,
+        [{ id: randomUUID(), text: prompt, mode: 'queue', ...(attachments.length ? { attachments } : {}) }],
+        false,
+      )
+      this.host.workspaceQueue.add(session.id)
+      return this.host.get(session.id)
+    }
+    scope.covers.forEach((cwd) => this.host.capturing.add(cwd))
+    try {
+      const reviewId = await this.host.reviewHooks()?.begin(taskId, scope)
+      try {
+        const session = this.start(taskId, scope, prompt, settings, attachments)
+        if (reviewId) this.host.reviewHooks()?.bind(reviewId, session.id)
+        return session
+      } catch (error) {
+        if (reviewId) this.host.reviewHooks()?.abandon(reviewId, error)
+        throw error
+      }
+    } finally {
+      scope.covers.forEach((cwd) => this.host.capturing.delete(cwd))
+      this.host.wakeWorkspaceQueue()
+    }
+  }
+
+  /** Starts a session at task scope; the caller takes the scope from ready bindings. */
+  start(
+    taskId: string,
+    scope: AgentScope,
+    prompt: string,
+    settings: AgentSettings = DEFAULT_AGENT_SETTINGS,
+    attachments: Attachment[] = [],
+  ): AgentSessionInfo {
+    if (scope.covers.some((cwd) => this.host.workspaceReservations.has(cwd)))
+      throw new Error('Files are being updated. Try again when the workspace operation finishes.')
+    if (this.host.shutdown()) throw new Error('Application is shutting down')
+    const writer = this.host.activeWriter(scope.covers)
+    if (writer) {
+      throw new Error(
+        `Another agent session is already writing in ${writer.covers.filter((c) => scope.covers.includes(c)).join(', ')}. Stop it, wait for it, or use an isolated task.`,
+      )
+    }
+    const session = this.host.createSession(taskId, scope, settings, 'starting')
+    this.host.attempted.set(session.id, new Set([stepKey(settings)]))
+    this.host.attemptedAccounts.delete(session.id)
+    this.host.lowConfidenceRetried.delete(session.id)
+    this.host.launch(session.id, prompt, null, true, attachments)
+    return this.host.get(session.id)
+  }
+
+  /** Sends a follow-up. A session without a live process is natively resumed by provider session id. */
+  async send(
+    id: string,
+    text: string,
+    attachments: Attachment[] = [],
+    reviewId?: string,
+    recordUser = true,
+    internalGoal?: { revision: number; goalId: string },
+    providerRetry = false,
+    from?: MessageOrigin,
+  ): Promise<void> {
+    if (recordUser && !from && this.host.goalCommand(id, text, attachments, reviewId)) return
+    if (this.host.providerWait(id) && recordUser) {
+      this.host.updateQueue(
+        id,
+        [
+          ...this.host.queued(id),
+          {
+            id: randomUUID(),
+            text,
+            mode: 'queue',
+            ...(attachments.length ? { attachments } : {}),
+            ...(reviewId ? { reviewId } : {}),
+            ...(from ? { from } : {}),
+          },
+        ],
+        false,
+      )
+      this.host.scheduleProvider(id)
+      return
+    }
+    await this.host.finalizing.get(id)
+    if (this.host.transitioning.has(id)) throw new Error('Provider switch in progress. Try again in a moment.')
+    let s = this.host.get(id)
+    if (s.covers.some((cwd) => this.host.workspaceReservations.has(cwd) || this.host.capturing.has(cwd)))
+      throw new Error('Files are being updated. Try again when the workspace operation finishes.')
+    if (WRITING_STATES.includes(s.state)) throw new Error('Wait for the current turn to finish, or interrupt it first.')
+    const writer = this.host.activeWriter(s.covers, id)
+    if (writer && writer.id !== id) throw new Error(`Another agent session is already writing in ${writer.cwd}`)
+    // A provider at its limit would only fail this message; continue with the next fallback instead.
+    if (await this.host.switchBeforeSend(id)) {
+      await this.host.finalizing.get(id)
+    }
+    await this.host.refreshProviderTools(id)
+    s = this.host.get(id)
+    // A person continuing a thread Ramu restored after a restart gets the same report as an automatic resume.
+    if (recordUser && s.state === 'restored' && !s.parentId) {
+      try {
+        const setupOmissions = this.host.setupOmissions()?.(s, s.settings) ?? []
+        if (setupOmissions.length) this.host.record(id, { kind: 'recovery', state: 'resumed', setupOmissions })
+      } catch {
+        // Unreadable Shared MCP configuration is reported in Settings; it must not stop a message.
+      }
+    }
+    this.host.transitioning.add(id)
+    try {
+      if (reviewId) await this.host.reviewHooks()?.validateFeedback?.(reviewId)
+      if (!s.parentId) await this.host.reviewHooks()?.followup(id)
+    } finally {
+      this.host.transitioning.delete(id)
+    }
+    if (
+      internalGoal &&
+      (this.host.shutdown() ||
+        internalGoal.revision !== (this.host.revisions.get(id) ?? 0) ||
+        this.host.getGoal(id)?.id !== internalGoal.goalId ||
+        this.host.getGoal(id)?.status !== 'active' ||
+        this.host.queued(id).length ||
+        this.host.queuePaused(id) ||
+        WRITING_STATES.includes(this.host.get(id).state) ||
+        this.host.hasBlockingQuestions(id) ||
+        this.host.hasRunningTasks(id))
+    )
+      return
+    if (!recordUser && !this.host.isRecoveryPending(id) && !internalGoal && !providerRetry) return
+    if (recordUser) this.db.prepare('DELETE FROM agent_recovery WHERE session_id = ?').run(id)
+    if (recordUser && this.host.getGoal(id)?.status === 'blocked') this.host.controlGoal(id, 'resume')
+    // Follow-ups carry only the changing goal state, plus the policy once if the launch instructions left it out.
+    const goal = !s.parentId ? this.host.getGoal(id) : null
+    const sendPolicy = !!goal && !this.host.goalPolicySent.has(id)
+    if (sendPolicy) this.host.goalPolicySent.add(id)
+    const goalText = goal && (sendPolicy ? goalInstructions(this.host.goalPreferences(), goal) : goalState(goal))
+    const withGoal = goalText ? `${text}\n\n<ramu-goals>\n${goalText}\n</ramu-goals>` : text
+    // A running session keeps the rules it started with; a runtime without a system slot is handed the changed set here.
+    let rulesText: string | undefined
+    try {
+      rulesText = this.host.rulesInstructions()?.(s)
+    } catch {
+      // An oversize set blocks a launch; a running session just keeps what it has.
+    }
+    const running = !!this.host.runners.get(id) || !!this.host.live.get(id)
+    const actualText = `${running ? (this.host.rulesUpdate(id, s.provider, rulesText, true) ?? '') : ''}${withGoal}`
+    this.host.attempted.set(id, new Set([stepKey(s.settings)]))
+    this.host.attemptedAccounts.delete(id)
+    this.host.lowConfidenceRetried.delete(id)
+    const codex = this.host.runners.get(id)
+    if (codex) {
+      if (recordUser) this.host.record(id, userEvent(text, attachments, from))
+      this.host.setState(id, 'running')
+      try {
+        await codex.send(actualText, attachments)
+      } catch (e) {
+        this.host.fail(id, e)
+      }
+      return
+    }
+    const live = this.host.live.get(id)
+    if (live) {
+      if (recordUser) this.host.record(id, userEvent(text, attachments, from))
+      live.input.push(actualText, attachments)
+      this.host.setState(id, 'running')
+      return
+    }
+    await this.host.draining.get(id)
+    // A new process for a thread: its provider or login may have been turned off since it last ran.
+    await this.host.validateLaunch(s.settings)
+    this.host.launch(id, text, s.providerSessionId, recordUser, attachments, from)
+  }
+}

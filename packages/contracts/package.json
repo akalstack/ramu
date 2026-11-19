@@ -1,0 +1,30 @@
+{
+  "name": "@ramu/contracts",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "description": "Typed API contracts between Ramu clients and the server.",
+  "license": "MIT",
+  "author": "Ramu contributors",
+  "homepage": "https://getramu.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akalstack/ramu.git",
+    "directory": "packages/contracts"
+  },
+  "bugs": {
+    "url": "https://github.com/akalstack/ramu/issues"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

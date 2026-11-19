@@ -1,0 +1,70 @@
+.browser-tab-frame {
+  display: flex;
+  min-width: 0;
+  max-width: 11rem;
+  flex: none;
+  align-items: center;
+  border-radius: var(--radius-s);
+  color: var(--muted);
+}
+.browser-tab-frame:hover,
+.browser-tab-frame[data-active] {
+  background: var(--hover);
+  color: var(--text);
+}
+button.browser-tab-button,
+button.browser-tab-close {
+  display: flex;
+  min-height: 24px;
+  height: auto;
+  align-items: center;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  font-size: var(--font-caption);
+  color: var(--muted);
+  cursor: pointer;
+  transform: none;
+  translate: none;
+}
+button.browser-tab-button {
+  min-width: 0;
+  max-width: 11rem;
+  flex: 1;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 4px 8px;
+  text-align: left;
+}
+button.browser-tab-button[aria-selected='true'],
+button.browser-tab-button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+.browser-tab-frame > button.browser-tab-button,
+.browser-tab-frame > button.browser-tab-button:hover,
+.browser-tab-frame > button.browser-tab-button[aria-selected='true'] {
+  background: transparent;
+  color: inherit;
+}
+button.browser-tab-close {
+  min-width: 20px;
+  width: auto;
+  flex: none;
+  padding: 4px;
+  color: inherit;
+}
+button.browser-tab-close:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+}
+button.browser-tab-button:focus-visible,
+button.browser-tab-close:focus-visible {
+  outline: 1px solid var(--line-strong);
+  outline-offset: -1px;
+}
+button.browser-tab-button:disabled,
+button.browser-tab-close:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

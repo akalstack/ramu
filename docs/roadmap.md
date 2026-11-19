@@ -1,0 +1,36 @@
+# Roadmap
+
+Work that is not finished yet. What already works is in the [guide](README.md#guide). Ramu is in a stability push: fixes are welcome any time, but open a [discussion](https://github.com/akalstack/ramu/discussions/categories/ideas) or an issue before starting anything here.
+
+| Section | What it holds |
+| --- | --- |
+| [To build](#to-build) | Code to write; nothing blocks it |
+| [Blocked](#blocked) | Waiting on another project's release or on hardware |
+| [Later](#later) | Options, not planned |
+
+Every change needs focused tests and typechecks for the packages it touches; desktop-facing changes also run `pnpm build` then `pnpm test:desktop-smoke` ([Contributing](../CONTRIBUTING.md#checks)).
+
+## To build
+
+- **Transport:** bounded replay and snapshot recovery for every resource, and defined connection outcomes (current, synchronizing, disconnected, authorization rejected, outcome unknown) that keep drafts and queued messages; non-retriable mutations report an unknown outcome and reconcile. Start from measurements on real networks ([Architecture](contributing/architecture.md#transport)).
+- **Windows:** the `windows-port` branch reaches the local service over a named pipe, finds provider CLIs, `gh` and ripgrep, reads memory and processes, keeps the host awake, and packages a Squirrel installer with Ramu's icon, its shortcuts and `ramu://` links handed to the running app. Left: a hands-on run of the installed app in a Windows 11 VM (terminal, agents, pairing a phone, computer use refused with its reason), fixing what that finds, then merging the branch.
+- **Presenting from the phone:** **Present** a deck on a display the phone is connected to (AirPlay or a cable), with speaker notes on the phone ([Artifacts](guide/artifacts.md)).
+
+## Blocked
+
+- **Starting points for test devices:** **Save as starting point** would make a Simlock baseline the next thread opens from. Waits for Simlock's agent-device front to allocate from a baseline (Ramu pins 0.6.0, which cannot).
+- **Test device video through a tunnel:** when WebRTC cannot connect (a tunnel blocking UDP), play Simlock's stream through Ramu's connection, decoded with WebCodecs in a WebView. Start by checking on a physical phone that its WebView decodes H.264 with WebCodecs.
+- **Computer use on Windows and Linux:** waits for native capture, permissions and signing on each.
+- **Media services as plugins:** move ElevenLabs (then others) from its built-in connector to a plugin once the vendor ships an MCP server that makes the file and passes the same live checks.
+- **Mobile dev builds:** `apps/mobile/package.json` builds `expo-video` from source because its prebuilt binary does not match `expo-modules-core` 58.0.26; drop the override once Expo ships a matching binary.
+
+## Later
+
+- **Games and 3D:** Rapier beside three.js if games keep shipping their own physics; an App docked as a panel across a project's threads if asked for; Unity checks through computer use; a Blender plugin for retopology and levels of detail.
+- **Tools across hosts:** sending a key to another host, sealed and confirmed with a matching number, if re-entering keys proves the main friction (needs a [host pairing](../SECURITY.md#host-pairing)-level review); installing from the phone; adopting provider-folder skills and servers so they travel; one server following several projects ([On your other hosts](guide/plugins.md#on-your-other-hosts)).
+- **Cloud hosts:** Ramu hosts attached to the account and listed in the host switcher, with the web app at `ramu.akalstack.com`.
+- **Hosted connection:** a relay or tunnels provisioned per host by a Ramu service (the cheapest option to revisit), once there is a way to fund them; today hosts are reached over the LAN, a private network, SSH or the person's own tunnel ([Remote hosts](guide/remote-hosts.md)).
+- **Codex call costs:** price Codex calls in cost-aware Auto once Codex reports cost; Ramu keeps no price table of its own, since published prices change and disagree.
+- **Browser recording:** change videos on pull requests, if people ask for them; it needs a video encoder Ramu does not ship.
+- **Certificate pinning:** only with a threat that HTTPS pairing and host-identity checks do not cover; it needs a native transport replacement.
+- **Not planned unless people ask:** a full mobile editor, mobile provider sign-in, chunked large-file upload, a theme marketplace, plugin code inside Ramu and plugin hooks, automatic provider-file or credential sync, AI conflict resolution, local grounding models and VMs for computer use, and vector retrieval for learning.

@@ -1,0 +1,217 @@
+---
+import '@/styles/global.css'
+import Footer from '@/components/footer.astro'
+import { LinkButton } from '@/components/site-button'
+import { REPO } from '@/lib/site'
+import data from '../data/plugins.json'
+
+const title = 'Plugins — Ramu'
+const description =
+  'Plugins add a service to Ramu in one install: its skills, MCP servers, credential, safe CLI commands and abilities, for every provider. The same folders work in Claude Code and Codex.'
+const canonical = new URL('/plugins', Astro.site)
+const GUIDE = `${REPO}/blob/main/docs/guide/plugins.md`
+const TEMPLATE = 'https://github.com/akalstack/ramu-plugin-template'
+
+/** The link Ramu opens on this computer: the install review for one listed plugin. */
+const install = (name: string) =>
+  `ramu://plugin/install?${new URLSearchParams({ source: name, index: data.index }).toString()}`
+
+const adds = (plugin: (typeof data.plugins)[number]) =>
+  [
+    plugin.adds.cli ? `the ${plugin.adds.cli} CLI` : null,
+    plugin.adds.dataSources?.length ? `dashboard data from ${plugin.adds.dataSources.join(', ')}` : null,
+    plugin.adds.skills ? `${plugin.adds.skills === 1 ? 'a skill' : `${plugin.adds.skills} skills`}` : null,
+    plugin.adds.credentials?.length ? `asks for ${plugin.adds.credentials.join(', ')}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+---
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#131315" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <style>
+      .plugin-search {
+        width: 100%;
+        max-width: 420px;
+        margin-top: 20px;
+        padding: 10px 14px;
+        border-radius: var(--radius-row);
+        background: var(--fill);
+        color: var(--text);
+        border: 1px solid var(--line-strong);
+        font: inherit;
+      }
+      .plugin-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 24px;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      }
+      .plugin-card {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 16px;
+        border-radius: var(--radius-m);
+        background: var(--raised-2);
+      }
+      .plugin-card h3 {
+        font-size: 16px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .plugin-card p {
+        color: var(--soft);
+        font-size: 14px;
+      }
+      .plugin-card .plugin-adds {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .plugin-card .plugin-actions {
+        margin-top: auto;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        font-size: 14px;
+      }
+      .plugin-badge {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: var(--fill);
+        color: var(--soft);
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip" href="#list">Skip to the list</a>
+    <header class="nav">
+      <div class="nav-inner">
+        <a class="nav-brand" href="/" aria-label="Ramu home">
+          <img src="/wordmark.svg" alt="Ramu" height="22" />
+        </a>
+        <nav class="nav-links" aria-label="Primary">
+          <a href="/#path">How it works</a>
+          <a href="#list">Plugins</a>
+          <a href="#build">Build one</a>
+          <a href={GUIDE}>Docs</a>
+          <a class="nav-cta" href="/#download">Download</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="section" id="list">
+        <div class="section-head">
+          <h2>Plugins for Ramu.</h2>
+          <p>
+            One install adds a service's skills, MCP servers, credential and safe commands for every provider. Ramu shows
+            everything a plugin adds before you install it, asks for its token once, and keeps that token on your
+            computer. <em>Open in Ramu</em> opens the install review.
+          </p>
+          <label>
+            <span class="skip">Search plugins</span>
+            <input
+              class="plugin-search"
+              type="search"
+              id="plugin-search"
+              placeholder="Search plugins, such as deploy or analytics"
+              autocomplete="off"
+            />
+          </label>
+        </div>
+        <ul class="plugin-list">
+          {
+            data.plugins.map((plugin) => (
+              <li
+                class="plugin-card"
+                data-search={[plugin.name, plugin.description, ...plugin.keywords, ...plugin.stacks]
+                  .join(' ')
+                  .toLowerCase()}
+              >
+                <h3>
+                  {plugin.name}
+                  {plugin.byRamu && <span class="plugin-badge">By Ramu</span>}
+                  {plugin.signed && <span class="plugin-badge">Signed</span>}
+                </h3>
+                <p>{plugin.description}</p>
+                <span class="plugin-adds">{adds(plugin)}</span>
+                <div class="plugin-actions">
+                  <a href={install(plugin.name)}>Open in Ramu</a>
+                  {plugin.homepage && <a href={plugin.homepage}>{new URL(plugin.homepage).host}</a>}
+                </div>
+              </li>
+            ))
+          }
+        </ul>
+        <p id="plugin-none" class="section-head" hidden>No plugin matches. Build one below.</p>
+      </section>
+
+      <section class="section section-split" id="build">
+        <div class="section-head">
+          <h2>Build a plugin in under 30 minutes.</h2>
+          <p>
+            A plugin is a folder in the layout Claude Code and Codex already use: a manifest, skills, an
+            <code>.mcp.json</code>, and Ramu's own fields under <code>extensions["dev.getramu"]</code>, which other tools
+            ignore.
+          </p>
+          <div class="hero-actions">
+            <LinkButton tone="primary" href={TEMPLATE}>Use the template</LinkButton>
+            <LinkButton href={GUIDE}>Read the guide</LinkButton>
+          </div>
+        </div>
+        <ol class="rows">
+          <li>
+            <h3><code>ramu plugin new render</code></h3>
+            <p>Writes a working plugin: the manifest with its schema, a skill, a README, and with --mcp an MCP server.</p>
+          </li>
+          <li>
+            <h3><code>ramu plugin dev .</code></h3>
+            <p>Installs the folder on your host as a Development plugin; a thread uses it right away and it reloads on save.</p>
+          </li>
+          <li>
+            <h3><code>ramu plugin check .</code></h3>
+            <p>Validates the manifest and skills, starts each MCP server and lists its tools, and names every problem.</p>
+          </li>
+          <li>
+            <h3>Open a pull request</h3>
+            <p>
+              Add your signed commit to <a href="https://github.com/akalstack/ramu-plugins">akalstack/ramu-plugins</a>. CI
+              runs the same check, and a maintainer reviews what it runs and how it uses the credential.
+            </p>
+          </li>
+        </ol>
+      </section>
+    </main>
+
+    <Footer />
+    <script>
+      const input = document.getElementById('plugin-search') as HTMLInputElement | null
+      const cards = [...document.querySelectorAll<HTMLElement>('.plugin-card')]
+      const none = document.getElementById('plugin-none')
+      input?.addEventListener('input', () => {
+        const words = input.value.toLowerCase().split(/\s+/).filter(Boolean)
+        let shown = 0
+        for (const card of cards) {
+          const match = words.every((word) => card.dataset.search?.includes(word))
+          card.hidden = !match
+          if (match) shown++
+        }
+        if (none) none.hidden = shown > 0
+      })
+    </script>
+  </body>
+</html>

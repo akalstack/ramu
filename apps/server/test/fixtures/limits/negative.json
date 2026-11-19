@@ -1,0 +1,74 @@
+[
+  {
+    "id": "negative-file-not-found",
+    "synthetic": true,
+    "origin": "apps/server/test/acp.test.ts isLimitMessage(\"File not found\")",
+    "provider": null,
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "File not found",
+    "expect": {
+      "limited": false
+    }
+  },
+  {
+    "id": "negative-unauthorized",
+    "synthetic": true,
+    "origin": "apps/server/test/agent.test.ts isUsageLimit(new Error(\"Unauthorized\"))",
+    "provider": null,
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "Unauthorized",
+    "expect": {
+      "limited": false
+    }
+  },
+  {
+    "id": "negative-file-does-not-exist",
+    "synthetic": true,
+    "origin": "apps/server/test/agent.test.ts isUsageLimit(\"file does not exist\")",
+    "provider": null,
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "file does not exist",
+    "expect": {
+      "limited": false
+    }
+  },
+  {
+    "id": "negative-prompt-too-long",
+    "synthetic": true,
+    "origin": "wording synthetic: T3 #19832 (\"Prompt is too long\" misclassified as a usage limit); not a live provider capture",
+    "provider": null,
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "Prompt is too long: 250000 tokens > 200000 maximum; usage limit not involved",
+    "expect": {
+      "limited": false
+    }
+  },
+  {
+    "id": "negative-context-length",
+    "synthetic": true,
+    "origin": "wording synthetic: negative limit-classification regression case; not a live provider capture",
+    "provider": null,
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "context length exceeded (rate limit of tokens per request is separate)",
+    "expect": {
+      "limited": false
+    }
+  },
+  {
+    "id": "negative-invalid-api-key",
+    "synthetic": true,
+    "origin": "wording synthetic: authentication error class",
+    "provider": null,
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "Invalid API key. Authentication failed.",
+    "expect": {
+      "limited": false
+    }
+  }
+]

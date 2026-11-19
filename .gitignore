@@ -1,0 +1,21 @@
+node_modules/
+out/
+dist/
+*.log
+.DS_Store
+*.tsbuildinfo
+output/
+coverage/
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.p8
+.ramu-*
+apps/web/_debug-*
+.playwright-cli/
+.expo/
+
+# Agent tool built-in skills (for example Antigravity run-workflow) stay out of the repo
+/skills/

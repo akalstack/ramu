@@ -1,0 +1,14 @@
+{
+  "fill": { "solid": "srgb:0.13725,0.13725,0.15294,1.00000" },
+  "groups": [
+    {
+      "layers": [
+        { "image-name": "r.svg", "name": "r" },
+        { "image-name": "dot.svg", "name": "dot" }
+      ],
+      "shadow": { "kind": "neutral", "opacity": 0.5 },
+      "translucency": { "enabled": false, "value": 0 }
+    }
+  ],
+  "supported-platforms": { "squares": "shared" }
+}

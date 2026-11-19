@@ -1,0 +1,23 @@
+name: Bug report
+description: Report a reproducible problem in Ramu.
+labels: [bug]
+body:
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Ramu version, OS and architecture, provider and provider version (if relevant).
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include what you expected and what actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs or screenshots
+      description: Remove tokens, private code, paths and conversation content before attaching evidence.

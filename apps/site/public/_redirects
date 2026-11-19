@@ -1,0 +1,2 @@
+# APT asks for packages under /apt/pool/<tag>/; they live on the GitHub release (scripts/release/linux-repo.sh).
+/apt/pool/:tag/:file https://github.com/akalstack/ramu/releases/download/:tag/:file 302

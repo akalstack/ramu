@@ -1,0 +1,218 @@
+import { useState } from 'react'
+import { TextInput, View } from 'react-native'
+import { Trash2 } from 'lucide-react-native'
+import type { ForgeService, ReviewVerdict } from '@ramu/shared/types'
+import { reviewNeedsWords, reviewVerdicts } from '@ramu/shared/pullRequestReadiness'
+import { font, radius, space, useTheme } from '../theme'
+import { useSay } from '../i18n'
+import { SheetGroup, SheetOption } from './SheetOptions'
+import { Button, IconButton, Sheet, T } from './ui'
+
+/** A line comment waiting to go out with the review, on the new side of `line` in `path`. */
+export interface PendingComment {
+  id: string
+  path: string
+  line: number
+  /** Where a comment on a block of lines starts. */
+  startLine?: number
+  body: string
+}
+
+/** The lines a comment covers, as the desktop labels them: "Line 4" or "Lines 12–18". */
+export const commentLines = (
+  say: (text: string, values?: Record<string, string | number>) => string,
+  { line, startLine }: { line: number; startLine?: number },
+) =>
+  startLine !== undefined && startLine !== line
+    ? say('Lines {0}', { 0: `${startLine}–${line}` })
+    : say('Line {0}', { 0: line })
+
+/** The services' longest comment, which the host also enforces. */
+const MAX_COMMENT = 20_000
+
+/** The desktop's review choices, with its English copy keys. */
+const VERDICTS: { value: ReviewVerdict; label: string; help: string }[] = [
+  { value: 'comment', label: 'Comment', help: 'Submit general feedback without explicit approval.' },
+  { value: 'approve', label: 'Approve', help: 'Submit feedback and approve merging these changes.' },
+  {
+    value: 'request-changes',
+    label: 'Request changes',
+    help: 'Submit feedback that must be addressed before merging.',
+  },
+]
+
+function CommentInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+}) {
+  const { c } = useTheme()
+  return (
+    <TextInput
+      value={value}
+      onChangeText={onChange}
+      multiline
+      maxLength={MAX_COMMENT}
+      placeholder={placeholder}
+      placeholderTextColor={c.placeholder}
+      accessibilityLabel={placeholder}
+      style={{
+        color: c.text,
+        backgroundColor: c.fill,
+        borderRadius: radius.m,
+        padding: space.m,
+        paddingTop: space.m,
+        minHeight: 96,
+        maxHeight: 220,
+        fontSize: font.control,
+        textAlignVertical: 'top',
+      }}
+    />
+  )
+}
+
+/**
+ * Writes one line comment for the review; it waits as pending until Finish review sends them together. With `initial`
+ * it edits a pending comment, and `onRemove` takes it out of the review.
+ */
+export function LineCommentSheet({
+  path,
+  line,
+  startLine,
+  initial,
+  onAdd,
+  onRemove,
+  onClose,
+}: {
+  path: string
+  line: number
+  startLine?: number
+  initial?: string
+  onAdd: (body: string) => void
+  onRemove?: () => void
+  onClose: () => void
+}) {
+  const say = useSay()
+  const [body, setBody] = useState(initial ?? '')
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title={initial === undefined ? commentLines(say, { line, startLine }) : say('Edit comment')}
+    >
+      <View style={{ paddingHorizontal: space.l, paddingBottom: space.l, gap: space.m }}>
+        <T size={font.caption} tone="muted" mono numberOfLines={2}>
+          {path}
+        </T>
+        <CommentInput value={body} onChange={setBody} placeholder={say('Leave a comment')} />
+        <Button
+          title={say(initial === undefined ? 'Add to review' : 'Save')}
+          disabled={!body.trim()}
+          onPress={() => {
+            onAdd(body.trim())
+            onClose()
+          }}
+        />
+        {onRemove ? (
+          <Button
+            kind="ghost"
+            icon={Trash2}
+            title={say('Remove comment')}
+            onPress={() => {
+              onRemove()
+              onClose()
+            }}
+          />
+        ) : null}
+      </View>
+    </Sheet>
+  )
+}
+
+/**
+ * Finishes the person's review, as on the desktop and the services: a summary, the line comments waiting to go with it
+ * (each removable), and a verdict.
+ */
+export function FinishReviewSheet({
+  service,
+  own,
+  pending,
+  busy,
+  error,
+  onRemove,
+  onSubmit,
+  onClose,
+}: {
+  service: ForgeService
+  own: boolean
+  pending: PendingComment[]
+  busy: boolean
+  error: string | null
+  onRemove: (id: string) => void
+  onSubmit: (verdict: ReviewVerdict, body: string) => void
+  onClose: () => void
+}) {
+  const say = useSay()
+  const allowed = reviewVerdicts(service, own)
+  const [verdict, setVerdict] = useState<ReviewVerdict>('comment')
+  const [body, setBody] = useState('')
+  const empty = reviewNeedsWords(service, verdict) && !body.trim() && !pending.length
+  return (
+    <Sheet open onClose={() => !busy && onClose()} title={say('Finish review')}>
+      <View style={{ paddingHorizontal: space.l, paddingBottom: space.s }}>
+        <CommentInput value={body} onChange={setBody} placeholder={say('Leave a comment')} />
+      </View>
+      <SheetGroup title={say('Review')}>
+        {VERDICTS.filter((entry) => allowed.includes(entry.value)).map((entry) => (
+          <SheetOption
+            key={entry.value}
+            title={say(entry.label)}
+            help={say(entry.help)}
+            selected={verdict === entry.value}
+            onPress={() => setVerdict(entry.value)}
+          />
+        ))}
+      </SheetGroup>
+      {pending.length ? (
+        <SheetGroup title={say('{0} line comments', { 0: pending.length })}>
+          {pending.map((comment) => (
+            <SheetOption
+              key={comment.id}
+              title={`${comment.path} · ${commentLines(say, comment)}`}
+              help={comment.body}
+              trailing={
+                <IconButton
+                  icon={Trash2}
+                  label={say('Remove comment')}
+                  size={34}
+                  tone="muted"
+                  onPress={() => onRemove(comment.id)}
+                />
+              }
+            />
+          ))}
+        </SheetGroup>
+      ) : null}
+      <View style={{ paddingHorizontal: space.l, paddingTop: space.l, paddingBottom: space.xl, gap: space.s }}>
+        {error ? (
+          <T size={font.control} tone="bad">
+            {error}
+          </T>
+        ) : empty ? (
+          <T size={font.caption} tone="muted" style={{ textAlign: 'center' }}>
+            {say(verdict === 'request-changes' ? 'GitHub needs a comment to request changes.' : 'Add a comment first.')}
+          </T>
+        ) : null}
+        <Button
+          title={busy ? say('Submitting…') : say('Submit review')}
+          disabled={busy || empty}
+          onPress={() => onSubmit(verdict, body.trim())}
+        />
+      </View>
+    </Sheet>
+  )
+}

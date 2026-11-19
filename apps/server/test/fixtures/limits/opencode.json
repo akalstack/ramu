@@ -1,0 +1,59 @@
+[
+  {
+    "id": "opencode-insufficient-quota",
+    "synthetic": true,
+    "origin": "apps/server/test/acp.test.ts \"insufficient_quota\"",
+    "provider": "opencode",
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "insufficient_quota",
+    "expect": {
+      "limited": true,
+      "confidence": "high",
+      "source": "provider"
+    }
+  },
+  {
+    "id": "opencode-out-of-credits",
+    "synthetic": true,
+    "origin": "apps/server/test/acp.test.ts \"You are out of credits\"",
+    "provider": "opencode",
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "You are out of credits",
+    "expect": {
+      "limited": true,
+      "confidence": "high",
+      "source": "provider"
+    }
+  },
+  {
+    "id": "opencode-quota-exceeded-429",
+    "synthetic": true,
+    "origin": "apps/server/test/acp.test.ts line 66 \"quota exceeded 429\"",
+    "provider": "opencode",
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "quota exceeded 429",
+    "expect": {
+      "limited": true,
+      "confidence": "high",
+      "source": "provider"
+    }
+  },
+  {
+    "id": "opencode-retry-after",
+    "synthetic": true,
+    "origin": "apps/server/test/acp.test.ts \"429: retry after 30s\"",
+    "provider": "opencode",
+    "channel": "error",
+    "toolCalls": 0,
+    "text": "429: retry after 30s",
+    "expect": {
+      "limited": true,
+      "confidence": "low",
+      "source": "generic",
+      "resetsInMs": 30000
+    }
+  }
+]

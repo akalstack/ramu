@@ -1,0 +1,44 @@
+/* Tailwind utilities without preflight, as in apps/web/src/ui.css: site.css owns the reset and the page's look.
+   It sits in the components layer so utility classes, such as the shadcn Button's, override it. */
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+@import './site.css' layer(components);
+@source "../";
+
+/* shadcn's color and radius names map onto the site's tokens (site.css :root), which keep their own names. */
+@theme inline {
+  --color-window: var(--window);
+  --color-raised: var(--raised);
+  --color-fill: var(--fill);
+  --color-fill-hover: var(--fill-hover);
+  --color-primary-hover: var(--primary-hover);
+  --color-background: var(--window);
+  --color-foreground: var(--text);
+  --color-card: var(--raised-2);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--raised);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--primary);
+  --color-primary-foreground: #fff;
+  --color-secondary: var(--fill);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--fill);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--fill-hover);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--bad);
+  --color-border: var(--line-strong);
+  --color-input: transparent;
+  --color-ring: var(--accent);
+  --font-sans: var(--sans);
+  --font-mono: var(--mono);
+  --radius-sm: var(--radius-s);
+  --radius-md: var(--radius-s);
+  --radius-lg: var(--radius-row);
+  --radius-xl: var(--radius-m);
+}

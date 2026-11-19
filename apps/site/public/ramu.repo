@@ -1,0 +1,8 @@
+[ramu]
+name=Ramu
+baseurl=https://getramu.dev/rpm/$basearch
+enabled=1
+# The signed index lists each package's checksum, so the packages need no signature of their own.
+gpgcheck=0
+repo_gpgcheck=1
+gpgkey=https://getramu.dev/ramu.asc
