@@ -1,6 +1,6 @@
 import { BrowserWindow, screen } from 'electron'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { rememberBounds, savedBounds } from './windowBounds'
 
 /**
  * What the live view window may call. It only watches and stops: thread and host state, frames, and Stop. Anything
@@ -25,8 +25,6 @@ const LIVE_METHODS = new Set([
 
 export const liveMethodAllowed = (method: string) => LIVE_METHODS.has(method)
 
-type Bounds = { x: number; y: number; width: number; height: number }
-
 /** A small window that stays above other apps and remembers where the person put it on this device. */
 export class LiveWindow {
   private window: BrowserWindow | null = null
@@ -44,26 +42,6 @@ export class LiveWindow {
     return !!this.window && !this.window.isDestroyed() && this.window.webContents === contents
   }
 
-  private saved(): Bounds | null {
-    try {
-      if (!existsSync(this.options.file)) return null
-      const bounds = JSON.parse(readFileSync(this.options.file, 'utf8')) as Bounds
-      // A display that is gone would leave the window off screen.
-      const visible = screen
-        .getAllDisplays()
-        .some(
-          ({ workArea: area }) =>
-            bounds.x >= area.x - 40 &&
-            bounds.y >= area.y - 40 &&
-            bounds.x < area.x + area.width &&
-            bounds.y < area.y + area.height,
-        )
-      return visible ? bounds : null
-    } catch {
-      return null
-    }
-  }
-
   open(hideFromSharing: boolean) {
     if (this.window && !this.window.isDestroyed()) {
       this.window.setContentProtection(hideFromSharing)
@@ -71,7 +49,8 @@ export class LiveWindow {
       return
     }
     const area = screen.getPrimaryDisplay().workArea
-    const bounds = this.saved() ?? {
+    const saved = savedBounds(this.options.file)
+    const bounds = (saved && { x: saved.x, y: saved.y, width: saved.width, height: saved.height }) ?? {
       width: 360,
       height: 320,
       x: area.x + area.width - 380,
@@ -97,16 +76,7 @@ export class LiveWindow {
     window.setContentProtection(hideFromSharing)
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     window.webContents.on('will-navigate', (event) => event.preventDefault())
-    const remember = () => {
-      if (!window.isDestroyed())
-        try {
-          writeFileSync(this.options.file, JSON.stringify(window.getBounds()))
-        } catch {
-          /* The next window opens in the default corner. */
-        }
-    }
-    window.on('moved', remember)
-    window.on('resized', remember)
+    rememberBounds(window, this.options.file)
     window.on('closed', () => {
       this.window = null
       this.options.closed()

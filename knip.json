@@ -23,7 +23,6 @@
         "quickjs-emscripten-core",
         "@jitl/quickjs-wasmfile-release-sync",
         "undici",
-        "zod",
         "@electron-forge/*",
         "@ramu/web",
         "@dagrejs/dagre",

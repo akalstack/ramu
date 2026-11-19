@@ -311,6 +311,7 @@ export function Onboarding() {
               label={t('App language')}
               value={app.preferences.language}
               disabled={busy}
+              className="w-[180px]! flex-none"
               options={[
                 { value: 'system', label: t('Follow system') },
                 { value: 'id', label: 'Bahasa Indonesia' },
