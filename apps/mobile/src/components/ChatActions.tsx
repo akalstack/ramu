@@ -637,13 +637,16 @@ export function ProjectActionsSheet({
         onClose()
         Alert.alert(
           say('Remove project?'),
-          `${project.name}\n\n${say('Its threads and folders on the host are not deleted.')}`,
+          `${project.name}\n\n${say(
+            'Its threads, archived ones included, are deleted with their agent transcripts, and their running agents and commands stop. Folders, worktrees and branches on the host stay.',
+          )}`,
           [
             { text: say('Cancel'), style: 'cancel' },
             {
               text: say('Remove'),
               style: 'destructive',
-              onPress: () => void run(() => store.invoke(project.computerId, 'projects.remove', raw)),
+              onPress: () =>
+                void run(() => store.invoke(project.computerId, 'projects.remove', raw, { deleteThreads: true })),
             },
           ],
         )

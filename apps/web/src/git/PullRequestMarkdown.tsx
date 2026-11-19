@@ -49,6 +49,16 @@ const components: Components = {
       {children}
     </summary>
   ),
+  // The window's content policy loads no remote images, which also keeps a comment's tracking pixels out. A remote
+  // image shows as its alt text, so a bot's image button still reads as its link; one without alt text is left out.
+  img: ({ src, alt }) =>
+    typeof src === 'string' && /^https?:/i.test(src) ? (
+      alt ? (
+        <span>{alt}</span>
+      ) : null
+    ) : (
+      <img src={src} alt={alt ?? ''} />
+    ),
   a: ({ href, children }) => (
     <a href={href} target="_blank" rel="noreferrer" className="text-brand underline-offset-2 hover:underline">
       {children}

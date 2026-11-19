@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -203,3 +204,38 @@ it.skipIf(process.platform === 'win32')(
     expect(f.terminals.listBackground(f.task.id)).toEqual([])
   },
 )
+
+it('removes a project with its threads, archived ones included, only when asked to, keeping its folders', async () => {
+  const { workspace, agents } = await fixture()
+  const folder = mkdtempSync(join(tmpdir(), 'ramu-project-'))
+  cleanups.push(() => rmSync(folder, { recursive: true, force: true }))
+  execFileSync('git', ['init', '-q', folder])
+  const project = workspace.createProject('Shop')
+  await workspace.addRepository(project.id, folder)
+  const kept = await workspace.createTask({ projectId: project.id, title: 'Open', mode: 'current' })
+  const archived = await workspace.createTask({ projectId: project.id, title: 'Old', mode: 'current' })
+  workspace.setArchived(archived.id, true)
+  agents.list.mockImplementation(() => [{ id: 'session' }])
+  const table = registerWorkspaceHandlers({
+    workspace,
+    terminals: {
+      listBackground: () => [],
+      withTaskRemoval: (_c: string[], run: () => unknown) => run(),
+      reviewRemoval() {},
+      stopForRemoval: async () => {},
+      closeTask() {},
+    },
+    agents,
+    lock: new KeyedLock(),
+    host: {},
+    watchers: { release() {}, projectConfigs: { retain() {} } },
+  } as unknown as HandlerContext)
+  const method = table['projects.remove']!
+  await expect(async () => method.run(...method.args.parse([project.id]))).rejects.toThrow(/2 threads first/)
+  await method.run(...method.args.parse([project.id, { deleteThreads: true }]))
+  expect(workspace.listProjects().some((item) => item.id === project.id)).toBe(false)
+  expect(() => workspace.getTask(kept.id)).toThrow()
+  expect(() => workspace.getTask(archived.id)).toThrow()
+  expect(agents.stopAndWait).toHaveBeenCalledTimes(2)
+  expect(existsSync(folder)).toBe(true)
+})
