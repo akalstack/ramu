@@ -1,0 +1,44 @@
+name: Site
+# getramu.dev follows main: a push that changes the site checks it and deploys it to Cloudflare. Downloads need no
+# deploy (the Worker finds each new release), and the Linux repositories workflow deploys the indexes it commits itself,
+# since a push made with the workflow token starts no other workflow.
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/site/**
+      # The site bundles the desktop's provider and service marks.
+      - apps/web/src/assets/**
+      - pnpm-lock.yaml
+      - .github/workflows/site.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  # One deploy at a time, in push order, so an older commit never replaces a newer one.
+  group: site-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DEPLOY_SITE: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@v6
+      - run: pnpm install --frozen-lockfile --filter @ramu/site...
+      - run: pnpm --filter @ramu/site typecheck
+      - run: pnpm --filter @ramu/site test
+      - name: Deploy getramu.dev
+        if: env.DEPLOY_SITE == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm --filter @ramu/site run deploy
+      - name: Say why nothing deployed
+        if: env.DEPLOY_SITE != 'true'
+        run: echo "::warning::Save CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in the repository secrets to deploy getramu.dev."
