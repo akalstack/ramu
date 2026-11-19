@@ -30,6 +30,7 @@ import { DesktopVoice } from './voice'
 import { voiceErrorMessage } from '@ramu/shared/voice/bridge'
 import { newerVersion } from '@ramu/shared/version'
 import { DesktopUpdater } from './desktopUpdater'
+import { whileStarting } from './startupWindow'
 import { runtimeBuild } from '@ramu/server/build'
 import { unloadLoginService } from './runtimeLauncher'
 import type { AppUpdateStatus } from '@ramu/shared/updates'
@@ -173,7 +174,15 @@ async function main() {
   const userData = app.getPath('userData')
   const daemonPath = join(import.meta.dirname, 'daemon.js')
   // This computer's server always runs. Paired computers connect alongside it in the same shell.
-  const runtime = await ensureRuntime(userData, daemonPath)
+  // Settings live in the service, so until it answers the window follows the system language.
+  configureDesktopLanguage('system', app.getPreferredSystemLanguages())
+  const runtime =
+    e2eHeadless || launchedForPairing
+      ? await ensureRuntime(userData, daemonPath)
+      : await whileStarting(() => ensureRuntime(userData, daemonPath), {
+          title: t('Starting Ramu…'),
+          detail: t('The first start after installing or updating can take up to a minute.'),
+        })
   /** Stops the service and starts it again from the daemon on disk, keeping login startup as it was. */
   const restartRuntime = async () => {
     const startup = loginEnabled(userData)

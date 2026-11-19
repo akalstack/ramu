@@ -2568,6 +2568,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Background service': 'Layanan latar belakang',
   'Background service running': 'Layanan latar belakang berjalan',
   'Background service stopped': 'Layanan latar belakang berhenti',
+  'Starting Ramu…': 'Memulai Ramu…',
+  'The first start after installing or updating can take up to a minute.':
+    'Mulai pertama setelah memasang atau memperbarui bisa memakan waktu hingga satu menit.',
   'Start background service': 'Mulai layanan latar belakang',
   'Stop background service': 'Hentikan layanan latar belakang',
   'Start at login': 'Mulai saat login',
