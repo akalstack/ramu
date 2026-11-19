@@ -31,7 +31,7 @@ import type { Project } from '@ramu/shared/types'
 import { t, useLanguage } from '../../i18n'
 import { invoke } from '../../ipc'
 import { pickHostFolder } from '../../workspace/addProject'
-import { useContextMenu, type MenuEntry } from '../../Menu'
+import { Dialog, useContextMenu, type MenuEntry } from '../../Menu'
 import { errorText } from '../../workspace/TaskPane'
 import { projectCtx, useWorkspace } from '../../workspace/workspace'
 import { useAppSettings } from '../../settings/AppSettings'
@@ -77,6 +77,8 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
   const [routing, setRouting] = useState(false)
   const [deploying, setDeploying] = useState(false)
   const [settingUpCi, setSettingUpCi] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const [removeBusy, setRemoveBusy] = useState(false)
   const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: project.id,
     disabled: renaming,
@@ -335,7 +337,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
           <X size={14} /> {t(' Remove project')}
         </>
       ),
-      onSelect: () => void act(() => host.invoke('projects.remove', project.id)),
+      onSelect: () => setRemoving(true),
     },
   ]
 
@@ -475,6 +477,34 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
       )}
       {deploying && <DeployDialog project={project} repos={repos} onClose={() => setDeploying(false)} />}
       {settingUpCi && <CiSetupDialog project={project} repos={repos} onClose={() => setSettingUpCi(false)} />}
+      {removing && (
+        <Dialog
+          title={t('Remove “{0}”?', { 0: project.name })}
+          confirmLabel={t('Remove project')}
+          confirmDisabled={viewOnly}
+          danger
+          busy={removeBusy}
+          error={error}
+          onCancel={() => setRemoving(false)}
+          onConfirm={() =>
+            void (async () => {
+              setRemoveBusy(true)
+              const removed = await act(() => host.invoke('projects.remove', project.id, { deleteThreads: true }))
+              setRemoveBusy(false)
+              if (removed) {
+                for (const task of all) ws.forgetTask(task.id)
+                setRemoving(false)
+              }
+            })()
+          }
+        >
+          <p>
+            {t(
+              'Its threads, archived ones included, are deleted with their agent transcripts, and their running agents and commands stop. Folders, worktrees and branches on the host stay.',
+            )}
+          </p>
+        </Dialog>
+      )}
       {error && <div className={ROW_ERROR_CLASS}>{error}</div>}
       {visible && <ThreadPreviewList ref={list} preview={preview} />}
     </section>

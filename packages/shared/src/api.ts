@@ -1236,7 +1236,8 @@ export interface RamuMethods extends ArtifactMethods {
   'projects.rename'(projectId: string, name: string): Project
   'projects.setRouting'(projectId: string, aliases: string[], description: string): Project
   'projects.reorder'(projectIds: string[]): Project[]
-  'projects.remove'(projectId: string): void
+  /** With `deleteThreads`, deletes the project's threads too, archived ones included; folders on disk always stay. */
+  'projects.remove'(projectId: string, options?: { deleteThreads: true }): void
   'projects.reveal'(projectId: string): void
   'projects.actions'(projectId: string): ProjectAction[]
   'projects.setActions'(projectId: string, actions: ProjectAction[]): ProjectAction[]

@@ -131,6 +131,37 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       signal,
     )
   }
+  /** Stops a thread's agents and commands, then deletes it; `review` approves the commands the person saw. */
+  const deleteThread = async (taskId: string, removeWorktrees: boolean, review?: TaskRemovalReview) => {
+    const covers = workspace.explorerBindings(taskId).map((binding) => binding.cwd)
+    return lock.runMany([`delete-task:${taskId}`, ...covers.map((cwd) => `checkout:${cwd}`)], async () => {
+      const task = workspace.getTask(taskId)
+      if (
+        removeWorktrees &&
+        task.workspaceId &&
+        workspace.listTasks().some((other) => other.id !== taskId && other.workspaceId === task.workspaceId)
+      )
+        throw new Error(
+          'This isolated workspace is used by other threads. Delete only this thread or remove the other threads first.',
+        )
+      const contexts = [taskId, ...(removeWorktrees && task.workspaceId ? [`worktree:${task.workspaceId}`] : [])]
+      return terminals.withTaskRemoval(contexts, async () => {
+        terminals.reviewRemoval(taskId, removeWorktrees, review)
+        await Promise.all(agents.list(taskId).map((session) => agents.stopAndWait(session.id)))
+        terminals.reviewRemoval(taskId, removeWorktrees, review)
+        await terminals.stopForRemoval(taskId)
+        terminals.closeTask(taskId, { keepHistory: true })
+        if (removeWorktrees && task.workspaceId)
+          terminals.closeTask(`worktree:${task.workspaceId}`, { keepHistory: true })
+        await workspace.deleteTask(taskId, removeWorktrees)
+        terminals.closeTask(taskId)
+        notices?.forgetTask(taskId)
+        pullRequestIndex?.forget(taskId)
+        watchers.release(taskId)
+        if (removeWorktrees && task.workspaceId) terminals.closeTask(`worktree:${task.workspaceId}`)
+      })
+    })
+  }
   return {
     'projects.list': { args: z.tuple([]), run: () => workspace.listProjects() },
     'projects.route': {
@@ -516,36 +547,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
           .object({ backgroundIds: z.array(z.string().uuid()).max(2000), forgetUnknown: z.boolean().optional() })
           .optional(),
       ]),
-      run: async (taskId: string, removeWorktrees: boolean, review?: TaskRemovalReview) => {
-        const covers = workspace.explorerBindings(taskId).map((binding) => binding.cwd)
-        return lock.runMany([`delete-task:${taskId}`, ...covers.map((cwd) => `checkout:${cwd}`)], async () => {
-          const task = workspace.getTask(taskId)
-          if (
-            removeWorktrees &&
-            task.workspaceId &&
-            workspace.listTasks().some((other) => other.id !== taskId && other.workspaceId === task.workspaceId)
-          )
-            throw new Error(
-              'This isolated workspace is used by other threads. Delete only this thread or remove the other threads first.',
-            )
-          const contexts = [taskId, ...(removeWorktrees && task.workspaceId ? [`worktree:${task.workspaceId}`] : [])]
-          return terminals.withTaskRemoval(contexts, async () => {
-            terminals.reviewRemoval(taskId, removeWorktrees, review)
-            await Promise.all(agents.list(taskId).map((session) => agents.stopAndWait(session.id)))
-            terminals.reviewRemoval(taskId, removeWorktrees, review)
-            await terminals.stopForRemoval(taskId)
-            terminals.closeTask(taskId, { keepHistory: true })
-            if (removeWorktrees && task.workspaceId)
-              terminals.closeTask(`worktree:${task.workspaceId}`, { keepHistory: true })
-            await workspace.deleteTask(taskId, removeWorktrees)
-            terminals.closeTask(taskId)
-            notices?.forgetTask(taskId)
-            pullRequestIndex?.forget(taskId)
-            watchers.release(taskId)
-            if (removeWorktrees && task.workspaceId) terminals.closeTask(`worktree:${task.workspaceId}`)
-          })
-        })
-      },
+      run: deleteThread,
     },
     'projects.reveal': {
       args: z.tuple([id]),
@@ -598,9 +600,17 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       run: (p: string, name: string) => workspace.renameProject(p, name),
     },
     'projects.remove': {
-      args: z.tuple([id]),
-      run: (p: string) => {
+      args: z.tuple([id, z.object({ deleteThreads: z.literal(true) }).optional()]),
+      run: async (p: string, options?: { deleteThreads: true }) => {
         const roots = workspace.listRepositories(p).map((repo) => repo.root)
+        // The person confirmed the whole project, archived threads included, so every command each thread has is
+        // approved. Files stay: worktrees and branches are kept, as removing a project keeps its folders.
+        if (options?.deleteThreads)
+          for (const task of workspace.listTasks(p))
+            await deleteThread(task.id, false, {
+              backgroundIds: terminals.listBackground(task.id).map((command) => command.id),
+              forgetUnknown: true,
+            })
         workspace.removeProject(p)
         rules?.removeForProject(p)
         ruleFiles?.sync(roots)

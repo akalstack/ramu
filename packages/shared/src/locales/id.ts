@@ -2569,6 +2569,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Background service running': 'Layanan latar belakang berjalan',
   'Background service stopped': 'Layanan latar belakang berhenti',
   'Starting Ramu…': 'Memulai Ramu…',
+  'Remove “{0}”?': 'Hapus “{0}”?',
   'The first start after installing or updating can take up to a minute.':
     'Mulai pertama setelah memasang atau memperbarui bisa memakan waktu hingga satu menit.',
   'Start background service': 'Mulai layanan latar belakang',
@@ -4998,7 +4999,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Copy folder path': 'Salin jalur folder',
   'Remove project…': 'Hapus proyek…',
   'Remove project?': 'Hapus proyek?',
-  'Its threads and folders on the host are not deleted.': 'Thread dan folder di host tidak ikut dihapus.',
+  'Its threads, archived ones included, are deleted with their agent transcripts, and their running agents and commands stop. Folders, worktrees and branches on the host stay.':
+    'Thread-nya, termasuk yang diarsipkan, dihapus beserta transkrip agent-nya, dan agent serta perintah yang berjalan dihentikan. Folder, worktree, dan branch di host tetap ada.',
   'Rename project': 'Ganti nama proyek',
   'Project name': 'Nama proyek',
   'Could not update project': 'Tidak dapat memperbarui proyek',
