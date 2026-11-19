@@ -12,6 +12,7 @@ export default tseslint.config(
       '**/output/**',
       '**/coverage/**',
       '**/.astro/**',
+      '**/.wrangler/**',
       'apps/mobile/ios/**',
       'apps/mobile/android/**',
       'apps/mobile/src/assets/**',
