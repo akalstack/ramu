@@ -2569,6 +2569,9 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Background service running': 'Layanan latar belakang berjalan',
   'Background service stopped': 'Layanan latar belakang berhenti',
   'Starting Ramu…': 'Memulai Ramu…',
+  'Sign in above to finish. The backup turns on once you are signed in.':
+    'Masuk di atas untuk menyelesaikan. Cadangan aktif setelah kamu masuk.',
+  'Needs a Ramu account. Ticking it starts sign-in.': 'Perlu akun Ramu. Mencentangnya memulai proses masuk.',
   'Remove “{0}”?': 'Hapus “{0}”?',
   'The first start after installing or updating can take up to a minute.':
     'Mulai pertama setelah memasang atau memperbarui bisa memakan waktu hingga satu menit.',
