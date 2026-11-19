@@ -202,7 +202,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   providerUpdateChecks: true,
   appUpdateChecks: true,
   updateWait: true,
-  appAutoUpdate: false,
+  appAutoUpdate: true,
   keepAwake: false,
   keepAwakeWhen: 'plugged-in',
   testDevices: DEFAULT_TEST_DEVICE_PREFERENCES,

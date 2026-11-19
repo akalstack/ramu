@@ -1,7 +1,7 @@
 import { newerVersion } from './version'
 
-/** Stays off until a signed release has been seen updating itself in place. Off: no background downloads and no auto-update setting; releases are installed manually from GitHub. */
-export const APP_AUTO_UPDATE = false
+/** Off: no background downloads and no auto-update setting; releases are installed manually from GitHub. */
+export const APP_AUTO_UPDATE = true
 
 export interface AppRelease {
   version: string
