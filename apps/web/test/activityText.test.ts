@@ -27,7 +27,10 @@ const render = (active: boolean, text = 'Read files') => {
   state.effects.splice(0).forEach((effect) => effect())
   return tree
 }
+let now = 0
 beforeEach(() => {
+  now = 0
+  vi.spyOn(performance, 'now').mockImplementation(() => now)
   state.slots = []
   state.effects = []
   state.reduced = false
@@ -43,6 +46,7 @@ it('keeps completed history still and sweeps once only after a live step settles
   render(true)
   render(true, 'Reading more files')
   expect(animate).not.toHaveBeenCalled()
+  now = TOOL_MOTION.quietMs
   const tree = render(false, 'Read files')
   expect(tree.props.children[0].props.children).toBe('Read files')
   expect(tree.props.children[1].props['aria-hidden']).toBe('true')
@@ -53,6 +57,12 @@ it('keeps completed history still and sweeps once only after a live step settles
   expect(animate).toHaveBeenCalledTimes(1)
   render(true)
   expect(cancel).toHaveBeenCalledTimes(1)
+})
+it('does not light up a row that has only just appeared, as when its group opens', () => {
+  render(true)
+  now = TOOL_MOTION.quietMs - 1
+  render(false)
+  expect(animate).not.toHaveBeenCalled()
 })
 it('shows the completed label immediately with reduced motion and no decorative animation', () => {
   state.reduced = true

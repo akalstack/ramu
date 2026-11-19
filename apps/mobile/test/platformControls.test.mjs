@@ -8067,40 +8067,46 @@ test('native tool completion uses the shared delayed left-to-right sweep without
       return { value: this, ...config }
     }
   }
-  const { ActivityText } = load('components/Motion.tsx', 'ios', {
-    react: hooks.react,
-    '@ramu/shared/chat/presentation': chatPresentation,
-    'react-native': {
-      AccessibilityInfo: {
-        isReduceMotionEnabled: async () => false,
-        addEventListener: (_event, listener) => {
-          listeners.push(listener)
-          return { remove() {} }
+  let clock = 0
+  const { ActivityText } = load(
+    'components/Motion.tsx',
+    'ios',
+    {
+      react: hooks.react,
+      '@ramu/shared/chat/presentation': chatPresentation,
+      'react-native': {
+        AccessibilityInfo: {
+          isReduceMotionEnabled: async () => false,
+          addEventListener: (_event, listener) => {
+            listeners.push(listener)
+            return { remove() {} }
+          },
+        },
+        Easing: { linear: 'linear' },
+        Animated: { Value, View: 'AnimatedView' },
+      },
+      // The sweep runs on the UI thread through Reanimated: record each timing with the delay that wraps it.
+      'react-native-reanimated': {
+        default: { View: 'ReanimatedView' },
+        Easing: { linear: 'linear' },
+        useSharedValue: (value) => hooks.react.useRef({ value }).current,
+        useAnimatedStyle: (style) => style(),
+        interpolate: (value) => value,
+        withTiming: (toValue, options) => {
+          const timing = { toValue, ...options }
+          calls.push(timing)
+          return timing
+        },
+        withDelay: (delay, timing) => Object.assign(timing, { delay }),
+        cancelAnimation: () => {
+          stopped++
         },
       },
-      Easing: { linear: 'linear' },
-      Animated: { Value, View: 'AnimatedView' },
+      'react-native-worklets': { scheduleOnRN: (run, ...args) => run(...args) },
+      './ui': { T: 'T' },
     },
-    // The sweep runs on the UI thread through Reanimated: record each timing with the delay that wraps it.
-    'react-native-reanimated': {
-      default: { View: 'ReanimatedView' },
-      Easing: { linear: 'linear' },
-      useSharedValue: (value) => hooks.react.useRef({ value }).current,
-      useAnimatedStyle: (style) => style(),
-      interpolate: (value) => value,
-      withTiming: (toValue, options) => {
-        const timing = { toValue, ...options }
-        calls.push(timing)
-        return timing
-      },
-      withDelay: (delay, timing) => Object.assign(timing, { delay }),
-      cancelAnimation: () => {
-        stopped++
-      },
-    },
-    'react-native-worklets': { scheduleOnRN: (run, ...args) => run(...args) },
-    './ui': { T: 'T' },
-  })
+    { Date: { now: () => clock } },
+  )
   let active = false
   let text = 'Read files'
   const render = () => hooks.render(() => ActivityText({ active, children: text }))
@@ -8108,6 +8114,8 @@ test('native tool completion uses the shared delayed left-to-right sweep without
   assert.equal(calls.length, 0)
   active = true
   render()
+  // A row that has only just appeared does not light up; this one has been on screen past that.
+  clock = chatPresentation.TOOL_MOTION.quietMs
   active = false
   const tree = render()
   assert.equal(find(tree, 'T').props.children, text)

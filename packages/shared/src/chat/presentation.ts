@@ -37,7 +37,10 @@ export const TOOL_MOTION = {
   sweepMs: 2200,
   /** The pause between passes, while the highlight is off the end of the text. */
   restMs: 700,
-  settleMs: 120,
-  finishMs: 360,
+  /** How long a finished tool stays finished before its label lights up; the next tool starting meanwhile cancels it. */
+  settleMs: 300,
+  finishMs: 650,
+  /** A row this new does not light up: it has only just appeared, as when its group opens. */
+  quietMs: 500,
   fadeAt: 0.8,
 } as const
