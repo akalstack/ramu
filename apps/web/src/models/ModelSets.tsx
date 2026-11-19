@@ -20,13 +20,8 @@ import { useHostRuntime } from '../workspace/workspace'
 import { cachedModelSets, rememberModelSets } from './modelSetsCache'
 import { stableContext } from '../lib/stableContext'
 
-export const modelDisplayName = (name: string) =>
-  name
-    .replace(/^gpt-/i, 'GPT-')
-    .replace(
-      /-(sol|luna|astra|terra)\b/gi,
-      (_, family: string) => ` ${family[0]!.toUpperCase()}${family.slice(1).toLowerCase()}`,
-    )
+import { modelDisplayName } from './modelNames'
+export { modelDisplayName }
 export const effortDisplayName = (effort: ReasoningEffort | null, _provider: AgentProvider) =>
   effort === 'xhigh' ? t('Extra High') : effort ? t(effort[0]!.toUpperCase() + effort.slice(1)) : ''
 /** The model and effort names Ramu shows for a chat's settings, as the model chip shows them. */

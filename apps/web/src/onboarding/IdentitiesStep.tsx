@@ -176,7 +176,7 @@ export function IdentitiesStep({
             role="radio"
             aria-checked={drafts.choice === option.value}
             className={cn(
-              'h-auto min-h-0 flex-col items-start gap-1 whitespace-normal rounded-(--radius-m) border border-(--line) bg-fill! p-3 text-left font-normal',
+              'h-auto min-h-0 flex-col items-start justify-start gap-1 whitespace-normal rounded-(--radius-m) border border-(--line) bg-fill! p-3 text-left font-normal',
               drafts.choice === option.value && 'border-brand bg-hover!',
             )}
             onClick={() => choose(option.value)}

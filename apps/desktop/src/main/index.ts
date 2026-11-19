@@ -31,6 +31,7 @@ import { voiceErrorMessage } from '@ramu/shared/voice/bridge'
 import { newerVersion } from '@ramu/shared/version'
 import { DesktopUpdater } from './desktopUpdater'
 import { whileStarting } from './startupWindow'
+import { rememberBounds, savedBounds } from './windowBounds'
 import { runtimeBuild } from '@ramu/server/build'
 import { unloadLoginService } from './runtimeLauncher'
 import type { AppUpdateStatus } from '@ramu/shared/updates'
@@ -418,10 +419,13 @@ async function main() {
     ) ?? ''
   // macOS takes the dock icon from the bundle, packaged or patched for development (scripts/dev-icon.mjs), so the glass icon is not replaced by a flat PNG.
 
+  const windowFile = join(userData, 'main-window.json')
+  const lastBounds = e2eHeadless ? null : savedBounds(windowFile)
   const win = new BrowserWindow({
     ...(icon ? { icon } : {}),
     width: 1440,
     height: 900,
+    ...(lastBounds && { x: lastBounds.x, y: lastBounds.y, width: lastBounds.width, height: lastBounds.height }),
     minWidth: 900,
     minHeight: 560,
     title: 'Ramu',
@@ -438,6 +442,11 @@ async function main() {
       backgroundThrottling: !e2eHeadless,
     },
   })
+  if (!e2eHeadless) {
+    // Showing a window only for a pairing request should not also pop it to full size.
+    if (lastBounds?.maximized && !launchedForPairing) win.maximize()
+    rememberBounds(win, windowFile)
+  }
 
   // Each computer's page gets the same behavior: edit menu, window chrome, and no navigation away from the app.
   const sendChrome = (contents: WebContents) => {
