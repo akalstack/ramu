@@ -152,3 +152,22 @@ it('stops waiting at once for a socket left by a service that already exited', a
     rmSync(directory, { recursive: true, force: true })
   }
 })
+
+it('reports a service that exits during startup at once instead of waiting out the start timeout', async () => {
+  const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { ensureRuntime } = await import('../src/main/runtimeLauncher')
+  const directory = mkdtempSync(join(tmpdir(), 'ramu-failed-startup-'))
+  try {
+    const daemon = join(directory, 'daemon.js')
+    writeFileSync(daemon, 'process.exit(1)')
+    const started = Date.now()
+    await expect(ensureRuntime(directory, daemon, process.execPath, 60_000)).rejects.toThrow(
+      'Background service could not start',
+    )
+    expect(Date.now() - started).toBeLessThan(5_000)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})

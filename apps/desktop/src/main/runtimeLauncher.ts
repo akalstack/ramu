@@ -58,6 +58,7 @@ export async function ensureRuntime(
   userData: string,
   daemonPath: string,
   executable = process.execPath,
+  startTimeoutMs = 120_000,
 ): Promise<string> {
   mkdirSync(userData, { recursive: true })
   const socketPath = runtimeSocket(userData)
@@ -96,10 +97,16 @@ export async function ensureRuntime(
       ...desktopApp(),
     },
   })
-  child.on('error', () => {})
+  let exited = false
+  child.on('error', () => (exited = true))
+  child.on('exit', () => (exited = true))
   child.unref()
   closeSync(log)
-  for (let i = 0; i < 100; i++) {
+  // A new copy's first start can take most of a minute on an Intel Mac while macOS checks the whole bundle, so wait as
+  // long as the service is alive. One more try after it exits covers a copy that found another service already running.
+  const deadline = Date.now() + startTimeoutMs
+  for (let last = false; !last;) {
+    last = exited || Date.now() > deadline
     await new Promise((resolve) => setTimeout(resolve, 100))
     try {
       await runtimeInvoke(socketPath, 'background.status')
