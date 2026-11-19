@@ -4,8 +4,12 @@
   "name": "ramu-site",
   "compatibility_date": "2026-11-01",
   "workers_dev": true,
+  // Only /download/* runs the Worker, which redirects to the newest release's installer; the rest is static.
+  "main": "./worker/index.ts",
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/download/*"],
   },
   // Cloudflare creates the DNS records and HTTPS certificates for these.
   "routes": [

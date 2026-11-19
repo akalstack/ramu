@@ -39,6 +39,9 @@
       "ignoreDependencies": ["expo-updates", "escape-string-regexp"],
       "entry": ["plugins/*.cjs", "src/runtime/isomorphicWebcrypto.ts"]
     },
+    "apps/site": {
+      "entry": ["worker/index.ts"]
+    },
     "apps/server": {
       "ignoreBinaries": ["ssh-keygen", "ffprobe"],
       "ignoreDependencies": ["@dagrejs/dagre", "chart.js", "react", "react-dom"]

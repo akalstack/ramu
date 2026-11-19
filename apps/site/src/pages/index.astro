@@ -5,6 +5,7 @@ import { ProviderLogo } from '@/components/provider-logo'
 import Footer from '@/components/footer.astro'
 import { LinkButton } from '@/components/site-button'
 import StoreBadges from '@/components/store-badges.astro'
+import { DOWNLOADS, downloadPath } from '@/lib/downloads'
 import { AKALSTACK, MOBILE_SETUP, PROVIDERS, RELEASES, REPO, SERVICES } from '@/lib/site'
 
 const title = 'Ramu — Describe it. Ramu ships it.'
@@ -439,14 +440,34 @@ const WORK = [
           <img class="download-logo" src="/favicon.svg" alt="" width="64" height="64" />
           <h2>Bring your next idea to Ramu.</h2>
           <p>Download the desktop alpha, connect a provider and say what you want.</p>
-          <div class="hero-actions">
-            <LinkButton tone="primary" href={RELEASES}>macOS · Apple silicon and Intel</LinkButton>
-            <LinkButton href={RELEASES}>Linux · x64 and arm64</LinkButton>
+          {/* The script below points this at the visitor's computer; without it, the list underneath has every file. */}
+          <div class="hero-actions" id="download-primary-actions">
+            <LinkButton tone="primary" id="download-primary" href={downloadPath('mac-arm64')}>
+              Download for macOS
+            </LinkButton>
           </div>
+          <p class="download-for" id="download-for">
+            Apple silicon · DMG. On an Intel Mac? <a href={downloadPath('mac-x64')}>Download for Intel</a>.
+          </p>
+          <details class="download-all" id="download-all">
+            <summary>All downloads</summary>
+            <ul>
+              {
+                DOWNLOADS.map((download) => (
+                  <li>
+                    <a href={downloadPath(download.id)} data-download={download.id}>
+                      <span>{download.label}</span>
+                      <span class="download-kind">{download.kind}</span>
+                    </a>
+                  </li>
+                ))
+              }
+            </ul>
+            <a class="download-notes" href={RELEASES}>Release notes and checksums</a>
+          </details>
           <StoreBadges />
           <p class="download-fine">
-            Installers and checksums are on GitHub Releases. Or install with
-            <code>brew install --cask akalstack/tap/ramu</code>, or from Ramu's
+            Or install with <code>brew install --cask akalstack/tap/ramu</code>, or from Ramu's
             <a href={`${REPO}#get-started`}>APT and DNF repositories</a>, which bring each new release.
             Windows is coming. See <a href={`${REPO}/blob/main/docs/guide/providers.md`}>provider setup</a>.
           </p>
@@ -455,6 +476,60 @@ const WORK = [
     </main>
 
     <Footer />
+    <script>
+      import { DOWNLOADS, downloadPath, suggestDownload, type Suggestion, type Visitor } from '@/lib/downloads'
+
+      type Hints = {
+        platform?: string
+        mobile?: boolean
+        getHighEntropyValues?(hints: string[]): Promise<{ architecture?: string }>
+      }
+      const hints = (navigator as Navigator & { userAgentData?: Hints }).userAgentData
+      const primary = document.getElementById('download-primary') as HTMLAnchorElement | null
+      const actions = document.getElementById('download-primary-actions')
+      const line = document.getElementById('download-for')
+      const all = document.getElementById('download-all') as HTMLDetailsElement | null
+
+      const link = (id: Parameters<typeof downloadPath>[0], text: string) => {
+        const anchor = document.createElement('a')
+        anchor.href = downloadPath(id)
+        anchor.textContent = text
+        return anchor
+      }
+      const show = (suggestion: Suggestion) => {
+        if (!primary || !actions || !line || !all) return
+        line.replaceChildren()
+        if (!suggestion) return
+        if (suggestion.kind !== 'download') {
+          // Nothing here installs on this device, so lead with the full list instead of a button that cannot help.
+          actions.hidden = true
+          all.open = true
+          line.textContent =
+            suggestion.kind === 'windows'
+              ? 'Ramu for Windows is coming. For a Mac or Linux computer, choose a download below.'
+              : 'Ramu runs on your computer. Get the phone companion below, and Ramu for your Mac or Linux computer.'
+          return
+        }
+        const download = DOWNLOADS.find((entry) => entry.id === suggestion.id)!
+        actions.hidden = false
+        primary.href = downloadPath(download.id)
+        primary.textContent = download.os === 'mac' ? 'Download for macOS' : 'Download for Linux'
+        const detail = download.label.split(' · ')[1]
+        line.append(`${detail} · ${download.kind}. `)
+        if (download.id === 'mac-arm64') line.append('On an Intel Mac? ', link('mac-x64', 'Download for Intel'), '.')
+        else if (download.id === 'mac-x64')
+          line.append('On Apple silicon? ', link('mac-arm64', 'Download for Apple silicon'), '.')
+        else line.append('Other formats are under All downloads.')
+      }
+
+      const visitor: Visitor = { userAgent: navigator.userAgent, platform: hints?.platform, mobile: hints?.mobile }
+      show(suggestDownload(visitor))
+      // Chromium browsers can say which chip the computer has; Safari and Firefox keep the default.
+      void hints
+        ?.getHighEntropyValues?.(['architecture'])
+        .then(({ architecture }) => show(suggestDownload({ ...visitor, architecture })))
+        .catch(() => {})
+    </script>
     <script>
       // Fade sections in as they scroll into view. Without script or with reduced motion, everything stays visible.
       const items = document.querySelectorAll('.reveal')

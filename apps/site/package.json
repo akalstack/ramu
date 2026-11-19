@@ -20,6 +20,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "typecheck": "astro check",
+    "test": "node --test test/*.test.ts",
     "plugins:sync": "node scripts/sync-plugins.mjs",
     "deploy": "astro build && npx --yes wrangler@4.162.0 deploy"
   },
