@@ -30,7 +30,8 @@ jobs:
         with:
           node-version-file: .node-version
       - uses: pnpm/action-setup@v6
-      - run: pnpm install --frozen-lockfile --filter @ramu/site...
+      # A full install: the root postinstall needs the desktop's packages, which a site-only filter leaves out.
+      - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @ramu/site typecheck
       - run: pnpm --filter @ramu/site test
       - name: Deploy getramu.dev
