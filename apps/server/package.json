@@ -1,6 +1,6 @@
 {
   "name": "@ramu/server",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "private": true,
   "description": "Ramu workspace server: agents, files, Git, terminals, schedules and the local database.",
   "license": "MIT",

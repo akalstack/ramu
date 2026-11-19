@@ -14,6 +14,38 @@ it('does not snapshot a development Electron on Linux, whose daemon is in the re
   expect(pinnedRuntime('/tmp/ramu-user-data', daemonPath, executable, 'linux')).toEqual({ daemonPath, executable })
 })
 
+it('keeps relative symlinks relative when snapshotting a macOS bundle, so its code signature stays valid', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, readlinkSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const root = mkdtempSync(join(tmpdir(), 'ramu-pin-'))
+  try {
+    const app = join(root, 'Install', 'Ramu.app')
+    const framework = join(app, 'Contents', 'Frameworks', 'Electron Framework.framework')
+    mkdirSync(join(framework, 'Versions', 'A'), { recursive: true })
+    mkdirSync(join(app, 'Contents', 'MacOS'), { recursive: true })
+    mkdirSync(join(app, 'Contents', 'Resources'), { recursive: true })
+    writeFileSync(join(framework, 'Versions', 'A', 'Electron Framework'), '')
+    symlinkSync('A', join(framework, 'Versions', 'Current'))
+    symlinkSync('Versions/Current/Electron Framework', join(framework, 'Electron Framework'))
+    writeFileSync(join(app, 'Contents', 'MacOS', 'Ramu'), '')
+    writeFileSync(join(app, 'Contents', 'Resources', 'daemon.js'), '')
+    const pinned = pinnedRuntime(
+      join(root, 'data'),
+      join(app, 'Contents', 'Resources', 'daemon.js'),
+      join(app, 'Contents', 'MacOS', 'Ramu'),
+      'darwin',
+    )
+    const copy = pinned.executable.slice(0, pinned.executable.indexOf('/Contents/MacOS/'))
+    expect(copy).not.toBe(app)
+    const copied = join(copy, 'Contents', 'Frameworks', 'Electron Framework.framework')
+    expect(readlinkSync(join(copied, 'Electron Framework'))).toBe('Versions/Current/Electron Framework')
+    expect(readlinkSync(join(copied, 'Versions', 'Current'))).toBe('A')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 it('writes a systemd user service that restarts only a crashed service and keeps paths with spaces and % intact', () => {
   const unit = systemdUnit(
     '/home/me/Ramu Data/Ramu',

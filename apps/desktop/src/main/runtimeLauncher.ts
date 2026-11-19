@@ -44,7 +44,9 @@ export function pinnedRuntime(
     const temporary = `${destination}.partial`
     mkdirSync(dirname(destination), { recursive: true, mode: 0o700 })
     rmSync(temporary, { recursive: true, force: true })
-    cpSync(bundle, temporary, { recursive: true, dereference: false })
+    // Without verbatimSymlinks Node rewrites a framework's relative links to absolute ones into the original bundle,
+    // which breaks the macOS code signature ("Ramu is damaged") and dangles once an AppImage or DMG unmounts.
+    cpSync(bundle, temporary, { recursive: true, dereference: false, verbatimSymlinks: true })
     renameSync(temporary, destination)
   }
   return {
