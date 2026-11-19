@@ -125,6 +125,21 @@ export function AccountSettings() {
       const result = await invoke('account.setBackup', { [destination]: value })
       if (result.recoveryCode) setRecovery(result.recoveryCode)
     })
+  // Ticked while signed out: sign in first, then back up once the account answers.
+  const [backupAfterSignIn, setBackupAfterSignIn] = useState(false)
+  const backedUpToAccount = !!status?.backup.account
+  useEffect(() => {
+    if (!backupAfterSignIn || !signedIn) return
+    setBackupAfterSignIn(false)
+    if (backedUpToAccount) return
+    void invoke('account.setBackup', { account: true }).then(
+      (result) => {
+        if (result.recoveryCode) setRecovery(result.recoveryCode)
+        return reload()
+      },
+      (cause) => setError(errorText(cause)),
+    )
+  }, [backupAfterSignIn, signedIn, backedUpToAccount, invoke, reload])
   if (!status) return error ? <p className="text-bad">{error}</p> : null
   const pending = status.pendingSignIn
   // Without the account, a recovery code can only come from GitHub.
@@ -197,12 +212,26 @@ export function AccountSettings() {
       <div className="flex flex-col gap-1.5 text-control">
         <label className="flex items-center gap-2">
           <Checkbox
-            checked={choosing.account ?? status.backup.account}
-            disabled={viewOnly || busy || !signedIn}
-            onCheckedChange={(value) => setBackup('account', value === true)}
+            checked={choosing.account ?? (status.backup.account || backupAfterSignIn)}
+            disabled={viewOnly || busy}
+            onCheckedChange={(value) => {
+              if (signedIn) return setBackup('account', value === true)
+              if (value !== true) return setBackupAfterSignIn(false)
+              setBackupAfterSignIn(true)
+              if (!pending) void act(() => invoke('account.signIn'))
+            }}
           />
           {t('To my Ramu account (the last 30 versions)')}
         </label>
+        {!signedIn && (
+          <p className="m-0 -mt-1 pl-6 text-caption text-muted-foreground">
+            {t(
+              backupAfterSignIn
+                ? 'Sign in above to finish. The backup turns on once you are signed in.'
+                : 'Needs a Ramu account. Ticking it starts sign-in.',
+            )}
+          </p>
+        )}
         <label className="flex items-center gap-2">
           <Checkbox
             checked={choosing.github ?? status.backup.github}
