@@ -354,6 +354,19 @@ describe('waiting a day before an update is offered', () => {
     await service.update('claude-code', true)
     expect(calls().some((call) => call.args[0] === 'update')).toBe(true)
   })
+  it('does not hold a first install for the wait, which only protects a working install', async () => {
+    mockReleases()
+    preferences = { ...preferences, updateWait: true }
+    preferences.providerBinaries.antigravity = { binary: '' }
+    create()
+    // Pointing the runtime at a missing file is how this test makes Antigravity not installed; Ramu then refuses only
+    // because that path is a custom one, past the point where the wait would have stopped it.
+    vi.stubEnv('RAMU_ANTIGRAVITY_BIN', join(dir, 'not-installed', 'antigravity'))
+    await expect(service.update('antigravity')).rejects.toThrow('custom Antigravity runtime')
+    vi.stubEnv('RAMU_ANTIGRAVITY_BIN', bin)
+    await expect(service.update('antigravity')).rejects.toThrow('less than a day ago')
+    vi.unstubAllEnvs()
+  })
   it('pins Codex to the exact release that has waited', () => {
     const plan = providerAdapter('codex').updatePlan({
       config: {},

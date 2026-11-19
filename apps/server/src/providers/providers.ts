@@ -28,7 +28,7 @@ import {
 import type { ProviderApiKeyStore } from './apiKeyStore'
 import { supportsApiKey } from '@ramu/shared/providers/apiKeys'
 import { automaticallyInstallable } from '@ramu/shared/providers/compatibility'
-import { offeredVersion, recordSeen, settlesAt, type SeenVersions } from '@ramu/shared/updates'
+import { hoursUntil, offeredVersion, recordSeen, settlesAt, type SeenVersions } from '@ramu/shared/updates'
 
 type Release = { version: string; checkedAt: string; downloadUrl?: string }
 type Cache = Partial<Record<AgentProvider, Release>>
@@ -317,7 +317,9 @@ export class ProviderService {
   update(provider: AgentProvider, now = false): Promise<ProviderStatus> {
     const pending = this.updating.get(provider)
     if (pending) return pending
-    const waiting = this.preferences().updateWait !== false && !now
+    // The wait keeps a bad release off a working install; with nothing installed yet there is nothing to protect.
+    const installed = !!findExecutable(providerBinary(provider, this.preferences().providerBinaries))
+    const waiting = this.preferences().updateWait !== false && !now && installed
     const pins = !!providerAdapter(provider).pinsVersion
     // Never install a release this policy already knows cannot work; the card explains the manual path instead.
     const known =
@@ -348,7 +350,7 @@ export class ProviderService {
         if (!offered || (!pins && offered !== fresh?.version)) {
           const firstSeen = fresh ? this.seen[provider]?.[fresh.version] : undefined
           throw new Error(
-            `${fresh?.version ?? 'The newest release'} came out less than a day ago${firstSeen ? ` and is offered from ${settlesAt(firstSeen)}` : ''}. Choose Update now to install it anyway.`,
+            `${fresh?.version ?? 'The newest release'} came out less than a day ago${firstSeen ? `; Ramu offers it in ${hoursUntil(settlesAt(firstSeen))}h` : ''}. Choose Update now to install it anyway.`,
           )
         }
         if (pins) version = offered
