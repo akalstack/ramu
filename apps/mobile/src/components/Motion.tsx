@@ -131,12 +131,17 @@ export function ActivityText({
 }) {
   const reduced = useReducedMotion()
   const previous = useRef(active)
+  const shownAt = useRef(0)
   const progress = useSharedValue(1)
   const [width, setWidth] = useState(0)
   useEffect(() => {
+    shownAt.current = Date.now()
+  }, [])
+  useEffect(() => {
     const completed = previous.current && !active
     previous.current = active
-    if (!completed || reduced) {
+    // A row that has only just appeared, as when its group opens, does not light up.
+    if (!completed || reduced || Date.now() - shownAt.current < TOOL_MOTION.quietMs) {
       progress.value = 1
       return
     }
@@ -146,7 +151,11 @@ export function ActivityText({
       TOOL_MOTION.settleMs,
       withTiming(1, { duration: TOOL_MOTION.finishMs, easing: ReEasing.linear }),
     )
-    return () => cancelAnimation(progress)
+    // A highlight cut short by the next tool would otherwise stay half drawn.
+    return () => {
+      cancelAnimation(progress)
+      progress.value = 1
+    }
   }, [active, reduced, progress])
   const wipe = useAnimatedStyle(() => ({
     width: `${interpolate(progress.value, [0, TOOL_MOTION.fadeAt, 1], [0, 100, 100])}%`,

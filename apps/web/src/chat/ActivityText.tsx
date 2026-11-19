@@ -15,10 +15,14 @@ export function ActivityText({
 }) {
   const overlay = useRef<HTMLSpanElement>(null)
   const previous = useRef(active)
+  const shownAt = useRef(0)
+  useLayoutEffect(() => {
+    shownAt.current = performance.now()
+  }, [])
   useLayoutEffect(() => {
     const completed = previous.current && !active
     previous.current = active
-    if (!completed || reducedMotion()) return
+    if (!completed || reducedMotion() || performance.now() - shownAt.current < TOOL_MOTION.quietMs) return
     const animation = overlay.current?.animate(
       [
         { clipPath: 'inset(0 100% 0 0)', opacity: 1 },

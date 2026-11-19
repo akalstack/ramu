@@ -115,11 +115,12 @@ export function GitInspector({
             <Button
               variant="ghost"
               size="sm"
-              className="mx-1 h-7 justify-start gap-1.5 px-1.5 text-caption text-muted-foreground"
+              className="mx-1 h-7 min-w-0 justify-start gap-1.5 px-1.5 text-caption text-muted-foreground"
+              title={t('All pull requests in {0}', { '0': binding.repoName })}
               onClick={() => showPullRequests(ws, { host, repoId: binding.repoId })}
             >
               <GitPullRequest size={13} className="flex-none" aria-hidden="true" />
-              {t('All pull requests in {0}', { '0': binding.repoName })}
+              <span className="min-w-0 truncate">{t('All pull requests in {0}', { '0': binding.repoName })}</span>
             </Button>
           )}
           <CommitsPane

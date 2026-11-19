@@ -264,7 +264,7 @@ export function CommitHistoryRow({
             className="commit-dot flex-none w-2 h-2 m-[0_1px] rounded-full [background:var(--muted)]"
             aria-hidden="true"
           />
-          <span className="commit-subject flex-initial min-w-12 overflow-hidden text-ellipsis whitespace-nowrap">
+          <span className="commit-subject flex-initial min-w-16 overflow-hidden text-ellipsis whitespace-nowrap">
             {commit.subject}
           </span>
           {commit.outgoing && (
@@ -276,15 +276,23 @@ export function CommitHistoryRow({
               <span className="sr-only">{t('Not pushed yet')}</span>
             </span>
           )}
-          {refs.map((ref) => (
+          {/* The subject comes first in a narrow panel: one ref shrinks before it does, and the rest count as +N. */}
+          {refs.length > 0 && (
             <span
-              key={ref}
-              className="commit-ref [flex:0_0_auto] max-w-[104px] p-[0_5px] [border:1px_solid_transparent] rounded-(--radius-xs) text-muted-foreground text-[length:10.5px] leading-[15px] overflow-hidden text-ellipsis whitespace-nowrap bg-fill"
-              title={ref}
+              className="commit-ref [flex:0_4_auto] min-w-6 max-w-[104px] p-[0_5px] [border:1px_solid_transparent] rounded-(--radius-xs) text-muted-foreground text-[length:10.5px] leading-[15px] overflow-hidden text-ellipsis whitespace-nowrap bg-fill"
+              title={refs[0]}
             >
-              {ref}
+              {refs[0]}
             </span>
-          ))}
+          )}
+          {refs.length > 1 && (
+            <span
+              className="commit-ref flex-none p-[0_4px] rounded-(--radius-xs) text-muted-foreground text-[length:10.5px] leading-[15px] tabular-nums bg-fill"
+              title={refs.slice(1).join('\n')}
+            >
+              +{refs.length - 1}
+            </span>
+          )}
           <span className="grow flex-1 min-w-0 text-left" />
           <span className="commit-age flex-none text-muted-foreground text-caption tabular-nums">
             {timeAgo(commit.timestamp)}
