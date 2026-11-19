@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-<h3 align="center">Describe it. Ramu ships it.</h3>
+<h3 align="center">Every coding agent. One workspace.</h3>
 
 <p align="center">The free, open-source workspace where your coding agents build the app, put it online and keep it running.<br />On desktop and phone, with accounts you own.</p>
 
@@ -54,6 +54,7 @@ Open a project, say what you want, review the result. The defaults work as they 
 - Ask a second model for advice or a review. Select text to quote it or ask a quick question.
 - Borrow abilities across providers, such as Codex's image generation in a Claude thread.
 - Memory, preferences, skills and lessons are shared across providers. Agents can search old threads for past fixes.
+- **Plan usage** shows every login's limits and reset times, across providers and hosts, closest to a limit first.
 
 **📄 Artifacts you keep**
 
@@ -65,9 +66,11 @@ Open a project, say what you want, review the result. The defaults work as they 
 - Monaco editor, split terminals, recorded diffs, inline review comments and selective undo.
 - Git branches, staging, stashes, sync and worktrees, across several repos in one folder.
 - GitHub, GitLab, Bitbucket and Azure DevOps: start from an issue, open a pull request, hand failing checks back to an agent.
-- Built-in browser, computer use, and iOS Simulator and Android emulator testing, all watchable and stoppable.
+- Built-in browser, computer use, and iOS Simulator and Android emulator testing, all watchable and stoppable. **Float** keeps a small live view on screen while you work elsewhere.
+- **Access modes** from asking first to Full access, which still asks before a force-push, `git reset --hard` or deleting outside the project. Agents ask for tokens and passwords in a masked card and get a file path, never the value.
 - **Home** to start work and an **Inbox** for what needs you, what's running and what finished.
 - **Identities:** work and personal accounts (Git author, provider logins) picked per project, so nothing is switched by hand. [Identities →](docs/guide/identities.md)
+- Ask an agent to change a setting: it shows the old and new value, and you apply or undo it.
 - Shared MCP tools with per-thread approval, themes, English and Bahasa Indonesia.
 
 **🌐 Shipping and running**
