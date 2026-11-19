@@ -21,6 +21,38 @@ const releaseSchema = z.object({
   published_at: z.string(),
   assets: z.array(assetSchema),
 })
+const RELEASE_TAG = /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/
+const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/
+/** How settled a release line is: alpha, then beta, then release candidate, then stable. */
+function stability(version: string): number {
+  if (!version.includes('-')) return 3
+  const label = /-([A-Za-z]+)/.exec(version)?.[1]?.toLowerCase()
+  return label === 'rc' ? 2 : label === 'beta' ? 1 : 0
+}
+/**
+ * The newest release an install of `currentVersion` follows: a stable install takes stable releases only, and a
+ * pre-release install also takes later pre-releases at least as settled as its own, so an alpha moves on to beta and
+ * stable but a beta never drops back to an alpha.
+ */
+export function pickAppRelease(
+  data: unknown,
+  currentVersion: string,
+  platform = process.platform,
+  arch = process.arch,
+): AppRelease | null {
+  let newest: AppRelease | null = null
+  for (const item of z.array(z.unknown()).max(100).parse(data)) {
+    let release: AppRelease | null
+    try {
+      release = parseAppRelease(item, platform, arch)
+    } catch {
+      continue
+    }
+    if (!release || stability(release.version) < stability(currentVersion)) continue
+    if (!newest || newerVersion(release.version, newest.version)) newest = release
+  }
+  return newest
+}
 export function releaseAssetUrl(url: string): boolean {
   try {
     const parsed = new URL(url)
@@ -31,7 +63,7 @@ export function releaseAssetUrl(url: string): boolean {
 }
 export function parseAppRelease(data: unknown, platform = process.platform, arch = process.arch): AppRelease | null {
   const release = releaseSchema.parse(data)
-  if (release.draft || release.prerelease || !/^v\d+\.\d+\.\d+$/.test(release.tag_name)) return null
+  if (release.draft || !RELEASE_TAG.test(release.tag_name)) return null
   const prefix = `${platform}-${arch}-`
   const asset = release.assets.find((item) => item.name.startsWith(prefix) && /^[\w.-]+\.zip$/.test(item.name))
   const sums = release.assets.find((item) => item.name === `SHA256SUMS-${platform}-${arch}.txt`)
@@ -88,7 +120,7 @@ export class AppUpdateService {
       const parsed = z
         .object({
           release: z.object({
-            version: z.string().regex(/^\d+\.\d+\.\d+$/),
+            version: z.string().regex(VERSION),
             assetName: z.string().regex(/^[\w.-]+\.zip$/),
             assetUrl: z.string().refine(releaseAssetUrl),
             size: z.number().positive(),
@@ -150,7 +182,8 @@ export class AppUpdateService {
       const ready = this.state.phase === 'ready'
       this.change({ phase: 'checking', error: null })
       try {
-        const response = await fetch('https://api.github.com/repos/akalstack/ramu/releases/latest', {
+        // The list, not /releases/latest, which never returns a pre-release.
+        const response = await fetch('https://api.github.com/repos/akalstack/ramu/releases?per_page=30', {
           signal: AbortSignal.any([AbortSignal.timeout(20_000), this.abort.signal]),
           headers: {
             Accept: 'application/vnd.github+json',
@@ -164,8 +197,8 @@ export class AppUpdateService {
         }
         if (!response.ok) throw new Error(`GitHub update check failed (HTTP ${response.status})`)
         const text = await response.text()
-        if (text.length > 2_000_000) throw new Error('Release response too large')
-        const release = parseAppRelease(JSON.parse(text))
+        if (text.length > 8_000_000) throw new Error('Release response too large')
+        const release = pickAppRelease(JSON.parse(text), this.state.currentVersion)
         const settles = release ? Date.parse(release.publishedAt) + UPDATE_WAIT_MS : 0
         const waits =
           !!release &&
