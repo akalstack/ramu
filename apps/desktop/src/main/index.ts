@@ -31,6 +31,7 @@ import { voiceErrorMessage } from '@ramu/shared/voice/bridge'
 import { newerVersion } from '@ramu/shared/version'
 import { DesktopUpdater } from './desktopUpdater'
 import { whileStarting } from './startupWindow'
+import { serviceIsIdle } from './serviceIdle'
 import { rememberBounds, savedBounds } from './windowBounds'
 import { runtimeBuild } from '@ramu/server/build'
 import { unloadLoginService } from './runtimeLauncher'
@@ -184,6 +185,11 @@ async function main() {
           title: t('Starting Ramu…'),
           detail: t('The first start after installing or updating can take up to a minute.'),
         })
+  const serviceIdle = () =>
+    serviceIsIdle({
+      counts: () => runtimeInvoke(runtime, 'agent.counts'),
+      resources: () => runtimeInvoke(runtime, 'resources.snapshot'),
+    })
   /** Stops the service and starts it again from the daemon on disk, keeping login startup as it was. */
   const restartRuntime = async () => {
     const startup = loginEnabled(userData)
@@ -204,6 +210,19 @@ async function main() {
     if (status.build !== runtimeBuild(daemonPath)) {
       console.info('[ramu] background service is from an older build; restarting it')
       await restartRuntime()
+    }
+  }
+  // An update installs the app but leaves the service running the release it started under. When nothing is running,
+  // nothing is lost by replacing it, so the new app brings it up to date instead of leaving a second restart to do.
+  // With work running it stays, and Settings offers the restart.
+  if (app.isPackaged && !process.env.RAMU_USER_DATA && !e2eHeadless && !launchedForPairing) {
+    const status = await runtimeInvoke(runtime, 'background.status').catch(() => null)
+    if (status?.running && status.build !== runtimeBuild(daemonPath) && (await serviceIdle())) {
+      console.info('[ramu] background service is from an older build and idle; restarting it')
+      await whileStarting(restartRuntime, {
+        title: t('Updating Ramu…'),
+        detail: t('The background service is restarting with the new version.'),
+      })
     }
   }
   const diagnosticPreferences = await runtimeInvoke(runtime, 'settings.app.get')
@@ -1422,10 +1441,15 @@ async function main() {
       return
     }
     if (method === 'updates.restart') {
+      const idle = !remote && (await serviceIdle())
       const choice = await dialog.showMessageBox(win, {
         type: 'question',
         message: t('Restart Ramu to finish updating?'),
-        detail: t('Running threads keep going. You can update the background service separately.'),
+        detail: idle
+          ? t('Nothing is running, so the background service updates too.')
+          : t(
+              'Running threads keep going. The background service keeps its current version until you restart it in Settings.',
+            ),
         buttons: [t('Restart now'), t('Later')],
         defaultId: 1,
         cancelId: 1,

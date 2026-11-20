@@ -1252,8 +1252,13 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Agent yang berjalan akan berhenti. Thread yang belum selesai dilanjutkan jika pemulihan restart aktif.',
   'Restart now': 'Restart sekarang',
   'Restart Ramu to finish updating?': 'Restart Ramu untuk menyelesaikan pembaruan?',
-  'Running threads keep going. You can update the background service separately.':
-    'Thread yang berjalan tetap lanjut. Layanan latar belakang bisa diperbarui terpisah.',
+  'Nothing is running, so the background service updates too.':
+    'Tidak ada yang berjalan, jadi layanan latar belakang ikut diperbarui.',
+  'Running threads keep going. The background service keeps its current version until you restart it in Settings.':
+    'Thread yang berjalan tetap lanjut. Layanan latar belakang tetap di versi saat ini sampai kamu me-restart-nya di Pengaturan.',
+  'Updating Ramu…': 'Memperbarui Ramu…',
+  'The background service is restarting with the new version.':
+    'Layanan latar belakang dimulai ulang dengan versi baru.',
   'Keep host awake': 'Jaga host tetap aktif',
   'Prevent idle sleep on macOS while the service runs. Display sleep and manual sleep still work.':
     'Cegah macOS tidur saat idle selama layanan berjalan. Layar mati dan tidur manual tetap berfungsi.',

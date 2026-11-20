@@ -41,7 +41,7 @@ Without signing variables the app is signed ad hoc, so its signature verifies bu
 
 The app checks `akalstack/ramu` for published releases and skips drafts. The installed version picks the channel: a stable `vX.Y.Z` install follows stable releases only, a beta (`v0.2.0-beta.1`) follows beta, release candidate and stable releases, and an alpha follows every newer release, so a pre-release install moves toward stable and never back. A download needs a matching ZIP and checksum file. Only a signed macOS build installs updates itself; elsewhere Settings links to the release for a manual install.
 
-**Auto-update Ramu**, on by default, downloads an update but doesn't restart by itself. **Restart app** leaves the service and threads running. **Restart app & service** switches to the bundled service, stops agents and recovers unfinished threads by the saved recovery setting. A healthy older service is not restarted when the app opens.
+**Auto-update Ramu**, on by default, downloads an update but doesn't restart by itself. **Restart app** leaves threads running. When the app opens after an update and nothing is running (no agent, terminal, background command or test device), it restarts an older service itself so the two match; with anything running, the service is left alone, and **Restart app & service** switches to the bundled service, stops agents and recovers unfinished threads by the saved recovery setting.
 
 ## Phone app
 
