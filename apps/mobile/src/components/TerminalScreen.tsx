@@ -7,6 +7,7 @@ import { FolderGit2, GitBranch, MessageCircle, RotateCcw, TerminalSquare } from 
 import { font, space, useTheme } from '../theme'
 import { PermissionNeeded } from './DevicePermissions'
 import { useStore } from '../runtime/store'
+import { useOpenTerminalLink } from '../runtime/openFile'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import type { TerminalInfo } from '@ramu/shared/api'
@@ -58,6 +59,7 @@ export function TerminalScreen({
   // Switching workspace happens here, in place: no new screen, and the sessions already seen show at once.
   const [ctx, setCtx] = useState(initialCtx)
   const chat = { computerId, taskId: ctx }
+  const openTerminalLink = useOpenTerminalLink(computerId, ctx)
   const [sessionsOpen, setSessionsOpen] = useState(false)
   const [keysOpen, setKeysOpen] = useState(false)
   // Which keys sit on the rail is a choice for this device, kept with the other device-local drafts.
@@ -402,6 +404,7 @@ export function TerminalScreen({
               session={terminal.id}
               output={outputOwner === terminal.id ? output : ''}
               fontSize={terminalFontSize(store.drafts?.[TERMINAL_FONT_DEVICE_KEY])}
+              onLink={(kind, text) => void openTerminalLink(kind, text, terminal.cwd)}
               onFontSize={(next) => store.setDraft(TERMINAL_FONT_DEVICE_KEY, String(terminalFontSize(next)))}
               onInput={(data) => {
                 if (latch === 'ctrl' && data.length === 1)

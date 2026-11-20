@@ -3,7 +3,14 @@ import { useHostWriteAccess } from '../composer/useHostWriteAccess'
 import { VIEW_ONLY_TERMINAL_NOTICE } from '../composer/viewerAccess'
 import { FitAddon } from '@xterm/addon-fit'
 import { createTerminalResizeScheduler } from '../workspace/terminalResize'
-import { Terminal } from '@xterm/xterm'
+import { Terminal, type ILink } from '@xterm/xterm'
+import {
+  isTerminalUrl,
+  terminalLinksAround,
+  terminalPathTargets,
+  type TerminalLinkKind,
+} from '@ramu/shared/workspace/terminalLinks'
+import { useOpenFileLink } from '../workspace/useOpenFileLink'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAppSettings } from '../settings/AppSettings'
@@ -66,6 +73,16 @@ export function TerminalView({
   const connectRef = useRef<(() => void) | null>(null)
   const scheduleFitRef = useRef<(() => void) | null>(null)
   const [cwd, setCwd] = useState<string | null>(null)
+  const cwdRef = useRef<string | null>(null)
+  cwdRef.current = cwd
+  const openFileLink = useOpenFileLink(taskId)
+  const openFileRef = useRef(openFileLink)
+  openFileRef.current = openFileLink
+  /** Web addresses go through the window handler, which honors the device's choice of browser; paths open in the editor. */
+  const openTerminalLink = (kind: TerminalLinkKind, target: string) => {
+    if (kind === 'url') window.open(target, '_blank', 'noopener,noreferrer')
+    else openFileRef.current(target)
+  }
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState(false)
   const exitRef = useRef(onExit)
@@ -95,6 +112,21 @@ export function TerminalView({
       cursorBlink: true,
       screenReaderMode: true,
       scrollback: 5000,
+      // OSC 8 hyperlinks, such as `ls --hyperlink` and many CLIs print: web pages and local files.
+      linkHandler: {
+        allowNonHttpProtocols: true,
+        activate: (_event, uri) => {
+          if (isTerminalUrl(uri)) openTerminalLink('url', uri)
+          else if (/^file:\/\//i.test(uri)) {
+            // `ls` names the host in the URI; the path is what the editor opens.
+            try {
+              openTerminalLink('path', decodeURIComponent(new URL(uri).pathname))
+            } catch {
+              /* A malformed URI opens nothing. */
+            }
+          }
+        },
+      },
     })
     terminal.current = term
     const fit = new FitAddon()
@@ -103,6 +135,51 @@ export function TerminalView({
     let termId: string | null = null
     let disposed = false
     const offs: (() => void)[] = []
+    // Printed web addresses and paths are links a plain click opens. A path links only once the host finds it, so prose
+    // such as `and/or` stays text; a shell that changed folder still resolves through the thread's folders.
+    const found = new Map<string, Promise<string | null>>()
+    const resolvePath = (text: string) => {
+      const key = `${cwdRef.current ?? ''}\n${text}`
+      let check = found.get(key)
+      if (!check) {
+        if (found.size > 500) found.clear()
+        check = (async () => {
+          for (const target of terminalPathTargets(text, cwdRef.current))
+            if (await invoke('files.resolveLink', taskId, target, { folders: true }).catch(() => null)) return target
+          return null
+        })()
+        found.set(key, check)
+      }
+      return check
+    }
+    const linkProvider = term.registerLinkProvider({
+      provideLinks(line, callback) {
+        const row = line - 1
+        const buffer = term.buffer.active
+        const candidates = terminalLinksAround(row, (index) => buffer.getLine(index)).filter(
+          (link) => link.start.row <= row && link.end.row >= row,
+        )
+        if (!candidates.length) return callback(undefined)
+        void Promise.all(
+          candidates.map(async (link): Promise<ILink | null> => {
+            const target = link.kind === 'url' ? link.text : await resolvePath(link.text)
+            if (!target) return null
+            return {
+              text: link.text,
+              range: {
+                start: { x: link.start.column + 1, y: link.start.row + 1 },
+                end: { x: link.end.column + 1, y: link.end.row + 1 },
+              },
+              activate: () => openTerminalLink(link.kind, target),
+            }
+          }),
+        ).then((links) => {
+          const usable = links.filter((link): link is ILink => !!link)
+          callback(disposed || !usable.length ? undefined : usable)
+        })
+      },
+    })
+    offs.push(() => linkProvider.dispose())
     const dragging = () => !!document.querySelector('[data-separator="active"], [data-workspace-split][data-dragging]')
     const ptyResize = createTerminalResizeScheduler((cols, rows) => {
       if (termId && canWrite()) void invoke('term.resize', termId, cols, rows).catch((e) => setError(errorText(e)))

@@ -17,7 +17,17 @@ const control = vi.hoisted(() => ({
   options: {} as { disableStdin?: boolean },
   invoke: vi.fn(),
   onExit: vi.fn(),
+  openFile: vi.fn(),
+  created: {} as { linkHandler?: { activate(event: unknown, uri: string): void } },
+  linkProvider: undefined as
+    { provideLinks(line: number, callback: (links: TerminalLink[] | undefined) => void): void } | undefined,
+  lines: [] as string[],
 }))
+interface TerminalLink {
+  text: string
+  range: { start: { x: number; y: number }; end: { x: number; y: number } }
+  activate(event: unknown, text: string): void
+}
 vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react')>()),
   useRef: (current: unknown) => (control.refs[control.cursor++] ??= { current }),
@@ -29,7 +39,20 @@ vi.mock('react', async (importOriginal) => ({
 }))
 vi.mock('@xterm/xterm', () => ({
   Terminal: class {
+    constructor(options: typeof control.created) {
+      control.created = options
+    }
     options = control.options
+    buffer = {
+      active: {
+        getLine: (row: number) =>
+          row < control.lines.length ? { isWrapped: false, translateToString: () => control.lines[row]! } : undefined,
+      },
+    }
+    registerLinkProvider(provider: typeof control.linkProvider) {
+      control.linkProvider = provider
+      return { dispose() {} }
+    }
     cols = 80
     rows = 24
     open() {}
@@ -97,6 +120,7 @@ vi.mock('../src/workspace/workspace', () => ({
   }),
 }))
 vi.mock('../src/ipc', () => ({ ramu: {} }))
+vi.mock('../src/workspace/useOpenFileLink', () => ({ useOpenFileLink: () => control.openFile }))
 vi.mock('../src/workspace/TaskPane', () => ({ errorText: (error: unknown) => String(error) }))
 vi.mock('../src/i18n', () => ({ t: (text: string) => text }))
 vi.mock('../src/theme/themes', () => ({
@@ -122,6 +146,10 @@ beforeEach(() => {
   control.options = {}
   control.invoke.mockReset()
   control.onExit.mockReset()
+  control.openFile.mockReset()
+  control.created = {}
+  control.linkProvider = undefined
+  control.lines = []
   vi.stubGlobal('document', { querySelector: () => null, documentElement: {} })
   vi.stubGlobal('window', { addEventListener() {}, removeEventListener() {} })
   vi.stubGlobal('MutationObserver', observer)
@@ -264,4 +292,36 @@ it('waits for a disconnected host before attaching a restored terminal tab', asy
   ;(control.recovery as (() => unknown) | undefined)?.()
   await new Promise((resolve) => setTimeout(resolve, 0))
   expect(control.writes.join('')).toContain('after reconnect')
+})
+
+it('links printed addresses at once and paths only once the host finds them, and opens each where it belongs', async () => {
+  const open = vi.fn()
+  vi.stubGlobal('window', { addEventListener() {}, removeEventListener() {}, open })
+  control.invoke.mockImplementation(async (method: string, ...args: unknown[]) => {
+    if (method === 'term.snapshot') return { output: '', cursor: 0, exited: true }
+    if (method === 'term.list')
+      return [{ id: 'command', taskId: 'task', repoId: null, cwd: '/checkout', exited: true, background: true }]
+    if (method === 'files.resolveLink')
+      return args[1] === 'src/a.ts:3' ? { repoId: 'repo', path: 'src/a.ts', line: 3 } : null
+    throw new Error(`Unexpected ${method}`)
+  })
+  control.lines = ['see https://a.dev/x then src/a.ts:3 and/or']
+  await mount()
+  const links = await new Promise<TerminalLink[] | undefined>((resolve) =>
+    control.linkProvider!.provideLinks(1, resolve),
+  )
+  expect(links?.map((link) => [link.text, link.range])).toEqual([
+    ['https://a.dev/x', { start: { x: 5, y: 1 }, end: { x: 19, y: 1 } }],
+    ['src/a.ts:3', { start: { x: 26, y: 1 }, end: { x: 35, y: 1 } }],
+  ])
+  links![0]!.activate({}, links![0]!.text)
+  links![1]!.activate({}, links![1]!.text)
+  expect(open).toHaveBeenCalledWith('https://a.dev/x', '_blank', 'noopener,noreferrer')
+  expect(control.openFile).toHaveBeenCalledWith('src/a.ts:3')
+
+  // OSC 8 hyperlinks: web pages and local files, whatever host `ls` names; other schemes open nothing.
+  control.created.linkHandler!.activate({}, 'file://laptop/Users/me/My%20Notes.md')
+  control.created.linkHandler!.activate({}, 'ssh://example.com')
+  expect(control.openFile).toHaveBeenLastCalledWith('/Users/me/My Notes.md')
+  expect(open).toHaveBeenCalledTimes(1)
 })

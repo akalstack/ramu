@@ -1,7 +1,8 @@
 import { useSay } from '../i18n'
-import { Alert } from 'react-native'
+import { Alert, Linking } from 'react-native'
 import { useRouter } from 'expo-router'
 import { localFileLink } from '@ramu/shared/workspace/fileLinks'
+import { isTerminalUrl, terminalPathTargets, type TerminalLinkKind } from '@ramu/shared/workspace/terminalLinks'
 import { useStore } from './store'
 import type { Chat } from './types'
 
@@ -10,7 +11,8 @@ export type FileMode = 'file' | 'changes' | 'staged' | 'all'
 /**
  * Resolves a path as written in text (`src/a.ts`, `repo/src/a.ts:12`, `docs/`, `file:///…`) against a thread's or
  * project's folders, as the desktop does: a file goes to `openFile`, a folder is revealed in the Explorer. Returns
- * whether it was a local reference at all.
+ * whether it opened something. `quiet` skips the alert for a path that is not there, for text that only looks like one,
+ * such as a word tapped in a terminal.
  */
 export function useOpenLink(
   computerId: string | undefined,
@@ -20,7 +22,7 @@ export function useOpenLink(
   const store = useStore()
   const say = useSay()
   const router = useRouter()
-  return async (href: string): Promise<boolean> => {
+  return async (href: string, { quiet = false }: { quiet?: boolean } = {}): Promise<boolean> => {
     const local = localFileLink(href)
     if (!local || !computerId || !contextId) return false
     try {
@@ -44,10 +46,11 @@ export function useOpenLink(
           },
         })
       else openFile(file.repoId, file.path, file.line)
+      return true
     } catch (error) {
-      Alert.alert(say('Could not open file'), error instanceof Error ? error.message : String(error))
+      if (!quiet) Alert.alert(say('Could not open file'), error instanceof Error ? error.message : String(error))
+      return false
     }
-    return true
   }
 }
 
@@ -72,4 +75,25 @@ export function useOpenFile(chat: Pick<Chat, 'id' | 'computerId' | 'taskId'> | u
   }
   const openLink = useOpenLink(chat?.computerId, chat?.taskId, (repoId, path, line) => open(repoId, path, { line }))
   return { open, openLink }
+}
+
+/**
+ * Opens what was tapped in a terminal: a web address in the phone's browser, a path on the file screen. A path is tried
+ * from the shell's folder first, then among the thread's folders; text that only looks like a path opens nothing.
+ */
+export function useOpenTerminalLink(computerId: string | undefined, contextId: string | undefined) {
+  const router = useRouter()
+  const openLink = useOpenLink(computerId, contextId, (repoId, path, line) =>
+    router.push({
+      pathname: '/file',
+      params: { computer: computerId!, ctx: contextId!, repoId, path, ...(line ? { line: String(line) } : {}) },
+    }),
+  )
+  return async (kind: TerminalLinkKind, text: string, cwd: string | undefined) => {
+    if (kind === 'url') {
+      if (isTerminalUrl(text)) await Linking.openURL(text).catch(() => {})
+      return
+    }
+    for (const target of terminalPathTargets(text, cwd)) if (await openLink(target, { quiet: true })) return
+  }
 }

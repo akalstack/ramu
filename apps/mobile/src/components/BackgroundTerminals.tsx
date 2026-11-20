@@ -5,6 +5,7 @@ import { translate } from '@ramu/shared/i18n'
 import { TerminalOutputBuffer, unseenOutput, type TerminalChunk } from '@ramu/shared/workspace/terminalOutput'
 import type { Chat } from '../runtime/types'
 import { useStore } from '../runtime/store'
+import { useOpenTerminalLink } from '../runtime/openFile'
 import { providerCommands } from '../runtime/threadActivity'
 import { HelperDetails } from './Helpers'
 import { font, space } from '../theme'
@@ -44,6 +45,7 @@ export function BackgroundTerminals({
   const hostId = chat.computerId,
     taskId = chat.taskId,
     scope = `${hostId}:${taskId}`
+  const openTerminalLink = useOpenTerminalLink(hostId, taskId)
   const online = store.isOnline(hostId)
   const t = (text: string, params?: Record<string, string | number>) => translate(store.language, text, params)
   const io = useRef({ invoke: store.invoke, subscribe: store.subscribe })
@@ -327,6 +329,7 @@ export function BackgroundTerminals({
                       enabled={false}
                       onInput={() => {}}
                       onResize={() => {}}
+                      onLink={(kind, text) => void openTerminalLink(kind, text, shown.cwd)}
                     />
                   </View>
                   <T size={font.caption} tone="muted">
