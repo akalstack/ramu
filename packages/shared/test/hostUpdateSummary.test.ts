@@ -6,6 +6,7 @@ import {
   pendingProviderUpdates,
   providerUpdateKey,
   recordSeen,
+  serviceReportsOlderVersion,
   UPDATE_WAIT_MS,
 } from '../src/updates'
 
@@ -92,5 +93,19 @@ describe('waiting before an update is offered', () => {
     const seen = { '1.0.0': new Date(t0).toISOString(), '1.1.0': new Date(t0 + day / 2).toISOString() }
     expect(offeredVersion(seen, '1.1.0', { wait: true, pins: false, now: t0 + day })).toBeNull()
     expect(offeredVersion(seen, '1.1.0', { wait: true, pins: false, now: t0 + day * 2 })).toBe('1.1.0')
+  })
+})
+
+describe('serviceReportsOlderVersion', () => {
+  it('flags a service on the bundled build that still reports the version it started under', () => {
+    expect(serviceReportsOlderVersion({ version: '0.1.0-alpha.3', bundledVersion: '0.1.0-alpha.4' })).toBe(true)
+  })
+  it('stays quiet when versions match, a service update is pending, or nothing is known', () => {
+    expect(serviceReportsOlderVersion({ version: '0.1.0-alpha.4', bundledVersion: '0.1.0-alpha.4' })).toBe(false)
+    expect(
+      serviceReportsOlderVersion({ version: '0.1.0-alpha.3', bundledVersion: '0.1.0-alpha.4', updateAvailable: true }),
+    ).toBe(false)
+    expect(serviceReportsOlderVersion({ version: '0.1.0-alpha.3' })).toBe(false)
+    expect(serviceReportsOlderVersion(null)).toBe(false)
   })
 })

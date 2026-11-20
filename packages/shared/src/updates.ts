@@ -172,3 +172,13 @@ export function offeredVersion(
 /** Whole hours until a waiting release is offered, never under one, for "offered in 5h". */
 export const hoursUntil = (until: string, now = Date.now()) =>
   Math.max(1, Math.ceil((Date.parse(until) - now) / 3_600_000))
+
+/** A service started before an app update runs the same code (matching build) but still reports the version it started under. */
+export const serviceReportsOlderVersion = (
+  service: { version?: string; bundledVersion?: string; updateAvailable?: boolean } | null,
+) =>
+  !!service &&
+  !service.updateAvailable &&
+  !!service.version &&
+  !!service.bundledVersion &&
+  service.version !== service.bundledVersion
