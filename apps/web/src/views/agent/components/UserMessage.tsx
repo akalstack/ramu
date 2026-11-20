@@ -4,6 +4,8 @@ import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
 import { AppWindow, Bot, ChevronDown, ChevronRight, Lightbulb, Pencil, ShieldQuestion, Square } from 'lucide-react'
 import { sentInteractiveAttachments } from '@ramu/shared/interactive'
+import { sentTerminalAttachments } from '@ramu/shared/chat/terminalContext'
+import { TerminalAttachmentChip } from '../../../chat/TerminalAttachmentChip'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { AgentEvent, AgentTask, Attachment } from '@ramu/shared/types'
@@ -138,7 +140,8 @@ export function UserMessage({
   const text = visibleText(e.text)
   const comments = sentComments(e.text)
   const content = sentInteractiveAttachments(e.text)
-  if (!text && !e.attachments?.length && !comments.length && !content.length) return null
+  const terminal = sentTerminalAttachments(e.text)
+  if (!text && !e.attachments?.length && !comments.length && !content.length && !terminal.length) return null
   // A sub-agent's report comes back as a message, shown as a report and not as something you typed.
   const report = parseTaskReport(e.text)
   // Advice delivered after the advisor answered: the card holds the advice, this marks where the agent received it.
@@ -236,6 +239,13 @@ export function UserMessage({
               <AppWindow size={12} className="flex-none" aria-hidden />
               <span className="min-w-0 truncate text-foreground">{item.title}</span>v{item.version}
             </span>
+          ))}
+        </div>
+      )}
+      {terminal.length > 0 && (
+        <div className="mt-1 flex flex-wrap justify-end gap-1 self-end">
+          {terminal.map((item, index) => (
+            <TerminalAttachmentChip key={index} attachment={item} sent />
           ))}
         </div>
       )}

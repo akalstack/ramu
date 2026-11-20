@@ -27,6 +27,8 @@ interface Entry extends TerminalInfo {
   shell: string
   output: string
   cursor: number
+  /** When the shell last printed, so a read without an id finds the terminal the person was just looking at. */
+  printedAt: number
   bg?: BackgroundMeta
 }
 
@@ -123,7 +125,18 @@ export class TerminalService {
       // Names the terminal, so a server it starts and detaches still shows under its thread.
       env: userEnvironment({ TERM_PROGRAM: 'Ramu', [OWNER_ENV]: id }, cwd) as Record<string, string>,
     })
-    const entry: Entry = { id, taskId, repoId, cwd, exited: false, pty, shell, output: '', cursor: 0 }
+    const entry: Entry = {
+      id,
+      taskId,
+      repoId,
+      cwd,
+      exited: false,
+      pty,
+      shell,
+      output: '',
+      cursor: 0,
+      printedAt: Date.now(),
+    }
     if (command) {
       entry.background = true
       entry.bg = {
@@ -139,6 +152,7 @@ export class TerminalService {
     this.terms.set(entry.id, entry)
     pty.onData((d) => {
       entry.cursor += d.length
+      entry.printedAt = Date.now()
       entry.output = (entry.output + d).slice(-256_000)
       this.onData(entry.id, d, entry.cursor)
       this.notify(entry.id)
@@ -459,20 +473,33 @@ export class TerminalService {
   /** True while something other than the login shell itself holds the terminal's foreground. */
   busy(id: string): boolean {
     const e = this.terms.get(id)
-    if (!e || e.exited) return false
     // Closing a persistent command's output only detaches the view; it cannot terminate that command.
-    if (e.bg) return false
-    const name = (value: string) =>
-      value
-        .split(/[\\/]/)
-        .pop()!
-        .replace(/^-/, '')
-        .replace(/\.exe$/i, '')
-    try {
-      return name(e.pty.process) !== name(e.shell)
-    } catch {
-      return false
-    }
+    return !!e && !e.bg && !!foreground(e)
+  }
+
+  /** The person's own shells in this thread, oldest first, with the program each one is running now. */
+  listShells(taskId: string): { id: string; cwd: string; exited: boolean; running: string | null }[] {
+    return [...this.terms.values()]
+      .filter((entry) => entry.taskId === taskId && !entry.bg)
+      .map((entry) => ({ id: entry.id, cwd: entry.cwd, exited: entry.exited, running: foreground(entry) }))
+  }
+
+  /** The shell of this thread that printed most recently. */
+  latestShell(taskId: string): ReturnType<TerminalService['listShells']>[number] | undefined {
+    const latest = [...this.terms.values()]
+      .filter((entry) => entry.taskId === taskId && !entry.bg)
+      .reduce<Entry | undefined>(
+        (best, entry) => (!best || entry.printedAt >= best.printedAt ? entry : best),
+        undefined,
+      )
+    return latest && this.listShells(taskId).find((shell) => shell.id === latest.id)
+  }
+
+  /** The raw output a shell of this thread still holds; background commands have their own inspect. */
+  shellOutput(taskId: string, id: string): string {
+    const entry = this.terms.get(id)
+    if (!entry || entry.bg || entry.taskId !== taskId) throw new Error(`Unknown terminal ${id}`)
+    return entry.output
   }
 
   closeTask(taskId: string, options: { keepHistory?: boolean } = {}): void {
@@ -593,6 +620,24 @@ function savedInfo(record: BackgroundTerminalRecord): TerminalInfo {
     cwd: record.cwd,
     exited: true,
     background: true,
+  }
+}
+
+const programName = (value: string) =>
+  value
+    .split(/[\\/]/)
+    .pop()!
+    .replace(/^-/, '')
+    .replace(/\.exe$/i, '')
+
+/** The program in a live shell's foreground other than the shell itself, if any. */
+function foreground(entry: Entry): string | null {
+  if (entry.exited) return null
+  try {
+    const name = programName(entry.pty.process)
+    return name !== programName(entry.shell) ? name : null
+  } catch {
+    return null
   }
 }
 

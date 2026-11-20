@@ -17,6 +17,14 @@ import { FILE_DRAG_TYPE } from '../composer/ComposerSuggestions'
 import { createOutputGate } from '../workspace/terminalActivity'
 import { effectiveTheme, useEffectiveTheme } from '../theme/themes'
 import { resolvedAppearance, useResolvedAppearance } from '../appearance'
+import { MessageSquarePlus } from 'lucide-react'
+import { NO_PROJECT } from '@ramu/shared/types'
+import { terminalAttachment } from '@ramu/shared/chat/terminalContext'
+import { Button } from '@/components/desktop-button'
+import { captureTerminal } from '../workspace/terminalCapture'
+import { isProjectCtx } from '../workspace/workspaceModel'
+import { draftKey, draftStore, loadDraft, saveDraft } from '../composer/drafts'
+import { sendTerminalToChat, terminalAttachmentMarkdown } from '../chat/terminalToChat'
 
 const shellQuote = (path: string) => (/^[\w@%+=:,./-]+$/.test(path) ? path : `'${path.replace(/'/g, `'\\''`)}'`)
 
@@ -59,6 +67,7 @@ export function TerminalView({
   const scheduleFitRef = useRef<(() => void) | null>(null)
   const [cwd, setCwd] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [selected, setSelected] = useState(false)
   const exitRef = useRef(onExit)
   exitRef.current = onExit
   // Read once: a project action runs when its terminal opens, never on a later re-render.
@@ -147,9 +156,11 @@ export function TerminalView({
     const resize = term.onResize(({ cols, rows }) => {
       if (termId) ptyResize.request(cols, rows)
     })
+    const selection = term.onSelectionChange(() => setSelected(term.hasSelection() && !!term.getSelection().trim()))
     offs.push(
       () => input.dispose(),
       () => resize.dispose(),
+      () => selection.dispose(),
     )
     if (host.current?.offsetParent) fit.fit()
 
@@ -385,6 +396,45 @@ export function TerminalView({
     if (active) scheduleFitRef.current?.()
   }, [active])
 
+  /**
+   * Puts the selection, or the rows on screen when nothing is selected, into this thread's chat as an excerpt the agent
+   * reads with the next message. A terminal with no chat beside it (a project's own) starts New chat with it instead.
+   */
+  const addToChat = () => {
+    const term = terminal.current
+    const capture = term && captureTerminal(term)
+    const attachment = capture && terminalAttachment(label, capture.lines, capture.text)
+    if (!term || !attachment) return
+    const state = ws.taskUi[taskId]
+    const chats = (state?.views ?? []).flatMap((view) => (view.kind === 'agent' ? [view] : []))
+    const chat = chats.find((view) => view.id === state?.activeAgentViewId) ?? chats.at(-1)
+    term.clearSelection()
+    if (chat) {
+      if (!sendTerminalToChat(executionHost, chat.sessionId, attachment)) ws.activateView(taskId, chat.id)
+      return
+    }
+    const project = isProjectCtx(taskId) ? taskId.slice('project:'.length) : (ws.task(taskId)?.projectId ?? NO_PROJECT)
+    const key = draftKey.newChat(project)
+    const current = loadDraft(key, draftStore(executionHost)).replace(/\s+$/, '')
+    const block = terminalAttachmentMarkdown(attachment)
+    saveDraft(key, current ? `${current}\n\n${block}\n\n` : `${block}\n\n`, draftStore(executionHost))
+    ws.newTask(project)
+  }
+
+  const openMenu = (term: Terminal, point: { x: number; y: number }) => {
+    // The menu opens on this machine, so it goes through this window's own host.
+    void invokeHere('term.menu', term.getSelection(), point).then(
+      (action) => {
+        if (!canWrite()) return
+        if (action === 'selectAll') term.selectAll()
+        else if (action === 'clear') term.clear()
+        else if (action === 'addToChat') addToChat()
+        else if (action && typeof action === 'object') term.paste(action.paste)
+      },
+      (error) => setError(errorText(error)),
+    )
+  }
+
   return (
     <div className="terminal-view flex flex-col flex-1 min-h-0 min-w-0">
       <div className="view-header [&_.path]:flex-1 [&_button]:text-control [&_button]:p-[2px_8px] [&_[aria-pressed='true']]:bg-hover [&_[aria-pressed='true']]:text-foreground flex gap-2.5 items-center h-8 p-[0_12px] flex-none min-w-0 text-control text-soft">
@@ -408,7 +458,7 @@ export function TerminalView({
         hidden={viewOnly}
         inert={viewOnly}
         style={{ display: viewOnly ? 'none' : undefined }}
-        className="terminal-host [contain:layout_paint] flex flex-1 min-h-0 min-w-0 overflow-hidden p-[4px_0_0_12px]"
+        className="terminal-host relative [contain:layout_paint] flex flex-1 min-h-0 min-w-0 overflow-hidden p-[4px_0_0_12px]"
         onDragOver={(event) => {
           if (!canWrite()) return
           if (event.dataTransfer.types.includes(FILE_DRAG_TYPE) || event.dataTransfer.types.includes('Files')) {
@@ -453,16 +503,7 @@ export function TerminalView({
           if (!canWrite()) return
           const term = terminal.current
           if (!term) return
-          // The menu opens on this machine, so it goes through this window's own host.
-          void invokeHere('term.menu', term.getSelection(), { x: event.clientX, y: event.clientY }).then(
-            (action) => {
-              if (!canWrite()) return
-              if (action === 'selectAll') term.selectAll()
-              else if (action === 'clear') term.clear()
-              else if (action && typeof action === 'object') term.paste(action.paste)
-            },
-            (error) => setError(errorText(error)),
-          )
+          openMenu(term, { x: event.clientX, y: event.clientY })
         }}
         onKeyDown={(event) => {
           if (initialCommand && event.key === 'Escape') {
@@ -476,18 +517,24 @@ export function TerminalView({
           const term = terminal.current,
             rect = event.currentTarget.getBoundingClientRect()
           if (!term) return
-          void invokeHere('term.menu', term.getSelection(), { x: rect.left + 12, y: rect.top + 12 }).then(
-            (action) => {
-              if (!canWrite()) return
-              if (action === 'selectAll') term.selectAll()
-              else if (action === 'clear') term.clear()
-              else if (action && typeof action === 'object') term.paste(action.paste)
-            },
-            (error) => setError(errorText(error)),
-          )
+          openMenu(term, { x: rect.left + 12, y: rect.top + 12 })
         }}
       >
         <div ref={host} className="flex-1 min-h-0 min-w-0 overflow-hidden" />
+        {selected && canWrite() && (
+          <Button
+            size="xs"
+            variant="secondary"
+            className="absolute top-2 right-3 z-10 shadow-sm"
+            // A press must not take focus or the selection away from the terminal before it is read.
+            onMouseDown={(event) => event.preventDefault()}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={addToChat}
+          >
+            <MessageSquarePlus data-icon="inline-start" aria-hidden />
+            {t('Add to chat')}
+          </Button>
+        )}
       </div>
     </div>
   )

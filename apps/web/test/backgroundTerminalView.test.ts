@@ -49,6 +49,9 @@ vi.mock('@xterm/xterm', () => ({
     onKey() {
       return { dispose() {} }
     }
+    onSelectionChange() {
+      return { dispose() {} }
+    }
   },
 }))
 vi.mock('@xterm/addon-fit', () => ({

@@ -1742,7 +1742,11 @@ export interface RamuMethods extends ArtifactMethods {
   'clipboard.readFiles'(): string[]
   /** Puts these files of this computer on the clipboard for the file manager to paste. */
   'clipboard.writeFiles'(paths: string[]): void
-  'term.menu'(selection: string, point: { x: number; y: number }): 'selectAll' | 'clear' | { paste: string } | null
+  /** The terminal's context menu; `addToChat` puts the selection, or the rows on screen, into the thread's chat. */
+  'term.menu'(
+    selection: string,
+    point: { x: number; y: number },
+  ): 'selectAll' | 'clear' | 'addToChat' | { paste: string } | null
   'agent.list'(taskId: string): AgentSessionInfo[]
   'agent.get'(sessionId: string): AgentSessionInfo
   'agent.goal'(sessionId: string): ChatGoal | null
