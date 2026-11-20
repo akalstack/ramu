@@ -43,6 +43,8 @@ export interface UpdateContext {
   installRuntime: () => Promise<void>
   /** The exact release to install, for an adapter that can pin one (`pinsVersion`); otherwise the newest. */
   version?: string
+  /** The release installed now, as the last status refresh read it; null when not known. */
+  installedVersion?: string | null
 }
 
 /**

@@ -23,7 +23,11 @@ it('covers each tested release line through its later patches and minors, and st
     expect(evaluate(provider, oldest).status).toBe('supported')
     expect(evaluate(provider, later).status).toBe('supported')
     expect(evaluate(provider, major)).toMatchObject({ status: 'unverified', reason: 'newer-than-tested' })
-    expect(evaluate(provider, older)).toMatchObject({ status: 'unverified', reason: 'no-rule' })
+    expect(evaluate(provider, older)).toMatchObject(
+      provider === 'opencode'
+        ? { status: 'incompatible', ruleId: 'opencode-http-1' }
+        : { status: 'unverified', reason: 'no-rule' },
+    )
     expect(evaluate(provider, null).status).toBe('unverified')
   }
 })
