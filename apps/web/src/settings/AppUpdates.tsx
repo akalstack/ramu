@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { Clock, Download, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
-import { APP_AUTO_UPDATE, hoursUntil, type AppUpdateStatus } from '@ramu/shared/updates'
+import { APP_AUTO_UPDATE, hoursUntil, serviceReportsOlderVersion, type AppUpdateStatus } from '@ramu/shared/updates'
 import type { AppPreferences, BackgroundStatus } from '@ramu/shared/types'
 import { ramu } from '../ipc'
 import { notifyError } from '../chat/Notifications'
@@ -213,7 +213,11 @@ export function AppUpdates({ value, onChange }: { value: AppPreferences; onChang
               ? t(
                   'Service update available. Restart app & service to apply it. Agents stop, and unfinished threads resume.',
                 )
-              : t('Matches the installed app. App-only restarts keep threads running.')}
+              : serviceReportsOlderVersion(service)
+                ? t(
+                    'Runs the same code as the installed app. It shows the older version until the service next restarts.',
+                  )
+                : t('Matches the installed app. App-only restarts keep threads running.')}
           </span>
         </span>
         {service?.updateAvailable && (

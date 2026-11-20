@@ -1206,6 +1206,8 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Pembaruan layanan tersedia. Restart aplikasi & layanan untuk menerapkannya. Agent berhenti, lalu thread yang belum selesai dilanjutkan.',
   'Matches the installed app. App-only restarts keep threads running.':
     'Sesuai dengan aplikasi terpasang. Restart aplikasi saja tidak menghentikan thread.',
+  'Runs the same code as the installed app. It shows the older version until the service next restarts.':
+    'Menjalankan kode yang sama dengan aplikasi terpasang. Versi lama tetap tampil sampai layanan restart berikutnya.',
   'Restart app & service': 'Restart aplikasi & layanan',
   'Ramu {0} is ready. Restart when it suits you. Threads keep running.':
     'Ramu {0} siap. Restart kapan saja, thread tetap berjalan.',
