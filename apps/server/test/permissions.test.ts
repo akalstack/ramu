@@ -121,11 +121,29 @@ it('Full access asks once for whatever Claude still sends it, while Ramu tools s
       kind: 'permission-request',
       approvalOnceOnly: true,
       approvalPatterns: undefined,
-      detail: expect.stringContaining('Full access still asks'),
+      approvalFullAccess: {},
     }),
   ])
   ;[...pending.values()][0]!.resolve({ behavior: 'deny', message: 'Declined' })
   expect(await result).toMatchObject({ behavior: 'deny' })
+})
+
+it('keeps the reason Full access asks out of the detail, so the card can explain it on request', async () => {
+  const { canUseTool, events, pending } = fixture('full')
+  const result = canUseTool(
+    'Bash',
+    { command: 'gh pr comment 1' },
+    {
+      signal: new AbortController().signal,
+      toolUseID: 'Bash',
+      requestId: 'Bash',
+      decisionReason: 'Posts on a pull request in your name',
+    },
+  )
+  expect(events[0]).toMatchObject({ approvalFullAccess: { reason: 'Posts on a pull request in your name' } })
+  expect((events[0] as { detail: string }).detail).not.toContain('Posts on a pull request')
+  ;[...pending.values()][0]!.resolve({ behavior: 'deny', message: 'Declined' })
+  await result
 })
 
 it('turns a dangerous Bash call into an ask before Claude runs it, and leaves routine ones alone', async () => {

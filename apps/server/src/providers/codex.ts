@@ -722,8 +722,9 @@ class CodexSession implements CodexRunner {
           requestId: id,
           toolName: 'Bash',
           title: 'Allow command?',
-          detail: [danger, 'Full access still asks before this.', command].join('\n'),
+          detail: command,
           approvalOnceOnly: true,
+          approvalFullAccess: { reason: danger },
           approvalCommand: command,
         })
         this.emit({ kind: 'state', state: 'needs-input' })

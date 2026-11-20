@@ -1051,7 +1051,8 @@ class AcpSession implements AgentRunner {
       ) {
         this.replyPermission(id, true)
         return
-      } else
+      } else {
+        const danger = this.settings.access === 'full' ? this.fullAccessDanger(p) : null
         this.emit({
           kind: 'permission-request',
           requestId: id,
@@ -1072,12 +1073,15 @@ class AcpSession implements AgentRunner {
                 ),
               }
             : {}),
-          detail:
-            (this.settings.access === 'full' && this.fullAccessDanger(p)
-              ? `${this.fullAccessDanger(p)}\nFull access still asks before this.\n`
-              : '') + (p.plan || JSON.stringify(p.toolCall?.rawInput ?? {})),
-          ...(this.settings.access === 'full' ? { approvalOnceOnly: true } : {}),
+          detail: p.plan || JSON.stringify(p.toolCall?.rawInput ?? {}),
+          ...(this.settings.access === 'full'
+            ? {
+                approvalOnceOnly: true,
+                ...(danger ? { approvalFullAccess: { reason: danger } } : {}),
+              }
+            : {}),
         })
+      }
       this.emit({ kind: 'state', state: 'needs-input' })
       return
     }

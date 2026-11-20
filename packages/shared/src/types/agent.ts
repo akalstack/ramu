@@ -483,6 +483,11 @@ type AgentEventBody =
        */
       productionDeploy?: true
       approvalOnceOnly?: boolean
+      /**
+       * Full access still asks for this request. The card says so and explains on request, with the specific `reason`
+       * when the provider or Ramu's own check gave one, so the detail holds only what is being approved.
+       */
+      approvalFullAccess?: { reason?: string }
       approvalKey?: string
       approvalCommand?: string
       approvalPatterns?: string[]
