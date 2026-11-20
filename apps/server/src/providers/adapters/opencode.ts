@@ -50,5 +50,9 @@ export const opencodeAdapter = defineAdapter({
   native: { toolScripts: true, toolSearch: true },
   // OpenCode's `skills` setting lists extra folders; it travels in the inline config, not the user's config files.
   skillsLaunch: (exportDir) => ({ configPaths: [join(exportDir, 'skills')] }),
-  updatePlan: selfUpdate(['upgrade']),
+  // OpenCode 1's `upgrade` stays on release 1, which Ramu cannot use; `--major` moves it to 2 (and removes release 1).
+  updatePlan(ctx) {
+    const plan = selfUpdate(['upgrade'])(ctx)
+    return 'args' in plan && /^1\./.test(ctx.installedVersion ?? '') ? { ...plan, args: ['upgrade', '--major'] } : plan
+  },
 })

@@ -359,6 +359,7 @@ export class ProviderService {
         version,
         config,
         binary: providerBinary(provider, config),
+        installedVersion: launchCompatibility.peek(provider, config)?.observedVersion ?? null,
         findExecutable,
         runtimeHome: providerRuntimeHome(provider),
         installRuntime: async () => {

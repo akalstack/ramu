@@ -85,6 +85,15 @@ describe('provider adapter registry', () => {
     }
     expect(providerAdapter('claude-code').updatePlan(base)).toEqual({ command: '/bin/tool', args: ['update'] })
     expect(providerAdapter('opencode').updatePlan(base)).toEqual({ command: '/bin/tool', args: ['upgrade'] })
+    expect(providerAdapter('opencode').updatePlan({ ...base, installedVersion: '2.3.2' })).toEqual({
+      command: '/bin/tool',
+      args: ['upgrade'],
+    })
+    // OpenCode 1 upgrades only within release 1 unless told otherwise, so Update would leave it unusable.
+    expect(providerAdapter('opencode').updatePlan({ ...base, installedVersion: '1.19.6' })).toEqual({
+      command: '/bin/tool',
+      args: ['upgrade', '--major'],
+    })
     expect(providerAdapter('codex').updatePlan(base)).toEqual({
       command: 'npm',
       args: ['install', '--prefix', '/runtime/codex', '--no-audit', '--no-fund', '@openai/codex@latest'],

@@ -9,7 +9,7 @@ import type { AgentProvider } from '@ramu/shared/types'
  * newer release in the same line moves `tested` and adds its evidence; probing a new major adds a rule.
  */
 export const COMPATIBILITY_POLICY: CompatibilityPolicy = {
-  revision: 10,
+  revision: 11,
   rules: [
     {
       id: 'claude-code-sdk-2',
@@ -21,6 +21,16 @@ export const COMPATIBILITY_POLICY: CompatibilityPolicy = {
       status: 'supported',
       evidence:
         'Claude Code 2.1.308 (2026-10-23), 2.1.316 (2026-11-02) and 2.1.319 (2026-11-08), each the installed executable driven by @anthropic-ai/claude-agent-sdk 0.3.295 on macOS: initializationResult, supportedCommands and getContextUsage answered, with no model call. The rule keys on the executable; a Ramu release that moves the SDK pin needs its own probe.',
+    },
+    {
+      id: 'opencode-http-1',
+      provider: 'opencode',
+      runtime: 'http',
+      below: '2.0.0',
+      status: 'incompatible',
+      recommend: '2.2.5',
+      evidence:
+        'opencode 1.19.6 on macOS, `opencode serve` driven by @opencode/client: the server printed its address and the event stream connected, but the first prompt failed with `Missing key at ["prompt"]`, because OpenCode 1 serves a different HTTP API. `opencode upgrade --major` is its own way to OpenCode 2.',
     },
     {
       id: 'opencode-http-2',
