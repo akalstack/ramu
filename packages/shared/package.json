@@ -1,6 +1,6 @@
 {
   "name": "@ramu/shared",
-  "version": "0.1.0-alpha.6",
+  "version": "0.1.0-alpha.7",
   "private": true,
   "description": "Pure logic shared by every Ramu app and the server.",
   "license": "MIT",
