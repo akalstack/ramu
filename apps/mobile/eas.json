@@ -24,7 +24,10 @@
   },
   "submit": {
     "production": {
-      "ios": {},
+      "ios": {
+        "ascAppId": "6836786013",
+        "appleTeamId": "CZ63H443SZ"
+      },
       "android": {
         "track": "internal",
         "releaseStatus": "draft"
