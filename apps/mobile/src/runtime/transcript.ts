@@ -322,6 +322,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
         ...(e.approvalKey && !e.approvalOnceOnly ? { rememberable: { project: !!e.approvalProjectId } } : {}),
         ...(e.approvalPatterns?.length ? { patterns: e.approvalPatterns } : {}),
         ...(e.approvalReviewRule ? { reviewRule: e.approvalReviewRule } : {}),
+        ...(e.approvalFullAccess ? { fullAccess: e.approvalFullAccess } : {}),
         ...(e.approvalAlways ? { always: true } : {}),
         ...(e.productionDeploy ? { productionDeploy: true } : {}),
       })

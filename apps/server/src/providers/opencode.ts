@@ -704,15 +704,11 @@ export class OpenCodeSession implements AgentRunner {
           requestId: d.id,
           toolName: d.action,
           title: d.message || `Allow ${d.action}?`,
-          detail: [
-            ...(danger
-              ? [danger, ...(this.settings.access === 'full' ? ['Full access still asks before this.'] : [])]
-              : []),
-            ...(d.resources ?? []),
-          ].join('\n'),
+          detail: [...(danger && this.settings.access !== 'full' ? [danger] : []), ...(d.resources ?? [])].join('\n'),
           ...(danger
             ? { approvalOnceOnly: true, ...(d.resources?.length === 1 ? { approvalCommand: d.resources[0] } : {}) }
             : {}),
+          ...(danger && this.settings.access === 'full' ? { approvalFullAccess: { reason: danger } } : {}),
           ...(!danger && d.resources?.length && !d.resources.includes('*')
             ? {
                 approvalKey: permissionKey(d.action, d.resources),

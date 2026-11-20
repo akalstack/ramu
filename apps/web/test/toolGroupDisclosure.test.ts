@@ -107,6 +107,7 @@ it('headlines a live group with its newest thought when the agent is thinking af
       live: true,
     }),
   )
-  expect(html).toContain('Thinking Check the config next')
+  expect(html).toContain('Check the config next')
+  expect(html).not.toContain('Thinking')
   expect(html).toContain('lucide-brain')
 })

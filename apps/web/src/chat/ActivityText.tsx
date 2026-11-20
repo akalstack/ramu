@@ -1,9 +1,12 @@
-import { useLayoutEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { TOOL_MOTION } from '@ramu/shared/chat/presentation'
 import { reducedMotion } from '../workspace/panelMotion'
 import { WorkingText } from '../views/agent/components/WorkingText'
 
-/** Keep the real label visible; completion adds one delayed left-to-right highlight without moving layout. */
+/**
+ * Keep the real label visible; a call still running after a moment shimmers, and completion adds one delayed
+ * left-to-right highlight without moving layout.
+ */
 export function ActivityText({
   active,
   children,
@@ -16,6 +19,16 @@ export function ActivityText({
   const overlay = useRef<HTMLSpanElement>(null)
   const previous = useRef(active)
   const shownAt = useRef(0)
+  // The shimmer waits a moment: a command that finishes at once should never flash it.
+  const [settled, setSettled] = useState(false)
+  useEffect(() => {
+    if (!active) return
+    const timer = setTimeout(() => setSettled(true), TOOL_MOTION.shimmerDelayMs)
+    return () => {
+      clearTimeout(timer)
+      setSettled(false)
+    }
+  }, [active])
   useLayoutEffect(() => {
     shownAt.current = performance.now()
   }, [])
@@ -35,7 +48,7 @@ export function ActivityText({
   }, [active])
   return (
     <span className={`relative min-w-0 ${className}`}>
-      <span>{active ? <WorkingText>{children}</WorkingText> : children}</span>
+      <span>{active && settled ? <WorkingText>{children}</WorkingText> : children}</span>
       <span
         ref={overlay}
         aria-hidden="true"

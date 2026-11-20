@@ -3212,6 +3212,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Project and user approvals remember this exact request.':
     'Izin proyek dan pengguna mengingat permintaan yang sama persis ini.',
   'Applies to this request only.': 'Hanya berlaku untuk permintaan ini.',
+  'Full access still asks before this.': 'Akses penuh tetap meminta izin untuk ini.',
+  'Why?': 'Kenapa?',
+  'Full access skips most approvals, but a short list of actions always asks: ones that can destroy work for good, change the computer itself, act in your name or deploy to production.':
+    'Akses penuh melewati sebagian besar izin, tetapi sejumlah kecil tindakan selalu meminta izin: yang bisa merusak pekerjaan secara permanen, mengubah komputer itu sendiri, bertindak atas namamu, atau men-deploy ke produksi.',
+  'Allow once covers only this request; the next one asks again.':
+    'Izinkan sekali hanya untuk permintaan ini; permintaan berikutnya akan bertanya lagi.',
   Allowed: 'Diizinkan',
   Denied: 'Ditolak',
   Answered: 'Dijawab',

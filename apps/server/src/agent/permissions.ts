@@ -144,14 +144,9 @@ export function createCanUseTool({
           requestId,
           toolName,
           title: title ?? `Allow ${toolName}?`,
-          detail: [
-            decisionReason,
-            fullAccessAsk ? 'Full access still asks before this.' : '',
-            summarizeInput(toolInput),
-          ]
-            .filter(Boolean)
-            .join('\n'),
+          detail: [fullAccessAsk ? '' : decisionReason, summarizeInput(toolInput)].filter(Boolean).join('\n'),
           approvalOnceOnly: suppressAlwaysAllowRule || fullAccessAsk,
+          ...(fullAccessAsk ? { approvalFullAccess: { ...(decisionReason ? { reason: decisionReason } : {}) } } : {}),
           approvalPatterns:
             !fullAccessAsk && toolName === 'Bash' && !blockedPath && typeof toolInput.command === 'string'
               ? [

@@ -244,7 +244,10 @@ describe('Codex app-server wire adapter', () => {
       expect(messages().some((message) => message.id === 912 && message.result)).toBe(false)
       const asked = events.filter((event) => event.kind === 'permission-request')
       expect(asked).toEqual([
-        expect.objectContaining({ approvalOnceOnly: true, detail: expect.stringContaining('outside this thread') }),
+        expect.objectContaining({
+          approvalOnceOnly: true,
+          approvalFullAccess: { reason: expect.stringContaining('outside this thread') },
+        }),
       ])
       runner.replyPermission!(asked[0]!.requestId, false)
       await vi.waitFor(() =>

@@ -1323,7 +1323,7 @@ function ToolGroup({ item, live }: { item: Extract<TranscriptItem, { kind: 'tool
   const lastThought = live && running ? item.entries.findLast((entry) => entry.kind === 'thinking') : undefined
   const lastThoughtLine = lastThought ? thoughtLine(lastThought.text, true) : ''
   const headline = thought
-    ? `${say('Thinking')} ${thoughtLine(thought.text, true)}`.trim()
+    ? thoughtLine(thought.text, true) || say('Thinking')
     : live || running || failed
       ? `${words?.verb ?? ''} ${words?.subject ?? ''}`.trim()
       : [...counts].map(([verb, count]) => `${verb}${count > 1 ? ` ×${count}` : ''}`).join(' · ')
@@ -1936,6 +1936,7 @@ function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind
           {say('Always ask')}: {item.reviewRule}
         </T>
       ) : null}
+      {item.fullAccess ? <FullAccessWhy reason={item.fullAccess.reason} /> : null}
       {/* As on the desktop: the rule a saved approval covers, then every choice at once, Allow once first. */}
       {item.rememberable && item.patterns?.length ? (
         <View style={{ gap: space.s }}>
@@ -2000,6 +2001,51 @@ function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind
         )}
       </T>
     </Card>
+  )
+}
+
+/** As on the desktop: Full access still asks, and Why? opens the reason and what Full access skips. */
+function FullAccessWhy({ reason }: { reason?: string }) {
+  const say = useSay()
+  const [open, setOpen] = useState(false)
+  return (
+    <View style={{ gap: space.xs }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.xs }}>
+        <T size={font.caption} tone="muted">
+          {say('Full access still asks before this.')}
+        </T>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: open }}
+          hitSlop={8}
+          onPress={() => {
+            tap()
+            setOpen((value) => !value)
+          }}
+        >
+          <T size={font.caption} tone="accent">
+            {say('Why?')}
+          </T>
+        </Pressable>
+      </View>
+      {open ? (
+        <View style={{ gap: space.xs }}>
+          {reason ? (
+            <T size={font.caption} tone="soft">
+              {reason}
+            </T>
+          ) : null}
+          <T size={font.caption} tone="muted">
+            {say(
+              'Full access skips most approvals, but a short list of actions always asks: ones that can destroy work for good, change the computer itself, act in your name or deploy to production.',
+            )}
+          </T>
+          <T size={font.caption} tone="muted">
+            {say('Allow once covers only this request; the next one asks again.')}
+          </T>
+        </View>
+      ) : null}
+    </View>
   )
 }
 
@@ -2471,9 +2517,9 @@ function InteractiveVersionRow({
 }
 
 /**
- * Reasoning the provider shared, as the desktop's ThinkingRow: closed, "Thinking" (shimmering while it streams) or
- * "Thought" is followed by the thought on one line ending in an ellipsis, its newest paragraph while it streams; a tap
- * opens the whole thought.
+ * Reasoning the provider shared, as the desktop's ThinkingRow: led by the brain icon, which already says what the row
+ * is, the thought on one line ending in an ellipsis (its newest paragraph, shimmering, while it streams); a tap opens
+ * the whole thought.
  */
 function ThinkingRow({ text, live }: { text: string; live: boolean }) {
   const { c } = useTheme()
@@ -2485,6 +2531,7 @@ function ThinkingRow({ text, live }: { text: string; live: boolean }) {
     <View>
       <Pressable
         accessibilityRole="button"
+        accessibilityLabel={say(live ? 'Thinking' : 'Thought')}
         accessibilityState={{ expanded: open }}
         onPress={() => {
           tap()
@@ -2495,16 +2542,17 @@ function ThinkingRow({ text, live }: { text: string; live: boolean }) {
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingVertical: 4 }}
       >
         <Brain size={14} color={c.muted} />
-        {live ? (
-          <Shimmer size={font.control}>{say('Thinking')}</Shimmer>
-        ) : (
-          <T size={font.control} tone="muted">
-            {say('Thought')}
-          </T>
-        )}
-        <T size={font.control} tone="muted" numberOfLines={1} style={{ flex: 1, minWidth: 0 }}>
-          {open ? '' : line}
-        </T>
+        <View style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+          {open || !line ? null : live ? (
+            <Shimmer size={font.control} singleLine>
+              {line.slice(0, 180)}
+            </Shimmer>
+          ) : (
+            <T size={font.control} tone="muted" numberOfLines={1}>
+              {line}
+            </T>
+          )}
+        </View>
         <Disclosure open={open} color={c.muted} />
       </Pressable>
       <Collapse open={open}>

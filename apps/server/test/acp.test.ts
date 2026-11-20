@@ -748,7 +748,7 @@ it.each([
       await until(() => events.some((event) => event.kind === 'permission-request'))
       expect(events.find((event) => event.kind === 'permission-request')).toMatchObject({
         approvalOnceOnly: true,
-        detail: expect.stringContaining('outside this thread'),
+        approvalFullAccess: { reason: expect.stringContaining('outside this thread') },
       })
       runner!.replyPermission('900', false)
     }

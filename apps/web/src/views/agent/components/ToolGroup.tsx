@@ -88,7 +88,7 @@ export function ToolGroup({
   // While a call runs, the thought that led to it stays under the headline instead of hiding in the closed group.
   const lastThought = live && running ? entries.findLast((entry) => entry.kind === 'thinking') : undefined
   const headline = thought
-    ? `${translate('Thinking')} ${thoughtLine(thought.text, true)}`.trim()
+    ? thoughtLine(thought.text, true) || translate('Thinking')
     : running || live
       ? primaryTool.title?.trim() ||
         toolFallbackTitle(primaryTool, running) ||

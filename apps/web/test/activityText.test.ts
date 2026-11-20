@@ -3,18 +3,24 @@ import { TOOL_MOTION } from '@ramu/shared/chat/presentation'
 
 type Slot = { current: unknown } | { deps: unknown[]; cleanup?: void | (() => void) }
 const state = vi.hoisted(() => ({ cursor: 0, slots: [] as Slot[], effects: [] as (() => void)[], reduced: false }))
+function effect(run: () => void | (() => void), deps: unknown[]) {
+  const index = state.cursor++
+  const previous = state.slots[index] as Extract<Slot, { deps: unknown[] }> | undefined
+  if (!previous || deps.some((dep, at) => dep !== previous.deps[at]))
+    state.effects.push(() => {
+      previous?.cleanup?.()
+      state.slots[index] = { deps, cleanup: run() }
+    })
+}
 vi.mock('react', async () => ({
   ...(await vi.importActual<typeof import('react')>('react')),
   useRef: (initial: unknown) => (state.slots[state.cursor++] ??= { current: initial }),
-  useLayoutEffect: (effect: () => void | (() => void), deps: unknown[]) => {
-    const index = state.cursor++
-    const previous = state.slots[index] as Extract<Slot, { deps: unknown[] }> | undefined
-    if (!previous || deps.some((dep, at) => dep !== previous.deps[at]))
-      state.effects.push(() => {
-        previous?.cleanup?.()
-        state.slots[index] = { deps, cleanup: effect() }
-      })
+  useState: (initial: unknown) => {
+    const slot = (state.slots[state.cursor++] ??= { current: initial }) as { current: unknown }
+    return [slot.current, (value: unknown) => void (slot.current = value)]
   },
+  useEffect: effect,
+  useLayoutEffect: effect,
 }))
 vi.mock('../src/workspace/panelMotion', () => ({ reducedMotion: () => state.reduced }))
 import { ActivityText } from '../src/chat/ActivityText'
@@ -70,4 +76,20 @@ it('shows the completed label immediately with reduced motion and no decorative 
   const tree = render(false, 'Completed')
   expect(tree.props.children[0].props.children).toBe('Completed')
   expect(animate).not.toHaveBeenCalled()
+})
+it('shimmers only once a call has run for a moment, so a quick command never flashes', () => {
+  vi.useFakeTimers()
+  try {
+    render(true)
+    render(false)
+    vi.advanceTimersByTime(TOOL_MOTION.shimmerDelayMs)
+    expect(render(false).props.children[0].props.children).toBe('Read files')
+    render(true)
+    vi.advanceTimersByTime(TOOL_MOTION.shimmerDelayMs - 1)
+    expect(render(true).props.children[0].props.children).toBe('Read files')
+    vi.advanceTimersByTime(1)
+    expect(typeof render(true).props.children[0].props.children).toBe('object')
+  } finally {
+    vi.useRealTimers()
+  }
 })

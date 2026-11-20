@@ -489,7 +489,7 @@ describe('OpenCode Full access', () => {
         await settle(events, 'permission-request')
         expect(events.find((event) => event.kind === 'permission-request')).toMatchObject({
           approvalOnceOnly: true,
-          detail: expect.stringContaining('uncommitted'),
+          approvalFullAccess: { reason: expect.stringContaining('uncommitted') },
         })
         expect(replies).toEqual([])
         runner.replyPermission('p1', false)

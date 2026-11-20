@@ -134,9 +134,20 @@ export function ActivityText({
   const shownAt = useRef(0)
   const progress = useSharedValue(1)
   const [width, setWidth] = useState(0)
+  // The shimmer waits a moment: a command that finishes at once should never flash it.
+  const [settled, setSettled] = useState(false)
   useEffect(() => {
     shownAt.current = Date.now()
   }, [])
+  useEffect(() => {
+    if (!active) return
+    const timer = setTimeout(() => setSettled(true), TOOL_MOTION.shimmerDelayMs)
+    return () => {
+      clearTimeout(timer)
+      setSettled(false)
+    }
+  }, [active])
+  const shimmering = active && settled && !reduced
   useEffect(() => {
     const completed = previous.current && !active
     previous.current = active
@@ -164,10 +175,10 @@ export function ActivityText({
   return (
     <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)} style={{ minWidth: 0, overflow: 'hidden' }}>
       {/* While the shimmer runs it is the only copy shown; drawing both put two slightly offset labels on top of each other. */}
-      <T size={size} tone="muted" numberOfLines={1} style={active && !reduced ? { opacity: 0 } : undefined}>
+      <T size={size} tone="muted" numberOfLines={1} style={shimmering ? { opacity: 0 } : undefined}>
         {children}
       </T>
-      {active && !reduced ? (
+      {shimmering ? (
         <View
           pointerEvents="none"
           accessibilityElementsHidden

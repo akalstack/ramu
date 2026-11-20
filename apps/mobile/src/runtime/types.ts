@@ -134,6 +134,8 @@ export type TranscriptItem = (
       patterns?: string[]
       /** A rule that makes this host always ask, shown so the person knows why. */
       reviewRule?: string
+      /** Full access still asks for this request; `reason` says why when the host knows. */
+      fullAccess?: { reason?: string }
       /** An MCP tool set to Ask: Always allow switches it to Allow. */
       always?: boolean
       /** A production deploy: Allow production deploys in this thread is offered beside Allow once. */

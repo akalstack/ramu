@@ -40,6 +40,8 @@ export const TOOL_MOTION = {
   /** How long a finished tool stays finished before its label lights up; the next tool starting meanwhile cancels it. */
   settleMs: 300,
   finishMs: 650,
+  /** A call that ends sooner than this never starts its working shimmer, so a quick command does not flash. */
+  shimmerDelayMs: 600,
   /** A row this new does not light up: it has only just appeared, as when its group opens. */
   quietMs: 500,
   fadeAt: 0.8,

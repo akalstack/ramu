@@ -15,9 +15,10 @@ import { WorkingText } from './WorkingText'
 import { CARET_CLASS, TOOL_DISCLOSURE_PANEL_CLASS, TOOL_ICON_CLASS, TOOL_SUMMARY_CLASS } from '../styles'
 
 /**
- * Reasoning the provider shared, as one row: closed, it reads "Thought for 4s" followed by the thought itself on a
- * single line that ends in an ellipsis (its newest paragraph while it streams); opened, the whole thought shows as
- * markdown, new words fading in while it streams.
+ * Reasoning the provider shared, as one row led by the brain icon: closed, the thought itself on a single line that
+ * ends in an ellipsis (its newest paragraph, shimmering, while it streams) preceded by "Thought for 4s" once it took
+ * a while; opened, the whole thought shows as markdown, new words fading in while it streams. The icon says what the
+ * row is, so no "Thinking" label repeats it.
  */
 export function ThinkingRow({ text, active = false }: { text: string; active?: boolean }) {
   useLanguage()
@@ -51,17 +52,18 @@ export function ThinkingRow({ text, active = false }: { text: string; active?: b
       {/* Full width, so a streaming thought ends in an ellipsis at the column's edge instead of overflowing it. */}
       <CollapsibleTrigger render={<Button variant="ghost" className="w-full min-w-0" />}>
         <Brain size={14} className={TOOL_ICON_CLASS} />
+        <span className="sr-only">{translate(active ? 'Thinking' : 'Thought')}</span>
         {/* Not a tool-summary: a tool group shrinks those, and this label must always read in full. */}
-        <span className="flex-none whitespace-nowrap font-sans text-chat text-inherit">
-          {active ? (
-            <WorkingText>{translate('Thinking')}</WorkingText>
-          ) : took !== null && took >= 1000 ? (
-            translate('Thought for {0}', { '0': formatDuration(took) })
-          ) : (
-            translate('Thought')
-          )}
-        </span>
-        {!open && line && <span className={`${TOOL_SUMMARY_CLASS} thinking-line text-muted-foreground`}>{line}</span>}
+        {!active && took !== null && took >= 1000 && (
+          <span className="flex-none whitespace-nowrap font-sans text-chat text-inherit">
+            {translate('Thought for {0}', { '0': formatDuration(took) })}
+          </span>
+        )}
+        {!open && line && (
+          <span className={`${TOOL_SUMMARY_CLASS} thinking-line text-muted-foreground`}>
+            {active ? <WorkingText>{line}</WorkingText> : line}
+          </span>
+        )}
         <ChevronRight size={12} className={CARET_CLASS} />
       </CollapsibleTrigger>
       <CollapsibleContent className={TOOL_DISCLOSURE_PANEL_CLASS}>

@@ -7,6 +7,7 @@ import type { AgentEvent, PermissionScope } from '@ramu/shared/types'
 import { errorText } from '../../../lib/errors'
 import { useHost } from '../../../workspace/HostProvider'
 import { Dropdown } from '../../../Menu'
+import { FullAccessWhy } from './FullAccessWhy'
 import { Outcome } from './Outcome'
 
 const CARD_CLASS =
@@ -71,6 +72,7 @@ export function PermissionRequestCard({
         <ShieldQuestion size={15} /> {e.title}
       </div>
       {e.detail && <pre>{e.detail}</pre>}
+      {e.approvalFullAccess && pending && <FullAccessWhy reason={e.approvalFullAccess.reason} />}
       {e.approvalReviewRule && (
         <p className="m-0 mt-2 text-caption text-muted-foreground">
           {translate('Always ask')}: {e.approvalReviewRule}
