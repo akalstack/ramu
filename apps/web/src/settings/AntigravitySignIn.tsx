@@ -18,6 +18,7 @@ import { Input } from '@/components/desktop-input'
 import { RowButton } from '@/components/row-button'
 import { t } from '../i18n'
 import { errorText } from '../lib/errors'
+import { invoke } from '../ipc'
 
 const METHODS: { id: AntigravitySignInMethod; title: string; help: string; note?: string }[] = [
   {
@@ -47,13 +48,17 @@ export function AntigravitySignIn({
   current,
   hasKey,
   onSubmit,
+  onCode,
   onClose,
 }: {
   /** The method this account signed in with last, chosen again so a sign-in after expiry is one click. */
   current?: string
   /** Which key variables the host already has for Antigravity, so a saved key need not be typed again. */
   hasKey: (method: AntigravitySignInMethod) => boolean
-  onSubmit: (input: SignIn) => Promise<void>
+  /** Resolves with Google's page when the sign-in finishes with a code pasted from it. */
+  onSubmit: (input: SignIn) => Promise<{ url: string } | void>
+  /** Finishes a browser sign-in with the pasted code; null abandons it. */
+  onCode: (code: string | null) => Promise<void>
   onClose: () => void
 }) {
   const [method, setMethod] = useState<AntigravitySignInMethod>(
@@ -67,14 +72,81 @@ export function AntigravitySignIn({
   const input: SignIn = { method, apiKey, gcpProject, gcpLocation }
   const problem = antigravitySignInProblem(input, hasKey(method))
   const browser = method === 'oauth-personal' || method === 'oauth-business'
+  /** Google's page while a browser sign-in waits for the code it shows. */
+  const [page, setPage] = useState<string | null>(null)
+  const [code, setCode] = useState('')
+  const open = (url: string) => void invoke('app.openExternal', url).catch(() => {})
   const submit = () => {
     setBusy(true)
     setError(null)
-    onSubmit(input).then(onClose, (reason) => {
+    onSubmit(input).then(
+      (started) => {
+        setBusy(false)
+        if (!started) return onClose()
+        setPage(started.url)
+        open(started.url)
+      },
+      (reason) => {
+        setBusy(false)
+        setError(errorText(reason))
+      },
+    )
+  }
+  const finish = () => {
+    setBusy(true)
+    setError(null)
+    onCode(code.trim()).then(onClose, (reason) => {
       setBusy(false)
       setError(errorText(reason))
     })
   }
+  const close = () => {
+    if (page) void onCode(null).catch(() => {})
+    onClose()
+  }
+  if (page)
+    return (
+      <Dialog open onOpenChange={(next) => !next && !busy && close()}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>{t('Sign in to Antigravity')}</DialogTitle>
+            <DialogDescription>
+              {t('Allow access on the Google page, then paste the code it shows here.')}
+            </DialogDescription>
+          </DialogHeader>
+          <label className="flex flex-col gap-1.5 text-caption">
+            {t('Code from Google')}
+            <Input
+              autoFocus
+              autoComplete="off"
+              maxLength={16384}
+              value={code}
+              disabled={busy}
+              onChange={(event) => setCode(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && code.trim() && !busy) finish()
+              }}
+            />
+          </label>
+          {error && (
+            <p className="m-0 text-caption text-bad" role="alert">
+              {error}
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" disabled={busy} onClick={() => open(page)}>
+              {t('Open the page again')}
+            </Button>
+            <Button variant="ghost" disabled={busy} onClick={close}>
+              {t('Cancel')}
+            </Button>
+            <Button disabled={busy || !code.trim()} onClick={finish}>
+              {busy ? t('Signing in…') : t('Sign in')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
   return (
     <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
       <DialogContent className="sm:max-w-[480px]">

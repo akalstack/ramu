@@ -9,7 +9,7 @@ import type { AgentProvider } from '@ramu/shared/types'
  * newer release in the same line moves `tested` and adds its evidence; probing a new major adds a rule.
  */
 export const COMPATIBILITY_POLICY: CompatibilityPolicy = {
-  revision: 11,
+  revision: 12,
   rules: [
     {
       id: 'claude-code-sdk-2',
@@ -60,10 +60,10 @@ export const COMPATIBILITY_POLICY: CompatibilityPolicy = {
       runtime: 'acp',
       min: '1.4.3',
       below: '2.0.0',
-      tested: '1.5.0',
+      tested: '1.5.13',
       status: 'supported',
       evidence:
-        "Google's antigravity-acp 1.4.3 (2026-11-08) and 1.5.0 (2026-11-17), agy_acp_server.par as Ramu downloads it, on macOS: ACP initialize answered protocol version 1 with its agentInfo version, loadSession, session list and resume, and its four sign-in methods; 1.5.0 also listed HTTP and SSE MCP. No model call and no sign-in.",
+        "Google's antigravity-acp 1.4.3 (2026-11-08) and 1.5.0 (2026-11-17), agy_acp_server.par as Ramu downloads it, on macOS: ACP initialize answered protocol version 1 with its agentInfo version, loadSession, session list and resume, and its four sign-in methods; 1.5.0 also listed HTTP and SSE MCP. No model call and no sign-in. The Antigravity CLI agy 1.5.13 (darwin_arm64 from Google's CLI manifest, 2026-11-20), started as `agy acp --gemini-dir <dir> --app-data-dir antigravity-acp`: the same initialize answer, identifying as Antigravity ACP Server 1.5.13; with SSH_CONNECTION set, `authenticate` for a Google account refers to `agy acp --login`, which prints a Google link to https://antigravity.google/oauth-callback and reads the code back.",
     },
     {
       id: 'cursor-acp',

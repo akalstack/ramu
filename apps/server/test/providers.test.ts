@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { latestProviderRelease, newerVersion, parseProviderVersion, ProviderService } from '../src/providers/providers'
 import {
@@ -15,6 +15,7 @@ import { AGENT_PROVIDERS } from '@ramu/shared/providers/providers'
 import { providerAdapter } from '../src/providers/adapters'
 import { ActivityService } from '../src/background/activity'
 import * as antigravityInstall from '../src/providers/antigravityInstall'
+import { antigravityTarget } from '../src/providers/antigravityRelease'
 import type { ProviderStatus } from '@ramu/shared/providers/providers'
 
 let dir: string, bin: string, preferences: AppPreferences, store: Map<string, unknown>, service: ProviderService
@@ -67,6 +68,19 @@ const create = (activity?: ActivityService) =>
     emit,
     activity,
   ))
+/** Google's CLI manifest for this computer, as its release feed serves it. */
+const antigravityManifest = (version: string) => {
+  const win = process.platform === 'win32',
+    arm = process.arch === 'arm64'
+  const os = process.platform === 'darwin' ? 'mac' : win ? 'windows' : 'linux'
+  const musl = antigravityTarget()?.endsWith('_musl') ? '_musl' : ''
+  const folder = `${win ? 'windows' : process.platform}-${arm ? 'arm' : 'x64'}${musl ? '-musl' : ''}`
+  return {
+    version,
+    url: `https://storage.googleapis.com/antigravity-public/antigravity-cli/${version}-1/${folder}/cli_${os}_${arm ? 'arm64' : 'x64'}${musl}.${win ? 'exe' : 'tar.gz'}`,
+    sha512: 'a'.repeat(128),
+  }
+}
 const mockReleases = () => {
   const fetchMock = vi.fn(
     async (url: string) =>
@@ -74,10 +88,7 @@ const mockReleases = () => {
         url.includes('cursor.com')
           ? 'DOWNLOAD_URL="https://downloads.cursor.com/lab/2026.10.01-e373342/macos/arm64/agent-cli-package.tar.gz"'
           : url.includes('antigravity')
-            ? JSON.stringify({
-                version: '1.3.0',
-                distribution: { binary: { 'darwin-aarch64': { archive: 'https://dl.google.com/runtime.zip' } } },
-              })
+            ? JSON.stringify(antigravityManifest('1.5.13'))
             : JSON.stringify({ version: url.includes('opencode') ? '1.3.0' : '1.4.0' }),
       ),
   )
@@ -139,7 +150,7 @@ it('uses official sources, with OpenCode on its v2 package', async () => {
   await latestProviderRelease('opencode', '2.0.25')
   expect(network.mock.calls.map((c) => c[0])).toEqual(['https://registry.npmjs.org/%40opencode%2Fcli/latest'])
   expect((await latestProviderRelease('cursor', null)).version).toBe('2026.10.01-e373342')
-  expect((await latestProviderRelease('antigravity', null)).version).toBe('1.3.0')
+  expect((await latestProviderRelease('antigravity', null)).version).toBe('1.5.13')
 })
 it('manual checks still work when automatic checks are disabled and remember dismissal', async () => {
   const network = mockReleases()
@@ -285,6 +296,9 @@ it('does not substitute an automatic release check for cached login status', asy
 it('routes managed runtime cancellation to the installer and lets the update be retried', async () => {
   const activity = new ActivityService(() => {})
   preferences.providerBinaries.antigravity = { binary: '' }
+  // No agy of this computer's may be found, or Update would run its own updater instead of Ramu's installer.
+  vi.stubEnv('HOME', dir)
+  vi.stubEnv('PATH', dirname(process.execPath))
   const install = vi.spyOn(antigravityInstall, 'installAntigravity').mockImplementation(async ({ signal } = {}) => {
     await new Promise<void>((_resolve, reject) =>
       signal!.addEventListener('abort', () => reject(signal!.reason), { once: true }),

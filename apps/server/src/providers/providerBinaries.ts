@@ -5,7 +5,7 @@ import type { AgentProvider } from '@ramu/shared/types'
 import type { ProviderConfiguration } from '@ramu/shared/providers/providers'
 import { supportsProviderAccounts } from '@ramu/shared/providers/providers'
 import { scopedEnvironment, type ProviderEnvironmentValues } from '@ramu/shared/providers/environment'
-import { antigravityFileNames, managedAntigravityAt } from './adapters/antigravity'
+import { managedAntigravityAt } from './adapters/antigravity'
 import { providerAdapter } from './adapters'
 import { userEnvironment } from '../userEnvironment'
 
@@ -19,7 +19,6 @@ export function configureProviderAccounts(root: string) {
 export function providerRuntimeHome(provider: AgentProvider) {
   return join(runtimesRoot, provider)
 }
-export { antigravityFileNames }
 export const managedAntigravity = () => managedAntigravityAt(providerRuntimeHome('antigravity'))
 export function providerAccountId(provider: AgentProvider) {
   return configuration[provider]?.accountId || 'default'
@@ -137,12 +136,13 @@ export function providerBinary(provider: AgentProvider, overrides = configuratio
   const managed = adapter.managedBinary?.(providerRuntimeHome(provider))
   if (managed) return managed
   const names = adapter.executableNames()
+  const usable = (path: string | null): path is string => !!path && (adapter.usable?.(path) ?? true)
   return (
     adapter
       .searchDirs(homedir())
       .flatMap((dir) => names.map((name) => join(dir, name)))
-      .find(existsSync) ??
-    names.map(findExecutable).find((path) => !!path) ??
+      .find((path) => existsSync(path) && usable(path)) ??
+    names.map(findExecutable).find(usable) ??
     names[0]!
   )
 }

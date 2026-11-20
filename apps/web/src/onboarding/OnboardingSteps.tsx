@@ -28,6 +28,8 @@ import { choosableEfforts, initialChoice, onboardingModels, withModel, type Defa
 import { FEWEST_TOKENS, TOKEN_FEATURES, sameChoices, type TokenChoices } from './tokenChoices'
 import { Group, Row } from './parts'
 import { AccountSignIn } from './SignInRows'
+import { AntigravitySignIn } from '../settings/AntigravitySignIn'
+import { antigravityKeyName } from '@ramu/shared/providers/environment'
 
 export function AgentsStep({
   statuses,
@@ -39,18 +41,38 @@ export function AgentsStep({
   onError(message: string): void
 }) {
   const [checking, setChecking] = useState(false)
+  /** Key variables the host already has, while Antigravity's sign-in dialog is open. */
+  const [antigravityKeys, setAntigravityKeys] = useState<string[] | null>(null)
   const signIn = async (status: ProviderStatus) => {
     onError('')
     try {
       const command = await invoke('providers.loginCommand', status.provider)
       if (command) runProviderCommand(`${providerName(status.provider)} · ${t('Sign in')}`, command)
-      else await invoke('providers.signIn', status.provider)
+      else if (status.provider === 'antigravity') {
+        const environment = await Promise.resolve(invoke('providers.environment')).catch(() => null)
+        setAntigravityKeys(environment?.keys.antigravity ?? [])
+      } else await invoke('providers.signIn', status.provider)
     } catch (e) {
       onError(errorText(e))
     }
   }
   return (
     <div className="flex flex-col gap-3">
+      {antigravityKeys && (
+        <AntigravitySignIn
+          hasKey={(method) => antigravityKeys.includes(antigravityKeyName(method))}
+          onClose={() => setAntigravityKeys(null)}
+          onSubmit={async (input) => {
+            const started = await invoke('providers.signIn', 'antigravity', 'default', input)
+            if (!started) void onRefresh()
+            return started
+          }}
+          onCode={async (code) => {
+            await invoke('providers.completeSignIn', 'antigravity', 'default', code)
+            if (code !== null) void onRefresh()
+          }}
+        />
+      )}
       {statuses === null ? (
         <p className="m-0 text-caption text-muted-foreground" role="status">
           {t('Looking for installed agents…')}

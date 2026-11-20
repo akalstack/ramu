@@ -481,7 +481,18 @@ export function ProviderSettings({
           onSubmit={async (input) => {
             setSigningIn('antigravity')
             try {
-              await invoke('providers.signIn', 'antigravity', antigravity.accountId, input)
+              const started = await invoke('providers.signIn', 'antigravity', antigravity.accountId, input)
+              if (!started) void refresh(false, false, ['antigravity'])
+              return started
+            } finally {
+              setSigningIn(null)
+            }
+          }}
+          onCode={async (code) => {
+            if (code === null) return invoke('providers.completeSignIn', 'antigravity', antigravity.accountId, null)
+            setSigningIn('antigravity')
+            try {
+              await invoke('providers.completeSignIn', 'antigravity', antigravity.accountId, code)
               void refresh(false, false, ['antigravity'])
             } finally {
               setSigningIn(null)

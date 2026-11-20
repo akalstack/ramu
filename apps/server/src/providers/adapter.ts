@@ -20,6 +20,15 @@ export const runCli = (binary: string, args: string[], env: NodeJS.ProcessEnv): 
     )
   })
 
+/** A browser sign-in waiting for the code the provider's page shows. */
+export interface PendingSignIn {
+  /** The page that signs in; the person opens it on any device. */
+  url: string
+  /** Finishes with the code (or the landing page's address); rejects when the provider does not accept it. */
+  complete(code: string): Promise<void>
+  cancel(): void
+}
+
 export type ProviderSetup = Pick<
   ProviderStatus,
   'docsUrl' | 'installCommand' | 'updateCommand' | 'setupCommand' | 'setupNote'
@@ -122,8 +131,12 @@ export interface ProviderAdapter {
   /** Executable file names searched on PATH and in `searchDirs`; the first is the fallback. */
   executableNames(): string[]
   searchDirs(home: string): string[]
+  /** Whether an executable found by name can run here; one that cannot is passed over for the next match. */
+  usable?(binary: string): boolean
   /** A Ramu-managed executable that outranks the default lookup, if one is installed. */
   managedBinary?(runtimeHome: string): string | null
+  /** Arguments that start the executable as an ACP server for the login whose environment is `env`. */
+  launchArgs?(binary: string, env: NodeJS.ProcessEnv): string[]
   /** Variables pointing the CLI at one account's own config and credential directory. */
   accountEnv(root: string): Record<string, string>
   /** Credential variables removed when running as a non-default account. */
@@ -146,13 +159,14 @@ export interface ProviderAdapter {
   /** Sign-in that runs inside Ramu instead of a terminal command. */
   signIn?(ctx: {
     installed: boolean
+    binary: string
     accountId: string
     /** The account's provider environment, including where it keeps its own login. */
     env: NodeJS.ProcessEnv
     acpSignIn: (provider: 'antigravity', methodId: string, accountId: string) => Promise<void>
     /** The sign-in method the person chose, for runtimes that offer more than one. */
     method?: AntigravitySignIn
-  }): Promise<void>
+  }): Promise<void | PendingSignIn>
   /**
    * Saves an API key in the CLI's own credential store, for CLIs that read it from there rather than the environment;
    * `key` null signs that login out. Without this hook Ramu keeps the key and passes it in the environment.

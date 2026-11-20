@@ -3673,6 +3673,10 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Gemini Enterprise Agent Platform (sebelumnya Vertex AI), dengan API key atau kredensial Google Cloud.',
   'Sign in to Antigravity': 'Masuk ke Antigravity',
   'Choose how this account signs in.': 'Pilih cara akun ini masuk.',
+  'Allow access on the Google page, then paste the code it shows here.':
+    'Izinkan akses di halaman Google, lalu tempel kode yang ditampilkannya di sini.',
+  'Code from Google': 'Kode dari Google',
+  'Open the page again': 'Buka halamannya lagi',
   'Sign-in method': 'Metode masuk',
   'API key': 'API key',
   'Saved on this host. Enter a new one to replace it.': 'Tersimpan di host ini. Masukkan yang baru untuk menggantinya.',
@@ -3686,7 +3690,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Enter an API key, or a Google Cloud project and location.':
     'Masukkan API key, atau project dan lokasi Google Cloud.',
   'This runtime updates itself outside Ramu.': 'Runtime ini memperbarui dirinya sendiri di luar Ramu.',
-  'Runtime and helper paths.': 'Path runtime dan helper.',
   'Use a specific executable.': 'Pakai executable tertentu.',
   Content: 'Isi',
   Why: 'Alasan',

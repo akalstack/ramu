@@ -1323,11 +1323,20 @@ export interface RamuMethods extends ArtifactMethods {
     provider: ProviderStatus['provider'],
     configuration?: ProviderConfiguration,
   ): Promise<string | null>
-  /** In-app sign-in for runtimes without a login command (Antigravity). Resolves after the browser flow completes. */
+  /**
+   * In-app sign-in for runtimes without a login command. Resolves once signed in, or, for a browser sign-in that ends
+   * with a code (the Antigravity CLI), with the page to open; `providers.completeSignIn` then finishes it.
+   */
   'providers.signIn'(
     provider: ProviderStatus['provider'],
     accountId?: string,
     method?: AntigravitySignIn,
+  ): Promise<{ url: string } | void>
+  /** Finishes a browser sign-in with the code its page showed; `code` null abandons it. */
+  'providers.completeSignIn'(
+    provider: ProviderStatus['provider'],
+    accountId: string,
+    code: string | null,
   ): Promise<void>
   /** Signs one login in with an API key on the execution host; `key` null removes it so the subscription login is used. */
   'providers.setApiKey'(

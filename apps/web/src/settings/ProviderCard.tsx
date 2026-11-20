@@ -410,10 +410,7 @@ export function ProviderCard({
           render={<SettingsRow className="settings-stack gap-0" />}
         >
           <div className="flex items-center justify-between gap-6">
-            <SettingsLabel
-              title={t('Advanced')}
-              help={t(provider === 'antigravity' ? 'Runtime and helper paths.' : 'Use a specific executable.')}
-            />
+            <SettingsLabel title={t('Advanced')} help={t('Use a specific executable.')} />
             <CollapsibleTrigger render={<Button size="sm" variant="ghost" />}>
               {advanced ? t('Hide') : t('Show')}
             </CollapsibleTrigger>
@@ -451,33 +448,36 @@ export function ProviderCard({
                 <code>{status.binary}</code>
               </p>
             )}
-            {provider === 'antigravity' && (
-              <>
-                <label htmlFor="provider-harness">
-                  {t('Harness helper path')}
-                  <SettingTitleHosts path={`providerBinaries.${provider}.harness`} />
-                </label>
-                <div className="provider-binary-input">
-                  <SettingsField path={`providerBinaries.${provider}.harness`}>
-                    {' '}
-                    <Input
-                      id="provider-harness"
-                      value={preferences?.harness ?? ''}
-                      onChange={(event) => onChange({ harness: event.target.value })}
-                    />{' '}
-                  </SettingsField>
-                  <Button
-                    variant="secondary"
-                    size="icon-sm"
-                    className={BROWSE_BUTTON_CLASS}
-                    aria-label={t('Browse Antigravity harness helper')}
-                    onClick={() => onBrowse('harness')}
-                  >
-                    <FolderOpen size={16} />
-                  </Button>
-                </div>
-              </>
-            )}
+            {/* Only the runtime Ramu used before the CLI served ACP needs its harness helper. */}
+            {provider === 'antigravity' &&
+              (!!preferences?.harness ||
+                (!!status?.binary && !/(^|[\\/])(agy|antigravity)(\.(exe|cmd|bat))?$/i.test(status.binary))) && (
+                <>
+                  <label htmlFor="provider-harness">
+                    {t('Harness helper path')}
+                    <SettingTitleHosts path={`providerBinaries.${provider}.harness`} />
+                  </label>
+                  <div className="provider-binary-input">
+                    <SettingsField path={`providerBinaries.${provider}.harness`}>
+                      {' '}
+                      <Input
+                        id="provider-harness"
+                        value={preferences?.harness ?? ''}
+                        onChange={(event) => onChange({ harness: event.target.value })}
+                      />{' '}
+                    </SettingsField>
+                    <Button
+                      variant="secondary"
+                      size="icon-sm"
+                      className={BROWSE_BUTTON_CLASS}
+                      aria-label={t('Browse Antigravity harness helper')}
+                      onClick={() => onBrowse('harness')}
+                    >
+                      <FolderOpen size={16} />
+                    </Button>
+                  </div>
+                </>
+              )}
           </CollapsibleContent>
         </Collapsible>
       )}

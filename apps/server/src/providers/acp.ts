@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import type { SelectionTransition } from './selectionTransition'
 import { providerBinary, providerEnvironment } from './providerBinaries'
+import { providerAdapter } from './adapters'
 import { createInterface } from 'node:readline'
 import { AcpEvents, nativeShell } from './acpEvents'
 import { dangerousCommand } from '../agent/dangerousCommands'
@@ -112,11 +113,9 @@ function acpMcpCall(
   return known(titled) ?? { server: 'other', tool: '' }
 }
 
-export function acpCommand(provider: AcpProvider): { command: string; args: string[] } {
-  return {
-    command: providerBinary(provider),
-    args: provider === 'cursor' || provider === 'opencode' ? ['acp'] : process.platform === 'linux' ? ['--uid='] : [],
-  }
+export function acpCommand(provider: AcpProvider, env: NodeJS.ProcessEnv): { command: string; args: string[] } {
+  const command = providerBinary(provider)
+  return { command, args: providerAdapter(provider).launchArgs?.(command, env) ?? ['acp'] }
 }
 export { ResumeUnavailable as AcpResumeUnavailable } from '../agent/agentRunner'
 import { ResumeUnavailable as AcpResumeUnavailable } from '../agent/agentRunner'
@@ -143,14 +142,9 @@ export class AcpRpc {
     cwd: string,
     accountId?: string,
   ) {
-    const { command, args } = acpCommand(provider)
-    this.child = trackProcess(
-      spawn(command, args, {
-        cwd,
-        stdio: 'pipe',
-        env: ownedEnvironment(providerEnvironment(provider, undefined, accountId, cwd)),
-      }),
-    )
+    const env = ownedEnvironment(providerEnvironment(provider, undefined, accountId, cwd))
+    const { command, args } = acpCommand(provider, env)
+    this.child = trackProcess(spawn(command, args, { cwd, stdio: 'pipe', env }))
     const output = recordOutput(this.child.stderr)
     this.output = output
     this.child.stdin.on('error', () => {})

@@ -33,7 +33,7 @@ it('covers each tested release line through its later patches and minors, and st
 })
 
 it('reports the newest release probed in the line', () => {
-  expect(evaluate('antigravity', '1.5.3')).toMatchObject({ ruleId: 'antigravity-acp-1', testedVersion: '1.5.0' })
+  expect(evaluate('antigravity', '1.5.3')).toMatchObject({ ruleId: 'antigravity-acp-1', testedVersion: '1.5.13' })
   expect(evaluate('codex', '0.168.0')).toMatchObject({ ruleId: 'codex-app-server-0', testedVersion: '0.167.0' })
 })
 
