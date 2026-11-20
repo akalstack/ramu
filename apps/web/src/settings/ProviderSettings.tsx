@@ -222,6 +222,18 @@ export function ProviderSettings({
     return () => window.removeEventListener('focus', onFocus)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [config, invoke, viewOnly] by design; the values it reads beyond these are current as of that run
   }, [config, invoke, viewOnly])
+  // An install the host is running in the background (started here earlier, from another window or by auto-update)
+  // keeps showing as installing, and its card settles when the host finishes.
+  const installingKey = statuses
+    .filter((entry) => entry.updating)
+    .map((entry) => entry.provider)
+    .join()
+  useEffect(() => {
+    if (viewOnly || !installingKey || updating) return
+    const timer = setInterval(() => void refresh(false, true, installingKey.split(',') as AgentProvider[]), 3000)
+    return () => clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restarted when the set of installing providers changes
+  }, [installingKey, updating, viewOnly])
   /** The top enabled login is the one new threads use. */
   const arrange = (
     provider: AgentProvider,
