@@ -13,6 +13,8 @@ export const ANTIGRAVITY_REGISTRY =
   'https://raw.githubusercontent.com/agentclientprotocol/registry/main/antigravity-acp/agent.json'
 const ARCHIVE_ORIGIN = 'https://dl.google.com'
 const MAX_ARCHIVE_BYTES = 1024 ** 3
+/** The runtime unpacks and compiles its Python on first launch, which takes minutes on a slow or Intel Mac; the install runs in the background, so waiting costs nothing. */
+export const PROBE_TIMEOUT_MS = 5 * 60_000
 export interface AntigravityAsset {
   version: string
   archive: string
@@ -97,7 +99,7 @@ function extract(archive: string, into: string, signal?: AbortSignal): Promise<v
 export function probeAntigravity(
   executable: string,
   harness: string,
-  timeoutMs = 20_000,
+  timeoutMs = PROBE_TIMEOUT_MS,
   signal?: AbortSignal,
 ): Promise<void> {
   signal?.throwIfAborted()
@@ -108,7 +110,15 @@ export function probeAntigravity(
       stdio: 'pipe',
       windowsHide: true,
     })
-    child.stderr.resume()
+    // What the runtime said before it went quiet is the only clue to why it did not answer.
+    let said = ''
+    child.stderr.on('data', (chunk: Buffer) => {
+      said = (said + chunk.toString()).slice(-400)
+    })
+    const why = () => {
+      const last = said.trim().split('\n').pop()?.trim()
+      return last ? ` Last output: ${last.slice(0, 200)}` : ''
+    }
     child.stdin.on('error', () => {})
     const lines = createInterface({ input: child.stdout })
     let settled = false
@@ -124,14 +134,19 @@ export function probeAntigravity(
       error ? reject(error) : resolve()
     }
     const timer = setTimeout(
-      () => finish(new Error('The downloaded runtime did not answer. It may not match this host.')),
+      () =>
+        finish(
+          new Error(
+            `The downloaded runtime did not answer within ${Math.round(timeoutMs / 1000)} seconds. It may not match this host.${why()}`,
+          ),
+        ),
       timeoutMs,
     )
     const abort = () => finish(signal?.reason)
     signal?.addEventListener('abort', abort, { once: true })
     if (signal?.aborted) abort()
     child.once('error', () => finish(new Error('The downloaded runtime cannot start on this host.')))
-    child.once('exit', () => finish(new Error('The downloaded runtime stopped before answering.')))
+    child.once('close', () => finish(new Error(`The downloaded runtime stopped before answering.${why()}`)))
     lines.on('line', (line) => {
       try {
         if (JSON.parse(line).id === 1) finish()
@@ -195,7 +210,7 @@ export async function installAntigravity(
     const executable = join(unpacked, names.executable),
       harness = join(unpacked, names.harness)
     if (options.probe) await options.probe(executable, harness)
-    else await probeAntigravity(executable, harness, 20_000, signal)
+    else await probeAntigravity(executable, harness, PROBE_TIMEOUT_MS, signal)
     // Cancellation is honored up to activation; the short atomic activation finishes once started.
     signal?.throwIfAborted()
     const target = join(home, 'versions', asset.version)

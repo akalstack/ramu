@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { installAntigravity, resolveAntigravityAsset } from '../src/providers/antigravityInstall'
+import { installAntigravity, probeAntigravity, resolveAntigravityAsset } from '../src/providers/antigravityInstall'
 import {
   antigravityFileNames,
   configureProviderAccounts,
@@ -119,6 +119,23 @@ it.skipIf(!hasZip)('never activates an archive that is incomplete or fails its h
   expect(existsSync(join(providerRuntimeHome('antigravity'), 'versions', '1.4.0'))).toBe(false)
   expect(readdirSync(providerRuntimeHome('antigravity')).filter((entry) => entry.startsWith('.stage-'))).toEqual([])
 })
+it.skipIf(process.platform === 'win32')(
+  'says how long it waited and what the runtime last printed when it never answers or stops early',
+  async () => {
+    const silent = join(root, 'silent.sh'),
+      quits = join(root, 'quits.sh')
+    writeFileSync(silent, '#!/bin/sh\necho "compiling modules" >&2\nsleep 5\n')
+    writeFileSync(quits, '#!/bin/sh\necho "illegal instruction" >&2\nexit 1\n')
+    chmodSync(silent, 0o755)
+    chmodSync(quits, 0o755)
+    await expect(probeAntigravity(silent, join(root, 'harness'), 300)).rejects.toThrow(
+      /did not answer within 0 seconds.*Last output: compiling modules/,
+    )
+    await expect(probeAntigravity(quits, join(root, 'harness'), 5000)).rejects.toThrow(
+      /stopped before answering.*Last output: illegal instruction/,
+    )
+  },
+)
 it.skipIf(!hasZip)('never unpacks a download whose checksum differs from the registry', async () => {
   const names = antigravityFileNames()
   await expect(

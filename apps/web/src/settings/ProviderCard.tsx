@@ -137,6 +137,7 @@ export function ProviderCard({
         ? preferences?.defaultAccountEnabled !== false
         : preferences?.accounts?.find((a) => a.id === id)?.enabled !== false,
     onCount = order.filter(on).length,
+    installing = updating === provider || !!status?.updating,
     canUpdate = !((provider === 'codex' || provider === 'antigravity') && preferences?.binary?.trim()),
     plan = compatibilityPlan(status, { customBinary: !!preferences?.binary?.trim(), canUpdate })
   const incompatible = status?.compatibility?.status === 'incompatible'
@@ -304,7 +305,7 @@ export function ProviderCard({
             />
             <span className="flex flex-none items-center gap-2.5">
               {((status?.updateAvailable && status.updateCompatibility?.status !== 'incompatible') ||
-                updating === provider ||
+                installing ||
                 (provider === 'antigravity' && !status?.installed)) && (
                 <Button
                   variant="secondary"
@@ -313,11 +314,8 @@ export function ProviderCard({
                   disabled={updating !== null || status?.updating}
                   onClick={onUpdate}
                 >
-                  <RefreshCw
-                    size={14}
-                    className={updating === provider ? 'spin [animation:spin_0.9s_linear_infinite]' : ''}
-                  />
-                  {updating === provider
+                  <RefreshCw size={14} className={installing ? 'spin [animation:spin_0.9s_linear_infinite]' : ''} />
+                  {installing
                     ? t(status?.installed ? 'Updating…' : 'Installing…')
                     : !status?.installed
                       ? t('Install runtime')
