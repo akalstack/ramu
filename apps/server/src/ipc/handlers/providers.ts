@@ -126,6 +126,16 @@ export const registerProviderHandlers: RegisterHandlers = ({
         return providers.signIn(provider, accountId, method && { ...method, apiKey: undefined })
       },
     },
+    // The code a provider's sign-in page shows; null abandons the sign-in.
+    'providers.completeSignIn': {
+      args: z.tuple([
+        agentSettings.shape.provider,
+        z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/),
+        z.string().max(16_384).nullable(),
+      ]),
+      run: (provider: ProviderStatus['provider'], accountId: string, code: string | null) =>
+        providers.completeSignIn(provider, accountId, code),
+    },
     // Keys are credentials: only the execution host enters them; other clients see that a login uses one.
     'providers.setApiKey': {
       args: z.tuple([

@@ -10,7 +10,7 @@ Ramu runs the agent tools you already use, with your own accounts.
 | Codex       | Install Codex and sign in                                                            |
 | OpenCode    | Install OpenCode and configure a model provider                                      |
 | Cursor      | **Login** in Settings (Cursor's browser sign-in), or set `CURSOR_API_KEY`            |
-| Antigravity | **Settings → Providers → Antigravity → Install runtime**, then **Login** with Google |
+| Antigravity | Install the Antigravity CLI (`agy` 1.5 or newer), or **Settings → Providers → Antigravity → Install runtime**; then **Login** |
 
 A new profile opens a short setup that finds installed tools and offers their sign-ins. **Settings → Providers** handles sign-in, accounts, updates and executable paths (`RAMU_CLAUDE_BIN`, `RAMU_CODEX_BIN`, `RAMU_OPENCODE_BIN`, `RAMU_CURSOR_BIN`, `RAMU_ANTIGRAVITY_BIN`). Ramu stores no provider passwords.
 
@@ -35,6 +35,8 @@ To pick a login yourself, open the model menu under the message box (on the phon
 ### API keys
 
 Claude Code, Codex, Cursor and OpenCode logins can use an API key instead of a subscription: choose the key button on a login in **Settings → Providers** on the host, or **Use an API key** beside a signed-out login. Usage is then billed to the key, and a login with a key gives a thread somewhere to continue when your plan's limit is reached. OpenCode asks which model provider the key is for. Codex keeps the key in its own login file. For the others, the key stays in the host's OS credential store and reaches only that login's processes. **Remove key** returns the login to its subscription (for Codex, sign in again). Antigravity takes Gemini and Agent Platform keys in its own **Login** dialog, which opens on the method the login used last. Under **Google account** it notes that Google may limit personal plans used outside its own apps, which a Gemini API key avoids. Ramu checks the Antigravity runtime it downloads against Google's published checksum before unpacking it.
+
+Antigravity runs on Google's Antigravity CLI. An `agy` you installed (1.5 or newer) is used as it is, with nothing to download; **Update** runs its own `agy update`, which also brings an older `agy` up to 1.5. Without one, **Install runtime** downloads the CLI, about 85 MB, into Ramu's own folder. A download that drops or stalls continues where it stopped, including the next time you choose **Install runtime**. Each login keeps its own sign-in in a file under its profile, never in the OS keychain, so logins stay separate from each other and from the `agy` you use in a terminal. To sign in with a Google account or Gemini Enterprise, **Login** opens Google's page in your browser, on whichever device you are using. Allow access there, then paste the code the page shows into Ramu. A Google sign-in made before Ramu used the CLI has to be made once more; API keys carry over. Until you update, a runtime Ramu downloaded earlier keeps working, and so does an `agy_acp_server` you selected under **Advanced**, together with its harness helper path.
 
 ## Abilities
 

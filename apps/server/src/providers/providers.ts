@@ -11,7 +11,7 @@ import {
 } from '@ramu/shared/providers/providers'
 import type { AgentProvider, AppPreferences } from '@ramu/shared/types'
 import { acpPlan, acpSignIn } from './acp'
-import { parseProviderVersion } from './adapter'
+import { parseProviderVersion, type PendingSignIn } from './adapter'
 import { providerAdapter } from './adapters'
 import {
   configureProviderBinaries,
@@ -257,17 +257,54 @@ export class ProviderService {
     )
   }
 
-  async signIn(provider: AgentProvider, accountId = 'default', method?: AntigravitySignIn): Promise<void> {
+  /** Browser sign-ins waiting for the code from the provider's page, by provider and login. */
+  private pendingSignIns = new Map<string, PendingSignIn>()
+  /**
+   * Signs a login in. A browser sign-in that finishes with a pasted code resolves with the page to open; `completeSignIn`
+   * then finishes it, on whichever device the page was opened.
+   */
+  async signIn(
+    provider: AgentProvider,
+    accountId = 'default',
+    method?: AntigravitySignIn,
+  ): Promise<{ url: string } | void> {
     const adapter = providerAdapter(provider)
     if (!adapter.signIn) throw new Error('Use the Login command for this provider.')
+    const key = `${provider}:${accountId}`
+    this.pendingSignIns.get(key)?.cancel()
+    this.pendingSignIns.delete(key)
     this.statusCache = undefined
-    await adapter.signIn({
-      installed: !!findExecutable(providerBinary(provider, this.preferences().providerBinaries)),
+    const config = this.preferences().providerBinaries
+    const binary = providerBinary(provider, config)
+    const pending = await adapter.signIn({
+      installed: !!findExecutable(binary),
+      binary,
       accountId,
-      env: providerEnvironment(provider, this.preferences().providerBinaries, accountId),
+      env: providerEnvironment(provider, config, accountId),
       acpSignIn,
       method,
     })
+    if (pending) {
+      this.pendingSignIns.set(key, pending)
+      return { url: pending.url }
+    }
+    this.signedIn(provider, accountId)
+  }
+  /** Finishes a browser sign-in with the code its page showed; `code` null abandons it. */
+  async completeSignIn(provider: AgentProvider, accountId: string, code: string | null): Promise<void> {
+    const key = `${provider}:${accountId}`
+    const pending = this.pendingSignIns.get(key)
+    if (code === null) {
+      pending?.cancel()
+      this.pendingSignIns.delete(key)
+      return
+    }
+    if (!pending) throw new Error('This sign-in has ended. Start it again.')
+    this.pendingSignIns.delete(key)
+    await pending.complete(code)
+    this.signedIn(provider, accountId)
+  }
+  private signedIn(provider: AgentProvider, accountId: string) {
     this.statusCache = undefined
     // Signing in may put a different account behind this login: its cached email and usage are no longer its own.
     this.logins.delete(`${provider}:${accountId}`)
@@ -579,5 +616,7 @@ export class ProviderService {
   close() {
     this.closed = true
     clearTimeout(this.timer)
+    for (const pending of this.pendingSignIns.values()) pending.cancel()
+    this.pendingSignIns.clear()
   }
 }

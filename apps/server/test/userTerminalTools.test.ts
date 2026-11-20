@@ -55,6 +55,13 @@ it.skipIf(process.platform === 'win32')(
     const older = terminals.open('thread', null, tmpdir())
     const elsewhere = terminals.open('other-thread', null, tmpdir())
     const shell = terminals.open('thread', null, tmpdir())
+    // A shell drops what is typed before it is ready, so the command waits for its prompt.
+    await vi.waitFor(
+      async () => {
+        expect(String((await call('terminal_read')).json().output).trim()).not.toBe('')
+      },
+      { timeout: 10_000 },
+    )
     // Colors, a redrawn progress line and a token-looking value, the way real tool output prints them.
     terminals.write(
       shell.id,
