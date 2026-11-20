@@ -1,6 +1,7 @@
 import { openCodeRamuName, ramuTool } from '@ramu/shared/chat/ramuTools'
 import { mcpCallSkipsCard, selfGatedRamuTool, type McpCallServer } from '../agent/toolApprovals'
 import { ownedEnvironment, trackProcess } from '../agent/processOwners'
+import { exitReason, recordOutput } from './exitReason'
 import { addTokens } from './turnTokens'
 import { permissionKey } from '../agent/permissionApprovals'
 // OpenCode 2 chats through its HTTP API (`@opencode/client`). Each chat runs its own `opencode serve`, so the
@@ -254,7 +255,7 @@ const freePort = (): Promise<number> =>
 async function startServer(
   cwd: string,
   env: NodeJS.ProcessEnv,
-): Promise<{ child: ChildProcess; url: string; password?: string }> {
+): Promise<{ child: ChildProcess; url: string; password?: string; output: { last(): string } }> {
   const port = await freePort()
   const child = trackProcess(
     spawn(providerBinary('opencode'), ['serve', '--hostname', '127.0.0.1', '--port', String(port)], {
@@ -263,7 +264,7 @@ async function startServer(
       stdio: ['ignore', 'pipe', 'pipe'],
     }),
   )
-  child.stderr!.resume()
+  const output = recordOutput(child.stderr)
   return new Promise((resolve, reject) => {
     let url = '',
       password: string | undefined
@@ -275,9 +276,17 @@ async function startServer(
       if (error) {
         child.kill()
         reject(error)
-      } else resolve({ child, url, ...(password ? { password } : {}) })
+      } else resolve({ child, url, output, ...(password ? { password } : {}) })
     }
-    const timer = setTimeout(() => done(new Error('OpenCode did not start its server in time')), 30_000)
+    const timer = setTimeout(
+      () =>
+        done(
+          new Error(
+            `OpenCode did not start its server in time.${output.last() ? ` Last output: ${output.last()}` : ''}`,
+          ),
+        ),
+      30_000,
+    )
     let grace: NodeJS.Timeout | undefined
     lines.on('line', (line) => {
       url ||= /listening on (\S+)/i.exec(line)?.[1] ?? ''
@@ -289,7 +298,9 @@ async function startServer(
     child.once('error', (e) =>
       done(new Error(`Cannot start OpenCode. Install it and configure a model provider first. ${e.message}`)),
     )
-    child.once('exit', (code) => done(new Error(`OpenCode exited before it was ready (${code ?? 'signal'})`)))
+    child.once('exit', (code, signal) =>
+      done(new Error(`${exitReason('OpenCode', code, signal, output.last())} It stopped before it was ready.`)),
+    )
   })
 }
 
@@ -414,10 +425,11 @@ export class OpenCodeSession implements AgentRunner {
     this.child = server.child
     // stop() ran while the server was still starting, when there was no child to kill yet.
     if (this.stopped) server.child.kill()
-    server.child.once('exit', (code) => {
+    server.child.once('exit', (code, signal) => {
       if (this.stopped) return
-      this.emit({ kind: 'error', message: `OpenCode exited (${code ?? 'signal'})` })
-      this.turn?.done({ error: `OpenCode exited (${code ?? 'signal'})` })
+      const message = exitReason('OpenCode', code, signal, server.output.last())
+      this.emit({ kind: 'error', message })
+      this.turn?.done({ error: message })
       this.emit({ kind: 'state', state: 'failed' })
     })
     return OpenCode.make({

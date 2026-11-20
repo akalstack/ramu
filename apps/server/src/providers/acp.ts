@@ -30,6 +30,7 @@ import { elicitationContent, elicitationRequest } from '../agent/elicitation'
 import { classifyLimit, limitSignal } from './limitClassifier'
 import { limitedReading } from './usageLimit'
 import { noteRuntimeTransports } from './runtimeTransports'
+import { exitReason, recordOutput } from './exitReason'
 import { ACP_TERMINAL_METHODS, type AcpTerminalHost } from './acpTerminals'
 import type { AgentRunner, AgentRunnerFactory } from '../agent/agentRunner'
 
@@ -133,6 +134,7 @@ export class AcpRpc {
     number,
     { resolve: (r: Wire) => void; reject: (e: Error) => void; timer?: NodeJS.Timeout }
   >()
+  private readonly output: { last(): string }
   readonly exited: Promise<void>
   onMessage: (message: Wire) => void = () => {}
   onExit: (error: Error) => void = () => {}
@@ -149,7 +151,8 @@ export class AcpRpc {
         env: ownedEnvironment(providerEnvironment(provider, undefined, accountId, cwd)),
       }),
     )
-    this.child.stderr.resume()
+    const output = recordOutput(this.child.stderr)
+    this.output = output
     this.child.stdin.on('error', () => {})
     const lines = createInterface({ input: this.child.stdout })
     lines.on('line', (line) => {
@@ -200,8 +203,8 @@ export class AcpRpc {
         ),
       )
       // `close` waits for stdout to drain, so a last reply written just before the runtime exits is still read.
-      this.child.once('close', (code) =>
-        finish(new Error(`${providerName(provider)} ACP runtime exited (${code ?? 'signal'})`)),
+      this.child.once('close', (code, signal) =>
+        finish(new Error(exitReason(`${providerName(provider)} ACP runtime`, code, signal, output.last()))),
       )
     })
   }
@@ -215,7 +218,10 @@ export class AcpRpc {
       const timer = timeoutMs
         ? setTimeout(() => {
             this.pending.delete(id)
-            reject(new Error(`${providerName(this.provider)} ${method} timed out`))
+            const said = this.output.last()
+            reject(
+              new Error(`${providerName(this.provider)} ${method} timed out.${said ? ` Last output: ${said}` : ''}`),
+            )
           }, timeoutMs)
         : undefined
       this.pending.set(id, { resolve, reject, timer })
@@ -225,17 +231,22 @@ export class AcpRpc {
   /** Advertised only when the session was given a terminal host; set before `initialize`. */
   terminal = false
   async initialize(): Promise<Wire> {
-    const result = await this.request('initialize', {
-      protocolVersion: 1,
-      // Antigravity offers its Claude and GPT models only to allowlisted clients such as Zed; everyone else gets Gemini.
-      clientInfo:
-        this.provider === 'antigravity' ? { name: 'zed', version: '0.0.0' } : { name: 'ramu', version: '0.0.1' },
-      clientCapabilities: {
-        fs: { readTextFile: false, writeTextFile: false },
-        terminal: this.terminal,
-        session: { compaction: {} },
+    const result = await this.request(
+      'initialize',
+      {
+        protocolVersion: 1,
+        // Antigravity offers its Claude and GPT models only to allowlisted clients such as Zed; everyone else gets Gemini.
+        clientInfo:
+          this.provider === 'antigravity' ? { name: 'zed', version: '0.0.0' } : { name: 'ramu', version: '0.0.1' },
+        clientCapabilities: {
+          fs: { readTextFile: false, writeTextFile: false },
+          terminal: this.terminal,
+          session: { compaction: {} },
+        },
       },
-    })
+      // Antigravity's runtime compiles on its first start, which takes minutes on a slow or Intel Mac.
+      this.provider === 'antigravity' ? 5 * 60_000 : undefined,
+    )
     if (result.protocolVersion !== 1) throw new Error('Unsupported ACP protocol version')
     if (this.provider === 'cursor') await this.request('authenticate', { methodId: 'cursor_login' })
     return result
