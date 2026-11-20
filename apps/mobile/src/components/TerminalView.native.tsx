@@ -6,6 +6,7 @@ import { TerminalGestureOverlay, readGesture, type GestureDisplay } from './Term
 import { WebView } from 'react-native-webview'
 import { terminalHtml } from '../assets/terminal'
 import type { TerminalViewProps } from './TerminalView'
+import { terminalLinkMessage } from '../runtime/terminalLinkMessage'
 import { useSay } from '../i18n'
 
 export default function TerminalView({
@@ -19,6 +20,7 @@ export default function TerminalView({
   keyAction,
   fontSize,
   onFontSize,
+  onLink,
 }: TerminalViewProps) {
   const say = useSay()
   const [appActive, setAppActive] = useState(AppState.currentState === 'active')
@@ -107,6 +109,8 @@ export default function TerminalView({
             if (enabled && appActive && value.kind === 'input' && typeof value.data === 'string') onInput(value.data)
             if (value.kind === 'resize' && Number.isInteger(value.cols) && Number.isInteger(value.rows))
               onResize(value.cols, value.rows)
+            const link = appActive ? terminalLinkMessage(value) : null
+            if (link) onLink?.(link.kind, link.text)
           } catch {}
         }}
       />

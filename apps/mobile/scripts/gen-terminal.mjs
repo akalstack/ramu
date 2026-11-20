@@ -11,6 +11,11 @@ const gesture = ts.transpileModule(
 const keyModule = ts.transpileModule(readFileSync(new URL('../src/runtime/terminalKeys.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText
+const linkModule = ts.transpileModule(
+  readFileSync(new URL('../../../packages/shared/src/workspace/terminalLinks.ts', import.meta.url), 'utf8'),
+  { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } },
+).outputText
+const links = readFileSync(new URL('./terminal-links.js', import.meta.url), 'utf8')
 const driver = readFileSync(new URL('./terminal-gesture.js', import.meta.url), 'utf8')
 const css = readFileSync(require.resolve('@xterm/xterm/css/xterm.css'), 'utf8')
 const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'"><style>${css}html,body,#terminal{margin:0;width:100%;height:100%;background:#0e0e10;overflow:hidden}</style></head><body><div id="terminal"></div><script>${js.replaceAll('</script', '<\\/script')}
@@ -21,6 +26,8 @@ ${fit.replaceAll('</script', '<\\/script')}
 const term = new Terminal({fontSize:13,scrollback:5000,theme:{background:'#0e0e10'},allowProposedApi:false}); const fit = new FitAddon.FitAddon(); term.loadAddon(fit); term.open(document.getElementById('terminal'));
 function post(value){const text=JSON.stringify(value);if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(text);else parent.postMessage(text,'*')}
 const keysModule = (()=>{const exports={};${keyModule};return exports})();
+const linksModule = (()=>{const exports={};${linkModule};return exports})();
+${links};installTerminalLinks(term,post,linksModule.terminalLinkAt);
 const gestureModule = (()=>{const exports={};${gesture};return exports})();${driver};installTerminalGesture(term,post,gestureModule.TerminalGesture,gestureModule.arrowSequence,gestureModule.pinchFontSize,()=>fit.fit());
 term.onData(data=>post({kind:'input',data}));term.onResize(size=>post({kind:'resize',...size}));
 function receive(event){try{const value=JSON.parse(event.data);if(value.kind==='output')term.write(value.data);if(value.kind==='reset'){term.reset();term.write(value.data)}if(value.kind==='focus')term.focus();if(value.kind==='blur')term.blur();if(value.kind==='key'&&typeof value.key==='string'&&value.key.length<32)post({kind:'input',data:keysModule.terminalKeySequence(value.key,term.modes.applicationCursorKeysMode)});if(value.kind==='font'&&Number.isInteger(value.size)&&value.size>=9&&value.size<=22){term.options.fontSize=value.size;fit.fit()}}catch{}}

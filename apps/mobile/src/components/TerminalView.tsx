@@ -4,6 +4,8 @@ import { View } from 'react-native'
 import { TerminalGestureOverlay, readGesture, type GestureDisplay } from './TerminalGestureOverlay'
 import { terminalHtml } from '../assets/terminal'
 import { useSay } from '../i18n'
+import type { TerminalLinkKind } from '@ramu/shared/workspace/terminalLinks'
+import { terminalLinkMessage } from '../runtime/terminalLinkMessage'
 export interface TerminalViewProps {
   /** Which shell `output` belongs to; a different one always starts the screen over. */ session?: string
   output: string
@@ -16,7 +18,10 @@ export interface TerminalViewProps {
   /** Text size this phone remembers for terminals; pinching changes it and reports the new size. */
   fontSize?: number
   onFontSize?(size: number): void
+  /** A web address or path tapped in the output. */
+  onLink?(kind: TerminalLinkKind, text: string): void
 }
+
 export default function TerminalView({
   session,
   output,
@@ -26,11 +31,12 @@ export default function TerminalView({
   enabled = true,
   keyboardAction,
   keyAction,
+  onLink,
 }: TerminalViewProps) {
   const say = useSay()
   const frame = useRef<HTMLIFrameElement>(null)
-  const callbacks = useRef({ onInput, onResize, enabled })
-  callbacks.current = { onInput, onResize, enabled }
+  const callbacks = useRef({ onInput, onResize, onLink, enabled })
+  callbacks.current = { onInput, onResize, onLink, enabled }
   const [ready, setReady] = useState(false)
   const previous = useRef<TerminalOutputState>({ output: '' })
   const consumedKey = useRef<number | undefined>(undefined)
@@ -46,6 +52,8 @@ export default function TerminalView({
         if (callbacks.current.enabled && value.kind === 'input' && typeof value.data === 'string')
           callbacks.current.onInput(value.data)
         if (value.kind === 'resize') callbacks.current.onResize(value.cols, value.rows)
+        const link = terminalLinkMessage(value)
+        if (link) callbacks.current.onLink?.(link.kind, link.text)
       } catch {}
     }
     window.addEventListener('message', receive)

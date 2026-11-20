@@ -198,6 +198,7 @@ function load(file, os, overrides = {}, globals = {}) {
       if (id.endsWith('/runtime/openFile'))
         return {
           useOpenLink: () => async () => false,
+          useOpenTerminalLink: () => async () => {},
           useOpenFile: () => ({
             open() {},
             async openLink() {
