@@ -1,7 +1,7 @@
 import { t } from './localization'
 import { clipboard, dialog, Menu, type BrowserWindow } from 'electron'
 
-export type TerminalMenuResult = 'selectAll' | 'clear' | { paste: string } | null
+export type TerminalMenuResult = 'selectAll' | 'clear' | 'addToChat' | { paste: string } | null
 export function terminalMenu(
   win: BrowserWindow,
   selection: string,
@@ -35,6 +35,11 @@ export function terminalMenu(
         },
       },
       { label: t('Select all'), click: () => resolve('selectAll') },
+      { type: 'separator' },
+      {
+        label: selection.trim() ? t('Add selection to chat') : t('Add screen to chat'),
+        click: () => resolve('addToChat'),
+      },
       { type: 'separator' },
       { label: t('Clear scrollback'), click: () => resolve('clear') },
     ]).popup({

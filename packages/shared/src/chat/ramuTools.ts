@@ -86,6 +86,8 @@ const KNOWN = new Set([
   'background_terminal_inspect',
   'background_terminal_wait',
   'background_terminal_stop',
+  'terminal_list',
+  'terminal_read',
   'codex_pre_tool_use',
   'artifact_preview',
   'artifact_publish',
@@ -528,6 +530,10 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
       return reply('Stopped a background command', 'Stopping a background command', 'terminal', command(data.command))
     case 'background_terminal_wait':
       return describeWait(args, data, reply)
+    case 'terminal_list':
+      return reply('Looked at your terminals', 'Looking at your terminals', 'terminal')
+    case 'terminal_read':
+      return reply('Read your terminal', 'Reading your terminal', 'terminal')
     case 'artifact_preview':
       return reply('Previewed an artifact', 'Previewing an artifact', 'sparkles', quote(text(args.title)))
     case 'artifact_publish':

@@ -67,6 +67,7 @@ import { SettingsChanges } from './settings/settingsChanges'
 import { registerSettingsTools } from './settings/settingsTools'
 import type { SettingsSnapshot } from '@ramu/shared/settingsCompatibility'
 import { registerBackgroundTerminalTools } from './agent/backgroundTerminalTools'
+import { registerUserTerminalTools } from './agent/userTerminalTools'
 import { UptimeWatches } from './workspace/deploy/uptime'
 import { ProjectWake } from './workspace/deploy/wake'
 import { MediaAccounts } from './media/mediaAccounts'
@@ -1893,6 +1894,7 @@ const mcpHttp = createServer(async (req, res) => {
       () => agents.get(source.id),
       (detail, signal) => agents.requestPermission(source.id, 'Background command', detail, signal),
     )
+  if (!review) registerUserTerminalTools(server, terminals, source, () => agents.get(source.id))
   if (!review) registerThemeTools(server, (theme) => agents.themeProposed(source.id, theme))
   if (!review) registerSettingsTools(server, source.id, settingsChanges)
   if (!review) registerAbilityTools(server, abilities, source)

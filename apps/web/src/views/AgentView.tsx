@@ -124,6 +124,14 @@ import {
   type InteractiveFollowupDetail,
 } from '../interactive/followup'
 import { InteractiveAttachmentChip } from '../interactive/InteractiveAttachmentChip'
+import { TerminalAttachmentChip } from '../chat/TerminalAttachmentChip'
+import { TERMINAL_CONTEXT_EVENT, terminalDraftKey, type TerminalContextDetail } from '../chat/terminalToChat'
+import {
+  addTerminalAttachment,
+  isTerminalAttachmentList,
+  terminalAttachmentBlock,
+  type TerminalAttachment,
+} from '@ramu/shared/chat/terminalContext'
 import type { AgentViewDesc, MessageEdit, TranscriptContext } from './agent/types'
 import { AgentHeader } from './agent/components/AgentHeader'
 import { ContinueChatDialog } from './agent/components/ContinueChatDialog'
@@ -582,6 +590,25 @@ export const AgentView = memo(function AgentView({
     window.addEventListener(INTERACTIVE_FOLLOWUP_EVENT, receive)
     return () => window.removeEventListener(INTERACTIVE_FOLLOWUP_EVENT, receive)
   }, [host.id, view.sessionId, setContentAttachments])
+  /** Terminal output added from a terminal of this thread waits as a chip and goes out as hidden context too. */
+  const [terminalAttachments, setTerminalAttachments] = useJsonDraft<TerminalAttachment[]>(
+    terminalDraftKey(view.sessionId),
+    host.id,
+    [],
+    isTerminalAttachmentList,
+    (items) => items.length === 0,
+  )
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const detail = (event as CustomEvent<TerminalContextDetail>).detail
+      if (viewOnly || detail?.host !== host.id || detail.session !== view.sessionId || detail.taken) return
+      detail.taken = true
+      setTerminalAttachments((current) => addTerminalAttachment(current, detail.attachment))
+      requestAnimationFrame(() => focusComposer(root.current, Number.MAX_SAFE_INTEGER))
+    }
+    window.addEventListener(TERMINAL_CONTEXT_EVENT, receive)
+    return () => window.removeEventListener(TERMINAL_CONTEXT_EVENT, receive)
+  }, [host.id, view.sessionId, viewOnly, setTerminalAttachments])
 
   const recallIntoComposer = (files: Attachment[], text: string) => {
     setAttachments((current) => [...current, ...files.filter((file) => !current.some((entry) => entry.id === file.id))])
@@ -668,7 +695,7 @@ export const AgentView = memo(function AgentView({
         if (consumed.unchanged) setDraft((current) => (current === submitted ? '' : current))
       }, true)
     const side = /^\/(?:aside|btw)\s+(\S[\s\S]*)$/.exec(draft.trim())
-    return side && !attachments.length && !attached.length && !contentAttachments.length
+    return side && !attachments.length && !attached.length && !contentAttachments.length && !terminalAttachments.length
       ? askAside(side[1]!.trim())
       : sendToAgent(mode, context)
   }
@@ -678,11 +705,18 @@ export const AgentView = memo(function AgentView({
       const submitted = draft
       const submittedFiles = attachments
       const submittedContent = contentAttachments
-      const outgoing = submittedContent.length
-        ? `${submitted}${CONTEXT_MARKER}${interactiveAttachmentBlock(submittedContent)}\n</ramu-context>`
-        : submitted
-      const clearContent = () =>
+      const submittedTerminal = terminalAttachments
+      const hidden = [
+        submittedContent.length ? interactiveAttachmentBlock(submittedContent) : '',
+        submittedTerminal.length ? terminalAttachmentBlock(submittedTerminal) : '',
+      ]
+        .filter(Boolean)
+        .join('\n')
+      const outgoing = hidden ? `${submitted}${CONTEXT_MARKER}${hidden}\n</ramu-context>` : submitted
+      const clearContent = () => {
         setContentAttachments((current) => current.filter((item) => !submittedContent.includes(item)))
+        setTerminalAttachments((current) => current.filter((item) => !submittedTerminal.includes(item)))
+      }
       // Review comments live on the host, so a message carrying them waits for the connection rather than the outbox.
       if (hostOffline && attached.length)
         throw new Error(translate('Review comments send once {0} is back. Your message is kept.', { 0: hostName }))
@@ -1260,7 +1294,7 @@ export const AgentView = memo(function AgentView({
                         },
                       }}
                       value={draft}
-                      allowEmpty={attached.length > 0}
+                      allowEmpty={attached.length > 0 || terminalAttachments.length > 0}
                       chips={
                         <>
                           {!viewOnly && (
@@ -1282,6 +1316,15 @@ export const AgentView = memo(function AgentView({
                               attachment={attachment}
                               onRemove={() =>
                                 setContentAttachments((current) => current.filter((item) => item !== attachment))
+                              }
+                            />
+                          ))}
+                          {terminalAttachments.map((attachment) => (
+                            <TerminalAttachmentChip
+                              key={attachment.id}
+                              attachment={attachment}
+                              onRemove={() =>
+                                setTerminalAttachments((current) => current.filter((item) => item !== attachment))
                               }
                             />
                           ))}

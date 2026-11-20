@@ -156,6 +156,12 @@ Threads on the same checkout take turns. A message to one waits in its queue whi
 
 Hosts whose platform or description (**Settings → Threads → Describe this host**) the request mentions are listed first.
 
+## Terminal output in a message
+
+To show an agent what a terminal printed, select the lines and click **Add to chat** in the terminal's corner, or right-click and choose **Add selection to chat**. With nothing selected, **Add screen to chat** takes the rows on screen. The output waits above the message box as a chip naming the terminal and its lines: click it to check the text, or × to take it off. It goes to the agent with your next message, and you can send it without typing anything. The thread's chat takes it; a project's own terminal starts **New chat** with the output in the box.
+
+Agents can also read your terminals in the thread themselves. When you write "fix the error in my terminal", the agent lists your terminals and reads the recent output of the one that printed last, or the one it needs. It only reads, never types into them, and values that look like secrets are redacted. Commands the agent started in the background are in [Background terminals](background-work.md#background-commands) instead.
+
 ## Threads from a terminal
 
 `ramu thread start|status|message|list` lets a terminal agent or script place work on this host. See [Remote hosts](remote-hosts.md#threads-from-a-terminal).

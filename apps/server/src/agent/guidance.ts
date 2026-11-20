@@ -1,5 +1,6 @@
 import { INTERACTIVE_GUIDE } from '../interactive/tools'
 import { BACKGROUND_TERMINAL_GUIDE } from './backgroundTerminalTools'
+import { USER_TERMINAL_GUIDE } from './userTerminalTools'
 import { BACKGROUND_PREAMBLE } from '@ramu/shared/chat/agentTasks'
 import { QUESTION_INPUT_GUIDANCE, QUESTION_PREAMBLE } from '@ramu/shared/chat/questions'
 import { ADVISOR_PREAMBLE } from './advisor'
@@ -53,7 +54,7 @@ export function sessionGuidance(sections: GuidanceSections): string {
   if (sections.goal !== null) instructions += `\n\n${sections.goal}`
   if (sections.nativeSubagentNote) instructions += `\n\n${NATIVE_SUBAGENT_PREAMBLE}`
   if (sections.memory) instructions += `\n\n${sections.memory}`
-  instructions += `\n\n${BACKGROUND_TERMINAL_GUIDE}`
+  instructions += `\n\n${BACKGROUND_TERMINAL_GUIDE}\n\n${USER_TERMINAL_GUIDE}`
   // Whichever search defers the tools, the agent still needs to know artifacts exist.
   if (sections.toolSearch || sections.nativeToolSearch) instructions += `\n\n${INTERACTIVE_GUIDE}`
   if (sections.toolSearch) instructions += `\n\n${TOOL_DISCOVERY_INSTRUCTIONS}`
