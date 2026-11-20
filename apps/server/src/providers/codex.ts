@@ -1,3 +1,4 @@
+import { exitReason, recordOutput } from './exitReason'
 import { ownedEnvironment, trackProcess } from '../agent/processOwners'
 import { addTokens } from './turnTokens'
 import { modelLegacyMetadata } from './modelLifecycle'
@@ -78,7 +79,7 @@ export class CodexRpc {
         },
       ),
     )
-    this.process.stderr.resume()
+    const output = recordOutput(this.process.stderr)
     const lines = createInterface({ input: this.process.stdout })
     lines.on('line', (line) => {
       let m: Wire
@@ -109,7 +110,9 @@ export class CodexRpc {
       this.process.once('error', (error) =>
         finish(new Error(`Cannot start Codex. Install the Codex CLI and sign in first. ${error.message}`)),
       )
-      this.process.once('exit', (code) => finish(new Error(`Codex app-server exited (${code ?? 'signal'})`)))
+      this.process.once('exit', (code, signal) =>
+        finish(new Error(exitReason('Codex app-server', code, signal, output.last()))),
+      )
     })
     this.process.stdin.on('error', () => {})
   }

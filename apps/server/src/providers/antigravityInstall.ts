@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
+import { recordOutput } from './exitReason'
 import { antigravityFileNames, managedAntigravity, providerRuntimeHome } from './providerBinaries'
 
 export const ANTIGRAVITY_REGISTRY =
@@ -111,14 +112,8 @@ export function probeAntigravity(
       windowsHide: true,
     })
     // What the runtime said before it went quiet is the only clue to why it did not answer.
-    let said = ''
-    child.stderr.on('data', (chunk: Buffer) => {
-      said = (said + chunk.toString()).slice(-400)
-    })
-    const why = () => {
-      const last = said.trim().split('\n').pop()?.trim()
-      return last ? ` Last output: ${last.slice(0, 200)}` : ''
-    }
+    const output = recordOutput(child.stderr)
+    const why = () => (output.last() ? ` Last output: ${output.last()}` : '')
     child.stdin.on('error', () => {})
     const lines = createInterface({ input: child.stdout })
     let settled = false
