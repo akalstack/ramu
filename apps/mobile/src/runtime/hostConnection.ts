@@ -19,7 +19,3 @@ export const attemptStatus = (current: ComputerStatus, retry: boolean): Computer
 
 /** The status after a failed attempt: a link that was just live is reconnecting, not yet offline. */
 export const failureStatus = (wasLive: boolean): ComputerStatus => (wasLive ? 'connecting' : 'offline')
-
-/** The host answered that it has no such call: it runs an older Ramu than this phone, and updating it adds the call. */
-export const isOlderHostRefusal = (error: unknown) =>
-  error instanceof Error && /^Unknown method [\w.]+$/.test(error.message)

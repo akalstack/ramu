@@ -155,28 +155,6 @@ describe('AgentService', () => {
     expect(svc.events(session.id).at(-1)).not.toMatchObject({ kind: 'state', state: 'stopped' })
   })
 
-  it('repairs an older shutdown stop after a successful result but retains genuinely interrupted work', async () => {
-    const svc = new AgentService(db, () => {}, demoQuery)
-    const finished = svc.start('t', scopeOf(cwd), 'hello', DEFAULT_AGENT_SETTINGS)
-    // A second writer in the same checkout is refused while the first is working.
-    await until(() => svc.get(finished.id).state === 'idle')
-    const interrupted = svc.start('t2', scopeOf(cwd), 'hello', DEFAULT_AGENT_SETTINGS)
-    await until(() => svc.get(interrupted.id).state === 'idle')
-    svc.stopAll()
-    const record = (id: string, event: AgentEvent) =>
-      (svc as unknown as { record(id: string, event: AgentEvent): void }).record(id, event)
-    record(finished.id, { kind: 'state', state: 'stopped' })
-    record(interrupted.id, { kind: 'user', text: 'Unfinished next turn' })
-    record(interrupted.id, { kind: 'state', state: 'stopped' })
-    db.prepare("UPDATE agent_sessions SET state='stopped' WHERE id IN (?,?)").run(finished.id, interrupted.id)
-    const restored = new AgentService(db, () => {}, demoQuery)
-    restored.markRestoredOnBoot()
-    expect(restored.get(finished.id).state).toBe('restored')
-    expect(restored.events(finished.id).at(-1)).toMatchObject({ kind: 'state', state: 'restored' })
-    expect(restored.get(interrupted.id).state).toBe('stopped')
-    restored.stopAll()
-  })
-
   it('does not replace a failed outcome with stopped during provider cleanup', async () => {
     const svc = new AgentService(db, () => {}, demoQuery)
     const session = svc.start('t', scopeOf(cwd), 'hello', DEFAULT_AGENT_SETTINGS)
@@ -225,7 +203,8 @@ describe('AgentService', () => {
     const chat = svc.start('t', scopeOf(cwd), 'hello', DEFAULT_AGENT_SETTINGS)
     await until(() => svc.get(chat.id).state === 'idle')
     svc.stopAll()
-    db.prepare("UPDATE agent_sessions SET state='stopped' WHERE id = ?").run(chat.id)
+    // The host went away mid-turn: on the next start the thread comes back restored.
+    db.prepare("UPDATE agent_sessions SET state='running' WHERE id = ?").run(chat.id)
     const restored = new AgentService(db, () => {}, demoQuery)
     restored.markRestoredOnBoot()
     restored.setupOmissions = () => [{ kind: 'shared-mcp', name: 'Tracker', status: 'approval-needed' }]

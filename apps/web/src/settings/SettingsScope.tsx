@@ -23,26 +23,6 @@ import { t } from '../i18n'
 
 export type SettingsScope = ReturnType<typeof useSettingsScope>
 export const SettingsScopeContext = createContext<SettingsScope | null>(null)
-/** Older servers can omit newly introduced fields. Defaults are for rendering only, never capabilities. */
-function renderPreferences(saved?: AppPreferences): AppPreferences {
-  const merge = (defaults: unknown, value: unknown): unknown =>
-    defaults &&
-    typeof defaults === 'object' &&
-    !Array.isArray(defaults) &&
-    value &&
-    typeof value === 'object' &&
-    !Array.isArray(value)
-      ? Object.fromEntries(
-          [...new Set([...Object.keys(defaults), ...Object.keys(value)])].map((key) => [
-            key,
-            merge((defaults as Record<string, unknown>)[key], (value as Record<string, unknown>)[key]),
-          ]),
-        )
-      : value === undefined
-        ? defaults
-        : value
-  return merge(DEFAULT_APP_PREFERENCES, saved) as AppPreferences
-}
 const currentValue = (snapshot: SettingsSnapshot, path: string) =>
   snapshot.settings.find((field) => field.path === path)?.value
 /** A selected host's side of one setting; see `hosts` in `useSettingsScope`. */
@@ -181,7 +161,7 @@ export function useSettingsScope(section: string, host?: string) {
   const primary =
     targets.find((entry) => entry.id === computers?.current && entry.snapshot) ??
     targets.find((entry) => entry.snapshot)
-  const preferences = renderPreferences(primary?.snapshot?.preferences)
+  const preferences = primary?.snapshot?.preferences ?? DEFAULT_APP_PREFERENCES
   const snapshots = targets.flatMap((entry) => (entry.snapshot ? [entry.snapshot] : []))
   const common = ready ? commonSettings(snapshots) : []
   // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [])), [targets] by design; the values it reads beyond these are current as of that run

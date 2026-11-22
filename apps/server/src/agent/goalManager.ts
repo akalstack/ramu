@@ -175,17 +175,6 @@ export class GoalManager {
     return this.saveGoal(id, next)!
   }
 
-  /** Durable event sequences avoid timestamp collisions when a claim or objective is replaced. */
-  private inputSeq(id: string): number {
-    return (
-      this.db
-        .prepare(
-          "SELECT COALESCE(MAX(seq), 0) AS seq FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') IN ('user', 'queue', 'question', 'question-state', 'permission-request', 'elicitation', 'request-resolved')",
-        )
-        .get(id) as { seq: number }
-    ).seq
-  }
-
   /** Question drafts/answers update in place, so a sequence alone is not an input revision. */
   private inputState(id: string): string {
     const rows = this.db
@@ -470,7 +459,7 @@ export class GoalManager {
     const claim = goal.claim!
     const state = this.completionState(id)
     // Instructions received after a durable claim require fresh evidence, including after restart.
-    if (claim.inputState ? claim.inputState !== this.inputState(id) : this.inputSeq(id) > this.goalSeq(id)) {
+    if (claim.inputState !== this.inputState(id)) {
       this.saveGoal(id, {
         ...goal,
         claim: undefined,

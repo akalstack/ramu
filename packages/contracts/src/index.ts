@@ -166,44 +166,7 @@ export function isLoopbackHost(host: string): boolean {
   return value === 'localhost' || value === '::1' || /^127\.\d+\.\d+\.\d+$/.test(value)
 }
 
-/** A short-lived manual pairing offer, safe to display as a QR code. Never contains a device token. */
-export interface PairQrOffer {
-  kind: 'ramu-pair'
-  version: 1
-  url: string
-  code: string
-  expiresAt: number
-}
-export function encodePairQr(offer: Omit<PairQrOffer, 'kind' | 'version'>): string {
-  return JSON.stringify({ kind: 'ramu-pair', version: 1, ...offer })
-}
-export function decodePairQr(text: string, now = Date.now()): PairQrOffer {
-  if (text.length > 4096) throw new Error('Unrecognized pairing QR code')
-  const offer = JSON.parse(text) as PairQrOffer
-  if (
-    offer.kind !== 'ramu-pair' ||
-    offer.version !== 1 ||
-    typeof offer.url !== 'string' ||
-    typeof offer.code !== 'string' ||
-    !/^[A-Z2-9]{5}-?[A-Z2-9]{5}$/.test(offer.code) ||
-    !Number.isFinite(offer.expiresAt)
-  )
-    throw new Error('Unrecognized pairing QR code')
-  const url = new URL(offer.url)
-  if (
-    !['http:', 'https:'].includes(url.protocol) ||
-    url.username ||
-    url.password ||
-    url.pathname !== '/' ||
-    url.search ||
-    url.hash
-  )
-    throw new Error('Invalid host address in QR code')
-  if (offer.expiresAt <= now) throw new Error('This pairing code has expired. Create a new one on the host.')
-  return { ...offer, url: url.origin }
-}
-
-/** What a person can paste to add a computer: a `ramu://pair` link, a QR payload, an https link with a code, or an address. */
+/** What a person can paste to add a computer: a pairing link (getramu.dev or `ramu://pair`), an https link with a code, or an address. */
 export interface PairInput {
   url: string
   code?: string
@@ -254,10 +217,6 @@ function offerFromParams(params: URLSearchParams, now: number): PairInput {
 export function parsePairInput(input: string, now = Date.now()): PairInput {
   const text = input.trim()
   if (!text || text.length > 4096) throw new Error('Paste a Ramu pairing link or an address')
-  if (text.startsWith('{')) {
-    const offer = decodePairQr(text, now)
-    return { url: offer.url, code: offer.code, expiresAt: offer.expiresAt }
-  }
   let link: URL | null = null
   try {
     link = new URL(text)

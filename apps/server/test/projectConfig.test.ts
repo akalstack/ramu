@@ -257,7 +257,7 @@ it('hides actions from ordinary lists and preserves hidden commands through olde
   expect(f.workspace.listWorkspaces()).toEqual([])
 })
 
-it('migrates legacy local action storage atomically and retains order/visibility after reopening SQLite', async () => {
+it('keeps local actions, their order and visibility after reopening SQLite', async () => {
   const root = directory(),
     data = directory()
   let db = openDb(join(data, 'actions.db'))
@@ -267,10 +267,9 @@ it('migrates legacy local action storage atomically and retains order/visibility
   const local = { id: 'local', name: 'Local', command: 'echo local' }
   const action = { id: 'repo', name: 'Repository', command: 'echo repository' }
   writeFileSync(join(root, 'ramu.json'), JSON.stringify({ actions: [action] }))
-  workspace.setAppState(`project-actions:${project.id}`, [local])
+  workspace.setAppState(`project-action-settings:${project.id}`, { version: 1, local: [local], hidden: [] })
   let actions = new ProjectActions(workspace, (id) => workspace.projectConfiguration(id))
   expect(actions.list(project.id).map((entry) => entry.id)).toEqual(['repo', 'local'])
-  expect(workspace.getAppState(`project-action-settings:${project.id}`, null)).toBeNull()
   actions.reorder(
     project.id,
     actions
@@ -279,7 +278,6 @@ it('migrates legacy local action storage atomically and retains order/visibility
       .reverse(),
   )
   actions.visibility(project.id, 'repo', true)
-  expect(workspace.getAppState(`project-actions:${project.id}`, [])).toEqual([local])
   db.close()
   db = openDb(join(data, 'actions.db'))
   workspace = new Workspace(db, join(data, 'worktrees'))

@@ -56,7 +56,7 @@ export function ProviderRouteChip({
   useEffect(() => {
     void invoke('agent.providerHold', sessionId).then(setHold, () => {})
   }, [sessionId, settings.provider, settings.model, invoke])
-  // The host's own answer for the next message. Older hosts lack the method and keep the local estimate below.
+  // The host's own answer for the next message; without one, the local estimate below stands.
   const [hosted, setHosted] = useState<NextMessageRoute | null>(null)
   const usageKey = usage
     .map((r) => `${r.provider}:${r.accountId ?? ''}:${r.window}:${r.usedPercent}:${r.status}`)

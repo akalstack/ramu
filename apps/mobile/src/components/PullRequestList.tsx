@@ -114,7 +114,7 @@ export function PullRequestList({ pane }: { pane?: { openUrl: string; open(targe
         setLists((all) => ({ ...all, [computerId]: { ...all[computerId], [closed ? 'closed' : 'open']: next } }))
         setFailed(({ [computerId]: _gone, ...rest }) => rest)
       } catch (error) {
-        // An offline or older host keeps what it last gave and says why.
+        // An offline host keeps what it last gave and says why.
         setFailed((all) => ({ ...all, [computerId]: error instanceof Error ? error.message : String(error) }))
       }
     },

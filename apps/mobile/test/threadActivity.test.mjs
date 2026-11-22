@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mobileThreadActivity, normalizeHelperGroups } from '../src/runtime/threadActivity.ts'
+import { mobileThreadActivity } from '../src/runtime/threadActivity.ts'
 const helper = (agentId, status = 'running', extra = {}) => ({
   id: agentId,
   agentId,
@@ -66,23 +66,4 @@ test('phone outbox uncertainty is never counted as a server queue and settled wo
 test('idle context compaction is a distinct working state, and blocked goals retain their meaning', () => {
   assert.equal(mobileThreadActivity(chat([], { compacting: true }), true).model.primary, 'working')
   assert.equal(mobileThreadActivity(chat([], { goal: { status: 'blocked' } }), true).model.goalState, 'blocked')
-})
-
-test('old cached lifetime groups retain helper identity, separate advisor history and gain no inferred permissions', () => {
-  const groups = normalizeHelperGroups([
-    {
-      kind: 'agents',
-      id: 'helpers',
-      agents: [
-        { id: 'native', name: 'Native', type: 'Explore', status: 'running', summary: '' },
-        { id: 'advice', name: 'Advisor', type: 'advisor', status: 'completed', summary: '' },
-      ],
-    },
-  ])
-  assert.equal(groups.length, 2)
-  assert.equal(groups[0].agents[0].agentId, 'native')
-  assert.equal(groups[0].agents[0].canStop, undefined)
-  assert.equal(groups[0].earlier, true)
-  assert.equal(groups[1].advisor, true)
-  assert.equal(groups[1].agents[0].taskType, 'advisor')
 })

@@ -2,11 +2,7 @@ import type { TaskUiState, TerminalGroup, ViewDescriptor } from '../types'
 
 export function terminalGroups(state: TaskUiState): TerminalGroup[] {
   const ids = state.views.filter((view) => view.kind === 'terminal').map((view) => view.id)
-  const saved =
-    state.terminalGroups ??
-    (state.terminalLayout && state.terminalLayout !== 'tabs' && ids.length
-      ? [{ id: ids[0]!, terminalIds: ids, layout: state.terminalLayout }]
-      : [])
+  const saved = state.terminalGroups ?? []
   const seen = new Set<string>(),
     groups: TerminalGroup[] = []
   for (const group of saved) {

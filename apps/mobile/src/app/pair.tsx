@@ -18,7 +18,6 @@ import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { needsHttpConsent } from '../runtime/transport'
 import { parsePairInput } from '@ramu/contracts'
-import { PairRequestUnsupported } from '@ramu/shared/pairRequest'
 import { CameraOff, CircleAlert, Monitor, QrCode, ShieldAlert } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
@@ -39,7 +38,7 @@ import {
   pairingFill,
   type PairMethod,
 } from '../runtime/nearbyModel'
-import { pairProblem, pairedName, readScan, type PairProblem } from '../runtime/pairingModel'
+import { pairProblem, pairedName, readScan, SecureRandomUnavailable, type PairProblem } from '../runtime/pairingModel'
 
 const LENGTH = 10
 
@@ -429,7 +428,7 @@ export default function Pair() {
                           if (!mounted.current || controller.signal.aborted) return
                           setAsking(null)
                           // Whatever stopped the request, the code form is filled in and ready as the next step.
-                          if (!(error instanceof PairRequestUnsupported)) setProblem(pairProblem(error))
+                          if (!(error instanceof SecureRandomUnavailable)) setProblem(pairProblem(error))
                           typeCode()
                         } finally {
                           pairing.current = false

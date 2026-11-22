@@ -3,7 +3,6 @@ import {
   DEFAULT_AGENT_BROWSER_PREFERENCES,
   fallbackKeepsBrowser,
   freezeForRun,
-  migrateAgentBrowserPreferences,
   resolveAgentBrowser,
   resolveProfile,
   validProfileId,
@@ -75,17 +74,7 @@ describe('profiles', () => {
   })
 })
 
-describe('migration and runs', () => {
-  it('keeps an existing provider browser, defaults everyone else and preserves explicit choices', () => {
-    const migrated = migrateAgentBrowserPreferences(['codex', 'cursor'], {
-      providerOverrides: { cursor: 'integrated' },
-    })
-    expect(migrated.providerOverrides).toEqual({ codex: 'provider', cursor: 'integrated' })
-    expect(migrated.agentBrowser).toBe('integrated')
-    expect(migrateAgentBrowserPreferences([], undefined)).toEqual(DEFAULT_AGENT_BROWSER_PREFERENCES)
-    expect(migrateAgentBrowserPreferences([], { defaultProfileId: '../bad' }).defaultProfileId).toBe('default')
-  })
-
+describe('runs', () => {
   it('freezes a run, and only an integrated destination keeps the session on fallback', () => {
     const integrated = resolveAgentBrowser(DEFAULT_AGENT_BROWSER_PREFERENCES, 'codex', full, ready)
     const frozen = freezeForRun(integrated, 'work')

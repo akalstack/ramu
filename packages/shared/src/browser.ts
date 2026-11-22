@@ -100,25 +100,6 @@ export function resolveProfile(
   return { id: DEFAULT_PROFILE_ID, fellBack: selected !== undefined && selected !== DEFAULT_PROFILE_ID }
 }
 
-/**
- * Existing installs that already configured a provider browser keep it: those providers migrate to the provider
- * setup, everyone else gets the new default. Existing tools are never replaced silently.
- */
-export function migrateAgentBrowserPreferences(
-  providersWithOwnBrowser: readonly AgentProvider[],
-  current: Partial<AgentBrowserPreferences> | undefined,
-): AgentBrowserPreferences {
-  const overrides: Partial<Record<AgentProvider, BrowserBackend>> = { ...current?.providerOverrides }
-  for (const provider of providersWithOwnBrowser) overrides[provider] ??= 'provider'
-  return {
-    agentBrowser: current?.agentBrowser ?? DEFAULT_AGENT_BROWSER_PREFERENCES.agentBrowser,
-    providerOverrides: overrides,
-    defaultProfileId: validProfileId(current?.defaultProfileId)
-      ? current.defaultProfileId
-      : DEFAULT_AGENT_BROWSER_PREFERENCES.defaultProfileId,
-  }
-}
-
 /** A run keeps the browser it started with; settings changes apply to the next run. */
 export function freezeForRun(resolution: BrowserResolution, profileId: string) {
   return Object.freeze({ backend: resolution.backend, profileId })

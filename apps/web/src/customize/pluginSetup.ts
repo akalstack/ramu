@@ -44,7 +44,7 @@ export function usePluginSetup(plugin: { index: string; name: string } | null): 
   const setUp = useCallback(() => {
     if (!name || !index) return
     if (current === 'missing') reviewPluginInstall(index, name)
-    else openPluginSettings(host.id)
-  }, [current, host.id, index, name])
+    else openPluginSettings()
+  }, [current, index, name])
   return { state: current, setUp }
 }

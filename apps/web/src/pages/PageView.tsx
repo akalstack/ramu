@@ -895,7 +895,7 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
             )}
           </span>
           {!viewOnly && (
-            <Button size="sm" variant="secondary" onClick={() => openPluginSettings(host)}>
+            <Button size="sm" variant="secondary" onClick={openPluginSettings}>
               {t('Open plugin settings')}
             </Button>
           )}

@@ -21,8 +21,8 @@ export interface BackgroundStatus {
   listening?: string
   /** Whether that listener serves HTTPS. */
   tls?: boolean
-  /** What this host runs on. Older hosts omit it. */
-  os?: DeviceOs
+  /** What this host runs on. */
+  os: DeviceOs
 }
 
 /** What asking a host to update Ramu did. `built` means a supervisor-less host needs its service restarted by hand. */
@@ -55,7 +55,7 @@ export interface NetworkDevice {
   expiresAt?: number | null
   role?: 'owner' | 'viewer'
   lastSeenAt: number | null
-  /** Absent on devices paired before permissions existed, which hold every permission. */
+  /** What an owner device may use; absent on view-only devices. */
   permissions?: Partial<
     Record<import('../devicePermissions').DevicePermission, import('../devicePermissions').PermissionGrant>
   > /** Permissions the host refused for good. */

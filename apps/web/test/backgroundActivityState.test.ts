@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { readBackgroundActivity } from '../src/chat/backgroundActivityState'
 
-it('keeps a healthy older service connected when the activity endpoint is missing', async () => {
+it('keeps a running service connected when only the activity read fails', async () => {
   const state = await readBackgroundActivity(
     async () => {
       throw new Error('Unknown method activity.status')

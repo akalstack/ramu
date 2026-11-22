@@ -22,7 +22,6 @@ const SELF_GATED = new Set([
   'get_goal',
   'update_goal',
   'tool_search',
-  'tool_result_read',
   'memory_read',
   'session_recall',
   'session_search',

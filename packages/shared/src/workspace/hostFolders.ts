@@ -11,7 +11,7 @@ export interface HostFolder {
 export interface HostFolderListing {
   path: string
   parent: string | null
-  /** The listed folder is itself a Git repository. Older hosts omit it. */
+  /** The listed folder is itself a Git repository. */
   repo?: boolean
   folders: HostFolder[]
 }

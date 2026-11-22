@@ -110,7 +110,7 @@ export interface HelperRecoverySource {
   tasks: AgentTask[]
 }
 
-/** Reconstruct provider ownership from durable events, including chats written before init carried a provider. */
+/** Reconstruct provider ownership from durable events. */
 export function helperRecoverySources(
   session: AgentSessionInfo,
   events: AgentEvent[],
@@ -120,12 +120,7 @@ export function helperRecoverySources(
   const owners = new Map<string, string>()
   const firstSwitch = events.find((event) => event.kind === 'settings' && event.previous)
   const firstInit = events.find((event) => event.kind === 'init')
-  let provider =
-    firstInit?.kind === 'init' && firstInit.provider
-      ? firstInit.provider
-      : firstSwitch?.kind === 'settings'
-        ? firstSwitch.previous!.provider
-        : session.provider
+  let provider = firstInit?.kind === 'init' && firstInit.provider ? firstInit.provider : session.provider
   let settings = firstSwitch?.kind === 'settings' ? firstSwitch.previous! : { ...session.settings, provider }
   let active: string | null = null
   const source = (id: string, cwd: string) => {

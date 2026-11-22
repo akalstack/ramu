@@ -15,7 +15,7 @@ const onByDefault = (category: PushCategory) => !PUSH_OPT_IN.includes(category)
 
 /**
  * The draft key that stores the categories switched away from their default, as a comma list: an on-by-default one that was
- * switched off, or an opt-in one that was switched on. (The key keeps its first name, "muted", so saved choices carry over.)
+ * switched off, or an opt-in one that was switched on.
  */
 export const PUSH_MUTED_KEY = 'push-muted'
 

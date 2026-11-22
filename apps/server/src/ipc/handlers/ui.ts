@@ -79,7 +79,6 @@ const taskUiSchema = z.object({
   activeTerminalId: id.nullable().optional(),
   terminalReturnViewId: id.nullable().optional(),
   terminalOpen: z.boolean().optional(),
-  terminalLayout: z.enum(['tabs', 'horizontal', 'vertical']).optional(),
   terminalGroups: z
     .array(z.object({ id, terminalIds: z.array(id).min(1).max(200), layout: z.enum(['horizontal', 'vertical']) }))
     .max(200)
@@ -88,20 +87,12 @@ const taskUiSchema = z.object({
   terminalHeight: z.number().int().min(120).max(2000).optional(),
   terminalDock: z.enum(['right', 'bottom']).optional(),
 })
-const workspaceUiSchema = z.preprocess(
-  (value) => {
-    // Restore the removed Agents page on Home, keeping existing task tabs open.
-    if (value && typeof value === 'object' && 'sidebar' in value && value.sidebar === 'agents')
-      return { ...value, sidebar: 'projects', activeTaskId: null }
-    return value
-  },
-  z.object({
-    openTaskIds: z.array(id).max(100),
-    activeTaskId: id.nullable(),
-    sidebar: z.enum(['projects', 'explorer', 'search', 'scm', 'schedules', 'inbox']).catch('projects'),
-    collapsed: z.array(z.string().max(200)).max(500).optional().catch(undefined),
-  }),
-)
+const workspaceUiSchema = z.object({
+  openTaskIds: z.array(id).max(100),
+  activeTaskId: id.nullable(),
+  sidebar: z.enum(['projects', 'explorer', 'search', 'scm', 'schedules', 'inbox']),
+  collapsed: z.array(z.string().max(200)).max(500).optional(),
+})
 
 /** Which tabs, terminals and sidebar state the window restores. */
 export const registerUiHandlers: RegisterHandlers = ({ workspace }) => ({

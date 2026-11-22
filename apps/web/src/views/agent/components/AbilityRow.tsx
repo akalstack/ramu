@@ -10,6 +10,7 @@ import { useHost } from '../../../workspace/HostProvider'
 import { notifyError } from '../../../chat/Notifications'
 import { errorText } from '../../../lib/errors'
 import { GHOST_TEXT_BUTTON_CLASS } from '../styles'
+import { openCustomize } from '../../../customize/openCustomize'
 
 const ICONS = {
   image_generation: ImageIcon,
@@ -108,7 +109,7 @@ export function AbilityRow({ call, sessionId, live }: { call: AbilityCall; sessi
             variant="ghost"
             size="sm"
             className={GHOST_TEXT_BUTTON_CLASS}
-            onClick={() => window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'plugins' } }))}
+            onClick={() => openCustomize('plugins')}
           >
             {t('Open {0} in Plugins', { '0': call.mcp.server })}
           </Button>

@@ -128,7 +128,6 @@ export function effectiveTaskUi(
       activeTerminalId: shared.activeTerminalId,
       terminalReturnViewId: shared.terminalReturnViewId,
       terminalOpen: shared.terminalOpen,
-      terminalLayout: shared.terminalLayout,
       terminalGroups: shared.terminalGroups,
       terminalTabPosition: shared.terminalTabPosition,
       terminalHeight: shared.terminalHeight,

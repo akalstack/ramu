@@ -94,9 +94,7 @@ export function parsePublicUrl(input: unknown): string | null {
 export function validateNetworkSetting(input: unknown, tls: boolean, addresses = localAddresses()): NetworkSetting {
   const value = input as Partial<NetworkSetting> | null
   if (!value || typeof value !== 'object') throw new Error('Invalid network settings')
-  const { enabled, host, port, acceptUnencrypted } = value
-  // Settings saved before discovery existed have no such field: it stays off until the person turns it on.
-  const discoverable = value.discoverable ?? false
+  const { enabled, host, port, acceptUnencrypted, discoverable } = value
   const publicUrl = parsePublicUrl(value.publicUrl)
   const tunnel = parseTunnelChoice(value.tunnel)
   if (

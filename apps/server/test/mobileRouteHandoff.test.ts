@@ -107,11 +107,11 @@ it('pairs once, loses LAN during an action, switches to VPN, and returns to LAN 
             ok: true,
             value: {
               protocol: 1,
-              capabilities: ['mobile-companion'],
               running: true,
               pid: 1,
               startedAt: 0,
               loginEnabled: false,
+              os: { os: 'macos', form: 'computer' },
             },
           }
         if (request.method === 'tasks.rename') {
@@ -170,7 +170,7 @@ it('pairs once, loses LAN during an action, switches to VPN, and returns to LAN 
     signal.addEventListener('abort', close, { once: true })
     try {
       const status = await probe.invoke('background.status')
-      return status.protocol === 1 && !!status.capabilities?.includes('mobile-companion')
+      return status.protocol === 1
     } finally {
       signal.removeEventListener('abort', close)
       close()

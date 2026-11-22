@@ -150,8 +150,7 @@ function PermissionLine({
   permission: DevicePermission
   invoke: PermissionInvoke
 }) {
-  // A device from before permissions holds every one of them.
-  const grant = device.permissions ? (device.permissions[permission] ?? null) : { until: null }
+  const grant = device.permissions?.[permission] ?? null
   const state = permissionState(grant, !!device.blocked?.includes(permission), Date.now())
   const [choice, choose] = useStagedValue<string>(`permission:${device.id}:${permission}`, state, (value) =>
     invoke('network.setDevicePermission', device.id, permission, value),

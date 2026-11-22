@@ -22,6 +22,7 @@ const skill = (id: string, name: string, projectId: string | null): ManagedSkill
   id,
   projectId,
   name,
+  changedBy: 'learning',
   description: `Use ${name}`,
   content: `Steps for ${name}.`,
   status: 'active',

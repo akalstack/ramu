@@ -141,22 +141,6 @@ it('routes manager removals with explicit user, project, all-project and all sco
   expect(agents.removePermissionApproval).toHaveBeenCalledWith('permission-approval:v1:rule')
 })
 
-it('replaces older predefined rules once when the defaults change, keeping rules the user saved', () => {
-  const approvals = new PermissionApprovals(db)
-  approvals.remember('antigravity', 'builtin:git-read:diff', 'user', undefined, {
-    label: 'old',
-    builtin: 'git-read:diff',
-    autoOnly: true,
-    behavior: 'allow',
-  })
-  approvals.remember('antigravity', 'mine', 'user', undefined, { label: 'Mine', pattern: 'make *', behavior: 'allow' })
-  approvals.ensureAntigravityDefaults()
-  const rules = approvals.list()
-  expect(rules.some((rule) => rule.builtin === 'git-read:diff')).toBe(false)
-  expect(rules.some((rule) => rule.builtin === 'project-checks')).toBe(true)
-  expect(rules.some((rule) => rule.label === 'Mine')).toBe(true)
-})
-
 it('initializes internal Antigravity Auto defaults once and never restores removed rules implicitly', () => {
   const approvals = new PermissionApprovals(db)
   approvals.ensureAntigravityDefaults()

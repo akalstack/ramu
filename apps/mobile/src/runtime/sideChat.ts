@@ -3,7 +3,7 @@ import type { Aside, AsideMessage } from '@ramu/shared/types'
 /**
  * A thread's side questions as one chat, the way Claude's /btw works: every aside the host holds is read as one
  * conversation in time order, a quoted passage shown before the question that asked about it, and new questions
- * continue the latest aside. Older hosts may hold several asides from before; they simply read as earlier messages.
+ * continue the latest aside.
  */
 export function sideChat(asides: readonly Aside[]): {
   messages: (AsideMessage & { quote?: string })[]

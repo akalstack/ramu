@@ -154,7 +154,6 @@ export interface WorkspaceApi {
         TaskUiState,
         | 'terminalOpen'
         | 'restoreTerminal'
-        | 'terminalLayout'
         | 'terminalGroups'
         | 'terminalTabPosition'
         | 'terminalHeight'

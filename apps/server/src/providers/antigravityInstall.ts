@@ -233,7 +233,7 @@ export async function installAntigravity(
   signal?.throwIfAborted()
   if (!asset) throw new Error('Google does not publish the Antigravity CLI for this host.')
   const active = managedAntigravity()
-  if (active?.version === asset.version && !active.harness) return { version: asset.version, installed: false }
+  if (active?.version === asset.version) return { version: asset.version, installed: false }
   const home = providerRuntimeHome('antigravity')
   await mkdir(join(home, 'downloads'), { recursive: true, mode: 0o700 })
   // Named by the checksum, so a partial download only ever continues the same file.

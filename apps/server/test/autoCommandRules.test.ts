@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   AUTO_COMMAND_DEFAULTS,
-  isRoutineGitRead,
   judgeCommand,
   matchesAutoCommandRule,
   parseCommand,
@@ -241,26 +240,7 @@ describe('what is merely unknown', () => {
   })
 })
 
-describe('legacy and rule matching', () => {
-  it('keeps isRoutineGitRead strict and single-command', () => {
-    for (const command of ['git diff', 'git diff --stat', 'git status --porcelain=v1', 'git log --oneline -n 5'])
-      expect(isRoutineGitRead(command)).toBe(true)
-    for (const command of [
-      'git diff --output=x',
-      'git diff --ext-diff',
-      'git show --textconv',
-      'git -c core.pager=evil diff',
-      'git -C /tmp diff',
-      'git reset --hard',
-      'git diff; whoami',
-      'git diff | cat',
-      'git diff $(pwd)',
-      'git diff > out',
-      'git diff --unknown',
-    ])
-      expect(isRoutineGitRead(command)).toBe(false)
-  })
-
+describe('rule matching', () => {
   it('matches a stored rule by its id', () => {
     expect(matchesAutoCommandRule('read', 'ls src')).toBe(true)
     expect(matchesAutoCommandRule('git-read', 'ls src')).toBe(false)

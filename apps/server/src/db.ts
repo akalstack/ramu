@@ -2,88 +2,22 @@
 // Source files stay on disk; only projects, tasks, bindings, sessions and UI state live here.
 import { DatabaseSync } from 'node:sqlite'
 
-/** The schema version the first public release (0.1.0) stamps; profiles from earlier builds are not read. */
-const BASELINE = 36
-
 /**
- * Schema changes since the first public release, oldest first: entry `i` upgrades a profile from version
- * `BASELINE + i` to the next, in the same transaction as the new version stamp. Change SCHEMA (what a new profile is
- * created with) and add an entry here (what an existing profile needs) together, and never edit a released entry:
- * people's threads and settings live in these files.
+ * The schema version this build creates. A profile stamped with a higher number comes from a newer Ramu and is
+ * refused, untouched.
  */
-const MIGRATIONS: ((db: DatabaseSync) => void)[] = []
-
-/**
- * Tables added after this schema version was stamped. Each is created if missing on every open, so an existing profile
- * gains them in place; they only ever add tables and indexes.
- */
-const ADDED_TABLES = `
-CREATE TABLE IF NOT EXISTS interactive_media (
-    id TEXT NOT NULL, version INTEGER NOT NULL, wide TEXT, light TEXT, checks TEXT NOT NULL DEFAULT '[]',
-    PRIMARY KEY(id,version)
-  );
-CREATE TABLE IF NOT EXISTS artifacts (
-    id TEXT PRIMARY KEY, kind TEXT NOT NULL DEFAULT 'app', data TEXT NOT NULL, current_version INTEGER NOT NULL,
-    pinned INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, changed_at INTEGER NOT NULL
-  );
-CREATE TABLE IF NOT EXISTS artifact_versions (
-    artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE, version INTEGER NOT NULL,
-    reference TEXT NOT NULL, html TEXT NOT NULL, preview TEXT, files TEXT, PRIMARY KEY(artifact_id,version)
-  );
-CREATE TABLE IF NOT EXISTS artifact_state (
-    artifact_id TEXT PRIMARY KEY REFERENCES artifacts(id) ON DELETE CASCADE, state TEXT NOT NULL,
-    revision INTEGER NOT NULL, updated_at INTEGER NOT NULL
-  );
-CREATE TABLE IF NOT EXISTS artifact_records (
-    artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE, collection TEXT NOT NULL, id TEXT NOT NULL,
-    data TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(artifact_id,collection,id)
-  );
-CREATE TABLE IF NOT EXISTS artifact_files (
-    artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE, id TEXT NOT NULL, mime TEXT NOT NULL,
-    data BLOB NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(artifact_id,id)
-  );
-CREATE TABLE IF NOT EXISTS artifact_runs (
-    id TEXT PRIMARY KEY, artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE, data TEXT NOT NULL,
-    created_at INTEGER NOT NULL
-  );
-CREATE TABLE IF NOT EXISTS artifact_shares (
-    token TEXT PRIMARY KEY, artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE, data TEXT NOT NULL,
-    created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL
-  );
-CREATE TABLE IF NOT EXISTS interactive_exports (
-    id TEXT NOT NULL, version INTEGER NOT NULL, format TEXT NOT NULL, digest TEXT NOT NULL, name TEXT NOT NULL,
-    mime TEXT NOT NULL, data BLOB NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(id,version,format)
-  );
-CREATE TABLE IF NOT EXISTS session_context (
-    session_id TEXT PRIMARY KEY REFERENCES agent_sessions(id) ON DELETE CASCADE, selection TEXT NOT NULL, data TEXT NOT NULL
-  );
-CREATE INDEX IF NOT EXISTS artifact_records_by_artifact ON artifact_records(artifact_id, collection, created_at);
-CREATE INDEX IF NOT EXISTS artifact_runs_by_artifact ON artifact_runs(artifact_id, created_at);
-`
-
-/**
- * Columns added to tables after this schema version was stamped, each with a default, so existing rows read as that
- * default and nothing is copied.
- */
-const ADDED_COLUMNS: { table: string; column: string; definition: string }[] = [
-  { table: 'rules', column: 'paths', definition: "TEXT NOT NULL DEFAULT '[]'" },
-  { table: 'rule_revisions', column: 'paths', definition: "TEXT NOT NULL DEFAULT '[]'" },
-]
-
-function addColumns(db: DatabaseSync) {
-  for (const { table, column, definition } of ADDED_COLUMNS) {
-    const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
-    if (!columns.some((entry) => entry.name === column))
-      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
-  }
-}
+const SCHEMA_VERSION = 36
 
 const SCHEMA = `
 CREATE TABLE projects (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    created_at INTEGER NOT NULL
-  , root TEXT, position INTEGER, aliases TEXT NOT NULL DEFAULT '[]', description TEXT NOT NULL DEFAULT '');
+    created_at INTEGER NOT NULL,
+    root TEXT,
+    position INTEGER,
+    aliases TEXT NOT NULL DEFAULT '[]',
+    description TEXT NOT NULL DEFAULT ''
+  );
 
 CREATE TABLE repositories (
     id TEXT PRIMARY KEY,
@@ -101,13 +35,23 @@ CREATE TABLE tasks (
     mode TEXT NOT NULL CHECK (mode IN ('current', 'worktree')),
     status TEXT NOT NULL,
     ui_state TEXT,
-    created_at INTEGER NOT NULL
-  , workspace_id TEXT REFERENCES workspaces(id), title_source TEXT NOT NULL DEFAULT 'prompt', pinned_at INTEGER, done_at INTEGER, title_revision INTEGER NOT NULL DEFAULT 0, title_generation_state TEXT NOT NULL DEFAULT 'idle', title_auto_attempted INTEGER NOT NULL DEFAULT 0, title_needs_refinement INTEGER NOT NULL DEFAULT 0, title_refinement_attempted INTEGER NOT NULL DEFAULT 0);
+    created_at INTEGER NOT NULL,
+    workspace_id TEXT REFERENCES workspaces(id),
+    title_source TEXT NOT NULL DEFAULT 'prompt',
+    pinned_at INTEGER,
+    done_at INTEGER,
+    title_revision INTEGER NOT NULL DEFAULT 0,
+    title_generation_state TEXT NOT NULL DEFAULT 'idle',
+    title_auto_attempted INTEGER NOT NULL DEFAULT 0,
+    title_needs_refinement INTEGER NOT NULL DEFAULT 0,
+    title_refinement_attempted INTEGER NOT NULL DEFAULT 0
+  );
 
 CREATE TABLE agent_events (
     session_id TEXT NOT NULL REFERENCES agent_sessions(id),
     seq INTEGER NOT NULL,
-    event TEXT NOT NULL, rev INTEGER NOT NULL DEFAULT 0,
+    event TEXT NOT NULL,
+    rev INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (session_id, seq)
   );
 
@@ -116,7 +60,7 @@ CREATE TABLE app_state (
     value TEXT NOT NULL
   );
 
-CREATE TABLE "agent_sessions" (
+CREATE TABLE agent_sessions (
     id TEXT PRIMARY KEY,
     task_id TEXT NOT NULL REFERENCES tasks(id),
     repo_id TEXT REFERENCES repositories(id),
@@ -126,8 +70,10 @@ CREATE TABLE "agent_sessions" (
     covers TEXT NOT NULL DEFAULT '[]',
     state TEXT NOT NULL,
     provider_session_id TEXT,
-    created_at INTEGER NOT NULL
-  , settings TEXT NOT NULL DEFAULT '{"provider":"claude-code","model":"","effort":null,"access":"ask","autoFallback":true}', parent_session_id TEXT, response_style_applied INTEGER NOT NULL DEFAULT 0);
+    created_at INTEGER NOT NULL,
+    settings TEXT NOT NULL DEFAULT '{"provider":"claude-code","model":"","effort":null,"access":"full","autoFallback":true}',
+    parent_session_id TEXT
+  );
 
 CREATE TABLE workspaces (
     id TEXT PRIMARY KEY,
@@ -136,7 +82,7 @@ CREATE TABLE workspaces (
     created_at INTEGER NOT NULL
   );
 
-CREATE TABLE "bindings" (
+CREATE TABLE bindings (
     task_id TEXT NOT NULL REFERENCES workspaces(id),
     repo_id TEXT NOT NULL REFERENCES repositories(id),
     mode TEXT NOT NULL,
@@ -187,7 +133,9 @@ CREATE TABLE session_provider_sessions (
     provider_session_id TEXT NOT NULL,
     last_seq INTEGER NOT NULL,
     context_max INTEGER,
-    updated_at INTEGER NOT NULL, model TEXT, context_used INTEGER,
+    updated_at INTEGER NOT NULL,
+    model TEXT,
+    context_used INTEGER,
     PRIMARY KEY (session_id, provider, account_id)
   );
 
@@ -230,6 +178,7 @@ CREATE TABLE rules (
     activation TEXT NOT NULL DEFAULT 'always',
     enabled INTEGER NOT NULL DEFAULT 1,
     revision INTEGER NOT NULL DEFAULT 1,
+    paths TEXT NOT NULL DEFAULT '[]',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   );
@@ -239,6 +188,7 @@ CREATE TABLE rule_revisions (
     revision INTEGER NOT NULL,
     name TEXT NOT NULL,
     body TEXT NOT NULL,
+    paths TEXT NOT NULL DEFAULT '[]',
     at INTEGER NOT NULL,
     PRIMARY KEY (rule_id, revision)
   );
@@ -265,8 +215,11 @@ CREATE TABLE thread_links (
     target_session_id TEXT,
     depth INTEGER NOT NULL,
     reported TEXT,
-    created_at INTEGER NOT NULL
-  , source_device TEXT, source_host TEXT, source_title TEXT);
+    created_at INTEGER NOT NULL,
+    source_device TEXT,
+    source_host TEXT,
+    source_title TEXT
+  );
 
 CREATE TABLE remote_threads (
       id TEXT PRIMARY KEY,
@@ -282,6 +235,48 @@ CREATE TABLE remote_threads (
       created_at INTEGER NOT NULL,
       retry_until INTEGER
     );
+
+CREATE TABLE interactive_media (
+    id TEXT NOT NULL, version INTEGER NOT NULL, wide TEXT, light TEXT, checks TEXT NOT NULL DEFAULT '[]',
+    PRIMARY KEY(id,version)
+  );
+CREATE TABLE artifacts (
+    id TEXT PRIMARY KEY, kind TEXT NOT NULL DEFAULT 'app', data TEXT NOT NULL, current_version INTEGER NOT NULL,
+    pinned INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, changed_at INTEGER NOT NULL
+  );
+CREATE TABLE artifact_versions (
+    artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE, version INTEGER NOT NULL,
+    reference TEXT NOT NULL, html TEXT NOT NULL, preview TEXT, files TEXT, PRIMARY KEY(artifact_id,version)
+  );
+CREATE TABLE artifact_state (
+    artifact_id TEXT PRIMARY KEY REFERENCES artifacts(id) ON DELETE CASCADE, state TEXT NOT NULL,
+    revision INTEGER NOT NULL, updated_at INTEGER NOT NULL
+  );
+CREATE TABLE artifact_records (
+    artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE, collection TEXT NOT NULL, id TEXT NOT NULL,
+    data TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(artifact_id,collection,id)
+  );
+CREATE TABLE artifact_files (
+    artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE, id TEXT NOT NULL, mime TEXT NOT NULL,
+    data BLOB NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(artifact_id,id)
+  );
+CREATE TABLE artifact_runs (
+    id TEXT PRIMARY KEY, artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE, data TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+CREATE TABLE artifact_shares (
+    token TEXT PRIMARY KEY, artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE, data TEXT NOT NULL,
+    created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL
+  );
+CREATE TABLE interactive_exports (
+    id TEXT NOT NULL, version INTEGER NOT NULL, format TEXT NOT NULL, digest TEXT NOT NULL, name TEXT NOT NULL,
+    mime TEXT NOT NULL, data BLOB NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(id,version,format)
+  );
+CREATE TABLE session_context (
+    session_id TEXT PRIMARY KEY REFERENCES agent_sessions(id) ON DELETE CASCADE, selection TEXT NOT NULL, data TEXT NOT NULL
+  );
+CREATE INDEX artifact_records_by_artifact ON artifact_records(artifact_id, collection, created_at);
+CREATE INDEX artifact_runs_by_artifact ON artifact_runs(artifact_id, created_at);
 
 CREATE VIRTUAL TABLE session_search_fts USING fts5(session_id UNINDEXED, seq UNINDEXED, text, tokenize='unicode61');
 
@@ -347,27 +342,21 @@ INSERT INTO projects (id, name, created_at) VALUES ('no-project', 'No project', 
 
 export type Db = DatabaseSync
 
-export function openDb(path: string, migrations = MIGRATIONS): Db {
+export function openDb(path: string): Db {
   const db = new DatabaseSync(path)
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = OFF;')
   const version = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
-  const latest = BASELINE + migrations.length
-  const refuse = (message: string) => {
+  if (version > SCHEMA_VERSION) {
     db.close()
-    throw new Error(message)
-  }
-  if (version > latest)
-    refuse(
-      `${path} was written by a newer Ramu (schema ${version}; this build reads up to ${latest}). Update Ramu to open it.`,
+    throw new Error(
+      `${path} was written by a newer Ramu (schema ${version}; this build reads ${SCHEMA_VERSION}). Update Ramu to open it.`,
     )
-  if (version !== 0 && version < BASELINE)
-    refuse(`${path} is from a Ramu build before 0.1.0 (schema ${version}). Move the file aside to start fresh.`)
-  if (version !== latest) {
+  }
+  if (version === 0) {
     db.exec('BEGIN')
     try {
-      if (version === 0) db.exec(SCHEMA)
-      else for (const migrate of migrations.slice(version - BASELINE)) migrate(db)
-      db.exec(`PRAGMA user_version = ${latest}`)
+      db.exec(SCHEMA)
+      db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
       db.exec('COMMIT')
     } catch (err) {
       db.exec('ROLLBACK')
@@ -375,8 +364,6 @@ export function openDb(path: string, migrations = MIGRATIONS): Db {
       throw err
     }
   }
-  db.exec(ADDED_TABLES)
-  addColumns(db)
   db.exec('PRAGMA foreign_keys = ON;')
   return db
 }

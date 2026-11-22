@@ -17,6 +17,7 @@ import { useWorkspace } from '../workspace/workspace'
 import { AGENT_PROVIDERS, providerName } from '@ramu/shared/providers/providers'
 import { t } from '../i18n'
 import { errorText } from '../lib/errors'
+import { openCustomize } from '../customize/openCustomize'
 
 export function InstalledSkills() {
   const invoke = useSettingsInvoke(),
@@ -379,9 +380,7 @@ export function InstalledSkills() {
                     variant="ghost"
                     size="sm"
                     title={t('Comes with a plugin: it updates, turns off and is removed with it.')}
-                    onClick={() =>
-                      window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'plugins' } }))
-                    }
+                    onClick={() => openCustomize('plugins')}
                   >
                     {t('Manage in Plugins')}
                   </Button>

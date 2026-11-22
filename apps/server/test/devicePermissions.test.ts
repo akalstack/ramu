@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -43,20 +43,6 @@ it('grants for a while, for good or until the device disconnects, and revokes', 
   expect(devices.allows(phone.id, 'terminal')).toBe(true)
   devices.setPermission(phone.id, 'terminal', null)
   expect(devices.allows(phone.id, 'terminal')).toBe(false)
-})
-
-it('keeps every permission for a device paired before permissions, until one is changed', () => {
-  const devices = store()
-  const phone = pair(devices)
-  // Simulate an older device record: no permissions field at all.
-  const path = (devices as unknown as { path: string }).path
-  const file = JSON.parse(readFileSync(path, 'utf8'))
-  delete file.devices[0].permissions
-  writeFileSync(path, JSON.stringify(file))
-  expect(devices.allows(phone.id, 'settings')).toBe(true)
-  devices.setPermission(phone.id, 'settings', null)
-  expect(devices.allows(phone.id, 'settings')).toBe(false)
-  expect(devices.allows(phone.id, 'computer')).toBe(true)
 })
 
 it('names the permission each call needs, leaving reads open', () => {
@@ -105,12 +91,6 @@ it('sets a lasting state from Settings: allowed, ask first (which lifts a block)
 it('never gives Agents without a person choosing it', () => {
   const devices = store()
   const device = pair(devices)
-  expect(devices.allows(device.id, 'computer')).toBe(true)
-  expect(devices.allows(device.id, 'agents')).toBe(false)
-  const path = join(dirs.at(-1)!, 'devices.json')
-  const file = JSON.parse(readFileSync(path, 'utf8'))
-  for (const entry of file.devices) delete entry.permissions
-  writeFileSync(path, JSON.stringify(file))
   expect(devices.allows(device.id, 'computer')).toBe(true)
   expect(devices.allows(device.id, 'agents')).toBe(false)
   expect(devices.permissionsOf(device.id).agents).toBeNull()

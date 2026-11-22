@@ -22,7 +22,7 @@ interface StoredServer {
   enabled?: boolean
   retryMode?: 'events' | 'periodic'
   ssh?: SshRoute
-  /** What pairing bound: this device's id on the host and the host's own durable id. Absent for older pairings. */
+  /** What pairing bound: this device's id on the host and, when the host gave one, its durable id. */
   deviceId?: string
   hostId?: string
   /** Other addresses the host named in a proven identity answer; tried only when the saved one stops answering. */

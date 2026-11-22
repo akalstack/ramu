@@ -23,7 +23,7 @@ export async function readThreadTabs(
   taskId: string,
 ): Promise<{ tabs: BrowserTabInfo[]; hostBrowser: boolean }> {
   const status = await invoke('hostBrowser.status').catch(() => null)
-  // A host with its own browser reports an engine; an older or browserless one does not.
+  // A host with its own browser reports an engine; a browserless one does not.
   if (status?.engine)
     return {
       tabs: (await invoke('hostBrowser.list', taskId)).map((tab) => ({ ...tab, hostId: host })),

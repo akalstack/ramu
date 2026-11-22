@@ -201,10 +201,10 @@ export function ProviderSettings({
   const change = (provider: AgentProvider, patch: Partial<NonNullable<(typeof config)[AgentProvider]>>) =>
     allowed() &&
     onChange({ ...value, providerBinaries: { ...config, [provider]: { binary: '', ...config[provider], ...patch } } })
-  const browse = async (provider: AgentProvider, key: 'binary' | 'harness') => {
+  const browse = async (provider: AgentProvider) => {
     try {
       const path = await invoke('providers.pickBinary')
-      if (path) change(provider, { [key]: path })
+      if (path) change(provider, { binary: path })
     } catch (reason) {
       setError(errorText(reason))
     }
@@ -444,7 +444,7 @@ export function ProviderSettings({
               checking={checking.has(provider)}
               onCheckAgain={() => void refresh(false, false, [provider])}
               onUpdateRamu={onOpenSection ? () => onOpenSection('system') : undefined}
-              onBrowse={(key) => void browse(provider, key)}
+              onBrowse={() => void browse(provider)}
               models={
                 <ProviderModels
                   provider={provider}

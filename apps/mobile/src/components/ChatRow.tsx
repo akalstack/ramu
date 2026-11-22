@@ -142,7 +142,7 @@ export const ChatRow = memo(function ChatRow({
   const reply = state ? '' : (chat.lastReply ?? '')
   const detail = Boolean(state || reply || facts)
   // Every agent that has worked here, as T3's rows show them: earlier ones (a handoff) small and grey
-  // before the one leading now. An older host reports only the leading one.
+  // before the one leading now.
   const agents = providerStack(chat.providers?.length ? chat.providers : chat.provider ? [chat.provider] : [])
   const actions =
     chat.pending || commands.viewOnly || selecting

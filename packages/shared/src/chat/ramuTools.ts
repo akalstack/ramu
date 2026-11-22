@@ -27,7 +27,6 @@ const KNOWN = new Set([
   'update_goal',
   'tool_search',
   'tool_invoke',
-  'tool_result_read', // removed with compression; kept so old transcripts still read well
   'memory_search',
   'memory_read',
   'memory_save',
@@ -448,8 +447,6 @@ export function describeRamuTool(call: RamuToolCall, result?: string): RamuToolR
       return reply('Checked schedule options', 'Checking schedule options', 'calendar')
     case 'tool_search':
       return reply('Looked up Ramu tools', 'Looking up Ramu tools', 'search', quote(query))
-    case 'tool_result_read':
-      return reply('Read saved output', 'Reading saved output', 'book')
     case 'message_parent':
       return reply('Messaged the main agent', 'Messaging the main agent', 'message', undefined, [
         { label: 'Message', value: text(args.text) ?? '' },

@@ -142,14 +142,7 @@ export function deriveChangeLog(
       }
       const steps = revisions.map((skill) => {
         const before = previousOf(skill)
-        // Revisions saved before summaries existed carry no author; read it from what changed.
-        const by =
-          skill.changedBy ??
-          (!before || before.sourceSeq !== skill.sourceSeq || before.sourceSessionId !== skill.sourceSessionId
-            ? 'learning'
-            : before.status === 'active' && skill.status === 'archived'
-              ? 'cleanup'
-              : 'user')
+        const by = skill.changedBy
         const change: LibrarySummaryItem['change'] | null = !before
           ? 'added'
           : skill.status === 'archived' && before.status !== 'archived'

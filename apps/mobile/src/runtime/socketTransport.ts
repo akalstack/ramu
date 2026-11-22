@@ -128,9 +128,8 @@ registerSocketProvider(
       await socket.whenReady(3000, signal)
       const info = (await socket.invoke('background.status', [], { signal, timeoutMs: 3000 })) as {
         protocol?: number
-        capabilities?: unknown
       } | null
-      return info?.protocol === 1 && Array.isArray(info.capabilities) && info.capabilities.includes('mobile-companion')
+      return info?.protocol === 1
     } finally {
       signal.removeEventListener('abort', close)
       close()

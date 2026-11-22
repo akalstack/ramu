@@ -1,4 +1,4 @@
-import { isMediaService, MEDIA_SERVICES } from '@ramu/shared/types/media'
+import { MEDIA_SERVICES } from '@ramu/shared/types/media'
 import { z } from 'zod'
 import { validBranchPrefix } from '@ramu/shared/workspaceDefaults'
 import { intelligenceSchema } from '../intelligence'
@@ -67,13 +67,6 @@ export const providerBinaries = z
             autoUpdate: z.boolean().optional(),
             enabled: z.boolean().optional(),
             defaultAccountEnabled: z.boolean().optional().meta(personOnly),
-            harness: z
-              .string()
-              .trim()
-              .max(4096)
-              .refine((path) => !path.includes('\0'), 'Invalid helper path')
-              .optional()
-              .meta(personOnly),
           })
           .optional(),
       ]),
@@ -100,24 +93,11 @@ const fallbackPreferences = z.object({
   order: order.optional(),
   autoResume: z.boolean().default(true),
 })
-// Saved before the single choice: "One provider for all" with a model keeps that model; anything else uses the thread's.
-const legacySubagents = (value: unknown) => {
-  if (!value || typeof value !== 'object' || 'model' in value) return value
-  const old = value as { mode?: unknown; single?: unknown; codexHook?: unknown }
-  return {
-    model: old.mode === 'single' && old.single ? 'pick' : 'thread',
-    step: old.mode === 'single' ? (old.single ?? null) : null,
-    codexHook: old.codexHook === true,
-  }
-}
-const subagentPreferences = z.preprocess(
-  legacySubagents,
-  z.object({
-    model: z.enum(['thread', 'auto', 'pick']).default('thread'),
-    step: fallbackStep.nullable().default(null),
-    codexHook: z.boolean().default(false),
-  }),
-)
+const subagentPreferences = z.object({
+  model: z.enum(['thread', 'auto', 'pick']).default('thread'),
+  step: fallbackStep.nullable().default(null),
+  codexHook: z.boolean().default(false),
+})
 const mcpTool = z.object({
   connectionId: z.string().min(1).max(200),
   tool: z.string().min(1).max(200),
@@ -142,14 +122,8 @@ const abilityChoice = z.union([
   z.object({ media: z.enum(MEDIA_SERVICES) }),
 ])
 /** Auto, Off or one provider and model per ability; a project's `ramu.json` can set these over the host's. */
-// A choice of a media service Ramu no longer offers is dropped, so that ability falls back to Auto.
-const keptChoice = z.preprocess(
-  (value) =>
-    value && typeof value === 'object' && 'media' in value && !isMediaService(value.media) ? undefined : value,
-  abilityChoice.optional(),
-)
 export const abilityChoices = z.object(
-  Object.fromEntries(ABILITIES.map((ability) => [ability, keptChoice])),
+  Object.fromEntries(ABILITIES.map((ability) => [ability, abilityChoice.optional()])),
 ) as z.ZodType<AbilityPreferences['choices']>
 const abilityPreferences = z.object({
   choices: abilityChoices.default({}),

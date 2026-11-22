@@ -3373,7 +3373,6 @@ for (const ambiguous of [false, true]) {
       './newChatHost': { newChatHost },
       './workspaces': workspaceChoices,
       './transport': { HostError, SuspendedError: class extends HostError {} },
-      './threadActivity': { normalizeHelperGroups: (rows) => rows },
     })
     const render = () => hooks.render(() => StoreProvider({ children: null })).props.value
     let store = render()
@@ -5821,7 +5820,6 @@ for (const os of ['ios', 'android']) {
       },
       './transport': { HostError, SuspendedError: class extends HostError {} },
       './newChatHost': { newChatHost: () => 'a' },
-      './threadActivity': { normalizeHelperGroups: (rows) => rows },
     })
     const render = () => hooks.render(() => StoreProvider({ children: null })).props.value
     const retained = render(),
@@ -5896,7 +5894,6 @@ for (const os of ['ios', 'android']) {
         writeSendJournal() {},
       },
       './transport': { HostError, SuspendedError: class extends HostError {} },
-      './threadActivity': { normalizeHelperGroups: (rows) => rows },
     })
     const store = hooks.render(() => StoreProvider({ children: null })).props.value
     const current = refs[0]
@@ -7335,7 +7332,6 @@ function deliveryStoreHarness() {
       writeSendJournal() {},
     },
     './refreshDepth': load('runtime/refreshDepth.ts', 'ios'),
-    './threadActivity': { normalizeHelperGroups: (rows) => rows },
     './newChatHost': { newChatHost: () => 'a' },
     './workspaces': workspaceChoices,
     './transport': (() => {

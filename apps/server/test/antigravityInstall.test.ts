@@ -142,20 +142,6 @@ it.skipIf(!unix)("installs the CLI into Ramu's own directory, activates it and l
   ).toEqual({ version: '1.5.13', installed: false })
 })
 
-it.skipIf(!unix)('replaces the older runtime Ramu downloaded, which keeps running until then', async () => {
-  const home = providerRuntimeHome('antigravity'),
-    old = join(home, 'versions', '1.4.3')
-  mkdirSync(old, { recursive: true })
-  for (const name of ['agy_acp_server.par', 'localharness_external']) writeFileSync(join(old, name), '#!/bin/sh\n')
-  writeFileSync(join(home, 'active.json'), JSON.stringify({ version: '1.4.3' }))
-  expect(managedAntigravity()).toMatchObject({ version: '1.4.3', harness: join(old, 'localharness_external') })
-  expect(providerEnvironment('antigravity', {}).ANTIGRAVITY_HARNESS_PATH).toBe(join(old, 'localharness_external'))
-  const { asset, download } = release('1.5.13')
-  await installAntigravity({ asset, download, probe: async () => {} })
-  expect(managedAntigravity()).toEqual({ executable: join(home, 'versions', '1.5.13', 'agy'), version: '1.5.13' })
-  expect(providerEnvironment('antigravity', {}).ANTIGRAVITY_HARNESS_PATH).toBeUndefined()
-})
-
 it.skipIf(!unix)('keeps one previous version for rollback and drops older ones', async () => {
   for (const version of ['1.5.1', '1.5.2', '1.5.3']) {
     const { asset, download } = release(version)

@@ -181,10 +181,6 @@ export function ToolGroup({
                     : !r || r.running
                       ? 'Stopped'
                       : 'Completed'
-              // Threads recorded before tool references were read keep a placeholder for them; it says nothing.
-              const shown = details.filter(
-                (item) => !(item.type === 'unsupported' && item.label === 'Unsupported content: tool_reference'),
-              )
               const movable = !!onBackground && t.name === 'Bash' && toolRunning
               return (
                 <Collapsible
@@ -246,9 +242,9 @@ export function ToolGroup({
                               </pre>
                             </div>
                           )}
-                          {shown?.length ? (
+                          {details?.length ? (
                             <div className="tool-rich-content p-[8px_12px]">
-                              <AgentContentView content={shown} taskId={taskId} plainText={bash} />
+                              <AgentContentView content={details} taskId={taskId} plainText={bash} />
                             </div>
                           ) : !images.length ? (
                             <ShadowPre>

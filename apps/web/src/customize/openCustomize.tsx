@@ -3,7 +3,7 @@ import { t, useLanguage } from '../i18n'
 
 export type CustomizeSection = 'plugins' | 'skills' | 'mcp'
 
-/** Opens Customize on a section from anywhere, such as a thread's "Set up a 3D service" or Settings' old links. */
+/** Opens Customize on a section from anywhere, such as a thread's "Set up a 3D service" or a Settings link. */
 export const CUSTOMIZE_EVENT = 'ramu:customize'
 /** What a Customize link asks for: a section, and optionally one plugin or MCP server in it opened on its details. */
 export interface CustomizeTarget {
@@ -25,7 +25,7 @@ export function openCustomize(section: CustomizeSection, item?: string) {
   )
 }
 
-/** Where Settings used to keep plugins, skills and MCP servers: one line and the way there. */
+/** A pointer from Settings to the Customize section that holds these: one line and the way there. */
 export function MovedToCustomize({ section, text }: { section: CustomizeSection; text: string }) {
   useLanguage()
   return (

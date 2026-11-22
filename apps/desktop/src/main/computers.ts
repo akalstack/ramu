@@ -171,7 +171,6 @@ export class ComputerRegistry {
             const current = this.deps.servers.endpoint(id) ?? endpoint
             void this.deps.follow(current, this.followed.get(id) ?? []).catch(() => {})
             const os = this.deps.thisDevice?.()
-            // An older host without the method refuses it; it then shows this computer without an OS.
             if (os) void this.deps.invoke(current, 'device.describe', [os]).catch(() => {})
             this.routeWork('learn', id, 3_600_000, (host) => this.learnRoutes(host))
             this.countSoon(id)
@@ -354,7 +353,7 @@ export class ComputerRegistry {
 
   /**
    * Asks a nearby host to pair this computer: `onCode` shows the number a person at the host must see before allowing
-   * it. Rejects with `PairRequestUnsupported` for a host that needs a typed code.
+   * it. Rejects with the host's message when it refuses.
    */
   async pairByRequest(
     address: string,

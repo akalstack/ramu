@@ -8,7 +8,6 @@ import {
   pairResultMac,
   pairSecrets,
   requestPairing,
-  PairRequestUnsupported,
   type PairPost,
 } from '../src/pairRequest'
 
@@ -114,7 +113,7 @@ it('gives each side of a relay a different code', () => {
   expect(pairSecrets(relay.secret, device.publicKey, deviceSide)).toEqual(seen)
 })
 
-it('rejects malformed and low-order keys and treats a 404 as an older host', async () => {
+it('rejects malformed and low-order keys and passes on what the host says', async () => {
   const keys = pairKeys(random)
   const transcript = { requestId: 'r', hostId: 'h', commit: 'c', deviceKey: keys.publicKey, hostKey: '0'.repeat(64) }
   expect(() => pairSecrets(keys.secret, '0'.repeat(64), transcript)).toThrow('Invalid pairing key')
@@ -122,11 +121,11 @@ it('rejects malformed and low-order keys and treats a 404 as an older host', asy
   expect(() => pairKeys(() => new Uint8Array(4))).toThrow('Secure random')
   await expect(
     requestPairing({
-      post: async () => ({ status: 404, body: null }),
+      post: async () => ({ status: 403, body: { error: 'This host is not discoverable.' } }),
       name: 'Phone',
       random,
       onCode() {},
       signal: new AbortController().signal,
     }),
-  ).rejects.toBeInstanceOf(PairRequestUnsupported)
+  ).rejects.toThrow('This host is not discoverable.')
 })

@@ -1,7 +1,7 @@
 import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { defineAdapter, parseProviderVersion, type PendingSignIn } from '../adapter'
 import { newerVersion } from '@ramu/shared/version'
@@ -11,28 +11,14 @@ import { antigravityKeyName, antigravitySignInProblem } from '@ramu/shared/provi
 
 /** Google's Antigravity CLI (`agy`), which serves ACP as `agy acp`. Older releases have no `acp` command. */
 export const ANTIGRAVITY_CLI_MIN = '1.5.0'
-/** Where the CLI keeps a login's settings and credentials, beneath its Gemini folder; the runtime Ramu used before shares it. */
+/** Where the CLI keeps a login's settings and credentials, beneath its Gemini folder. */
 export const ANTIGRAVITY_APP_DATA = 'antigravity-acp'
-/** Ramu's record that a browser sign-in was made with the CLI, whose credentials the older runtime's cannot stand in for. */
-const CLI_SIGN_IN = 'ramu-sign-in.json'
 
 /** The CLI's file name in Ramu's own runtime folder. */
 export const antigravityCliName = () => (process.platform === 'win32' ? 'agy.exe' : 'agy')
-/** The runtime Ramu downloaded before the CLI served ACP, kept running until it is updated. */
-export const legacyAntigravityNames = () =>
-  process.platform === 'win32'
-    ? { executable: 'agy_acp_server.exe', harness: 'localharness_external.exe' }
-    : { executable: 'agy_acp_server.par', harness: 'localharness_external' }
-
-/** The CLI is the only form with an `acp` command; anything else is the older ACP runtime with its harness helper. */
-export const isAntigravityCli = (binary: string) =>
-  /^(?:agy|antigravity)(?:\.(?:exe|cmd|bat))?$/i.test(binary.split(/[\\/]/).pop() ?? '')
-
 export interface ManagedAntigravity {
   executable: string
   version: string
-  /** Set only for the older runtime, which needs its helper beside it. */
-  harness?: string
 }
 /** The runtime Ramu downloaded itself: `active.json` names the version directory that holds it. */
 export function managedAntigravityAt(home: string): ManagedAntigravity | null {
@@ -40,12 +26,8 @@ export function managedAntigravityAt(home: string): ManagedAntigravity | null {
     const version = JSON.parse(readFileSync(join(home, 'active.json'), 'utf8'))?.version
     if (typeof version !== 'string' || !/^[\w.-]{1,40}$/.test(version)) return null
     const directory = join(home, 'versions', version)
-    const cli = join(directory, antigravityCliName())
-    if (existsSync(cli)) return { executable: cli, version }
-    const legacy = legacyAntigravityNames()
-    const executable = join(directory, legacy.executable),
-      harness = join(directory, legacy.harness)
-    return existsSync(executable) && existsSync(harness) ? { executable, harness, version } : null
+    const executable = join(directory, antigravityCliName())
+    return existsSync(executable) ? { executable, version } : null
   } catch {
     return null
   }
@@ -80,10 +62,9 @@ export const servesAcp = (binary: string) => {
 
 const geminiHome = (env: NodeJS.ProcessEnv) => env.GEMINI_HOME || join(homedir(), '.gemini')
 const appData = (env: NodeJS.ProcessEnv) => join(geminiHome(env), ANTIGRAVITY_APP_DATA)
-/** How Ramu starts a runtime as an ACP server: the CLI is told where this login keeps its files. */
-export function antigravityArgs(binary: string, env: NodeJS.ProcessEnv): string[] {
-  if (isAntigravityCli(binary)) return ['acp', '--gemini-dir', geminiHome(env), '--app-data-dir', ANTIGRAVITY_APP_DATA]
-  return process.platform === 'linux' ? ['--uid='] : []
+/** How Ramu starts the CLI as an ACP server, told where this login keeps its files. */
+export function antigravityArgs(_binary: string, env: NodeJS.ProcessEnv): string[] {
+  return ['acp', '--gemini-dir', geminiHome(env), '--app-data-dir', ANTIGRAVITY_APP_DATA]
 }
 
 /** Where Google sends a CLI browser sign-in; the page shows a code to paste back. */
@@ -194,36 +175,21 @@ export const antigravityAdapter = defineAdapter({
   browser: { integratedTools: true, providerBrowser: true, canSuppressNative: false },
   selectionTransition: { type: 'restart-and-resume' },
   binaryEnvVar: 'RAMU_ANTIGRAVITY_BIN',
-  // An `agy` you installed is used before the older runtime; a copy too old to serve ACP is passed over.
-  executableNames: () => ['agy', legacyAntigravityNames().executable],
-  usable: (binary) => !isAntigravityCli(binary) || servesAcp(binary),
+  // A copy of `agy` too old to serve ACP is passed over.
+  executableNames: () => ['agy'],
+  usable: servesAcp,
   managedBinary: (runtimeHome) => managedAntigravityAt(runtimeHome)?.executable ?? null,
   accountEnv: (root) => ({ GEMINI_HOME: root, AGY_ACP_FORCE_FILE_STORAGE: '1' }),
   accountClearedEnv: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
   launchArgs: antigravityArgs,
-  extendEnvironment(env, { overrides, binary, expand }) {
-    const runtime = binary()
-    if (isAntigravityCli(runtime))
-      return {
-        ...env,
-        // The CLI keeps a Google login in one OS keyring entry shared by every login unless it believes it runs over SSH;
-        // then each login keeps its own file, and Ramu never needs Keychain permission.
-        SSH_CONNECTION: env.SSH_CONNECTION || '127.0.0.1 0 127.0.0.1 0',
-        // Ramu updates the CLI itself, so a running chat never has its executable replaced underneath it.
-        AGY_CLI_DISABLE_AUTO_UPDATE: '1',
-      }
-    const custom = overrides.antigravity?.harness?.trim()
-    const sibling = join(dirname(runtime), legacyAntigravityNames().harness)
-    const helper = custom
-      ? expand(custom)
-      : process.env.ANTIGRAVITY_HARNESS_PATH || (existsSync(sibling) ? sibling : undefined)
-    // The login is saved in a file, never the macOS Keychain, so Ramu never needs Keychain permission.
-    return {
-      ...env,
-      AGY_ACP_FORCE_FILE_STORAGE: env.AGY_ACP_FORCE_FILE_STORAGE ?? '1',
-      ...(helper ? { ANTIGRAVITY_HARNESS_PATH: helper } : {}),
-    }
-  },
+  extendEnvironment: (env) => ({
+    ...env,
+    // The CLI keeps a Google login in one OS keyring entry shared by every login unless it believes it runs over SSH;
+    // then each login keeps its own file, and Ramu never needs Keychain permission.
+    SSH_CONNECTION: env.SSH_CONNECTION || '127.0.0.1 0 127.0.0.1 0',
+    // Ramu updates the CLI itself, so a running chat never has its executable replaced underneath it.
+    AGY_CLI_DISABLE_AUTO_UPDATE: '1',
+  }),
   setup: () => ({
     docsUrl: 'https://antigravity.google/docs/ide/extensions',
     installCommand: null,
@@ -263,16 +229,8 @@ export const antigravityAdapter = defineAdapter({
         error ? reject(error) : resolve(value)
       }
       const timer = setTimeout(
-        () =>
-          finish(
-            null,
-            new Error(
-              isAntigravityCli(binary)
-                ? 'The Antigravity CLI did not report its version. Update it to agy 1.5 or newer.'
-                : 'ACP runtime did not report its version. Check the helper path.',
-            ),
-          ),
-        isAntigravityCli(binary) ? 30_000 : 5000,
+        () => finish(null, new Error('The Antigravity CLI did not report its version. Update it to agy 1.5 or newer.')),
+        30_000,
       )
       child.once('error', () => finish(null, new Error('Cannot start the ACP runtime.')))
       child.once('exit', () => finish(null, new Error('ACP runtime stopped before reporting its version.')))
@@ -291,18 +249,10 @@ export const antigravityAdapter = defineAdapter({
         }) + '\n',
       )
     }),
-  async signInState(binary, env) {
+  async signInState(_binary, env) {
     try {
       const type = JSON.parse(readFileSync(join(appData(env), 'settings.json'), 'utf8'))?.auth?.type
       if (typeof type !== 'string' || !type) return { signedIn: false }
-      // A browser login made with the older runtime is not one the CLI can use; it asks for a new sign-in.
-      if (isAntigravityCli(binary) && (type === 'oauth-personal' || type === 'oauth-business')) {
-        let method: unknown
-        try {
-          method = JSON.parse(readFileSync(join(appData(env), CLI_SIGN_IN), 'utf8'))?.method
-        } catch {}
-        if (method !== type) return { signedIn: false, detail: type }
-      }
       return { signedIn: true, detail: type }
     } catch {
       return { signedIn: false }
@@ -321,8 +271,7 @@ export const antigravityAdapter = defineAdapter({
     mkdirSync(dir, { recursive: true, mode: 0o700 })
     const project = chosen.gcpProject?.trim(),
       location = chosen.gcpLocation?.trim()
-    const file = join(dir, 'settings.json'),
-      record = join(dir, CLI_SIGN_IN)
+    const file = join(dir, 'settings.json')
     const previous = existsSync(file) ? readFileSync(file, 'utf8') : null
     writeFileSync(
       file,
@@ -338,8 +287,7 @@ export const antigravityAdapter = defineAdapter({
       else writeFileSync(file, previous, { mode: 0o600 })
     }
     const browser = chosen.method === 'oauth-personal' || chosen.method === 'oauth-business'
-    if (browser && isAntigravityCli(binary)) {
-      rmSync(record, { force: true })
+    if (browser) {
       const pending = await cliSignIn(binary, env).catch((error) => {
         restore()
         throw error
@@ -349,7 +297,6 @@ export const antigravityAdapter = defineAdapter({
         async complete(code) {
           try {
             await pending.complete(code)
-            writeFileSync(record, JSON.stringify({ method: chosen.method }), { mode: 0o600 })
           } catch (error) {
             pending.cancel()
             restore()
@@ -373,9 +320,7 @@ export const antigravityAdapter = defineAdapter({
     const custom = config.antigravity?.binary?.trim() || process.env.RAMU_ANTIGRAVITY_BIN
     const managed = binary.startsWith(runtimeHome)
     // An `agy` you installed updates itself, even one too old to serve ACP yet, so no second copy is downloaded.
-    const own = custom
-      ? isAntigravityCli(binary) && findExecutable(binary)
-      : !managed && (isAntigravityCli(binary) ? findExecutable(binary) : findExecutable('agy'))
+    const own = (custom || !managed) && findExecutable(binary)
     if (own) return { command: own, args: ['update'] }
     if (custom)
       throw new Error('Update this custom Antigravity runtime yourself, or clear its path to let Ramu manage it.')

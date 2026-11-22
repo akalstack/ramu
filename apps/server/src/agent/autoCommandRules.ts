@@ -755,12 +755,6 @@ export function judgeCommand(command: string): AutoVerdict {
   return { risks: [], allow: allowed.every(Boolean) ? allowed[0] : undefined }
 }
 
-/** True for a plain, single, routine Git read such as `git diff --stat`; kept for callers that want only that. */
-export function isRoutineGitRead(command: string): boolean {
-  const segments = parseCommand(command.trim())
-  return !!segments && segments.length === 1 && isGitRead(segments[0]!) && riskOf(segments[0]!).length === 0
-}
-
 /**
  * Whether a command line only reads, for a session that may never write (a read-only helper). Wider than Auto's
  * routine reads, since a refusal here cannot be approved: any path, and any Git read verb with options that cannot

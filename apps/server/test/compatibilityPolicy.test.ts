@@ -17,7 +17,7 @@ it('covers each tested release line through its later patches and minors, and st
     ['claude-code', '2.1.308', '2.4.0', '3.0.0', '2.1.0'],
     ['codex', '0.150.0', '0.199.3', '1.0.0', '0.149.0'],
     ['opencode', '2.1.3', '2.9.0', '3.0.0', '1.14.19'],
-    ['antigravity', '1.4.3', '1.6.2', '2.0.0', '1.3.0'],
+    ['antigravity', '1.5.0', '1.6.2', '2.0.0', '1.4.3'],
   ]
   for (const [provider, oldest, later, major, older] of lines) {
     expect(evaluate(provider, oldest).status).toBe('supported')
