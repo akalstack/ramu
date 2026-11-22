@@ -224,7 +224,11 @@ export class AcpRpc {
   }
   /** Advertised only when the session was given a terminal host; set before `initialize`. */
   terminal = false
-  async initialize(): Promise<Wire> {
+  /**
+   * `signIn` is for work the person started, such as a thread: Cursor's CLI then signs in, opening the browser when it
+   * holds no login. Background work (listing models, a side question) passes false, so it never opens a sign-in page.
+   */
+  async initialize(signIn = true): Promise<Wire> {
     const result = await this.request(
       'initialize',
       {
@@ -242,7 +246,7 @@ export class AcpRpc {
       this.provider === 'antigravity' ? 5 * 60_000 : undefined,
     )
     if (result.protocolVersion !== 1) throw new Error('Unsupported ACP protocol version')
-    if (this.provider === 'cursor') await this.request('authenticate', { methodId: 'cursor_login' })
+    if (signIn && this.provider === 'cursor') await this.request('authenticate', { methodId: 'cursor_login' })
     return result
   }
   async close(): Promise<void> {
@@ -338,7 +342,8 @@ export async function acpModels(provider: AcpProvider, accountId?: string): Prom
       rpc.write({ id: m.id, error: { code: -32601, message: 'Model discovery cannot run tools or answer questions' } })
   }
   try {
-    await rpc.initialize()
+    // Model discovery runs when the app starts; a CLI without a login lists nothing rather than opening its sign-in.
+    await rpc.initialize(false)
     const session = await rpc.request('session/new', { cwd: homedir(), mcpServers: [] })
     observeAcpPlan(provider, accountId ?? 'default', session)
     return acpSessionModels(provider, session, provider === 'antigravity' ? await modelLevels(rpc, session) : undefined)
@@ -389,7 +394,7 @@ export async function acpAside({
   const stop = () => void rpc.close()
   signal?.addEventListener('abort', stop, { once: true })
   try {
-    const init = await rpc.initialize()
+    const init = await rpc.initialize(false)
     if (!init.agentCapabilities?.sessionCapabilities?.fork)
       throw new Error(`${providerName(provider)} cannot fork sessions`)
     forked = (await rpc.request('session/fork', { sessionId, cwd, mcpServers: [] })).sessionId

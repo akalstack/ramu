@@ -121,11 +121,11 @@ const start = async (
   if (connection) runner.setTools!(connection)
   await runner.start(prompt, resume)
 }
-it('discovers advertised models and authenticates Cursor without prompting', async () => {
+it('discovers advertised models without starting Cursor’s sign-in, which would open the browser at launch', async () => {
   expect(await acpModels('cursor')).toEqual([
     { provider: 'cursor', id: 'wire-model', name: 'Wire model', efforts: [], defaultEffort: null, isDefault: true },
   ])
-  expect(log().find((m) => m.method === 'authenticate').params).toEqual({ methodId: 'cursor_login' })
+  expect(log().some((m) => m.method === 'authenticate')).toBe(false)
 })
 it('identifies as Zed to Antigravity alone, and reads each Antigravity model’s own thinking levels', async () => {
   vi.stubEnv('RAMU_TWO_MODELS', '1')
