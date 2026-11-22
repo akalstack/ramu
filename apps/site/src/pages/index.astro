@@ -10,12 +10,12 @@ import { AKALSTACK, MOBILE_SETUP, PROVIDERS, RELEASES, REPO, SERVICES } from '@/
 
 const title = 'Ramu — Every coding agent. One workspace.'
 const description =
-  'Describe an app and your coding agents build it, put it online and keep it running, on accounts you own. A new project, deploys, CI and previews in one flow, with Claude Code, Codex, Cursor and more. Free and open source, with an iOS and Android companion.'
+  'Your coding agents keep working past usage limits, away from your desk, all the way to a live app. When one provider runs out, the next picks up the thread with its context, and the iOS and Android app keeps you with the work. Claude Code, Codex, Cursor and more, on accounts you own. Free and open source.'
 const canonical = new URL('/', Astro.site)
 // Shorter copy for link previews (WhatsApp, Slack, X...), which cut the description after a line or two.
 const shareTitle = 'Ramu: Every coding agent. One workspace.'
 const shareDescription =
-  'Your coding agents build the app, put it online and keep it running, on accounts you own. Free and open source, with Claude Code, Codex, Cursor and more.'
+  'Your coding agents keep working past usage limits, away from your desk, all the way to a live app. Free and open source, with Claude Code, Codex, Cursor and more.'
 const ogImage = new URL('/og.png', Astro.site).href
 const ogImageAlt = 'Ramu: Every coding agent. One workspace.'
 
@@ -53,6 +53,11 @@ const SAFELY = [
 
 const WHY = [
   {
+    icon: 'shuffle',
+    title: 'Limits don’t stop you',
+    body: 'When one provider runs out, the next picks up the thread with its context, and hands it back when your first choice has room.',
+  },
+  {
     icon: 'rocket',
     title: 'One sentence to a live app',
     body: 'Ramu asks, builds until the tests pass, and the agent deploys it to your own account. Production waits for your OK.',
@@ -61,11 +66,6 @@ const WHY = [
     icon: 'target',
     title: 'Work that finishes itself',
     body: 'Longer tasks get a goal. Ramu calls it done only when the checks really pass.',
-  },
-  {
-    icon: 'shuffle',
-    title: 'Limits don’t stop you',
-    body: 'When one provider runs out, the next picks up the thread with its context.',
   },
 ] as const
 
@@ -155,8 +155,8 @@ const WORK = [
         </a>
         <h1>Every coding agent. <span class="grad">One workspace.</span></h1>
         <p class="hero-sub">
-          Your coding agents build the app, put it online and keep it running. On accounts you own, free and open
-          source.
+          Your coding agents keep working: past usage limits, away from your desk, all the way to a live app. On
+          accounts you own, free and open source.
         </p>
         <div class="hero-actions">
           <LinkButton tone="primary" href="#download">Download Ramu</LinkButton>
@@ -231,7 +231,7 @@ const WORK = [
             WHY.map((w, i) => (
               <li class="card reveal" style={`--d:${i * 90}ms`}>
                 <div class={`viz viz-${i}`} aria-hidden="true">
-                  {i === 0 && (
+                  {w.icon === 'rocket' && (
                     <>
                       <span class="viz-prompt">“A booking page for my barbershop”</span>
                       <span class="viz-arrow" />
@@ -241,7 +241,7 @@ const WORK = [
                       </span>
                     </>
                   )}
-                  {i === 1 && (
+                  {w.icon === 'target' && (
                     <ul class="viz-checks">
                       <li>Build passes</li>
                       <li>12 tests pass</li>
@@ -249,7 +249,7 @@ const WORK = [
                       <li class="viz-done">Goal met</li>
                     </ul>
                   )}
-                  {i === 2 && (
+                  {w.icon === 'shuffle' && (
                     <div class="viz-meters">
                       <div class="vm vm-a">
                         <ProviderLogo provider={PROVIDERS[0]!} size={22} />

@@ -7,7 +7,7 @@
 
 <h3 align="center">Every coding agent. One workspace.</h3>
 
-<p align="center">The free, open-source workspace where your coding agents build the app, put it online and keep it running.<br />On desktop and phone, with accounts you own.</p>
+<p align="center">The free, open-source workspace where your coding agents keep working: past usage limits, away from your desk, all the way to a live app.<br />On desktop and phone, with accounts you own.</p>
 
 <p align="center">
   <a href="https://github.com/akalstack/ramu/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-8b5cf6" alt="License: MIT" /></a>
@@ -29,7 +29,7 @@
 
 ---
 
-Ramu puts your coding agents, editor, terminals, Git and review in one window. Bring **Claude Code, Codex, OpenCode, Cursor or Antigravity** with the plans you already pay for.
+Ramu puts your coding agents, editor, terminals, Git and review in one window. Bring **Claude Code, Codex, OpenCode, Cursor or Antigravity** with the plans you already pay for. When one plan runs out, the thread moves to the next with its context, and the phone app keeps you with the work when you step away.
 
 - **No Ramu account.** Signing in is optional: it adds encrypted settings backups and lets your devices find your hosts.
 - **No subscription.** Ramu is free and resells nothing.
@@ -41,9 +41,10 @@ Open a project, say what you want, review the result. The defaults work as they 
 
 |                                    |                                                                                                                                                                                                                                                                                                                           |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🔁 **Usage limits don't stop you** | Rank your providers. When one runs out, the thread moves to the next with its context, and comes back when your first choice has room. If all are limited, Ramu waits and resumes, even after a restart. [Fallback →](docs/guide/working-with-agents.md#usage-limits-and-fallback) |
+| 📱 **Your desk is optional**      | The iOS and Android app has your threads, review, Git, terminals and approvals, with push notifications when an agent needs you. Pair it with a QR code and reach your computer over your network, Tailscale, SSH or a tunnel. [Phone →](apps/mobile/README.md) |
 | 🚀 **One sentence to a live app**  | Ramu asks a few questions, picks a stack and builds until the build and tests pass. Then the agent deploys it to _your_ hosting account, production only after your OK, and every later change comes as a pull request with CI. [Shipping →](docs/guide/shipping.md) |
 | 🎯 **Work that finishes itself**   | For longer tasks the agent sets a goal and keeps going across turns and providers. Ramu calls it done only when the checks pass and the changes are really in the repo. Add your own check, like your test suite. [Goals →](docs/guide/goals.md)                                                                          |
-| 🔁 **Usage limits don't stop you** | Rank your providers. When one runs out, the thread moves to the next with its context, and comes back when your first choice has room. If all are limited, Ramu waits and resumes, even after a restart. [Fallback →](docs/guide/working-with-agents.md#usage-limits-and-fallback) |
 
 ## What's inside
 
