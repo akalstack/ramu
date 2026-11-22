@@ -3,6 +3,7 @@ import { Button } from '@/components/desktop-button'
 import { Switch } from '@/components/ui/switch'
 import {
   DEVICE_PERMISSIONS,
+  permissionsFor,
   DURATION_LABEL,
   PERMISSION_DURATIONS,
   PERMISSION_HELP,
@@ -174,7 +175,7 @@ export function DevicePermissionList({ device, invoke }: { device: NetworkDevice
   if (device.role === 'viewer') return null
   return (
     <div className="mt-2 flex flex-col gap-2 border-t border-border pt-3">
-      {DEVICE_PERMISSIONS.map((permission) => (
+      {permissionsFor(device.os).map((permission) => (
         <PermissionLine key={permission} device={device} permission={permission} invoke={invoke} />
       ))}
       {device.agentHost && (

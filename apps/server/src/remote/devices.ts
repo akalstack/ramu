@@ -7,6 +7,7 @@ import { AUTH_SCHEME } from '@ramu/contracts'
 import {
   AUTOMATIC_PERMISSIONS,
   DEVICE_PERMISSIONS,
+  permissionsFor,
   grantActive,
   isDevicePermission,
   type DevicePermission,
@@ -183,6 +184,13 @@ export class DeviceStore {
     const record = file.devices.find((entry) => entry.id === id)
     if (!record || JSON.stringify(record.os) === JSON.stringify(os)) return
     record.os = os
+    // Now that the host knows it is a phone or tablet, what it picked up but cannot use is dropped.
+    const offered = permissionsFor(os)
+    if (record.permissions)
+      record.permissions = Object.fromEntries(
+        Object.entries(record.permissions).filter(([permission]) => offered.includes(permission as DevicePermission)),
+      )
+    if (record.blocked) record.blocked = record.blocked.filter((permission) => offered.includes(permission))
     this.write(file)
   }
 
@@ -223,6 +231,8 @@ export class DeviceStore {
   allows(id: string, permission: DevicePermission, now = Date.now()): boolean {
     const device = this.read().devices.find((entry) => entry.id === id)
     if (!device || device.role === 'viewer' || device.kind === 'host') return false
+    // A grant a phone picked up, from the host's defaults or before it said what it is, counts for nothing.
+    if (!permissionsFor(device.os).includes(permission)) return false
     return grantActive(device.permissions?.[permission], now)
   }
 
@@ -245,6 +255,8 @@ export class DeviceStore {
     const device = file.devices.find((entry) => entry.id === id)
     if (!device || device.role === 'viewer' || device.kind === 'host')
       throw new Error('Only a device with full access can pair its agents.')
+    if (!permissionsFor(device.os).includes('agents'))
+      throw new Error('A phone or tablet has no agents to pair. Pair the computer they run on.')
     this.write({
       ...file,
       devices: file.devices.filter((entry) => entry.agentsOf !== id),
@@ -266,7 +278,8 @@ export class DeviceStore {
     const device = this.read().devices.find((entry) => entry.id === id)
     return Object.fromEntries(
       DEVICE_PERMISSIONS.map((permission) => {
-        if (!device || device.role === 'viewer') return [permission, null]
+        if (!device || device.role === 'viewer' || !permissionsFor(device.os).includes(permission))
+          return [permission, null]
         const grant = device.permissions?.[permission]
         return [permission, grantActive(grant, now) ? grant! : null]
       }),
@@ -294,6 +307,8 @@ export class DeviceStore {
     if (!device) throw new Error('That device is no longer paired')
     if (device.role === 'viewer')
       throw new Error('A view-only device cannot hold permissions. Pair it with full access.')
+    if (grant && !permissionsFor(device.os).includes(permission))
+      throw new Error('Agents is for another computer. A phone or tablet has no agents of its own.')
     const current = device.permissions ?? {}
     const next = Object.fromEntries(
       Object.entries({ ...current, [permission]: grant }).filter(

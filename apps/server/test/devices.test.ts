@@ -346,3 +346,23 @@ it('remembers what a device says it runs on', () => {
   devices.describe(paired.device.id, { os: 'android', form: 'tablet', version: '16', model: 'Pixel Tablet' })
   expect(devices.list()[0]!.os).toEqual({ os: 'android', form: 'tablet', version: '16', model: 'Pixel Tablet' })
 })
+
+it('gives a phone or tablet no Agents permission: it only connects to hosts and runs no agents of its own', () => {
+  const { devices } = store()
+  devices.setDefaultPermissions(['terminal', 'agents'])
+  const phone = devices.redeem(devices.createCode().code, 'Phone')!.device.id
+  const laptop = devices.redeem(devices.createCode().code, 'Laptop')!.device.id
+  // Until it says what it is, a new device holds the host's defaults.
+  expect(devices.allows(phone, 'agents')).toBe(true)
+  devices.describe(phone, { os: 'ios', form: 'phone' })
+  devices.describe(laptop, { os: 'macos', form: 'computer' })
+  expect(devices.allows(phone, 'agents')).toBe(false)
+  expect(devices.allows(phone, 'terminal')).toBe(true)
+  expect(devices.permissionsOf(phone).agents).toBeNull()
+  expect(devices.list().find((device) => device.id === phone)!.permissions).not.toHaveProperty('agents')
+  expect(() => devices.setPermission(phone, 'agents', { until: null })).toThrow('no agents of its own')
+  expect(() => devices.agentPairingCode(phone)).toThrow('no agents to pair')
+  // A computer keeps it.
+  expect(devices.allows(laptop, 'agents')).toBe(true)
+  expect(devices.agentPairingCode(laptop)).toMatch(/^[A-Z2-9]{5}-[A-Z2-9]{5}$/)
+})

@@ -13,6 +13,18 @@ export const AUTOMATIC_PERMISSIONS: readonly DevicePermission[] = DEVICE_PERMISS
   (permission) => permission !== 'agents',
 )
 
+/**
+ * The permissions a device can hold. Agents lets another computer's agents start threads here, and a phone or tablet
+ * only connects to hosts: it runs no agents of its own, so the permission does not apply to it.
+ */
+export function permissionsFor(
+  os: { form: 'phone' | 'tablet' | 'computer' | 'server' } | undefined,
+): readonly DevicePermission[] {
+  return os?.form === 'phone' || os?.form === 'tablet'
+    ? DEVICE_PERMISSIONS.filter((permission) => permission !== 'agents')
+    : DEVICE_PERMISSIONS
+}
+
 export const isDevicePermission = (value: unknown): value is DevicePermission =>
   typeof value === 'string' && (DEVICE_PERMISSIONS as readonly string[]).includes(value)
 
