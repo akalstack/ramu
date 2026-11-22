@@ -332,6 +332,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
         ...(e.approvalFullAccess ? { fullAccess: e.approvalFullAccess } : {}),
         ...(e.approvalAlways ? { always: true } : {}),
         ...(e.productionDeploy ? { productionDeploy: true } : {}),
+        ...(e.projectLocation ? { projectLocation: e.projectLocation } : {}),
       })
     else if (e.kind === 'elicitation')
       items.push({ kind: 'elicitation', id: e.requestId, request: e, outcome: resolved.get(e.requestId) })

@@ -4,7 +4,7 @@ import { branchForTitle, validBranchName, type BranchChoice } from '@ramu/shared
 import { KeyedLock } from '../ipc/keyedLock'
 import { randomUUID } from 'node:crypto'
 import { cleanLabel } from '@ramu/shared/text'
-import { existsSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { mkdir, readdir, realpath } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { homedir } from 'node:os'
@@ -71,6 +71,15 @@ export const WORKTREE_PREFIX = 'worktree:'
 export const isWorktreeCtx = (ctx: string) => ctx.startsWith(WORKTREE_PREFIX)
 export const isProjectCtx = (ctx: string) => ctx.startsWith(PROJECT_PREFIX)
 
+const PROJECT_PARENT = 'project-parent'
+const USUAL_PROJECT_FOLDERS = ['Projects', 'Developer', 'Code', 'code', 'src', 'dev', 'repos', 'workspace'] as const
+const isDirectory = (path: string) => {
+  try {
+    return statSync(path).isDirectory()
+  } catch {
+    return false
+  }
+}
 const SKIP_DIRS = new Set(['node_modules', 'vendor', 'dist', 'build', 'target'])
 
 function isWithin(root: string, target: string): boolean {
@@ -153,12 +162,40 @@ export class Workspace {
     return project
   }
 
-  /** Where a new or cloned project goes: beside the person's other repositories in their home folder, or the home folder itself. */
-  newProjectParent(): string {
-    const known = this.listProjects()
-      .flatMap((project) => this.listRepositories(project.id))
-      .find((entry) => dirname(entry.root).startsWith(homedir()))
-    return known ? dirname(known.root) : homedir()
+  /**
+   * Where a new or cloned project goes: the folder the person last chose on this host, else the folder holding most of
+   * their repositories, else a usual projects folder that exists, else `~/Projects`. Never the home folder itself.
+   * `create` makes `~/Projects` when that is the answer, for a caller about to put a project there.
+   */
+  newProjectParent(create = false): string {
+    const chosen = this.chosenProjectParent()
+    if (chosen) return chosen
+    const home = homedir()
+    const counts = new Map<string, number>()
+    for (const project of this.listProjects())
+      for (const entry of this.listRepositories(project.id)) {
+        const parent = dirname(entry.root)
+        if (parent !== home && parent.startsWith(home + sep)) counts.set(parent, (counts.get(parent) ?? 0) + 1)
+      }
+    const busiest = [...counts].sort((a, b) => b[1] - a[1])[0]
+    if (busiest) return busiest[0]
+    for (const name of USUAL_PROJECT_FOLDERS) {
+      const folder = join(home, name)
+      if (isDirectory(folder)) return folder
+    }
+    const fallback = join(home, USUAL_PROJECT_FOLDERS[0])
+    if (create) mkdirSync(fallback, { recursive: true })
+    return fallback
+  }
+
+  /** The folder the person last put a new project in, while it still exists; shared by every device and the agents. */
+  chosenProjectParent(): string | null {
+    const saved = this.getAppState<string | null>(PROJECT_PARENT, null)
+    return saved && isDirectory(saved) ? saved : null
+  }
+
+  rememberProjectParent(folder: string): void {
+    this.setAppState(PROJECT_PARENT, folder)
   }
 
   /**

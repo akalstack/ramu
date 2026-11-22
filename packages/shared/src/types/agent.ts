@@ -477,6 +477,8 @@ type AgentEventBody =
        * when the provider or Ramu's own check gave one, so the detail holds only what is being approved.
        */
       approvalFullAccess?: { reason?: string }
+      /** A new project: its folder name and where it goes, which the card lets the person change before creating. */
+      projectLocation?: { name: string; parent: string }
       approvalKey?: string
       approvalCommand?: string
       approvalPatterns?: string[]

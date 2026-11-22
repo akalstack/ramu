@@ -1954,6 +1954,8 @@ export interface RamuMethods extends ArtifactMethods {
     pattern?: string,
   ): void
   'agent.forgetPermission'(sessionId: string, requestId: string, scope: 'project' | 'user'): void
+  /** Approves a new project's card, putting its folder in `parent`; that folder is where the next project goes too. */
+  'agent.createProjectIn'(sessionId: string, requestId: string, parent: string): void
   /** The migrate command a production deploy runs first, and whether the production database address is saved. */
   'deploy.migrations'(projectId: string): { command: string | null; addressSaved: boolean }
   /** Saves the production database address for migrations, or forgets it with null. */

@@ -80,7 +80,7 @@ const PARENT_FOLDER = z
   .max(4096)
   .optional()
   .describe(
-    'Absolute host folder to put it in, only when the person names one; defaults to beside their other repositories.',
+    'Absolute host folder to put it in, only when the person names one; defaults to where they keep their projects.',
   )
 const TERMINAL_DEVICE = 'terminal'
 const TERMINAL_GROUP = 'terminal:'
@@ -315,7 +315,7 @@ export class AgentThreadService {
     server.registerTool(
       'project_create',
       {
-        description: `Create a new project from scratch when the person wants to build something that needs its own folder and repository: a folder beside their other repositories, the stack's official generator (${STACK_IDS.join(', ')}; leave stack out to write the files yourself), a .gitignore, ramu.json with the stack's commands, and a first commit. Ask at most three questions first and say the stack in one line. With continue (the default) the work goes on in the new project toward a goal checked by the stack's build and tests: a thread with no project moves into it when this turn ends, and from another project a new thread starts there with the brief; either way end your turn after telling the person. Outside Full access the person approves first; if they decline, do not retry. For the app's icon, store screenshots or a social sharing image, call generate_image when you have it; to compare hosting or a library when your provider has no search of its own, call web_search.`,
+        description: `Create a new project from scratch when the person wants to build something that needs its own folder and repository: a folder where the person keeps their projects (they can change it on the card that asks), the stack's official generator (${STACK_IDS.join(', ')}; leave stack out to write the files yourself), a .gitignore, ramu.json with the stack's commands, and a first commit. Ask at most three questions first and say the stack in one line. With continue (the default) the work goes on in the new project toward a goal checked by the stack's build and tests: a thread with no project moves into it when this turn ends, and from another project a new thread starts there with the brief; either way end your turn after telling the person. Outside Full access the person approves first; if they decline, do not retry. For the app's icon, store screenshots or a social sharing image, call generate_image when you have it; to compare hosting or a library when your provider has no search of its own, call web_search.`,
         inputSchema: {
           name: z.string().regex(PROJECT_NAME).describe('Folder and project name, such as barbershop-booking.'),
           stack: z.enum(STACK_IDS).optional(),
@@ -1004,7 +1004,7 @@ export class AgentThreadService {
       const match = matchProject({ remoteUrl: input.url, repoName }, await this.projectRemotes())
       if (match?.by === 'remote') return { projectId: match.projectId, name: match.name, added: false }
       const path = (await this.invoke('folders.clone', [
-        input.parent ?? this.workspace.newProjectParent(),
+        input.parent ?? this.workspace.newProjectParent(true),
         repoName,
         input.url,
       ])) as string
@@ -1047,23 +1047,28 @@ export class AgentThreadService {
     signal?: AbortSignal,
   ) {
     const caller = this.agents.get(sessionId)
-    const parent = input.parent ?? this.workspace.newProjectParent()
     const stack = input.stack ? STACKS[input.stack] : null
-    if (caller.settings.access !== 'full') {
+    // Full access asks once per host, until the person has said where their projects go; other modes always ask.
+    const location = { name: input.name, parent: input.parent ?? this.workspace.newProjectParent(true) }
+    if (caller.settings.access !== 'full' || (!input.parent && !this.workspace.chosenProjectParent())) {
       const commands = stack?.generator.map(commandLine) ?? []
       const allowed = await this.agents.requestPermission(
         sessionId,
         `creating the project ${input.name}`,
         [
-          `Create ${join(parent, input.name)}${stack ? ` as ${stack.summary}` : ''}, commit it and add it as a project.`,
+          `Create the folder ${input.name}${stack ? ` as ${stack.summary}` : ''}, commit it and add it as a project.`,
           commands.length ? `Runs:\n${commands.join('\n')}` : '',
         ]
           .filter(Boolean)
           .join('\n\n'),
         signal,
+        { projectLocation: location },
       )
       if (!allowed) return { created: false, message: 'The person chose not to create this project. Do not retry.' }
+      // What the person approved or picked is where their next project goes too.
+      this.workspace.rememberProjectParent(location.parent)
     }
+    const parent = location.parent
     const folder = await createProjectFolder(
       { parent, name: input.name, ...(input.stack ? { stack: input.stack } : {}) },
       {

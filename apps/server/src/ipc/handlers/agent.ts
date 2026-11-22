@@ -384,6 +384,14 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, id, z.enum(['project', 'user'])]),
       run: (s: string, r: string, scope: 'project' | 'user') => agents.forgetPermission(s, r, scope),
     },
+    // Owner devices only: it names a host folder. A viewer can still approve the location the card shows.
+    'agent.createProjectIn': {
+      args: z.tuple([id, z.string().min(1).max(300), z.string().min(1).max(4096)]),
+      run: async (s: string, r: string, parent: string) => {
+        const folder = await ctx.hostFolders.inspect(parent)
+        agents.createProjectIn(s, r, folder)
+      },
+    },
     'agent.replyQuestion': {
       args: z.tuple([id, z.string().min(1).max(300), z.record(z.string().max(10_000), z.string().max(10_000))]),
       run: (s: string, r: string, answers: Record<string, string>) => agents.replyQuestion(s, r, answers),

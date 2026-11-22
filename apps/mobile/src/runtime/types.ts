@@ -140,6 +140,8 @@ export type TranscriptItem = (
       always?: boolean
       /** A production deploy: Allow production deploys in this thread is offered beside Allow once. */
       productionDeploy?: boolean
+      /** A new project: its folder name and where it goes, which the person can change before creating. */
+      projectLocation?: { name: string; parent: string }
     }
   | { kind: 'elicitation'; id: string; request: import('@ramu/shared/types').AgentElicitation; outcome?: string }
   | {

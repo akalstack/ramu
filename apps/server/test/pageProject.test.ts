@@ -30,6 +30,7 @@ afterEach(() => {
   rmSync(outside, { recursive: true, force: true })
 })
 
+const remembered: string[] = []
 function context(kind: 'design' | 'app', projectRoot?: string) {
   const startInProject = vi.fn(async () => ({ taskId: 't1', sessionId: 's1' }))
   const addProjectFromFolder = vi.fn(async () => ({ project: { id: 'p-new' } }))
@@ -52,6 +53,7 @@ function context(kind: 'design' | 'app', projectRoot?: string) {
     workspace: {
       addProjectFromFolder,
       newProjectParent: () => base,
+      rememberProjectParent: (folder: string) => remembered.push(folder),
       listProjects: () => (projectRoot ? [{ id: 'p1', name: 'shop', root: projectRoot, createdAt: 0 }] : []),
       listRepositories: () => [],
     },
@@ -83,6 +85,8 @@ it('puts a new project in the chosen parent under the chosen name, numbering it 
   expect(readFileSync(join(parent, 'pricing-site', 'keep.txt'), 'utf8')).toBe('mine')
   expect(readFileSync(join(made.folder, 'index.html'), 'utf8')).toBe('<h1>Pricing</h1>')
   expect(addProjectFromFolder).toHaveBeenCalledWith(made.folder)
+  // The chosen place is where the next project goes too.
+  expect(remembered).toEqual([realpathSync(parent)])
 })
 
 it('refuses a new project parent outside the host browse roots', async () => {

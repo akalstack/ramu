@@ -21,6 +21,7 @@ vi.mock('@/components/desktop-button', () => ({
 vi.mock('../src/Menu', () => ({
   Dropdown: () => null,
 }))
+vi.mock('../src/workspace/addProject', () => ({ pickHostFolder: vi.fn() }))
 vi.mock('../src/workspace/HostProvider', () => ({
   useHost: () => ({ id: 'local', isLocal: true, status: 'connected', invoke: vi.fn() }),
 }))
@@ -88,6 +89,21 @@ describe('permission request visibility', () => {
     )
     expect(pendingMarkup).toContain('Allow once')
     expect(pendingMarkup).toContain('Deny')
+
+    // A new project's card names where its folder goes and offers to change it before creating.
+    const projectMarkup = renderToStaticMarkup(
+      createElement(PermissionRequestCard, {
+        event: { ...event, projectLocation: { name: 'shop', parent: '/home/ana/Projects' } },
+        sessionId: 's-1',
+        pending: true,
+        outcome: undefined,
+      }),
+    )
+    expect(projectMarkup).toContain('/home/ana/Projects')
+    expect(projectMarkup).toContain('Change…')
+    expect(projectMarkup).toContain('Create project')
+    expect(projectMarkup).toContain('Not now')
+    expect(projectMarkup).not.toContain('Allow once')
 
     const deniedMarkup = renderToStaticMarkup(
       createElement(PermissionRequestCard, {

@@ -8011,5 +8011,8 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Card from the agent': 'Kartu dari agent',
   'From a card': 'Dari kartu',
   Card: 'Kartu',
+  'Create project': 'Buat proyek',
+  'Your next project goes in the same place unless you change it.':
+    'Proyek berikutnya ditaruh di tempat yang sama kecuali kamu mengubahnya.',
   'This card could not be read.': 'Kartu ini tidak bisa dibaca.',
 }

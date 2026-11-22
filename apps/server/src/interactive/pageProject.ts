@@ -173,7 +173,8 @@ export async function makePageProject(
     if (!thread) ctx.pages.markGrewInto(artifactId, { projectId: project.id })
     return { projectId: project.id, folder, thread }
   }
-  const parent = await ctx.hostFolders.inspect(destination.parent ?? ctx.workspace.newProjectParent())
+  const parent = await ctx.hostFolders.inspect(destination.parent ?? ctx.workspace.newProjectParent(true))
+  if (destination.parent) ctx.workspace.rememberProjectParent(parent)
   const folder = await freeFolder(parent, destination.name ?? titleFolderName(title))
   const source = await writeArtifact(ctx, artifactId, folder)
   const { project } = await ctx.workspace.addProjectFromFolder(folder)

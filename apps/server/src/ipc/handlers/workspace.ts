@@ -263,9 +263,11 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
       ]),
       run: async ({ parent, ...input }: { name: string; stack?: StackId; parent?: string }) => {
         const folder = await createProjectFolder(
-          { parent: parent ?? workspace.newProjectParent(), ...input },
+          { parent: parent ?? workspace.newProjectParent(true), ...input },
           { create: (parent, name) => hostFolders.create(parent, name), run: runCommand },
         )
+        // The place the person picked is where their next project goes too, from any device or agent.
+        if (parent) workspace.rememberProjectParent(await hostFolders.inspect(parent))
         const { project } = await workspace.addProjectFromFolder(await hostFolders.inspect(folder.path))
         return { project, path: folder.path }
       },

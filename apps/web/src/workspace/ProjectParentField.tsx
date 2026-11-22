@@ -3,34 +3,26 @@ import { useQuery } from '@tanstack/react-query'
 import { FolderOpen } from 'lucide-react'
 import { folderName } from '@ramu/shared/workspace/hostFolders'
 import { Button } from '@/components/desktop-button'
-import { hostStorageFor } from '../hostStorage'
 import { invokerFor } from '../ipc'
 import { t, useLanguage } from '../i18n'
 import { pickHostFolder } from './addProject'
 
-const KEY = 'ramu.project-parent'
-
 /**
- * Where a new project's folder goes on `host`: the folder last chosen there on this device, else the host's usual
- * place. `chosen` is what to send; null leaves the choice to the host.
+ * Where a new project's folder goes on `host`: the folder the person last chose there, from any device or approval
+ * card, else the host's usual place. `chosen` is what to send; null leaves the choice to the host.
  */
 export function useProjectParent(host: string) {
-  const [chosen, setChosen] = useState<string | null>(() => hostStorageFor(host).getItem(KEY))
+  const [chosen, setChosen] = useState<string | null>(null)
   const fallback = useQuery({
     queryKey: ['ipc', host, 'projects.defaultParent'],
     queryFn: () => invokerFor(host)('projects.defaultParent'),
-    staleTime: 60_000,
+    // The host remembers a choice made on another device or in a thread, so each opening asks again.
+    staleTime: 0,
   })
   const parent = chosen ?? fallback.data ?? null
   const change = async () => {
     const dir = await pickHostFolder(host, { purpose: 'parent', ...(parent ? { start: parent } : {}) })
-    if (!dir) return
-    setChosen(dir)
-    try {
-      hostStorageFor(host).setItem(KEY, dir)
-    } catch {
-      // Only the next project's default is lost.
-    }
+    if (dir) setChosen(dir)
   }
   return { parent, chosen, change }
 }

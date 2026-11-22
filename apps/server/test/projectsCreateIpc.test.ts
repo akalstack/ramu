@@ -48,8 +48,8 @@ it('creates, commits and adds a project beside the person’s other repositories
   await expect(create({ name: 'notes' })).rejects.toThrow()
 })
 
-it('starts in the home folder when there are no projects yet', async () => {
-  expect((await create({ name: 'first' })).path).toBe(join(home, 'first'))
+it('starts a projects folder, never the home folder itself, when there are no projects yet', async () => {
+  expect((await create({ name: 'first' })).path).toBe(join(home, 'Projects', 'first'))
 })
 
 it('accepts only a folder name and a known stack', () => {
@@ -67,6 +67,8 @@ it('creates the project in a chosen parent, but only inside the host browse root
   mkdirSync(join(home, 'clients'))
   const made = await create({ name: 'shop', parent: join(home, 'clients') })
   expect(made.path).toBe(join(home, 'clients', 'shop'))
+  // The chosen folder is where the next project goes, for every device and agent.
+  expect(await methods['projects.defaultParent']!.run()).toBe(join(home, 'clients'))
   const elsewhere = realpathSync(mkdtempSync(join(tmpdir(), 'ramu-elsewhere-')))
   try {
     await expect(create({ name: 'shop', parent: elsewhere })).rejects.toThrow(/outside the host browse roots/)
@@ -76,5 +78,5 @@ it('creates the project in a chosen parent, but only inside the host browse root
 })
 
 it('tells the client where a new project goes when none is chosen', async () => {
-  expect(await methods['projects.defaultParent']!.run()).toBe(home)
+  expect(await methods['projects.defaultParent']!.run()).toBe(join(home, 'Projects'))
 })

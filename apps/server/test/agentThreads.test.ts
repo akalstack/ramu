@@ -30,6 +30,10 @@ let db: Db, ws: Workspace, service: AgentThreadService
 let sessions: Map<string, AgentSessionInfo>
 let events: Map<string, AgentEvent[]>
 let approvals: boolean[], permissionDetails: string[]
+let locationsAsked: { name: string; parent: string }[]
+let pickedParent: string | null
+let projectsFolder: string
+let createdIn: string[]
 let submitted: { id: string; text: string; mode: string; from?: MessageOrigin }[]
 let recorded: { id: string; threads: unknown[] }[]
 let calls: string[]
@@ -79,6 +83,9 @@ beforeEach(async () => {
   events = new Map()
   approvals = []
   permissionDetails = []
+  locationsAsked = []
+  createdIn = []
+  pickedParent = null
   helperCards = []
   interrupted = []
   submitted = []
@@ -93,6 +100,9 @@ beforeEach(async () => {
   writeFileSync(join(apiRoot, 'schema.ts'), 'export const fields = []\n')
   run('add', '.')
   run('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'init')
+  // The person has already said where projects go, so Full access creates without asking, as on a host in use.
+  projectsFolder = root
+  ws.rememberProjectParent(root)
   api = (await ws.addProjectFromFolder(join(root, 'api'))).project
   web = (await ws.addProjectFromFolder(join(root, 'web'))).project
   let started = 0
@@ -104,10 +114,23 @@ beforeEach(async () => {
     },
     list: (taskId: string) => [...sessions.values()].filter((s) => s.taskId === taskId),
     events: (id: string) => events.get(id) ?? [],
-    requestPermission: vi.fn(async (_id: string, _tool: string, detail: string) => {
-      permissionDetails.push(detail)
-      return approvals.shift() ?? false
-    }),
+    requestPermission: vi.fn(
+      async (
+        _id: string,
+        _tool: string,
+        detail: string,
+        _signal?: AbortSignal,
+        options?: { projectLocation?: { name: string; parent: string } },
+      ) => {
+        permissionDetails.push(detail)
+        if (options?.projectLocation) {
+          locationsAsked.push({ ...options.projectLocation })
+          // The person picks another folder on the card before creating.
+          if (pickedParent) options.projectLocation.parent = pickedParent
+        }
+        return approvals.shift() ?? false
+      },
+    ),
     threadsStarted: (id: string, threads: unknown[]) => recorded.push({ id, threads }),
     recordHelperTask: (id: string, agentId: string, patch: Record<string, unknown>) =>
       helperCards.push({ id, agentId, ...patch }),
@@ -151,6 +174,7 @@ beforeEach(async () => {
     if (method === 'folders.addProject') return ws.addProjectFromFolder(args[0] as string)
     if (method === 'folders.create') {
       // New projects go beside the test's own repositories, never into the real parent the service chose.
+      createdIn.push(args[0] as string)
       const target = join(apiRoot, '..', args[1] as string)
       mkdirSync(target)
       return target
@@ -448,13 +472,34 @@ describe('project_create', () => {
     expect(calls).not.toContain('folders.create')
   })
 
+  it('asks once in Full access, until the person has said where projects go', async () => {
+    await noProjectCaller()
+    ws.setAppState('project-parent', null)
+    // A home of the test's own, so the host's usual place is made there and not in the real one.
+    const home = mkdtempSync(join(tmpdir(), 'ramu-home-'))
+    vi.stubEnv('HOME', home)
+    const { call } = tools('caller')
+    expect(await call('project_create', { name: 'first', brief: 'A first app.' })).toMatchObject({ created: false })
+    expect(locationsAsked).toEqual([{ name: 'first', parent: join(home, 'Projects') }])
+    // They pick a folder on the card: the project goes there, and the next one follows without asking.
+    pickedParent = projectsFolder
+    approvals.push(true)
+    const created = await call('project_create', { name: 'second', brief: 'A second app.' })
+    expect(created.path).toBe(join(projectsFolder, 'second'))
+    expect(ws.newProjectParent()).toBe(projectsFolder)
+    await call('project_create', { name: 'third', brief: 'A third app.' })
+    expect(createdIn).toEqual([projectsFolder, projectsFolder])
+    expect(locationsAsked).toHaveLength(2)
+    vi.unstubAllEnvs()
+  })
+
   it('puts the project in the folder the person named, and asks with that folder', async () => {
     await callerIn(api, 'edits')
     const { call } = tools('caller')
     expect(await call('project_create', { name: 'shop', brief: 'A shop.', parent: '/work/clients' })).toMatchObject({
       created: false,
     })
-    expect(permissionDetails[0]).toContain(join('/work/clients', 'shop'))
+    expect(locationsAsked[0]).toEqual({ name: 'shop', parent: '/work/clients' })
     expect(
       await call('project_add', { url: 'https://github.com/acme/billing.git', parent: '/work/clients' }),
     ).toMatchObject({ added: false })

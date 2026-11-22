@@ -596,6 +596,10 @@ export class AgentService {
     return this.parts.requests.requestPermission(...args)
   }
 
+  createProjectIn(...args: Parameters<UserRequests['createProjectIn']>) {
+    return this.parts.requests.createProjectIn(...args)
+  }
+
   requestSecret(...args: Parameters<UserRequests['requestSecret']>) {
     return this.parts.requests.requestSecret(...args)
   }

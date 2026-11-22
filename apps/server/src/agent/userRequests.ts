@@ -54,6 +54,8 @@ export interface PermissionOptions {
   always?: () => void
   /** A production deploy: the card offers Allow production deploys in this thread, and nothing lasting. */
   productionDeploy?: boolean
+  /** A new project: the card shows where its folder goes and lets the person change it; `parent` holds their choice. */
+  projectLocation?: { name: string; parent: string }
 }
 
 /** The line a production deploy's card adds to say what happens when it is allowed. */
@@ -131,11 +133,21 @@ export class UserRequests {
         approvalOnceOnly: true,
         ...(options.always ? { approvalAlways: toolName } : {}),
         ...(options.productionDeploy ? { productionDeploy: true as const } : {}),
+        ...(options.projectLocation ? { projectLocation: { ...options.projectLocation } } : {}),
       })
       this.host.setState(id, 'needs-input')
       signal?.addEventListener('abort', abort, { once: true })
       if (signal?.aborted) abort()
     })
+  }
+
+  /** Approves a new project's card with the folder the person picked for it. */
+  createProjectIn(id: string, requestId: string, parent: string): void {
+    const pending = this.appPermissions.get(requestId)
+    if (!pending || pending.sessionId !== id || !pending.options.projectLocation)
+      throw new Error('That request is no longer pending')
+    pending.options.projectLocation.parent = parent
+    pending.finish(true)
   }
 
   /**

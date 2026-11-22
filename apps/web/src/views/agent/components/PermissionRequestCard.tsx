@@ -1,7 +1,8 @@
 import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
-import { ShieldQuestion } from 'lucide-react'
+import { FolderOpen, ShieldQuestion } from 'lucide-react'
+import { pickHostFolder } from '../../../workspace/addProject'
 import { useState } from 'react'
 import type { AgentEvent, PermissionScope } from '@ramu/shared/types'
 import { errorText } from '../../../lib/errors'
@@ -26,7 +27,9 @@ export function PermissionRequestCard({
   outcome: string | undefined
 }) {
   useLanguage()
-  const { invoke } = useHost()
+  const { invoke, id: host } = useHost()
+  // A new project's folder: what the host proposed until the person picks another.
+  const [parent, setParent] = useState(e.projectLocation?.parent ?? null)
   const [pattern, setPattern] = useState(e.approvalPatterns?.[0] ?? 'exact')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -53,6 +56,18 @@ export function PermissionRequestCard({
       setBusy(false)
     }
   }
+  const createProject = async () => {
+    if (!parent || parent === e.projectLocation?.parent) return act(true)
+    setBusy(true)
+    setError(null)
+    try {
+      await invoke('agent.createProjectIn', sessionId, e.requestId, parent)
+    } catch (error) {
+      setError(errorText(error))
+    } finally {
+      setBusy(false)
+    }
+  }
   const savedScope = outcome === 'allowed-project' ? 'project' : outcome === 'allowed-user' ? 'user' : null
   const forget = async () => {
     if (!savedScope) return
@@ -73,6 +88,26 @@ export function PermissionRequestCard({
       </div>
       {e.detail && <pre>{e.detail}</pre>}
       {e.approvalFullAccess && pending && <FullAccessWhy reason={e.approvalFullAccess.reason} />}
+      {e.projectLocation && parent && pending && (
+        <p className="m-0 mt-2 flex min-w-0 items-center gap-1 text-caption text-muted-foreground">
+          <FolderOpen size={13} className="flex-none" aria-hidden />
+          <span className="truncate" title={`${parent}/${e.projectLocation.name}`}>
+            {translate('In {0}', { '0': parent })}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-1.5"
+            disabled={busy}
+            aria-label={translate('Change where the project goes')}
+            onClick={() =>
+              void pickHostFolder(host, { purpose: 'parent', start: parent }).then((dir) => dir && setParent(dir))
+            }
+          >
+            {translate('Change…')}
+          </Button>
+        </p>
+      )}
       {e.approvalReviewRule && (
         <p className="m-0 mt-2 text-caption text-muted-foreground">
           {translate('Always ask')}: {e.approvalReviewRule}
@@ -95,9 +130,20 @@ export function PermissionRequestCard({
             </div>
           )}
           <div className="row flex flex-wrap gap-1.5">
-            <Button variant="default" className={PRIMARY_ACTION_CLASS} disabled={busy} onClick={() => void act(true)}>
-              {translate('Allow once')}
-            </Button>
+            {e.projectLocation ? (
+              <Button
+                variant="default"
+                className={PRIMARY_ACTION_CLASS}
+                disabled={busy}
+                onClick={() => void createProject()}
+              >
+                {translate('Create project')}
+              </Button>
+            ) : (
+              <Button variant="default" className={PRIMARY_ACTION_CLASS} disabled={busy} onClick={() => void act(true)}>
+                {translate('Allow once')}
+              </Button>
+            )}
             {e.approvalKey && e.approvalProjectId && (
               <Button variant="secondary" disabled={busy} onClick={() => void act(true, 'project')}>
                 {translate('Allow for this project')}
@@ -124,7 +170,7 @@ export function PermissionRequestCard({
               disabled={busy}
               onClick={() => void act(false)}
             >
-              {translate('Deny')}
+              {translate(e.projectLocation ? 'Not now' : 'Deny')}
             </Button>
           </div>
           <p className="m-0 text-caption text-muted-foreground">
@@ -135,7 +181,9 @@ export function PermissionRequestCard({
                   ? 'Always allow lets this tool run without asking. Change it back in Customize → MCP servers.'
                   : e.productionDeploy
                     ? 'Allow in this thread lasts until the thread ends or Ramu restarts; other threads still ask.'
-                    : 'Applies to this request only.',
+                    : e.projectLocation
+                      ? 'Your next project goes in the same place unless you change it.'
+                      : 'Applies to this request only.',
             )}
           </p>
         </div>

@@ -55,7 +55,9 @@ import {
   CirclePause,
   CircleAlert,
   AppWindow,
+  FolderOpen,
 } from 'lucide-react-native'
+import { pickFolder } from '../runtime/folderPick'
 import { font, radius, space, useTheme } from '../theme'
 import { fill, useT, useSay } from '../i18n'
 import { agentErrorView } from '@ramu/shared/chat/agentErrorView'
@@ -1942,8 +1944,23 @@ function QuestionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 
 function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 'permission' }>; chatId: string }) {
   const say = useSay()
   const { c } = useTheme()
-  const { decide, forgetApproval } = useStore()
+  const store = useStore()
+  const { decide, forgetApproval } = store
+  const router = useRouter()
   const [rule, setRule] = useState('exact')
+  // A new project's folder: what the host proposed until the person picks another.
+  const [parent, setParent] = useState(item.projectLocation?.parent ?? null)
+  const chat = store.chats.find((entry) => entry.id === chatId)
+  const viewer = store.computers?.find((host) => host.id === chat?.computerId)?.access === 'viewer'
+  const [problem, setProblem] = useState<string | null>(null)
+  const createProject = () => {
+    if (!chat?.sessionId || !parent || parent === item.projectLocation?.parent) return decide(chatId, item.id, 'allow')
+    setProblem(null)
+    void store
+      .invoke(chat.computerId, 'agent.createProjectIn', chat.sessionId, item.id, parent)
+      .then(() => store.refresh(chat.computerId))
+      .catch((reason: unknown) => setProblem(reason instanceof Error ? reason.message : String(reason)))
+  }
   if (item.decision) {
     const allowed = item.decision === 'allow'
     return (
@@ -1994,6 +2011,34 @@ function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind
         </T>
       ) : null}
       {item.fullAccess ? <FullAccessWhy reason={item.fullAccess.reason} /> : null}
+      {item.projectLocation && parent ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+          <FolderOpen size={14} color={c.muted} />
+          <T size={font.caption} tone="muted" numberOfLines={1} style={{ flex: 1 }}>
+            {say('In {0}', { 0: parent })}
+          </T>
+          {chat && !viewer ? (
+            <Button
+              kind="ghost"
+              title={say('Change…')}
+              accessibilityLabel={say('Change where the project goes')}
+              onPress={() =>
+                void pickFolder(() =>
+                  router.push({
+                    pathname: '/folders',
+                    params: { purpose: 'parent', computer: chat.computerId, start: parent },
+                  }),
+                ).then((path) => path && setParent(path))
+              }
+            />
+          ) : null}
+        </View>
+      ) : null}
+      {problem ? (
+        <T size={font.caption} tone="bad" accessibilityLiveRegion="polite">
+          {problem}
+        </T>
+      ) : null}
       {/* As on the desktop: the rule a saved approval covers, then every choice at once, Allow once first. */}
       {item.rememberable && item.patterns?.length ? (
         <View style={{ gap: space.s }}>
@@ -2015,7 +2060,11 @@ function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind
         </View>
       ) : null}
       <View style={{ gap: space.s }}>
-        <Button title={say('Allow once')} onPress={() => decide(chatId, item.id, 'allow')} />
+        {item.projectLocation ? (
+          <Button title={say('Create project')} onPress={createProject} />
+        ) : (
+          <Button title={say('Allow once')} onPress={() => decide(chatId, item.id, 'allow')} />
+        )}
         {item.rememberable?.project ? (
           <Button
             kind="secondary"
@@ -2044,7 +2093,11 @@ function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind
             onPress={() => decide(chatId, item.id, 'allow', 'user')}
           />
         ) : null}
-        <Button kind="secondary" title={say('Deny')} onPress={() => decide(chatId, item.id, 'deny')} />
+        <Button
+          kind="secondary"
+          title={say(item.projectLocation ? 'Not now' : 'Deny')}
+          onPress={() => decide(chatId, item.id, 'deny')}
+        />
       </View>
       <T size={font.caption} tone="muted">
         {say(
@@ -2054,7 +2107,9 @@ function PermissionCard({ item, chatId }: { item: Extract<TranscriptItem, { kind
               ? 'Always allow lets this tool run without asking. Change it back in Customize → MCP servers.'
               : item.productionDeploy
                 ? 'Allow in this thread lasts until the thread ends or Ramu restarts; other threads still ask.'
-                : 'Applies to this request only.',
+                : item.projectLocation
+                  ? 'Your next project goes in the same place unless you change it.'
+                  : 'Applies to this request only.',
         )}
       </T>
     </Card>
