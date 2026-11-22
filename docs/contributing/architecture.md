@@ -112,7 +112,7 @@ User-facing behavior is in the [browser guide](../guide/browser-and-computer.md#
 
 `index.ts` is the service entry point, `cli.ts` the CLI, `db.ts` the database, and `build.ts` the build fingerprint that detects a stale running service.
 
-Host preferences and model sets live in `userData/settings.json` through `settings/settingsStore.ts`. SQLite keeps operational state. `workspace/projectConfig.ts` reads bounded repository configuration without executing commands or widening permissions. See [Configuration files](../guide/configuration.md). The schema is one script in `db.ts`, stamped with a version. A new profile runs it, and a profile at another version is refused untouched.
+Host preferences and model sets live in `userData/settings.json` through `settings/settingsStore.ts`. SQLite keeps operational state. `workspace/projectConfig.ts` reads bounded repository configuration without executing commands or widening permissions. See [Configuration files](../guide/configuration.md). The schema is one script in `db.ts`, stamped with a version. A new profile runs it, and a profile from a newer build is refused untouched. There are no migrations while Ramu is in alpha ([Compatibility](code-style.md#compatibility)).
 
 ### Shared MCP
 
@@ -156,7 +156,7 @@ Logins: a provider's login belongs to its own runtime. Ramu reaches a provider o
 
 Accounts: when a thread reaches a usage limit, it moves on only to an enabled login of the same provider that runs on an API key (provider terms bar working around a subscription's limits), then to the next model in the fallback order. A person can still pick any login themselves. Turn an account off in Settings to remove it from the rotation.
 
-Background commands: Ramu's own `background_terminal_launch` tools give every provider host-owned commands that outlive a turn, with output, waits and **Stop**. A provider's native background shell has its own owner. Claude Code 2.1.319 keeps a `run_in_background` command running while its session stays open and stops it when the session closes. Codex 0.167.0 ends a command's processes, `nohup … &` included, when the tool call returns, so it has no native background handle. Antigravity 1.4.3 runs commands with its own shell even when the client offers ACP terminals, so `NativeFeatures.terminals` stays off for it. OpenCode 2.2.7's `shell` tool takes `background: true` and returns a shell ID and output file. The command keeps running after the tool call and the turn while the session's `opencode serve` is up, and ends when Ramu stops that server.
+Background commands: Ramu's own `background_terminal_launch` tools give every provider host-owned commands that outlive a turn, with output, waits and **Stop**. A provider's native background shell has its own owner and lifetime, and `NativeFeatures.terminals` stays off for a provider that runs commands in its own shell even when the client offers ACP terminals.
 
 ## Forges and platforms
 

@@ -23,7 +23,7 @@ For people using Ramu.
 - [Appearance and themes](guide/themes.md): light and dark, fonts, and built-in or custom themes.
 - [Configuration](guide/configuration.md): `settings.json`, agents changing settings, and `ramu.json` team defaults.
 - [Diagnostics](guide/diagnostics.md): local-only crash reports.
-- [Mobile app](../apps/mobile/README.md).
+- [Mobile app](../apps/mobile/README.md): install the phone app and connect it to your computer.
 
 ## Contributing
 
@@ -34,4 +34,7 @@ For people working on Ramu. Start with [CONTRIBUTING.md](../CONTRIBUTING.md).
 - [Packaging](contributing/packaging.md): build and test installers.
 - [Roadmap](roadmap.md): unfinished work.
 
-Security and remote access are in [SECURITY.md](../SECURITY.md).
+## Security
+
+- [Security model](security-model.md): what Ramu can reach and how it limits that.
+- [Reporting a vulnerability](../SECURITY.md).

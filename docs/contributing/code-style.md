@@ -55,12 +55,13 @@ Rules for human and agent contributors. `pnpm check` enforces what tools can (Pr
 
 ## Compatibility
 
-People install Ramu, keep their data in it, and pair phones and hosts that update at different times. Keep what they already have working:
+Ramu is in alpha. Change things directly instead of carrying the old shape along:
 
-- A schema change updates `SCHEMA` in `apps/server/src/db.ts` and adds an entry to `MIGRATIONS` in the same change, so existing profiles upgrade in place. Don't edit a released migration or drop people's data.
-- The host's API, agent tools, links (`ramu://`), push payloads and saved settings are contracts with other devices and older versions. To rename or remove one, keep the old name working beside the new one and remove it in a later release on purpose.
-- Say in the pull request when a change can't stay compatible, and why.
+- Edit `SCHEMA` in `apps/server/src/db.ts` in place. There are no migrations; a profile from a newer build is refused.
+- Rename or remove an API method, agent tool, `ramu://` link, push payload or setting in one change, and update every caller. Don't keep the old name, upgrade old saved values or add fallbacks for older hosts.
+- The desktop, its background service and the phone can still run different builds after an update. Bump `PROTOCOL_VERSION` in `packages/contracts` when a change breaks the host's API, so the other side shows a clear "update Ramu" message instead of failing quietly.
 
+## Testing
 
 - Vitest for packages and apps (`apps/mobile` uses `node --test`). Add or update a test for every behavior change or bug fix, in the package's `test/` directory.
 - Test observable behavior and edge cases: failure paths, limits, races, permission denial. Do not assert implementation details or re-test the library.

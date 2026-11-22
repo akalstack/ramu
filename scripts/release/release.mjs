@@ -87,7 +87,7 @@ export function run(args) {
       .split('\n')
       .find((name) => /^v\d+\.\d+\.\d+(?:-|$)/.test(name))
     const log = git('log', '--format=- %s (%h)', ...(previous ? [`${previous}..HEAD`] : ['HEAD']))
-    const notes = `# Ramu ${tag}\n\n## Changes\n\n${log || '- Initial release.'}\n\n## Downloads\n\nChoose the installer matching your OS and CPU: macOS arm64 (Apple Silicon), macOS x64 (Intel), or Linux x64 or arm64 (.deb, .rpm, AppImage or ZIP). SHA256SUMS files accompany the downloads.\n\n## Known limitations\n\nDesktop alpha. Updates are installed by hand. Windows releases are not available yet. Agent providers require their own installation and authentication.\n`
+    const notes = `# Ramu ${tag}\n\n## Changes\n\n${log || '- Initial release.'}\n\n## Downloads\n\nChoose the installer matching your OS and CPU: macOS arm64 (Apple Silicon), macOS x64 (Intel), or Linux x64 or arm64 (.deb, .rpm, AppImage or ZIP). SHA256SUMS files accompany the downloads.\n\n## Known limitations\n\nDesktop alpha. macOS builds update themselves; Linux installs outside a package manager update by hand. Windows releases are not available yet. Agent providers require their own installation and authentication.\n`
     if (dryRun) {
       console.log(
         `Would set package.json versions (root and workspace packages) to ${version} and write ${notesPath}\n\n${notes}`,

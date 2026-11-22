@@ -4,7 +4,7 @@ The iOS and Android app for a Ramu host. The host runs your agents, providers, G
 
 ## Connect a phone
 
-1. Start Ramu on the host (`pnpm build`, then the desktop app or `ramu serve`). Its setup shows a pairing QR code; later, **Settings → Remote access → Pair a device** shows one. Headless: `ramu serve --listen 0.0.0.0:7788 --private-network`, then `ramu pair`. Read [remote access](../../SECURITY.md#remote-access) first.
+1. Start Ramu on the host (`pnpm build`, then the desktop app or `ramu serve`). Its setup shows a pairing QR code; later, **Settings → Remote access → Pair a device** shows one. Headless: `ramu serve --listen 0.0.0.0:7788 --private-network`, then `ramu pair`. Read [remote access](../../docs/security-model.md#remote-access) first.
 2. Install the app from a store. From source, install a development build once (`pnpm --filter @ramu/mobile eas:ios`, `eas:android`, or locally `build:ios`, `build:android`) and run `pnpm dev:mobile` first.
 3. Open it. A phone with no host starts on **Connect to your computer**:
    - **Scan QR code** pairs the moment it reads the host's code. The phone's own camera works too: the code opens getramu.dev, which opens the app (or its store page first). The host's address and code stay after `#` in that link, so the site never receives them.
@@ -45,7 +45,7 @@ Opt in under **Settings → Notifications**, with a switch per kind: needs you, 
 
 On iOS, **Settings → Live Activity** shows running and waiting counts on the Lock Screen and in the Dynamic Island.
 
-Official builds (`com.akalstack.ramu`) use the `@akalstack/ramu` Expo project and the `akalstack-ramu` Firebase project. The FCM v1 key lives in EAS and `google-services.json` is committed. A fork builds against its own projects with `EXPO_PUBLIC_EAS_PROJECT_ID=<id>` and `RAMU_GOOGLE_SERVICES_FILE=<path>`. Background Live Activity updates need an APNs key on each host (`RAMU_APNS_KEY_PATH`, `RAMU_APNS_KEY_ID`, `RAMU_APNS_TEAM_ID`). Delivery needs a physical phone and a signed build. See [Expo push setup](https://docs.expo.dev/push-notifications/push-notifications-setup/).
+`google-services.json` for the official app is committed. A fork builds against its own projects with `EXPO_PUBLIC_EAS_PROJECT_ID=<id>` and `RAMU_GOOGLE_SERVICES_FILE=<path>`. Background Live Activity updates need an APNs key on each host (`RAMU_APNS_KEY_PATH`, `RAMU_APNS_KEY_ID`, `RAMU_APNS_TEAM_ID`). Delivery needs a physical phone and a signed build. See [Expo push setup](https://docs.expo.dev/push-notifications/push-notifications-setup/).
 
 ## Development
 

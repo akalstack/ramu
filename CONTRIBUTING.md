@@ -4,6 +4,8 @@ Ramu is in a stability push. The most helpful thing you can send is a fix: a bug
 
 Report bugs in issues. For a fix, describe the problem, the expected behavior and the steps to reproduce it. Open an issue before a large architecture change.
 
+To send a change: fork the repository, create a branch, commit with a message that says what changes for the person using Ramu, and open a pull request against `main`. Questions go to [Discussions](https://github.com/akalstack/ramu/discussions).
+
 ## Development
 
 Use Git, Node.js 26 LTS and pnpm 12.21.0:
@@ -13,6 +15,15 @@ npm install --global pnpm@12.21.0
 pnpm install --frozen-lockfile
 pnpm dev
 ```
+
+| Command | Starts |
+| --- | --- |
+| `pnpm dev` | The desktop app with hot reload |
+| `pnpm dev:server` | The workspace server alone |
+| `pnpm dev:mobile` | Metro for the phone app ([mobile README](apps/mobile/README.md#development)) |
+| `pnpm dev:site` | The getramu.dev website |
+
+To work without signing in to a paid provider, start with `RAMU_FAKE_AGENT=1 pnpm dev`: every provider is simulated. Add `RAMU_USER_DATA=/tmp/ramu-dev` to keep that profile apart from the Ramu you use.
 
 Project search uses your `rg` if installed, otherwise the ripgrep inside the bundled Claude Code binary. Native dependencies may need Python 3 and a C/C++ toolchain. Keep the hoisted dependency layout in `pnpm-workspace.yaml`. Electron Forge depends on it.
 
