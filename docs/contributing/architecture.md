@@ -112,7 +112,7 @@ User-facing behavior is in the [browser guide](../guide/browser-and-computer.md#
 
 `index.ts` is the service entry point, `cli.ts` the CLI, `db.ts` the database, and `build.ts` the build fingerprint that detects a stale running service.
 
-Host preferences and model sets live in `userData/settings.json` through `settings/settingsStore.ts`. SQLite keeps operational state. `workspace/projectConfig.ts` reads bounded repository configuration without executing commands or widening permissions. See [Configuration files](../guide/configuration.md). The schema is one script in `db.ts`, stamped with a version. A new profile runs it, and a profile from a newer build is refused untouched. There are no migrations while Ramu is in alpha ([Compatibility](code-style.md#compatibility)).
+Host preferences and model sets live in `userData/settings.json` through `settings/settingsStore.ts`. SQLite keeps operational state. `workspace/projectConfig.ts` reads bounded repository configuration without executing commands or widening permissions. See [Configuration files](../guide/configuration.md). The schema is one script in `db.ts`, stamped with a version. A new profile runs it, an existing one upgrades in place through `MIGRATIONS`, and a profile from a newer build is refused untouched ([Compatibility](code-style.md#compatibility)).
 
 ### Shared MCP
 
