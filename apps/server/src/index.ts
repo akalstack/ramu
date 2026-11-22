@@ -146,6 +146,8 @@ import { createPairingNotice } from './remote/pairingNotice'
 import { clientAddress } from './remote/clientAddress'
 import { PhoneForwards, phoneForwardPeer, phoneForwardTarget } from './remote/phoneForward'
 import { parseTunnelChoice, TunnelManager } from './remote/tunnel'
+import { LinkClient } from './remote/ramuLink'
+import { LINK_LIMITS, LINK_URL } from '@ramu/shared/ramuLink'
 import { HostAdvertiser, advertisedInterfaces, discoveryName, readDiscoveryHostId } from './remote/discovery'
 import {
   candidateUrls,
@@ -295,8 +297,18 @@ let network: NetworkSetting = config.listen
       tunnel: null,
     }
   : readNetworkSetting(config.networkPath, Boolean(config.tls))
-// A tunnel Ramu runs itself (Cloudflare quick tunnel, Tailscale Funnel, ngrok), while the listener is up.
-const tunnels = new TunnelManager()
+// Ramu Link's client, made once the account is ready; the tunnel asks it for the relay's token.
+let ramuLink: LinkClient | null = null
+// A tunnel Ramu runs itself (Ramu Link, Cloudflare quick tunnel, Tailscale Funnel, ngrok), while the listener is up.
+const tunnels = new TunnelManager({
+  lease: (relay, target) => ramuLink?.lease(relay ?? LINK_URL, target) ?? Promise.resolve(null),
+  link: () => ({ status: ramuLink?.status() ?? null, pool: ramuLink?.cachedPool() ?? null }),
+})
+/** Tells the relay this host is going away, briefly: shutting down never waits long on the network. */
+const linkOffline = () =>
+  network.tunnel?.kind === 'link' && ramuLink
+    ? Promise.race([ramuLink.offline(), new Promise<void>((resolve) => setTimeout(resolve, 3_000).unref())])
+    : Promise.resolve()
 /** Where a tunnel reaches this host's listener on this computer. */
 const tunnelTarget = () => {
   const scheme = config.tls ? 'https' : 'http'
@@ -1297,6 +1309,15 @@ const account: AccountService = new AccountService({
   changed: () => send('account:changed', null),
 })
 account.start()
+ramuLink = new LinkClient({
+  hostId,
+  hostName: () => hostname(),
+  bearer: () => account.bearer(),
+  getState: (key, fallback) => workspace.getAppState(key, fallback),
+  setState: (key, value) => workspace.setAppState(key, value),
+  changed: () => {},
+})
+ramuLink.onLease = (lease) => tunnels.relinked(lease)
 workspace.settingsStore?.subscribe(() => account.settingsChanged())
 /** Migrations every production deploy runs first, against the database address saved for the project. */
 const productionMigrations = new ProductionMigrations({
@@ -1498,6 +1519,7 @@ async function stop(intentional = false, exitCode = 0) {
   if (stopping) return
   stopping = true
   clearInterval(tick)
+  await linkOffline()
   tunnels.stop()
   publicPages.close()
   phoneForwards.closeAll()
@@ -1762,7 +1784,13 @@ async function performInvoke(
       os: hostOs,
       ...(network.enabled ? { listening: `${network.host}:${network.port}`, tls: Boolean(config.tls) } : {}),
     }
-  else if (method.startsWith('network.')) {
+  // A paired phone may see how this host is reached from anywhere and turn on Ramu Link (with the settings permission);
+  // the rest of network access, with its devices and pairing codes, stays on the host.
+  else if (method === 'network.link') value = { tunnel: networkStatus().tunnel ?? null }
+  else if (method === 'network.useLink') {
+    await networkMethod('network.setTunnel', [{ kind: 'link' }])
+    value = { tunnel: networkStatus().tunnel ?? null }
+  } else if (method.startsWith('network.')) {
     if (remote) throw new Error('Network access is managed from the host running Ramu')
     value = await networkMethod(method, args)
   } else if (method === 'background.stop') {
@@ -2381,8 +2409,21 @@ let sockets: ReturnType<typeof serveSockets> | null = null
 // The WebSocket is one more transport for the same calls and events: it registers for the same broadcast as an SSE
 // stream and runs every call through `performInvoke`, so authorization and keyed-mutation recovery are shared.
 const streamDevices = new Map<object, string>()
+/** Streams that arrived through Ramu Link, and their device, for the link's device limit. */
+const linkStreams = new Map<object, string>()
 const socketHost: SocketHost = {
-  accept: (req, res) => remoteAccess.accept(req, res),
+  accept: async (req, res) => {
+    const device = await remoteAccess.accept(req, res)
+    if (!device || !ramuLink?.routed(req.headers.host) || ramuLink.admit(device.id)) return device
+    res.statusCode = 429
+    res.setHeader('Content-Type', 'application/json')
+    res.end(
+      JSON.stringify({
+        error: `This host's Ramu Link already has ${LINK_LIMITS.devices} devices connected. Close Ramu on one of them, or connect on the same network.`,
+      }),
+    )
+    return undefined
+  },
   invoke: async (device, request, req) => {
     try {
       const result = await performInvoke(true, device, request, req)
@@ -2404,6 +2445,7 @@ const socketHost: SocketHost = {
     clients.add(sink)
     remoteStreams.set(sink, req.headers.authorization)
     if (device) streamDevices.set(sink, device.id)
+    if (device && ramuLink?.routed(req.headers.host)) linkStreams.set(sink, device.id)
   },
   detach: (sink) => {
     clients.delete(sink)
@@ -2411,6 +2453,9 @@ const socketHost: SocketHost = {
     // A device's last connection closing ends what it was allowed "this time".
     const id = streamDevices.get(sink)
     streamDevices.delete(sink)
+    const linked = linkStreams.get(sink)
+    linkStreams.delete(sink)
+    if (linked && ![...linkStreams.values()].includes(linked)) ramuLink?.leave(linked)
     if (id && ![...streamDevices.values()].includes(id)) devices.endSession(id)
   },
 }
@@ -2488,6 +2533,7 @@ function syncDiscovery() {
 }
 function stopRemote() {
   clearTimeout(remoteRetry)
+  void linkOffline()
   tunnels.use(null, null)
   void advertiser.stop()
   const old = remote
@@ -2530,7 +2576,20 @@ function networkStatus() {
   }
 }
 async function networkMethod(method: string, args: unknown[]) {
-  if (method === 'network.status') return networkStatus()
+  if (method === 'network.status') {
+    // The pool is cached for minutes; asking here keeps Settings' "a slot is free" fresh without a timer.
+    if (ramuLink) void ramuLink.pool(network.tunnel?.relay ?? LINK_URL)
+    return networkStatus()
+  }
+  if (method === 'network.releaseLink') {
+    await ramuLink?.release()
+    if (network.tunnel?.kind === 'link') {
+      network = { ...network, tunnel: null }
+      writeNetworkSetting(config.networkPath, network)
+      syncTunnel()
+    }
+    return networkStatus()
+  }
   if (method === 'network.setHostAccess') {
     const [deviceId, access] = args
     if (typeof deviceId !== 'string' || !isHostAccess(access)) throw new Error('Invalid access')
@@ -2610,6 +2669,8 @@ async function networkMethod(method: string, args: unknown[]) {
     if (config.listen)
       throw new Error('Network access was set with --listen; run the tunnel yourself and pass --public-url')
     const tunnel = parseTunnelChoice(args[0])
+    // Leaving Ramu Link frees its tunnel at once; the address stays reserved until released or unused.
+    if (network.tunnel?.kind === 'link' && tunnel?.kind !== 'link') void linkOffline()
     // A tunnel needs the listener; turned on for this computer only, nothing else on the network can reach it.
     const enable = tunnel && !network.enabled ? { enabled: true, host: '127.0.0.1' } : {}
     network = { ...network, ...enable, tunnel }

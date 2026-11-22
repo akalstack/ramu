@@ -19,6 +19,7 @@ In product copy, a conversation and its work is a **thread**. A **task** is one 
 | `apps/desktop` | Electron windows, menus, native dialogs, the preload bridge, update checks, packaging. Reaches the server through `@ramu/client-runtime`. |
 | `apps/web` | React workspace UI and Monaco editor, rendered in the desktop app. |
 | `apps/mobile` | Expo phone app that pairs with a server over the network. On Google Play and the App Store, or built from source ([README](../../apps/mobile/README.md)). |
+| `apps/link` | Ramu Link relay: a Cloudflare Worker with one Durable Object that gives signed-in hosts a Cloudflare Tunnel and address, with slots, a waitlist and cleanup ([README](../../apps/link/README.md)). |
 | `apps/site` | Project website (getramu.dev): static Astro pages, with React islands for the hero demo and backdrop, and shadcn/ui components. |
 | `packages/shared` | Domain types, the API method table, and pure helpers used by every app, some grouped into folders such as `chat/`, `review/`, `search/`, `workspace/` and `providers/` (import as `@ramu/shared/<module>` or `@ramu/shared/<folder>/<module>`). |
 | `packages/contracts` | Wire protocol: versions, capabilities, request encoding. |

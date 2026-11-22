@@ -119,6 +119,7 @@ const READ = /\.(status|get|list|snapshot|catalog)$/
 /** The permission a call needs from a paired device, or null. Reading status and settings stays open. */
 export function permissionFor(method: string): DevicePermission | null {
   if (method === 'device.agentPairing') return 'agents'
+  if (method === 'network.useLink') return 'settings'
   const domain = method.split('.')[0]!
   if (domain === 'computer') return method === 'computer.status' || method === 'computer.session' ? null : 'computer'
   if (domain === 'hostBrowser') return method === 'hostBrowser.status' ? null : 'browser'

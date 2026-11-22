@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { collectAssets, run, versionOf } from './release.mjs'
+import { collectAssets, compareVersions, run, versionOf, withCredits } from './release.mjs'
 
 test('rejects malformed versions and tag/path injection', () => {
   for (const value of ['../x', '1.2', '01.2.3', '1.2.3;bad', '1.2.3-01', '1.2.3+build'])
@@ -91,4 +91,34 @@ test('prepares notes without committing, refuses overwrites, and verifies versio
     process.chdir(cwd)
     rmSync(root, { recursive: true, force: true })
   }
+})
+
+test('credits pull request authors from GitHub and commit authors it left out, without bots', () => {
+  const generated =
+    "## What's Changed\n* Fix pairing by @alice in https://github.com/o/r/pull/7\n\n## New Contributors\n* @alice made their first contribution in https://github.com/o/r/pull/7\n\n**Full Changelog**: https://github.com/o/r/compare/v1...v2\n"
+  const notes = withCredits('# Ramu v2\n\n## Added\n\n- A thing.\n', generated, [
+    'maintainer',
+    'alice',
+    'dependabot[bot]',
+    '',
+    'bob',
+    'maintainer',
+  ])
+  assert.ok(notes.startsWith('# Ramu v2\n\n## Added\n\n- A thing.\n\n## Contributors\n\n@bob, @maintainer\n\n## What'))
+  assert.match(notes, /by @alice in https:\/\/github.com\/o\/r\/pull\/7/)
+  assert.match(notes, /\*\*Full Changelog\*\*: https:\/\/github.com\/o\/r\/compare\/v1...v2\n$/)
+  assert.equal(withCredits('# Ramu v2\n', '', ['github-actions[bot]']), '# Ramu v2\n')
+})
+
+test('orders versions so the previous release is found by version, not creation date', () => {
+  const tags = ['v0.1.0-alpha.8', 'v0.1.0', 'v0.1.0-alpha.10', 'v0.1.0-beta.1', 'v0.1.0-alpha.9']
+  assert.deepEqual(tags.sort(compareVersions), [
+    'v0.1.0-alpha.8',
+    'v0.1.0-alpha.9',
+    'v0.1.0-alpha.10',
+    'v0.1.0-beta.1',
+    'v0.1.0',
+  ])
+  assert.ok(compareVersions('0.2.0', '0.10.0') < 0)
+  assert.ok(compareVersions('1.0.0-rc', '1.0.0-rc.1') < 0)
 })

@@ -51,6 +51,8 @@ it('names the permission each call needs, leaving reads open', () => {
   expect(permissionFor('hostBrowser.open')).toBe('browser')
   expect(permissionFor('hostBrowser.status')).toBeNull()
   expect(permissionFor('term.write')).toBe('terminal')
+  expect(permissionFor('network.useLink')).toBe('settings')
+  expect(permissionFor('network.link')).toBeNull()
   expect(permissionFor('settings.app.set')).toBe('settings')
   expect(permissionFor('settings.app.get')).toBeNull()
   expect(permissionFor('providers.status')).toBeNull()

@@ -15,7 +15,7 @@ import { SETTINGS_CARD_LINE, SettingsEmpty } from './cards'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { Check, ChevronDown, Copy, Link2, MoreHorizontal, Plus, Radar, Wifi } from 'lucide-react'
+import { ChevronDown, Link2, MoreHorizontal, Plus, Radar, Wifi } from 'lucide-react'
 import { useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type {
   AgentHostSummary,
@@ -30,7 +30,7 @@ import { RowButton } from '@/components/row-button'
 import { Dialog as ConfirmDialog, Dropdown, Menu, timeAgo } from '../Menu'
 import { learnedRoutes } from '@ramu/shared/hostProof'
 import { hostOfUrl, networkName, VIRTUAL_INTERFACE } from '@ramu/shared/networkLabel'
-import { copyText, invoke, invokeOn, invokeUncachedOn, ramu } from '../ipc'
+import { invoke, invokeOn, invokeUncachedOn, ramu } from '../ipc'
 import { ownHostId } from '../hosts'
 import { errorText } from '../lib/errors'
 import { notifyError } from '../chat/Notifications'
@@ -39,6 +39,8 @@ import { activityText, hostRoute, StatusDot, statusText, useComputers } from '..
 import { workspaceVisible } from '../workspace/workspaceLifetime'
 import { onPairLink, takePairLink } from '../pairLink'
 import { NearbyHosts } from './NearbyHosts'
+import { CopyButton } from './CopyAddressButton'
+import { RamuLinkState, OWN_RELAY_GUIDE, type RouteChoice } from './RamuLinkState'
 import { AgentHosts } from './AgentHosts'
 import { HostUpdateLine, UpdateAllHosts } from './HostUpdates'
 import { DeviceIcon } from '@/components/device-icon'
@@ -87,26 +89,6 @@ function useNetworkStatus(interval: number) {
   return [status, setStatus, reload] as const
 }
 
-function CopyButton({ text, label }: { text: string; label: string }) {
-  const [done, setDone] = useState(false)
-  return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      aria-label={label}
-      title={label}
-      onClick={() =>
-        void copyText(text).then(() => {
-          setDone(true)
-          window.setTimeout(() => setDone(false), 1400)
-        })
-      }
-    >
-      {done ? <Check size={14} /> : <Copy size={14} />}
-    </Button>
-  )
-}
-
 export function RemoteAccessSettings() {
   useLanguage()
   const state = useComputers()
@@ -132,10 +114,11 @@ export function RemoteAccessSettings() {
   )
 }
 
-type ReachMode = 'off' | 'quick' | 'tailscale' | 'ngrok' | 'manual'
-const REACH_MODES: ReachMode[] = ['off', 'quick', 'tailscale', 'ngrok', 'manual']
+type ReachMode = 'off' | 'link' | 'quick' | 'tailscale' | 'ngrok' | 'manual'
+const REACH_MODES: ReachMode[] = ['off', 'link', 'quick', 'tailscale', 'ngrok', 'manual']
 const REACH_LABEL: Record<ReachMode, string> = {
   off: 'Only my network or VPN',
+  link: 'Ramu Link',
   quick: 'Quick tunnel (Cloudflare)',
   tailscale: 'Tailscale Funnel',
   ngrok: 'ngrok',
@@ -143,6 +126,7 @@ const REACH_LABEL: Record<ReachMode, string> = {
 }
 const REACH_HELP: Record<ReachMode, string> = {
   off: 'Devices reach this host on your network or VPN. Choose a tunnel to reach it from anywhere.',
+  link: 'A free address from Ramu that stays the same, for one computer per Ramu account. Ramu runs cloudflared for it. Cloudflare can read the traffic; every call still needs a paired device.',
   quick:
     'Ramu starts a Cloudflare quick tunnel. No account needed. The address changes each time Ramu starts, so it suits trying things out. Cloudflare can read the traffic.',
   tailscale:
@@ -151,7 +135,8 @@ const REACH_HELP: Record<ReachMode, string> = {
   manual:
     'For a tunnel you run yourself, such as a named Cloudflare Tunnel, pointed at port {0} on this computer. Paste its https:// address.',
 }
-const TUNNEL_TOOL: Record<'quick' | 'tailscale' | 'ngrok', 'cloudflared' | 'tailscale' | 'ngrok'> = {
+const TUNNEL_TOOL: Record<'link' | 'quick' | 'tailscale' | 'ngrok', 'cloudflared' | 'tailscale' | 'ngrok'> = {
+  link: 'cloudflared',
   quick: 'cloudflared',
   tailscale: 'tailscale',
   ngrok: 'ngrok',
@@ -191,6 +176,8 @@ function TunnelState({ status, mode, staged }: { status: NetworkStatus; mode: Re
         {t('Then save again.')}
       </p>
     )
+  // Ramu Link says its own state (RamuLinkState); only a missing cloudflared is told here.
+  if (mode === 'link') return null
   if (tunnel.state === 'running' && tunnel.url)
     return (
       <p className={line} role="status">
@@ -265,15 +252,17 @@ function ThisComputer() {
     {
       mode: (tunnelChoice?.kind ?? (status?.publicAddress?.url ? 'manual' : 'off')) as ReachMode,
       domain: tunnelChoice?.domain ?? '',
+      relay: tunnelChoice?.relay ?? '',
       url: tunnelChoice ? '' : (status?.publicAddress?.url ?? ''),
     },
-    async ({ mode, domain, url }) => {
+    async ({ mode, domain, relay, url }) => {
       try {
-        if (mode === 'quick' || mode === 'tailscale' || mode === 'ngrok')
+        if (mode === 'link' || mode === 'quick' || mode === 'tailscale' || mode === 'ngrok')
           setStatus(
             await invoke('network.setTunnel', {
               kind: mode,
               ...(mode === 'ngrok' && domain.trim() ? { domain: domain.trim() } : {}),
+              ...(mode === 'link' && relay.trim() ? { relay: relay.trim() } : {}),
             }),
           )
         else {
@@ -285,6 +274,18 @@ function ThisComputer() {
       }
     },
   )
+  const [showRelay, setShowRelay] = useState(false)
+  const linkPool = status?.tunnel?.pool
+  const linkFull = !!linkPool && linkPool.used >= linkPool.capacity
+  /** Switches to a route Ramu Link's panel recommended; saving applies it as any other choice. */
+  const chooseRoute = (route: RouteChoice) => {
+    if (route === 'own-relay') {
+      setShowRelay(true)
+      void ramu.invoke('app.openExternal', OWN_RELAY_GUIDE).catch(() => {})
+      return
+    }
+    stageReach({ ...reach, mode: route })
+  }
   if (!status) return null
   const managed = status.source === 'command-line'
   const publicUrlFixed = managed || status.publicAddress?.source === 'command-line'
@@ -431,7 +432,13 @@ function ThisComputer() {
               value={reach.mode}
               disabled={publicUrlFixed}
               options={REACH_MODES.filter((mode) => status.tunnel || mode === 'off' || mode === 'manual').map(
-                (mode) => ({ value: mode, label: t(REACH_LABEL[mode]) }),
+                (mode) => ({
+                  value: mode,
+                  label:
+                    mode === 'link' && linkFull && tunnelChoice?.kind !== 'link'
+                      ? t('Ramu Link (full right now)')
+                      : t(REACH_LABEL[mode]),
+                }),
               )}
               onChange={(mode) => stageReach({ ...reach, mode: mode as ReachMode })}
             />
@@ -450,6 +457,37 @@ function ThisComputer() {
                 onChange={(event) => stageReach({ ...reach, domain: event.target.value })}
               />
             </SettingsRow>
+          )}
+          {reach.mode === 'link' && (showRelay || reach.relay) && (
+            <SettingsRow>
+              <SettingsLabel
+                title={t('Your own relay')}
+                help={t(
+                  'Optional. The address of a Ramu Link relay you run on your Cloudflare account. Leave empty for Ramu’s.',
+                )}
+              />
+              <Input
+                aria-label={t('Your own relay')}
+                type="url"
+                inputMode="url"
+                spellCheck={false}
+                placeholder="https://link.example.com"
+                value={reach.relay}
+                onChange={(event) => stageReach({ ...reach, relay: event.target.value })}
+              />
+            </SettingsRow>
+          )}
+          {reach.mode === 'link' && (
+            <RamuLinkState
+              status={status}
+              staged={reach.mode !== (tunnelChoice?.kind ?? null) || reach.relay.trim() !== (tunnelChoice?.relay ?? '')}
+              onChoose={chooseRoute}
+              onRelease={() =>
+                void invoke('network.releaseLink')
+                  .then(setStatus)
+                  .catch((error: unknown) => notifyError(errorText(error), t('Remote access')))
+              }
+            />
           )}
           {reach.mode === 'manual' && (
             <SettingsRow>

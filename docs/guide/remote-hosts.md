@@ -21,7 +21,7 @@ To have agents use another computer's screen, add that computer as a host and ru
 **Let other devices use this host** decides who can reach this computer:
 
 - **Allow other devices** opens the host to the network chosen under **How devices reach it**: **Network** (all networks, or one such as your VPN) and **Discoverable on this network**. The port is under **Advanced**.
-- **From anywhere** runs or names a [tunnel](#your-own-tunnel) to this host.
+- **From anywhere** turns on [Ramu Link](#ramu-link), or runs or names a [tunnel](#your-own-tunnel) to this host.
 - **Pair a device…** opens the same window as the phone button: the QR code, a one-time code, a pairing link to send, and this host's addresses (**Use in QR code** picks the one the code carries). **Device access** picks **Full access** or **View threads and answer requests**. With **Discoverable on this network** on, a nearby device can also ask without a code. Ramu asks you to allow it (in the app, or as a notification when it's in the background or closed). Allow it only when both screens show the same six-digit number.
 - Each device's permissions decide what it may use: computer use, the browser, terminals, settings changes and agents. Each is **Allowed**, **Ask first** (the device can request it) or **Blocked** (its requests are declined without asking). Each device shows what it runs on (an iPhone, an Android tablet, a Mac, an Ubuntu server…) once it has connected, and **Keep paired** sets how long that one device stays paired without use, or leaves it like the others. When a device asks for a permission it lacks, the request opens in Ramu on this host (or as a system notification when Ramu is in the background) with **Allow this time** (until that device disconnects), **Allow for 1 hour**, **Always allow**, **Deny** and **Don’t ask again**. A request allowed for a while shows in Settings as **Allowed until** its end, until you set a lasting state. Closing the request leaves it waiting here until it lapses, and the asking device, desktop or phone, shows the answer as soon as you give it.
 
@@ -40,7 +40,7 @@ ramu pair
 | Command | What it does |
 | --- | --- |
 | `ramu [serve]` | Run the server in the foreground; `--public-url` names [your own tunnel](#your-own-tunnel) |
-| `ramu tunnel quick\|tailscale\|ngrok [domain]\|off` | Reach this host from anywhere through a [tunnel](#your-own-tunnel) Ramu runs |
+| `ramu tunnel link [relay]\|quick\|tailscale\|ngrok [domain]\|off` | Reach this host from anywhere through [Ramu Link](#ramu-link) or a [tunnel](#your-own-tunnel) Ramu runs; `ramu tunnel release` gives the Ramu Link slot back |
 | `ramu status`, `stop`, `restart` | Check, stop or restart it |
 | `ramu up` | Let devices on your private network reach this host, keep it running as a service and pair a device; `--private-network`, `--no-private-network` and `--yes` make it scriptable |
 | `ramu pair [--role viewer]` | Print a one-time pairing code and this host's addresses |
@@ -65,6 +65,24 @@ A bare port (`--listen 7788`) listens on this computer only. Any other address n
 | Anywhere | [Your own tunnel](#your-own-tunnel), or HTTPS in front, or a certificate for Ramu |
 
 A private network (Tailscale, NetBird, ZeroTier or WireGuard) is the simplest choice: free for personal use, encrypted end to end, and no domain needed. Tailscale offers Funnel. NetBird is open source down to its coordination server, so you can run all of it yourself.
+
+### Ramu Link
+
+Ramu Link gives a host a free `https://ramu-….akalstack.com` address that stays the same and works from any network, with nothing to install but what Ramu runs for you. Choose **Ramu Link** under **Settings → Remote access → From anywhere → Reach from anywhere**, or run `ramu tunnel link` on a headless host. It needs the [Ramu account](account.md) on that host and `cloudflared` (Settings shows how to install it).
+
+- **One computer per account.** A second computer on the same account says which one holds the link; **Give the slot back** there (or `ramu tunnel release`) frees it.
+- **While it's on:** the address shows under the choice, with this month's traffic and how many devices are connected through it. Pairing links and the addresses paired devices learn put it first. At home, devices still use the network or VPN address when it answers.
+- **Limits:** 5 devices connected through the link at once (devices on your network, VPN or SSH don't count) and 10 GB a month. Past the limit the link pauses until the 1st of the next month; your network, VPN and other tunnels keep working.
+- **Unused links are freed.** A link no paired device has reached for 28 days goes to the next computer waiting; Settings shows the date. A restarted host reconnects straight away, and a host that's off keeps its address.
+- **When it's full,** Settings says so before you save, and saving puts the computer on the waitlist: it switches to Ramu Link on its own when a slot frees. Meanwhile Settings lists what this computer can use instead, best first: Tailscale when installed, [your own relay](#your-own-relay), the quick tunnel when `cloudflared` is here, ngrok when installed, or installing Tailscale. Each has **Use this**. The same happens when the link is paused for traffic or held by another computer.
+
+Ramu's relay only hands out the tunnel. Pairing, device tokens and the host's identity stay on the host, and every call still needs a paired device's token. Cloudflare decrypts the traffic at its edge, as with any tunnel below.
+
+A phone with the **settings** permission can turn Ramu Link on from its first-run setup ([mobile app](../../apps/mobile/README.md#connect-a-phone)).
+
+#### Your own relay
+
+The relay is `apps/link` in this repository. Deploy it to your own free Cloudflare account ([how](../../apps/link/README.md#run-your-own)), then enter its address under **Your own relay** (shown with **Set up** when Ramu Link is full) or run `ramu tunnel link https://your-relay`. Your relay has its own slots, so it never waits for Ramu's.
 
 ### Your own tunnel
 

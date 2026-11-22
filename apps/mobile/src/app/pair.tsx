@@ -62,7 +62,14 @@ export default function Pair() {
   const askAbort = useRef<AbortController | null>(null)
   useEffect(() => () => askAbort.current?.abort(), [])
   const [moved, setMoved] = useState<ReviewAddressResult | 'checking' | null>(null)
-  const params = useLocalSearchParams<{ url?: string; code?: string; exp?: string; name?: string; method?: string }>()
+  const params = useLocalSearchParams<{
+    url?: string
+    code?: string
+    exp?: string
+    name?: string
+    method?: string
+    from?: string
+  }>()
   const [address, setAddress] = useState('')
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
@@ -113,7 +120,9 @@ export default function Pair() {
   const done = (host: string) => {
     succeeded()
     showToast(fill(t.pairedWith, host))
-    if (router.canDismiss()) router.dismissAll()
+    // Opened from the first-run steps: return to them, which go on to the Connected step.
+    if (params.from === 'onboarding' && router.canGoBack()) router.back()
+    else if (router.canDismiss()) router.dismissAll()
     else router.replace('/')
   }
   // A `ramu://pair?url=…&code=…` link opened from outside the app arrives as route parameters.

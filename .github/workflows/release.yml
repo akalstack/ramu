@@ -121,13 +121,14 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
+          node scripts/release/release.mjs notes "$RELEASE_TAG" "$GH_REPO" > /tmp/ramu-notes.md
           if gh release view "$RELEASE_TAG" --json isDraft > /tmp/ramu-release.json; then
             node -e "if (!JSON.parse(require('fs').readFileSync('/tmp/ramu-release.json')).isDraft) throw new Error('Refusing to change a published release')"
-            gh release edit "$RELEASE_TAG" --title "Ramu $RELEASE_TAG" --notes-file "releases/$RELEASE_TAG.md"
+            gh release edit "$RELEASE_TAG" --title "Ramu $RELEASE_TAG" --notes-file /tmp/ramu-notes.md
           else
             prerelease=()
             if [[ "$RELEASE_TAG" == *-* ]]; then prerelease=(--prerelease); fi
-            gh release create "$RELEASE_TAG" --draft --verify-tag --title "Ramu $RELEASE_TAG" --notes-file "releases/$RELEASE_TAG.md" "${prerelease[@]}"
+            gh release create "$RELEASE_TAG" --draft --verify-tag --title "Ramu $RELEASE_TAG" --notes-file /tmp/ramu-notes.md "${prerelease[@]}"
           fi
           gh release upload "$RELEASE_TAG" dist/release/* --clobber
           echo "Draft ready for review. Publish it manually from GitHub Releases."

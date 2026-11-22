@@ -29,6 +29,7 @@ import { setHapticsEnabled } from '../components/ui'
 import { StoreProvider, useStore } from '../runtime/store'
 import { AutomationProvider } from '../runtime/automation'
 import { WELCOME_DISMISSED, showWelcome } from '../runtime/pairingModel'
+import { ONBOARDING_STEP, resumesOnboarding } from '../runtime/onboardingModel'
 
 // Deep links (and notification taps) into a sheet or chat still get the tabs underneath,
 // so sheets present as sheets and back always has somewhere to go.
@@ -37,7 +38,10 @@ export const unstable_settings = { anchor: '(tabs)' }
 // A crash anywhere below shows a recoverable screen instead of the developer error screen.
 export { AppErrorBoundary as ErrorBoundary } from '../components/AppErrorBoundary'
 
-/** Opens the welcome screen once per launch on a phone with no host, unless a link opened another screen. */
+/**
+ * Opens the first-run steps once per launch on a phone with no host, or one that left them part way after pairing, unless
+ * a link opened another screen.
+ */
 function WelcomeGate() {
   const store = useStore()
   const router = useRouter()
@@ -46,8 +50,10 @@ function WelcomeGate() {
   useEffect(() => {
     if (!store.ready || checked.current) return
     checked.current = true
-    if (!showWelcome({ hosts: store.computers.length, dismissed: store.drafts[WELCOME_DISMISSED] === 'yes', path }))
-      return
+    const hosts = store.computers.length
+    // A first run left part way after pairing (before notifications or done) resumes where it was.
+    const resuming = resumesOnboarding(store.drafts[ONBOARDING_STEP], hosts) && path === '/'
+    if (!resuming && !showWelcome({ hosts, dismissed: store.drafts[WELCOME_DISMISSED] === 'yes', path })) return
     const frame = requestAnimationFrame(() => router.push('/welcome'))
     return () => cancelAnimationFrame(frame)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- decided once, when the saved state has loaded
