@@ -79,6 +79,34 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Drafting…': 'Membuat draf…',
   'New agent': 'Agent baru',
   'Read-only': 'Hanya baca',
+  // Connecting a phone (desktop).
+  'Allow devices on this network': 'Izinkan perangkat di jaringan ini',
+  'Allowing…': 'Mengizinkan…',
+  'Connect a phone': 'Hubungkan ponsel',
+  'Connect a phone or computer': 'Hubungkan ponsel atau komputer',
+  'Getting this host ready for your phone…': 'Menyiapkan host ini untuk ponselmu…',
+  'In the QR code': 'Di kode QR',
+  'It can use this host now. Manage it in Settings › Remote access.': 'Sekarang bisa memakai host ini. Kelola di Pengaturan › Akses jarak jauh.',
+  'Making the code…': 'Membuat kode…',
+  'No address yet': 'Belum ada alamat',
+  'Or sign in to your Ramu account on both devices to connect from anywhere.': 'Atau masuk ke akun Ramu di kedua perangkat untuk terhubung dari mana saja.',
+  'Other devices can’t reach this host yet. Allow devices on this network, and the code appears here. Ramu does not encrypt this connection, so use it on a network or VPN you trust.': 'Perangkat lain belum bisa menjangkau host ini. Izinkan perangkat di jaringan ini, dan kodenya muncul di sini. Ramu tidak mengenkripsi koneksi ini, jadi pakai di jaringan atau VPN yang kamu percaya.',
+  'Pair another': 'Pasangkan yang lain',
+  'Pair it once to follow threads, review changes and answer approvals from your phone.': 'Pasangkan sekali untuk mengikuti thread, meninjau perubahan, dan menjawab persetujuan dari ponselmu.',
+  'Pair it once to follow threads, review changes and answer approvals from your phone. This lets devices on your network or VPN reach this host. Ramu does not encrypt that connection, so use a network you trust.': 'Pasangkan sekali untuk mengikuti thread, meninjau perubahan, dan menjawab persetujuan dari ponselmu. Ini membuat perangkat di jaringan atau VPN-mu bisa menjangkau host ini. Ramu tidak mengenkripsi koneksi itu, jadi pakai jaringan yang kamu percaya.',
+  'Pairing QR code. Scan it with your phone’s camera.': 'Kode QR pemasangan. Pindai dengan kamera ponselmu.',
+  'Scan the code with your phone’s camera, or choose this host under Nearby hosts in Ramu and allow it when both show the same number.': 'Pindai kodenya dengan kamera ponselmu, atau pilih host ini di Host terdekat di Ramu lalu izinkan saat keduanya menampilkan angka yang sama.',
+  'Scan with your phone’s camera. It opens Ramu, or the App Store or Google Play first.': 'Pindai dengan kamera ponselmu. Ramu akan terbuka, atau App Store atau Google Play dulu.',
+  'Send it to your phone': 'Kirim ke ponselmu',
+  'Show pairing code': 'Tampilkan kode pemasangan',
+  'Shows a QR code your phone’s camera opens, and a one-time code. With Discoverable on, nearby devices can ask instead, and you allow them here.': 'Menampilkan kode QR yang bisa dibuka kamera ponselmu, dan kode sekali pakai. Dengan Bisa ditemukan aktif, perangkat terdekat juga bisa meminta, dan kamu mengizinkannya di sini.',
+  'This host is starting to listen for other devices. The code appears in a moment.': 'Host ini mulai menerima perangkat lain. Kodenya muncul sebentar lagi.',
+  'Use in QR code': 'Pakai di kode QR',
+  'Waiting for your phone…': 'Menunggu ponselmu…',
+  'Works once · a new one in {0}': 'Sekali pakai · yang baru dalam {0}',
+  'Your phone': 'Ponselmu',
+  'Connect your phone': 'Hubungkan ponselmu',
+  'Scan one code and Ramu is on your phone too. Skip it for now and connect later with the phone button in the sidebar.': 'Pindai satu kode dan Ramu ada di ponselmu juga. Lewati dulu dan hubungkan nanti dengan tombol ponsel di sidebar.',
   'A helper on {0} reviews this': 'Helper di {0} meninjau ini',
   'Ask {0}': 'Tanya {0}',
   'What should it do?': 'Apa yang harus dilakukan?',
@@ -795,11 +823,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Use the fewest tokens': 'Pakai token paling sedikit',
   'Checking this host…': 'Memeriksa host ini…',
   Recommended: 'Disarankan',
-  'Same network or VPN': 'Jaringan yang sama atau VPN',
-  'Devices on this Wi-Fi or your VPN (such as Tailscale) connect directly after pairing. Not encrypted by Ramu, so use a network you trust.':
-    'Perangkat di Wi-Fi ini atau VPN-mu (seperti Tailscale) terhubung langsung setelah dipasangkan. Tidak dienkripsi oleh Ramu, jadi pakai jaringan yang kamu percaya.',
-  'Pair a phone or another computer from Settings › Remote access whenever you are ready.':
-    'Pasangkan ponsel atau komputer lain dari Pengaturan › Akses jarak jauh kapan pun kamu siap.',
   'Add another repository': 'Tambah repositori lain',
   'Optional Ramu tools stay out of the prompt until the agent asks for them.':
     'Tool Ramu opsional tidak masuk prompt sampai agent memintanya.',
@@ -3711,7 +3734,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Creates a one-time code for a phone or another host. Enter it on that device.':
     'Membuat kode sekali pakai untuk ponsel atau host lain. Masukkan di perangkat itu.',
   'Devices that can use this host': 'Perangkat yang bisa memakai host ini',
-  Expired: 'Kedaluwarsa',
   Forget: 'Lupakan',
   'Forget {0}?': 'Lupakan {0}?',
   'It can now use this host. You can revoke it any time under Devices that can use this host.':
@@ -3719,14 +3741,12 @@ export const indonesian: Readonly<Record<string, string>> = {
   'It stops working right away and must be paired again to reconnect.':
     'Langsung berhenti berfungsi dan harus dipasangkan lagi agar bisa tersambung.',
   'Pairing link': 'Tautan pemasangan',
-  'Open it on a device that has Ramu': 'Buka di perangkat yang sudah ada Ramu',
   'Copy pairing link': 'Salin tautan pemasangan',
   SSH: 'SSH',
   'Connects over SSH with your keys and ~/.ssh/config. Ramu must already be installed on that host. Ramu starts it there if needed, and no port is opened to the network.':
     'Tersambung lewat SSH dengan kunci dan ~/.ssh/config-mu. Ramu harus sudah terpasang di host itu. Ramu menjalankannya di sana jika perlu, dan tidak ada port yang dibuka ke jaringan.',
   'SSH host': 'Host SSH',
   'user@host or an alias from your SSH config': 'user@host atau alias dari konfigurasi SSH-mu',
-  'QR host address': 'Alamat host QR',
   'SSH config aliases': 'Alias konfigurasi SSH',
   'Choose from your SSH config': 'Pilih dari konfigurasi SSH-mu',
   'The feature branch is named from your changes. Staged and unstaged changes are kept, and you stay on it.':
@@ -3803,12 +3823,9 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Perangkat di dekatmu atau di VPN-mu terhubung lewat jaringan ini. Pilih VPN-mu agar Ramu tidak terbuka di jaringan lain.',
   'Devices on the same network see this host as {0} and can ask to pair. Seeing it gives no access. Off by default.':
     'Perangkat di jaringan yang sama melihat host ini sebagai {0} dan bisa meminta untuk dipasangkan. Itu tidak memberi akses. Mati secara default.',
-  'Shows a one-time code and QR code for a phone or another computer. With Discoverable on, nearby devices can ask instead, and you allow them here.':
-    'Menampilkan kode sekali pakai dan kode QR untuk ponsel atau komputer lain. Jika Dapat ditemukan aktif, perangkat di dekatmu bisa meminta, lalu kamu izinkan di sini.',
   'Turn on Allow other devices first.': 'Aktifkan Izinkan perangkat lain dulu.',
   'Phones and your other computers connect once paired: on your network, over a VPN, or from anywhere through your own tunnel.':
     'Ponsel dan komputermu yang lain terhubung setelah dipasangkan, lewat jaringanmu, VPN, atau dari mana saja lewat tunnel sendiri.',
-  'New code': 'Kode baru',
   'No network address found. Connect this host to a network or VPN.':
     'Alamat jaringan tidak ditemukan. Sambungkan host ini ke jaringan atau VPN.',
   'Open Remote access on that host, choose Pair a device, then enter what it shows. Projects live on that host, so add them there.':
@@ -3835,7 +3852,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Turn on': 'Aktifkan',
   'Turn on access above first.': 'Aktifkan akses di atas dulu.',
   'Use a number from 1024 to 65535.': 'Pakai angka dari 1024 sampai 65535.',
-  'Works once · expires in {0}': 'Sekali pakai · kedaluwarsa dalam {0}',
   'You can pair again later. The other host still lists this device until you revoke it there.':
     'Kamu bisa memasangkan lagi nanti. Host lain masih mencantumkan perangkat ini sampai kamu mencabutnya di sana.',
   never: 'belum pernah',
@@ -5329,8 +5345,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0} wants to pair': '{0} ingin dipasangkan',
   'Allow it only if it shows this number. From {0}.':
     'Izinkan hanya jika perangkat itu menampilkan angka ini. Dari {0}.',
-  'On the other device, open Ramu and choose this host under Nearby hosts. You are asked to allow it when both show the same number. Or enter one of these addresses and the code.':
-    'Di perangkat lain, buka Ramu dan pilih host ini di Host terdekat. Kamu akan diminta mengizinkannya jika keduanya menampilkan angka yang sama. Atau masukkan salah satu alamat ini beserta kodenya.',
   'Allow this computer on {0} if it shows this number': 'Izinkan komputer ini di {0} jika menampilkan angka ini',
   'Asking {0}…': 'Meminta {0}…',
   Asked: 'Sudah diminta',
@@ -5583,9 +5597,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'idb installation is already running.': 'Pemasangan idb sedang berjalan.',
   'Install idb on the owning host.': 'Pasang idb di host pemilik.',
   'idb installed without its executables. Try again.': 'idb terpasang tanpa file yang bisa dijalankan. Coba lagi.',
-  'Reach Ramu from your other devices': 'Jangkau Ramu dari perangkatmu yang lain',
-  'Use your phone or another computer with this host over your network, a VPN or your Ramu account. You can change this later.':
-    'Pakai ponsel atau komputer lain dengan host ini lewat jaringan, VPN, atau Akun Ramu-mu. Kamu bisa mengubahnya nanti.',
   'Nothing outside this computer can reach it yet. Turn on Allow other devices in Settings → Remote access, and the address appears here.':
     'Belum ada yang bisa menjangkaunya dari luar komputer ini. Nyalakan Izinkan perangkat lain di Pengaturan → Akses jarak jauh, lalu alamatnya tampil di sini.',
   'Turn on Local network or VPN below first, so {0} can reach this computer.':
@@ -6897,7 +6908,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Akun terhubung di satu host. Pilih host di header pengaturan untuk menghubungkan atau mengubahnya.',
   'Model control': 'Kontrol model',
   'Agent features': 'Fitur agen',
-  'Other devices': 'Perangkat lain',
   'Choose your default model': 'Pilih model bawaan',
   'New threads start on this model. Change it in any thread, or later in Settings.':
     'Thread baru dimulai dengan model ini. Ubah di thread mana pun, atau nanti di Pengaturan.',
@@ -7392,7 +7402,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   Run: 'Jalankan',
   'Dock terminal on right': 'Tempatkan terminal di kanan',
   AI: 'AI',
-  'Scan this pairing offer with Ramu on your phone': 'Pindai tawaran pemasangan ini dengan Ramu di ponselmu',
   Removed: 'Dihapus',
   '{0}: worktree setup failed': '{0}: penyiapan worktree gagal',
   '{0}: setting up worktree…': '{0}: menyiapkan worktree…',

@@ -73,7 +73,7 @@ function NeedComputerSheet() {
           onPress={() => {
             tap()
             close()
-            later(() => router.push('/pair'))
+            later(() => router.push(store.computers.length ? '/pair' : '/welcome'))
           }}
         >
           <Plus size={17} color={c.accent} />

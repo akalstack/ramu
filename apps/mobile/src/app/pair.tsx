@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView,
   Keyboard,
   Alert,
+  ActivityIndicator,
   Linking,
   Platform,
   Pressable,
@@ -16,14 +17,15 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { needsHttpConsent } from '../runtime/transport'
-import { decodePairQr, parsePairInput } from '@ramu/contracts'
+import { parsePairInput } from '@ramu/contracts'
 import { PairRequestUnsupported } from '@ramu/shared/pairRequest'
-import { CameraOff, Monitor, QrCode, ShieldAlert } from 'lucide-react-native'
+import { CameraOff, CircleAlert, Monitor, QrCode, ShieldAlert } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
 import { GlassButton, Header, Screen, useSheetKeyboardOffset, PageScrollView as ScrollView } from '../components/Screen'
 import { ReadableColumn } from '../components/ReadableColumn'
-import { Card, T, Toggle, tap } from '../components/ui'
+import { Card, T, Toggle, succeeded, tap } from '../components/ui'
+import { showToast } from '../runtime/toast'
 import { animateLayout } from '../components/Motion'
 import { fill, useT } from '../i18n'
 import { reviewSelection } from '@ramu/shared/discovery/tracker'
@@ -37,6 +39,7 @@ import {
   pairingFill,
   type PairMethod,
 } from '../runtime/nearbyModel'
+import { pairProblem, pairedName, readScan, type PairProblem } from '../runtime/pairingModel'
 
 const LENGTH = 10
 
@@ -60,17 +63,21 @@ export default function Pair() {
   const askAbort = useRef<AbortController | null>(null)
   useEffect(() => () => askAbort.current?.abort(), [])
   const [moved, setMoved] = useState<ReviewAddressResult | 'checking' | null>(null)
-  const params = useLocalSearchParams<{ url?: string; code?: string; exp?: string; name?: string }>()
+  const params = useLocalSearchParams<{ url?: string; code?: string; exp?: string; name?: string; method?: string }>()
   const [address, setAddress] = useState('')
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
   const [http, setHttp] = useState(false)
   const [offerScanned, setOfferScanned] = useState(false)
   const [busy, setBusy] = useState(false)
+  // What stopped the last try, shown in place with what to do next, instead of an alert.
+  const [problem, setProblem] = useState<PairProblem | null>(null)
+  // The host a scanned code is pairing with right now.
+  const [joining, setJoining] = useState<string | null>(null)
   const t = useT()
   const live = Platform.OS !== 'web'
   // Nearby hosts come first. Opening this screen never starts the camera: it opens only for the QR method.
-  const [method, setMethod] = useState<PairMethod>(() => initialMethod(live, Boolean(params.url)))
+  const [method, setMethod] = useState<PairMethod>(() => initialMethod(live, Boolean(params.url), params.method))
   const [foreground, setForeground] = useState(AppState.currentState === 'active')
   const [selected, setSelected] = useState<{ key: string; url: string } | null>(null)
   const [scanning, setScanning] = useState(true)
@@ -101,7 +108,14 @@ export default function Pair() {
     scroll.current?.scrollTo({ y: 0, animated: false })
     scanned.current = false
     setScanning(true)
+    setProblem(null)
     setMethod(next)
+  }
+  const done = (host: string) => {
+    succeeded()
+    showToast(fill(t.pairedWith, host))
+    if (router.canDismiss()) router.dismissAll()
+    else router.replace('/')
   }
   // A `ramu://pair?url=…&code=…` link opened from outside the app arrives as route parameters.
   useEffect(() => {
@@ -117,7 +131,7 @@ export default function Pair() {
       setHttp(false)
       setMethod('manual')
     } catch (error) {
-      Alert.alert(t.pairInvalidLink, error instanceof Error ? error.message : String(error))
+      setProblem(error instanceof Error && /expired/i.test(error.message) ? { kind: 'expired' } : { kind: 'invalid' })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [params.url, params.code, params.exp, params.name] by design; the values it reads beyond these are current as of that run
   }, [params.url, params.code, params.exp, params.name])
@@ -162,7 +176,35 @@ export default function Pair() {
   const rescan = () => {
     tap()
     scanned.current = false
+    setProblem(null)
     setScanning(true)
+  }
+  // A scanned code with an encrypted address needs no review: pairing starts the moment it is read.
+  const pairScanned = async (url: string, scannedCode: string, offeredName?: string) => {
+    if (pairing.current) return
+    pairing.current = true
+    const host = pairedName({ url, name: offeredName })
+    setJoining(host)
+    setBusy(true)
+    try {
+      await pair(offeredName?.trim() ?? '', url, scannedCode, false)
+      if (mounted.current) done(host)
+    } catch (error) {
+      if (mounted.current) setProblem(pairProblem(error))
+    } finally {
+      pairing.current = false
+      if (mounted.current) {
+        setJoining(null)
+        setBusy(false)
+      }
+    }
+  }
+  const problemText: Record<PairProblem['kind'], [string, string]> = {
+    expired: [t.pairProblemExpired, t.pairProblemExpiredNext],
+    'too-many': [t.pairProblemTooMany, t.pairProblemTooManyNext],
+    unreachable: [t.pairProblemUnreachable, t.pairProblemUnreachableNext],
+    invalid: [t.pairProblemInvalid, t.pairProblemInvalidNext],
+    other: [t.pairProblemOther, t.pairProblemOtherNext],
   }
 
   return (
@@ -175,6 +217,19 @@ export default function Pair() {
           contentContainerStyle={{ padding: space.l, gap: space.l, alignItems: 'center' }}
           keyboardShouldPersistTaps="handled"
         >
+          {problem ? (
+            <Card style={{ width: '100%', padding: space.m, gap: space.xs, backgroundColor: c.badWash }}>
+              <View accessibilityRole="alert" style={{ flexDirection: 'row', gap: space.s, alignItems: 'flex-start' }}>
+                <CircleAlert size={16} color={c.bad} style={{ marginTop: 2 }} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <T weight="600">{problemText[problem.kind][0]}</T>
+                  <T size={font.control} tone="soft" style={{ lineHeight: 19 }}>
+                    {problem.kind === 'other' && problem.detail ? problem.detail : problemText[problem.kind][1]}
+                  </T>
+                </View>
+              </View>
+            </Card>
+          ) : null}
           {methods.length > 1 ? (
             <View
               accessibilityRole="tablist"
@@ -369,14 +424,12 @@ export default function Pair() {
                             controller.signal,
                           )
                           if (!mounted.current) return
-                          if (router.canDismiss()) router.dismissAll()
-                          else router.replace('/')
+                          done(choice.name)
                         } catch (error) {
                           if (!mounted.current || controller.signal.aborted) return
                           setAsking(null)
                           // Whatever stopped the request, the code form is filled in and ready as the next step.
-                          if (!(error instanceof PairRequestUnsupported))
-                            Alert.alert(t.pairFailed, error instanceof Error ? error.message : String(error))
+                          if (!(error instanceof PairRequestUnsupported)) setProblem(pairProblem(error))
                           typeCode()
                         } finally {
                           pairing.current = false
@@ -449,22 +502,25 @@ export default function Pair() {
                       onBarcodeScanned={({ data }) => {
                         if (scanned.current) return
                         scanned.current = true
-                        try {
-                          const offer = decodePairQr(data)
-                          setAddress(offer.url)
-                          setCode(offer.code.replace('-', ''))
-                          setHttp(false)
-                          setOfferScanned(true)
-                          Keyboard.dismiss()
-                          animateLayout()
-                          scroll.current?.scrollTo({ y: 0, animated: false })
-                          setScanning(false)
-                          // The scanned address and code are shown for review in the manual fields.
-                          setMethod('manual')
-                        } catch (error) {
-                          setScanning(false)
-                          Alert.alert(t.pairScanFailed, error instanceof Error ? error.message : String(error))
+                        setScanning(false)
+                        setProblem(null)
+                        const result = readScan(data, needsHttpConsent)
+                        if (result.kind === 'expired' || result.kind === 'invalid') {
+                          setProblem({ kind: result.kind })
+                          return
                         }
+                        const offer = result.offer
+                        setAddress(offer.url)
+                        setCode(offer.code?.replace('-', '') ?? '')
+                        if (offer.name) setName((current) => current || offer.name!)
+                        setHttp(false)
+                        if (result.kind === 'pair') return void pairScanned(offer.url, result.offer.code, offer.name)
+                        // Something to decide first (plain HTTP to allow, or a code to type): the form shows it.
+                        setOfferScanned(true)
+                        Keyboard.dismiss()
+                        animateLayout()
+                        scroll.current?.scrollTo({ y: 0, animated: false })
+                        setMethod('manual')
                       }}
                     />
                     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
@@ -510,6 +566,16 @@ export default function Pair() {
                       />
                     </View>
                   </>
+                ) : joining ? (
+                  <View
+                    accessibilityLiveRegion="polite"
+                    style={{ alignItems: 'center', gap: space.m, padding: space.xl }}
+                  >
+                    <ActivityIndicator color={c.accent} />
+                    <T weight="600" style={{ textAlign: 'center' }}>
+                      {fill(t.pairPairingWith, joining)}
+                    </T>
+                  </View>
                 ) : live && permission && !permission.granted ? (
                   <View style={{ alignItems: 'center', gap: space.m, padding: space.xl }}>
                     <CameraOff size={30} color={c.muted} strokeWidth={1.6} />
@@ -524,7 +590,7 @@ export default function Pair() {
                 ) : live && permission ? (
                   <View style={{ alignItems: 'center', gap: space.m, padding: space.xl }}>
                     <QrCode size={30} color={c.accent} strokeWidth={1.6} />
-                    <T weight="600">{address ? t.pairScanned : t.pairPaused}</T>
+                    <T weight="600">{address && !problem ? t.pairScanned : t.pairPaused}</T>
                     <GlassButton title={t.pairScanAgain} onPress={rescan} />
                   </View>
                 ) : (
@@ -666,12 +732,12 @@ export default function Pair() {
                   pairing.current = true
                   Keyboard.dismiss()
                   setBusy(true)
+                  setProblem(null)
                   try {
                     await pair(name.trim(), address.trim(), code, http)
-                    if (router.canDismiss()) router.dismissAll()
-                    else router.replace('/')
+                    done(name.trim() || pairedName({ url: address.trim() }))
                   } catch (error) {
-                    Alert.alert(t.pairFailed, error instanceof Error ? error.message : String(error))
+                    setProblem(pairProblem(error))
                   } finally {
                     pairing.current = false
                     setBusy(false)

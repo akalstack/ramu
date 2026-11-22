@@ -76,9 +76,9 @@ const STEPS = [
   },
   {
     key: 'reach',
-    name: 'Other devices',
-    title: 'Reach Ramu from your other devices',
-    lead: 'Use your phone or another computer with this host over your network, a VPN or your Ramu account. You can change this later.',
+    name: 'Your phone',
+    title: 'Connect your phone',
+    lead: 'Scan one code and Ramu is on your phone too. Skip it for now and connect later with the phone button in the sidebar.',
   },
   {
     key: 'project',
@@ -103,7 +103,7 @@ const OWN_ENTER = 'button, a, textarea, [role="combobox"], [role="listbox"], [ro
 
 /**
  * First-run setup, one step at a time: agents, model control, default model and effort, token-heavy features, default
- * access, who the host commits as and its GitHub sign-in, remote reach with the optional Ramu account, and a project.
+ * access, who the host commits as and its GitHub sign-in, connecting a phone (or the optional Ramu account), and a project.
  * Every step is prefilled, so Continue alone finishes it; the language can change from the first step on.
  */
 export function Onboarding() {

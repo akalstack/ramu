@@ -24,7 +24,7 @@ export default function NewThreadTab() {
           title={host ? t.revokedTitle : t.noComputer}
           detail={host ? t.revokedHint : t.noComputerHint}
         />
-        <Button title={t.pair} onPress={() => router.push('/pair')} />
+        <Button title={t.pair} onPress={() => router.push(host ? '/pair' : '/welcome')} />
       </View>
     </Screen>
   )

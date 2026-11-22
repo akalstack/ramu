@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Check, ExternalLink, FolderGit2, Layers, SlidersHorizontal, Wifi } from 'lucide-react'
+import { Check, ExternalLink, FolderGit2, Layers, QrCode, SlidersHorizontal, Smartphone } from 'lucide-react'
 import { cn } from 'cn'
 import { providerName, type ProviderStatus } from '@ramu/shared/providers/providers'
 import type {
@@ -28,6 +28,10 @@ import { choosableEfforts, initialChoice, onboardingModels, withModel, type Defa
 import { FEWEST_TOKENS, TOKEN_FEATURES, sameChoices, type TokenChoices } from './tokenChoices'
 import { Group, Row } from './parts'
 import { AccountSignIn } from './SignInRows'
+import { LoadingDots } from '@/components/loading-dots'
+import { PairingCode } from '../settings/PairingCode'
+import { defaultPairUrl, pairingNetwork } from '../settings/pairingOffer'
+import { usePairingOffer } from '../settings/usePairingOffer'
 import { AntigravitySignIn } from '../settings/AntigravitySignIn'
 import { antigravityKeyName } from '@ramu/shared/providers/environment'
 
@@ -502,12 +506,15 @@ export function AccessStep({ access, onAccess }: { access: Access; onAccess(acce
   )
 }
 
-const LOOPBACK = /^(127\.|::1$|localhost$)/
-
-/** The route to this host from elsewhere: the local network or a VPN. */
+/**
+ * Connecting a phone during setup: one action allows devices on this network, makes the host visible to nearby ones
+ * and shows a QR code the phone's camera opens, then says which device paired. The Ramu account stays the way to
+ * connect from anywhere.
+ */
 export function ReachStep({ onError }: { onError(message: string): void }) {
   const [status, setStatus] = useState<NetworkStatus | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [showing, setShowing] = useState(false),
+    [busy, setBusy] = useState(false)
   useEffect(() => {
     let live = true
     const load = () =>
@@ -516,15 +523,23 @@ export function ReachStep({ onError }: { onError(message: string): void }) {
         () => {},
       )
     load()
+    // While the code is wanted, the listener may still be starting; once it listens the code appears.
+    const id = showing ? window.setInterval(load, 2000) : undefined
     return () => {
       live = false
+      window.clearInterval(id)
     }
-  }, [])
-  const run = async (work: () => Promise<NetworkStatus>) => {
+  }, [showing])
+  const ready = showing && !!status?.reachable
+  const pairing = usePairingOffer(invoke, 'owner', ready)
+  const show = async () => {
+    if (!status) return
     setBusy(true)
     onError('')
     try {
-      setStatus(await work())
+      const change = pairingNetwork(status)
+      if (change) setStatus(await invoke('network.configure', change))
+      setShowing(true)
     } catch (e) {
       onError(errorText(e))
     } finally {
@@ -537,47 +552,74 @@ export function ReachStep({ onError }: { onError(message: string): void }) {
         {t('Checking this host…')}
       </p>
     )
-  const managed = status.source === 'command-line'
-  const network = status.enabled && !LOOPBACK.test(status.host)
+  const offer = pairing.offer
+  const url = offer ? defaultPairUrl(offer.urls) : undefined
   return (
     <div className="flex flex-col gap-3">
-      <Group>
-        <Row
-          title={
-            <>
-              <Wifi size={15} className="text-muted-foreground" />
-              {t('Same network or VPN')}
-            </>
-          }
-          help={
-            managed
-              ? t('Set when Ramu was started with --listen. Change it there.')
-              : t(
-                  'Devices on this Wi-Fi or your VPN (such as Tailscale) connect directly after pairing. Not encrypted by Ramu, so use a network you trust.',
-                )
-          }
-        >
-          <Switch
-            aria-label={t('Same network or VPN')}
-            checked={network}
-            disabled={busy || managed}
-            onCheckedChange={(checked) =>
-              void run(() =>
-                invoke('network.configure', {
-                  enabled: checked,
-                  host: checked && LOOPBACK.test(status.host) ? '0.0.0.0' : status.host,
-                  port: status.port,
-                  acceptUnencrypted: true,
-                }),
-              )
+      {!showing ? (
+        <Group>
+          <Row
+            title={
+              <>
+                <Smartphone size={15} className="text-muted-foreground" />
+                {t('Your phone')}
+              </>
             }
-          />
-        </Row>
-      </Group>
-      <AccountSignIn onError={onError} />
-      <p className="m-0 text-caption text-muted-foreground">
-        {t('Pair a phone or another computer from Settings › Remote access whenever you are ready.')}
+            help={
+              pairingNetwork(status)
+                ? t(
+                    'Pair it once to follow threads, review changes and answer approvals from your phone. This lets devices on your network or VPN reach this host. Ramu does not encrypt that connection, so use a network you trust.',
+                  )
+                : t('Pair it once to follow threads, review changes and answer approvals from your phone.')
+            }
+          >
+            <Button variant="default" disabled={busy} onClick={() => void show()}>
+              <QrCode size={14} />
+              {t('Show pairing code')}
+            </Button>
+          </Row>
+        </Group>
+      ) : !ready ? (
+        <p className="m-0 text-caption text-muted-foreground" role="status">
+          {status.error
+            ? t('Cannot listen on {0}:{1} ({2}). Local use still works, and Ramu keeps retrying.', {
+                0: status.host,
+                1: status.port,
+                2: status.error,
+              })
+            : t('Getting this host ready for your phone…')}
+        </p>
+      ) : pairing.joined ? (
+        <Group>
+          <Row
+            title={
+              <>
+                <Check size={15} className="text-primary" />
+                {t('{0} is paired', { 0: pairing.joined.name })}
+              </>
+            }
+            help={t('It can use this host now. Manage it in Settings › Remote access.')}
+          >
+            <Button onClick={pairing.renew}>{t('Pair another')}</Button>
+          </Row>
+        </Group>
+      ) : offer ? (
+        <>
+          <PairingCode offer={offer} now={pairing.now} url={url} name={status.discovery?.name} />
+          <p className="m-0 flex items-center gap-2 text-caption text-muted-foreground" role="status">
+            <LoadingDots />
+            {t('Waiting for your phone…')}
+          </p>
+        </>
+      ) : (
+        <p className="m-0 text-caption text-muted-foreground" role={pairing.error ? 'alert' : 'status'}>
+          {pairing.error ?? t('Making the code…')}
+        </p>
+      )}
+      <p className="m-0 mt-1 text-caption text-muted-foreground">
+        {t('Or sign in to your Ramu account on both devices to connect from anywhere.')}
       </p>
+      <AccountSignIn onError={onError} />
     </div>
   )
 }
