@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { PluginCli, PluginCredential } from '@ramu/shared/plugins'
 import {
   cliCommand,
@@ -6,6 +9,7 @@ import {
   cliOutput,
   credentialEnvironment,
   registerPluginCliTools,
+  runPluginCli,
   type PluginCliTarget,
 } from '../src/plugins/cli'
 import type { PluginSecret } from '../src/plugins/service'
@@ -191,5 +195,30 @@ describe('plugin CLIs', () => {
     const long = cliOutput(`${'a'.repeat(60_000)}END`, ['xxxx'])
     expect(long.startsWith('…')).toBe(true)
     expect(long.endsWith('END')).toBe(true)
+  })
+})
+
+describe.skipIf(process.platform === 'win32')('a signed-in CLI’s own HOME', () => {
+  const node: PluginCliTarget = { plugin: 'probe', pluginId: 'p9', cli: { binaries: ['node'], reads: [] }, slot }
+  const secret: PluginSecret = { token: 't', fields: {}, account: '' }
+
+  it('refuses a folder in the shared temporary folder that another account could have made or opened', async () => {
+    const shared = mkdtempSync(join(tmpdir(), 'ramu-tmp-'))
+    const previous = process.env.TMPDIR
+    process.env.TMPDIR = shared
+    try {
+      const base = join(shared, `ramu-cli-${process.getuid!()}`)
+      mkdirSync(base, { mode: 0o777 })
+      await expect(runPluginCli(node, ['-v'], shared, secret)).rejects.toThrow(/another account|others can open/)
+      rmSync(base, { recursive: true })
+      // A link planted where the folder goes could send the CLI's files anywhere.
+      mkdirSync(join(shared, 'elsewhere'), { mode: 0o700 })
+      symlinkSync(join(shared, 'elsewhere'), base)
+      await expect(runPluginCli(node, ['-v'], shared, secret)).rejects.toThrow(/another account|others can open/)
+    } finally {
+      if (previous === undefined) delete process.env.TMPDIR
+      else process.env.TMPDIR = previous
+      rmSync(shared, { recursive: true, force: true })
+    }
   })
 })

@@ -9,6 +9,7 @@ import { bearerOf } from './validate'
 export interface Env {
   POOL: DurableObjectNamespace
   ALLOCATIONS: RateLimit
+  LOOKUPS: RateLimit
   ZONE: string
   CAPACITY: string
   ACCOUNT_URL: string
@@ -68,6 +69,11 @@ export default {
       const response = await pool(env).fetch(request)
       if (response.ok) await caches.default.put(request, response.clone())
       return response
+    }
+    // Every link call checks its session with the account service, so one address cannot flood it with made-up ones.
+    if (url.pathname === '/v1/links' || url.pathname.startsWith('/v1/links/')) {
+      const { success } = await env.LOOKUPS.limit({ key: request.headers.get('CF-Connecting-IP') ?? 'anonymous' })
+      if (!success) return Response.json({ state: 'unavailable', reason: 'rate-limited' }, { status: 429 })
     }
     if (url.pathname === '/v1/links' && request.method === 'POST') {
       const key = bearerOf(request.headers.get('Authorization'))?.slice(-32) ?? request.headers.get('CF-Connecting-IP')

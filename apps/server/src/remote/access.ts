@@ -46,8 +46,11 @@ export class RemoteAccess {
       pairing?: PairingRequests
       /** A device paired with a typed code, so the host can stop advertising itself for pairing. */
       paired?: () => void
-      /** Where a request came from; defaults to its socket's address. Behind a tunnel, the visitor's (see `clientAddress`). */
-      peer?: (req: IncomingMessage) => string
+      /**
+       * Where a request came from; defaults to its socket's address, not tunneled. Behind a tunnel, the visitor's (see
+       * `clientAddress`).
+       */
+      peer?: (req: IncomingMessage) => { address: string; tunneled: boolean }
       now?: () => number
     },
   ) {}
@@ -83,7 +86,8 @@ export class RemoteAccess {
     const now = this.options.now?.() ?? Date.now()
     // Bound attacker-controlled keys, and forget inactive peers so a past failure is not a permanent penalty.
     for (const [peer, state] of this.failures) if (now - state.updatedAt > 15 * 60_000) this.failures.delete(peer)
-    const peer = this.options.peer?.(req) ?? req.socket.remoteAddress ?? 'unknown'
+    const from = this.options.peer?.(req) ?? { address: req.socket.remoteAddress ?? 'unknown', tunneled: false }
+    const peer = from.address
     const limit = this.failures.get(peer)
     if (limit && limit.until > now) {
       res.writeHead(429, { 'Retry-After': String(Math.ceil((limit.until - now) / 1000)) }).end()
@@ -131,6 +135,12 @@ export class RemoteAccess {
       path &&
       [PAIR_REQUEST_PATH, PAIR_REVEAL_PATH, PAIR_WAIT_PATH].includes(path)
     ) {
+      // Pairing by request is for a nearby device. Through a public address anyone on the internet could put a request
+      // in front of the person, so a device out there types a code or asks through the Ramu account instead.
+      if (from.tunneled) {
+        rejected('Pairing requests are accepted only from nearby devices. Enter a pairing code instead.')
+        return
+      }
       const body = await readJson(req)
       if (body === undefined) {
         rejected('Invalid pairing request')

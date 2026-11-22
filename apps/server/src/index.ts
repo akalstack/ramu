@@ -143,7 +143,7 @@ import {
 } from '@ramu/shared/devicePermissions'
 import { PairingError, PairingRequests } from './remote/pairingRequests'
 import { createPairingNotice } from './remote/pairingNotice'
-import { clientAddress } from './remote/clientAddress'
+import { clientAddress, type PublicTunnel } from './remote/clientAddress'
 import { PhoneForwards, phoneForwardPeer, phoneForwardTarget } from './remote/phoneForward'
 import { parseTunnelChoice, TunnelManager } from './remote/tunnel'
 import { LinkClient } from './remote/ramuLink'
@@ -262,7 +262,7 @@ const remoteAccess = new RemoteAccess({
   hostId,
   pairing: pairingRequests,
   paired: () => syncDiscovery(),
-  peer: (req) => clientAddress(req, publicUrl() !== null).address,
+  peer: (req) => clientAddress(req, publicTunnel()),
   // The addresses the listener really serves, for a paired device to try when its saved one stops answering.
   routes: () => [
     ...publicCandidates().map((candidate) => candidate.url),
@@ -318,6 +318,13 @@ const tunnelTarget = () => {
 const syncTunnel = () => tunnels.use(network.tunnel, network.enabled && remote?.listening ? tunnelTarget() : null)
 /** A tunnel's address from the command line wins over the one saved in Settings. */
 const publicUrl = () => config.publicUrl ?? (network.tunnel ? tunnels.address() : network.publicUrl)
+/** What delivers requests to the public address, which decides the header that names a visitor (see `clientAddress`). */
+const publicTunnel = (): PublicTunnel =>
+  publicUrl() === null
+    ? null
+    : !config.publicUrl && (network.tunnel?.kind === 'link' || network.tunnel?.kind === 'quick')
+      ? 'cloudflare'
+      : 'proxy'
 /** The tunnel's address, first: it answers from anywhere, while the listener's own addresses answer only nearby. */
 const publicCandidates = () => (network.enabled && publicUrl() ? [{ url: publicUrl()!, interface: 'tunnel' }] : [])
 // A launchd instance can supervise a daemon that was started by the UI without interrupting it.
@@ -1733,7 +1740,7 @@ async function performInvoke(
       throw new InvokeRefused('Only a paired owner phone can open a page from the host this way.')
     const [page] = z.tuple([z.string().min(1).max(4000)]).parse(args)
     const target = phoneForwardTarget(page, [network.port, address.port])
-    const from = clientAddress(req, publicUrl() !== null)
+    const from = clientAddress(req, publicTunnel())
     const peer = phoneForwardPeer(req.socket.remoteAddress, req.socket.localAddress, from.tunneled)
     value = await phoneForwards.open({ deviceId: device.id, ...peer, target })
   } else if (method === 'hostBrowser.phoneForwardClose') {
@@ -2439,7 +2446,7 @@ const socketHost: SocketHost = {
   epoch: runEpoch,
   attach: (sink, req, device) => {
     // A device reached through a tunnel is not on this network, so a reconnect announcement could not reach it.
-    const from = clientAddress(req, publicUrl() !== null)
+    const from = clientAddress(req, publicTunnel())
     if (device && req.socket.remoteAddress && !from.tunneled)
       presence.register(device.id, from.address, Number(req.headers['x-ramu-presence-port']))
     clients.add(sink)

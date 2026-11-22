@@ -20,7 +20,10 @@ import {
 import { bearerOf, linkRequest, parseHostId, readJson } from './validate'
 
 const DAY_MS = 24 * 60 * 60_000
-/** How long a verified session is trusted before the account service is asked again. */
+/**
+ * How long a verified session is trusted for a host's own housekeeping (seen, offline, release) before the account
+ * service is asked again. A request for a tunnel always asks, so a signed-out or deleted account gets no new token.
+ */
 export const SESSION_CACHE_MS = 5 * 60_000
 /** A sweep's budget, under the five-minute cron interval, and the most tunnels it deletes. */
 const SWEEP_MS = 2 * 60_000
@@ -70,14 +73,16 @@ export function createRelay(deps: RelayDeps) {
     return next
   }
 
-  async function userOf(request: Request): Promise<string | null> {
+  async function userOf(request: Request, fresh: boolean): Promise<string | null> {
     const token = bearerOf(request.headers.get('Authorization'))
     if (!token) return null
     const hash = await sha256(token)
     const cached = store.session(hash, deps.now())
-    if (cached) return cached
+    if (cached && !fresh) return cached
     const userId = await deps.account(token)
+    // A session the account service no longer knows stops working here at once.
     if (userId) store.putSession(hash, userId, deps.now() + SESSION_CACHE_MS)
+    else if (cached) store.putSession(hash, cached, deps.now())
     return userId
   }
 
@@ -173,7 +178,7 @@ export function createRelay(deps: RelayDeps) {
     if (parts[1] !== 'links') return refuse('not-found', 404)
     let userId: string | null
     try {
-      userId = await userOf(request)
+      userId = await userOf(request, request.method === 'POST' && parts.length === 2)
     } catch {
       return refuse('account-unreachable', 503)
     }

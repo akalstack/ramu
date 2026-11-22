@@ -6,6 +6,8 @@ import { PLUGIN_CALLBACK_PORT } from '@ramu/shared/plugins'
 
 export interface CallbackListener {
   redirectUri: string
+  /** The sign-in's `state`. Until it is set, and for any other state, a request is answered and ignored. */
+  expect(state: string): void
   /** Resolves with the state and code the browser came back with. */
   received: Promise<{ state: string; code: string }>
   stop(): void
@@ -24,12 +26,19 @@ export function listenForCallback(
       fail = reject
     })
     void received.catch(() => {})
+    let expected: string | null = null
     const server: Server = createServer((req, res) => {
       const at = new URL(req.url ?? '/', redirectUri)
       if (at.pathname !== '/plugin/callback') return void res.writeHead(404).end()
       const code = at.searchParams.get('code')
       const state = at.searchParams.get('state')
-      if (!code || !state) {
+      // Any page in the person's browser can reach this address; only the service, which got the state, may end the
+      // sign-in, so a request without it can neither finish nor cancel it.
+      if (expected === null || state !== expected)
+        return void res
+          .writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' })
+          .end('This sign-in was not started here.')
+      if (!code) {
         const reason = at.searchParams.get('error_description') ?? at.searchParams.get('error') ?? 'No code came back.'
         res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' }).end(`The sign-in did not finish: ${reason}`)
         fail(new Error(`The sign-in did not finish: ${reason.slice(0, 200)}`))
@@ -58,6 +67,9 @@ export function listenForCallback(
       redirectUri = `http://localhost:${(server.address() as AddressInfo).port}/plugin/callback`
       ready({
         redirectUri,
+        expect: (state) => {
+          expected = state
+        },
         received,
         stop: () => {
           server.close()

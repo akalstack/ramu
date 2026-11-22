@@ -189,6 +189,30 @@ describe('project-free thread files', () => {
     }
   })
 
+  it('never copies Ramu’s own data folder, or a folder holding it, out through a transfer or an import', async () => {
+    const task = await ws.createTask({ projectId: NO_PROJECT, title: 'Copy', mode: 'current' })
+    const outside = realpathSync(tmp)
+    mkdirSync(join(outside, 'profile'))
+    writeFileSync(join(outside, 'profile', 'ramu.db'), 'private')
+    writeFileSync(join(outside, 'notes.md'), 'Notes')
+    const dispatcher = createDispatcher(
+      { userData: join(outside, 'profile'), send: () => {}, native: async () => undefined },
+      { workspace: ws } as Services,
+    )
+    const binding = ws.fileBindings(task.id)[0]!
+    const call = (method: string, args: unknown[]) => Promise.resolve().then(() => dispatcher.invoke(method, args))
+    try {
+      for (const paths of [[join(outside, 'profile')], [join(outside, 'profile', 'ramu.db')], [outside]]) {
+        await expect(call('files.transfer.manifest', [{ paths }])).rejects.toThrow('data folder')
+        await expect(call('files.transfer.read', [{ paths }, 0, 'profile/ramu.db', 0])).rejects.toThrow('data folder')
+        await expect(call('files.import', [task.id, binding.repoId, '', paths])).rejects.toThrow('data folder')
+      }
+      await expect(call('files.transfer.manifest', [{ paths: [join(outside, 'notes.md')] }])).resolves.toBeTruthy()
+    } finally {
+      dispatcher.close()
+    }
+  })
+
   it('does not list linked files from another thread', async () => {
     const first = await ws.createTask({ projectId: NO_PROJECT, title: 'First', mode: 'current' })
     const second = await ws.createTask({ projectId: NO_PROJECT, title: 'Second', mode: 'current' })
