@@ -14,7 +14,7 @@ Agents can work in a browser, on your computer's screen or apps, and on iOS Simu
 - **Engine:** **Automatic** uses the desktop app's own browser when Ramu is open on the host, and the host's Chromium otherwise (as on a headless server).
 - **Downloads** need your approval first and are never opened automatically. **Uploads** take files from inside the workspace.
 
-On the phone, the Browser pill opens a full-screen viewer. **Open on this phone** loads the page in a private browser on the phone instead. A dev server listening only on the host's `localhost` opens there too. The host opens a port for that phone alone, shown with the dev server's port under the address, and closes it when you leave the page or after 30 minutes ([Security](../../SECURITY.md#remote-access)).
+On the phone, the Browser pill opens a full-screen viewer. **Open on this phone** loads the page in a private browser on the phone instead. A dev server listening only on the host's `localhost` opens there too. The host opens a port for that phone alone, shown with the dev server's port under the address, and closes it when you leave the page or after 30 minutes ([Security](../security-model.md#remote-access)).
 
 ## Computer use
 

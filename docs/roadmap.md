@@ -13,7 +13,7 @@ Every change needs focused tests and typechecks for the packages it touches; des
 ## To build
 
 - **Transport:** bounded replay and snapshot recovery for every resource, and defined connection outcomes (current, synchronizing, disconnected, authorization rejected, outcome unknown) that keep drafts and queued messages; non-retriable mutations report an unknown outcome and reconcile. Start from measurements on real networks ([Architecture](contributing/architecture.md#transport)).
-- **Windows:** the `windows-port` branch reaches the local service over a named pipe, finds provider CLIs, `gh` and ripgrep, reads memory and processes, keeps the host awake, and packages a Squirrel installer with Ramu's icon, its shortcuts and `ramu://` links handed to the running app. Left: a hands-on run of the installed app in a Windows 11 VM (terminal, agents, pairing a phone, computer use refused with its reason), fixing what that finds, then merging the branch.
+- **Windows:** a Windows build: the local service over a named pipe, finding provider CLIs, `gh` and ripgrep, keeping the host awake, and a Squirrel installer that hands `ramu://` links to the running app.
 - **Presenting from the phone:** **Present** a deck on a display the phone is connected to (AirPlay or a cable), with speaker notes on the phone ([Artifacts](guide/artifacts.md)).
 
 ## Blocked
@@ -27,10 +27,10 @@ Every change needs focused tests and typechecks for the packages it touches; des
 ## Later
 
 - **Games and 3D:** Rapier beside three.js if games keep shipping their own physics; an App docked as a panel across a project's threads if asked for; Unity checks through computer use; a Blender plugin for retopology and levels of detail.
-- **Tools across hosts:** sending a key to another host, sealed and confirmed with a matching number, if re-entering keys proves the main friction (needs a [host pairing](../SECURITY.md#host-pairing)-level review); installing from the phone; adopting provider-folder skills and servers so they travel; one server following several projects ([On your other hosts](guide/plugins.md#on-your-other-hosts)).
-- **Cloud hosts:** Ramu hosts attached to the account and listed in the host switcher, with the web app at `ramu.akalstack.com`.
+- **Tools across hosts:** sending a key to another host, sealed and confirmed with a matching number, if re-entering keys proves the main friction (needs a [host pairing](security-model.md#host-pairing)-level review); installing from the phone; adopting provider-folder skills and servers so they travel; one server following several projects ([On your other hosts](guide/plugins.md#on-your-other-hosts)).
+- **Cloud hosts:** Ramu hosts attached to the account and listed in the host switcher, with a web app to reach them.
 - **Hosted connection:** a relay or tunnels provisioned per host by a Ramu service (the cheapest option to revisit), once there is a way to fund them; today hosts are reached over the LAN, a private network, SSH or the person's own tunnel ([Remote hosts](guide/remote-hosts.md)).
 - **Codex call costs:** price Codex calls in cost-aware Auto once Codex reports cost; Ramu keeps no price table of its own, since published prices change and disagree.
 - **Browser recording:** change videos on pull requests, if people ask for them; it needs a video encoder Ramu does not ship.
 - **Certificate pinning:** only with a threat that HTTPS pairing and host-identity checks do not cover; it needs a native transport replacement.
-- **Not planned unless people ask:** a full mobile editor, mobile provider sign-in, chunked large-file upload, a theme marketplace, plugin code inside Ramu and plugin hooks, automatic provider-file or credential sync, AI conflict resolution, local grounding models and VMs for computer use, and vector retrieval for learning.
+- **Not planned unless people ask:** a full mobile editor, mobile provider sign-in, chunked large-file upload, a theme marketplace, plugin code inside Ramu and plugin hooks, automatic provider-file or credential sync, local grounding models and VMs for computer use, and vector retrieval for learning.

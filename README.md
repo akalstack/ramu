@@ -43,7 +43,7 @@ Open a project, say what you want, review the result. The defaults work as they 
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 🚀 **One sentence to a live app**  | Ramu asks a few questions, picks a stack and builds until the build and tests pass. Then it deploys to _your_ Vercel, Netlify, Railway, Cloudflare or Fly.io account through that platform's own plugin, and every later change comes as a pull request with CI. [Shipping →](docs/guide/shipping.md) |
 | 🎯 **Work that finishes itself**   | For longer tasks the agent sets a goal and keeps going across turns and providers. Ramu calls it done only when the checks pass and the changes are really in the repo. Add your own check, like your test suite. [Goals →](docs/guide/goals.md)                                                                          |
-| 🔁 **Usage limits don't stop you** | Rank your providers. When one runs out, the thread moves to the next with its context, and comes back when your first choice has room. If all are limited, Ramu waits and resumes, even after a restart.                                                                                                                  |
+| 🔁 **Usage limits don't stop you** | Rank your providers. When one runs out, the thread moves to the next with its context, and comes back when your first choice has room. If all are limited, Ramu waits and resumes, even after a restart. [Fallback →](docs/guide/working-with-agents.md#usage-limits-and-fallback) |
 
 ## What's inside
 
@@ -93,11 +93,13 @@ Every feature has a page in the [guide](docs/README.md#guide).
 
 ## Get started
 
-1. Download the installer from [GitHub Releases](https://github.com/akalstack/ramu/releases).
-2. Sign in to a provider ([setup](docs/guide/providers.md)).
+You need macOS or Linux and at least one coding agent: Claude Code, Codex, OpenCode, Cursor or Antigravity.
+
+1. Download the installer from [GitHub Releases](https://github.com/akalstack/ramu/releases), or use a package manager below.
+2. Open Ramu. Setup finds your agents and signs you in ([providers](docs/guide/providers.md)).
 3. Open a folder or start a thread.
 
-For the phone, install the app and pair it with your computer ([mobile guide](apps/mobile/README.md)):
+For the phone, install the app and choose **Connect phone** on your computer, then scan the code with the phone's camera ([mobile guide](apps/mobile/README.md)):
 
 <a href="https://apps.apple.com/app/id6836786013"><img src="apps/site/public/badges/app-store.svg" alt="Download on the App Store" height="44" /></a>&nbsp;
 <a href="https://play.google.com/store/apps/details?id=com.akalstack.ramu"><img src="apps/site/public/badges/google-play.png" alt="Get it on Google Play" height="44" /></a>
@@ -124,7 +126,7 @@ sudo curl -fsSLo /etc/yum.repos.d/ramu.repo https://getramu.dev/ramu.repo
 sudo dnf install ramu
 ```
 
-Ramu is in **alpha**. macOS builds are signed and notarized. Without a package manager, updates install by hand from GitHub Releases. The AppImage needs FUSE 2: `sudo apt install libfuse2t64` on Ubuntu 24.04+, `libfuse2` on 22.04.
+Ramu is in **alpha**. macOS builds are signed, notarized and update themselves. On Linux without a package manager, updates install by hand from GitHub Releases. The AppImage needs FUSE 2: `sudo apt install libfuse2t64` on Ubuntu 24.04+, `libfuse2` on 22.04.
 
 ### Run from source
 
@@ -151,7 +153,7 @@ Built with Electron, React, React Native and TypeScript. Start with the [archite
 | `pnpm server serve`       | Run the workspace server without the desktop app (after `pnpm build`) |
 
 > [!NOTE]
-> **Ramu is in a stability push.** The most helpful thing you can send is a fix: a bug, a crash, something slow, a missing test, a docs mistake or a translation. Those get reviewed first, and we're grateful for every one. New features stay with the core team until the push is over. Got an idea? Start a thread in [Ideas](https://github.com/akalstack/ramu/discussions/categories/ideas) so we can talk it through before anyone writes code.
+> **Ramu is in a stability push.** Fixes are reviewed first: bugs, crashes, slowness, tests, docs and translations. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 - Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 - [Report a bug](https://github.com/akalstack/ramu/issues/new/choose).

@@ -1,6 +1,6 @@
 # Remote hosts
 
-A **host** is a computer that runs Ramu's workspace server: your agents, terminals, Git and history live there. The desktop app runs one for you. Another computer, a server or your phone can connect to it, and one desktop can connect to many hosts. Read [Security](../../SECURITY.md#remote-access) before opening a host to the network.
+A **host** is a computer that runs Ramu's workspace server: your agents, terminals, Git and history live there. The desktop app runs one for you. Another computer, a server or your phone can connect to it, and one desktop can connect to many hosts. Read [Security](../security-model.md#remote-access) before opening a host to the network.
 
 ## Connect a phone
 
