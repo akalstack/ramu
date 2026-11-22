@@ -14,7 +14,7 @@ Follow [Code conventions](docs/contributing/code-style.md) for every change; it 
 
 - Extend what exists before adding anything. Shared pure logic goes in `packages/shared`; the server owns agents, files, Git, terminals and storage.
 - Strict TypeScript, no new `any`, no `@ts-ignore`, no dead code or unused exports. Prettier and ESLint decide style; run `pnpm format`.
-- Ramu is in alpha: change the schema, APIs, tools, links and settings directly, with no migrations, old-name aliases or fallbacks for older versions. Bump the protocol version when the host's API breaks ([Compatibility](docs/contributing/code-style.md#compatibility)).
+- Keep released behavior compatible: a schema change adds a migration, and a renamed API, tool, link or setting keeps its old name working until a later release removes it.
 - Validate and bound every server input with `zod`; enforce authorization on the server; keep secrets in `credentials/`; never build shell strings.
 - Every visible string goes through `t()` with an Indonesian translation; UI is built from the app-owned wrappers in `apps/web/src/components`, never raw buttons.
 - Comments explain why, not what, and never narrate history. Docs describe current behavior only.

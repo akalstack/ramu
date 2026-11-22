@@ -2,11 +2,16 @@
 // Source files stay on disk; only projects, tasks, bindings, sessions and UI state live here.
 import { DatabaseSync } from 'node:sqlite'
 
+/** The schema version the first public release (0.1.0) stamps; profiles from earlier builds are not read. */
+const BASELINE = 36
+
 /**
- * The schema version this build creates. A profile stamped with a higher number comes from a newer Ramu and is
- * refused, untouched.
+ * Schema changes since the first public release, oldest first: entry `i` upgrades a profile from version
+ * `BASELINE + i` to the next, in the same transaction as the new version stamp. Change SCHEMA (what a new profile is
+ * created with) and add an entry here (what an existing profile needs) together, and never edit a released entry:
+ * people's threads and settings live in these files.
  */
-const SCHEMA_VERSION = 36
+const MIGRATIONS: ((db: DatabaseSync) => void)[] = []
 
 const SCHEMA = `
 CREATE TABLE projects (
@@ -342,21 +347,27 @@ INSERT INTO projects (id, name, created_at) VALUES ('no-project', 'No project', 
 
 export type Db = DatabaseSync
 
-export function openDb(path: string): Db {
+export function openDb(path: string, migrations = MIGRATIONS): Db {
   const db = new DatabaseSync(path)
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = OFF;')
   const version = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
-  if (version > SCHEMA_VERSION) {
+  const latest = BASELINE + migrations.length
+  const refuse = (message: string) => {
     db.close()
-    throw new Error(
-      `${path} was written by a newer Ramu (schema ${version}; this build reads ${SCHEMA_VERSION}). Update Ramu to open it.`,
-    )
+    throw new Error(message)
   }
-  if (version === 0) {
+  if (version > latest)
+    refuse(
+      `${path} was written by a newer Ramu (schema ${version}; this build reads up to ${latest}). Update Ramu to open it.`,
+    )
+  if (version !== 0 && version < BASELINE)
+    refuse(`${path} is from a Ramu build before 0.1.0 (schema ${version}). Move the file aside to start fresh.`)
+  if (version !== latest) {
     db.exec('BEGIN')
     try {
-      db.exec(SCHEMA)
-      db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
+      if (version === 0) db.exec(SCHEMA)
+      else for (const migrate of migrations.slice(version - BASELINE)) migrate(db)
+      db.exec(`PRAGMA user_version = ${latest}`)
       db.exec('COMMIT')
     } catch (err) {
       db.exec('ROLLBACK')
