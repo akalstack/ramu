@@ -11,6 +11,8 @@ coverage/
 !.env.example
 *.pem
 *.p12
+*.jks
+*.keystore
 *.p8
 .ramu-*
 apps/web/_debug-*
