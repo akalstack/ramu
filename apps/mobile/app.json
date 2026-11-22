@@ -12,6 +12,7 @@
       "bundleIdentifier": "com.akalstack.ramu",
       "supportsTablet": true,
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "NSLocalNetworkUsageDescription": "Find Ramu hosts on your network and connect to the workspace on your paired host.",
         "NSMicrophoneUsageDescription": "Ramu records only while you dictate a message, and recognizes speech on this iPhone. Audio is never uploaded or kept.",
         "NSSpeechRecognitionUsageDescription": "Ramu turns your dictated message into text on this iPhone. Audio never leaves the device.",
