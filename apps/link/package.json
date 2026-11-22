@@ -1,0 +1,31 @@
+{
+  "name": "@ramu/link",
+  "version": "0.1.0-alpha.10",
+  "private": true,
+  "description": "Ramu Link relay: hands signed-in hosts a Cloudflare Tunnel and an akalstack.com address.",
+  "license": "MIT",
+  "author": "Ramu contributors",
+  "homepage": "https://getramu.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akalstack/ramu.git",
+    "directory": "apps/link"
+  },
+  "bugs": {
+    "url": "https://github.com/akalstack/ramu/issues"
+  },
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "deploy": "npx --yes wrangler@4.162.0 deploy"
+  },
+  "dependencies": {
+    "@ramu/shared": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

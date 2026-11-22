@@ -1,0 +1,6 @@
+# Shapes GitHub's generated release notes, which the release workflow adds under each release's own notes.
+changelog:
+  exclude:
+    authors:
+      - dependabot
+      - github-actions

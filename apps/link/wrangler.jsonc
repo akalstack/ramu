@@ -1,0 +1,27 @@
+{
+  // Ramu Link's relay: hands signed-in hosts a Cloudflare Tunnel and an ramu-<slug>.akalstack.com address.
+  // Deploy with `pnpm --filter @ramu/link run deploy` after setting the secrets below with `wrangler secret put`:
+  //   CF_API_TOKEN   an API token with Cloudflare Tunnel: Edit on the account, and DNS: Edit and Analytics: Read on the zone
+  //   CF_ACCOUNT_ID  the account the tunnels are made in
+  //   CF_ZONE_ID     the zone named by ZONE, where each host's CNAME is added
+  "name": "ramu-link",
+  "main": "./src/worker.ts",
+  "compatibility_date": "2026-11-01",
+  // Only the custom domain answers: no workers.dev address and no preview URLs.
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "ramu-link.akalstack.com", "custom_domain": true }],
+  "vars": {
+    "ZONE": "akalstack.com",
+    // Cloudflare allows 1,000 tunnels per account, idle ones included; the rest is headroom.
+    "CAPACITY": "950",
+    "ACCOUNT_URL": "https://account.akalstack.com",
+  },
+  // Every slot, the waitlist and the session cache live in one SQLite Durable Object, so allocation is atomic.
+  "durable_objects": { "bindings": [{ "name": "POOL", "class_name": "SlotPool" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SlotPool"] }],
+  // Reads tunnel status, releases idle slots and counts traffic; hosts send no heartbeats.
+  "triggers": { "crons": ["*/5 * * * *"] },
+  // Link requests per session, so one account cannot churn tunnels.
+  "ratelimits": [{ "name": "ALLOCATIONS", "namespace_id": "4101", "simple": { "limit": 10, "period": 60 } }],
+}

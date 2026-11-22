@@ -46,6 +46,57 @@ export function collectAssets(source, destination, platform, arch) {
   }
   writeFileSync(join(destination, `SHA256SUMS-${platform}-${arch}.txt`), sums.join('\n') + '\n')
 }
+const isBot = (login) => !login || login.endsWith('[bot]')
+// GitHub's generated notes credit only pull requests, so authors who pushed commits directly are added beside them.
+export function withCredits(notes, generated, commitAuthors) {
+  const body = generated.trim()
+  const named = new Set([...body.matchAll(/@([A-Za-z0-9-]+(?:\[bot\])?)/g)].map((match) => match[1]))
+  const others = [...new Set(commitAuthors)].filter((login) => !isBot(login) && !named.has(login)).sort()
+  const thanks = others.length ? `## Contributors\n\n${others.map((login) => `@${login}`).join(', ')}` : ''
+  const credits = [thanks, body].filter(Boolean).join('\n\n')
+  return credits ? `${notes.trimEnd()}\n\n${credits}\n` : notes
+}
+function ghJson(...args) {
+  return JSON.parse(execFileSync('gh', ['api', ...args], { encoding: 'utf8' }))
+}
+// Semantic-version order: a prerelease sorts before its release, numeric identifiers compare as numbers.
+export function compareVersions(a, b) {
+  const [coreA, preA] = versionOf(a).split(/-(.*)/),
+    [coreB, preB] = versionOf(b).split(/-(.*)/)
+  const core = coreA.split('.').map(Number),
+    other = coreB.split('.').map(Number)
+  for (let i = 0; i < 3; i++) if (core[i] !== other[i]) return core[i] - other[i]
+  if (!preA || !preB) return (preA ? -1 : 0) - (preB ? -1 : 0)
+  const partsA = preA.split('.'),
+    partsB = preB.split('.')
+  for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+    const x = partsA[i],
+      y = partsB[i]
+    if (x === undefined || y === undefined) return x === undefined ? -1 : 1
+    if (x === y) continue
+    const numeric = /^\d+$/.test(x) && /^\d+$/.test(y)
+    return numeric ? Number(x) - Number(y) : x < y ? -1 : 1
+  }
+  return 0
+}
+// The previous release is the highest published version below this one; creation order can differ from version order.
+function releaseCredits(tag, repo) {
+  const previous = ghJson(`repos/${repo}/releases?per_page=100`)
+    .filter((release) => !release.draft && /^v\d/.test(release.tag_name) && compareVersions(release.tag_name, tag) < 0)
+    .map((release) => release.tag_name)
+    .sort(compareVersions)
+    .at(-1)
+  const generated = ghJson(
+    '--method',
+    'POST',
+    `repos/${repo}/releases/generate-notes`,
+    '-f',
+    `tag_name=${tag}`,
+    ...(previous ? ['-f', `previous_tag_name=${previous}`] : []),
+  ).body
+  const commits = previous ? ghJson(`repos/${repo}/compare/${previous}...${tag}`).commits : []
+  return { generated, authors: commits.map((commit) => commit.author?.login ?? '') }
+}
 // Every workspace package ships together; the desktop app reads its own package.json for app.getVersion().
 function setWorkspaceVersions(version) {
   for (const group of ['apps', 'packages']) {
@@ -63,12 +114,22 @@ export function run(args) {
   const [command, input] = args
   if (!command || args.includes('--help')) {
     console.log(
-      'Usage: pnpm release:prepare <version> [--dry-run]\n       pnpm release:verify <tag>\n       pnpm release:draft <tag> [--dry-run]\n       pnpm release:assets <platform> <arch>',
+      'Usage: pnpm release:prepare <version> [--dry-run]\n       pnpm release:verify <tag>\n       node scripts/release/release.mjs notes <tag> <owner/repo>\n       pnpm release:draft <tag> [--dry-run]\n       pnpm release:assets <platform> <arch>',
     )
     return
   }
   if (command === 'assets') {
     collectAssets(resolve('dist/make'), resolve('dist/release'), input, args[2])
+    return
+  }
+  if (command === 'notes') {
+    const tag = `v${versionOf(input)}`,
+      repo = args[2]
+    if (!/^[\w.-]+\/[\w.-]+$/.test(repo ?? '')) throw new Error('Name the repository as owner/repo.')
+    const notesPath = resolve('releases', `${tag}.md`)
+    if (!existsSync(notesPath)) throw new Error(`Missing release notes: ${notesPath}`)
+    const { generated, authors } = releaseCredits(tag, repo)
+    process.stdout.write(withCredits(readFileSync(notesPath, 'utf8'), generated, authors))
     return
   }
   if (!['prepare', 'verify', 'draft'].includes(command)) throw new Error(`Unknown command: ${command}`)

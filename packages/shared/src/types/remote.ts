@@ -133,12 +133,20 @@ export interface NetworkStatus {
     url: string | null
     error: string | null
     tools: Record<'cloudflared' | 'tailscale' | 'ngrok', boolean>
+    /** Ramu Link's state while it is the choice, or after it was refused (full, suspended). */
+    link?: import('../ramuLink').LinkStatus | null
+    /** The relay's pool as last fetched, so Settings can say a slot is free before anyone asks. */
+    pool?: import('../ramuLink').LinkPool | null
   }
 }
-/** A tunnel Ramu runs: Cloudflare's quick tunnel, Tailscale Funnel, or ngrok (with an optional static domain). */
+/**
+ * A tunnel Ramu runs: Ramu Link (Ramu's relay, or one the person runs at `relay`), Cloudflare's quick tunnel, Tailscale
+ * Funnel, or ngrok (with an optional static domain).
+ */
 export interface TunnelChoice {
-  kind: 'quick' | 'tailscale' | 'ngrok'
+  kind: 'link' | 'quick' | 'tailscale' | 'ngrok'
   domain?: string
+  relay?: string
 }
 /** What became of one pairing offer. */
 export type PairingOfferStatus =

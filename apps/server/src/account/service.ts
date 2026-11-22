@@ -181,6 +181,12 @@ export class AccountService {
     }
   }
 
+  /** The account session, for Ramu Link's relay, which checks it with the account service; null when signed out. */
+  async bearer(): Promise<string | null> {
+    if (!this.state().user) return null
+    return (await this.session.read().catch(() => null))?.token ?? null
+  }
+
   // ---- Talking to the service ----
 
   private async call<T>(method: string, path: string, body?: unknown, token?: string, timeoutMs = 20_000): Promise<T> {

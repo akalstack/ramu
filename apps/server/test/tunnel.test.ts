@@ -119,3 +119,47 @@ it('resolves Stop once the tool has exited, and kills a tool that does not exit'
   expect(stopped).toBe(true)
   expect(tunnels.status().state).toBe('off')
 })
+
+it('runs Ramu Link with the relay’s token out of the process list, and is up once cloudflared registers', async () => {
+  const runs: { args: string[]; env?: Record<string, string>; process: ReturnType<typeof fakeProcess> }[] = []
+  const tunnels = new TunnelManager({
+    find: (command) => `/usr/local/bin/${command}`,
+    run: (_file, args, env) => {
+      runs.push({ args, env, process: fakeProcess() })
+      return runs.at(-1)!.process.child
+    },
+    lease: async (relay, target) =>
+      relay === undefined && target === 'http://127.0.0.1:7788'
+        ? { token: 'tok', url: 'https://ramu-abc.akalstack.com' }
+        : null,
+  })
+  tunnels.use({ kind: 'link' }, 'http://127.0.0.1:7788')
+  await vi.waitFor(() => expect(runs).toHaveLength(1))
+  expect(runs[0]!.args).toEqual(['tunnel', '--no-autoupdate', 'run'])
+  expect(runs[0]!.args.join(' ')).not.toContain('tok')
+  expect(runs[0]!.env).toEqual({ TUNNEL_TOKEN: 'tok' })
+  expect(tunnels.address()).toBeNull()
+  runs[0]!.process.say('INF Registered tunnel connection connIndex=0')
+  await vi.waitFor(() => expect(tunnels.address()).toBe('https://ramu-abc.akalstack.com'))
+  tunnels.relinked(null)
+  expect(tunnels.status().state).toBe('off')
+  expect(runs[0]!.process.child.kill).toHaveBeenCalled()
+})
+
+it('waits without a tunnel while Ramu Link has no slot for this host', async () => {
+  const run = vi.fn()
+  const tunnels = new TunnelManager({ find: (command) => `/usr/local/bin/${command}`, run, lease: async () => null })
+  tunnels.use({ kind: 'link' }, 'http://127.0.0.1:7788')
+  await vi.waitFor(() => expect(tunnels.status().state).toBe('off'))
+  expect(run).not.toHaveBeenCalled()
+})
+
+it('takes Ramu Link with Ramu’s relay or the person’s own', () => {
+  expect(parseTunnelChoice({ kind: 'link' })).toEqual({ kind: 'link' })
+  expect(parseTunnelChoice({ kind: 'link', relay: 'https://ramu-link.akalstack.com' })).toEqual({ kind: 'link' })
+  expect(parseTunnelChoice({ kind: 'link', relay: 'https://relay.example.com/' })).toEqual({
+    kind: 'link',
+    relay: 'https://relay.example.com',
+  })
+  expect(() => parseTunnelChoice({ kind: 'link', relay: 'ftp://x' })).toThrow()
+})

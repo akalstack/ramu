@@ -1018,6 +1018,12 @@ export interface RamuMethods extends ArtifactMethods {
   'network.setPublicUrl'(url: string | null): NetworkStatus
   /** Runs a tunnel for this host (turning on access for this computer only if it is off), or stops it with null. */
   'network.setTunnel'(choice: TunnelChoice | null): NetworkStatus
+  /** Gives this host's Ramu Link slot back (or leaves the waitlist) and stops the link if it is the choice. Host only. */
+  'network.releaseLink'(): NetworkStatus
+  /** How this host is reached from anywhere (its tunnel and Ramu Link), for a paired device such as a phone. */
+  'network.link'(): { tunnel: NetworkStatus['tunnel'] | null }
+  /** Turns on Ramu Link for this host; a paired device needs the settings permission. */
+  'network.useLink'(): { tunnel: NetworkStatus['tunnel'] | null }
   /** One device's pairing lifetime: days, never, or back to this host's default. Host only. */
   'network.setDeviceExpiry'(deviceId: string, days: number | 'never' | 'default'): NetworkStatus
   /** A paired device saying what it runs on, so this host shows the right icon and OS for it. */

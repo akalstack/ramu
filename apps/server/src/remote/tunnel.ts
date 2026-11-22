@@ -1,19 +1,25 @@
 // A tunnel Ramu runs for the person, so a host is reachable from anywhere without setting one up by hand. Each kind is
 // the provider's own command-line tool, run in the foreground while Ramu listens; the address it prints becomes the
-// host's tunnel address. Nothing here is a Ramu service: traffic goes through the person's Cloudflare, Tailscale or
-// ngrok, and every call still needs a paired device's token.
+// host's tunnel address. Ramu Link is the one kind whose address comes from a relay instead (see ramuLink.ts): it runs
+// cloudflared with the relay's token. Every call through any tunnel still needs a paired device's token.
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { findExecutable } from '../providers/providerBinaries'
 import { userEnvironment } from '../userEnvironment'
 import type { NetworkStatus, TunnelChoice } from '@ramu/shared/types'
+import { parseRelay, type LinkLease } from './ramuLink'
 
-const TUNNEL_KINDS = ['quick', 'tailscale', 'ngrok'] as const
+const TUNNEL_KINDS = ['link', 'quick', 'tailscale', 'ngrok'] as const
 type TunnelKind = TunnelChoice['kind']
 type TunnelTool = 'cloudflared' | 'tailscale' | 'ngrok'
 type TunnelStatus = NonNullable<NetworkStatus['tunnel']>
 
-const TOOL: Record<TunnelKind, TunnelTool> = { quick: 'cloudflared', tailscale: 'tailscale', ngrok: 'ngrok' }
+const TOOL: Record<TunnelKind, TunnelTool> = {
+  link: 'cloudflared',
+  quick: 'cloudflared',
+  tailscale: 'tailscale',
+  ngrok: 'ngrok',
+}
 /** Waits before starting a tunnel that ended on its own again: soon at first, then less often. */
 const RETRY_MS = [3_000, 15_000, 60_000]
 
@@ -22,7 +28,11 @@ export function parseTunnelChoice(input: unknown): TunnelChoice | null {
   if (input === null || input === undefined) return null
   const value = input as Partial<TunnelChoice>
   if (typeof value !== 'object' || !TUNNEL_KINDS.includes(value.kind as TunnelKind))
-    throw new Error('Choose Cloudflare, Tailscale Funnel or ngrok')
+    throw new Error('Choose Ramu Link, Cloudflare, Tailscale Funnel or ngrok')
+  if (value.kind === 'link') {
+    const relay = parseRelay(value.relay)
+    return relay === parseRelay(undefined) ? { kind: 'link' } : { kind: 'link', relay }
+  }
   if (value.kind !== 'ngrok' || value.domain === undefined || value.domain === '') return { kind: value.kind! }
   const domain = String(value.domain)
     .trim()
@@ -36,6 +46,8 @@ export function parseTunnelChoice(input: unknown): TunnelChoice | null {
 /** The command that runs a tunnel to `target` (this host's listener), in the foreground. */
 export function tunnelCommand(choice: TunnelChoice, target: string): string[] {
   const https = target.startsWith('https:')
+  // The relay set this tunnel's route to the listener; the token arrives in TUNNEL_TOKEN, out of the process list.
+  if (choice.kind === 'link') return ['tunnel', '--no-autoupdate', 'run']
   if (choice.kind === 'quick')
     return ['tunnel', '--no-autoupdate', ...(https ? ['--no-tls-verify'] : []), '--url', target]
   if (choice.kind === 'tailscale') return ['funnel', https ? target.replace(/^https:/, 'https+insecure:') : target]
@@ -52,6 +64,7 @@ export function tunnelCommand(choice: TunnelChoice, target: string): string[] {
 
 /** The public address in one line of a tunnel tool's output, if it names one. */
 export function tunnelUrl(kind: TunnelKind, line: string): string | null {
+  if (kind === 'link') return null
   if (kind === 'quick') return /https:\/\/[a-z0-9-]+\.trycloudflare\.com/i.exec(line)?.[0] ?? null
   if (kind === 'tailscale') return /https:\/\/[a-z0-9.-]+\.ts\.net/i.exec(line)?.[0] ?? null
   try {
@@ -113,7 +126,11 @@ export class TunnelManager {
       /** The address changed (it appeared, changed or went away). */
       changed?: () => void
       find?: (command: string) => string | null
-      run?: (file: string, args: string[]) => ChildProcess
+      run?: (file: string, args: string[], env?: Record<string, string>) => ChildProcess
+      /** Ramu Link's tunnel for this target, from the relay; null when the host has none right now. */
+      lease?: (relay: string | undefined, target: string) => Promise<LinkLease | null>
+      /** Ramu Link's state and pool, shown with the tunnel. */
+      link?: () => { status: TunnelStatus['link']; pool: TunnelStatus['pool'] }
     } = {},
   ) {}
 
@@ -146,7 +163,21 @@ export class TunnelManager {
         tailscale: !!find('tailscale'),
         ngrok: !!find('ngrok'),
       },
+      ...(this.options.link ? { link: this.options.link().status, pool: this.options.link().pool } : {}),
     }
+  }
+
+  /** Ramu Link's relay gave a new tunnel (a slot came free, or the token changed), or took it away with null. */
+  relinked(lease: LinkLease | null): void {
+    if (this.choice?.kind !== 'link') return
+    this.halt()
+    this.retries = 0
+    if (!lease) {
+      this.state = 'off'
+      this.options.changed?.()
+      return
+    }
+    this.start(lease)
   }
 
   /** The tunnel's public address while it runs. */
@@ -180,20 +211,54 @@ export class TunnelManager {
 
   private launch() {
     const choice = this.choice!
-    const file = (this.options.find ?? findExecutable)(TOOL[choice.kind])
-    if (!file) {
+    if (!(this.options.find ?? findExecutable)(TOOL[choice.kind])) {
       this.state = 'missing'
       this.error = null
       return
     }
     this.state = 'starting'
-    const run = this.options.run ?? ((path: string, args: string[]) => spawn(path, args, { env: userEnvironment() }))
-    const child = run(file, tunnelCommand(choice, this.target))
+    if (choice.kind !== 'link') return this.start(null)
+    const target = this.target
+    const lease = this.options.lease?.(choice.relay, target) ?? Promise.resolve(null)
+    void lease.then(
+      (granted) => {
+        if (this.choice !== choice || this.target !== target || this.child) return
+        if (granted) this.start(granted)
+        else {
+          // No slot right now: the link's own state says why, and the relay's answer later starts it.
+          this.state = 'off'
+          this.options.changed?.()
+        }
+      },
+      (error: unknown) => {
+        if (this.choice !== choice) return
+        this.state = 'failed'
+        this.error = error instanceof Error ? error.message : String(error)
+        this.options.changed?.()
+      },
+    )
+  }
+
+  private start(lease: LinkLease | null) {
+    const choice = this.choice!
+    const file = (this.options.find ?? findExecutable)(TOOL[choice.kind])
+    if (!file) {
+      this.state = 'missing'
+      return
+    }
+    this.state = 'starting'
+    const env = lease ? { TUNNEL_TOKEN: lease.token } : undefined
+    const run =
+      this.options.run ??
+      ((path: string, args: string[], extra?: Record<string, string>) =>
+        spawn(path, args, { env: { ...userEnvironment(), ...extra } }))
+    const child = run(file, tunnelCommand(choice, this.target), env)
     this.child = child
     let lastProblem: string | null = null
     const read = (line: string) => {
       if (this.child !== child) return
-      const url = tunnelUrl(choice.kind, line)
+      // cloudflared never prints a Ramu Link address; the relay named it, and a registered connection means it answers.
+      const url = lease ? (/Registered tunnel connection/i.test(line) ? lease.url : null) : tunnelUrl(choice.kind, line)
       if (url) {
         this.state = 'running'
         this.error = null
@@ -215,6 +280,7 @@ export class TunnelManager {
       this.error = lastProblem ?? `${TOOL[choice.kind]} stopped (${code ?? 'signal'})`
       // A tunnel that ends on its own is started again, less often each time it fails in a row.
       const wait = RETRY_MS[Math.min(this.retries++, RETRY_MS.length - 1)]!
+      // A Ramu Link tunnel asks the relay again, which replaces a token it no longer accepts.
       this.timer = setTimeout(() => {
         if (this.choice === choice && !this.child) this.launch()
       }, wait)

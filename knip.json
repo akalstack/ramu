@@ -41,6 +41,9 @@
     "apps/site": {
       "entry": ["worker/index.ts"]
     },
+    "apps/link": {
+      "entry": ["src/worker.ts"]
+    },
     "apps/server": {
       "ignoreBinaries": ["ssh-keygen", "ffprobe"],
       "ignoreDependencies": ["@dagrejs/dagre", "chart.js", "react", "react-dom"]

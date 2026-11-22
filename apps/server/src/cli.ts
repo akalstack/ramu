@@ -9,6 +9,28 @@ import { DeviceStore, isHostAccess, PAIRING_TTL_MS } from './remote/devices'
 import { candidateUrls, DEFAULT_NETWORK_PORT, parsePublicUrl } from './remote/network'
 import { installUserService } from './userService'
 import { encodePairLink, parseRemoteUrl } from '@ramu/contracts'
+import { recommendRoutes, type LinkStatus, type RouteKind } from '@ramu/shared/ramuLink'
+
+/** What to do instead while Ramu Link cannot be had, one line each. */
+const ROUTE_HINTS: Record<RouteKind, string> = {
+  link: 'ramu tunnel link          Ramu Link, once a slot is free',
+  tailscale: 'ramu tunnel tailscale     Tailscale Funnel (installed here; private and stable)',
+  'own-relay': 'ramu tunnel link <relay>  Your own relay on your Cloudflare account (apps/link)',
+  quick: 'ramu tunnel quick         Cloudflare quick tunnel (temporary address, changes on restart)',
+  ngrok: 'ramu tunnel ngrok         ngrok (installed here)',
+  'install-tailscale': 'Install Tailscale on this host and your devices: https://tailscale.com/download',
+}
+function linkLine(link: LinkStatus): string {
+  if (link.state === 'waitlisted')
+    return `Ramu Link is full right now. This host is number ${link.position ?? '?'} in line and switches on its own when a slot frees.`
+  if (link.state === 'suspended')
+    return `Ramu Link reached this month's traffic limit and is paused until ${new Date(link.until ?? 0).toLocaleDateString()}.`
+  if (link.state === 'taken')
+    return `Your Ramu account's link is used by ${link.takenBy ?? 'another host'}. Release it there first.`
+  if (link.state === 'signed-out')
+    return 'Ramu Link needs the Ramu account. Run ramu account login, then ramu tunnel link.'
+  return `Ramu Link is unavailable${link.reason ? `: ${link.reason}` : ''}.`
+}
 
 const HELP = `ramu — Ramu workspace server (agents, files, Git, terminals, schedules)
 
@@ -51,10 +73,11 @@ Usage:
   ramu hosts add <address> <code> [--name <name>]
                                  Add one, with a code from \`ramu pair\` there; it may only start and follow threads
   ramu hosts forget <id|name>    Stop using a host here (revoke it on that host to end it there too)
-  ramu tunnel quick|tailscale|ngrok [domain]|off
-                                 Reach this host from anywhere through a tunnel Ramu runs: Cloudflare's quick tunnel (no
-                                 account), Tailscale Funnel, or ngrok (with your static domain). Turns on access for this
-                                 computer only if it is off. ramu tunnel alone shows its state and address.
+  ramu tunnel link [relay]|quick|tailscale|ngrok [domain]|off|release
+                                 Reach this host from anywhere through a tunnel Ramu runs: Ramu Link (free, needs the
+                                 Ramu account; or your own relay), Cloudflare's quick tunnel (no account), Tailscale
+                                 Funnel, or ngrok (with your static domain). Turns on access for this computer only if it
+                                 is off. release gives the Ramu Link slot back. ramu tunnel alone shows its state.
   ramu account login|status|logout
                                  Sign this host in to the optional Ramu account with a code confirmed in any browser
   ramu plugin new <name> [--mcp] [--cli]
@@ -539,24 +562,44 @@ if (command === 'start') {
       ),
     ) as Promise<NetworkStatus>
   const kind = positional[1]
-  if (kind && !['quick', 'tailscale', 'ngrok', 'off'].includes(kind))
-    fail('Usage: ramu tunnel quick|tailscale|ngrok [domain]|off')
-  let status = kind
-    ? await call('network.setTunnel', [
-        kind === 'off' ? null : { kind, ...(kind === 'ngrok' && positional[2] ? { domain: positional[2] } : {}) },
-      ])
-    : await call('network.status')
+  if (kind && !['link', 'quick', 'tailscale', 'ngrok', 'off', 'release'].includes(kind))
+    fail('Usage: ramu tunnel link [relay]|quick|tailscale|ngrok [domain]|off|release')
+  const extra =
+    kind === 'ngrok' && positional[2]
+      ? { domain: positional[2] }
+      : kind === 'link' && positional[2]
+        ? { relay: positional[2] }
+        : {}
+  let status =
+    kind === 'release'
+      ? await call('network.releaseLink')
+      : kind
+        ? await call('network.setTunnel', [kind === 'off' ? null : { kind, ...extra }])
+        : await call('network.status')
   // The address arrives once the tool has connected, usually within a few seconds.
   for (let wait = 0; kind && kind !== 'off' && status.tunnel?.state === 'starting' && wait < 30; wait++) {
     await new Promise((resolve) => setTimeout(resolve, 500))
     status = await call('network.status')
   }
   const tunnel = status.tunnel
-  if (!tunnel?.choice) console.log('No tunnel. Devices reach this host on your network or VPN.')
+  const link = tunnel?.choice?.kind === 'link' ? tunnel.link : null
+  if (link && link.state !== 'active') {
+    console.log(linkLine(link))
+    const others = recommendRoutes({
+      link,
+      pool: tunnel?.pool ?? null,
+      signedIn: link.state !== 'signed-out',
+      tools: tunnel!.tools,
+    })
+      .filter((option) => option.kind !== 'link')
+      .map((option) => ROUTE_HINTS[option.kind])
+    if (others.length) console.log(`Meanwhile:\n${others.map((hint) => `  ${hint}`).join('\n')}`)
+  } else if (kind === 'release') console.log('Ramu Link released. Devices reach this host on your network or VPN.')
+  else if (!tunnel?.choice) console.log('No tunnel. Devices reach this host on your network or VPN.')
   else if (tunnel.state === 'running') console.log(`Reachable at ${tunnel.url}. Pair a device with ramu pair.`)
   else if (tunnel.state === 'missing')
     console.log(
-      `${{ quick: 'cloudflared', tailscale: 'tailscale', ngrok: 'ngrok' }[tunnel.choice.kind]} is not installed. Install it, then run this again.`,
+      `${{ link: 'cloudflared', quick: 'cloudflared', tailscale: 'tailscale', ngrok: 'ngrok' }[tunnel.choice.kind]} is not installed. Install it, then run this again.`,
     )
   else console.log(`Tunnel ${tunnel.state}${tunnel.error ? `: ${tunnel.error}` : ''}`)
 } else if (command === 'account') {
