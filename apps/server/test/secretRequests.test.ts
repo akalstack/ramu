@@ -33,7 +33,13 @@ function setup() {
   const ask = (signal?: AbortSignal, timeoutMs = 60_000) =>
     requests.requestSecret(
       'session',
-      { label: 'Vercel token', reason: 'To deploy', envName: 'VERCEL_TOKEN', timeoutMs },
+      {
+        label: 'Vercel token',
+        reason: 'To deploy',
+        envName: 'VERCEL_TOKEN',
+        url: 'https://vercel.com/account/tokens',
+        timeoutMs,
+      },
       signal,
     )
   return { requests, events, card, outcome, ask, state: () => state, directory }
@@ -43,7 +49,11 @@ it('hands the agent an owner-only file and keeps the value out of every event', 
   const s = setup()
   const waiting = s.ask()
   expect(s.state()).toBe('needs-input')
-  expect(s.card()).toMatchObject({ label: 'Vercel token', envName: 'VERCEL_TOKEN' })
+  expect(s.card()).toMatchObject({
+    label: 'Vercel token',
+    envName: 'VERCEL_TOKEN',
+    url: 'https://vercel.com/account/tokens',
+  })
   expect(inputSummary(s.events, 'session')?.requests[0]).toMatchObject({ kind: 'question', title: 'Vercel token' })
   await s.requests.answerSecret('session', s.card().requestId, { secret: '  tok_123\n', savedAs: 'VERCEL_TOKEN' })
   const result = await waiting
