@@ -171,7 +171,7 @@ export function Notifications() {
         })
         notices.add({ id, title, description, type: 'info', actionLabel: t('Update'), onAction: install })
       } catch {
-        /* Older or disconnected hosts do not support update status. */
+        /* A disconnected host has no update status to report. */
       }
     }
     void check()

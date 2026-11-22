@@ -50,10 +50,7 @@ describe('terminal groups', () => {
     expect(terminalFocusAfterClose(split, new Set(['first', 'split']))).toBe('other')
     expect(terminalFocusAfterClose(split, new Set(['first', 'split', 'other']))).toBeNull()
   })
-  it('restores a legacy split as one group and ignores stale or duplicated group entries', () => {
-    expect(terminalGroups({ ...state, terminalLayout: 'vertical' })).toEqual([
-      { id: 'first', terminalIds: ['first', 'other'], layout: 'vertical' },
-    ])
+  it('ignores stale or duplicated group entries', () => {
     expect(
       terminalGroups({
         ...state,

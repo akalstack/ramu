@@ -306,7 +306,7 @@ export const registerComputerHandlers: RegisterHandlers = ({
         return summary(threadId)
       },
     },
-    // Older viewers ask the device in control instead of taking it; the device in control can still answer.
+    // A viewer can ask the device in control instead of taking control; that device answers.
     'computer.requestHandoff': {
       args: z.tuple([id]),
       run: (threadId: string) => {

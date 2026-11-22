@@ -139,16 +139,9 @@ function openAddresses(macKey: Uint8Array, sealed: string): string[] {
 /** One JSON POST to the host; returns the status and parsed body (null when there is none). */
 export type PairPost = (path: string, body: unknown, signal: AbortSignal) => Promise<{ status: number; body: unknown }>
 
-/** The host does not know pairing by request; the device should ask for a code instead. */
-export class PairRequestUnsupported extends Error {
-  constructor() {
-    super('This host needs a pairing code.')
-  }
-}
-
 /**
  * The device side. `onCode` runs once the code is known, to show it; the promise settles when the person at the host
- * answers. Rejects with `PairRequestUnsupported` when the host refuses the request and with the host's own message otherwise.
+ * answers. Rejects with the host's own message when it refuses.
  */
 export async function requestPairing(input: {
   post: PairPost
@@ -160,7 +153,6 @@ export async function requestPairing(input: {
   const keys = pairKeys(input.random)
   const commit = pairCommit(keys.publicKey)
   const failure = (answer: { status: number; body: unknown }) => {
-    if (answer.status === 404) return new PairRequestUnsupported()
     const message = (answer.body as { error?: unknown } | null)?.error
     return new Error(typeof message === 'string' ? message : `The host refused the request (${answer.status}).`)
   }

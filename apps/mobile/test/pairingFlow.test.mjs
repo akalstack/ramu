@@ -6,7 +6,7 @@ import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import * as nearby from '../src/runtime/nearbyModel.ts'
 import * as pairing from '../src/runtime/pairingModel.ts'
-import { encodePairQr, encodePairWebLink, parsePairInput } from '../../../packages/contracts/src/index.ts'
+import { encodePairWebLink, parsePairInput } from '../../../packages/contracts/src/index.ts'
 
 const require = createRequire(import.meta.url)
 function harness(os, options = {}) {
@@ -156,7 +156,7 @@ for (const os of ['ios', 'android']) {
     ).props.onPress()
     tree = h.render()
     find(tree, 'CameraView').props.onBarcodeScanned({
-      data: encodePairQr({ url: 'https://studio.local:7788', code: 'ABCDE-FGHJK', expiresAt: Date.now() + 60000 }),
+      data: encodePairWebLink({ url: 'https://studio.local:7788', code: 'ABCDE-FGHJK', expiresAt: Date.now() + 60000 }),
     })
     h.finish(new Error('That pairing code is wrong, already used or expired'))
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -185,7 +185,7 @@ for (const os of ['ios', 'android']) {
     find(tree, 'GlassButton', (props) => props.title === 'pairScanAgain').props.onPress()
     tree = h.render()
     find(tree, 'CameraView').props.onBarcodeScanned({
-      data: encodePairQr({ url: 'http://studio.local:7788', code: 'ABCDE-FGHJK', expiresAt: Date.now() + 60000 }),
+      data: encodePairWebLink({ url: 'http://studio.local:7788', code: 'ABCDE-FGHJK', expiresAt: Date.now() + 60000 }),
     })
     tree = h.render()
     assert.equal(find(tree, 'GlassButton', (props) => props.primary).props.disabled, true)

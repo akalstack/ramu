@@ -46,8 +46,8 @@ export interface ManagedSkill {
   useCount: number
   sourceSessionId: string
   sourceSeq: number
-  /** Who made this revision. Absent on revisions saved before summaries existed. */
-  changedBy?: 'learning' | 'cleanup' | 'user' | 'review'
+  /** Who made this revision. */
+  changedBy: 'learning' | 'cleanup' | 'user' | 'review'
   /** Why a review chat made this revision. */
   changeNote?: string
 }

@@ -34,53 +34,6 @@ const versionOf = (path: string) => {
   return user_version
 }
 
-it('upgrades an older profile in place, running each later migration once and in order', () => {
-  const path = profile()
-  openDb(path).close()
-  const released = versionOf(path)
-  const db = openDb(path)
-  db.exec("INSERT INTO projects (id, name, created_at) VALUES ('p', 'Project', 0)")
-  db.close()
-  const ran: string[] = []
-  const migrations = [
-    (db: DatabaseSync) => {
-      ran.push('first')
-      db.exec("ALTER TABLE projects ADD COLUMN colour TEXT NOT NULL DEFAULT 'violet'")
-    },
-    (db: DatabaseSync) => {
-      ran.push('second')
-      db.exec("UPDATE projects SET colour = 'blue' WHERE id = 'p'")
-    },
-  ]
-  const upgraded = openDb(path, migrations)
-  expect(ran).toEqual(['first', 'second'])
-  expect(upgraded.prepare("SELECT name, colour FROM projects WHERE id = 'p'").get()).toEqual({
-    name: 'Project',
-    colour: 'blue',
-  })
-  upgraded.close()
-  expect(versionOf(path)).toBe(released + 2)
-  openDb(path, migrations).close()
-  expect(ran).toEqual(['first', 'second'])
-})
-
-it('leaves a profile as it was when a migration fails', () => {
-  const path = profile()
-  openDb(path).close()
-  const released = versionOf(path)
-  const failing = [
-    (db: DatabaseSync) => db.exec('CREATE TABLE half_done (id INTEGER)'),
-    () => {
-      throw new Error('migration failed')
-    },
-  ]
-  expect(() => openDb(path, failing)).toThrow('migration failed')
-  expect(versionOf(path)).toBe(released)
-  const db = new DatabaseSync(path)
-  expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'half_done'").get()).toBeUndefined()
-  db.close()
-})
-
 it('refuses a profile written by a newer Ramu without changing it', () => {
   const path = profile()
   openDb(path).close()
@@ -93,15 +46,6 @@ it('refuses a profile written by a newer Ramu without changing it', () => {
   const again = new DatabaseSync(path)
   expect(again.prepare("SELECT name FROM sqlite_master WHERE name = 'kept'").get()).toBeDefined()
   again.close()
-})
-
-it('refuses a profile from before the first public release without changing it', () => {
-  const path = profile()
-  const other = new DatabaseSync(path)
-  other.exec('CREATE TABLE kept (id INTEGER); PRAGMA user_version = 3;')
-  other.close()
-  expect(() => openDb(path)).toThrow(/before 0\.1\.0/)
-  expect(versionOf(path)).toBe(3)
 })
 
 it('reads an artifact as an App unless it says otherwise', () => {

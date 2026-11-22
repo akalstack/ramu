@@ -172,23 +172,6 @@ describe('change log', () => {
     const old = result.learned.find((item) => item.id === 'old')
     expect(old).toMatchObject({ change: 'archived', reason: 'unused for a long time' })
   })
-
-  it('reads the author of revisions saved before summaries existed from what changed', () => {
-    learning.write(skillOf('legacy', { changedBy: undefined }))
-    learning.write(
-      skillOf('legacy', { revision: 2, changedBy: undefined, status: 'archived', updatedAt: Date.now() + 1 }),
-    )
-    const result = log()
-    // No author and no new source: an archive of an untouched skill reads as cleanup.
-    expect(result.learned.find((item) => item.id === 'legacy')).toMatchObject({
-      change: 'archived',
-      reason: 'unused for a long time',
-    })
-    // A content change with the same source was a revert or a hand edit: yours.
-    learning.write(skillOf('hand', { changedBy: undefined }))
-    learning.write(skillOf('hand', { revision: 2, changedBy: undefined, content: 'Edited', updatedAt: Date.now() + 1 }))
-    expect(log().byYou.skills).toBe(1)
-  })
 })
 
 describe('prompt and text', () => {

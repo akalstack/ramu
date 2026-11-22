@@ -655,13 +655,6 @@ describe('saved ability preferences', () => {
     })
     expect(() => parse({ choices: { image_generation: 'sometimes' } })).toThrow()
   })
-
-  it('drops a choice of a media service Ramu no longer offers, so that ability falls back to Auto', () => {
-    const parse = (abilities: unknown) => appPreferences.parse({ ...DEFAULT_APP_PREFERENCES, abilities }).abilities
-    expect(parse({ choices: { speech: { media: 'openai' }, music: { media: 'elevenlabs' } } }).choices).toEqual({
-      music: { media: 'elevenlabs' },
-    })
-  })
 })
 
 describe('3D models on a plugin’s service', () => {

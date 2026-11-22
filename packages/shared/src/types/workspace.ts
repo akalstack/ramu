@@ -80,7 +80,7 @@ export interface TaskGoalSummary {
   status: Exclude<ChatGoal['status'], 'completed'>
   pausedBy?: ChatGoal['pausedBy']
   objective: string
-  /** The main session that owns the goal, so a list can open it exactly. Older hosts omit it. */
+  /** The main session that owns the goal, so a list can open it exactly. */
   sessionId?: string
   /** A completion claim is waiting for, or running, the verification command. */
   verifying?: boolean
@@ -94,11 +94,11 @@ export interface Task {
   id: string
   projectId: string
   title: string
-  /** Execution-host title work, synchronized across clients. Older hosts omit it. */
+  /** Execution-host title work, synchronized across clients; absent until the host starts it. */
   titleGenerationState?: 'idle' | 'pending' | 'complete' | 'failed'
   /**
    * Where the title came from: the first message, a model Ramu asked, the provider's own name for the session, or the
-   * person. A manual title is never replaced. Older hosts omit it.
+   * person. A manual title is never replaced.
    */
   titleSource?: TitleSource
   mode: CheckoutMode
@@ -122,10 +122,10 @@ export interface Task {
   goalState?: TaskGoalSummary | null
   /**
    * Every agent that has worked in the thread (model handoffs included), oldest first, the leading one last. Only
-   * the task list sets it; older hosts omit it.
+   * the task list sets it.
    */
   providers?: AgentProvider[]
-  /** Unresolved requests from main sessions, including forwarded helper input. Older hosts omit this. */
+  /** Unresolved requests from main sessions, including forwarded helper input. */
   inputSummary?: ThreadInputSummary | null
   /** Independent helper work after the parent goes idle. Null means none. */
   helperSummary?: ThreadHelperSummary | null
@@ -151,7 +151,7 @@ export interface Task {
   pullRequest?: import('./forge').TaskPullRequest | null
   /**
    * Where the thread's work lands: its worktree's branch, or the branch its project's checkout has out. Only the task
-   * list sets it; null when there is none (no project, a plain folder, detached), and older hosts omit it.
+   * list sets it; null when there is none (no project, a plain folder, detached).
    */
   branch?: string | null
 }
@@ -182,7 +182,7 @@ export interface RepositoryBinding {
   taskBranch: string | null
   /**
    * The branch a current-checkout binding has checked out now, so lists can say where a thread's work lands; null when
-   * detached. Only the task's bindings list sets it, and older hosts omit it.
+   * detached. Only the task's bindings list sets it.
    */
   checkedOut?: string | null
   baseRef: string | null

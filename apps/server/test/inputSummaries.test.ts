@@ -110,7 +110,7 @@ it('exposes bounded verification context without leaking command output into tas
     updatedAt: 1,
     turns: 0,
     reason: '',
-    claim: { reason: 'private evidence', evidence: { checks: [], changedFiles: [] }, at: 1 },
+    claim: { reason: 'private evidence', evidence: { checks: [], changedFiles: [] }, at: 1, inputState: '' },
     check: {
       command: 'private command',
       ok: false,

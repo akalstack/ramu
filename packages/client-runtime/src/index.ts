@@ -50,7 +50,7 @@ export function toEndpoint(target: string | RuntimeEndpoint): RuntimeEndpoint {
 export interface InvokeOptions {
   signal?: AbortSignal
   timeoutMs?: number
-  /** Marks one logical mutation across retries; a host that advertises `operation-keys` runs it once. */
+  /** Marks one logical mutation across retries; the host runs it once. */
   operationKey?: string
 }
 /** A method's result as the API table declares it; the host validated the call and built the result. */
@@ -110,26 +110,6 @@ export function isTransportFailure(error: unknown): boolean {
   return error instanceof SyntaxError || /timed out|socket hang up|aborted/i.test(error.message)
 }
 
-const operationSupport = new Map<string, { supported: boolean; at: number }>()
-const SUPPORT_TTL_MS = 10 * 60_000
-
-async function supportsOperationKeys(target: string | RuntimeEndpoint, signal?: AbortSignal): Promise<boolean> {
-  const endpoint = toEndpoint(target)
-  const key = endpoint.kind === 'socket' ? endpoint.path : endpoint.url
-  const known = operationSupport.get(key)
-  if (known && Date.now() - known.at < SUPPORT_TTL_MS) return known.supported
-  try {
-    const status = (await runtimeInvoke(target, 'background.status', [], { signal, timeoutMs: 10_000 })) as {
-      capabilities?: string[]
-    }
-    const supported = !!status?.capabilities?.includes('operation-keys')
-    operationSupport.set(key, { supported, at: Date.now() })
-    return supported
-  } catch {
-    return false
-  }
-}
-
 export interface RecoverableInvokeOptions extends InvokeOptions {
   /** Retries after a lost connection; each waits `backoffMs * 3 ** attempt`. */
   retries?: number
@@ -139,10 +119,9 @@ export interface RecoverableInvokeOptions extends InvokeOptions {
 }
 
 /**
- * Like `runtimeInvoke`, and for a listed mutation, retries a lost connection under one operation key so a host that
- * advertises `operation-keys` returns the first result instead of running it again. A host that does not advertise it,
- * a method outside the list and an answer from the host (an error reply) are never retried: the outcome stays the
- * caller's to reconcile.
+ * Like `runtimeInvoke`, and for a listed mutation, retries a lost connection under one operation key so the host returns
+ * the first result instead of running it again. A method outside the list and an answer from the host (an error reply)
+ * are never retried: the outcome stays the caller's to reconcile.
  */
 export async function runtimeInvokeRecoverable<M extends string>(
   target: string | RuntimeEndpoint,
@@ -150,12 +129,7 @@ export async function runtimeInvokeRecoverable<M extends string>(
   args: unknown[] = [],
   policy: RecoverableInvokeOptions = {},
 ): Promise<RuntimeResult<M>> {
-  if (
-    policy.operationKey ||
-    !RECOVERABLE_MUTATIONS.has(method) ||
-    !(await supportsOperationKeys(target, policy.signal))
-  )
-    return runtimeInvoke(target, method, args, policy)
+  if (policy.operationKey || !RECOVERABLE_MUTATIONS.has(method)) return runtimeInvoke(target, method, args, policy)
   const operationKey = (policy.newKey ?? (() => randomUUID()))()
   const retries = policy.retries ?? 2
   const backoffMs = policy.backoffMs ?? 500

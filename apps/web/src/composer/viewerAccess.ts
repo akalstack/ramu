@@ -1,6 +1,6 @@
 import type { BackgroundStatus } from '@ramu/shared/types'
 
-/** Older hosts omit `access`, and the server enforces it either way; this only decides what to offer. */
+/** The server enforces access either way; this only decides what to offer. */
 export const isViewOnly = (status: Pick<BackgroundStatus, 'access'> | null | undefined): boolean =>
   status?.access === 'viewer'
 

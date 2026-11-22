@@ -7,7 +7,7 @@ export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | '
 
 export interface AgentSettings {
   provider: AgentProvider
-  /** Pinned credential profile. Existing chats without this field use the original CLI account. */
+  /** Pinned credential profile; absent uses the provider's default account. */
   accountId?: string
   /** Empty means the provider's default. */
   model: string
@@ -289,7 +289,7 @@ export interface QueuedMessage {
   held?: boolean
 }
 
-/** When the event was recorded (ms). Absent on events stored before timestamps existed.
+/** When the event was recorded (ms).
  *  `agentId` marks text and tool events that a sub-agent produced; they belong to that agent's own transcript, not the main one. */
 export type AgentEvent = AgentEventBody & {
   at?: number

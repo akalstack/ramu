@@ -48,22 +48,6 @@ export class RestartRecovery {
 
   /** After a restart no SDK process survives: anything not terminal becomes "restored" (transcript only). */
   markRestoredOnBoot(): void {
-    // Older shutdown code stopped every attached process, including idle ones. A successful final result with
-    // only queue/state bookkeeping after it is a completed turn, not evidence of an interruption. Any later
-    // user message, helper update, request, error or tool activity keeps the stopped outcome intact.
-    const completed = this.db
-      .prepare(
-        `SELECT s.id FROM agent_sessions s WHERE s.state = 'stopped'
-      AND (SELECT json_extract(e.event, '$.kind') FROM agent_events e WHERE e.session_id = s.id
-        AND json_extract(e.event, '$.kind') NOT IN ('state','queue') ORDER BY e.seq DESC LIMIT 1) = 'result'
-      AND (SELECT json_extract(e.event, '$.isError') FROM agent_events e WHERE e.session_id = s.id
-        AND json_extract(e.event, '$.kind') NOT IN ('state','queue') ORDER BY e.seq DESC LIMIT 1) = 0`,
-      )
-      .all() as { id: string }[]
-    for (const { id } of completed) {
-      this.db.prepare("UPDATE agent_sessions SET state = 'restored' WHERE id = ? AND state = 'stopped'").run(id)
-      this.host.record(id, { kind: 'state', state: 'restored' })
-    }
     this.prepareForRestart()
     this.db
       .prepare(`UPDATE agent_sessions SET state = 'restored' WHERE state NOT IN ('stopped', 'failed', 'restored')`)

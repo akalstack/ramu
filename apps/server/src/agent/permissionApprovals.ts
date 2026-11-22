@@ -32,12 +32,11 @@ export function permissionKey(tool: string, input: unknown): string {
 export class PermissionApprovals {
   constructor(private db: Db) {}
   ensureAntigravityDefaults(): void {
-    // Bump the version when the predefined rules change: the old ones are replaced once, user-saved rules are kept.
+    // Set up once per profile, so a predefined rule the person removes stays removed.
     const marker = 'permission-defaults:v2:antigravity-auto'
     if (this.db.prepare('SELECT 1 FROM app_state WHERE key = ?').get(marker)) return
     this.db.exec('SAVEPOINT permission_defaults')
     try {
-      for (const rule of this.list()) if (rule.builtin) this.remove(rule.id)
       for (const rule of AUTO_COMMAND_DEFAULTS)
         this.remember('antigravity', `builtin:${rule.id}`, 'user', undefined, {
           ...rule,

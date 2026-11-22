@@ -25,20 +25,6 @@ describe('saved sub-agent preferences', () => {
     expect(parse({})).toEqual({ model: 'thread', step: null, codexHook: false })
     expect(() => parse({ model: 'cheapest' })).toThrow()
   })
-
-  it('keeps a model picked under the old settings and drops the rest', () => {
-    const step = { id: 's', provider: 'codex', model: 'large', effort: null }
-    expect(parse({ mode: 'single', single: step, maxEffort: 'low', codexHook: true })).toEqual({
-      model: 'pick',
-      step,
-      codexHook: true,
-    })
-    expect(parse({ mode: 'per-provider', perProvider: { codex: step }, autoSelect: 'model-and-effort' })).toEqual({
-      model: 'thread',
-      step: null,
-      codexHook: false,
-    })
-  })
 })
 
 describe('a model chosen for each task', () => {

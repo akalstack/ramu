@@ -233,7 +233,7 @@ function ThisComputer() {
             ...rest,
             port: Number(chosen),
             acceptUnencrypted: true,
-            // Older hosts have no such setting; leaving it out keeps whatever they saved.
+            // Left out, the host keeps its saved choice.
             ...(discoverable === undefined ? {} : { discoverable }),
           }),
         )
@@ -1192,9 +1192,9 @@ function AddHostDialog({ link, repair, onClose }: { link?: string; repair?: Comp
         setAsking(null)
         const message = errorText(reason)
         if (/cancelled|aborted/i.test(message)) return
-        // Older hosts cannot be asked; they show a code to type instead.
-        if (fallback) fallback()
-        if (!fallback || !/needs a pairing code/i.test(message)) setError(message)
+        // The address form, filled in, is the next step whatever stopped the request.
+        fallback?.()
+        setError(message)
       })
   }
   const submit = () => {

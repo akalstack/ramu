@@ -2,7 +2,6 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { normalizeAddress, needsHttpConsent } from '../src/runtime/transport.ts'
 import { transcript } from '../src/runtime/transcript.ts'
-import { decodePairQr, encodePairQr } from '@ramu/contracts'
 
 test('addresses default to HTTPS and require explicit trusted HTTP, rejecting dropped paths and credentials', () => {
   assert.equal(normalizeAddress('my-host.local:7421'), 'https://my-host.local:7421')
@@ -10,13 +9,6 @@ test('addresses default to HTTPS and require explicit trusted HTTP, rejecting dr
   assert.equal(normalizeAddress('http://host:7421', true), 'http://host:7421')
   for (const url of ['https://user:secret@host', 'https://host/proxy', 'https://host/?token=x', 'ftp://host'])
     assert.throws(() => normalizeAddress(url, true))
-})
-test('QR offers contain expiring one-time codes, reject tokens, unknown schemes and expired offers', () => {
-  const offer = { url: 'https://host:7421', code: 'ABCDE-FGHJK', expiresAt: 2000 }
-  assert.equal(decodePairQr(encodePairQr(offer), 1000).url, offer.url)
-  assert.throws(() => decodePairQr(encodePairQr(offer), 3000), /expired/)
-  assert.throws(() => decodePairQr(encodePairQr({ ...offer, url: 'https://host/proxy' }), 1000))
-  assert.throws(() => decodePairQr('{"token":"secret"}', 1000))
 })
 test('transcript restores tool outcomes, resolved questions and permissions without asking twice', () => {
   const items = transcript([

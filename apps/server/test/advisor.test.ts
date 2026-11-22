@@ -126,38 +126,13 @@ const appended = (options: Options) =>
     : ''
 
 describe('advisor', () => {
-  it('opens delivered advice from old threads that have no advisor task or transcript', () => {
-    const text = adviceMessage({
-      requestId: 'old-request',
-      status: 'ready',
-      advisor: 'opus · Claude',
-      advice: 'Check the migration.',
-    })
-    const saved: AgentEvent[] = [{ kind: 'user', text, at: 100 }]
-    const agentId = advisorAgentId('old-request')
-    expect(latestTasks(saved)).toEqual([
-      expect.objectContaining({ agentId, taskType: 'advisor', status: 'completed', summary: 'Check the migration.' }),
-    ])
-    expect(advisorTranscript(saved, agentId)).toEqual([
-      { kind: 'text', text: 'Check the migration.', agentId, at: 100 },
-    ])
+  it("reads a consultation's own transcript, apart from the thread's", () => {
+    const agentId = advisorAgentId('request')
     const own: AgentEvent[] = [
       { kind: 'agent', agentId, name: 'Advisor', taskType: 'advisor', status: 'completed' },
       { kind: 'text', text: 'Check the migration.', agentId },
     ]
-    expect(latestTasks([...own, ...saved])).toHaveLength(1)
-    expect(advisorTranscript([...own, ...saved], agentId)).toEqual([own[1]])
-  })
-
-  it('recovers failed legacy consultations as errors', () => {
-    const saved: AgentEvent[] = [
-      { kind: 'user', text: adviceMessage({ requestId: 'old-error', status: 'failed', error: 'Timed out' }) },
-    ]
-    expect(latestTasks(saved)[0]).toMatchObject({ status: 'failed', error: 'Timed out' })
-    expect(advisorTranscript(saved, advisorAgentId('old-error'))[0]).toMatchObject({
-      kind: 'error',
-      message: 'Timed out',
-    })
+    expect(advisorTranscript([...own, { kind: 'text', text: 'Lead reply' }], agentId)).toEqual([own[1]])
   })
   it('is off by default', () => {
     expect(DEFAULT_APP_PREFERENCES.advisor).toEqual({ enabled: false, step: null, wait: false })

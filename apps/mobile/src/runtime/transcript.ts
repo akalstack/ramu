@@ -526,7 +526,6 @@ export const ACCEPTED_HOLD_MS = 60_000
 
 /** An accepted message holds later sends to its host only briefly: the host already has it. */
 export function holdsQueue(item: OutboxItem, now = Date.now()): boolean {
-  // One saved before acknowledgements carried a time is already past its hold.
   return item.state === 'accepted' && item.acceptedAt !== undefined && now - item.acceptedAt < ACCEPTED_HOLD_MS
 }
 

@@ -286,6 +286,7 @@ it('discovers cross-thread recall and skill selection through real deferred MCP 
     id: 'browser',
     projectId: 'p',
     name: 'browser-tests',
+    changedBy: 'learning',
     description: 'Test with a browser',
     content: 'Run browser checks.',
     status: 'active',

@@ -76,7 +76,6 @@ export interface TaskUiState {
   /** Workspace selection to restore when a terminal leaves the shared tab area. */
   terminalReturnViewId?: string | null
   terminalOpen?: boolean
-  terminalLayout?: 'tabs' | 'horizontal' | 'vertical'
   terminalTabPosition?: 'top' | 'right'
   terminalHeight?: number
   /** 'right' shares the workspace file tabs; 'bottom' keeps a separate terminal panel. */

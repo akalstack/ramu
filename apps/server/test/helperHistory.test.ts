@@ -145,17 +145,4 @@ describe('historical helper ownership', () => {
     expect(sources[0]?.tasks.map((task) => task.agentId)).toEqual(['discovered'])
     expect(sources[1]?.tasks).toEqual([])
   })
-  it('infers legacy init providers from the first settings switch and retains history with no current native session', () => {
-    const codex = { ...DEFAULT_AGENT_SETTINGS, provider: 'codex' as const }
-    const sources = helperRecoverySources({ ...session, provider: 'codex', settings: codex, providerSessionId: null }, [
-      { kind: 'init', providerSessionId: 'claude-old', model: 'claude', cwd: '/workspace' },
-      { kind: 'agent', agentId: 'old-helper', name: 'Old helper', status: 'running' },
-      { kind: 'settings', settings: codex, previous: DEFAULT_AGENT_SETTINGS, reason: 'Fallback', handoff: true },
-    ])
-    expect(sources).toHaveLength(1)
-    expect(sources[0]).toMatchObject({
-      session: { provider: 'claude-code', providerSessionId: 'claude-old' },
-      tasks: [{ agentId: 'old-helper' }],
-    })
-  })
 })

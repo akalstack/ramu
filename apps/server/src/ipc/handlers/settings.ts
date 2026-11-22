@@ -268,17 +268,11 @@ export const registerSettingsHandlers: RegisterHandlers = ({
       args: z.tuple([]),
       run: async (): Promise<ModelPreferences> => {
         const catalogs = agents ? await agents.catalog() : []
-        const saved = workspace.getAppState<
-          (Omit<ModelPreferences, 'defaultBarMode'> & { defaultBarMode?: string }) | null
-        >('model-preferences', null)
+        const saved = workspace.getAppState<ModelPreferences | null>('model-preferences', null)
         const defaults = recommendedSets(catalogs)
         if (!saved) return defaults
-        const normalized = {
-          ...saved,
-          defaultBarMode: saved.defaultBarMode === 'effort' ? ('effort' as const) : ('model' as const),
-        }
-        const updated = migrateModelDefaults(normalized, defaults)
-        if (updated !== normalized) {
+        const updated = migrateModelDefaults(saved, defaults)
+        if (updated !== saved) {
           workspace.setAppState('model-preferences', updated)
           host.send('settings:models', updated)
         }

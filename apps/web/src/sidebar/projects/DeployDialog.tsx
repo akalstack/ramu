@@ -116,11 +116,7 @@ export function DeployDialog({
         )}
         {(!target || (plugin.state && plugin.state !== 'ready')) && (
           <span>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => setUp(target ? plugin.setUp : () => openPluginSettings(host.id))}
-            >
+            <Button size="sm" variant="secondary" onClick={() => setUp(target ? plugin.setUp : openPluginSettings)}>
               {!target
                 ? t('Open plugins')
                 : plugin.state === 'missing'

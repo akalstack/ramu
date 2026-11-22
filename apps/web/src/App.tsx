@@ -241,7 +241,7 @@ function Shell() {
     window.addEventListener('ramu:archived', open)
     return () => window.removeEventListener('ramu:archived', open)
   }, [])
-  // Customize opens on the section asked for, from the rail, a thread or an old Settings link.
+  // Customize opens on the section asked for, from the rail, a thread or Settings.
   const [customizeTarget, setCustomizeTarget] = useState<CustomizeTarget>({ section: 'plugins' })
   useEffect(() => {
     const show = (event: Event) => {
@@ -255,11 +255,6 @@ function Shell() {
   useEffect(() => {
     const open = (event: Event) => {
       const detail = (event as CustomEvent<{ section?: SettingsSection; target?: string; host?: string }>).detail
-      // Plugins moved to Customize; links that still ask for them land there.
-      if (detail?.section === 'plugins') {
-        openCustomize('plugins')
-        return
-      }
       setSettingsSection(detail?.section ?? 'appearance')
       setSettingsTarget(detail?.target)
       setSettingsHost(detail?.host)
@@ -280,8 +275,7 @@ function Shell() {
       window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'remote' } }))
     })
     const offPluginLink = ramu.on('plugin:link', ({ link }) => {
-      if (receivePluginLink(link))
-        window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'plugins' } }))
+      if (receivePluginLink(link)) openCustomize('plugins')
     })
     window.addEventListener('ramu:settings', open)
     return () => {

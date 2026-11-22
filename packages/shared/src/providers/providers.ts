@@ -32,7 +32,6 @@ export type ProviderConfiguration = Partial<
     AgentProvider,
     {
       binary: string
-      harness?: string
       accounts?: ProviderAccount[]
       accountId?: string
       /** Account IDs, `default` included, in the order they are tried: the first enabled one is used first. */

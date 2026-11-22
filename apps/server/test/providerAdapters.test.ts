@@ -9,12 +9,7 @@ import { defineAdapter, parseProviderVersion } from '../src/providers/adapter'
 import { ProviderService } from '../src/providers/providers'
 import { providerAccountClearedEnv, providerAccountEnv } from '../src/providers/providerBinaries'
 import { DEFAULT_APP_PREFERENCES } from '@ramu/shared/types'
-import {
-  antigravityArgs,
-  antigravitySignInCode,
-  antigravitySignInUrl,
-  isAntigravityCli,
-} from '../src/providers/adapters/antigravity'
+import { antigravityArgs, antigravitySignInCode, antigravitySignInUrl } from '../src/providers/adapters/antigravity'
 
 const savedEnv = { ...process.env }
 afterEach(() => {
@@ -56,9 +51,9 @@ describe('provider adapter registry', () => {
   })
 
   it('keeps every login in a file, including the default account, so the macOS Keychain is never used', () => {
-    const ctx = { overrides: {}, binary: () => '/x/agy_acp_server.par', expand: (path: string) => path }
+    const ctx = { overrides: {}, binary: () => '/x/agy', expand: (path: string) => path }
     expect(providerAdapter('antigravity').extendEnvironment!({}, ctx)).toMatchObject({
-      AGY_ACP_FORCE_FILE_STORAGE: '1',
+      SSH_CONNECTION: '127.0.0.1 0 127.0.0.1 0',
     })
     expect(providerAdapter('cursor').extendEnvironment!({}, ctx)).toMatchObject({ AGENT_CLI_CREDENTIAL_STORE: 'file' })
     // A choice made in the environment still wins.
@@ -111,9 +106,13 @@ describe('provider adapter registry', () => {
       'Update this custom Codex installation',
     )
     expect(() =>
-      providerAdapter('antigravity').updatePlan({ ...base, config: { antigravity: { binary: '/x' } } }),
+      providerAdapter('antigravity').updatePlan({
+        ...base,
+        config: { antigravity: { binary: '/x' } },
+        findExecutable: () => null,
+      }),
     ).toThrow('Update this custom Antigravity runtime')
-    expect('install' in providerAdapter('antigravity').updatePlan(base)).toBe(true)
+    expect('install' in providerAdapter('antigravity').updatePlan({ ...base, binary: '/runtime/codex/agy' })).toBe(true)
   })
 
   it('reports sign-in unavailable for Antigravity without a settings file', async () => {
@@ -181,15 +180,15 @@ describe('Antigravity sign-in methods', () => {
       const calls: string[] = []
       await signIn({
         installed: true,
-        binary: '/x/agy_acp_server.par',
+        binary: '/x/agy',
         accountId: 'work',
-        env: { GEMINI_HOME: dir },
+        env: { GEMINI_HOME: dir, GOOGLE_API_KEY: 'k' },
         acpSignIn: async (_provider, method, account) => void calls.push(`${method}:${account}`),
-        method: { method: 'oauth-business', gcpProject: 'acme-ai', gcpLocation: 'us-central1' },
+        method: { method: 'agent-platform', gcpProject: 'acme-ai', gcpLocation: 'us-central1' },
       })
-      expect(calls).toEqual(['oauth-business:work'])
+      expect(calls).toEqual(['agent-platform:work'])
       expect(JSON.parse(readFileSync(join(dir, 'antigravity-acp', 'settings.json'), 'utf8'))).toEqual({
-        auth: { type: 'oauth-business' },
+        auth: { type: 'agent-platform' },
         gcp: { project: 'acme-ai', location: 'us-central1' },
       })
     } finally {
@@ -205,7 +204,7 @@ describe('Antigravity sign-in methods', () => {
       await expect(
         signIn({
           installed: true,
-          binary: '/x/agy_acp_server.par',
+          binary: '/x/agy',
           accountId: 'default',
           env: { GEMINI_HOME: dir, GEMINI_API_KEY: 'k' },
           acpSignIn: async () => {
@@ -261,10 +260,7 @@ process.stdin.on('end', () => process.exit(input.trim() === 'good' ? 0 : 1))
     return file
   }
 
-  it('tells the CLI where each login keeps its files, and keeps the older runtime as it was', () => {
-    expect(isAntigravityCli('/u/.local/bin/agy')).toBe(true)
-    expect(isAntigravityCli('C:\\agy\\agy.exe')).toBe(true)
-    expect(isAntigravityCli('/x/agy_acp_server.par')).toBe(false)
+  it('tells the CLI where each login keeps its files', () => {
     expect(antigravityArgs('/u/bin/agy', { GEMINI_HOME: '/r' })).toEqual([
       'acp',
       '--gemini-dir',
@@ -272,16 +268,11 @@ process.stdin.on('end', () => process.exit(input.trim() === 'good' ? 0 : 1))
       '--app-data-dir',
       'antigravity-acp',
     ])
-    expect(antigravityArgs('/x/agy_acp_server.par', {})).toEqual(process.platform === 'linux' ? ['--uid='] : [])
   })
 
-  it('keeps CLI logins in their own files, never replaces a running CLI, and needs no harness helper', () => {
-    const env = adapter.extendEnvironment!(
-      {},
-      { overrides: { antigravity: { binary: '', harness: '/h' } }, binary: () => '/u/bin/agy', expand: (p) => p },
-    )
+  it('keeps CLI logins in their own files and never replaces a running CLI', () => {
+    const env = adapter.extendEnvironment!({}, { overrides: {}, binary: () => '/u/bin/agy', expand: (p) => p })
     expect(env).toMatchObject({ SSH_CONNECTION: '127.0.0.1 0 127.0.0.1 0', AGY_CLI_DISABLE_AUTO_UPDATE: '1' })
-    expect(env.ANTIGRAVITY_HARNESS_PATH).toBeUndefined()
     // A real SSH session is left as it is.
     expect(
       adapter.extendEnvironment!(
@@ -312,10 +303,7 @@ process.stdin.on('end', () => process.exit(input.trim() === 'good' ? 0 : 1))
         const agy = fakeAgy(dir),
           env = { ...process.env, GEMINI_HOME: dir }
         const ctx = { installed: true, binary: agy, accountId: 'default', env, acpSignIn: async () => {} }
-        // A browser login made with the older runtime does not count for the CLI.
-        mkdirSync(join(dir, 'antigravity-acp'))
-        writeFileSync(join(dir, 'antigravity-acp', 'settings.json'), '{"auth":{"type":"oauth-personal"}}')
-        expect(await adapter.signInState(agy, env)).toEqual({ signedIn: false, detail: 'oauth-personal' })
+        expect(await adapter.signInState(agy, env)).toEqual({ signedIn: false })
 
         const refused = await adapter.signIn!({ ...ctx, method: { method: 'oauth-personal' } })
         expect(refused).toMatchObject({ url: link })
@@ -370,20 +358,12 @@ process.stdin.on('end', () => process.exit(input.trim() === 'good' ? 0 : 1))
       command: '/u/bin/agy',
       args: ['update'],
     })
-    // The older runtime is in use because the agy beside it is too old: updating that agy is enough.
-    expect(
-      adapter.updatePlan({
-        ...base,
-        binary: '/u/bin/agy_acp_server.par',
-        findExecutable: found(['/u/bin/agy_acp_server.par', '/u/bin/agy']),
-      }),
-    ).toEqual({ command: '/u/bin/agy', args: ['update'] })
     expect(
       'install' in
         adapter.updatePlan({
           ...base,
-          binary: '/runtime/antigravity/versions/1.4.3/agy_acp_server.par',
-          findExecutable: found(['/u/bin/agy']),
+          binary: '/runtime/antigravity/versions/1.5.13/agy',
+          findExecutable: found(['/runtime/antigravity/versions/1.5.13/agy']),
         }),
     ).toBe(true)
     expect(

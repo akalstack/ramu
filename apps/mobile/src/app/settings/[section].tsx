@@ -277,7 +277,6 @@ function Notifications({ host, name }: { host: ReturnType<typeof useHostSettings
               </View>
             ))}
           </Card>
-          <Hint>{t.alertsNeedHost}</Hint>
           <ScopeControl
             field="notifyCompletion"
             overridden={parseSwitched(drafts[PUSH_MUTED_KEY]).length > 0}

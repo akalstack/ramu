@@ -48,8 +48,8 @@ export interface ChatGoal {
     reason: string
     evidence: GoalEvidence
     at: number
-    /** Fingerprint of instruction/request events when evidence was accepted; survives restart. Absent on older claims. */
-    inputState?: string
+    /** Fingerprint of instruction/request events when evidence was accepted; survives restart. */
+    inputState: string
   }
   /** The latest verification run. A failure is sent to the agent with the next continuation. */
   check?: GoalCheck

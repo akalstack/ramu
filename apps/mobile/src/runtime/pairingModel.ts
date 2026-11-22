@@ -20,7 +20,7 @@ export type ScanResult =
 
 /**
  * What a scanned QR code leads to. A code with an encrypted address pairs at once; one that needs a decision (plain
- * HTTP to allow, or no code) opens the form to review. Reads the getramu.dev/pair link, `ramu://pair` and older codes.
+ * HTTP to allow, or no code) opens the form to review. Reads the getramu.dev/pair link and `ramu://pair`.
  */
 export function readScan(data: string, needsConsent: (url: string) => boolean, now = Date.now()): ScanResult {
   let offer: PairInput
@@ -62,5 +62,12 @@ export function pairedName(offer: { url: string; name?: string }): string {
     return new URL(offer.url).hostname
   } catch {
     return offer.url
+  }
+}
+
+/** This phone has no secure random source, so it cannot ask a host by request; the person types a code instead. */
+export class SecureRandomUnavailable extends Error {
+  constructor() {
+    super('This phone cannot ask without a code.')
   }
 }

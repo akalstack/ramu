@@ -104,7 +104,7 @@ if (new URLSearchParams(location.search).has('live')) {
       </ErrorBoundary>
     </QueryClientProvider>,
   )
-} else if (!new URLSearchParams(location.search).has('ramu-storage-migration')) {
+} else {
   pruneDrafts()
   createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>

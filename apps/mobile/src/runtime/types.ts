@@ -10,7 +10,7 @@ export interface Computer {
   name: string
   address: string
   os: 'macos' | 'linux' | 'windows'
-  /** What the host runs on, as it reports itself: its icon and the line under its name. Older hosts omit it. */
+  /** What the host runs on, as it reports itself: its icon and the line under its name. Absent until it first answers. */
   system?: import('@ramu/shared/types').DeviceOs
   /** Still carrying the placeholder label; the computer's own hostname replaces it on first contact. */
   auto?: boolean
@@ -19,7 +19,7 @@ export interface Computer {
   error?: string
   /** This phone's role on the host, as the host last reported it. Absent means full access. Advisory: the host enforces it. */
   access?: 'owner' | 'viewer'
-  /** What pairing bound: this phone's id on the host and the host's durable id. Absent for older pairings. */
+  /** What pairing bound: this phone's id on the host and, when the host gave one, its durable id. */
   deviceId?: string
   hostId?: string
   /** Other addresses the host named in a proven identity answer; tried only when the saved one stops answering. */

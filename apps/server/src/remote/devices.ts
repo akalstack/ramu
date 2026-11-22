@@ -32,7 +32,7 @@ export interface DeviceInfo {
   lastSeenAt: number | null
   expiresAt: number | null
   role: DeviceRole
-  /** Absent on devices paired before permissions existed, which hold every permission. */
+  /** What an owner device may use; absent on view-only devices and paired hosts. */
   permissions?: Partial<Record<DevicePermission, PermissionGrant>>
   /** Permissions the host refused for good; requests for them are declined without asking again. */
   blocked?: DevicePermission[]
@@ -76,8 +76,8 @@ interface DeviceRecord extends DeviceInfo {
   previousUntil?: number
 }
 interface PendingCode {
-  /** Non-secret handle for listing, cancelling and following one offer. Absent on offers made before ids existed. */
-  id?: string
+  /** Non-secret handle for listing, cancelling and following one offer. */
+  id: string
   /** Who created it (a dialog or the CLI); a new offer from the same owner replaces its previous unused one. */
   owner?: string
   role?: DeviceRole
@@ -219,12 +219,11 @@ export class DeviceStore {
     this.write({ ...this.read(), defaultPermissions: [...new Set(permissions)] })
   }
 
-  /** Whether this device may use a permission now. A viewer never may; a device from before permissions always may. */
+  /** Whether this device may use a permission now. A viewer or a paired host never may. */
   allows(id: string, permission: DevicePermission, now = Date.now()): boolean {
     const device = this.read().devices.find((entry) => entry.id === id)
     if (!device || device.role === 'viewer' || device.kind === 'host') return false
-    if (!device.permissions) return AUTOMATIC_PERMISSIONS.includes(permission)
-    return grantActive(device.permissions[permission], now)
+    return grantActive(device.permissions?.[permission], now)
   }
 
   /**
@@ -268,9 +267,7 @@ export class DeviceStore {
     return Object.fromEntries(
       DEVICE_PERMISSIONS.map((permission) => {
         if (!device || device.role === 'viewer') return [permission, null]
-        if (!device.permissions)
-          return [permission, AUTOMATIC_PERMISSIONS.includes(permission) ? { until: null } : null]
-        const grant = device.permissions[permission]
+        const grant = device.permissions?.[permission]
         return [permission, grantActive(grant, now) ? grant! : null]
       }),
     ) as Record<DevicePermission, PermissionGrant | null>
@@ -297,8 +294,7 @@ export class DeviceStore {
     if (!device) throw new Error('That device is no longer paired')
     if (device.role === 'viewer')
       throw new Error('A view-only device cannot hold permissions. Pair it with full access.')
-    // A device from before permissions held everything; it keeps everything else when one is changed.
-    const current = device.permissions ?? Object.fromEntries(AUTOMATIC_PERMISSIONS.map((p) => [p, { until: null }]))
+    const current = device.permissions ?? {}
     const next = Object.fromEntries(
       Object.entries({ ...current, [permission]: grant }).filter(
         (entry): entry is [string, PermissionGrant] => !!entry[1] && grantActive(entry[1], now),
@@ -399,16 +395,14 @@ export class DeviceStore {
     now: number,
     deviceId?: string,
   ) {
-    const added = offers.flatMap((offer) =>
-      offer.id ? [{ id: offer.id, state, at: now, ...(deviceId ? { deviceId } : {}) }] : [],
-    )
+    const added = offers.map((offer) => ({ id: offer.id, state, at: now, ...(deviceId ? { deviceId } : {}) }))
     return [...(file.settled ?? []).filter((entry) => now - entry.at < SETTLED_MS), ...added].slice(-SETTLED_KEEP)
   }
 
   /** Unused offers, without their codes. */
   offers(now = Date.now()): { id: string; role: DeviceRole; expiresAt: number }[] {
     return this.read().pending.flatMap((p) =>
-      p.id && p.expiresAt > now ? [{ id: p.id, role: p.role ?? 'owner', expiresAt: p.expiresAt }] : [],
+      p.expiresAt > now ? [{ id: p.id, role: p.role ?? 'owner', expiresAt: p.expiresAt }] : [],
     )
   }
 

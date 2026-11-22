@@ -280,7 +280,7 @@ export async function checkHostConnection(
   signal.addEventListener('abort', close, { once: true })
   try {
     const info = await probe.invoke('background.status')
-    return info.protocol === 1 && !!info.capabilities?.includes('mobile-companion')
+    return info.protocol === 1
   } finally {
     signal.removeEventListener('abort', close)
     close()

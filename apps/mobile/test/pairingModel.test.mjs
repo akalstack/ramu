@@ -1,14 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { encodePairLink, encodePairQr, encodePairWebLink } from '../../../packages/contracts/src/index.ts'
+import { encodePairLink, encodePairWebLink } from '../../../packages/contracts/src/index.ts'
 import { pairProblem, pairedName, readScan, showWelcome } from '../src/runtime/pairingModel.ts'
 
 const http = (url) => url.startsWith('http:')
 const soon = () => Date.now() + 60_000
 
-test('a scanned code with an encrypted address pairs at once, whichever QR format the computer showed', () => {
+test('a scanned code with an encrypted address pairs at once, as a getramu.dev or ramu:// link', () => {
   const offer = { url: 'https://studio.local:7788', code: 'ABCDE-FGHJK', expiresAt: soon() }
-  for (const data of [encodePairWebLink(offer), encodePairLink(offer), encodePairQr(offer)])
+  for (const data of [encodePairWebLink(offer), encodePairLink(offer)])
     assert.deepEqual(readScan(data, http), { kind: 'pair', offer })
 })
 

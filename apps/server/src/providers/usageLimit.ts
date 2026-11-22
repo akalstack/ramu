@@ -2,7 +2,7 @@ import type { AgentSettings, UsageReading } from '@ramu/shared/types'
 import { classifyLimit, parseResetTime } from './limitClassifier'
 
 // Providers without a usage API (OpenCode, Cursor, Antigravity) only reveal a limit through what they say or fail with.
-// The rules live in ./limitClassifier; these wrappers keep the older entry points.
+// The rules live in ./limitClassifier; these wrappers name the questions callers ask.
 
 /** An error or rejection that means the provider is out of quota, credits or rate allowance (any confidence). */
 export const isLimitMessage = (value: string): boolean => classifyLimit(value, { channel: 'error' }) !== null

@@ -1,7 +1,4 @@
-import type { SettingsSection } from './SettingsPage'
+import { openCustomize } from '../customize/openCustomize'
 
-const section: SettingsSection = 'plugins'
-
-/** Opens Customize → Plugins on the host that needs a plugin, where it is installed and its credential saved. */
-export const openPluginSettings = (host: string) =>
-  window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section, host } }))
+/** Opens Customize → Plugins, where a plugin is installed and its credential saved. */
+export const openPluginSettings = () => openCustomize('plugins')

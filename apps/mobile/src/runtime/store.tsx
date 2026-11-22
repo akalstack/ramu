@@ -1,7 +1,8 @@
-import { attemptStatus, failureStatus, isOlderHostRefusal, mayConnect, restoredStatus } from './hostConnection'
+import { attemptStatus, failureStatus, mayConnect, restoredStatus } from './hostConnection'
 import { relay as relayToHost } from './account'
 import { appForeground } from './chatViewport'
-import { PairRequestUnsupported, requestPairing } from '@ramu/shared/pairRequest'
+import { requestPairing } from '@ramu/shared/pairRequest'
+import { SecureRandomUnavailable } from './pairingModel'
 import { secureRandom } from './secureRandom'
 import { agentActivityLabel, currentStep, turnStartedAt, turnSteps } from '@ramu/shared/chat/agentActivity'
 import { runningCommands } from '@ramu/shared/chat/helperPresentation'
@@ -13,7 +14,6 @@ import { CREDENTIAL_NOT_SAVED, saveIssuedCredential } from './saveCredential'
 import { planLayerSync } from '@ramu/shared/sharedFields'
 import { inputSummary } from '@ramu/shared/chat/inputSummary'
 import type { BranchNamingIntent, BranchChoice } from '@ramu/shared/workspaceDefaults'
-import { normalizeHelperGroups } from './threadActivity'
 import { rememberExplorerNavigation, type ExplorerNavigation } from './explorerNavigation'
 import { isCompacting } from '@ramu/shared/chat/compaction'
 import { newChatHost } from './newChatHost'
@@ -153,7 +153,7 @@ interface Store extends State {
   pair(name: string, address: string, code: string, allowHttp: boolean): Promise<string>
   /**
    * Asks a nearby host to pair this phone; `onCode` shows the number the host must match. Rejects with
-   * `PairRequestUnsupported` when the host or this build cannot, so the person types a code instead.
+   * `SecureRandomUnavailable` when this phone cannot ask, so the person types a code instead.
    */
   /** Asks a host listed in this person's Ramu account to pair, with no code to type; `onCode` shows the number. */
   pairThroughAccount(
@@ -349,7 +349,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ...defaults,
       ...saved,
       ready: false,
-      chats: uniqueById(saved.chats).map((chat) => ({ ...chat, items: normalizeHelperGroups(chat.items) })),
+      chats: uniqueById(saved.chats),
       computers: uniqueById(saved.computers).map((c) => ({ ...c, status: restoredStatus(c.status) })),
       outbox: uniqueById(restoreOutbox(saved.outbox, sendJournal)),
       // The drafts file is newer than the profile's copy whenever both exist.
@@ -518,16 +518,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         connection.client.close()
         status(id, 'revoked', error.message)
       }
-      // A raw "Unknown method" names an internal call; say what fixes it instead.
-      if (isOlderHostRefusal(error))
-        throw new HostError(
-          translate(ref.current.language, '{0} runs an older Ramu. Update Ramu there to use this.', {
-            0:
-              ref.current.computers.find((computer) => computer.id === id)?.name ??
-              translate(ref.current.language, 'This host'),
-          }),
-          error instanceof HostError ? error.status : 0,
-        )
       throw error
     }
   }
@@ -1363,8 +1353,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       const info = await readConnectionStatus(connection.client, connection.controller.signal)
       if (!current()) return
-      if (info.protocol !== 1 || !info.capabilities?.includes('mobile-companion'))
-        throw new HostError('Update Ramu on this host: its protocol is incompatible.', 426)
+      if (info.protocol !== 1) throw new HostError('Update Ramu on this host: its protocol is incompatible.', 426)
       change((s) => ({
         ...s,
         computers: s.computers.map((c) =>
@@ -1379,26 +1368,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             : c,
         ),
       }))
-      // The host shows this phone with its own icon and OS; an older host without the method just refuses it.
+      // The host shows this phone with its own icon and OS.
       void connection.client.invoke('device.describe', thisDeviceOs()).catch(() => {})
-      // Rotate the device token about monthly on hosts that support it; a failure only retries next connect.
-      if (info.capabilities?.includes('renewal'))
-        void readRenewedAt(computer.id)
-          .then((renewedAt) =>
-            renewalDue(Date.now(), renewedAt)
-              ? renewCredential(
-                  {
-                    address: connection.client.address,
-                    token: () => connection.client.currentToken(),
-                    useToken: (next) => connection.client.useToken(next),
-                  },
-                  connection.client.fetch,
-                  (next) => saveToken(computer.id, next),
-                  (at) => saveRenewedAt(computer.id, at),
-                )
-              : false,
-          )
-          .catch(() => {})
+      // Rotate the device token about monthly; a failure only retries next connect.
+      void readRenewedAt(computer.id)
+        .then((renewedAt) =>
+          renewalDue(Date.now(), renewedAt)
+            ? renewCredential(
+                {
+                  address: connection.client.address,
+                  token: () => connection.client.currentToken(),
+                  useToken: (next) => connection.client.useToken(next),
+                },
+                connection.client.fetch,
+                (next) => saveToken(computer.id, next),
+                (at) => saveRenewedAt(computer.id, at),
+              )
+            : false,
+        )
+        .catch(() => {})
       await connection.client.stream(
         (...args) => {
           if (current()) receive(computer.id, ...args)
@@ -1669,7 +1657,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     pairThroughAccount: async (name, listedId, onCode, signal) => {
       const random = await secureRandom()
-      if (!random) throw new PairRequestUnsupported()
+      if (!random) throw new SecureRandomUnavailable()
       const result = await requestPairing({
         post: (path, body, aborted) => relayToHost(listedId, path, body, aborted),
         name: Device.deviceName || Device.modelName || 'Ramu phone',
@@ -1695,7 +1683,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     pairByRequest: async (name, address, allowHttp, onCode, signal) => {
       const url = normalizeAddress(address, allowHttp)
       const random = await secureRandom()
-      if (!random) throw new PairRequestUnsupported()
+      if (!random) throw new SecureRandomUnavailable()
       const result = await requestPairing({
         post: async (path, body, aborted) => {
           const response = await expoFetch(`${url}${path}`, {
@@ -1736,14 +1724,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               (current.hostId && current.hostId !== host.hostId)
             )
               return
-            // A device proof can upgrade older pairings that saved their device id but not the host id.
+            // The host proved it is the same one: remember the addresses it is reachable at now.
             change((s) => ({
               ...s,
               computers: s.computers.map((c) =>
                 c.id === current.id
                   ? {
                       ...c,
-                      hostId: host.hostId,
                       routes: rememberRoutes(
                         c.address,
                         host.routes.map((route) => route.url),
@@ -1768,7 +1755,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           )
           if (existing) {
             const info = await existing.client.invoke('background.status')
-            return info.protocol === 1 && !!info.capabilities?.includes('mobile-companion')
+            return info.protocol === 1
           }
           return checkHostConnection(address, token, expoFetch as typeof globalThis.fetch, probeSignal)
         },

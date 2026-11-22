@@ -213,7 +213,7 @@ import { NO_PROJECT, type AgentSessionInfo, type ScheduleInput, type SetupOmissi
 const config = loadConfig()
 const { userData, socketPath } = config
 mkdirSync(userData, { recursive: true })
-// Network clients present either their own device token (see `ramu pair`) or the older shared token.
+// Network clients present their own device token (see `ramu pair`).
 const devices = new DeviceStore(config.devicesPath, config.deviceLifetimeMs)
 const hostId = readDiscoveryHostId(join(userData, 'discovery.json'))
 const pairingRequests: PairingRequests = new PairingRequests({

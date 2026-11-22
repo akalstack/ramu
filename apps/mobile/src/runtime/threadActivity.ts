@@ -2,26 +2,6 @@ import { helperActive } from '@ramu/shared/chat/helperPresentation'
 import { threadActivity } from '@ramu/shared/chat/threadActivity'
 import { isLimitHold } from '@ramu/shared/chat/goalHold'
 import type { Chat, TranscriptItem } from './types'
-/** Old phone caches stored a reduced lifetime group; restore identity without inventing capabilities. */
-export function normalizeHelperGroups(items: TranscriptItem[]): TranscriptItem[] {
-  return items.flatMap((item): TranscriptItem[] => {
-    if (item.kind !== 'agents') return [item]
-    const agents = item.agents.map((task) => ({
-      ...task,
-      agentId: task.agentId ?? task.id,
-      taskType: task.taskType ?? (task.type === 'advisor' ? 'advisor' : undefined),
-    }))
-    const advisors = agents.filter((task) => item.advisor || task.taskType === 'advisor')
-    const helpers = agents.filter((task) => !advisors.includes(task))
-    const earlier = item.earlier ?? item.id === 'helpers'
-    return [
-      ...(helpers.length ? [{ ...item, agents: helpers, advisor: false, earlier }] : []),
-      ...(advisors.length
-        ? [{ ...item, id: helpers.length ? `${item.id}:advisors` : item.id, agents: advisors, advisor: true, earlier }]
-        : []),
-    ]
-  })
-}
 /**
  * Commands the provider itself moved to the background, shaped like a helper so the helper sheet can show their output
  * and stop them. They are processes, not agents, so they are listed with the background terminals.

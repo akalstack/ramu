@@ -43,7 +43,7 @@ else require('readline').createInterface({input:process.stdin}).on('line',line=>
       codex: { binary: bin },
       opencode: { binary: bin },
       cursor: { binary: bin },
-      antigravity: { binary: bin, harness: join(dir, 'helper') },
+      antigravity: { binary: bin },
     },
   }
   store = new Map()
@@ -113,7 +113,6 @@ it('custom executable paths override environment and are shared by runners', asy
   create()
   expect(providerBinary('codex')).toBe(bin)
   expect(findExecutable(dir)).toBe(null)
-  expect(providerEnvironment('antigravity').ANTIGRAVITY_HARNESS_PATH).toBe(join(dir, 'helper'))
   const statuses = await service.status()
   expect(statuses.every((s) => s.installed && s.version === '1.2.3' && s.binary === bin)).toBe(true)
   const wire = readFileSync(join(dir, 'calls'), 'utf8')
@@ -121,8 +120,6 @@ it('custom executable paths override environment and are shared by runners', asy
     .split('\n')
     .map((line) => JSON.parse(line))
   expect(wire.filter((c) => c.args.includes('--version'))).toHaveLength(4)
-  // Every provider shares the fake binary and probes in parallel; only Antigravity's calls carry its helper.
-  expect(wire.some((c) => c.helper === join(dir, 'helper'))).toBe(true)
   expect(statuses.find((s) => s.provider === 'codex')!.setupCommand).toContain(bin)
 })
 it('Claude uses the user CLI by default, never the SDK package runtime', () => {

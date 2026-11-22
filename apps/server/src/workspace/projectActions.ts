@@ -26,13 +26,7 @@ export class ProjectActions {
   private read(projectId: string) {
     const { config, source } = this.configuration(projectId)
     const raw = this.workspace.getAppState<unknown>(`project-action-settings:${projectId}`, null)
-    const parsed = savedActions.safeParse(
-      raw ?? {
-        version: 1,
-        local: this.workspace.getAppState<unknown>(`project-actions:${projectId}`, []),
-        hidden: [],
-      },
-    )
+    const parsed = savedActions.safeParse(raw ?? { version: 1, local: [], hidden: [] })
     if (!parsed.success)
       throw new Error('Saved project actions are invalid. Restore the host data before editing actions.')
     const state = parsed.data

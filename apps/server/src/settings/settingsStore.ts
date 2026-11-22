@@ -64,7 +64,7 @@ export class SettingsStore {
     return {
       ...raw,
       ...preferences,
-      models: models ? { ...models, defaultBarMode: models.defaultBarMode === 'effort' ? 'effort' : 'model' } : null,
+      models,
     }
   }
 

@@ -10,7 +10,7 @@ export const VIEW_ONLY_SCHEDULE_NOTICE: Record<Lang, string> = {
   id: 'Perangkat ini dapat melihat jadwal, tetapi tidak dapat mengubah atau menjalankannya. Minta pemilik host memasangkannya dengan akses penuh.',
 }
 
-/** Advisory client guard; the host still authorizes every operation. Older hosts can omit access. */
+/** Advisory client guard; the host still authorizes every operation. */
 export function scheduleWriteProblem(
   computer: { status: string; access?: 'owner' | 'viewer' } | undefined,
   language: Lang,
