@@ -8011,6 +8011,13 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Card from the agent': 'Kartu dari agent',
   'From a card': 'Dari kartu',
   Card: 'Kartu',
+  'Pull request links': 'Tautan pull request',
+  'Applies to this device only. In Ramu shows a pull request this host lists in the Pull requests page; any other opens as links do. Right-click a link for the other way.':
+    'Hanya berlaku di perangkat ini. Di Ramu menampilkan pull request yang didaftar host ini di halaman Pull request; yang lain dibuka seperti tautan biasa. Klik kanan tautan untuk cara yang satunya.',
+  'Open pull request links': 'Buka tautan pull request',
+  'In Ramu': 'Di Ramu',
+  'On the service (GitHub, GitLab…)': 'Di layanannya (GitHub, GitLab…)',
+  'Open pull request in Ramu': 'Buka pull request di Ramu',
   'Suggest next message': 'Sarankan pesan berikutnya',
   'After a turn, show a likely next message in the empty message box. Tab uses it. Each one is a small extra request on your plan, made only for a thread you have open.':
     'Setelah satu giliran, tampilkan pesan berikutnya yang mungkin di kotak pesan yang kosong. Tab memakainya. Tiap saran adalah satu permintaan kecil tambahan pada paketmu, dan hanya dibuat untuk thread yang sedang kamu buka.',

@@ -8,6 +8,33 @@ export function linkTargetFrom(value: string | null | undefined): LinkTarget {
   return value === 'integrated' ? 'integrated' : 'system'
 }
 
+/** Device-state key for where a clicked pull request link opens: Ramu's own pull request view, or the service. */
+export const PULL_REQUEST_LINKS_KEY = 'ramu.pullRequestLinks'
+export type PullRequestLinkTarget = 'app' | 'service'
+
+/** Ramu's view unless the person chose the service; a link Ramu cannot show still opens as any other link does. */
+export function pullRequestLinksFrom(value: string | null | undefined): PullRequestLinkTarget {
+  return value === 'service' ? 'service' : 'app'
+}
+
+const PULL_REQUEST_PATH = /^(.*?\/(?:pull|pull-requests|merge_requests|pullrequest)\/\d+)(?:\/|$)/i
+
+/**
+ * The pull request a web address points at, as `host/path/to/number` in lower case, so its Files or Checks page and
+ * the service's own spelling compare equal. Null for anything that is not a pull or merge request on GitHub, GitLab,
+ * Bitbucket or Azure DevOps.
+ */
+export function pullRequestLinkKey(url: string): string | null {
+  try {
+    const parsed = new URL(url)
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null
+    const path = PULL_REQUEST_PATH.exec(parsed.pathname)?.[1]
+    return path ? `${parsed.hostname}${path}`.toLowerCase() : null
+  } catch {
+    return null
+  }
+}
+
 /** Only plain web links ever open in either browser; other schemes never leave the app this way. */
 export function isWebLink(url: string): boolean {
   return /^https?:\/\//i.test(url)

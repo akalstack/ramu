@@ -1,3 +1,4 @@
+import { pullRequestLinkKey } from '@ramu/shared/browserLinks'
 import { useEffect, useRef, useState } from 'react'
 import { keptPullRequestRead } from './keptPullRequests'
 import { useQueries } from '@tanstack/react-query'
@@ -65,6 +66,17 @@ type RepoTarget = { host: string; repoId: string }
 /** A repository asked for before the page mounted, such as from a thread's Source Control. */
 let pendingRepo: RepoTarget | null = null
 
+const SELECT_EVENT = 'ramu:pull-requests-select'
+/** A pull request asked for by its address before the page mounted, such as from a link in a thread. */
+let pendingPull: { url: string; closed: boolean } | null = null
+
+/** Opens the Pull requests page on one pull request the page lists, found by its address. */
+export function showPullRequest(ws: ReturnType<typeof useWorkspace>, url: string, closed: boolean) {
+  pendingPull = { url, closed }
+  window.dispatchEvent(new CustomEvent(SELECT_EVENT, { detail: pendingPull }))
+  ws.setSidebar('pulls')
+}
+
 /** Opens the Pull requests page, narrowed to one repository when given. */
 export function showPullRequests(ws: ReturnType<typeof useWorkspace>, repo: RepoTarget | null = null) {
   pendingRepo = repo
@@ -123,6 +135,7 @@ export function PullRequestsPage() {
   const [pending, setPending] = useState<RepoTarget | null>(() => pendingRepo)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<MergedPullRequestRow | null>(null)
+  const [wanted, setWanted] = useState<{ url: string; closed: boolean } | null>(() => pendingPull)
   const [sort, setSort] = useState<PullRequestSort>(savedSort)
   const [refreshing, setRefreshing] = useState(false)
   const open = useHostsPullRequests(false)
@@ -143,7 +156,16 @@ export function PullRequestsPage() {
       pendingRepo = null
     }
     window.addEventListener(FILTER_EVENT, onFilter)
-    return () => window.removeEventListener(FILTER_EVENT, onFilter)
+    pendingPull = null
+    const onSelect = (event: Event) => {
+      setWanted((event as CustomEvent<{ url: string; closed: boolean }>).detail)
+      pendingPull = null
+    }
+    window.addEventListener(SELECT_EVENT, onSelect)
+    return () => {
+      window.removeEventListener(FILTER_EVENT, onFilter)
+      window.removeEventListener(SELECT_EVENT, onSelect)
+    }
   }, [])
 
   const refetchAll = () => Promise.all(lists.map(({ query }) => query.refetch()))
@@ -162,6 +184,18 @@ export function PullRequestsPage() {
   )
   const preferred = [activeHost, ownHostId()]
   const allRows = mergedPullRequestRows(hostLists, preferred)
+
+  // A pull request opened from a link shows once the list that holds it has arrived.
+  const wantedKey = wanted ? pullRequestLinkKey(wanted.url) : null
+  const wantedRow = wantedKey ? allRows.find((row) => pullRequestLinkKey(row.pr.url) === wantedKey) : undefined
+  useEffect(() => {
+    if (!wanted) return
+    if (wanted.closed && filter !== 'closed') return setFilter('closed')
+    if (!wantedRow) return
+    setRepoKey(ALL)
+    setSelected(wantedRow)
+    setWanted(null)
+  }, [wanted, wantedRow, filter])
 
   const pendingKey = pending
     ? repositories.find((repo) => repo.host === pending.host && repo.repoId === pending.repoId)

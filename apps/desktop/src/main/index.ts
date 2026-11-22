@@ -5,7 +5,14 @@ import { HostNavigation } from './hostNavigation'
 import type { HostDestination } from '@ramu/shared/hostOverview'
 import { readHostOverview, HostOverviewQueue } from './hostOverview'
 import { isHostDestination } from '@ramu/shared/hostOverview'
-import { LINK_TARGET_KEY, isWebLink, linkTargetFrom } from '@ramu/shared/browserLinks'
+import {
+  LINK_TARGET_KEY,
+  PULL_REQUEST_LINKS_KEY,
+  isWebLink,
+  linkTargetFrom,
+  pullRequestLinkKey,
+  pullRequestLinksFrom,
+} from '@ramu/shared/browserLinks'
 import { BrowserRuntime } from './browserRuntime'
 import { BrowserDownloads } from './browserDownloads'
 import { browserImportSources } from './browserImportSources'
@@ -482,6 +489,17 @@ async function main() {
       const items = editMenuItems(params)
       if (isWebLink(params.linkURL))
         items.unshift(
+          // Whichever the click does, the other way to open a pull request is one right-click away.
+          ...(pullRequestLinkKey(params.linkURL)
+            ? [
+                {
+                  label: t('Open pull request in Ramu'),
+                  click: () => {
+                    if (!win.isDestroyed()) win.webContents.send('pull-request:open-link', { url: params.linkURL })
+                  },
+                },
+              ]
+            : []),
           {
             label: t('Open in system browser'),
             click: () => {
@@ -534,6 +552,16 @@ async function main() {
         }
       }
       if (!isWebLink(url)) return { action: 'deny' }
+      // A pull request opens in Ramu's own view when the person keeps that choice; the window falls back to an
+      // ordinary link when Ramu does not list it.
+      if (
+        pullRequestLinkKey(url) &&
+        pullRequestLinksFrom(deviceState.snapshot()[PULL_REQUEST_LINKS_KEY]) === 'app' &&
+        !win.isDestroyed()
+      ) {
+        win.webContents.send('pull-request:open-link', { url })
+        return { action: 'deny' }
+      }
       // The person chooses, per device, whether clicked links use their own browser or the integrated one.
       if (linkTargetFrom(deviceState.snapshot()[LINK_TARGET_KEY]) === 'integrated' && !win.isDestroyed())
         win.webContents.send('browser:open-link', { url })

@@ -65,6 +65,7 @@ export const WINDOW_PUSH_CHANNELS = [
   'notify:inapp',
   'notify:open',
   'browser:open-link',
+  'pull-request:open-link',
   'browser:changed',
   'browser:present',
   'computers:changed',

@@ -2057,6 +2057,8 @@ export type PushEvents = {
   'notify:open': { sessionId: string; taskId: string }
   /** A clicked link the person chose to open in the integrated browser; the window opens it in the active thread. */
   'browser:open-link': { url: string }
+  /** A clicked pull request link to show in Ramu's own view when it lists that pull request. */
+  'pull-request:open-link': { url: string }
   /** Native browser state changed on this desktop; clients refresh only their thread's tabs. */
   'browser:changed': Record<string, never>
   'hostBrowser:changed': Record<string, never>

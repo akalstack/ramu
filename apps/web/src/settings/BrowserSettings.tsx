@@ -1,6 +1,12 @@
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { useCallback, useContext, useEffect, useRef, useState } from 'react'
-import { LINK_TARGET_KEY, linkTargetFrom } from '@ramu/shared/browserLinks'
+import {
+  LINK_TARGET_KEY,
+  PULL_REQUEST_LINKS_KEY,
+  linkTargetFrom,
+  pullRequestLinksFrom,
+  type PullRequestLinkTarget,
+} from '@ramu/shared/browserLinks'
 import { useStagedValue } from './stagedChanges'
 import type { AgentBrowserPreferences, LinkTarget } from '@ramu/shared/browser'
 import { SettingsGroupTitle, SettingsLabel, SettingsRow } from '@/components/settings-row'
@@ -29,6 +35,21 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
     () =>
       deviceStorage.subscribe(
         (key) => key === LINK_TARGET_KEY && setTarget(linkTargetFrom(deviceStorage.getItem(LINK_TARGET_KEY))),
+      ),
+    [],
+  )
+  const [pulls, setPulls] = useState<PullRequestLinkTarget>(() =>
+    pullRequestLinksFrom(deviceStorage.getItem(PULL_REQUEST_LINKS_KEY)),
+  )
+  const [stagedPulls, stagePulls] = useStagedValue('pullRequestLinks', pulls, (value) =>
+    deviceStorage.setItem(PULL_REQUEST_LINKS_KEY, value),
+  )
+  useEffect(
+    () =>
+      deviceStorage.subscribe(
+        (key) =>
+          key === PULL_REQUEST_LINKS_KEY &&
+          setPulls(pullRequestLinksFrom(deviceStorage.getItem(PULL_REQUEST_LINKS_KEY))),
       ),
     [],
   )
@@ -305,6 +326,23 @@ export function BrowserSettings({ draft, onChange, busy }: DraftProps) {
             { value: 'integrated', label: t('Ramu browser (in the thread)') },
           ]}
           onChange={(value) => stageTarget(linkTargetFrom(value))}
+        />
+      </SettingsRow>
+      <SettingsRow>
+        <SettingsLabel
+          title={t('Pull request links')}
+          help={t(
+            'Applies to this device only. In Ramu shows a pull request this host lists in the Pull requests page; any other opens as links do. Right-click a link for the other way.',
+          )}
+        />
+        <Dropdown
+          label={t('Open pull request links')}
+          value={stagedPulls}
+          options={[
+            { value: 'app', label: t('In Ramu') },
+            { value: 'service', label: t('On the service (GitHub, GitLab…)') },
+          ]}
+          onChange={(value) => stagePulls(pullRequestLinksFrom(value))}
         />
       </SettingsRow>
       <SettingsRow>

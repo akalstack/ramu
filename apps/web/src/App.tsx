@@ -50,7 +50,7 @@ import { ConnectPhoneButton } from './sidebar/ConnectPhoneButton'
 import { PairDialog } from './settings/RemoteAccess'
 import { Palette } from './palette/Palette'
 import type { PaletteMode } from './palette/sources'
-import { copyText, invoke, ramu } from './ipc'
+import { copyText, invoke, invokerFor, ramu } from './ipc'
 import { useHeldShells, useUnseenTerminalOutput } from './workspace/terminalActivity'
 import { Menu, useContextMenu } from './Menu'
 import { RepositoryPicker } from './git/RepositoryPicker'
@@ -79,7 +79,9 @@ import { SchedulesPage } from './Automation'
 import { PagesPage } from './pages/PagesPage'
 import { PageNotices } from './pages/PageNotices'
 import { InboxPage } from './inbox/InboxPage'
-import { PullRequestsPage, usePullRequestsWaiting } from './git/PullRequestsPage'
+import { PullRequestsPage, showPullRequest, usePullRequestsWaiting } from './git/PullRequestsPage'
+import { LINK_TARGET_KEY, linkTargetFrom, pullRequestLinkKey } from '@ramu/shared/browserLinks'
+import { deviceStorage } from './deviceStorage'
 import { useInboxModel } from './inbox/useBrief'
 import { LiveView } from './liveView/LiveView'
 import { openComputer } from './chat/openComputer'
@@ -390,6 +392,31 @@ function Shell() {
         presentBrowser(ws, activeHost, { ...tab, hostId: activeHost })
       }),
     [hostEvents, activeHost, ws],
+  )
+
+  // A clicked pull request link opens Ramu's own view when this host lists that pull request; any other one opens as
+  // an ordinary link does on this device.
+  useEffect(
+    () =>
+      ramu.on('pull-request:open-link', ({ url }) => {
+        const key = pullRequestLinkKey(url)
+        const listed = async (closed: boolean) =>
+          (await invokerFor(activeHost)('forge.allPullRequests', closed, false)).some((repo) =>
+            repo.pullRequests.some((pr) => pullRequestLinkKey(pr.url) === key),
+          )
+        const asLink = () => {
+          const taskId = ws.ui.activeTaskId
+          if (linkTargetFrom(deviceStorage.getItem(LINK_TARGET_KEY)) === 'integrated' && taskId)
+            ws.openView(taskId, { kind: 'browser', url })
+          else void ramu.invoke('app.openExternal', url).catch(() => {})
+        }
+        void (async () => {
+          if (await listed(false)) return showPullRequest(ws, url, false)
+          if (await listed(true)) return showPullRequest(ws, url, true)
+          asLink()
+        })().catch(asLink)
+      }),
+    [ws, activeHost],
   )
 
   // A clicked link the person chose to open in the integrated browser opens as a tab in the thread on screen; with no
