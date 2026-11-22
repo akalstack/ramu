@@ -1001,7 +1001,7 @@ kbd {
 :root {
   --composer-tray: color-mix(in srgb, var(--raised) 55%, var(--canvas));
 }
-/* Context choices wrap within the tray while settings stays reachable at the right edge. */
+/* Context choices start at the left and wrap within the tray while settings stays reachable at the right edge. */
 .start-context > button {
   flex-shrink: 1;
   min-width: 0;
@@ -1012,9 +1012,14 @@ kbd {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Same size as the composer's own controls below it. */
+/* Same size as the composer's own controls below it, centered on the first row of chips. */
 .composer-tray .tray-settings {
   @apply text-muted-foreground;
+  margin-block: 2px;
+}
+/* Everything in the composer and its tray is round or a pill, so an icon button there is a circle like the ones in the bar. */
+.composer-tray button.icon {
+  border-radius: 50%;
 }
 
 /* Floating surfaces: translucent glass, so what is behind shows through blurred (menus, popovers, pickers, palette, dialogs, toasts, suggestions). */

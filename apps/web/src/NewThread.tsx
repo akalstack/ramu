@@ -929,7 +929,7 @@ export function NewThread({
         )}
         <ComposerStack>
           <ComposerTray className="start-chips">
-            <div className="start-context flex min-w-0 flex-1 flex-wrap items-center justify-end gap-0.5">
+            <div className="start-context flex min-w-0 flex-1 flex-wrap items-center gap-0.5">
               {computerItems.length > 1 && (
                 <Menu
                   label={t('Host')}
