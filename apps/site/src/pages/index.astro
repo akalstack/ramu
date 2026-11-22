@@ -508,13 +508,14 @@ const WORK = [
         line.replaceChildren()
         if (!suggestion) return
         if (suggestion.kind !== 'download') {
-          // Nothing here installs on this device, so lead with the full list instead of a button that cannot help.
+          // Nothing here installs on this device, so drop the button that cannot help. A phone gets the store badges
+          // below; the computer downloads stay folded under All downloads instead of filling the screen.
           actions.hidden = true
-          all.open = true
+          all.open = suggestion.kind === 'windows'
           line.textContent =
             suggestion.kind === 'windows'
               ? 'Ramu for Windows is coming. For a Mac or Linux computer, choose a download below.'
-              : 'Ramu runs on your computer. Get the phone companion below, and Ramu for your Mac or Linux computer.'
+              : 'Ramu runs on your computer. Get the phone app from your store below; the computer downloads are under All downloads.'
           return
         }
         const download = DOWNLOADS.find((entry) => entry.id === suggestion.id)!
