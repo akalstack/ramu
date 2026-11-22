@@ -9,6 +9,13 @@ import { RequestReplay } from './agent/requestReplay'
 import { customAgentFor, type CustomAgent } from '@ramu/shared/customAgents'
 import type { ActivityRow } from '@ramu/shared/usageAcrossHosts'
 import { PermissionApprovals } from './agent/permissionApprovals'
+import {
+  applyInlineUi,
+  inlineUiActionMessage,
+  latestSurfaces,
+  type InlineUiActionEvent,
+  type InlineUiResult,
+} from '@ramu/shared/chat/inlineUi'
 import { providerBinary } from './providers/providerBinaries'
 import { DEFAULT_RUNNERS, sameRunnerForAll } from './providers/runners'
 import type { AgentRunnerFactory, ProviderRunners } from './agent/agentRunner'
@@ -403,6 +410,27 @@ export class AgentService {
   /** A drafted theme appears in the thread as a card; the person alone previews and keeps it. */
   themeProposed(sessionId: string, theme: import('@ramu/shared/theme').RamuTheme): void {
     this.record(sessionId, { kind: 'theme', theme })
+  }
+
+  /** Applies an agent's A2UI messages to the thread's inline cards, recording each changed card whole. */
+  showInlineUi(sessionId: string, messages: unknown): InlineUiResult {
+    const result = applyInlineUi(latestSurfaces(this.parts.store.eventsOfKind(sessionId, 'inline-ui')), messages)
+    if (result.ok) for (const surface of result.surfaces) this.record(sessionId, { kind: 'inline-ui', surface })
+    return result
+  }
+
+  /**
+   * A button the person pressed on an inline card. The action must name a live card and one of its buttons, so a device
+   * can only send what the agent offered; it reaches the agent as the person's message, like any other turn.
+   */
+  async inlineUiAction(sessionId: string, action: InlineUiActionEvent): Promise<void> {
+    const surface = latestSurfaces(this.parts.store.eventsOfKind(sessionId, 'inline-ui')).get(action.surfaceId)
+    if (!surface || surface.deleted) throw new Error('This card is no longer shown.')
+    const button = surface.components.find((c) => c.id === action.sourceComponentId)
+    if (button?.component !== 'Button' || !('event' in button.action) || button.action.event.name !== action.name)
+      throw new Error('This card no longer offers that action.')
+    if (action.dataModel && !surface.sendDataModel) throw new Error('This card does not send its values.')
+    await this.submit(sessionId, inlineUiActionMessage(action), 'steer', [], undefined, true)
   }
 
   /** An ability call the thread's agent or the person made, shown as its own row with the result. */

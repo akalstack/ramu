@@ -48,7 +48,7 @@ export const interactiveInput = z.object({
     .enum(ARTIFACT_KINDS)
     .optional()
     .describe(
-      'app (default): interactive HTML in html or files. doc: writing to keep (a report, plan, spec, notes) as Markdown in source. diagram: a flowchart, sequence, state or concept diagram as Mermaid or SVG in source, with format. slides: a deck as slides and theme, with its images in files. dashboard: figures and charts over tables, in datasets, figures and charts. design: screens or mockups as fixed-size frames of HTML and CSS, in frames. motion: a short animated explainer as timed scenes, in scenes.',
+      'app (default): interactive HTML in html or files. doc: writing to keep (a report, plan, spec, notes) as Markdown in source. diagram: a flowchart, sequence, state or concept diagram as Mermaid or SVG in source, with format. slides: a deck as slides and theme, with its images in files. dashboard: figures and charts over tables, in datasets, figures and charts. design: screens or mockups as fixed-size frames of HTML and CSS, in frames. motion: a short animated explainer as timed scenes, in scenes. card: a small native tool to keep, such as a tracker, checklist or log, as A2UI messages in messages with its record collections in records; drawn with the app’s own controls, no code.',
     ),
   source: z
     .string()
@@ -58,6 +58,19 @@ export const interactiveInput = z.object({
       'The Doc or Diagram itself. Doc: Markdown with GFM tables, task lists, footnotes and ```mermaid blocks; raw HTML shows as text. Diagram: Mermaid text, or one <svg> element.',
     ),
   format: z.enum(['mermaid', 'svg']).optional().describe('How a diagram is written; required with kind diagram.'),
+  messages: z
+    .array(z.record(z.string(), z.unknown()))
+    .max(20)
+    .optional()
+    .describe(
+      'The card (kind card): A2UI v1.0 messages building one surface, as show_ui takes. Buttons save with {"functionCall":{"@call":"addRecord","args":{"collection":"expenses","values":{"amount":{"@path":"/form/amount"}}}}} and remove with deleteRecord {collection, id:{"@path":"id"}}; each collection is read at /records/<collection> (newest first, each record with id, createdAt and its fields); sum {values, field} and count {values} total them. Event actions are for threads only.',
+    ),
+  records: z
+    .record(z.string(), z.object({ fields: z.record(z.string(), z.string()) }))
+    .optional()
+    .describe(
+      'The record collections a card keeps (kind card), such as {"expenses":{"fields":{"amount":"number","note":"string?","day":"date"}}}. Field types: string, number, boolean, date, json, with ? for optional.',
+    ),
   slides: z
     .array(slideSchema)
     .max(SLIDES_MAX)
@@ -303,7 +316,8 @@ export class InteractiveStore {
       input.slides !== undefined ||
       input.datasets !== undefined ||
       input.frames !== undefined ||
-      input.scenes !== undefined
+      input.scenes !== undefined ||
+      input.messages !== undefined
     )
       throw new Error(
         'Set kind to doc, diagram, slides or dashboard to publish source, slides or datasets; apps use html or files.',
@@ -354,9 +368,11 @@ export class InteractiveStore {
               ? 'A design is written in frames, each with its own html and css; html and files are for apps.'
               : input.kind === 'motion'
                 ? 'A motion is written in scenes, each with its seconds, html and css; html is for apps.'
-                : input.kind === 'doc'
-                  ? 'A doc is written in source, with its images in files; html is for apps.'
-                  : `A ${input.kind} is written in source; html and files are for apps.`,
+                : input.kind === 'card'
+                  ? 'A card is written in messages, with its record collections in records; html and files are for apps.'
+                  : input.kind === 'doc'
+                    ? 'A doc is written in source, with its images in files; html is for apps.'
+                    : `A ${input.kind} is written in source; html and files are for apps.`,
       )
     const source = parseArtifactSource({ ...input, kind: input.kind ?? 'app' })
     const offline = { ...input, network: OFFLINE_NETWORK }

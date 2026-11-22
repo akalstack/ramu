@@ -4,6 +4,7 @@ import {
   FileText,
   Frame,
   LayoutDashboard,
+  LayoutList,
   Presentation,
   Workflow,
   type LucideIcon,
@@ -20,6 +21,7 @@ const KIND_ICONS: Record<ArtifactKind, LucideIcon> = {
   dashboard: LayoutDashboard,
   design: Frame,
   motion: Clapperboard,
+  card: LayoutList,
 }
 const KIND_LABELS: Record<ArtifactKind, string> = {
   app: 'App',
@@ -29,6 +31,7 @@ const KIND_LABELS: Record<ArtifactKind, string> = {
   dashboard: 'Dashboard',
   design: 'Design',
   motion: 'Motion',
+  card: 'Card',
 }
 
 /** English copy keys for a kind's name and for sharing each of its exports, translated with say(). */

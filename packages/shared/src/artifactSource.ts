@@ -533,6 +533,20 @@ const motionSource = z
 export type MotionSource = z.infer<typeof motionSource>
 export type DashboardAggregate = (typeof DASHBOARD_AGGREGATES)[number]
 
+const cardSource = z.object({
+  kind: z.literal('card'),
+  messages: z
+    .array(z.record(z.string(), z.unknown()), { error: 'Write the card as A2UI v1.0 messages in messages.' })
+    .min(1, 'Write the card as A2UI v1.0 messages in messages.')
+    .max(20, 'A card is at most 20 messages. Put its components in one createSurface.'),
+  records: z
+    .record(z.string(), z.object({ fields: z.record(z.string(), z.string()) }), {
+      error: 'records maps each collection name to its fields, such as {"expenses":{"fields":{"amount":"number"}}}.',
+    })
+    .optional(),
+})
+export type CardSource = z.infer<typeof cardSource>
+
 /** The source of an artifact that is not an App, checked per kind before anything is drawn. */
 const artifactSourceSchema = z.discriminatedUnion('kind', [
   docSource,
@@ -541,6 +555,7 @@ const artifactSourceSchema = z.discriminatedUnion('kind', [
   dashboardSource,
   designSource,
   motionSource,
+  cardSource,
 ])
 export type ArtifactSource = z.infer<typeof artifactSourceSchema>
 
@@ -559,6 +574,8 @@ export function parseArtifactSource(input: {
   frames?: unknown
   scenes?: unknown
   tokens?: unknown
+  messages?: unknown
+  records?: unknown
 }): ArtifactSource {
   const result = artifactSourceSchema.safeParse(input)
   if (result.success) return result.data

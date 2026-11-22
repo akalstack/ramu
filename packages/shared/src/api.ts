@@ -1968,6 +1968,8 @@ export interface RamuMethods extends ArtifactMethods {
   'agent.elicitationDraft'(sessionId: string, requestId: string, drafts: Record<string, string>): void
   'agent.questionDraft'(sessionId: string, requestId: string, drafts: Record<string, string>): void
   'agent.dismissQuestion'(sessionId: string, requestId: string): void
+  /** A button pressed on an inline card; it reaches the agent as the person's message. */
+  'agent.inlineUiAction'(sessionId: string, action: import('./chat/inlineUi').InlineUiActionEvent): void
   'agent.answerSecret'(sessionId: string, requestId: string, answer: import('./types').SecretAnswer): void
 }
 

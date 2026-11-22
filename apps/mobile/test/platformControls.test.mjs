@@ -4441,6 +4441,7 @@ function chatView() {
     '../i18n': { useT: () => ({}), fill: (text) => text },
     './ui': { ...components, tap() {}, T: 'T', Card: 'Card' },
     './Motion': { Collapse: 'Collapse', Disclosure: 'Disclosure', Breathe: 'Breathe', Arrive: 'Arrive' },
+    './ChoiceOption': { Option: function Option() {} },
   })
   const invoke = (node) => {
     states = componentStates.get(node.type) ?? []

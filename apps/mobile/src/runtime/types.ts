@@ -77,6 +77,8 @@ export type TranscriptItem = (
   | { kind: 'ability'; id: string; call: import('@ramu/shared/providers/abilities').AbilityCall }
   /** A theme the agent drafted with `propose_theme`; the person previews it before anything changes. */
   | { kind: 'theme'; id: string; theme: import('@ramu/shared/theme').RamuTheme }
+  /** An agent's inline card at its newest version, drawn with the app's own controls. */
+  | { kind: 'inline-ui'; id: string; surface: import('@ramu/shared/chat/inlineUi').InlineSurface }
   /** Threads this thread's agent started; each row opens one. */
   | { kind: 'threads'; id: string; threads: import('@ramu/shared/types').StartedThread[] }
   | { kind: 'pull-request-writes'; id: string; cardId: string }

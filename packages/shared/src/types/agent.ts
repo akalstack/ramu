@@ -398,6 +398,8 @@ type AgentEventBody =
   | { kind: 'interactive'; reference: import('../interactive').InteractiveReference }
   /** A theme the agent drafted. It is only shown: the person previews, keeps or discards it on their own device. */
   | { kind: 'theme'; theme: import('../theme').RamuTheme }
+  /** An inline card's whole state after an agent's `show_ui` call; the newest one per surface is drawn. */
+  | { kind: 'inline-ui'; surface: import('../chat/inlineUi').InlineSurface }
   | { kind: 'goal'; goal: ChatGoal | null }
   | { kind: 'schedule'; schedule: Schedule }
   /** Threads this thread's agent started; each opens on its own. */

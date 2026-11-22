@@ -16,6 +16,7 @@ import {
   parseTaskStop,
 } from '@ramu/shared/chat/agentTasks'
 import { requestOutcomes, parseAnswerMessage, questionState } from '@ramu/shared/chat/questions'
+import { latestSurfaces, parseInlineUiActionMessage } from '@ramu/shared/chat/inlineUi'
 import { goalChanges, goalFactLines } from '@ramu/shared/chat/goalHistory'
 import { providerWaitState, type ProviderWaitState } from '@ramu/shared/chat/providerWait'
 import { foldSettingsChanges } from '@ramu/shared/chat/settingsChanges'
@@ -90,6 +91,7 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
   const goals = goalChanges(events)
   const revisions = interactiveRevisions(events)
   const updates = interactiveUpdates(events)
+  const cards = latestSurfaces(events)
   // The row of each document's newest version, so an older row can scroll to it.
   const latestItem = new Map<string, string>()
   events.forEach((e, index) => {
@@ -118,14 +120,16 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
         parseAdvice(e.text) ||
         parseTaskStop(e.text) ||
         parseTaskMessage(e.text) ||
-        parseAnswerMessage(e.text))
+        parseAnswerMessage(e.text) ||
+        parseInlineUiActionMessage(e.text))
     ) {
       // Messages Ramu writes on your behalf are status lines, not something you typed, as on the desktop.
       const report = parseTaskReport(e.text),
         advice = parseAdvice(e.text),
         stop = parseTaskStop(e.text),
         relay = parseTaskMessage(e.text),
-        answers = parseAnswerMessage(e.text)
+        answers = parseAnswerMessage(e.text),
+        pressed = parseInlineUiActionMessage(e.text)
       items.push(
         report
           ? { kind: 'report', id, name: report.name, verb: report.verb, body: report.body }
@@ -143,12 +147,14 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
               ? { kind: 'note', id, ...noteTitle('Asked the agent to stop {0}', { 0: stop.name }) }
               : relay
                 ? { kind: 'note', id, ...noteTitle('Message to {0}', { 0: relay.name }), detail: relay.body }
-                : ({
-                    kind: 'note',
-                    id,
-                    ...noteTitle("Answers to the agent's questions"),
-                    detail: answers!.body,
-                  } as TranscriptItem),
+                : pressed
+                  ? { kind: 'note', id, ...noteTitle('From a card'), detail: pressed.summary }
+                  : ({
+                      kind: 'note',
+                      id,
+                      ...noteTitle("Answers to the agent's questions"),
+                      detail: answers!.body,
+                    } as TranscriptItem),
       )
     } else if (e.kind === 'goal' && goals.has(e)) {
       const { type, goal } = goals.get(e)!
@@ -213,7 +219,11 @@ export function transcript(events: AgentEvent[], seqs?: number[], completeBlocks
             }),
       })
     } else if (e.kind === 'theme') items.push({ kind: 'theme', id, theme: e.theme })
-    else if (e.kind === 'ability') items.push({ kind: 'ability', id, call: e.call })
+    // A card shows once, at its newest version, as on the desktop.
+    else if (e.kind === 'inline-ui') {
+      if (!e.surface.deleted && cards.get(e.surface.surfaceId) === e.surface)
+        items.push({ kind: 'inline-ui', id, surface: e.surface })
+    } else if (e.kind === 'ability') items.push({ kind: 'ability', id, call: e.call })
     else if (e.kind === 'threads-started') items.push({ kind: 'threads', id, threads: e.threads })
     else if (e.kind === 'pull-request-writes') items.push({ kind: 'pull-request-writes', id, cardId: e.cardId })
     else if (e.kind === 'test-device-wait') items.push({ kind: 'test-device-wait', id, platform: e.platform })

@@ -2,6 +2,7 @@ import { readFileSync, statSync } from 'node:fs'
 import { z } from 'zod'
 import type { AgentSettings, FileContext, PermissionScope, SecretAnswer } from '@ramu/shared/types'
 import type { ModelViewerLabels } from '@ramu/shared/interactive'
+import { INLINE_UI_LIMITS, type InlineUiActionEvent } from '@ramu/shared/chat/inlineUi'
 import { MAX_ATTACHMENT_BYTES } from '../../attachments'
 import { modelViewerHtml } from '../../interactive/modelViewer'
 import { draftPrompt, interpretDraft, type CustomAgent } from '@ramu/shared/customAgents'
@@ -404,6 +405,32 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
     'agent.questionDraft': {
       args: z.tuple([id, z.string().min(1).max(300), z.record(z.string().max(10000), z.string().max(10000))]),
       run: (s: string, r: string, drafts: Record<string, string>) => agents.saveQuestionDraft(s, r, drafts),
+    },
+    // Owner devices only: a press starts the agent's turn, as sending a message does.
+    'agent.inlineUiAction': {
+      args: z.tuple([
+        id,
+        z
+          .object({
+            name: z.string().min(1).max(100),
+            surfaceId: z.string().min(1).max(100),
+            sourceComponentId: z.string().min(1).max(100),
+            timestamp: z.string().max(40),
+            context: z.record(z.string().max(100), z.unknown()),
+            userMessage: z.string().max(500).optional(),
+            dataModel: z.record(z.string().max(200), z.unknown()).optional(),
+          })
+          .strict()
+          .refine(
+            (action) => JSON.stringify(action).length <= INLINE_UI_LIMITS.modelBytes * 2,
+            'The card sent too much.',
+          ),
+      ]),
+      run: (s: string, action: InlineUiActionEvent) => {
+        assertOpen(workspace, agents.get(s).taskId)
+        workspace.setDone(agents.get(s).taskId, false)
+        return lockSession(ctx, s, () => agents.inlineUiAction(s, action))
+      },
     },
     'agent.dismissQuestion': {
       args: z.tuple([id, z.string().min(1).max(300)]),

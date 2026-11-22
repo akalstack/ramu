@@ -300,6 +300,14 @@ export class SessionStore {
     return row ? (JSON.parse(row.event) as Extract<AgentEvent, { kind: K }>) : undefined
   }
 
+  /** Every event of one kind, oldest first, read without parsing the rest of the transcript. */
+  eventsOfKind<K extends AgentEvent['kind']>(id: string, kind: K): Extract<AgentEvent, { kind: K }>[] {
+    const rows = this.db
+      .prepare(`SELECT event FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = ? ORDER BY seq`)
+      .all(id, kind) as { event: string }[]
+    return rows.map((row) => JSON.parse(row.event) as Extract<AgentEvent, { kind: K }>)
+  }
+
   queued(id: string): QueuedMessage[] {
     return this.latestEvent(id, 'queue')?.messages ?? []
   }

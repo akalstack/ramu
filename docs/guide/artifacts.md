@@ -2,6 +2,8 @@
 
 Agents can publish small interactive documents in a thread, such as explanations, diagrams, data explorers, calculators and prototypes. Their controls run locally with no further model call. A document you keep becomes an **artifact**: listed under **Artifacts** on the desktop and the phone, opened without its thread, changed by asking in any thread, and able to keep records and use your host's AI when you allow it.
 
+For a quick choice, a short form or a status summary used once in the conversation, the agent shows a [card](working-with-agents.md#cards-in-a-thread) instead, drawn with the app's own controls.
+
 ## Kinds
 
 The agent picks the kind from what you ask for. It shows as a mark on the artifact's row and card, and **Artifacts** on the desktop filters by it.
@@ -15,6 +17,9 @@ The agent picks the kind from what you ask for. It shows as a mark on the artifa
 | **Dashboard** | Figures and bar, line or pie charts over up to eight tables the agent fills in, each with when its data was read | CSV, PNG, PDF |
 | **Design** | Screens, mockups, landing pages and one-pagers as up to 12 frames of HTML and CSS at fixed sizes, side by side | Frame images, HTML, PDF |
 | **Motion** | A short animated explainer or walkthrough: up to 20 timed scenes, two minutes at most, played once in order on a 16:9 stage | MP4 and WebM video, poster image, HTML |
+| **Card** | A small tool that adds, shows and totals entries, such as a tracker, log, checklist or sign-up list, drawn with the app's own controls | PDF |
+
+A **Card** opens without a frame: the desktop and the phone draw it with their own buttons, fields and lists, in your theme and language, so it opens instantly and works like the rest of the app. Its buttons save entries to its records and remove them straight away, with no model call. What you type stays on the device as a draft until you save it, and a saved entry clears the form. A card asks once to keep records, like an app. The host also draws a card as a page, used for its preview, Versions, PDF, **Publish to the web** and **Open to anyone**, where its controls show their starting values. **Keep as artifact** on a [card in a thread](working-with-agents.md#cards-in-a-thread) asks the agent to make it a Card artifact that keeps what it collects.
 
 The host draws the other kinds into the same sandboxed frame as apps, in the app's light and dark colors, with no script or network. Mermaid is drawn with [Pele](https://pele.run). An SVG keeps only drawing elements, so it can't run script, follow links or load files. Versions, Compare, Restore, share links, **Open to anyone** and **Publish to the web** work for every kind. **Export** on the desktop downloads the kind's formats. On the phone, the card's actions and the artifact's menu hand them to the share sheet.
 
@@ -47,7 +52,7 @@ The host draws the other kinds into the same sandboxed frame as apps, in the app
   - A scene can play a video clip behind its words, such as one `make_video` made. It starts with the scene, follows play, pause and the slider, fills the exported video's frames, and its own sound is mixed in until the scene ends.
 - **Decks:** a slide whose text doesn't fit fails the preview, naming the slide, so a published deck has no cut-off text. On the desktop the toolbar moves between slides, and **Present** shows one slide at a time full screen (arrow keys, Space and Page Up or Down turn slides, Escape stops). The slide controls and **Present** wait while **Edit text** is open. With a second display, **Present** fills it with the deck and opens **Presenter notes** on this one: speaker notes, where you are, elapsed time and the next slide's title. The app asks once to know your displays.
 
-Records, AI and the other capabilities below are for apps.
+Records are for apps and cards. AI and the other capabilities below are for apps.
 
 ## In a thread
 
@@ -112,6 +117,7 @@ On the phone, **Show in the home screen widget** puts an artifact's declared wid
 Agents use `artifact_preview` to test a document (one HTML file or a small project, up to 512 KB) and `artifact_publish` to publish the exact tested version. A doc (`kind: "doc"`, Markdown in `source`, up to 200 KB) or a diagram (`kind: "diagram"`, `format` `mermaid` or `svg`, the text in `source`) is previewed the same way, with its own checks. A diagram must parse, and every heading of a doc must have its own anchor (no empty headings, no two with the same name, and every `#link` reaches one). Preview clicks the declared controls in a headless browser, screenshots phone and desktop widths, and blocks publishing on script errors or failed checks. A revision passes `previous` to both and a short `changes` sentence to publish. Checks kept with the previous version run again unless dropped on purpose.
 
 - `artifact_publish` with `artifact: true` keeps a new document as an artifact (with `title` and one emoji `icon`). `artifact: "<id>"` publishes a new version of an existing artifact from any thread.
+- A card (`kind: "card"`) is [A2UI](https://a2ui.org) v1.0 messages in `messages`, building one surface with the same parts as a [card in a thread](working-with-agents.md#cards-in-a-thread), and its collections in `records` (`{"expenses":{"fields":{"amount":"number","note":"string?"}}}`). Each collection is read at `/records/<collection>`, newest first, with each record's `id` and `createdAt`. Buttons save with `addRecord` (`collection` and `values`) and remove with `deleteRecord` (`collection` and `id`), and `sum` and `count` total a collection. A card's buttons can't send events, since no agent answers them.
 - `artifact_list` and `artifact_get` find an artifact and read its kind, sources, capabilities and last error. `artifact_records` queries, adds or updates its records, `artifact_run` starts one of its runs, and `artifact_published` records where it's live. `artifact_read` and `artifact_versions` read a thread's own documents.
 - Capabilities are declared in `ramu.json` or a `<meta name="ramu-capabilities">` tag and used through `window.ramuContent`: `records`, `ai.ask`, `ai.run`, `ai.tool`, `ai.image`, `pickImage`, `files`, `notify`, `folder`, `ramu`, `services` and `startThread`. `ai.image(prompt)` returns a picture as a data URL, made by a signed-in provider with image generation through the same routing threads use ([Abilities](working-with-agents.md#abilities)), and counts against the artifact's daily AI budget. The AI grant is the approval, and only the prompt is sent. Preview answers these from an in-frame fake so checks can exercise them.
 - Pinned libraries, all offline: React 19.3.0, Chart.js 4.6.1, Dagre 2.0.4, three.js 0.186.1 with its GLTFLoader, OrbitControls and SkeletonUtils.
