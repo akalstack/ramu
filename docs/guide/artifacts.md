@@ -2,6 +2,8 @@
 
 Agents can publish small interactive documents in a thread, such as explanations, diagrams, data explorers, calculators and prototypes. Their controls run locally with no further model call. A document you keep becomes an **artifact**: listed under **Artifacts** on the desktop and the phone, opened without its thread, changed by asking in any thread, and able to keep records and use your host's AI when you allow it.
 
+For a quick choice, a short form or a status summary used once in the conversation, the agent shows a [card](working-with-agents.md#cards-in-a-thread) instead, drawn with the app's own controls.
+
 ## Kinds
 
 The agent picks the kind from what you ask for. It shows as a mark on the artifact's row and card, and **Artifacts** on the desktop filters by it.

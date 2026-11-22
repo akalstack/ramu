@@ -4,6 +4,7 @@ import type { AgentEvent } from '@ramu/shared/types'
 import { type ChatBlock as Block } from '@ramu/shared/chat/chatFolding'
 import { goalChanges } from '@ramu/shared/chat/goalHistory'
 import { foldSettingsChanges } from '@ramu/shared/chat/settingsChanges'
+import { latestSurfaces } from '@ramu/shared/chat/inlineUi'
 import type { AgentTask } from '@ramu/shared/types'
 
 const SILENT = new Set<AgentEvent['kind']>([
@@ -26,6 +27,7 @@ export function toBlocks(events: AgentEvent[]): Block[] {
   )
   const seenAgents = new Set<string>()
   const goalNotes = goalChanges(events)
+  const cards = latestSurfaces(events)
   const outcomes = requestOutcomes(events)
   const failed = new Set(
     events.flatMap((event) => (event.kind === 'tool-result' && event.isError ? [event.toolUseId] : [])),
@@ -40,6 +42,9 @@ export function toBlocks(events: AgentEvent[]): Block[] {
     // A sub-agent's own output lives in its panel; its card stands for it here.
     if (event.agentId && event.kind !== 'agent') continue
     if (event.kind === 'compaction' && event.state === 'started') continue
+    // A card shows once, at its newest version, so an agent's update moves it to where the conversation is.
+    if (event.kind === 'inline-ui' && (event.surface.deleted || cards.get(event.surface.surfaceId) !== event.surface))
+      continue
     // Keep one activity row at each agent's starting position,
     // updated with its latest state instead of repeating every progress event.
     if (event.kind === 'agent' && event.taskType !== 'local_bash') {
