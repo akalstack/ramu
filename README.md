@@ -82,7 +82,7 @@ Open a project, say what you want, review the result. The defaults work as they 
 
 **📱 Anywhere**
 
-- **Phone app** for iOS and Android: chat, review, Git, terminals, artifacts and approvals, with push notifications. On [Google Play](https://play.google.com/store/apps/details?id=com.akalstack.ramu) and the App Store, or [build it from source](apps/mobile/README.md).
+- **Phone app** for iOS and Android: chat, review, Git, terminals, artifacts and approvals, with push notifications. On [Google Play](https://play.google.com/store/apps/details?id=com.akalstack.ramu) and the [App Store](https://apps.apple.com/app/id6836786013), or [build it from source](apps/mobile/README.md).
 - **Several hosts** from one desktop: continue a thread on another machine.
 - **Your network:** LAN, Tailscale, NetBird, SSH or your own tunnel. [Remote hosts →](docs/guide/remote-hosts.md)
 - **Headless server** and a `ramu` CLI for servers and terminals.
@@ -99,7 +99,7 @@ Every feature has a page in the [guide](docs/README.md#guide).
 
 For the phone, install the app and pair it with your computer ([mobile guide](apps/mobile/README.md)):
 
-<a href="apps/mobile/README.md"><img src="apps/site/public/badges/app-store.svg" alt="Download on the App Store" height="44" /></a>&nbsp;
+<a href="https://apps.apple.com/app/id6836786013"><img src="apps/site/public/badges/app-store.svg" alt="Download on the App Store" height="44" /></a>&nbsp;
 <a href="https://play.google.com/store/apps/details?id=com.akalstack.ramu"><img src="apps/site/public/badges/google-play.png" alt="Get it on Google Play" height="44" /></a>
 
 | Platform | Builds                                     |

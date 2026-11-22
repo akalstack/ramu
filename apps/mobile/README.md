@@ -1,6 +1,6 @@
 # Ramu mobile
 
-The iOS and Android app for a Ramu host. The host runs your agents, providers, Git and terminals, and the phone connects to it directly over HTTPS or a LAN or VPN you trust. Get it on [Google Play](https://play.google.com/store/apps/details?id=com.akalstack.ramu) or the App Store, or build it from source (see [Development](#development)).
+The iOS and Android app for a Ramu host. The host runs your agents, providers, Git and terminals, and the phone connects to it directly over HTTPS or a LAN or VPN you trust. Get it on [Google Play](https://play.google.com/store/apps/details?id=com.akalstack.ramu) or the [App Store](https://apps.apple.com/app/id6836786013), or build it from source (see [Development](#development)).
 
 ## Connect a phone
 
