@@ -2348,6 +2348,13 @@ function SecretCard({ item, chatId }: { item: Extract<TranscriptItem, { kind: 's
     <Card style={{ padding: space.m, gap: space.m }}>
       <T weight="600">{item.request.label}</T>
       <T>{item.request.reason}</T>
+      {item.request.url ? (
+        <Button
+          kind="secondary"
+          title={say('Open {0}', { 0: new URL(item.request.url).host })}
+          onPress={() => void Linking.openURL(item.request.url!)}
+        />
+      ) : null}
       <TextInput
         accessibilityLabel={item.request.label}
         placeholder={item.request.placeholder}

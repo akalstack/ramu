@@ -15,6 +15,16 @@ const secretRequestSchema = {
   label: z.string().trim().min(1).max(100).describe("Card title, such as 'Vercel token'."),
   reason: z.string().trim().min(1).max(2000).describe('What it is for and where the user gets it.'),
   placeholder: z.string().trim().min(1).max(200).optional(),
+  url: z
+    .string()
+    .trim()
+    .max(2000)
+    .url()
+    .refine((value) => value.startsWith('https://'), 'Use an https:// page')
+    .optional()
+    .describe(
+      'The page where the user creates or copies the value, such as https://vercel.com/account/tokens. The card shows it as a button.',
+    ),
   envName: z
     .string()
     .regex(ENVIRONMENT_KEY_PATTERN)
@@ -38,7 +48,7 @@ export function registerSecretTools(server: McpServer, agents: AgentService, ses
     'request_secret',
     {
       description:
-        'Ask the user for one secret only they can give (API token, password, PIN, pairing code) on a masked card in the thread, never in chat. One value per call. Waits for the answer and returns an owner-only file path; you never see the value. Not for access you already have: check the environment variable first.',
+        'Ask the user for one secret only they can give (API token, password, PIN, pairing code) on a masked card in the thread, never in chat. One value per call; pass url when a page gives the value. Waits for the answer and returns an owner-only file path; you never see the value. Not for access you already have: check the environment variable first.',
       inputSchema: secretRequestSchema,
     },
     async ({ timeoutMs, ...input }, extra) => {

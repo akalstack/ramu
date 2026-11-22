@@ -28,6 +28,7 @@ export interface SecretRequestInput {
   reason: string
   placeholder?: string
   envName?: string
+  url?: string
   timeoutMs: number
 }
 export type SecretRequestResult =
@@ -176,6 +177,7 @@ export class UserRequests {
       reason: input.reason,
       ...(input.placeholder ? { placeholder: input.placeholder } : {}),
       ...(input.envName ? { envName: input.envName } : {}),
+      ...(input.url ? { url: input.url } : {}),
     }
     return new Promise((resolve) => {
       const abort = () => finish({ status: 'cancelled' })

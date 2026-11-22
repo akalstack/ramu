@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import { KeyRound } from 'lucide-react'
+import { ExternalLink, KeyRound } from 'lucide-react'
 import type { AgentEvent } from '@ramu/shared/types'
 import { PRIMARY_ACTION_CLASS } from '@/components/button-classes'
 import { Button } from '@/components/desktop-button'
@@ -9,6 +9,7 @@ import { t, useLanguage } from '../i18n'
 import { useHost } from '../workspace/HostProvider'
 import { errorText } from '../workspace/TaskPane'
 import { useViewOnly } from '../composer/useViewOnly'
+import { invoke as openOnThisComputer } from '../ipc'
 
 type SecretRequest = Extract<AgentEvent, { kind: 'secret-request' }>
 
@@ -80,6 +81,17 @@ export function SecretRequestCard({
         </span>
       </div>
       <p className="whitespace-pre-wrap">{request.reason}</p>
+      {open && request.url && (
+        <Button
+          type="button"
+          variant="secondary"
+          className="self-start bg-fill hover:bg-fill-hover"
+          onClick={() => void openOnThisComputer('app.openExternal', request.url!).catch((e) => setError(errorText(e)))}
+        >
+          <ExternalLink size={13} aria-hidden />
+          {t('Open {0}', { 0: new URL(request.url).host })}
+        </Button>
+      )}
       {open && (
         <form
           className="flex flex-col gap-2"

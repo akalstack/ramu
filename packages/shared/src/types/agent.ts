@@ -508,6 +508,8 @@ type AgentEventBody =
       placeholder?: string
       /** An environment variable the card offers to keep the value as, for later threads. */
       envName?: string
+      /** The https page where the person creates or copies the value; the card opens it. */
+      url?: string
     }
   | {
       kind: 'question-state'
