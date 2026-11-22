@@ -19,7 +19,7 @@ export function AccountMenuButton({ onOpen }: { onOpen: (section: SettingsSectio
     <Button
       variant="ghost"
       size="icon-sm"
-      className="mt-auto size-10 flex-none justify-center border-transparent bg-transparent p-0 text-muted-foreground hover:bg-hover hover:text-foreground"
+      className="size-10 flex-none justify-center border-transparent bg-transparent p-0 text-muted-foreground hover:bg-hover hover:text-foreground"
       aria-label={t('Settings')}
       title={user ? `${t('Settings')} · ${user.name || user.email} (${keys})` : `${t('Settings')} (${keys})`}
       onClick={() => onOpen('appearance')}

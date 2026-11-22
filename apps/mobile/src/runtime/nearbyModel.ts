@@ -44,9 +44,13 @@ export const browsingActive = (method: PairMethod, foreground: boolean) => metho
 /** Web has no native browse or camera, so manual entry is the only method there. */
 export const availableMethods = (native: boolean): PairMethod[] => (native ? [...PAIR_METHODS] : ['manual'])
 
-/** The method a person lands on: discovery first on a phone. A link or QR already carrying an address goes straight to review. */
-export function initialMethod(native: boolean, hasOffer: boolean): PairMethod {
-  return hasOffer || !native ? 'manual' : 'nearby'
+/**
+ * The method a person lands on: the one they chose on the welcome screen, otherwise discovery first on a phone. A link
+ * already carrying an address goes straight to review.
+ */
+export function initialMethod(native: boolean, hasOffer: boolean, wanted?: string): PairMethod {
+  if (hasOffer || !native) return 'manual'
+  return (PAIR_METHODS as readonly string[]).includes(wanted ?? '') ? (wanted as PairMethod) : 'nearby'
 }
 
 /** What a chosen host fills in. Only an address and a name: the pairing code always comes from the host. */

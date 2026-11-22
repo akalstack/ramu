@@ -38,7 +38,7 @@ export function HostChipButton({
   const store = useStore()
   const pc = store.computers.find((x) => x.id === store.selected)
   if (!store.computers.length)
-    return <Chip label={t.pair} icon={Plus} small={compact} onPress={() => router.push('/pair')} />
+    return <Chip label={t.pair} icon={Plus} small={compact} onPress={() => router.push('/welcome')} />
   const merged = all && !!onAll
   return (
     <Chip

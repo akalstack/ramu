@@ -5,7 +5,8 @@ import { createRequire } from 'node:module'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import * as nearby from '../src/runtime/nearbyModel.ts'
-import { decodePairQr, encodePairQr } from '../../../packages/contracts/src/index.ts'
+import * as pairing from '../src/runtime/pairingModel.ts'
+import { encodePairQr, encodePairWebLink, parsePairInput } from '../../../packages/contracts/src/index.ts'
 
 const require = createRequire(import.meta.url)
 function harness(os, options = {}) {
@@ -13,6 +14,7 @@ function harness(os, options = {}) {
   let cursor = 0
   const calls = [],
     alerts = [],
+    toasts = [],
     navigation = []
   let finish
   const components = new Proxy({}, { get: (_, key) => key })
@@ -37,7 +39,9 @@ function harness(os, options = {}) {
     react,
     'react/jsx-runtime': require('react/jsx-runtime'),
     'react-native': {
-      ...Object.fromEntries(['KeyboardAvoidingView', 'Pressable', 'TextInput', 'View'].map((k) => [k, k])),
+      ...Object.fromEntries(
+        ['KeyboardAvoidingView', 'Pressable', 'TextInput', 'View', 'ActivityIndicator'].map((k) => [k, k]),
+      ),
       AppState: { currentState: 'active' },
       Platform: { OS: os },
       StyleSheet: {},
@@ -52,15 +56,17 @@ function harness(os, options = {}) {
     },
     'expo-camera': { CameraView: 'CameraView', useCameraPermissions: () => [{ granted: true }, () => {}] },
     '../runtime/transport': { needsHttpConsent: (address) => address.startsWith('http:') },
-    '@ramu/contracts': { decodePairQr },
+    '@ramu/contracts': { parsePairInput },
+    '../runtime/pairingModel': pairing,
+    '../runtime/toast': { showToast: (message) => toasts.push(message) },
     '../theme': { font: {}, radius: {}, space: { l: 16, m: 12 }, useTheme: () => ({ c: {} }) },
     '../runtime/store': {
       useStore: () => ({
         computers: [],
         pair: (...args) => {
           calls.push(args)
-          return new Promise((resolve) => {
-            finish = resolve
+          return new Promise((resolve, reject) => {
+            finish = (error) => (error ? reject(error) : resolve('id'))
           })
         },
         ...options.store,
@@ -74,7 +80,7 @@ function harness(os, options = {}) {
       PageScrollView: 'ScrollView',
       useSheetKeyboardOffset: () => 0,
     },
-    '../components/ui': { T: 'T', Card: 'Card', Toggle: 'Toggle', tap() {} },
+    '../components/ui': { T: 'T', Card: 'Card', Toggle: 'Toggle', tap() {}, succeeded() {} },
     '../components/Motion': { animateLayout() {} },
     '../i18n': {
       useT: () => new Proxy({}, { get: (_, key) => key }),
@@ -97,8 +103,9 @@ function harness(os, options = {}) {
     },
     calls,
     alerts,
+    toasts,
     navigation,
-    finish: () => finish(),
+    finish: (error) => finish(error),
   }
 }
 function nodes(tree) {
@@ -107,7 +114,7 @@ function nodes(tree) {
 const find = (tree, type, predicate = () => true) =>
   nodes(tree).find((node) => node.type === type && predicate(node.props))
 for (const os of ['ios', 'android']) {
-  test(`${os}: scanning closes the camera, keeps Pair outside the scroll view and prevents duplicate pairing`, async () => {
+  test(`${os}: scanning a code with an encrypted address pairs at once, once, and lands home`, async () => {
     const h = harness(os)
     let tree = h.render()
     assert.equal(find(tree, 'CameraView'), undefined)
@@ -117,25 +124,48 @@ for (const os of ['ios', 'android']) {
       (props) => props.accessibilityRole === 'tab' && props.children.props.children === 'pairScanQr',
     ).props.onPress()
     tree = h.render()
+    const camera = find(tree, 'CameraView')
+    const data = encodePairWebLink({
+      url: 'https://studio.local:7788',
+      code: 'ABCDE-FGHJK',
+      expiresAt: Date.now() + 60000,
+      name: 'Studio',
+    })
+    camera.props.onBarcodeScanned({ data })
+    camera.props.onBarcodeScanned({ data })
+    assert.deepEqual(h.calls, [['Studio', 'https://studio.local:7788', 'ABCDE-FGHJK', false]])
+    tree = h.render()
+    assert.equal(find(tree, 'CameraView'), undefined)
+    assert.ok(
+      find(tree, 'T', (props) => props.children === 'pairPairingWith'),
+      'shows which computer it is pairing with',
+    )
+    assert.equal(find(tree, 'TextInput'), undefined, 'no detour through the form')
+    h.finish()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    assert.deepEqual(h.toasts, ['pairedWith'])
+    assert.deepEqual(h.navigation, ['/'])
+  })
+  test(`${os}: a refused code reads as expired with what to do next, not a status code`, async () => {
+    const h = harness(os, { hosts: [] })
+    let tree = h.render()
+    find(
+      tree,
+      'Pressable',
+      (props) => props.accessibilityRole === 'tab' && props.children.props.children === 'pairScanQr',
+    ).props.onPress()
+    tree = h.render()
     find(tree, 'CameraView').props.onBarcodeScanned({
       data: encodePairQr({ url: 'https://studio.local:7788', code: 'ABCDE-FGHJK', expiresAt: Date.now() + 60000 }),
     })
+    h.finish(new Error('That pairing code is wrong, already used or expired'))
+    await new Promise((resolve) => setTimeout(resolve, 0))
     tree = h.render()
-    assert.equal(find(tree, 'CameraView'), undefined)
-    assert.equal(
-      find(find(tree, 'ScrollView'), 'GlassButton', (props) => props.primary),
-      undefined,
-    )
-    assert.equal(find(tree, 'TextInput').props.style.height, undefined, 'fields can grow with system text sizing')
-    const pair = find(tree, 'GlassButton', (props) => props.primary)
-    assert.equal(pair.props.disabled, false)
-    const pending = pair.props.onPress()
-    await pair.props.onPress()
-    assert.equal(h.calls.length, 1)
-    assert.equal(find(h.render(), 'GlassButton', (props) => props.primary).props.disabled, true)
-    h.finish()
-    await pending
-    assert.deepEqual(h.navigation, ['/'])
+    assert.equal(h.alerts.length, 0)
+    assert.ok(find(tree, 'T', (props) => props.children === 'pairProblemExpired'))
+    assert.ok(find(tree, 'T', (props) => props.children === 'pairProblemExpiredNext'))
+    assert.ok(find(tree, 'GlassButton', (props) => props.title === 'pairScanAgain'))
+    assert.deepEqual(h.navigation, [])
   })
   test(`${os}: editing a scanned address clears HTTP consent and failed scans can be retried`, () => {
     const h = harness(os)
@@ -149,8 +179,9 @@ for (const os of ['ios', 'android']) {
     qr()
     tree = h.render()
     find(tree, 'CameraView').props.onBarcodeScanned({ data: 'invalid QR' })
-    assert.equal(h.alerts.length, 1)
     tree = h.render()
+    assert.equal(h.alerts.length, 0)
+    assert.ok(find(tree, 'T', (props) => props.children === 'pairProblemInvalid'))
     find(tree, 'GlassButton', (props) => props.title === 'pairScanAgain').props.onPress()
     tree = h.render()
     find(tree, 'CameraView').props.onBarcodeScanned({

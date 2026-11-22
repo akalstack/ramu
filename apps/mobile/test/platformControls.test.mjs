@@ -7510,7 +7510,8 @@ for (const status of ['online', 'offline', 'revoked', null]) {
     } else {
       const pair = nodes(tree).find((node) => node.type === 'Button' && node.props.title === 'Pair host')
       pair.props.onPress()
-      assert.deepEqual(pushed, ['/pair'])
+      // A revoked host pairs again; a phone with none opens the welcome screen's ways to pair.
+      assert.deepEqual(pushed, [status ? '/pair' : '/welcome'])
       assert.equal(find(tree, 'Header').props.back, false)
     }
   })

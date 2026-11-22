@@ -4,10 +4,17 @@ The iOS and Android app for a Ramu host. The host runs your agents, providers, G
 
 ## Connect a phone
 
-1. Start Ramu on the host (`pnpm build`, then the desktop app or `ramu serve`).
-2. On the host: **Settings → Remote access**, turn on network access and **Discoverable** (or open **Pair a device** for a code). Headless: `ramu serve --listen 0.0.0.0:7788 --private-network`, then `ramu pair`. Read [remote access](../../SECURITY.md#remote-access) first.
-3. Install the app from a store and open **Hosts → Pair**. From source, install a development build once (`pnpm --filter @ramu/mobile eas:ios`, `eas:android`, or locally `build:ios`, `build:android`) and run `pnpm dev:mobile` first.
-4. Choose the host under **Nearby hosts**. The host asks you to allow it. Allow it when both screens show the same six-digit number. Or scan its QR code, or enter the address and code.
+1. Start Ramu on the host (`pnpm build`, then the desktop app or `ramu serve`). Its setup shows a pairing QR code; later, **Settings → Remote access → Pair a device** shows one. Headless: `ramu serve --listen 0.0.0.0:7788 --private-network`, then `ramu pair`. Read [remote access](../../SECURITY.md#remote-access) first.
+2. Install the app from a store. From source, install a development build once (`pnpm --filter @ramu/mobile eas:ios`, `eas:android`, or locally `build:ios`, `build:android`) and run `pnpm dev:mobile` first.
+3. Open it. A phone with no host starts on **Connect to your computer**:
+   - **Scan QR code** pairs the moment it reads the host's code. The phone's own camera works too: the code opens getramu.dev, which opens the app (or its store page first). The host's address and code stay after `#` in that link, so the site never receives them.
+   - **Find a computer nearby** lists hosts on the same network. Allow the phone on the host when both screens show the same six-digit number.
+   - **Sign in with your Ramu account** adds the hosts that let your account's devices in, from anywhere.
+   - **Enter address and code** types them by hand.
+
+   **Look around first** skips it. The **Pair a host** chip brings it back.
+
+A code over plain HTTP, or a link opened from another app, opens the form to review before pairing. If pairing fails, the screen says why and what to do next, such as asking the host for a new code.
 
 Use the host's LAN or VPN address, never `localhost`. The host must stay awake and reachable. Once paired, the phone learns the host's other addresses and switches to one that works. It checks that it's the same host before sending any credential.
 

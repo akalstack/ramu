@@ -53,6 +53,10 @@ export function setHapticsEnabled(on: boolean) {
 export function tap() {
   if (hapticsEnabled) Haptics.selectionAsync().catch(() => {})
 }
+/** A finished step the person waited for, such as pairing a host. */
+export function succeeded() {
+  if (hapticsEnabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+}
 
 type Tone = 'text' | 'body' | 'soft' | 'muted' | 'placeholder' | 'accent' | 'ok' | 'warn' | 'bad'
 

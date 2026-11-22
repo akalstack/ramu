@@ -11,16 +11,24 @@ import { showError } from '../runtime/toast'
 import { Overlays } from '../components/Overlays'
 import { InboxBadge } from '../components/InboxBadge'
 import { ModelNewsToast } from '../components/ModelNewsToast'
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider as NavigationThemeProvider } from 'expo-router'
+import {
+  DarkTheme,
+  DefaultTheme,
+  Stack,
+  ThemeProvider as NavigationThemeProvider,
+  usePathname,
+  useRouter,
+} from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { KeyboardMotion } from '../components/Keyboard'
 import { ThemeProvider, useTheme } from '../theme'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Platform } from 'react-native'
 import { setHapticsEnabled } from '../components/ui'
 import { StoreProvider, useStore } from '../runtime/store'
 import { AutomationProvider } from '../runtime/automation'
+import { WELCOME_DISMISSED, showWelcome } from '../runtime/pairingModel'
 
 // Deep links (and notification taps) into a sheet or chat still get the tabs underneath,
 // so sheets present as sheets and back always has somewhere to go.
@@ -28,6 +36,24 @@ export const unstable_settings = { anchor: '(tabs)' }
 
 // A crash anywhere below shows a recoverable screen instead of the developer error screen.
 export { AppErrorBoundary as ErrorBoundary } from '../components/AppErrorBoundary'
+
+/** Opens the welcome screen once per launch on a phone with no host, unless a link opened another screen. */
+function WelcomeGate() {
+  const store = useStore()
+  const router = useRouter()
+  const path = usePathname()
+  const checked = useRef(false)
+  useEffect(() => {
+    if (!store.ready || checked.current) return
+    checked.current = true
+    if (!showWelcome({ hosts: store.computers.length, dismissed: store.drafts[WELCOME_DISMISSED] === 'yes', path }))
+      return
+    const frame = requestAnimationFrame(() => router.push('/welcome'))
+    return () => cancelAnimationFrame(frame)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- decided once, when the saved state has loaded
+  }, [store.ready])
+  return null
+}
 
 function Navigator() {
   const { c, scheme } = useTheme()
@@ -61,6 +87,7 @@ function Navigator() {
       <PageWidgetSync />
       <PhoneBackup />
       <AccountHosts />
+      <WelcomeGate />
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <NavigationThemeProvider value={navigationTheme}>
         <Stack
@@ -96,6 +123,7 @@ function Navigator() {
           <Stack.Screen name="computers" options={{ presentation: 'modal' }} />
           <Stack.Screen name="folders" options={{ presentation: 'modal' }} />
           <Stack.Screen name="pair" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="welcome" options={{ presentation: 'fullScreenModal', headerShown: false }} />
           <Stack.Screen name="settings" options={{ presentation: 'modal', headerShown: false }} />
         </Stack>
       </NavigationThemeProvider>

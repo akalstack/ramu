@@ -1,6 +1,5 @@
 import { SettingsScopeContext, useSettingsInvoke } from './SettingsScope'
-import QRCode from 'qrcode'
-import { encodePairLink, encodePairQr, parsePairInput } from '@ramu/contracts'
+import { parsePairInput } from '@ramu/contracts'
 import {
   Dialog,
   DialogContent,
@@ -16,7 +15,7 @@ import { SETTINGS_CARD_LINE, SettingsEmpty } from './cards'
 import { Button } from '@/components/desktop-button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { Check, ChevronDown, Copy, Link2, MoreHorizontal, Plus, Radar } from 'lucide-react'
+import { Check, ChevronDown, Copy, Link2, MoreHorizontal, Plus, Radar, Wifi } from 'lucide-react'
 import { useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type {
   AgentHostSummary,
@@ -25,7 +24,6 @@ import type {
   DeviceOs,
   NetworkDevice,
   NetworkStatus,
-  PairingOffer,
 } from '@ramu/shared/types'
 import { DEVICE_PERMISSIONS } from '@ramu/shared/devicePermissions'
 import { RowButton } from '@/components/row-button'
@@ -48,6 +46,9 @@ import { DIALOG_SCROLLS, DialogScrollBody } from '@/components/dialog-scroll-bod
 import { osLine } from '@ramu/shared/deviceOs'
 import { isSshTarget } from '@ramu/shared/hostTarget'
 import { useStagedValue } from './stagedChanges'
+import { PairingCode } from './PairingCode'
+import { defaultPairUrl, pairingNetwork, pairingUrls, pairQrText } from './pairingOffer'
+import { usePairingOffer } from './usePairingOffer'
 import { agentReachable, agentsOnEverywhere } from './agentHostLinks'
 import {
   DefaultPermissions,
@@ -62,12 +63,6 @@ import {
 const ALL_NETWORKS = '0.0.0.0'
 const DEFAULT_PORT = 7788
 const validPort = (port: number) => Number.isInteger(port) && port >= 1024 && port <= 65535
-
-/** `m:ss` left until a pairing code expires. */
-const countdown = (expiresAt: number, now: number) => {
-  const left = Math.max(0, Math.round((expiresAt - now) / 1000))
-  return `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
-}
 
 /** Polls while the screen is open: pairing happens on another device, so nothing here would otherwise know it finished. */
 function useNetworkStatus(interval: number) {
@@ -481,20 +476,11 @@ function ThisComputer() {
       <SettingsRow>
         <SettingsLabel
           title={t('Pair a device')}
-          help={
-            status.reachable
-              ? t(
-                  'Shows a one-time code and QR code for a phone or another computer. With Discoverable on, nearby devices can ask instead, and you allow them here.',
-                )
-              : t('Turn on Allow other devices first.')
-          }
+          help={t(
+            'Shows a QR code your phone’s camera opens, and a one-time code. With Discoverable on, nearby devices can ask instead, and you allow them here.',
+          )}
         />
-        <Button
-          variant="secondary"
-          className="bg-fill hover:bg-fill-hover"
-          disabled={!status.reachable}
-          onClick={() => setPairing(true)}
-        >
+        <Button variant="secondary" className="bg-fill hover:bg-fill-hover" onClick={() => setPairing(true)}>
           <Link2 size={14} />
           {t('Pair a device…')}
         </Button>
@@ -587,96 +573,40 @@ function ThisComputer() {
   )
 }
 
-function PairDialog({ onClose }: { onClose: () => void }) {
+/**
+ * Pairs a phone or another computer: a QR code its camera opens and a one-time code, renewed while the dialog is open.
+ * With other devices not yet allowed, it says so and allows them on this network in one step instead of sending the
+ * person to the switches above. Opens from Remote access, the sidebar menu and the command palette.
+ */
+export function PairDialog({ onClose }: { onClose: () => void }) {
   const invoke = useSettingsInvoke()
-  const [offer, setOffer] = useState<PairingOffer | null>(null),
-    [now, setNow] = useState(Date.now()),
-    [error, setError] = useState<string | null>(null)
+  const [status, setStatus] = useNetworkStatus(2000)
   const [role, setRole] = useState<'owner' | 'viewer'>('owner')
-  const [qr, setQr] = useState('')
+  const [allowing, setAllowing] = useState(false),
+    [allowError, setAllowError] = useState<string | null>(null)
+  const ready = !!status?.reachable
+  const { offer, now, error, joined } = usePairingOffer(invoke, role, ready)
   const [qrUrl, setQrUrl] = useState('')
-  useEffect(() => {
-    let alive = true
-    setQr('')
-    if (offer && offer.urls.length) {
-      const url = qrUrl || offer.urls[0]!.url
-      void QRCode.toDataURL(encodePairQr({ url, code: offer.code, expiresAt: offer.expiresAt }), {
-        width: 240,
-        margin: 2,
-      }).then(
-        (value) => {
-          if (alive) setQr(value)
-        },
-        () => {},
-      )
+  const [showOther, setShowOther] = useState(false)
+  const change = status ? pairingNetwork(status) : null
+  const allow = async () => {
+    if (!change) return
+    setAllowing(true)
+    setAllowError(null)
+    try {
+      setStatus(await invoke('network.configure', change))
+    } catch (e) {
+      setAllowError(errorText(e))
+    } finally {
+      setAllowing(false)
     }
-    return () => {
-      alive = false
-    }
-  }, [offer, qrUrl])
-  const [joined, setJoined] = useState<{ name: string; role: 'owner' | 'viewer' } | null>(null),
-    [showOther, setShowOther] = useState(false)
-  const offerRequest = useRef(0)
-  // One owner per dialog: a new code (or a role change) replaces this dialog's unused one on the host.
-  const owner = useRef(crypto.randomUUID()).current
-  const create = useCallback(() => {
-    const request = ++offerRequest.current
-    setError(null)
-    setJoined(null)
-    setOffer(null)
-    invoke('network.pair', role, owner).then(
-      (next) => {
-        if (request === offerRequest.current) setOffer(next)
-      },
-      (e) => {
-        if (request === offerRequest.current) setError(errorText(e))
-      },
-    )
-  }, [invoke, role, owner])
-  useEffect(() => {
-    create()
-    return () => {
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- a counter that invalidates in-flight work; it is not a DOM ref
-      ++offerRequest.current
-    }
-  }, [create])
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(id)
-  }, [])
-  const offerId = offer?.offerId
-  useEffect(() => {
-    if (!offerId || joined) return
-    let live = true
-    const check = () =>
-      invoke('network.offer', offerId).then(
-        (result) => {
-          if (!live) return
-          if (result.state === 'redeemed' && result.device)
-            setJoined({ name: result.device.name, role: result.device.role ?? 'owner' })
-        },
-        () => {},
-      )
-    const id = window.setInterval(() => void check(), 1500)
-    return () => {
-      live = false
-      window.clearInterval(id)
-    }
-  }, [invoke, offerId, joined])
-  // Closing the dialog withdraws an unused code; a crash still relies on its expiry.
-  useEffect(() => {
-    if (!offerId) return
-    return () => {
-      void Promise.resolve(invoke('network.cancelOffer', offerId)).catch(() => {})
-    }
-  }, [invoke, offerId])
-  const expired = !!offer && offer.expiresAt <= now
-  // IPv4 first: they are shorter and what people type. Link-local and loopback are already left out.
-  const sorted = offer ? [...offer.urls].sort((a, b) => Number(a.url.includes('[')) - Number(b.url.includes('['))) : []
-  const likely = sorted.filter((entry) => !VIRTUAL_INTERFACE.test(entry.interface)),
-    other = sorted.filter((entry) => VIRTUAL_INTERFACE.test(entry.interface))
-  const urls = showOther || !likely.length ? sorted : likely
-  const hidden = sorted.length - urls.length
+  }
+  const { likely, other } = offer ? pairingUrls(offer.urls) : { likely: [], other: [] }
+  const urls = showOther || !likely.length ? [...likely, ...other] : likely
+  const hidden = likely.length + other.length - urls.length
+  const url =
+    (offer?.urls.some((entry) => entry.url === qrUrl) ? qrUrl : '') || (offer ? defaultPairUrl(offer.urls) : undefined)
+  const name = status?.discovery?.name
   return (
     <Dialog
       open
@@ -686,119 +616,122 @@ function PairDialog({ onClose }: { onClose: () => void }) {
     >
       <DialogContent className={`${DIALOG_SCROLLS} sm:max-w-[520px]`} aria-describedby={undefined}>
         <DialogHeader>
-          <DialogTitle>{joined ? t('{0} is paired', { 0: joined.name }) : t('Pair a device')}</DialogTitle>
-          {!joined && (
+          <DialogTitle>
+            {joined ? t('{0} is paired', { 0: joined.name }) : t('Connect a phone or computer')}
+          </DialogTitle>
+          {!joined && ready && (
             <DialogDescription>
               {t(
-                'On the other device, open Ramu and choose this host under Nearby hosts. You are asked to allow it when both show the same number. Or enter one of these addresses and the code.',
+                'Scan the code with your phone’s camera, or choose this host under Nearby hosts in Ramu and allow it when both show the same number.',
               )}
             </DialogDescription>
           )}
         </DialogHeader>
         <DialogScrollBody>
-          {!joined && (
-            <Dropdown
-              label={t('Device access')}
-              value={role}
-              options={[
-                { value: 'owner', label: t('Full access') },
-                { value: 'viewer', label: t('View threads and answer requests') },
-              ]}
-              onChange={(value) => setRole(value as 'owner' | 'viewer')}
-            />
-          )}
-          {error && (
-            <p className="text-bad small text-caption" role="alert">
-              {error}
+          {!status ? (
+            <p className="muted text-muted-foreground small text-caption" role="status">
+              {t('Checking this host…')}
             </p>
-          )}
-          {joined ? (
+          ) : !ready ? (
+            <div className="flex flex-col gap-3">
+              <p className="m-0">
+                {status.enabled
+                  ? t('This host is starting to listen for other devices. The code appears in a moment.')
+                  : change
+                    ? t(
+                        'Other devices can’t reach this host yet. Allow devices on this network, and the code appears here. Ramu does not encrypt this connection, so use it on a network or VPN you trust.',
+                      )
+                    : t('Set when Ramu was started with --listen. Change it there.')}
+              </p>
+              {status.error && (
+                <p className="text-bad small text-caption" role="alert">
+                  {status.error}
+                </p>
+              )}
+              {allowError && (
+                <p className="text-bad small text-caption" role="alert">
+                  {allowError}
+                </p>
+              )}
+              {change && !status.enabled && (
+                <Button className="self-start" variant="default" disabled={allowing} onClick={() => void allow()}>
+                  <Wifi size={14} />
+                  {allowing ? t('Allowing…') : t('Allow devices on this network')}
+                </Button>
+              )}
+            </div>
+          ) : joined ? (
             <p className="muted text-muted-foreground">
               {t(joined.role === 'viewer' ? 'View threads and answer requests' : 'Full access')}
               {' · '}
               {t('It can now use this host. You can revoke it any time under Devices that can use this host.')}
             </p>
           ) : (
-            offer && (
-              <>
-                <div className="flex items-center justify-between gap-3 rounded-(--radius-m) bg-fill p-[14px_16px]">
-                  <div>
-                    <span className="sr-only">{t('Pairing code')}</span>
-                    <div
-                      className={`font-mono text-[28px] font-semibold tracking-[0.12em] ${expired ? 'text-muted-foreground line-through' : ''}`}
-                    >
-                      {offer.code}
+            <>
+              <Dropdown
+                label={t('Device access')}
+                value={role}
+                options={[
+                  { value: 'owner', label: t('Full access') },
+                  { value: 'viewer', label: t('View threads and answer requests') },
+                ]}
+                onChange={(value) => setRole(value as 'owner' | 'viewer')}
+              />
+              {error && (
+                <p className="text-bad small text-caption" role="alert">
+                  {error}
+                </p>
+              )}
+              {offer && (
+                <>
+                  <PairingCode offer={offer} now={now} url={url} name={name} />
+                  {url && (
+                    <div className="flex items-center gap-2 rounded-(--radius-s) bg-fill p-[4px_6px_4px_12px]">
+                      <Link2 size={14} className="flex-none text-muted-foreground" aria-hidden />
+                      <span className="grow flex-1 min-w-0 truncate text-control">{t('Pairing link')}</span>
+                      <span className="muted text-muted-foreground small text-caption flex-none">
+                        {t('Send it to your phone')}
+                      </span>
+                      <CopyButton text={pairQrText(offer, url, name)} label={t('Copy pairing link')} />
+                      <CopyButton text={offer.code} label={t('Copy code')} />
                     </div>
-                    <div className="muted text-muted-foreground small text-caption">
-                      {expired
-                        ? t('Expired')
-                        : t('Works once · expires in {0}', { 0: countdown(offer.expiresAt, now) })}
-                    </div>
-                  </div>
-                  {expired ? (
-                    <Button variant="secondary" onClick={create}>
-                      {t('New code')}
-                    </Button>
-                  ) : (
-                    <CopyButton text={offer.code} label={t('Copy code')} />
                   )}
-                </div>
-                {!expired && offer.urls.length > 0 && (
-                  <div className="flex items-center gap-2 rounded-(--radius-s) bg-fill p-[4px_6px_4px_12px]">
-                    <Link2 size={14} className="flex-none text-muted-foreground" aria-hidden />
-                    <span className="grow flex-1 min-w-0 truncate text-control">{t('Pairing link')}</span>
-                    <span className="muted text-muted-foreground small text-caption flex-none">
-                      {t('Open it on a device that has Ramu')}
+                  <div className="flex flex-col gap-1">
+                    <span className="muted text-muted-foreground small text-caption">
+                      {t('Addresses this host has')}
                     </span>
-                    <CopyButton
-                      text={encodePairLink({
-                        url: qrUrl || offer.urls[0]!.url,
-                        code: offer.code,
-                        expiresAt: offer.expiresAt,
-                      })}
-                      label={t('Copy pairing link')}
-                    />
+                    {urls.length ? (
+                      urls.map((entry) => (
+                        <div
+                          key={entry.url}
+                          className="flex items-center gap-2 rounded-(--radius-s) bg-fill p-[4px_6px_4px_12px]"
+                        >
+                          <code className="font-mono text-control grow flex-1 min-w-0 truncate">{entry.url}</code>
+                          <span className="muted text-muted-foreground small text-caption flex-none">
+                            {entry.url === url ? t('In the QR code') : entry.interface}
+                          </span>
+                          {entry.url !== url && (
+                            <Button variant="ghost" size="sm" onClick={() => setQrUrl(entry.url)}>
+                              {t('Use in QR code')}
+                            </Button>
+                          )}
+                          <CopyButton text={entry.url} label={t('Copy address')} />
+                        </div>
+                      ))
+                    ) : (
+                      <p className="muted text-muted-foreground small text-caption">
+                        {t('No network address found. Connect this host to a network or VPN.')}
+                      </p>
+                    )}
+                    {hidden > 0 && (
+                      <Button variant="ghost" className="self-start" onClick={() => setShowOther(true)}>
+                        {t('Show {0} more (Docker, VM and other virtual networks)', { 0: other.length })}
+                      </Button>
+                    )}
                   </div>
-                )}
-                {qr && !expired && (
-                  <div className="flex flex-col items-center gap-2">
-                    <img src={qr} width={240} height={240} alt={t('Scan this pairing offer with Ramu on your phone')} />
-                    <Dropdown
-                      label={t('QR host address')}
-                      value={qrUrl || offer.urls[0]!.url}
-                      options={offer.urls.map((entry) => ({ value: entry.url, label: entry.url }))}
-                      onChange={setQrUrl}
-                    />
-                  </div>
-                )}
-                <div className="flex flex-col gap-1">
-                  <span className="muted text-muted-foreground small text-caption">{t('Addresses this host has')}</span>
-                  {urls.length ? (
-                    urls.map((entry) => (
-                      <div
-                        key={entry.url}
-                        className="flex items-center gap-2 rounded-(--radius-s) bg-fill p-[4px_6px_4px_12px]"
-                      >
-                        <code className="font-mono text-control grow flex-1 min-w-0 truncate">{entry.url}</code>
-                        <span className="muted text-muted-foreground small text-caption flex-none">
-                          {entry.interface}
-                        </span>
-                        <CopyButton text={entry.url} label={t('Copy address')} />
-                      </div>
-                    ))
-                  ) : (
-                    <p className="muted text-muted-foreground small text-caption">
-                      {t('No network address found. Connect this host to a network or VPN.')}
-                    </p>
-                  )}
-                  {hidden > 0 && (
-                    <Button variant="ghost" className="self-start" onClick={() => setShowOther(true)}>
-                      {t('Show {0} more (Docker, VM and other virtual networks)', { 0: other.length })}
-                    </Button>
-                  )}
-                </div>
-              </>
-            )
+                </>
+              )}
+            </>
           )}
         </DialogScrollBody>
         <DialogFooter>

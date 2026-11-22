@@ -46,6 +46,8 @@ import {
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { buildCommands, formatKeys, useKeybindings } from './commands'
 import { AccountMenuButton } from './sidebar/AccountMenuButton'
+import { ConnectPhoneButton } from './sidebar/ConnectPhoneButton'
+import { PairDialog } from './settings/RemoteAccess'
 import { Palette } from './palette/Palette'
 import type { PaletteMode } from './palette/sources'
 import { copyText, invoke, ramu } from './ipc'
@@ -228,6 +230,12 @@ function Shell() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [searchingChats, setSearchingChats] = useState(false)
   const [archivedOpen, setArchivedOpen] = useState(false)
+  const [connectingPhone, setConnectingPhone] = useState(false)
+  useEffect(() => {
+    const open = () => setConnectingPhone(true)
+    window.addEventListener('ramu:connect-phone', open)
+    return () => window.removeEventListener('ramu:connect-phone', open)
+  }, [])
   useEffect(() => {
     const open = () => setArchivedOpen(true)
     window.addEventListener('ramu:archived', open)
@@ -770,6 +778,7 @@ function Shell() {
                 {railButton('schedules', CalendarClock, t('Schedules'), 0)}
                 {railButton('artifacts', AppWindow, t('Artifacts'), 0)}
                 {railButton('customize', Blocks, t('Customize'), 0)}
+                <ConnectPhoneButton />
                 <AccountMenuButton
                   onOpen={(section) => {
                     setSettingsSection(section)
@@ -873,6 +882,7 @@ function Shell() {
       <PendingThreadDelivery />
       <ToolSyncDelivery />
       <PairingRequestDialog />
+      {connectingPhone && <PairDialog onClose={() => setConnectingPhone(false)} />}
       <PermissionRequestDialog />
       <PairBackDialog />
       <IdentityMismatchDialog />

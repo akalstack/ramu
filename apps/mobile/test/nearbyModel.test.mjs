@@ -38,6 +38,14 @@ test('an offer in a link goes straight to review, and the web has only manual en
   assert.equal(initialMethod(false, false), 'manual')
 })
 
+test('the welcome screen opens the method it offered, and an unknown one falls back to discovery', () => {
+  assert.equal(initialMethod(true, false, 'qr'), 'qr')
+  assert.equal(initialMethod(true, false, 'manual'), 'manual')
+  assert.equal(initialMethod(true, false, 'camera'), 'nearby')
+  assert.equal(initialMethod(false, false, 'qr'), 'manual')
+  assert.equal(initialMethod(true, true, 'qr'), 'manual')
+})
+
 test('the camera runs only for QR and browsing only for nearby, and both stop in the background', () => {
   assert.equal(cameraActive('qr', true), true)
   assert.equal(cameraActive('qr', false), false)

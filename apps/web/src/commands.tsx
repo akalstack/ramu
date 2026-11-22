@@ -230,6 +230,12 @@ export function buildCommands(ws: WorkspaceApi, shell: ShellControls): Command[]
       run: () => newTerminal(b.repoId),
     })),
     {
+      id: 'phone.connect',
+      title: t('Connect a phone'),
+      category: t('Preferences'),
+      run: () => window.dispatchEvent(new Event('ramu:connect-phone')),
+    },
+    {
       id: 'settings.open',
       title: t('Open settings'),
       category: t('Preferences'),
