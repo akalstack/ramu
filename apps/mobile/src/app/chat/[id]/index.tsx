@@ -1,4 +1,3 @@
-import { HelperDetails } from '../../../components/Helpers'
 import { projectIdentity, useHostIdentities } from '../../../runtime/identities'
 import { deliveryVisible, visibleText } from '../../../runtime/transcript'
 import { finishedAnswerRow, transcriptScrollState } from '../../../runtime/chatViewport'
@@ -12,7 +11,6 @@ import {
   Keyboard as SystemKeyboard,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   useWindowDimensions,
   View,
@@ -36,8 +34,6 @@ import {
   Monitor,
   Server,
   SquareTerminal,
-  Users,
-  X,
   Plug,
   MessageSquarePlus,
   Search,
@@ -62,7 +58,6 @@ import { sideChat } from '../../../runtime/sideChat'
 import { limitPlaceholderKey, limitTrayModel, limitWaitOf } from '../../../runtime/limitTray'
 import { fill, useT, useSay } from '../../../i18n'
 import { LoadingMark } from '../../../components/AnimatedMark'
-import { ProviderIcon } from '../../../components/Logos'
 import { McpStatusSheet } from '../../../components/McpStatusSheet'
 import { SessionCheckpointSheet, useSessionCheckpoint } from '../../../components/SessionCheckpoint'
 import { editFromHere } from '../../../runtime/editFromHere'
@@ -90,19 +85,11 @@ import { quoteSource } from '@ramu/shared/chat/quoteSource'
 import { showToast } from '../../../runtime/toast'
 import { Composer } from '../../../components/Composer'
 import { ContinueOnHostSheet } from '../../../components/ContinueOnHost'
-import { teammatesOf } from '../../../components/Teammate'
-import {
-  draftMention,
-  draftMentions,
-  joiningTeammate,
-  modelHandle,
-  resolveMention,
-  type AbilityModels,
-} from '@ramu/shared/chat/teammateMentions'
+import { draftMentions, type AbilityModels } from '@ramu/shared/chat/helperMentions'
 import type { CustomAgent } from '@ramu/shared/customAgents'
 import type { Chat, TranscriptItem } from '../../../runtime/types'
 import { sameAgentSettings } from '@ramu/shared/chat/settingsChanges'
-import type { AgentSettings, QueuedMessage, TeammateMode } from '@ramu/shared/types'
+import type { AgentSettings, QueuedMessage } from '@ramu/shared/types'
 import {
   CancelPendingSettings,
   ChatMentions,
@@ -114,7 +101,7 @@ import {
 } from '../../../components/Transcript'
 import { RunCommandProvider } from '../../../runtime/runCommand'
 import { SelectionBar } from '../../../components/SelectionBar'
-import { Button, Chip, ConnectionDot, IconButton, Segmented, Sheet, T, tap } from '../../../components/ui'
+import { Button, ConnectionDot, Sheet, T, tap } from '../../../components/ui'
 import { BottomFade, Glass, TopFade, floatingChrome } from '../../../components/Glass'
 import { ComposerDock, KeyboardLift, useKeyboardHeight } from '../../../components/Keyboard'
 import { ReadableColumn } from '../../../components/ReadableColumn'
@@ -175,12 +162,6 @@ function ChatView({ id }: { id: string }) {
   const [continueHost, setContinueHost] = useState<string | null>(null)
   const [mcpOpen, setMcpOpen] = useState(false)
   const [checkpointOpen, setCheckpointOpen] = useState(false)
-  // What the composer changed for a teammate the draft brings in, kept for that target only.
-  const [joinEdits, setJoinEdits] = useState<{
-    key: string
-    model?: import('../../../components/Composer').ModelChoice
-    mode?: TeammateMode
-  }>({ key: '' })
   const failedAt = chat?.status === 'failed' ? chat.lastActiveAt : null
   useFocusEffect(
     useCallback(() => {
@@ -448,16 +429,10 @@ function ChatView({ id }: { id: string }) {
     if (focused && hasNotice && chat) store.acknowledge(chat.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [focused, hasNotice, chat?.id] by design; the values it reads beyond these are current as of that run
   }, [focused, hasNotice, chat?.id])
-  const teammates = useMemo(() => (chat ? teammatesOf(chat) : []), [chat])
-  // Kept on this phone for this thread: after talking to a teammate, plain messages keep going to it.
-  const [recipientId, setRecipientId] = useState<string | null>(null)
-  const recipient = teammates.find((task) => task.agentId === recipientId) ?? null
-  // A teammate's own work (its task, output, report, Stop), opened from its chip with a long press.
-  const [teammateShown, setTeammateShown] = useState<string | null>(null)
   const viewer = computer?.access === 'viewer'
   const hostId = chat?.computerId
   const catalogs = hostId ? store.catalogs[hostId] : undefined
-  // A device that may only view can talk to no one, so it is offered nothing to bring in either.
+  // A device that may only view sends nothing, so it is offered no one to mention either.
   const models = useMemo(
     () => (viewer ? [] : (catalogs ?? []).flatMap((catalog) => catalog.models)),
     [catalogs, viewer],
@@ -468,38 +443,17 @@ function ChatView({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [hostId, viewer] by design; the store is current as of that run
   }, [hostId, viewer])
   const agents = useMemo(() => (viewer ? [] : customAgents), [customAgents, viewer])
-  // `@images` and the other ability handles bring in whichever model the host picks for that ability.
+  // `@images` and the other ability handles start a helper on whichever model the host picks for that ability.
   const [abilityModels, setAbilityModels] = useState<AbilityModels>({})
   useEffect(() => {
-    if (hostId && !viewer) void store.invoke(hostId, 'abilities.teammateModels').then(setAbilityModels, () => {})
+    if (hostId && !viewer) void store.invoke(hostId, 'abilities.mentionModels').then(setAbilityModels, () => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [hostId, viewer] by design; the store is current as of that run
   }, [hostId, viewer])
   const chatDraftKey = chat ? `${chat.computerId}:chat:${chat.taskId || chat.id}` : ''
   const draftText = (chatDraftKey && store.drafts[chatDraftKey]) || ''
-  // Puts a draft in the box and the store at once, so who it brings in follows straight away.
-  const writeDraft = (next: string) => {
-    if (chatDraftKey) store.setDraft(chatDraftKey, next)
-    setRestore({ text: next, n: Date.now() })
-  }
-  // Adding a teammate starts a message to the thread's own model; the composer then shows its settings to change.
-  const startTeammate = () => {
-    if (!chat) return
-    const model =
-      models.find((m) => m.provider === chat.provider && m.id === chat.model) ??
-      models.find((m) => !m.isLegacy) ??
-      models[0]
-    if (model) writeDraft(`@${modelHandle(model)} ${draftText.replace(/^@\S+\s*/, '')}`)
-  }
-  const composerTeammate = useMemo(
-    () => ({
-      teammates: teammates.map((task) => ({ name: task.name, mode: task.teammate ?? ('review' as const) })),
-      models,
-      agents,
-      mentions: draftMentions(teammates, models, agents, abilityModels),
-      ...(viewer ? {} : { onAdd: startTeammate }),
-    }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- startTeammate reads the draft and chat current at the tap
-    [teammates, models, agents, abilityModels, viewer],
+  const composerMentions = useMemo(
+    () => ({ models, agents, abilities: abilityModels, mentions: draftMentions(models, agents, abilityModels) }),
+    [models, agents, abilityModels],
   )
   // Editing a sent message keeps its place with the draft text: leaving the chat or restarting does not drop it.
   const editDraftKey = chat ? `${chat.computerId}:chat:${chat.taskId || chat.id}:editing` : null
@@ -822,38 +776,12 @@ function ChatView({ id }: { id: string }) {
     ? limitTrayModel(limitWait, chat.settings, store.appPreferences[chat.computerId]?.fallback)
     : null
   const currentModel = { provider: chat.provider, model: chat.model, effort: chat.effort, settings: chat.settings }
-  // Commands, teammates, edits and a model change waiting to apply do not continue this conversation as it is.
+  // Commands, edits and a model change waiting to apply do not continue this conversation as it is.
   const compactOffer =
-    compactTokens !== null && !recipient && !editing && staged?.chatId !== chat.id && !/^[/@]/.test(draftText.trim())
+    compactTokens !== null && !editing && staged?.chatId !== chat.id && !draftText.trim().startsWith('/')
       ? compactTokens
       : null
   const compactFirst = compactOffer !== null && keepHistoryFor !== chat.id
-  // While the draft starts with `@model` or `@custom-agent`, the composer's model chip and mode are that teammate's.
-  const joinTarget =
-    chat.settings && chat.sessionId && !viewer
-      ? draftMention(draftText, teammates, models, agents, abilityModels)
-      : null
-  const joinStart = joinTarget && joinTarget.kind !== 'teammate' ? joiningTeammate(joinTarget, chat.settings!) : null
-  const joinOwn = joinStart && joinEdits.key === joinStart.key ? joinEdits : null
-  const joining = joinStart
-    ? {
-        ...joinStart,
-        mode: joinOwn?.mode ?? joinStart.mode,
-        model: joinOwn?.model ?? {
-          provider: joinStart.settings.provider,
-          model: joinStart.settings.model,
-          effort: joinStart.settings.effort ?? '',
-          settings: joinStart.settings,
-        },
-      }
-    : null
-  const chooseJoinModel = (m: import('../../../components/Composer').ModelChoice) => {
-    if (!joining) return
-    const found = models.find((entry) => entry.provider === m.provider && entry.id === m.model)
-    const key = found && joinTarget?.kind === 'model' ? `model:${modelHandle(found)}` : joining.key
-    setJoinEdits({ key, model: m, mode: joinOwn?.mode })
-    if (found && key !== joining.key) writeDraft(draftText.replace(/^@\S+/, `@${modelHandle(found)}`))
-  }
   const applyModel = (m: import('../../../components/Composer').ModelChoice) => {
     // As on the desktop: while the agent works, or is held at a usage limit (a change made to get unblocked, which the
     // next try or automatic resume must use), the change applies now; otherwise it waits for the next message.
@@ -1591,7 +1519,7 @@ function ChatView({ id }: { id: string }) {
             },
           }}
         >
-          <ChatMentions.Provider value={composerTeammate.mentions}>
+          <ChatMentions.Provider value={composerMentions.mentions}>
             <CancelPendingSettings.Provider value={() => setStaged(null)}>
               <RowToggle.Provider value={holdScroll}>
                 <PageLegendList
@@ -1834,8 +1762,8 @@ function ChatView({ id }: { id: string }) {
                           </>
                         }
                         running={running}
-                        model={joining ? joining.model : staged?.chatId === chat.id ? staged.model : currentModel}
-                        onModel={joining ? chooseJoinModel : changeModel}
+                        model={staged?.chatId === chat.id ? staged.model : currentModel}
+                        onModel={changeModel}
                         onSend={async (text, mode, attachments, context) => {
                           if (editing) return submitEdit(text, mode, attachments, context)
                           if (staged?.chatId === chat.id) {
@@ -1864,58 +1792,6 @@ function ChatView({ id }: { id: string }) {
                               .then(() => {
                                 router.push({ pathname: '/chat/[id]/aside', params: { id: chat.id } })
                               })
-                          // `@lead` goes to the main agent; `@name` talks to a teammate here or brings a model or custom
-                          // agent in; without a mention, a teammate chosen as the recipient gets it.
-                          const lead = /^@(?:lead|main)\s+/i.test(text.trim())
-                          if (lead) setRecipientId(null)
-                          const mention =
-                            chat.sessionId && chat.settings && !attachments?.length && !lead
-                              ? resolveMention(text, teammates, models, agents, abilityModels)
-                              : null
-                          const target =
-                            mention ??
-                            (recipient && !lead && !attachments?.length && text.trim() && !text.trim().startsWith('/')
-                              ? ({ kind: 'teammate', task: recipient, body: text.trim() } as const)
-                              : null)
-                          if (target && chat.sessionId && chat.settings) {
-                            const base = chat.settings
-                            const sessionId = chat.sessionId
-                            if (target.kind === 'teammate')
-                              return store
-                                .invoke(
-                                  chat.computerId,
-                                  'agent.messageTask',
-                                  sessionId,
-                                  target.task.agentId,
-                                  target.body,
-                                )
-                                .then(() => setRecipientId(target.task.agentId))
-                            // What the composer showed for this teammate is what it joins with.
-                            const start = joiningTeammate(target, base)
-                            const shown = joining?.key === start.key ? joining : null
-                            const chosen = shown?.model
-                            const settings: AgentSettings = chosen
-                              ? {
-                                  ...start.settings,
-                                  ...chosen.settings,
-                                  provider: chosen.provider,
-                                  model: chosen.model,
-                                  effort: (chosen.effort || null) as AgentSettings['effort'],
-                                }
-                              : start.settings
-                            return store
-                              .invoke(
-                                chat.computerId,
-                                'agent.addTeammate',
-                                sessionId,
-                                settings,
-                                shown?.mode ?? start.mode,
-                                target.kind === 'agent'
-                                  ? `${target.agent.instructions}\n\n${target.body}`
-                                  : target.body,
-                              )
-                              .then((joined) => setRecipientId(joined.agentId))
-                          }
                           followSend()
                           // The message queues behind the compaction and goes out once it finishes, as after a typed /compact.
                           if (compactFirst) await store.send(chat.id, '/compact', 'queue')
@@ -1934,77 +1810,7 @@ function ChatView({ id }: { id: string }) {
                         taskId={chat.taskId || undefined}
                         chatId={chat.id}
                         onFindQuote={findQuote}
-                        teammate={composerTeammate}
-                        header={
-                          joining ? (
-                            // One row says who joins and how; × takes the mention out and the message goes to the thread again.
-                            // The composer's text inset, so the row lines up with what is typed below it.
-                            <View style={{ width: '100%', gap: 4, paddingLeft: space.s + 4, paddingVertical: 2 }}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
-                                <ProviderIcon provider={joining.model.provider} size={14} />
-                                <T size={font.control} weight="500" numberOfLines={1} style={{ flexShrink: 1 }}>
-                                  {tr('{0} joins as', { 0: joining.name })}
-                                </T>
-                                <View style={{ flex: 1, minWidth: 140, maxWidth: 220, marginLeft: 'auto' }}>
-                                  <Segmented<TeammateMode>
-                                    small
-                                    value={joining.mode}
-                                    onChange={(mode) => setJoinEdits({ key: joining.key, model: joinOwn?.model, mode })}
-                                    options={[
-                                      { key: 'review', label: tr('Review') },
-                                      { key: 'take-over', label: tr('Take over') },
-                                    ]}
-                                  />
-                                </View>
-                                <IconButton
-                                  icon={X}
-                                  label={tr('Don’t add {0}', { 0: joining.name })}
-                                  size={32}
-                                  tone="muted"
-                                  onPress={() => writeDraft(draftText.replace(/^@\S+\s*/, ''))}
-                                />
-                              </View>
-                              <T size={font.caption} tone="muted" numberOfLines={1} style={{ paddingBottom: 4 }}>
-                                {joining.mode === 'review'
-                                  ? tr('Reads the changes and reports. Never edits.')
-                                  : tr('Edits while the lead waits, then hands back.')}
-                              </T>
-                            </View>
-                          ) : teammates.length && !viewer ? (
-                            <ScrollView
-                              horizontal
-                              showsHorizontalScrollIndicator={false}
-                              keyboardShouldPersistTaps="always"
-                            >
-                              {/* Who the next message goes to: a recipient, not a view, so the row says "To". */}
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
-                                <T size={font.caption} tone="muted" style={{ paddingLeft: space.s, paddingRight: 2 }}>
-                                  {tr('To')}
-                                </T>
-                                <Chip
-                                  small
-                                  label={tr('Main agent')}
-                                  selected={!recipient}
-                                  onPress={() => setRecipientId(null)}
-                                />
-                                {teammates.map((task) => (
-                                  <Chip
-                                    key={task.agentId}
-                                    small
-                                    icon={Users}
-                                    label={task.name}
-                                    maxLabelWidth={140}
-                                    selected={recipient?.agentId === task.agentId}
-                                    accessibilityLabel={tr('To {0}', { 0: task.name })}
-                                    accessibilityHint={tr('Touch and hold to see its work')}
-                                    onPress={() => setRecipientId(task.agentId)}
-                                    onLongPress={() => setTeammateShown(task.agentId)}
-                                  />
-                                ))}
-                              </View>
-                            </ScrollView>
-                          ) : undefined
-                        }
+                        helpers={composerMentions}
                         computerId={chat.computerId}
                         draftKey={`${chat.computerId}:chat:${chat.taskId || chat.id}`}
                         onStop={() => store.stop(chat.id)}
@@ -2078,9 +1884,7 @@ function ChatView({ id }: { id: string }) {
                                       })
                                     : '',
                                 )
-                              : joining
-                                ? tr('Tell {0} what to do', { 0: joining.name })
-                                : undefined
+                              : undefined
                         }
                       />
                     )}
@@ -2136,15 +1940,6 @@ function ChatView({ id }: { id: string }) {
             </CancelPendingSettings.Provider>
           </ChatMentions.Provider>
         </MessageMenu.Provider>
-        {teammateShown ? (
-          <HelperDetails
-            task={chat.items
-              .flatMap((item) => (item.kind === 'agents' ? item.agents : []))
-              .findLast((agent) => agent.agentId === teammateShown)}
-            chat={chat}
-            onClose={() => setTeammateShown(null)}
-          />
-        ) : null}
         <Presence
           visible={Boolean(toast)}
           style={{

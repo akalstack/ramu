@@ -5,18 +5,17 @@ import { ramuTool } from '@ramu/shared/chat/ramuTools'
  * Whether a helper gets its own copy of the checkout. It does when it would write at the same time as another writer
  * there: it runs in the background while the thread works on, or another writing helper is still running. A helper the
  * thread waits for alone shares the checkout, so its edits show in the thread's change review as they happen and it can
- * still be messaged. Read-only helpers and teammates (one writer at a time, always reachable) never need a copy.
+ * still be messaged. Read-only helpers never need a copy.
  */
 export function needsOwnCheckout(helper: {
   background: boolean
   readOnly: boolean
-  teammate: boolean
   /** Writing helpers of the same thread that are still running. */
   otherWriters: number
   /** What the agent asked for; sharing still gives way when another writer would collide with it. */
   requested?: 'shared' | 'worktree'
 }): boolean {
-  if (helper.readOnly || helper.teammate) return false
+  if (helper.readOnly) return false
   if (helper.requested === 'worktree') return true
   if (helper.requested === 'shared') return helper.otherWriters > 0
   return helper.background || helper.otherWriters > 0

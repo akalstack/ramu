@@ -13,7 +13,6 @@ export type ToggleKey =
   | 'warnModelChange'
   | 'autoProjectSelection'
   | 'agentThreads'
-  | 'teammateSuggestions'
   | 'modelCatalogLookups'
   | 'newModelNotices'
   | 'liveViewDesktop'

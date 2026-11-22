@@ -338,7 +338,7 @@ export const registerWorkspaceHandlers: RegisterHandlers = ({
           const inputSummary = mergeInputSummaries(sessions.map((session) => session.inputSummary))
           const goal = main ? agents.goalOf(main.id) : null
           const executionState = main?.state
-          // The thread's cast: each session (the main agent and teammates) at its creation, plus every provider a
+          // The thread's cast: each session (the main agent and its helpers) at its creation, plus every provider a
           // session handed off between, with the main agent's provider leading.
           const providers = threadProviders(
             sessions.flatMap((session) => [

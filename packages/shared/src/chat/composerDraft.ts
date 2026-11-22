@@ -8,12 +8,12 @@ export interface DraftChip {
   source: string
   label: string
   target?: string
-  /** A mention of a model: whose icon it wears. A teammate or custom agent has none. */
+  /** A mention of a model: whose icon it wears. A custom agent without a model has none. */
   provider?: AgentProvider
 }
 export type DraftSegment = { kind: 'text'; source: string } | DraftChip
 
-/** Someone a message can start with: a teammate here, a model, or a custom agent. */
+/** A helper a message can start with: a model, a custom agent or an ability. */
 export interface DraftMention {
   /** As typed after `@`, lower case (`sonnet-5.5`). */
   handle: string

@@ -5,8 +5,8 @@ import type { Workspace } from '../workspace/workspace'
 const KEY = 'custom-agents'
 
 /**
- * Teammates ready from the first `@`, so a review or tests need no setup first. Ordinary custom agents: the person
- * edits or deletes them like their own, and they are added only to a host that has never saved one.
+ * Custom agents ready from the first `@`, so a review or tests need no setup first. The person edits or deletes them
+ * like their own, and they are added only to a host that has never saved one.
  */
 export const STARTER_AGENTS: Omit<CustomAgent, 'id' | 'updatedAt'>[] = [
   {

@@ -1,10 +1,6 @@
 import { isAcpProvider } from '@ramu/shared/providers/providers'
 import type { AgentTask } from '@ramu/shared/types'
-import { helperWork, isStaleProgress, taskMessagePrompt, taskStopPrompt } from '@ramu/shared/chat/agentTasks'
-import { teammateCatchUp } from '@ramu/shared/chat/teammateMentions'
-import { redactSecrets } from '../memory/secrets'
-import { transcriptOf } from './handoff'
-import type { ChildRun } from './types'
+import { isStaleProgress, taskMessagePrompt, taskStopPrompt } from '@ramu/shared/chat/agentTasks'
 import { WRITING_STATES } from './constants'
 import { isUsageLimit } from './usageLimit'
 import type { AdvisorService } from './advisorService'
@@ -17,12 +13,6 @@ import type { SessionStore } from './sessionStore'
 import type { SubagentRunner } from './subagentRunner'
 import type { ProviderWaits } from './providerWait'
 import type { Db } from '../db'
-import { clipTextEnd } from '@ramu/shared/text'
-
-/** Without a cursor (after a restart), how much of the lead's thread a teammate's catch-up covers. */
-const CATCH_UP_EVENTS = 40
-/** The most of the conversation one catch-up carries; the newest part is kept. */
-const CATCH_UP_CHARS = 40_000
 
 /** What AgentTasks needs from the rest of the service. */
 export interface AgentTasksHost
@@ -35,7 +25,7 @@ export interface AgentTasksHost
     Pick<SessionRegistry, 'live' | 'runners'>,
     Pick<SessionStore, 'emit' | 'events' | 'get' | 'hasRunningTasks' | 'task'>,
     Pick<ProviderWaits, 'providerWait'>,
-    Pick<SubagentRunner, 'children' | 'continueNative' | 'wakeTeammate'> {}
+    Pick<SubagentRunner, 'children' | 'continueNative'> {}
 
 /** The sub-agents and background commands inside a chat: recording their state and stopping or messaging them. */
 export class AgentTasks {
@@ -145,29 +135,10 @@ export class AgentTasks {
     throw new Error('That agent is no longer running.')
   }
 
-  /**
-   * Takes a teammate out of the thread: it stops if it is working, and once ended neither the lead nor the person can
-   * address it, so a thread with many teammates can let go of the ones it no longer needs. A finished teammate cannot
-   * be stopped, so without this it stayed in the conversation for good.
-   */
-  async dismissTeammate(id: string, agentId: string): Promise<void> {
-    const task = this.host.task(id, agentId)
-    if (!task?.teammate) throw new Error('That is not a teammate in this thread.')
-    if (task.status === 'stopped' || task.status === 'failed') return
-    if (task.status === 'running' && task.canStop === true) await this.stopTask(id, agentId)
-    // A teammate between turns still holds its own session; end it too, so it frees what it used.
-    else if (this.host.children.get(agentId)?.parentId === id) await this.host.stopAndWait(agentId)
-    if (this.host.task(id, agentId)?.status !== 'stopped')
-      this.updateTask(id, agentId, { status: 'stopped', canMessage: false, endedAt: task.endedAt ?? Date.now() })
-  }
-
-  async messageTask(id: string, agentId: string, message: string): Promise<void> {
-    let text = message
+  async messageTask(id: string, agentId: string, text: string): Promise<void> {
     const task = this.host.task(id, agentId)
     if (!task?.canMessage) throw new Error('This agent cannot receive messages.')
-    if (task.teammate) this.host.wakeTeammate(id, agentId)
     const run = this.host.children.get(agentId)
-    if (run?.teammate && run.parentId === id) text = `${this.catchUp(id, agentId, run)}${text}`
     if (run?.parentId === id) {
       // Straight to the sub-agent; its next report comes back as a message.
       run.report = true
@@ -195,27 +166,6 @@ export class AgentTasks {
       undefined,
       true,
     )
-  }
-
-  /**
-   * What the lead's thread said and changed since a teammate last took part. After a restart the cursor is gone, so the
-   * last stretch of the conversation stands in for it.
-   */
-  private catchUp(id: string, agentId: string, run: ChildRun): string {
-    const events = this.host.events(id)
-    const since = Math.min(run.seenParent ?? Math.max(0, events.length - CATCH_UP_EVENTS), events.length)
-    run.seenParent = events.length
-    // Its own reports and notes are already in its own session.
-    const own = [`[Sub-agent "${run.name.replace(/"/g, "'")}"`, `[Teammate "${run.name.replace(/"/g, "'")}"`]
-    const missed = events
-      .slice(since)
-      .filter(
-        (event) =>
-          !(event.kind === 'user' && own.some((prefix) => event.text.startsWith(prefix))) &&
-          !(event.kind === 'teammate-message' && event.teammateId === agentId),
-      )
-    const transcript = clipTextEnd(redactSecrets(transcriptOf(missed)), CATCH_UP_CHARS)
-    return teammateCatchUp(transcript, helperWork(missed).paths)
   }
 
   /** Moves a running command to the background, as Ctrl+B does in Claude Code. The turn goes on and the result arrives as a task notification. */

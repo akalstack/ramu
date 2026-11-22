@@ -17,7 +17,7 @@ export interface PermissionHost {
   setState(state: AgentSessionState): void
   /** A review chat about learned memories: Ramu's own tools only. */
   restricted?: boolean
-  /** A Review teammate: it may read, never write. */
+  /** A read-only helper: it may read, never write. */
   readOnly?: boolean
 }
 

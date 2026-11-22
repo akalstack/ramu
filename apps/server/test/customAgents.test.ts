@@ -22,7 +22,7 @@ it('saves, renames and removes custom agents, refusing a second one with the sam
   expect(store.list()).toHaveLength(starters)
 })
 
-it('starts a new host with ready teammates, once, and never brings deleted ones back', () => {
+it('starts a new host with ready custom agents, once, and never brings deleted ones back', () => {
   const state = memory()
   const store = new CustomAgentStore(state)
   const first = store.list()

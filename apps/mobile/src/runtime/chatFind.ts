@@ -9,7 +9,6 @@ function rowText(row: Row): string {
     case 'user':
     case 'text':
     case 'thinking':
-    case 'teammate-message':
       return item.text
     case 'report':
       return `${item.name} ${item.body}`

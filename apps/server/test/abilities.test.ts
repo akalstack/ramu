@@ -623,10 +623,10 @@ describe('helpers by ability', () => {
     await expect(abilities.helperModel(['video_generation'])).rejects.toThrow('video generation')
   })
 
-  it('names the model each @ability handle brings in, routed like a helper that needs that ability', async () => {
+  it('names the model each @ability handle starts a helper on, routed like a helper that needs that ability', async () => {
     const abilities = service(working)
     await abilities.refresh()
-    const models = await abilities.teammateModels()
+    const models = await abilities.mentionModels()
     expect(models.images).toMatchObject({ provider: 'codex', id: 'gpt-x' })
     expect(models.long?.provider).toBe('claude-code')
     expect(Object.keys(models).sort()).toEqual(['images', 'long', 'search'])

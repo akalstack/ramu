@@ -121,7 +121,7 @@ export interface Task {
    */
   goalState?: TaskGoalSummary | null
   /**
-   * Every agent that has worked in the thread (model handoffs and teammates), oldest first, the leading one last. Only
+   * Every agent that has worked in the thread (model handoffs included), oldest first, the leading one last. Only
    * the task list sets it; older hosts omit it.
    */
   providers?: AgentProvider[]

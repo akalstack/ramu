@@ -161,19 +161,6 @@ export const BACKGROUND_PREAMBLE =
 export const SUBAGENT_PREAMBLE =
   'You are a sub-agent started by another agent that works in the same workspace. Do the task below, then finish with a concise report of what you did and found: files you changed, results, and anything left open. Ask nothing unless you are blocked; your report goes straight back to the agent that started you. While you work, message_parent sends the agent that started you a short note without stopping, and ask_parent asks it a question and waits for the answer; use ask_parent only when you cannot go on without it, and still end with your report.'
 
-/** The person's teammates in this thread that are still around to talk to, in the order they joined. */
-export const activeTeammates = (tasks: readonly AgentTask[]) =>
-  tasks.filter((task) => task.teammate && task.status !== 'stopped' && task.status !== 'failed')
-
-/** How the lead and the person address a teammate: its name in lower case, spaces as dashes. */
-export const teammateHandle = (name: string) => name.trim().toLowerCase().replace(/\s+/g, '-')
-
-/** Whether `to` names this teammate: its handle, or plain `teammate`. */
-export const namesTeammate = (to: string, name: string) => {
-  const handle = to.trim().replace(/^@/, '').toLowerCase()
-  return handle === 'teammate' || handle === teammateHandle(name)
-}
-
 /** Files the card lists by name; the counts still cover every file. */
 const WORK_PATHS = 20
 
@@ -200,19 +187,4 @@ export function helperWork(events: readonly AgentEvent[]): AgentWork {
     }
   }
   return { files: files.size, paths: [...files].slice(0, WORK_PATHS), added, removed, turns, costUsd }
-}
-
-/** A teammate's note to the lead, sent with teammate_message; the lead answers the same way. */
-export function teammateNotePrompt(name: string, text: string): string {
-  return `[Teammate "${name.replace(/"/g, "'")}" says]\n${text.trim()}\n\n(Reply with teammate_message, to "${teammateHandle(name)}", only if it needs an answer.)`
-}
-
-/** The lead's question to a teammate; its reply goes straight back into the lead's turn. */
-export function leadQuestionPrompt(text: string): string {
-  return `[The lead asks]\n${text.trim()}\n\n(Answer briefly; your reply goes straight back to the lead.)`
-}
-
-/** The lead's note to its teammate, delivered as the teammate's next message. */
-export function leadNotePrompt(text: string): string {
-  return `[The lead says]\n${text.trim()}\n\n(Reply with teammate_message, to "lead", only if it needs an answer before your report.)`
 }

@@ -55,7 +55,7 @@ Removing a tool offers **Also ask your other hosts to remove it**, checked when 
 
 If a host refuses what the desktop app sends (it hasn't allowed **Change settings** for this device), a notice says which host and what to allow.
 
-An agent can do the same: `plugin_install` and `skill_install` take `hosts: "all"` when you ask for a tool on all your hosts, and the approval card says so. **Copy settings from…** and **Export settings** also carry Plugins, Skills and MCP servers groups ([Moving settings](identities.md#moving-settings)). **Export tools** there saves only those three, to share with a teammate, who imports it with **Import settings** and reviews each tool as one from another host.
+An agent can do the same: `plugin_install` and `skill_install` take `hosts: "all"` when you ask for a tool on all your hosts, and the approval card says so. **Copy settings from…** and **Export settings** also carry Plugins, Skills and MCP servers groups ([Moving settings](identities.md#moving-settings)). **Export tools** there saves only those three, to share with a colleague, who imports it with **Import settings** and reviews each tool as one from another host.
 
 **Continue on ‹host›** lists the plugins, skills and servers the thread used that the other host lacks, with **Install there**: the servers it called, the skills its agent opened and the plugin command lines it ran in a shell.
 

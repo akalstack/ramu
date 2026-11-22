@@ -86,7 +86,7 @@ export const registerProviderHandlers: RegisterHandlers = ({
         return { accounts: await media().list(false), canAdminister: administrator() }
       },
     },
-    'abilities.teammateModels': { args: z.tuple([]), run: () => ability().teammateModels() },
+    'abilities.mentionModels': { args: z.tuple([]), run: () => ability().mentionModels() },
     'abilities.mcpTools': { args: z.tuple([]), run: () => ability().mcpTools() },
     'abilities.again': {
       args: z.tuple([z.string().min(1).max(200), z.string().uuid(), z.boolean()]),

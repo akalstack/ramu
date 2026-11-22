@@ -132,7 +132,7 @@ export function SettingsTransfer() {
           size="sm"
           variant="secondary"
           disabled={busy}
-          title={t('Only plugins, skills and MCP servers, to share with a teammate. Keys and paths stay here.')}
+          title={t('Only plugins, skills and MCP servers, to share with a colleague. Keys and paths stay here.')}
           onClick={() => void act(() => download([...TOOL_GROUPS], 'tools'))}
         >
           <Download size={13} />

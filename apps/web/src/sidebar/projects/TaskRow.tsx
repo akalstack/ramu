@@ -127,7 +127,7 @@ export function TaskRow({
   const active = onScreen && ws?.ui.activeTaskId === task.id && !ws.composing
   const archived = task.status === 'archived'
   const done = !!task.doneAt
-  // The thread's agents, as the phone shows them: a handoff or teammate stays tucked behind the leading one. They end
+  // The thread's agents, as the phone shows them: an earlier agent stays tucked behind the leading one. They end
   // the row (after the time, or under it on the context line), so every row's agents share one right edge.
   const agents = <AgentStack task={task} />
   // Small marks (origin, review, pin, pull request or worktree) sit just before the agents in one icon group at the row's

@@ -211,7 +211,7 @@ type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange'> & {
   autoFocus?: boolean
   /** The draft is frozen, e.g. while a dictation take is running, so the insertion point cannot move under it. */
   readOnly?: boolean
-  /** Who a message can start with; a leading `@handle` naming one draws as that model or teammate. */
+  /** Who a message can start with; a leading `@handle` naming one draws as that model or custom agent. */
   mentions?: readonly DraftMention[]
   /** Opens a referenced file or folder from its chip. */
   onOpenFile?: (target: string) => void

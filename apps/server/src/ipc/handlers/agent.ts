@@ -1,10 +1,10 @@
 import { readFileSync, statSync } from 'node:fs'
 import { z } from 'zod'
-import type { AgentSettings, FileContext, PermissionScope, SecretAnswer, TeammateMode } from '@ramu/shared/types'
+import type { AgentSettings, FileContext, PermissionScope, SecretAnswer } from '@ramu/shared/types'
 import type { ModelViewerLabels } from '@ramu/shared/interactive'
 import { MAX_ATTACHMENT_BYTES } from '../../attachments'
 import { modelViewerHtml } from '../../interactive/modelViewer'
-import { draftPrompt, interpretDraft, teammateRecipe, type CustomAgent } from '@ramu/shared/customAgents'
+import { draftPrompt, interpretDraft, type CustomAgent } from '@ramu/shared/customAgents'
 import {
   chooseDuplicate,
   DUPLICATE_CHOICE_KEY,
@@ -22,6 +22,7 @@ import {
   type SkillSharing,
 } from '../../agent/projectSetup'
 import { lockCheckouts, lockSession } from '../helpers'
+import { withMentionInstruction } from '../../agent/mentionContext'
 import { agentSettings, attachmentIds, fileContext, id, modelViewerLabels, text } from '../schemas'
 import type { RegisterHandlers } from '../types'
 
@@ -34,6 +35,11 @@ function assertOpen(workspace: { getTask(id: string): { status: string } }, task
 
 export const registerAgentHandlers: RegisterHandlers = (ctx) => {
   const { host, workspace, agents, attachmentStore, withContext, rules, getSharedMcp, environment } = ctx
+  const mentionSources = {
+    models: async () => (await agents.catalog()).flatMap((catalog) => catalog.models),
+    agents: () => ctx.customAgents?.list() ?? [],
+    abilities: async () => (ctx.abilities ? ctx.abilities.mentionModels() : {}),
+  }
   return {
     'agent.all': { args: z.tuple([]), run: () => agents.all() },
     'agent.list': { args: z.tuple([id]), run: (taskId: string) => agents.list(taskId) },
@@ -222,7 +228,7 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
           throw new Error('Start a thread to run the agent.')
         assertOpen(workspace, taskId)
         if (settings) await agents.validateSettings(settings)
-        prompt = await withContext(workspace, taskId, prompt, context)
+        prompt = await withMentionInstruction(await withContext(workspace, taskId, prompt, context), mentionSources)
         const scope = workspace.agentScope(taskId)
         return lockCheckouts(ctx, scope.covers, () => {
           workspace.getTask(taskId)
@@ -238,7 +244,7 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
         assertOpen(workspace, taskId)
         workspace.setDone(taskId, false)
         t = await withContext(workspace, taskId, t, context)
-        agents.resetTeammateRounds(s)
+        if (!agents.get(s).parentId) t = await withMentionInstruction(t, mentionSources)
         return lockSession(ctx, s, () => {
           workspace.getTask(taskId)
           ctx.terminals?.assertTaskAvailable(taskId)
@@ -319,21 +325,10 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
       args: z.tuple([id, z.string().min(1).max(200)]),
       run: (s: string, agentId: string) => agents.stopTask(s, agentId),
     },
-    'agent.dismissTeammate': {
-      args: z.tuple([id, z.string().min(1).max(200)]),
-      run: (s: string, agentId: string) => lockSession(ctx, s, () => agents.dismissTeammate(s, agentId)),
-    },
-    'agent.continueTeammates': {
-      args: z.tuple([id]),
-      run: (s: string) => lockSession(ctx, s, async () => agents.continueTeammates(s)),
-    },
     'agent.messageTask': {
       args: z.tuple([id, z.string().min(1).max(200), z.string().min(1).max(100_000)]),
       run: (s: string, agentId: string, text: string) =>
-        lockSession(ctx, s, () => {
-          agents.resetTeammateRounds(s)
-          return agents.messageFromPerson(s, agentId, text)
-        }),
+        lockSession(ctx, s, () => agents.messageFromPerson(s, agentId, text)),
     },
     'customAgents.list': { args: z.tuple([]), run: () => ctx.customAgents?.list() ?? [] },
     'customAgents.save': {
@@ -358,15 +353,6 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
         return ctx.customAgents.save(input)
       },
     },
-    'customAgents.saveTeammate': {
-      args: z.tuple([id, z.string().min(1).max(200), z.string().trim().min(1).max(60)]),
-      run: (s: string, agentId: string, name: string) => {
-        if (!ctx.customAgents) throw new Error('Custom agents are unavailable on this host.')
-        const task = agents.task(s, agentId)
-        if (!task?.teammate) throw new Error('Only a teammate can be saved this way.')
-        return ctx.customAgents.save(teammateRecipe(task, name))
-      },
-    },
     'customAgents.delete': {
       args: z.tuple([z.string().uuid()]),
       run: (agentId: string) => ctx.customAgents?.remove(agentId),
@@ -379,13 +365,6 @@ export const registerAgentHandlers: RegisterHandlers = (ctx) => {
         const draft = interpretDraft(message)
         if (!draft) throw new Error('That did not produce a usable draft. Try describing it another way.')
         return draft
-      },
-    },
-    'agent.addTeammate': {
-      args: z.tuple([id, agentSettings, z.enum(['review', 'take-over']), z.string().max(20_000)]),
-      run: async (s: string, settings: AgentSettings, mode: TeammateMode, request: string) => {
-        await agents.validateSettings(settings)
-        return agents.addTeammate(s, settings, mode, request)
       },
     },
     'agent.replyPermission': {

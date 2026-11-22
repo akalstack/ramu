@@ -5,7 +5,7 @@
 For people using Ramu.
 
 - [Providers](guide/providers.md): set up Claude Code, Codex, OpenCode, Cursor or Antigravity.
-- [Agents](guide/working-with-agents.md): models, fallback, helpers, teammates, custom agents and work across threads and hosts.
+- [Agents](guide/working-with-agents.md): models, fallback, helpers, custom agents and work across threads and hosts.
 - [Home and Inbox](guide/inbox.md): what needs you, what is running, and what it uses.
 - [Browser, computer use and test devices](guide/browser-and-computer.md): what agents can drive, and Float.
 - [Goals](guide/goals.md): keep a thread working toward an objective across turns.

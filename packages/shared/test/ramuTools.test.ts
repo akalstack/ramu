@@ -125,16 +125,6 @@ describe('Ramu tool calls', () => {
     expect(describeRamuTool({ name: 'memory_read', args: { id: 'm1' } }, 'not json').subject).toBeUndefined()
   })
 
-  it("shows a teammate's reply to the lead's question, which reaches the thread nowhere else", () => {
-    const call = { name: 'teammate_ask', args: { to: 'opus-5.5', question: 'Is utils.ts covered?' } }
-    expect(describeRamuTool(call, JSON.stringify({ reply: 'Yes, by utils.test.ts.' })).facts).toEqual([
-      { label: 'Question', value: 'Is utils.ts covered?' },
-      { label: 'Reply', value: 'Yes, by utils.test.ts.' },
-    ])
-    // Still waiting: only the question.
-    expect(describeRamuTool(call).facts).toEqual([{ label: 'Question', value: 'Is utils.ts covered?' }])
-  })
-
   it('summarises agent states', () => {
     expect(summarizeAgentStatuses(['running', 'completed', 'completed', 'failed'])).toBe(
       '1 running · 1 failed · 2 done',

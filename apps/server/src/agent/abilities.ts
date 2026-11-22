@@ -646,8 +646,8 @@ export class AbilityService {
     }
   }
 
-  /** The model each `@ability` handle brings in as a teammate here; a handle no provider can serve is left out. */
-  async teammateModels(): Promise<Partial<Record<AbilityHandle, AgentModel>>> {
+  /** The model each `@ability` handle starts a helper on here; a handle no provider can serve is left out. */
+  async mentionModels(): Promise<Partial<Record<AbilityHandle, AgentModel>>> {
     const models: Partial<Record<AbilityHandle, AgentModel>> = {}
     for (const [handle, ability] of Object.entries(ABILITY_HANDLES) as [AbilityHandle, Ability][]) {
       const model = await this.helperModel([ability]).catch(() => null)

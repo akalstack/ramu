@@ -1,6 +1,6 @@
-import type { AgentSettings, AgentTask } from './types'
+import type { AgentSettings } from './types'
 
-/** A saved recipe: a sub-agent or a teammate can use it on any provider. It is read, never executed. */
+/** A saved recipe a sub-agent can use on any provider. It is read, never executed. */
 export interface CustomAgent {
   id: string
   name: string
@@ -42,37 +42,6 @@ export function interpretDraft(text: string): Omit<CustomAgent, 'id' | 'updatedA
     return null
   }
 }
-
-/**
- * A teammate from a thread as a reusable custom agent: its brief becomes the instructions, its first line says when to
- * use it, Review stays read-only, and it keeps the model it ran on.
- */
-export function teammateRecipe(
-  task: Pick<AgentTask, 'name' | 'prompt' | 'teammate' | 'provider' | 'model' | 'effort'>,
-  name: string,
-): Omit<CustomAgent, 'id' | 'updatedAt'> {
-  const brief =
-    task.prompt?.trim() ||
-    (task.teammate === 'take-over'
-      ? 'Take over the latest request and hand back with a short summary when done.'
-      : 'Review the latest changes and reply with concrete findings, most important first.')
-  const first = brief
-    .split('\n')
-    .find((line) => line.trim())!
-    .trim()
-  return {
-    name: customAgentHandle(name).slice(0, 60),
-    description: first.length > 300 ? `${first.slice(0, 299)}…` : first,
-    instructions: brief.slice(0, 8000),
-    model:
-      task.provider && task.model ? { provider: task.provider, model: task.model, effort: task.effort ?? null } : null,
-    readOnly: task.teammate !== 'take-over',
-  }
-}
-
-/** A name to offer when saving a teammate: its model's handle and what it did, such as `opus-5.5-reviewer`. */
-export const teammateRecipeName = (task: Pick<AgentTask, 'name' | 'teammate'>) =>
-  `${customAgentHandle(task.name)}-${task.teammate === 'take-over' ? 'helper' : 'reviewer'}`.slice(0, 60)
 
 /** How the lead learns which custom agents exist: names and when to use them, like a skill list. */
 export const customAgentList = (agents: readonly CustomAgent[]) =>

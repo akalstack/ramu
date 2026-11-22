@@ -298,9 +298,6 @@ export type AgentEvent = AgentEventBody & {
 }
 
 export type AgentTaskStatus = 'running' | 'completed' | 'failed' | 'stopped'
-/** A sub-agent or background task the main agent started. Recorded once and updated in place as it progresses. */
-/** A teammate the person adds: Review reads and reports; Take over edits while the lead waits, then hands back. */
-export type TeammateMode = 'review' | 'take-over'
 
 /** What a helper's own session did, read from its events. */
 export interface AgentWork {
@@ -316,6 +313,7 @@ export interface AgentWork {
   costUsd: number | null
 }
 
+/** A sub-agent or background task the main agent started. Recorded once and updated in place as it progresses. */
 export interface AgentTask {
   /** Ramu-owned session; absent for native provider helpers without a separate session. */
   childSessionId?: string
@@ -333,11 +331,7 @@ export interface AgentTask {
   role?: import('../chat/helperRoles').HelperRole
   /** Claude task kind: local_agent, local_bash, … Absent for Codex sub-agents. */
   taskType?: string
-  /** Set for a teammate the person added, rather than a helper the agent started. */
-  teammate?: TeammateMode
-  /** The exchange with this teammate paused for the person after a few rounds; its latest report waits until they continue. */
-  paused?: boolean
-  /** A teammate's changes and usage so far, updated as each turn ends. */
+  /** A helper's changes and usage so far, updated as each turn ends. */
   work?: AgentWork
   status: AgentTaskStatus
   /** Keeps running after the main turn ends. */
@@ -426,13 +420,6 @@ type AgentEventBody =
     }
   | { kind: 'user'; text: string; attachments?: Attachment[]; from?: MessageOrigin }
   | { kind: 'file-restore'; userSeq: number; fileCount: number }
-  /** Recorded on a teammate's own session: how it works beside the lead. Review is read-only whatever the thread allows. */
-  | { kind: 'teammate'; mode: TeammateMode; name: string }
-  /**
-   * Recorded on the lead's session when the person writes to a teammate, so the thread shows what each report answers.
-   * Only shown: the teammate gets the message in its own session, and the lead never receives it.
-   */
-  | { kind: 'teammate-message'; teammateId: string; name: string; text: string }
   /** Recorded on a helper's session when it runs a custom agent, so its read-only choice holds across restarts. */
   | { kind: 'custom-agent'; name: string; readOnly: boolean }
   /** Recorded on a helper's session when the agent gave it a role, so a read-only role holds across restarts. */

@@ -762,7 +762,7 @@ export function isRoutineGitRead(command: string): boolean {
 }
 
 /**
- * Whether a command line only reads, for a session that may never write (a Review teammate). Wider than Auto's
+ * Whether a command line only reads, for a session that may never write (a read-only helper). Wider than Auto's
  * routine reads, since a refusal here cannot be approved: any path, and any Git read verb with options that cannot
  * write or run a program. Shell syntax this file cannot read, wrappers and risky options still count as writing.
  */

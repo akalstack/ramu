@@ -11,7 +11,7 @@ import { translate, type Language } from '@ramu/shared/i18n'
 import { toolVerb } from '@ramu/shared/chat/toolStatus'
 import { DiffLines } from './DiffLines'
 import { changedFile } from '../runtime/diff'
-import { Helpers, ReportCard, TeammateTo } from './Helpers'
+import { Helpers, ReportCard } from './Helpers'
 import { InteractiveContent, InteractiveOlderVersion } from './InteractiveContent'
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
@@ -568,7 +568,7 @@ interface RowProps {
   /** The words that led here. A message highlights them in place; the whole row lights up only when it cannot. */
   mark?: readonly string[]
 }
-/** Rows that read the rest of the chat: an error offers Retry only while it ended the thread; teammates read it whole. */
+/** Rows that read the rest of the chat: an error offers Retry only while it ended the thread; helper cards read it whole. */
 const READS_ITEMS = new Set<TranscriptItem['kind']>(['error', 'agents'])
 
 /**
@@ -590,7 +590,7 @@ export const TranscriptListRow = memo(function TranscriptListRow({
   const inText = useMemo(() => {
     if (!mark?.length || !nativeMarkdown) return false
     // A report opens folded, so words inside it would not show; it lights up whole instead.
-    const text = item.kind === 'user' || item.kind === 'text' || item.kind === 'teammate-message' ? item.text : null
+    const text = item.kind === 'user' || item.kind === 'text' ? item.text : null
     return text !== null && markSource(text, mark) !== null
   }, [item, mark])
   return (
@@ -793,15 +793,6 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       return <AgentsGroup item={item} chat={chat} />
     case 'report':
       return <ReportCard item={item} chat={chat} />
-    case 'teammate-message':
-      return (
-        <MessageActions text={item.text} from="user" markdown>
-          <View style={{ gap: space.xs }}>
-            <TeammateTo teammateId={item.teammateId} name={item.name} chat={chat} />
-            <UserBubble text={item.text} chat={chat} />
-          </View>
-        </MessageActions>
-      )
     case 'question':
       return <QuestionCard item={item} chatId={chat.id} />
     case 'permission':

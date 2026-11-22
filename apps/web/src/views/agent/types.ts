@@ -69,8 +69,6 @@ export interface TranscriptContext {
   onOpenAgent: (agentId: string | null) => void
   readOnly?: boolean
   onStopTask: (task: AgentTask) => void
-  /** Continue on a teammate exchange that paused for the person. */
-  onContinueTeammates?: () => void
   onOpenQuestion: (requestId: string) => void
   onReviewAccess: () => void
   onRetry?: () => void

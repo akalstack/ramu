@@ -141,7 +141,7 @@ export const ChatRow = memo(function ChatRow({
   // Without a state to report, the reply says what the thread came to, which is what a person scans the list for.
   const reply = state ? '' : (chat.lastReply ?? '')
   const detail = Boolean(state || reply || facts)
-  // Every agent that has worked here, as T3's rows show them: earlier ones (a handoff, a teammate) small and grey
+  // Every agent that has worked here, as T3's rows show them: earlier ones (a handoff) small and grey
   // before the one leading now. An older host reports only the leading one.
   const agents = providerStack(chat.providers?.length ? chat.providers : chat.provider ? [chat.provider] : [])
   const actions =

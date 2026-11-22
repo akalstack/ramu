@@ -2114,7 +2114,7 @@ const mcpHttp = createServer(async (req, res) => {
       'agent_models',
       {
         description:
-          "List this host's providers and their current models with the handles ramu_agent's model and teammate_suggest take, at most eight per provider (the default first), and its abilities: which provider can make images, search the web or read very long documents, and the tool that calls each (generate_image, edit_image, web_search, read_long). Check it before planning work that needs one. query narrows models by name, handle or provider. A provider marked unavailable cannot run a helper now.",
+          "List this host's providers and their current models with the handles ramu_agent's model takes, at most eight per provider (the default first), and its abilities: which provider can make images, search the web or read very long documents, and the tool that calls each (generate_image, edit_image, web_search, read_long). Check it before planning work that needs one. query narrows models by name, handle or provider. A provider marked unavailable cannot run a helper now.",
         inputSchema: { query: z.string().max(80).optional() },
       },
       async ({ query }) => result(await agents.agentModels(query)),
@@ -2160,70 +2160,6 @@ const mcpHttp = createServer(async (req, res) => {
       },
     )
   }
-  // The lead and a teammate the person added address each other by name. A lead may gain a teammate mid-thread, so it always has the tool.
-  const teammateSession = agents.events(source.id).some((event) => event.kind === 'teammate')
-  if (!agents.get(source.id).parentId || teammateSession)
-    server.registerTool(
-      'teammate_message',
-      {
-        description: teammateSession
-          ? 'Send the lead (to "lead") a short note before your report: a finding it should act on now, or a question. It does not wait for a reply; finish with your report as usual.'
-          : 'Message a teammate the person added to this thread, by its name as in @name ("teammate" works while there is one). It wakes the teammate, which also sees what the thread said since it last took part, and its next report comes back to you as a message. Use it only when the thread has teammates; for your own sub-agents use their tools.',
-        inputSchema: { to: z.string().min(1).max(80), text: z.string().min(1).max(20000) },
-      },
-      async ({ to, text }) => {
-        try {
-          return result(await agents.teammateMessage(source.id, to, text))
-        } catch (error) {
-          return {
-            isError: true,
-            content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
-          }
-        }
-      },
-    )
-  if (!agents.get(source.id).parentId)
-    server.registerTool(
-      'teammate_suggest',
-      {
-        description:
-          'Suggest bringing another model into this thread as a teammate, when a second opinion would help: a review of risky changes, or a model better suited to part of the work. The person approves or declines first and pays for it with their login, so suggest only when it clearly helps, at most once per request. It joins in Review (reads and reports, never edits) with your request; its report arrives as a message. model is a handle such as opus-5.5.',
-        inputSchema: {
-          model: z.string().min(1).max(80),
-          reason: z.string().min(1).max(600),
-          request: z.string().min(1).max(20000),
-        },
-      },
-      async (value, extra) => {
-        try {
-          return result(await agents.suggestTeammate(source.id, value, extra.signal))
-        } catch (error) {
-          return {
-            isError: true,
-            content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
-          }
-        }
-      },
-    )
-  if (!agents.get(source.id).parentId)
-    server.registerTool(
-      'teammate_ask',
-      {
-        description:
-          'Ask a teammate the person added to this thread a quick question, by its name as in @name, and wait for its reply, which comes back as this result. It sees what the thread said since it last took part. Use teammate_message instead when you do not need the answer to continue.',
-        inputSchema: { to: z.string().min(1).max(80), question: z.string().min(1).max(20000) },
-      },
-      async ({ to, question }, extra) => {
-        try {
-          return result(await agents.teammateAsk(source.id, to, question, extra.signal))
-        } catch (error) {
-          return {
-            isError: true,
-            content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
-          }
-        }
-      },
-    )
   // A Ramu-run sub-agent talks to the chat that started it; the chat answers its questions.
   if (agents.get(source.id).parentId) {
     server.registerTool(

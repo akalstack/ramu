@@ -70,12 +70,6 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
       />
       <ToggleRow
         {...toggleProps}
-        setting="teammateSuggestions"
-        title="Let agents suggest teammates"
-        description="The thread's agent may suggest bringing another model in, for example to review its work. Each suggestion asks you first and says which login it uses."
-      />
-      <ToggleRow
-        {...toggleProps}
         setting="liveViewDesktop"
         title="Float on desktop"
         description="Browser, Computer and test device trays can float as a small live view in a corner or a window above other apps. Stop stays in reach."

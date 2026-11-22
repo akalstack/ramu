@@ -52,9 +52,9 @@ it('retains draft fields in the hidden panel while leaving header actions availa
 
 it('shows a section count after its title with a dot separator that screen readers skip', () => {
   const html = renderToStaticMarkup(
-    createElement(ComposerTraySection, { title: 'Teammates', count: 2, icon: createElement('i') }),
+    createElement(ComposerTraySection, { title: 'Agents', count: 2, icon: createElement('i') }),
   )
-  expect(html).toMatch(/Teammates<span aria-hidden="true"[^>]*>·<\/span><span[^>]*>2<\/span>/)
+  expect(html).toMatch(/Agents<span aria-hidden="true"[^>]*>·<\/span><span[^>]*>2<\/span>/)
   expect(
     renderToStaticMarkup(createElement(ComposerTraySection, { title: 'Computer', icon: createElement('i') })),
   ).not.toContain('·')

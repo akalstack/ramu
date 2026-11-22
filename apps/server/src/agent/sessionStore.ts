@@ -336,12 +336,12 @@ export class SessionStore {
 
   /**
    * Whether work that lives inside the provider's own process is still running: its native sub-agents and background
-   * commands. Helpers and teammates Ramu started run in their own sessions and outlive a restart of this one.
+   * commands. Helpers Ramu started run in their own sessions and outlive a restart of this one.
    */
   hasNativeWork(id: string): boolean {
     return !!this.db
       .prepare(
-        "SELECT 1 FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'agent' AND json_extract(event, '$.status') = 'running' AND json_extract(event, '$.childSessionId') IS NULL AND json_extract(event, '$.teammate') IS NULL LIMIT 1",
+        "SELECT 1 FROM agent_events WHERE session_id = ? AND json_extract(event, '$.kind') = 'agent' AND json_extract(event, '$.status') = 'running' AND json_extract(event, '$.childSessionId') IS NULL LIMIT 1",
       )
       .get(id)
   }

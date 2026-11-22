@@ -18,7 +18,6 @@ export function helperActions(task: AgentTask, connected: boolean) {
   return {
     canMessage: connected && task.canMessage === true,
     canStop: connected && helperActive(task) && task.canStop === true,
-    canContinue: connected && task.paused === true,
   }
 }
 export function helperElapsed(task: AgentTask, now: number): number | null {
@@ -38,7 +37,6 @@ export function helperCounts(tasks: AgentTask[]) {
 }
 export function helperStatusLabel(task: AgentTask): string {
   if (task.recovered && task.status === 'running') return 'Recovered activity'
-  if (task.paused) return 'Paused for you'
   if (task.status !== 'running') return { completed: 'Completed', failed: 'Failed', stopped: 'Stopped' }[task.status]
   return task.waitingFor === 'input'
     ? 'Waiting for input'
@@ -47,16 +45,14 @@ export function helperStatusLabel(task: AgentTask): string {
       : 'Working'
 }
 /**
- * What kind of helper this is, for the small tag beside its name: a teammate you added (and how it works), the
- * thread's advisor, a background command, or a sub-agent the agent started (and its type, such as Explore).
+ * What kind of helper this is, for the small tag beside its name: the thread's advisor, a background command, or a
+ * sub-agent the agent started (and its type, such as Explore).
  */
-export function helperRole(task: Pick<AgentTask, 'teammate' | 'taskType' | 'agentType'>): {
-  role: 'teammate' | 'advisor' | 'command' | 'subagent'
+export function helperRole(task: Pick<AgentTask, 'taskType' | 'agentType'>): {
+  role: 'advisor' | 'command' | 'subagent'
   label: string
   detail?: string
 } {
-  if (task.teammate)
-    return { role: 'teammate', label: 'Teammate', detail: task.teammate === 'take-over' ? 'Take over' : 'Review' }
   if (task.taskType === 'advisor') return { role: 'advisor', label: 'Advisor' }
   if (task.taskType === 'local_bash') return { role: 'command', label: 'Command' }
   return {

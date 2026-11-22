@@ -1363,8 +1363,8 @@ export interface RamuMethods extends ArtifactMethods {
   'abilities.saveMediaKey'(service: MediaService, key: string): MediaAccount
   /** Forgets a media service's saved key. Host only. */
   'abilities.removeMediaKey'(service: MediaService): MediaAccountsSummary
-  /** The model `@images`, `@search` and `@long` bring in as a teammate, for each handle a provider here can serve. */
-  'abilities.teammateModels'(): Promise<Partial<Record<AbilityHandle, import('./types').AgentModel>>>
+  /** The model `@images`, `@search` and `@long` start a helper on, for each handle a provider here can serve. */
+  'abilities.mentionModels'(): Promise<Partial<Record<AbilityHandle, import('./types').AgentModel>>>
   /** Shared MCP tools approved on this host that an ability can be mapped to. */
   'abilities.mcpTools'(): AbilityMcpToolOption[]
   /** Runs a finished ability call again with the same input, on any provider or only on one other than the first. */
@@ -1927,8 +1927,6 @@ export interface RamuMethods extends ArtifactMethods {
   'agent.backgroundTool'(sessionId: string, toolUseId: string): boolean
   /** Stops one sub-agent or background task; the main agent keeps going. */
   'agent.stopTask'(sessionId: string, agentId: string): void
-  /** Takes a teammate out of the thread: it stops if working, and nobody can address it afterwards. */
-  'agent.dismissTeammate'(sessionId: string, agentId: string): void
   /** Sends a message to a sub-agent through the main agent (Claude SendMessage, Codex send_input). */
   'agent.messageTask'(sessionId: string, agentId: string, text: string): void
   'customAgents.list'(): import('./customAgents').CustomAgent[]
@@ -1936,25 +1934,11 @@ export interface RamuMethods extends ArtifactMethods {
     input: Omit<import('./customAgents').CustomAgent, 'id' | 'updatedAt'> & { id?: string },
   ): import('./customAgents').CustomAgent
   'customAgents.delete'(id: string): void
-  /**
-   * Saves a teammate in this thread as a custom agent named `name`: its model, its brief as instructions, and Review as
-   * read-only, so it can be brought into another thread with `@name`.
-   */
-  'customAgents.saveTeammate'(sessionId: string, agentId: string, name: string): import('./customAgents').CustomAgent
   /** Drafts a custom agent from one sentence; nothing is saved until the person saves it. */
   'customAgents.draft'(
     sentence: string,
     settings: AgentSettings,
   ): Omit<import('./customAgents').CustomAgent, 'id' | 'updatedAt' | 'model'>
-  /** Lets a teammate exchange that paused for the person go on, delivering the report it held back. */
-  'agent.continueTeammates'(sessionId: string): void
-  /** Adds a teammate: a second model the person chose, working in this thread. One per thread. */
-  'agent.addTeammate'(
-    sessionId: string,
-    settings: AgentSettings,
-    mode: import('./types').TeammateMode,
-    request: string,
-  ): { agentId: string; name: string }
   'agent.replyPermission'(
     sessionId: string,
     requestId: string,

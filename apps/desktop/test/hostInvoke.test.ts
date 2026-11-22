@@ -102,7 +102,7 @@ describe('isHostInvokeAllowed', () => {
       'deploy.status',
       'deploy.setLiveAddress',
       'ci.setup',
-      'abilities.teammateModels',
+      'abilities.mentionModels',
     ])
       expect(isHostInvokeAllowed(method)).toBe(true)
     for (const method of [
