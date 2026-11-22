@@ -3,6 +3,7 @@ import { Button } from '@/components/desktop-button'
 import { MessageSquareText, X } from 'lucide-react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import type { ChangeReview } from '@ramu/shared/types'
+import { sentReviewComments } from '@ramu/shared/chat/sentContext'
 
 export interface PendingComments {
   review: ChangeReview
@@ -112,21 +113,9 @@ export function CommentsChip({ groups, onRemove }: { groups: PendingComments[]; 
 }
 
 /** Comment cards inside a sent message, read back from the hidden review payload. */
-export function sentComments(text: string): { path: string; label: string; text: string }[] {
-  const body = text.match(/<review-comments>\s*([\s\S]*?)\s*<\/review-comments>/)?.[1]
-  if (!body) return []
-  try {
-    return (
-      JSON.parse(body) as {
-        path: string
-        side: 'old' | 'new'
-        line: number
-        endLine: number
-        scope?: string
-        originalComment: string
-      }[]
-    ).map((c) => ({ path: c.path, label: commentLabel(c.side, c.line, c.endLine, c.scope), text: c.originalComment }))
-  } catch {
-    return []
-  }
-}
+export const sentComments = (text: string): { path: string; label: string; text: string }[] =>
+  sentReviewComments(text).map((c) => ({
+    path: c.path,
+    label: commentLabel(c.side, c.line, c.endLine, c.scope),
+    text: c.text,
+  }))

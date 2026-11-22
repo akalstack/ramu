@@ -113,6 +113,11 @@ import { useCompactOffer, useContextUsage } from '../../../runtime/useContextUsa
 import { Presence, PressGrow, SentArrive, useReducedMotion } from '../../../components/Motion'
 import { ChatActionsSheet, confirmChatDeletion, offerThreadUndo } from '../../../components/ChatActions'
 import * as Clipboard from 'expo-clipboard'
+import { TerminalExcerpts } from '../../../components/TerminalExcerpts'
+import { moveQueued } from '../../../runtime/queueOrder'
+import { showError } from '../../../runtime/toast'
+import { composerDraftKey } from '../../../runtime/composerDrafts'
+import { messageWithTerminal, readTerminalDraft, terminalDraftKey } from '../../../runtime/terminalChat'
 
 /** Turns drawn at a time; a chat can have hundreds. */
 const TURN_PAGE = 15
@@ -1796,8 +1801,26 @@ function ChatView({ id }: { id: string }) {
                           // The message queues behind the compaction and goes out once it finishes, as after a typed /compact.
                           if (compactFirst) await store.send(chat.id, '/compact', 'queue')
                           setKeepHistoryFor(null)
-                          return store.send(chat.id, text, mode, attachments, context)
+                          const terminalKey = terminalDraftKey(composerDraftKey(chat))
+                          const excerpts = readTerminalDraft(store.drafts, terminalKey)
+                          const sent = await store.send(
+                            chat.id,
+                            messageWithTerminal(text, excerpts),
+                            mode,
+                            attachments,
+                            context,
+                          )
+                          if (excerpts.length) store.setDraft(terminalKey, '[]')
+                          return sent
                         }}
+                        extraContent={
+                          readTerminalDraft(store.drafts, terminalDraftKey(composerDraftKey(chat))).length > 0
+                        }
+                        header={
+                          readTerminalDraft(store.drafts, terminalDraftKey(composerDraftKey(chat))).length ? (
+                            <TerminalExcerpts draftKey={terminalDraftKey(composerDraftKey(chat))} />
+                          ) : undefined
+                        }
                         compaction={
                           compactOffer !== null
                             ? {
@@ -1812,7 +1835,7 @@ function ChatView({ id }: { id: string }) {
                         onFindQuote={findQuote}
                         helpers={composerMentions}
                         computerId={chat.computerId}
-                        draftKey={`${chat.computerId}:chat:${chat.taskId || chat.id}`}
+                        draftKey={composerDraftKey(chat)}
                         onStop={() => store.stop(chat.id)}
                         goal={chat.goal}
                         queue={chat.queue?.filter((message) => message.mode !== 'steer')}
@@ -1841,6 +1864,26 @@ function ChatView({ id }: { id: string }) {
                         onSendQueuedNow={offline ? undefined : (q) => store.sendQueuedNow(chat.id, q)}
                         onSteerQueued={offline ? undefined : (q) => store.steerQueued(chat.id, q)}
                         onEditQueued={offline ? undefined : editQueued}
+                        onMoveQueued={
+                          offline || !chat.sessionId
+                            ? undefined
+                            : (queuedId: string, delta: -1 | 1) => {
+                                const order = moveQueued(
+                                  (chat.queue ?? []).map((message) => message.id),
+                                  (chat.queue ?? [])
+                                    .filter((message) => message.mode !== 'steer')
+                                    .map((message) => message.id),
+                                  queuedId,
+                                  delta,
+                                )
+                                if (!order) return
+                                tap()
+                                void store
+                                  .invoke(chat.computerId, 'agent.reorderQueued', chat.sessionId!, order)
+                                  .then(() => store.refresh(chat.computerId))
+                                  .catch((error) => showError(error instanceof Error ? error.message : String(error)))
+                              }
+                        }
                         offline={offline}
                         restore={restore}
                         limited={!!limit && !running}

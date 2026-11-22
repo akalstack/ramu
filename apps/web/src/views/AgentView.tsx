@@ -98,7 +98,8 @@ import {
   toolResultsOf,
   turnDatesOf,
 } from './agent/lib/derive'
-import { CONTEXT_MARKER, outboxFullError, quoteLines, visibleText } from './agent/lib/messages'
+import { outboxFullError, quoteLines, visibleText } from './agent/lib/messages'
+import { withHiddenContext } from '@ramu/shared/chat/visibleMessage'
 import { interactiveAttachmentBlock, type InteractiveAttachment } from '@ramu/shared/interactive'
 import { interactiveRevisions, interactiveUpdates } from '@ramu/shared/interactiveRevisions'
 import {
@@ -626,7 +627,7 @@ export const AgentView = memo(function AgentView({
       ]
         .filter(Boolean)
         .join('\n')
-      const outgoing = hidden ? `${submitted}${CONTEXT_MARKER}${hidden}\n</ramu-context>` : submitted
+      const outgoing = withHiddenContext(submitted, hidden)
       const clearContent = () => {
         setContentAttachments((current) => current.filter((item) => !submittedContent.includes(item)))
         setTerminalAttachments((current) => current.filter((item) => !submittedTerminal.includes(item)))

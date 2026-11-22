@@ -11,6 +11,8 @@ import { useOpenTerminalLink } from '../runtime/openFile'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import type { TerminalInfo } from '@ramu/shared/api'
+import type { TerminalAttachment } from '@ramu/shared/chat/terminalContext'
+import { captureScreen } from '../runtime/terminalChat'
 import TerminalView from './TerminalView'
 import { terminalFontSize } from '../runtime/terminalGesture'
 import * as Clipboard from 'expo-clipboard'
@@ -45,12 +47,15 @@ export function TerminalScreen({
   ctx: initialCtx,
   focus,
   onBack,
+  onAddToChat,
 }: {
   computerId: string
   ctx: string
   /** A shell to show first, such as the one a Run button typed into. */
   focus?: string
   onBack(): void
+  /** Takes the rows on screen into the thread's message box; offered from a thread's own terminal. */
+  onAddToChat?(attachment: TerminalAttachment): void
 }) {
   const say = useSay()
   const { c } = useTheme()
@@ -461,6 +466,21 @@ export function TerminalScreen({
             latch={latch}
             rail={rail}
             onBack={onBack}
+            {...(onAddToChat
+              ? {
+                  onAddToChat: () => {
+                    const shown = terminal && outputOwner === terminal.id ? output : ''
+                    const attachment = captureScreen(
+                      shown,
+                      size.current?.rows ?? 40,
+                      say('Shell {0}', { 0: active + 1 }),
+                      `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                    )
+                    if (!attachment) return setError(say('Nothing on screen to add yet.'))
+                    onAddToChat(attachment)
+                  },
+                }
+              : {})}
             onWorkspace={() => {
               keyboardBeforeSheet.current = keyboardVisible
               setKeyboardVisible(false)

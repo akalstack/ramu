@@ -264,6 +264,9 @@ function load(file, os, overrides = {}, globals = {}) {
       if (id === '@ramu/shared/chat/fileContext') return fileContextKeys
       if (id === '@ramu/shared/chat/replyPreview') return replyPreviews
       if (id === '@ramu/shared/chat/composerTrigger') return composerTriggers
+      // The next-message route asks the host; the composer tests run without one.
+      if (id.endsWith('/ProviderRouteChip'))
+        return { ProviderRouteChip: 'ProviderRouteChip', useNextRoute: () => ({ chip: null, reload() {} }) }
       if (id.endsWith('/Screen'))
         return new Proxy(
           { useScrolledUnderBar: () => ({ scrolled: false, onScroll() {} }) },

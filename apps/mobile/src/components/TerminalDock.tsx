@@ -10,6 +10,7 @@ import {
   Grid2X2,
   Keyboard,
   KeyboardOff,
+  MessageSquarePlus,
   TerminalSquare,
 } from 'lucide-react-native'
 import { Glass } from './Glass'
@@ -40,6 +41,7 @@ export function TerminalDock({
   onKeyboard,
   onKey,
   onMoreKeys,
+  onAddToChat,
   rail = DEFAULT_RAIL,
 }: {
   workspace: string
@@ -57,6 +59,8 @@ export function TerminalDock({
   onKeyboard(): void
   onKey(label: string): void
   onMoreKeys?(): void
+  /** Puts the rows on screen into the thread's message box; only a thread's own terminal offers it. */
+  onAddToChat?(): void
   /** The keys on the quiet rail, in order; the person's own choice from the keys sheet. */
   rail?: readonly string[]
 }) {
@@ -170,6 +174,7 @@ export function TerminalDock({
           </View>
           <ChevronDown size={14} color={c.muted} />
         </Pressable>
+        {onAddToChat ? button(MessageSquarePlus, say('Add screen to chat'), onAddToChat, !hasShell) : null}
         {button(
           keyboardVisible ? KeyboardOff : Keyboard,
           keyboardVisible ? say('Hide terminal keyboard') : say('Show terminal keyboard'),
