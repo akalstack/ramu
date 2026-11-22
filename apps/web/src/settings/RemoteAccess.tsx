@@ -25,7 +25,7 @@ import type {
   NetworkDevice,
   NetworkStatus,
 } from '@ramu/shared/types'
-import { DEVICE_PERMISSIONS } from '@ramu/shared/devicePermissions'
+import { permissionsFor } from '@ramu/shared/devicePermissions'
 import { RowButton } from '@/components/row-button'
 import { Dialog as ConfirmDialog, Dropdown, Menu, timeAgo } from '../Menu'
 import { learnedRoutes } from '@ramu/shared/hostProof'
@@ -173,7 +173,7 @@ function TunnelState({ status, mode, staged }: { status: NetworkStatus; mode: Re
             {t('Download it')}
           </LocalInlineAction>
         )}
-        {t('Then save again.')}
+        {t('Ramu starts it by itself once it is installed.')}
       </p>
     )
   // Ramu Link says its own state (RamuLinkState); only a missing cloudflared is told here.
@@ -1608,8 +1608,9 @@ function accessSummary(device: NetworkDevice): string {
   if (device.kind === 'host') return t('Another host’s agents: start and follow threads only')
   if (device.role === 'viewer') return t('Viewer')
   if (!device.permissions) return t('Full access')
-  const allowed = DEVICE_PERMISSIONS.filter((permission) => device.permissions?.[permission]).length
-  return t('Full access · {0} of {1} permissions', { 0: allowed, 1: DEVICE_PERMISSIONS.length })
+  const offered = permissionsFor(device.os)
+  const allowed = offered.filter((permission) => device.permissions?.[permission]).length
+  return t('Full access · {0} of {1} permissions', { 0: allowed, 1: offered.length })
 }
 
 /** How long one device stays paired without use: its own choice, or the same as every other device here. */

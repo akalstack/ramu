@@ -3834,7 +3834,7 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0} is not installed on this computer.': '{0} belum terpasang di komputer ini.',
   'Copy the install command': 'Salin perintah pemasangan',
   'Download it': 'Unduh',
-  'Then save again.': 'Lalu simpan lagi.',
+  'Ramu starts it by itself once it is installed.': 'Ramu menjalankannya sendiri begitu sudah terpasang.',
   'Reachable at {0}': 'Bisa diakses di {0}',
   'Copy the tunnel address': 'Salin alamat tunnel',
   'The tunnel stopped: {0}. Ramu will try again shortly.':

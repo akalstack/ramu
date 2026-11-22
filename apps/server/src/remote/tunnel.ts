@@ -153,6 +153,9 @@ export class TunnelManager {
 
   status(): TunnelStatus {
     const find = this.options.find ?? findExecutable
+    // A tool installed since the tunnel was chosen starts it now: nothing changed in Settings, so nothing there could
+    // be saved again to ask for it.
+    if (this.state === 'missing' && this.choice && this.target && find(TOOL[this.choice.kind])) this.launch()
     return {
       choice: this.choice,
       state: this.state,

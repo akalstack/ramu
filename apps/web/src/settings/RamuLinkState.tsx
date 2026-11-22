@@ -175,6 +175,9 @@ export function RamuLinkState({
         <OtherRoutes status={status} onChoose={onChoose} />
       </>
     )
+  // Without cloudflared the relay was never asked, so there is nothing to say about the link yet; the line about
+  // installing it stands alone.
+  if (link.state === 'unavailable' && (tunnel.state === 'missing' || !tunnel.tools.cloudflared)) return null
   if (link.state === 'unavailable')
     return (
       <>

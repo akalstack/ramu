@@ -95,6 +95,22 @@ it('says which tool to install instead of failing to start it', () => {
   })
 })
 
+it('starts the tunnel by itself once the missing tool is installed, with nothing to save again', () => {
+  let installed = false
+  const run = vi.fn((_path: string) => fakeProcess().child)
+  const tunnels = new TunnelManager({ find: () => (installed ? '/opt/homebrew/bin/cloudflared' : null), run })
+  tunnels.use({ kind: 'quick' }, 'http://127.0.0.1:7788')
+  expect(tunnels.status().state).toBe('missing')
+  expect(run).not.toHaveBeenCalled()
+  installed = true
+  expect(tunnels.status()).toMatchObject({ state: 'starting', tools: { cloudflared: true } })
+  expect(run).toHaveBeenCalledTimes(1)
+  expect(run.mock.calls[0]![0]).toBe('/opt/homebrew/bin/cloudflared')
+  // Asking again does not start a second one.
+  tunnels.status()
+  expect(run).toHaveBeenCalledTimes(1)
+})
+
 it('resolves Stop once the tool has exited, and kills a tool that does not exit', async () => {
   vi.useFakeTimers()
   const child = new EventEmitter() as ChildProcess & EventEmitter

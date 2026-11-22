@@ -106,16 +106,30 @@ export function configureProviderApiKeys(value: ProviderApiKeys) {
 /** Whether this login runs on a key Ramu saved for it. */
 export const providerApiKey = (provider: AgentProvider, accountId: string) => apiKeys[provider]?.[accountId]
 const expand = (path: string) => (path.startsWith('~/') ? join(homedir(), path.slice(2)) : path)
+/**
+ * Where tools are installed that a desktop app's own PATH leaves out: an app opened from the Dock or a launcher gets the
+ * system's bare PATH, without Homebrew or the person's own bin folders, so a tool they just installed would look missing.
+ */
+const usualToolDirs = () =>
+  process.platform === 'win32'
+    ? []
+    : [
+        '/opt/homebrew/bin',
+        '/usr/local/bin',
+        join(homedir(), '.local/bin'),
+        join(homedir(), 'bin'),
+        '/home/linuxbrew/.linuxbrew/bin',
+        '/snap/bin',
+      ]
+
 export function findExecutable(command: string): string | null {
   const candidates = isAbsolute(command)
     ? [command]
-    : (process.env.PATH ?? '')
-        .split(delimiter)
-        .flatMap((dir) =>
-          process.platform === 'win32'
-            ? ['', '.exe', '.cmd'].map((ext) => join(dir, command + ext))
-            : [join(dir, command)],
-        )
+    : [...new Set([...(process.env.PATH ?? '').split(delimiter).filter(Boolean), ...usualToolDirs()])].flatMap((dir) =>
+        process.platform === 'win32'
+          ? ['', '.exe', '.cmd'].map((ext) => join(dir, command + ext))
+          : [join(dir, command)],
+      )
   return (
     candidates.find((path) => {
       try {
