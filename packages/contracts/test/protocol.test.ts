@@ -28,8 +28,26 @@ it('recognises loopback hosts', () => {
   for (const host of ['0.0.0.0', '192.168.1.5', 'example.com', '::']) expect(isLoopbackHost(host)).toBe(false)
 })
 
-import { encodePairLink, parsePairInput, parseSshTarget } from '../src'
+import { PAIR_PAGE, encodePairLink, encodePairWebLink, parsePairInput, parseSshTarget } from '../src'
 describe('pairing links', () => {
+  it('puts the offer after # on getramu.dev/pair, so any camera opens it and the site never sees it', () => {
+    const soon = Date.now() + 60_000
+    const link = encodePairWebLink({
+      url: 'http://100.64.0.7:7788',
+      code: 'K7QM2-X9RTD',
+      expiresAt: soon,
+      name: 'Studio',
+    })
+    expect(link.startsWith(`${PAIR_PAGE}#`)).toBe(true)
+    expect(new URL(link).search).toBe('')
+    expect(parsePairInput(link)).toEqual({
+      url: 'http://100.64.0.7:7788',
+      code: 'K7QM2-X9RTD',
+      expiresAt: soon,
+      name: 'Studio',
+    })
+    expect(() => parsePairInput(`${PAIR_PAGE}#code=K7QM2-X9RTD`)).toThrow(/no address/)
+  })
   const soon = Date.now() + 60_000
   it('round-trips a ramu link', () => {
     const link = encodePairLink({ url: 'http://100.64.0.7:7788', code: 'K7QM2-X9RTD', expiresAt: soon })

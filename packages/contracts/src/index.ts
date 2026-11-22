@@ -211,17 +211,46 @@ export interface PairInput {
   name?: string
 }
 
+const pairParams = (offer: { url: string; code: string; expiresAt?: number; name?: string }) => {
+  const params = new URLSearchParams({ url: offer.url, code: offer.code })
+  if (offer.expiresAt) params.set('exp', String(offer.expiresAt))
+  if (offer.name) params.set('name', offer.name)
+  return params
+}
+
 /** `ramu://pair?url=<origin>&code=<code>&exp=<ms>`. Like the QR payload it carries no device token. */
 export function encodePairLink(offer: { url: string; code: string; expiresAt?: number; name?: string }): string {
-  const link = new URL('ramu://pair')
-  link.searchParams.set('url', offer.url)
-  link.searchParams.set('code', offer.code)
-  if (offer.expiresAt) link.searchParams.set('exp', String(offer.expiresAt))
-  if (offer.name) link.searchParams.set('name', offer.name)
-  return link.toString()
+  return `ramu://pair?${pairParams(offer)}`
+}
+
+/** The page a pairing QR opens when a phone's own camera reads it: it opens the app, or its store page first. */
+export const PAIR_PAGE = 'https://getramu.dev/pair'
+
+/**
+ * A pairing QR any camera can read: getramu.dev/pair with the offer after `#`, which a browser never sends to the site,
+ * so the host's address and code stay between the two devices. The app reads the same link when it scans it.
+ */
+export function encodePairWebLink(offer: { url: string; code: string; expiresAt?: number; name?: string }): string {
+  return `${PAIR_PAGE}#${pairParams(offer)}`
 }
 
 const PAIR_CODE = /^[A-Z2-9]{5}-?[A-Z2-9]{5}$/
+
+function offerFromParams(params: URLSearchParams, now: number): PairInput {
+  const url = params.get('url'),
+    code = (params.get('code') ?? '').trim().toUpperCase()
+  if (!url) throw new Error('This pairing link has no address')
+  if (code && !PAIR_CODE.test(code)) throw new Error('This pairing link has an invalid code')
+  const expiresAt = Number(params.get('exp')) || undefined
+  if (expiresAt && expiresAt <= now) throw new Error('This pairing link has expired. Create a new one on the host.')
+  return {
+    url: parseRemoteUrl(url),
+    ...(code ? { code } : {}),
+    ...(expiresAt ? { expiresAt } : {}),
+    ...(params.get('name') ? { name: params.get('name')!.slice(0, 60) } : {}),
+  }
+}
+
 export function parsePairInput(input: string, now = Date.now()): PairInput {
   const text = input.trim()
   if (!text || text.length > 4096) throw new Error('Paste a Ramu pairing link or an address')
@@ -238,19 +267,10 @@ export function parsePairInput(input: string, now = Date.now()): PairInput {
   if (link?.protocol === 'ramu:') {
     if (link.hostname !== 'pair' && link.pathname.replace(/^\/+/, '') !== 'pair')
       throw new Error('This is not a Ramu pairing link')
-    const url = link.searchParams.get('url'),
-      code = (link.searchParams.get('code') ?? '').trim().toUpperCase()
-    if (!url) throw new Error('This pairing link has no address')
-    if (code && !PAIR_CODE.test(code)) throw new Error('This pairing link has an invalid code')
-    const expiresAt = Number(link.searchParams.get('exp')) || undefined
-    if (expiresAt && expiresAt <= now) throw new Error('This pairing link has expired. Create a new one on the host.')
-    return {
-      url: parseRemoteUrl(url),
-      ...(code ? { code } : {}),
-      ...(expiresAt ? { expiresAt } : {}),
-      ...(link.searchParams.get('name') ? { name: link.searchParams.get('name')!.slice(0, 60) } : {}),
-    }
+    return offerFromParams(link.searchParams, now)
   }
+  if (link && `${link.origin}${link.pathname.replace(/\/$/, '')}` === PAIR_PAGE)
+    return offerFromParams(new URLSearchParams(link.hash.slice(1)), now)
   if (link && (link.protocol === 'http:' || link.protocol === 'https:')) {
     // A remote link may carry the code as ?code= or #code, which is not sent to the server.
     const code = (link.searchParams.get('code') ?? link.hash.replace(/^#(code=)?/, '')).trim().toUpperCase()
