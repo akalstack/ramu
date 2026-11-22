@@ -1,4 +1,4 @@
-// Words for a project's Deploy sheet, shared by the desktop and the phone so both describe it the same way. Pure: the
+// Words for a project's Live app sheet, shared by the desktop and the phone so both describe it the same way. Pure: the
 // clients pass their own translation and date formatting.
 import type { Translate } from './forgeStatus'
 import type { UptimeCheck } from './types/deploy'

@@ -17,7 +17,6 @@ const setup = (local: boolean) => {
         { id: 'r1', name: 'shop', root: '/tmp/shop' },
         { id: 'r2', name: 'notes', root: '/tmp/notes' },
       ],
-      projectConfiguration: () => ({ config: { stack: { deployTarget: 'vercel' } } }),
     },
   } as never)
   return { methods, migrations, uptime }
@@ -57,5 +56,5 @@ it('reads the latest deploy from the Git host for each repository it can read, w
   }
   vi.mocked(latestDeployChecks).mockImplementation(async (repository) => (repository.id === 'r1' ? checks : null))
   const { methods } = setup(false)
-  expect(await methods['deploy.status']!.run('p1')).toEqual({ recommended: 'vercel', repositories: [checks] })
+  expect(await methods['deploy.status']!.run('p1')).toEqual({ repositories: [checks] })
 })

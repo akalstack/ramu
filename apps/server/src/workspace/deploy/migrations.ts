@@ -95,7 +95,7 @@ export class ProductionMigrations {
     const saved = await this.saved(projectId).read()
     if (!saved)
       throw new MigrationError(
-        `This project migrates with ${commandLine(argv)}, but no production database address is saved, so the migrations cannot run first. Ask the person to add it in the project's Deploy sheet.`,
+        `This project migrates with ${commandLine(argv)}, but no production database address is saved, so the migrations cannot run first. Ask the person to add it in the project's Live app sheet (project menu → Live app…).`,
         '',
       )
     const result = await this.run(argv, cwd, { DATABASE_URL: saved.token, DATABASE_URL_UNPOOLED: saved.token })

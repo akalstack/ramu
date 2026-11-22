@@ -99,7 +99,7 @@ Azure Repos remotes (`dev.azure.com`, `*.visualstudio.com` and their SSH forms) 
 
 ## Set up CI
 
-**Set up CI…** in a project's menu, or **Set up CI** under **Checks** in the [Deploy sheet](deploy.md#set-up-a-platform), adds a CI workflow to a GitHub or GitLab repository: `.github/workflows/ci.yml` (GitHub Actions) or `.gitlab-ci.yml` (GitLab CI). The sheet first says what it will do, read from the default branch:
+**Set up CI…** in a project's menu, or **Set up CI** under **Checks** in its **Live app…** sheet, adds a CI workflow to a GitHub or GitLab repository: `.github/workflows/ci.yml` (GitHub Actions) or `.gitlab-ci.yml` (GitLab CI). The sheet first says what it will do, read from the default branch:
 
 - **Install** with the package manager the lockfile names (npm, pnpm, Yarn, Bun, uv, pip, Bundler or Go modules), cached between runs.
 - **Then** the lint, typecheck, test and build steps the project has: its `package.json` scripts, the Python tools it declares (Ruff, mypy, pytest, or Django's tests), RuboCop and Rails or RSpec tests, or `go vet`, `go test` and `go build`. The build and test commands in `ramu.json` ([Configuration](configuration.md)) take the place of the detected ones.

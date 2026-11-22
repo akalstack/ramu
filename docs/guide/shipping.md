@@ -7,7 +7,7 @@ From one sentence on Home to a live app on your own accounts, with CI and previe
 Type what you want into Home's message box, such as "a booking page for my barbershop where customers pick a time and I get an email".
 
 - With **Auto** and no project that fits, Home offers **New project** first. On the desktop, **New project…** in the Project picker does the same, and a host with no projects shows **Start something new** ([Home](inbox.md#home)).
-- The agent asks at most three questions it can't work out itself (a website or a phone app, sign-in, stored data), then names the stack in one line, such as "Next.js with TypeScript, deployed on Vercel". Ramu picks the smallest stack that does the job: plain HTML before a framework, a full framework only for sign-in or stored data.
+- The agent asks at most three questions it can't work out itself (a website or a phone app, sign-in, stored data), then names the stack in one line, such as "Next.js with TypeScript". Ramu picks the smallest stack that does the job: plain HTML before a framework, a full framework only for sign-in or stored data.
 - To skip the questions on the desktop, give the project a name (and a stack, if you know it). Ramu creates the project and the thread starts there with your message.
 
 ## 2. The project
@@ -18,18 +18,18 @@ When the agent needs something only you know, such as an API key, it asks with a
 
 ## 3. Put it on GitHub
 
-**Publish to GitHub** in Source Control creates a repository on your account (private by default) and pushes the project. The Deploy sheet's checks and CI read from the Git host.
+**Publish to GitHub** in Source Control creates a repository on your account (private by default) and pushes the project. The latest deploy's checks and CI read from the Git host.
 
 ## 4. Deploy
 
-**Deploy…** in the project's menu opens the Deploy sheet. **Set up deploy** names the platform the stack suits and its plugin, and opens the install or the plugin's settings until it's ready ([Set up a platform](deploy.md#set-up-a-platform)). Then ask the project's agent to deploy. It deploys through the plugin; Ramu decides when to ask ([Deploying](deploy.md#deploying)):
+Ask the project's agent to deploy. It picks a platform that suits the stack (Vercel, Netlify, Railway, Cloudflare, Fly.io and others), installs that platform's plugin if it helps, and asks you for a token with a card when it needs one. Ramu decides when to ask ([Deploying](deploy.md#deploying)):
 
 - **Previews** follow the thread's access mode like any other command.
 - **Production** always asks with a card: **Allow once**, or allow production deploys for the rest of the thread. The project's migrations run first, and a failed migration stops the deploy ([Migrations first](deploy.md#migrations-first)).
 
 ## 5. What the app needs
 
-The same sheet covers the rest:
+**Live app…** in the project's menu covers the rest:
 
 - **Live address:** where people use the app, which the host watches ([Live address and uptime](deploy.md#live-address-and-uptime)).
 - **Production database:** the address migrations run against ([Migrations first](deploy.md#migrations-first)).
@@ -40,13 +40,13 @@ The same sheet covers the rest:
 The agent works on a branch and opens a pull request. Its card in Source Control and on the phone shows the checks, including the preview a platform connected to the repository reports ([The Pull requests page](git-hosting.md#the-pull-requests-page)). With the platform connected to the repository, merging deploys it.
 
 - **After a push or merge from a thread**, Ramu follows the checks on that commit and wakes the thread once, with the links or the failing logs ([After a push](deploy.md#after-a-push)).
-- **Latest deploy** in the Deploy sheet shows the checks on the default branch's newest commit ([The latest deploy](deploy.md#the-latest-deploy)).
+- **Latest deploy** in **Live app…** shows the checks on the default branch's newest commit ([The latest deploy](deploy.md#the-latest-deploy)).
 
 ## 7. Keep it running
 
 - **Uptime:** the host checks the live address every five minutes. Two failed checks open a **Down:** thread and notify your phone. Its agent finds the latest deploy and can offer a rollback, which asks you ([Live address and uptime](deploy.md#live-address-and-uptime)).
-- **On the phone:** **Deploy** in a project's menu shows the latest deploy, the uptime watch and the production database's state ([On the phone](deploy.md#on-the-phone)).
+- **On the phone:** **Live app** in a project's menu shows the latest deploy, the uptime watch and the production database's state ([On the phone](deploy.md#on-the-phone)).
 
 ## Coming from an existing project
 
-Every step works on its own: **Deploy…** on any project, or **Set up CI…** alone.
+Every step works on its own: ask any project's agent to deploy, open **Live app…**, or run **Set up CI…** alone.

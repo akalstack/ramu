@@ -15,7 +15,7 @@ For people using Ramu.
 - [Identities and moving settings](guide/identities.md): work and personal accounts picked per project, and settings copied between hosts.
 - [Plugins](guide/plugins.md): add a service's skills, MCP servers, credential and CLI in one install, or build one.
 - [Shipping an app](guide/shipping.md): from one sentence to a live app with CI, previews and uptime.
-- [Deploying an app](guide/deploy.md): deploy to your own hosting account through the platform's plugin.
+- [Deploying an app](guide/deploy.md): agents deploy to your own hosting account; production asks first, and the live app is watched.
 - [GitHub, GitLab, Bitbucket and Azure DevOps](guide/git-hosting.md): sign-ins, pull requests and reviews.
 - [Editor](guide/editor.md): the file editor, Markdown and Mermaid, and moving files between hosts.
 - [Artifacts](guide/artifacts.md): interactive documents agents publish, and what they may use.

@@ -1,7 +1,6 @@
-// What the Deploy sheet shows on both clients. Platforms are reached through plugins, so nothing here names one: the
-// latest deploy is read from the checks the Git host lists on the default branch, and the live address is watched
-// from the host.
-import type { DeployTargetId } from '../stacks'
+// What the Live app sheet shows on both clients. Agents reach platforms through plugins or CLIs, so nothing here names
+// one: the latest deploy is read from the checks the Git host lists on the default branch, and the live address is
+// watched from the host.
 import type { ForgeCheck } from './forge'
 
 /** The checks on one repository's newest default-branch commit, where a connected platform reports each deploy. */
@@ -15,8 +14,6 @@ export interface DeployChecks {
 }
 
 export interface DeployStatus {
-  /** The platform the project's stack names, from `ramu.json`. */
-  recommended: DeployTargetId | null
   /** Each repository of the project whose Git host Ramu reads checks from. */
   repositories: DeployChecks[]
 }
@@ -37,7 +34,7 @@ export interface UptimeCheck {
   failure: UptimeFailure | null
 }
 
-/** The live address watch of a project, as the Deploy sheet shows it. */
+/** The live address watch of a project, as the Live app sheet shows it. */
 export interface UptimeStatus {
   /** On unless the person turned it off; checks start once the project has a live address. */
   enabled: boolean
@@ -59,7 +56,7 @@ export interface UptimeStatus {
 /** How an app runs on this computer: in a Docker container, or as a program with the person's own permissions. */
 export type LocalAppMode = 'container' | 'process'
 
-/** An app published from this computer through a tunnel of its own (Deploy → Run on this computer). */
+/** An app published from this computer through a tunnel of its own (Live app → Run on this computer). */
 export interface LocalAppStatus {
   state: 'off' | 'building' | 'running' | 'failed'
   mode: LocalAppMode | null

@@ -8,7 +8,6 @@ const time = (at) => `t${at}`
 test('the latest deploy is each repository’s default-branch checks, with links', () => {
   const rows = deployCheckRows(
     {
-      recommended: 'vercel',
       repositories: [
         {
           repoId: 'r1',

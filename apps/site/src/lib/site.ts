@@ -54,13 +54,13 @@ export const PROVIDERS: Provider[] = [
   },
 ]
 
-/** Hosting reached through each platform's own plugin, and the Git hosts Ramu works with itself. */
+/** Hosting agents deploy to with each platform's own CLI or plugin, and the Git hosts Ramu works with itself. */
 export const SERVICES = [
-  { name: 'Vercel', logo: vercelLogo, role: 'Deploy plugin' },
-  { name: 'Netlify', logo: netlifyLogo, role: 'Deploy plugin' },
-  { name: 'Railway', logo: railwayLogo, role: 'Deploy plugin' },
-  { name: 'Cloudflare', logo: cloudflareLogo, role: 'Deploy plugin' },
-  { name: 'Fly.io', logo: flyLogo, role: 'Deploy CLI' },
+  { name: 'Vercel', logo: vercelLogo, role: 'Hosting' },
+  { name: 'Netlify', logo: netlifyLogo, role: 'Hosting' },
+  { name: 'Railway', logo: railwayLogo, role: 'Hosting' },
+  { name: 'Cloudflare', logo: cloudflareLogo, role: 'Hosting' },
+  { name: 'Fly.io', logo: flyLogo, role: 'Hosting' },
   { name: 'GitHub', logo: githubLogo, role: 'Pull requests' },
   { name: 'GitLab', logo: gitlabLogo, role: 'Merge requests' },
   { name: 'Bitbucket', logo: bitbucketLogo, role: 'Pull requests' },

@@ -150,7 +150,7 @@ function CiSummary({ state }: { state: CiSetupState }) {
 
 const ready = (state: CiSetupState) => !!state.preview && !state.preview.exists && !state.opened
 
-/** The Deploy sheet's CI row: the same summary and action as the project menu's Set up CI. */
+/** The Live app sheet's CI row: the same summary and action as the project menu's Set up CI. */
 export function CiSetupSection({ projectId, repoId }: { projectId: string; repoId: string | null }) {
   useLanguage()
   const state = useCiSetup(projectId, repoId)

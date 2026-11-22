@@ -13,7 +13,6 @@ vi.mock('../src/i18n', () => ({
   formatLocale: () => 'en-US',
 }))
 vi.mock('../src/chat/GoalBar', () => ({ GoalDone: () => null, GoalNote: () => null }))
-vi.mock('../src/chat/GoalDeploy', () => ({ GoalDeploy: () => null }))
 vi.mock('../src/views/agent/components/ThinkingRow', () => ({
   ThinkingRow: ({ text }: { text: string }) => createElement('div', {}, text),
 }))

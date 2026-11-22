@@ -4,7 +4,7 @@
 // ignore. Everything here is pure: the host, both clients, `ramu plugin check` and the index's CI validate with it.
 import { z } from 'zod'
 import { MCP_ABILITIES, type Ability } from './providers/abilities'
-import { STACK_IDS, type DeployTargetId } from './stacks'
+import { STACK_IDS } from './stacks'
 
 /** The key Ramu's fields sit under in a manifest's `extensions` block. */
 export const RAMU_EXTENSION = 'dev.getramu'
@@ -14,17 +14,6 @@ export const PLUGIN_SCHEMA_URL = 'https://getramu.dev/schema/plugin.json'
 export const DEFAULT_PLUGIN_INDEX = 'https://github.com/akalstack/ramu-plugins'
 /** Claude's own plugin directory, listed beside Ramu's: the same marketplace format, read without Akalstack's key. */
 export const CLAUDE_PLUGIN_INDEX = 'https://github.com/anthropics/claude-plugins-official'
-/**
- * The plugin each deploy target installs: the platform's own in Claude's directory, and Ramu's `fly-cli` for Fly.io,
- * which Claude's directory has no plugin for.
- */
-export const DEPLOY_TARGET_PLUGINS = {
-  vercel: { index: CLAUDE_PLUGIN_INDEX, name: 'vercel' },
-  netlify: { index: CLAUDE_PLUGIN_INDEX, name: 'netlify-skills' },
-  railway: { index: CLAUDE_PLUGIN_INDEX, name: 'railway' },
-  cloudflare: { index: CLAUDE_PLUGIN_INDEX, name: 'cloudflare' },
-  fly: { index: DEFAULT_PLUGIN_INDEX, name: 'fly-cli' },
-} as const satisfies Record<DeployTargetId, { index: string; name: string }>
 /**
  * The key Akalstack signs the Ramu index's commits with. A clone of the index whose commit this key did not sign is
  * refused before anything in it is read, so a tampered index or a pushed-over plugin never reaches the review.

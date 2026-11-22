@@ -98,7 +98,7 @@ describe('isHostInvokeAllowed', () => {
       'projects.list',
       // Import reads a share from another connected host.
       'artifacts.openShare',
-      // A project's deploy sheet and CI setup run on the host that owns the project.
+      // A project's Live app sheet and CI setup run on the host that owns the project.
       'deploy.status',
       'deploy.setLiveAddress',
       'ci.setup',

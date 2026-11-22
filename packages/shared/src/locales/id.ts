@@ -6012,7 +6012,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   Queued: 'Antre',
   Building: 'Sedang dibangun',
   Canceled: 'Dibatalkan',
-  'Deploy {0}': 'Deploy {0}',
   'Link repository': 'Tautkan repositori',
   'Deploy now': 'Deploy sekarang',
   'Deploy to production': 'Deploy ke produksi',
@@ -6072,7 +6071,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   '{0} will show this version until the next deploy.': '{0} akan menampilkan versi ini sampai deploy berikutnya.',
   'No log yet.': 'Belum ada log.',
   'No deployments yet.': 'Belum ada deployment.',
-  'Deploy…': 'Deploy…',
   'Checked deployments': 'Memeriksa deployment',
   'Checking deployments': 'Memeriksa deployment',
   'Read the build log': 'Membaca log build',
@@ -6191,8 +6189,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   Deployments: 'Deployment',
   'Could not roll back': 'Tidak bisa mengembalikan',
   'Reconnect to see this project’s deployments.': 'Sambungkan ulang untuk melihat deployment proyek ini.',
-  'This project has no deploy target yet. Open Deploy… on the project on a computer.':
-    'Proyek ini belum punya target deploy. Buka Deploy… pada proyek di komputer.',
   'The live address is not watched.': 'Alamat live tidak dipantau.',
   'The host checks {0} every five minutes.': 'Host memeriksa {0} setiap lima menit.',
   'Preview failed': 'Preview gagal',
@@ -6304,7 +6300,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Selesaikan dulu yang dibutuhkan toko di lembar Deploy di komputer.',
   'previews have their own': 'preview punya miliknya sendiri',
   Databases: 'Database',
-  'Put {0} online, or see where it is deployed': 'Online-kan {0}, atau lihat tempat deploy-nya',
   'Running without Docker, with your permissions.': 'Berjalan tanpa Docker, dengan izinmu.',
   'Without Docker, Ramu runs the app’s start script (a Node app) as a program on this computer. It has your own permissions: it can read your files and anything else you can. Run only code you trust.':
     'Tanpa Docker, Ramu menjalankan skrip start aplikasi (aplikasi Node) sebagai program di komputer ini. Program itu punya izinmu sendiri: bisa membaca berkasmu dan apa pun yang bisa kamu akses. Jalankan hanya kode yang kamu percaya.',
@@ -6613,10 +6608,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Deploys to {0} through its plugin.': 'Deploy ke {0} lewat plugin-nya.',
   'Ask the project’s agent to deploy, and Ramu asks before each command that changes anything.':
     'Minta agent proyek untuk men-deploy, dan Ramu bertanya sebelum setiap perintah yang mengubah sesuatu.',
-  'Install it, then ask the project’s agent to deploy.': 'Pasang plugin-nya, lalu minta agent proyek untuk men-deploy.',
-  'Save its token, then ask the project’s agent to deploy.':
-    'Simpan token-nya, lalu minta agent proyek untuk men-deploy.',
-  'Install the {0} plugin': 'Pasang plugin {0}',
   'Open plugin settings': 'Buka pengaturan plugin',
   'This dashboard reads {0}, which no installed plugin provides. Its tables stay empty until you install one.':
     'Dashboard ini membaca {0}, yang tidak disediakan plugin terpasang mana pun. Tabelnya tetap kosong sampai kamu memasangnya.',
@@ -7364,13 +7355,14 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Tambahkan perintah migrate ke ramu.json, lalu Ramu menjalankannya pada database ini sebelum setiap deploy production.',
   'Add address': 'Tambah alamat',
   'An address is saved on this computer.': 'Sebuah alamat tersimpan di komputer ini.',
-  'Ask the project’s agent to deploy: previews run without asking, and production asks you first and runs the migrations before it.':
-    'Minta agent proyek untuk deploy: preview berjalan tanpa bertanya, dan production bertanya dulu lalu menjalankan migrasi sebelumnya.',
   'Before each production deploy, Ramu runs {0} against this database.':
     'Sebelum setiap deploy production, Ramu menjalankan {0} pada database ini.',
-  'Install the plugin for the platform you deploy to from Customize → Plugins, then ask the project’s agent to deploy.':
-    'Pasang plugin untuk platform tujuan deploy dari Kustomisasi → Plugin, lalu minta agent proyek untuk deploy.',
   'Latest deploy': 'Deploy terakhir',
+  'Live app': 'Aplikasi live',
+  'Live app…': 'Aplikasi live…',
+  'Live app · {0}': 'Aplikasi live · {0}',
+  'No address is saved yet. Add it in Live app on the host’s own computer.':
+    'Belum ada alamat yang disimpan. Tambahkan di Aplikasi live pada komputer host itu sendiri.',
   'Live address': 'Alamat live',
   'No address is saved yet.': 'Belum ada alamat yang tersimpan.',
   'No checks on this commit yet.': 'Belum ada pemeriksaan pada commit ini.',
@@ -7379,14 +7371,10 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Ramu reads each deploy from the checks the Git host lists on the default branch. Connect the platform to the repository, and its deploys show here.':
     'Ramu membaca setiap deploy dari pemeriksaan yang dicantumkan Git host pada branch default. Hubungkan platform ke repositori, dan deploy-nya muncul di sini.',
   'Replace address': 'Ganti alamat',
-  'Set up deploy': 'Siapkan deploy',
   'This repository is not on a Git host yet. Publish it, then connect the platform to it.':
     'Repositori ini belum ada di Git host. Publikasikan dulu, lalu hubungkan platform ke repositori itu.',
   'key saved on this host': 'kunci tersimpan di host ini',
-  '{0} suits this project’s stack, through the {1} plugin.': '{0} cocok untuk stack proyek ini, lewat plugin {1}.',
   '{0} · {1} at {2}': '{0} · {1} di {2}',
-  'No address is saved yet. Add it in the Deploy sheet on the host’s own computer.':
-    'Belum ada alamat yang tersimpan. Tambahkan di lembar Deploy pada komputer host itu sendiri.',
   'Checks start once your Git host records a production deploy, or once you save the address.':
     'Pemeriksaan dimulai begitu host Git-mu mencatat deploy produksi, atau begitu kamu menyimpan alamatnya.',
   'Found from the production deployment on your Git host.': 'Ditemukan dari deployment produksi di host Git-mu.',

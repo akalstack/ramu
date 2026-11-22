@@ -1,6 +1,6 @@
-// Which stack a new project starts on, from a few answers about it: the framework's own generator, the commands to
-// develop, build and test it, and where it deploys by default. Pure, so the agent tool, the deploy sheet and both
-// clients recommend the same thing. Commands are argument lists, never shell strings.
+// Which stack a new project starts on, from a few answers about it: the framework's own generator and the commands to
+// develop, build and test it. Pure, so the agent tool and both clients recommend the same thing. Commands are argument
+// lists, never shell strings.
 
 export const STACK_IDS = [
   'static',
@@ -19,25 +19,10 @@ export type StackId = (typeof STACK_IDS)[number]
 /** A new project's folder name: letters, digits, dots, dashes and underscores, starting with a letter or digit. */
 export const PROJECT_NAME = /^[A-Za-z0-9][\w.-]{0,99}$/
 
-/**
- * Platforms a stack deploys to by default, each with its own name. Agents deploy through the platform's plugin (its MCP
- * tools or its CLI), so Ramu has no code of its own for any of them.
- */
-export const DEPLOY_TARGETS = {
-  vercel: 'Vercel',
-  netlify: 'Netlify',
-  railway: 'Railway',
-  fly: 'Fly.io',
-  cloudflare: 'Cloudflare',
-} as const
-export type DeployTargetId = keyof typeof DEPLOY_TARGETS
-export const isDeployTarget = (value: unknown): value is DeployTargetId =>
-  typeof value === 'string' && Object.hasOwn(DEPLOY_TARGETS, value)
-
 export interface Stack {
   id: StackId
   name: string
-  /** One line for the person, such as "Next.js with a Postgres database, deployed on Vercel". */
+  /** One line for the person, such as "Next.js with TypeScript". */
   summary: string
   /** The official generator, run in the new, empty project folder (`.` is that folder); empty when files are written by hand. */
   generator: string[][]
@@ -46,8 +31,6 @@ export interface Stack {
   test: string[] | null
   /** Text the dev server prints once it serves, so the browser can open on it. */
   readyText: string | null
-  /** Null for a phone app, which ships through the app stores rather than a hosting platform. */
-  deployTarget: DeployTargetId | null
   /** Stores data in a Postgres database. */
   database: boolean
   /** Applies database migrations, run before each production deploy through a plugin. */
@@ -74,13 +57,12 @@ export const STACKS: Record<StackId, Stack> = {
   static: {
     id: 'static',
     name: 'Static site',
-    summary: 'A static HTML site, deployed on Netlify',
+    summary: 'A static HTML site',
     generator: [],
     dev: ['npx', '--yes', 'serve', '.'],
     build: null,
     test: null,
     readyText: 'Accepting connections',
-    deployTarget: 'netlify',
     database: false,
     migrate: null,
     ignore: ['.DS_Store'],
@@ -88,7 +70,7 @@ export const STACKS: Record<StackId, Stack> = {
   nextjs: {
     id: 'nextjs',
     name: 'Next.js',
-    summary: 'Next.js with TypeScript, deployed on Vercel',
+    summary: 'Next.js with TypeScript',
     generator: [
       [
         'npx',
@@ -108,7 +90,6 @@ export const STACKS: Record<StackId, Stack> = {
     build: ['npm', 'run', 'build'],
     test: ['npm', 'run', 'lint'],
     readyText: 'Ready in',
-    deployTarget: 'vercel',
     database: true,
     migrate: null,
     ignore: NODE_IGNORE,
@@ -116,7 +97,7 @@ export const STACKS: Record<StackId, Stack> = {
   'vite-react': {
     id: 'vite-react',
     name: 'Vite + React',
-    summary: 'React with Vite and TypeScript, deployed on Netlify',
+    summary: 'React with Vite and TypeScript',
     generator: [
       ['npm', 'create', '--yes', 'vite@latest', '.', '--', '--template', 'react-ts', '--no-interactive'],
       ['npm', 'install'],
@@ -125,7 +106,6 @@ export const STACKS: Record<StackId, Stack> = {
     build: ['npm', 'run', 'build'],
     test: ['npm', 'run', 'lint'],
     readyText: 'Local:',
-    deployTarget: 'netlify',
     database: false,
     migrate: null,
     ignore: NODE_IGNORE,
@@ -133,7 +113,7 @@ export const STACKS: Record<StackId, Stack> = {
   astro: {
     id: 'astro',
     name: 'Astro',
-    summary: 'An Astro site, deployed on Netlify',
+    summary: 'An Astro site',
     generator: [
       ['npm', 'create', '--yes', 'astro@latest', '.', '--', '--template', 'minimal', '--install', '--no-git', '--yes'],
     ],
@@ -141,7 +121,6 @@ export const STACKS: Record<StackId, Stack> = {
     build: ['npm', 'run', 'build'],
     test: ['npx', '--yes', 'astro', 'check'],
     readyText: 'Local',
-    deployTarget: 'netlify',
     database: false,
     migrate: null,
     ignore: NODE_IGNORE,
@@ -158,7 +137,6 @@ export const STACKS: Record<StackId, Stack> = {
     build: ['npx', 'expo', 'export'],
     test: ['npx', 'tsc', '--noEmit'],
     readyText: 'Metro waiting on',
-    deployTarget: null,
     database: false,
     migrate: null,
     ignore: [...NODE_IGNORE, '.expo/'],
@@ -166,7 +144,7 @@ export const STACKS: Record<StackId, Stack> = {
   'node-api': {
     id: 'node-api',
     name: 'Node API',
-    summary: 'A Node.js API with Hono, deployed on Railway',
+    summary: 'A Node.js API with Hono',
     generator: [
       ['npm', 'create', '--yes', 'hono@latest', '.', '--', '--template', 'nodejs', '--pm', 'npm', '--install'],
     ],
@@ -174,7 +152,6 @@ export const STACKS: Record<StackId, Stack> = {
     build: ['npm', 'run', 'build'],
     test: ['npx', 'tsc', '--noEmit'],
     readyText: 'Server is running',
-    deployTarget: 'railway',
     database: false,
     migrate: null,
     ignore: NODE_IGNORE,
@@ -182,7 +159,7 @@ export const STACKS: Record<StackId, Stack> = {
   django: {
     id: 'django',
     name: 'Django',
-    summary: 'Django with a Postgres database, deployed on Railway',
+    summary: 'Django with a Postgres database',
     generator: [
       ['uv', 'init', '--app', '--no-workspace', '--vcs', 'none'],
       ['uv', 'add', 'django'],
@@ -192,7 +169,6 @@ export const STACKS: Record<StackId, Stack> = {
     build: ['uv', 'run', 'manage.py', 'check', '--deploy'],
     test: ['uv', 'run', 'manage.py', 'test'],
     readyText: 'Quit the server with',
-    deployTarget: 'railway',
     database: true,
     migrate: ['uv', 'run', 'manage.py', 'migrate'],
     ignore: ['.venv/', '__pycache__/', '*.pyc', '.env', 'db.sqlite3', '.DS_Store'],
@@ -200,7 +176,7 @@ export const STACKS: Record<StackId, Stack> = {
   fastapi: {
     id: 'fastapi',
     name: 'FastAPI',
-    summary: 'A FastAPI service, deployed on Railway',
+    summary: 'A FastAPI service',
     generator: [
       ['uv', 'init', '--app', '--no-workspace', '--vcs', 'none'],
       ['uv', 'add', 'fastapi[standard]'],
@@ -210,7 +186,6 @@ export const STACKS: Record<StackId, Stack> = {
     build: null,
     test: ['uv', 'run', 'pytest'],
     readyText: 'Application startup complete',
-    deployTarget: 'railway',
     database: false,
     migrate: null,
     ignore: ['.venv/', '__pycache__/', '*.pyc', '.env', '.DS_Store'],
@@ -218,13 +193,12 @@ export const STACKS: Record<StackId, Stack> = {
   rails: {
     id: 'rails',
     name: 'Rails',
-    summary: 'Rails with a Postgres database, deployed on Fly',
+    summary: 'Rails with a Postgres database',
     generator: [['rails', 'new', '.', '--database=postgresql', '--skip-git']],
     dev: ['bin/rails', 'server'],
     build: ['bin/rails', 'assets:precompile'],
     test: ['bin/rails', 'test'],
     readyText: 'Listening on',
-    deployTarget: 'fly',
     database: true,
     migrate: ['bin/rails', 'db:migrate'],
     ignore: [],
@@ -232,13 +206,12 @@ export const STACKS: Record<StackId, Stack> = {
   go: {
     id: 'go',
     name: 'Go',
-    summary: 'A Go web service, deployed on Fly',
+    summary: 'A Go web service',
     generator: [],
     dev: ['go', 'run', '.'],
     build: ['go', 'build', './...'],
     test: ['go', 'test', './...'],
     readyText: null,
-    deployTarget: 'fly',
     database: false,
     migrate: null,
     ignore: ['/bin/', '.env', '.DS_Store'],

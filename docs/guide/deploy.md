@@ -1,22 +1,10 @@
 # Deploying an app
 
-Ramu deploys a project to a hosting platform on your own account. The app, its deployments, its database and their billing stay with the platform, and the repository stays a normal Git repository. Ramu has no code for any platform. An agent deploys with the platform's [plugin](plugins.md), through its MCP tools or its CLI. Ramu keeps what an agent can't do for itself: the decision to go to production, the migrations before it, and watching the result.
+Agents deploy a project to a hosting platform on your own account. The app, its deployments, its database and their billing stay with the platform, and the repository stays a normal Git repository. Ramu has no code for any platform: an agent picks the platform, installs its [plugin](plugins.md) when one helps (`plugin_search`, `plugin_install`) and deploys with the plugin's MCP tools or the platform's CLI. Ramu keeps what an agent shouldn't decide alone: going to production, the migrations before it, and watching the result.
 
-## Set up a platform
+## Signing in to a platform
 
-Each platform deploys through one plugin:
-
-| Platform | Plugin | From |
-| --- | --- | --- |
-| Vercel | **vercel** | Claude's directory |
-| Netlify | **netlify-skills** | Claude's directory |
-| Railway | **railway** | Claude's directory |
-| Cloudflare | **cloudflare** | Claude's directory |
-| Fly.io | **fly-cli** | Ramu's index: `flyctl` through `platform_cli`, signed in with `FLY_API_TOKEN` |
-
-The platform's plugin teaches agents the platform and brings its MCP tools. The agent signs in the way the plugin says. Claude's directory has no Fly.io plugin, so Ramu's **fly-cli** runs `flyctl` (installed on the host) through `platform_cli`, with the token pasted on its card in **Customize → Plugins**. The token stays on the host and the agent never sees it.
-
-A new project's stack names the platform it suits: Next.js deploys to Vercel; the static, Vite and Astro stacks to Netlify; the Node API, Django and FastAPI stacks to Railway; Rails and Go to Fly.io. The Expo stack names no platform, and Ramu never submits an app to a store. **Deploy…** in the project's menu opens the Deploy sheet. Its **Set up deploy** names the platform and plugin, says whether the plugin is installed (and for **fly-cli**, whether its token is saved), and offers **Install the … plugin** or **Open plugin settings** for the next step. Without a stack, it offers **Open plugins**. Threads in the project know the platform and plugin from `ramu.json`, and an agent can offer the install itself with `plugin_install`.
+The agent signs in the way the platform's plugin or CLI says. When it needs a token only you can give, such as `VERCEL_TOKEN`, it asks with a masked card that links to the page where you create one, and can keep it for later threads ([Secrets agents ask for](working-with-agents.md#secrets-agents-ask-for)). A plugin that runs a CLI through `platform_cli` (Ramu's **fly-cli** for Fly.io) keeps its token on the host, pasted on its card in **Customize → Plugins**; the agent never sees it.
 
 ## Deploying
 
@@ -41,11 +29,11 @@ MCP servers set up only in a provider's own configuration, not through Ramu, are
 
 When `ramu.json` names a `migrate` command (the Django and Rails stacks fill it in), an allowed production deploy first runs it on this host, in the thread's checkout, with `DATABASE_URL` and `DATABASE_URL_UNPOOLED` set to the project's production database address and nothing else from Ramu's environment. The deploy waits for it. A failed migration stops the deploy: nothing goes out, the request is refused, and the thread shows the end of the output (with the address and anything that looks like a secret replaced) so the agent can find the cause.
 
-**Production database** in the Deploy sheet keeps that address. **Add address** works only on the host's own computer. The address goes straight to the host's credential store and is never shown again. The sheet says whether one is saved and which command runs, with **Replace address** and **Forget**. Without a saved address, a production deploy of a project with a `migrate` command is refused with where to add one.
+**Production database** in the project's **Live app…** sheet keeps that address. **Add address** works only on the host's own computer. The address goes straight to the host's credential store and is never shown again. The sheet says whether one is saved and which command runs, with **Replace address** and **Forget**. Without a saved address, a production deploy of a project with a `migrate` command is refused with where to add one.
 
 ## The latest deploy
 
-Platforms connected to a repository through their Git integration (Vercel, Netlify, Railway, Cloudflare, Render, GitHub Pages) report each deploy on the commit as a check or a commit status. **Latest deploy** in the Deploy sheet shows the checks on the newest commit of each repository's default branch, with each one's state and **Open** for its link, so it works for any platform. Ramu reads GitHub's check runs and commit statuses, and GitLab's pipeline jobs. A repository not on a Git host yet offers **Publish to GitHub…** first. A platform that deploys only from its CLI, without a Git integration, reports nothing here, and the agent gives you its address instead.
+Platforms connected to a repository through their Git integration (Vercel, Netlify, Railway, Cloudflare, Render, GitHub Pages) report each deploy on the commit as a check or a commit status. **Latest deploy** in the **Live app…** sheet shows the checks on the newest commit of each repository's default branch, with each one's state and **Open** for its link, so it works for any platform. Ramu reads GitHub's check runs and commit statuses, and GitLab's pipeline jobs. A repository not on a Git host yet offers **Publish to GitHub…** first. A platform that deploys only from its CLI, without a Git integration, reports nothing here, and the agent gives you its address instead.
 
 ## After a push
 
@@ -58,7 +46,7 @@ This works on GitHub and GitLab. Only the newest push of a branch is followed. A
 
 ## Live address and uptime
 
-**Live address** in the Deploy sheet is where people use the app, such as `https://shop.example.com`. Save it there, edit it later, or clear it with **Forget**. Without a saved address, Ramu uses the production deployment your Git host records (GitHub or GitLab), then the lasting address of an app [run on this computer](#on-this-computer). While **Watch the live address** is on (the default), the host checks it:
+**Live address** in the project's **Live app…** sheet is where people use the app, such as `https://shop.example.com`. Save it there, edit it later, or clear it with **Forget**. Without a saved address, Ramu uses the production deployment your Git host records (GitHub or GitLab), then the lasting address of an app [run on this computer](#on-this-computer). While **Watch the live address** is on (the default), the host checks it:
 
 - **What is checked:** every five minutes, one `GET` to the address and the project's health path (`"healthPath"` in the stack of `ramu.json`, such as `"/api/health"`; `/` by default). An answer within 10 seconds that is a success, a redirect, or a sign-in or rate-limit page counts as up. Redirects are followed on the same host name only. The sheet shows the last check with its status code and response time.
 - **Incidents:** two failed checks in a row open a thread in the project titled **Down: …**, with the status code or the reason there was no answer, and notify your phones. The thread uses the model of the project's most recent thread, with at most Auto access. Its agent finds the latest deploy from the Git host and reads its logs through the platform's plugin. When the last deploy is the likely cause, it offers to roll back, which asks you like any production deploy. A project has at most one open incident.
@@ -69,7 +57,7 @@ Turning the watch off forgets its checks and closes an open incident without a r
 
 ## On this computer
 
-For demos and home use, **Run on this computer** in the Deploy sheet publishes the project's app from this computer, with no account or server. **Publish from this computer** builds it into a Docker container (with the repository's Dockerfile, or one Ramu writes for the stack and passes to the build without adding it to the repository) and runs it with only its port published to this computer's loopback address. The app gets a public address through its own tunnel, of the kind chosen for artifacts opened to anyone (Cloudflare or ngrok without a fixed domain). The address reaches only the app, never Ramu, and changes when Ramu restarts. The app is offline while the computer sleeps or Ramu isn't running, and an app left published starts again with Ramu. **Stop** takes the address down first, then the container. Of this host's saved Environment variables, the app gets only the ones its code reads. Docker must be installed and running.
+For demos and home use, **Run on this computer** in the **Live app…** sheet publishes the project's app from this computer, with no account or server. **Publish from this computer** builds it into a Docker container (with the repository's Dockerfile, or one Ramu writes for the stack and passes to the build without adding it to the repository) and runs it with only its port published to this computer's loopback address. The app gets a public address through its own tunnel, of the kind chosen for artifacts opened to anyone (Cloudflare or ngrok without a fixed domain). The address reaches only the app, never Ramu, and changes when Ramu restarts. The app is offline while the computer sleeps or Ramu isn't running, and an app left published starts again with Ramu. **Stop** takes the address down first, then the container. Of this host's saved Environment variables, the app gets only the ones its code reads. Docker must be installed and running.
 
 Without Docker, **Run without Docker…** first says what it means, then runs a Node app with a `start` script as a program here. It installs dependencies when there's no `node_modules`, runs the `build` script if there is one, and starts the app with `PORT` and `HOST` set to a loopback port. The tunnel names it once the app answers there. The program gets the project's variables and none of Ramu's environment, but it has your own permissions, so use it only for code you trust. **Stop** ends its whole process group, and a program that exits takes its address down and shows the end of its output.
 
@@ -77,4 +65,4 @@ Without Docker, **Run without Docker…** first says what it means, then runs a 
 
 ## On the phone
 
-**Deploy** in a project's menu on the phone shows the platform its stack names, the latest deploy's checks with **Open**, the live address watch with any open incident and its switch, and whether a production database address is saved and which migrate command runs. Installing a plugin, saving the live address and adding the database address are done on a computer. Viewer pairings don't see it.
+**Live app** in a project's menu on the phone shows the latest deploy's checks with **Open**, the live address watch with any open incident and its switch, and whether a production database address is saved and which migrate command runs. Saving the live address and adding the database address are done on a computer. Viewer pairings don't see it.

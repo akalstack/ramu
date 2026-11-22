@@ -67,7 +67,7 @@ interface Incident {
 interface UptimeRecord {
   /** Null until the person chooses; the watch is on by default. */
   enabled: boolean | null
-  /** The live address the person saved in the Deploy sheet. */
+  /** The live address the person saved in the Live app sheet. */
   url: string | null
   /** The address Ramu found itself: the Git host's production deployment. */
   found: { url: string; from: 'git-host' } | null

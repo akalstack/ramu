@@ -7,7 +7,7 @@ import { errorText } from '../../lib/errors'
 import { useHost } from '../../workspace/HostProvider'
 
 /**
- * The Deploy sheet's "Run on this computer", for demos and home use: the app runs in a container here and gets a
+ * The Live app sheet's "Run on this computer", for demos and home use: the app runs in a container here and gets a
  * public address of its own through a tunnel that reaches only the app.
  */
 export function LocalAppSection({ projectId, repoId }: { projectId: string; repoId: string | null }) {

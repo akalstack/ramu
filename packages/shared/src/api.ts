@@ -1546,8 +1546,8 @@ export interface RamuMethods extends ArtifactMethods {
   'forge.removeGitlab'(): import('./types').GitlabSummary
   /** Bitbucket Cloud's credential on this host; `check` asks Bitbucket whose it is. */
   /**
-   * The project's Deploy sheet: the platform its stack names, and the checks the Git host lists on each repository's
-   * newest default-branch commit, where a connected platform reports each deploy.
+   * The project's Live app sheet: the checks the Git host lists on each repository's newest default-branch commit,
+   * where a connected platform reports each deploy.
    */
   'deploy.status'(projectId: string): DeployStatus
   /** The app published from this computer, if any: its state and its own public address. */
