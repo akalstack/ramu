@@ -183,6 +183,8 @@ main > section {
 }
 
 .section {
+  /* Above the hero's sky, which on a phone reaches past the hero's own height. */
+  position: relative;
   padding-top: clamp(64px, 9vw, 112px);
 }
 
@@ -210,7 +212,7 @@ main > section {
   gap: clamp(28px, 5vw, 72px);
   align-items: start;
 }
-.section-split .sticky {
+.section-split .split-sticky {
   position: sticky;
   top: 88px;
 }
@@ -218,7 +220,7 @@ main > section {
   .section-split {
     grid-template-columns: 1fr;
   }
-  .section-split .sticky {
+  .section-split .split-sticky {
     position: static;
   }
 }

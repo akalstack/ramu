@@ -1,0 +1,131 @@
+---
+import '@/styles/global.css'
+import StoreBadges from '@/components/store-badges.astro'
+import { LinkButton } from '@/components/site-button'
+import { MOBILE_SETUP } from '@/lib/site'
+
+// A phone's camera opens this page from the pairing QR on a computer running Ramu. The offer sits after `#`, which a
+// browser never sends here, so this page only hands it to the app and never sees the host's address or code.
+const title = 'Pair your phone — Ramu'
+---
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#131315" />
+    <meta name="robots" content="noindex" />
+    <meta name="referrer" content="no-referrer" />
+    <title>{title}</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <style>
+      .pair {
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: 32px 20px;
+      }
+      .pair-card {
+        width: 100%;
+        max-width: 420px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        text-align: center;
+      }
+      .pair-card h1 {
+        margin-top: 12px;
+        font-size: 26px;
+        line-height: 1.2;
+        letter-spacing: -0.02em;
+        font-weight: 640;
+        text-wrap: balance;
+      }
+      .pair-card p {
+        margin: 10px auto 0;
+        color: var(--muted);
+        max-width: 36ch;
+      }
+      .pair-host {
+        color: var(--text);
+        font-weight: 560;
+      }
+      .pair-open {
+        width: 100%;
+        max-width: 280px;
+        justify-content: center;
+      }
+      .pair-install {
+        margin-top: 20px;
+        padding-top: 20px;
+        width: 100%;
+        border-top: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+      }
+      .pair-install .stores {
+        justify-content: center;
+      }
+      .pair-fine {
+        font-size: 13px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="pair">
+      <div class="pair-card">
+        <a href="/" aria-label="Ramu home"><img src="/wordmark.svg" alt="Ramu" height="26" /></a>
+
+        <div id="ready" hidden>
+          <h1>Pair this phone with <span class="pair-host" id="host">your computer</span></h1>
+          <p>Your computer runs the agents. This phone follows its threads, answers questions and approves changes.</p>
+        </div>
+        <LinkButton tone="primary" id="open" className="pair-open" href="#" hidden>Open in Ramu</LinkButton>
+
+        <div id="expired" hidden>
+          <h1>This code has expired</h1>
+          <p>Show a new one on your computer, then scan it again.</p>
+        </div>
+
+        <div id="empty">
+          <h1>Pair your phone with Ramu</h1>
+          <p>
+            On your computer, open Ramu and choose <strong>Connect phone</strong>, then scan the code with this phone's
+            camera.
+          </p>
+        </div>
+
+        <div class="pair-install">
+          <p>Don’t have the app yet? Install it, then scan the code again.</p>
+          <StoreBadges />
+          <p class="pair-fine">Or <a href={MOBILE_SETUP}>build it from source</a>.</p>
+        </div>
+      </div>
+    </main>
+    <script>
+      const params = new URLSearchParams(location.hash.slice(1))
+      const url = params.get('url')
+      const code = params.get('code')
+      const show = (id: string, on = true) => document.getElementById(id)?.toggleAttribute('hidden', !on)
+      if (url && code) {
+        show('empty', false)
+        const expires = Number(params.get('exp'))
+        if (expires && expires <= Date.now()) show('expired')
+        else {
+          const name = params.get('name')
+          if (name) document.getElementById('host')!.textContent = name.slice(0, 60)
+          const open = document.getElementById('open') as HTMLAnchorElement
+          open.href = `ramu://pair?${params}`
+          show('ready')
+          show('open')
+        }
+      }
+    </script>
+  </body>
+</html>
