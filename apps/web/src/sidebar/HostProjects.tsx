@@ -31,7 +31,7 @@ import { t, useLanguage } from '../i18n'
 import { FadeText } from '../FadeText'
 import { ProjectsPanel } from './ProjectsPanel'
 import { TaskRow } from './projects/TaskRow'
-import { DeployDialog } from './projects/DeployDialog'
+import { LiveAppDialog } from './projects/LiveAppDialog'
 import { CiSetupDialog } from './projects/CiSetup'
 import { useContextMenu, type MenuEntry } from '../Menu'
 import { useHostWriteAccess } from '../composer/useHostWriteAccess'
@@ -348,7 +348,7 @@ function OtherHostProject({
   const open = tree.isExpanded(key)
   const preview = useThreadPreview(host, all, project.id, limit)
   const openProject = () => select(host, { kind: 'project', projectId: project.id })
-  // Shipping from this row needs no switch to that host: Deploy and Set up CI run there, as on its own projects.
+  // Shipping from this row needs no switch to that host: Live app and Set up CI run there, as on its own projects.
   const repos = useWorkspaceOf(host)?.repos[project.id] ?? []
   const { viewOnly, canWrite } = useHostWriteAccess()
   const [deploying, setDeploying] = useState(false)
@@ -366,10 +366,10 @@ function OtherHostProject({
     ...(available && !viewOnly
       ? [
           {
-            key: 'deploy',
+            key: 'live-app',
             label: (
               <>
-                <Rocket size={14} /> {t(' Deploy…')}
+                <Rocket size={14} /> {t(' Live app…')}
               </>
             ),
             onSelect: () => {
@@ -457,7 +457,7 @@ function OtherHostProject({
         </div>
       </div>
       {open && <ThreadPreviewList preview={preview} />}
-      {deploying && <DeployDialog project={project} repos={repos} onClose={() => setDeploying(false)} />}
+      {deploying && <LiveAppDialog project={project} repos={repos} onClose={() => setDeploying(false)} />}
       {settingUpCi && <CiSetupDialog project={project} repos={repos} onClose={() => setSettingUpCi(false)} />}
     </section>
   )

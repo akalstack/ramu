@@ -34,7 +34,7 @@ An optional `ramu.json` at a project's root (or `.ramu/config.json`) shares team
   "workspace": { "defaultCheckoutMode": "worktree", "branchPrefix": "feat/" },
   "commit": { "commitStyle": "conventional" },
   "abilities": { "image_generation": "off", "web_search": { "provider": "claude-code", "model": "" } },
-  "stack": { "id": "nextjs", "dev": "npm run dev", "build": "npm run build", "test": "npm run lint", "deployTarget": "vercel" }
+  "stack": { "id": "nextjs", "dev": "npm run dev", "build": "npm run build", "test": "npm run lint" }
 }
 ```
 
@@ -42,7 +42,7 @@ An optional `ramu.json` at a project's root (or `.ramu/config.json`) shares team
 - **Default model** applies to new threads until you pick another. If it isn't available, Ramu asks you to choose.
 - **Workspace** and **commit** fields override the host's defaults for this project.
 - **Abilities** override **Settings → Models → Abilities** for threads in this project, ability by ability: `"auto"`, `"off"`, or one provider and model (an empty model uses the one its check ran on). An ability turned off here is refused with this file named as the reason ([Abilities](working-with-agents.md#abilities)).
-- **Stack** says how to run, build and test the project and where it deploys. New threads in the project read it, so the agent uses these commands without being told. A project Ramu creates gets it filled in. `"deployTarget"` names the platform it deploys to, whose plugin the Deploy sheet suggests. `"migrate"` (an argument list, such as `["npx", "prisma", "migrate", "deploy"]`) runs against the production database before each production deploy through a plugin ([Migrations first](deploy.md#migrations-first)). `"healthPath"` (such as `"/api/health"`) is the path the uptime watch checks on the live address ([Live address and uptime](deploy.md#live-address-and-uptime)).
+- **Stack** says how to run, build and test the project. New threads in the project read it, so the agent uses these commands without being told. A project Ramu creates gets it filled in. `"migrate"` (an argument list, such as `["npx", "prisma", "migrate", "deploy"]`) runs against the production database before each production deploy ([Migrations first](deploy.md#migrations-first)). `"healthPath"` (such as `"/api/health"`) is the path the uptime watch checks on the live address ([Live address and uptime](deploy.md#live-address-and-uptime)).
 
 ## Local diagnostics
 

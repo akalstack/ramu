@@ -11,7 +11,7 @@ import { useHost } from '../../workspace/HostProvider'
 const time = (at: number) => new Date(at).toLocaleString()
 
 /**
- * The Deploy sheet's live address: where people use the app, which this host checks every five minutes while the
+ * The Live app sheet's live address: where people use the app, which this host checks every five minutes while the
  * watch is on (the default), with the last result, any span the host was asleep, and the open incident.
  */
 export function LiveAddressSection({ projectId }: { projectId: string }) {

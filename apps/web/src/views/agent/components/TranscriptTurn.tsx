@@ -3,7 +3,6 @@ import { type ChatBlock as Block } from '@ramu/shared/chat/chatFolding'
 import { formatChatDate } from '@ramu/shared/chat/chatDates'
 import type { ChatGoal } from '@ramu/shared/types'
 import { GoalDone, GoalNote } from '../../../chat/GoalBar'
-import { GoalDeploy } from '../../../chat/GoalDeploy'
 import { TurnChanges } from '../../../Changes'
 import { agentOf, blockAt, blockIndex, groupAgentRuns, relativize } from '../lib/blocks'
 import { formatDuration } from '../lib/format'
@@ -251,7 +250,6 @@ export function TranscriptTurn({
       {completedGoals?.map((done) => (
         <GoalDone key={done.id} goal={done} />
       ))}
-      {isLast && !!completedGoals?.length && !ctx.readOnly && <GoalDeploy taskId={ctx.taskId} />}
     </div>
   )
 }

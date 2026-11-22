@@ -552,7 +552,7 @@ export function ProjectActionsSheet({
       key: 'deploy',
       group: 'work',
       icon: Rocket,
-      label: say('Deploy'),
+      label: say('Live app'),
       onPress: () => {
         if (writable()) setDeploying(true)
       },

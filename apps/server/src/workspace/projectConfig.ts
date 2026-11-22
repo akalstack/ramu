@@ -47,7 +47,6 @@ export const projectConfigSchema = z.object({
       dev: z.string().trim().min(1).max(1000).optional(),
       build: z.string().trim().min(1).max(1000).optional(),
       test: z.string().trim().min(1).max(1000).optional(),
-      deployTarget: z.string().trim().min(1).max(40).optional(),
       /** Stores data in a Postgres database. */
       database: z.boolean().optional(),
       /** An argument list, run before each production deploy from Ramu. */

@@ -32,13 +32,12 @@ it('runs the stack generator in the new folder, records the stack in ramu.json a
     dev: 'npm run dev',
     build: 'npm run build',
     test: 'npm run lint',
-    deployTarget: 'netlify',
   })
   expect(readFileSync(join(folder.path, '.gitignore'), 'utf8')).toContain('node_modules/')
   expect(await git(folder.path, ['status', '--porcelain'])).toBe('')
   expect(await git(folder.path, ['log', '--format=%s'])).toContain('Start shop with Vite + React')
   expect(projectFactsText(config)).toContain('Build: npm run build')
-  expect(projectFactsText(config)).toContain('Deploys to: Netlify, with the netlify-skills plugin')
+  expect(projectFactsText(config)).toContain("Deploys: with the hosting platform's own plugin")
   expect(projectFactsText(config)).toContain('a production deploy, however you make it, asks the person')
 })
 

@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react'
 import { CHECK_STATE } from '@ramu/shared/deployText'
-import { DEPLOY_TARGET_PLUGINS } from '@ramu/shared/plugins'
-import { DEPLOY_TARGETS } from '@ramu/shared/stacks'
 import type { DeployStatus, Project, Repository } from '@ramu/shared/types'
-import { BrandIcon } from '@/components/brand-icon'
 import { Button } from '@/components/desktop-button'
 import { Dialog } from '../../Menu'
 import { t, useLanguage } from '../../i18n'
@@ -12,8 +9,6 @@ import { errorText } from '../../lib/errors'
 import { useHost } from '../../workspace/HostProvider'
 import { projectCtx } from '../../workspace/workspace'
 import { openPublishRepository } from '../../git/PublishRepositoryHost'
-import { usePluginSetup } from '../../customize/pluginSetup'
-import { openPluginSettings } from '../../settings/openPluginSettings'
 import { CiSetupSection } from './CiSetup'
 import { LiveAddressSection } from './LiveAddress'
 import { LocalAppSection } from './LocalApp'
@@ -22,11 +17,11 @@ import { ProductionDatabaseSection } from './ProductionDatabase'
 const open = (url: string) => void openOnThisComputer('app.openExternal', url)
 
 /**
- * Deploy: the project's platform plugin and how far it is set up, the latest deploy as the Git host reports it, the
- * live address the host watches, and the production database migrations run against. Deploys themselves are the
- * project's agent's work through the plugin, so the sheet starts none.
+ * Live app: the latest deploy as the Git host reports it, the live address the host watches, the production database
+ * migrations run against, CI, and an app run from this computer. Deploys themselves are the project's agent's work
+ * with the platform's plugin or CLI, so the sheet starts none.
  */
-export function DeployDialog({
+export function LiveAppDialog({
   project,
   repos,
   onClose,
@@ -63,8 +58,6 @@ export function DeployDialog({
       live = false
     }
   }, [host, project.id, repoId])
-  const target = status?.recommended ?? null
-  const plugin = usePluginSetup(target ? DEPLOY_TARGET_PLUGINS[target] : null)
   const publish = () => {
     const repo = repos[0]
     if (!repo) return
@@ -72,61 +65,17 @@ export function DeployDialog({
       if (published) setUnpublished(false)
     })
   }
-  const setUp = (work: () => void) => {
-    onClose()
-    work()
-  }
 
   return (
     <Dialog
-      title={t('Deploy {0}', { 0: project.name })}
+      title={t('Live app · {0}', { 0: project.name })}
       confirmLabel={t('Done')}
       cancellable={false}
       error={error}
       onCancel={onClose}
       onConfirm={onClose}
     >
-      <section aria-label={t('Set up deploy')} className="flex flex-col gap-2">
-        <strong>{t('Set up deploy')}</strong>
-        {target ? (
-          <p role="status" className="m-0 flex items-start gap-2 text-caption">
-            <BrandIcon brand={target} className="mt-0.5" />
-            <span>
-              {t('{0} suits this project’s stack, through the {1} plugin.', {
-                0: DEPLOY_TARGETS[target],
-                1: DEPLOY_TARGET_PLUGINS[target].name,
-              })}{' '}
-              {plugin.state === 'ready'
-                ? t(
-                    'Ask the project’s agent to deploy: previews run without asking, and production asks you first and runs the migrations before it.',
-                  )
-                : plugin.state === 'missing'
-                  ? t('Install it, then ask the project’s agent to deploy.')
-                  : plugin.state === 'credential'
-                    ? t('Save its token, then ask the project’s agent to deploy.')
-                    : t('Checking…')}
-            </span>
-          </p>
-        ) : (
-          <p className="m-0 text-caption text-muted-foreground">
-            {t(
-              'Install the plugin for the platform you deploy to from Customize → Plugins, then ask the project’s agent to deploy.',
-            )}
-          </p>
-        )}
-        {(!target || (plugin.state && plugin.state !== 'ready')) && (
-          <span>
-            <Button size="sm" variant="secondary" onClick={() => setUp(target ? plugin.setUp : openPluginSettings)}>
-              {!target
-                ? t('Open plugins')
-                : plugin.state === 'missing'
-                  ? t('Install the {0} plugin', { 0: DEPLOY_TARGET_PLUGINS[target].name })
-                  : t('Open plugin settings')}
-            </Button>
-          </span>
-        )}
-      </section>
-      <section aria-label={t('Latest deploy')} className="mt-3 flex flex-col gap-2 border-t border-(--line) pt-3">
+      <section aria-label={t('Latest deploy')} className="flex flex-col gap-2">
         <strong>{t('Latest deploy')}</strong>
         {!status ? (
           !error && <p className="m-0 text-caption text-muted-foreground">{t('Checking…')}</p>

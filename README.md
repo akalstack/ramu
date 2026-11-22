@@ -41,7 +41,7 @@ Open a project, say what you want, review the result. The defaults work as they 
 
 |                                    |                                                                                                                                                                                                                                                                                                                           |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🚀 **One sentence to a live app**  | Ramu asks a few questions, picks a stack and builds until the build and tests pass. Then it deploys to _your_ Vercel, Netlify, Railway, Cloudflare or Fly.io account through that platform's own plugin, and every later change comes as a pull request with CI. [Shipping →](docs/guide/shipping.md) |
+| 🚀 **One sentence to a live app**  | Ramu asks a few questions, picks a stack and builds until the build and tests pass. Then the agent deploys it to _your_ hosting account, production only after your OK, and every later change comes as a pull request with CI. [Shipping →](docs/guide/shipping.md) |
 | 🎯 **Work that finishes itself**   | For longer tasks the agent sets a goal and keeps going across turns and providers. Ramu calls it done only when the checks pass and the changes are really in the repo. Add your own check, like your test suite. [Goals →](docs/guide/goals.md)                                                                          |
 | 🔁 **Usage limits don't stop you** | Rank your providers. When one runs out, the thread moves to the next with its context, and comes back when your first choice has room. If all are limited, Ramu waits and resumes, even after a restart. [Fallback →](docs/guide/working-with-agents.md#usage-limits-and-fallback) |
 
@@ -75,7 +75,7 @@ Open a project, say what you want, review the result. The defaults work as they 
 
 **🌐 Shipping and running**
 
-- Deploy with each platform's own plugin: Vercel, Netlify, Railway, Cloudflare or Fly.io. Ramu keeps the part an agent shouldn't decide alone: production always waits for your OK, and migrations run first. [Deploying →](docs/guide/deploy.md)
+- Agents deploy to your own Vercel, Netlify, Railway, Cloudflare or Fly.io account with the platform's CLI or plugin. Ramu keeps the part an agent shouldn't decide alone: production always waits for your OK, and migrations run first. [Deploying →](docs/guide/deploy.md)
 - **Run on this computer** for demos and home use: no hosting account, just a public address through a tunnel.
 - [Plugins](docs/guide/plugins.md) add a service in one install: its skills, MCP servers, CLI and credential, for every provider. Browse them at [getramu.dev/plugins](https://getramu.dev/plugins).
 - **Set up CI** in one pull request. After a push, the thread hears how its checks went (GitHub and GitLab). When the live site stops answering, an incident thread opens and your phone is told.

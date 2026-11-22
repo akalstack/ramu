@@ -42,7 +42,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { InlineEdit } from './InlineEdit'
 import { ProjectHoverCard } from './ProjectHoverCard'
 import { ProjectRoutingDialog } from './ProjectRoutingDialog'
-import { DeployDialog } from './DeployDialog'
+import { LiveAppDialog } from './LiveAppDialog'
 import { CiSetupDialog } from './CiSetup'
 import { useSidebarExpansion } from './sidebarExpansion'
 import { ThreadPreviewList, useThreadPreview } from './ThreadPreviewList'
@@ -212,10 +212,10 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
         ]
       : []),
     {
-      key: 'deploy',
+      key: 'live-app',
       label: (
         <>
-          <Rocket size={14} /> {t(' Deploy…')}
+          <Rocket size={14} /> {t(' Live app…')}
         </>
       ),
       onSelect: () => {
@@ -475,7 +475,7 @@ export function ProjectGroup({ project, previewLimit }: { project: Project; prev
           onClose={() => setRouting(false)}
         />
       )}
-      {deploying && <DeployDialog project={project} repos={repos} onClose={() => setDeploying(false)} />}
+      {deploying && <LiveAppDialog project={project} repos={repos} onClose={() => setDeploying(false)} />}
       {settingUpCi && <CiSetupDialog project={project} repos={repos} onClose={() => setSettingUpCi(false)} />}
       {removing && (
         <Dialog

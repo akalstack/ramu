@@ -6,7 +6,7 @@ import { errorText } from '../../lib/errors'
 import { useHost } from '../../workspace/HostProvider'
 
 /**
- * The Deploy sheet's production database: the address a production deploy's migrations run against, saved on the
+ * The Live app sheet's production database: the address a production deploy's migrations run against, saved on the
  * host and never shown again. It can be replaced or forgotten, and the sheet says which migrate command runs.
  */
 export function ProductionDatabaseSection({ projectId }: { projectId: string }) {

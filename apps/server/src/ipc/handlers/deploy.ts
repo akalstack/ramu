@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import type { DeployStatus } from '@ramu/shared/types/deploy'
-import { isDeployTarget } from '@ramu/shared/stacks'
 import { appVariables } from '../../workspace/deploy/appVariables'
 import { latestDeployChecks } from '../../workspace/deploy/gitHostStatus'
 import { id } from '../schemas'
@@ -14,9 +13,9 @@ const liveAddress = z
   .refine((value) => /^https?:\/\//i.test(value), 'Give an http or https address.')
 
 /**
- * A project's Deploy sheet: the latest deploy as the Git host reports it, the live address watch, the production
- * database migrations run against, and an app published from this computer. Platforms themselves are reached through
- * their plugins, so nothing here names one.
+ * A project's Live app sheet: the latest deploy as the Git host reports it, the live address watch, the production
+ * database migrations run against, and an app published from this computer. Agents reach platforms through their
+ * plugins or CLIs, so nothing here names one.
  */
 export const registerDeployHandlers: RegisterHandlers = (ctx) => {
   const need = <T>(service: T | undefined): T => {
@@ -53,14 +52,10 @@ export const registerDeployHandlers: RegisterHandlers = (ctx) => {
     'deploy.status': {
       args: z.tuple([id]),
       run: async (projectId: string): Promise<DeployStatus> => {
-        const target = ctx.workspace.projectConfiguration(project(projectId)).config.stack?.deployTarget
         const read = await Promise.all(
           ctx.workspace.listRepositories(projectId).map((repository) => latestDeployChecks(repository)),
         )
-        return {
-          recommended: isDeployTarget(target) ? target : null,
-          repositories: read.filter((entry) => entry !== null),
-        }
+        return { repositories: read.filter((entry) => entry !== null) }
       },
     },
     'deploy.migrations': {

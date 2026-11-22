@@ -2,8 +2,7 @@ import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { DEPLOY_TARGET_PLUGINS } from '@ramu/shared/plugins'
-import { DEPLOY_TARGETS, PROJECT_NAME, STACKS, commandLine, isDeployTarget, type StackId } from '@ramu/shared/stacks'
+import { PROJECT_NAME, STACKS, commandLine, type StackId } from '@ramu/shared/stacks'
 import { git } from './git'
 import type { ProjectConfig } from './projectConfig'
 
@@ -92,7 +91,6 @@ function projectFile(path: string, name: string, stack: (typeof STACKS)[StackId]
             ...(stack.dev ? { dev: commandLine(stack.dev) } : {}),
             ...(stack.build ? { build: commandLine(stack.build) } : {}),
             ...(stack.test ? { test: commandLine(stack.test) } : {}),
-            ...(stack.deployTarget ? { deployTarget: stack.deployTarget } : {}),
             ...(stack.database ? { database: true } : {}),
             ...(stack.migrate ? { migrate: stack.migrate } : {}),
           },
@@ -129,8 +127,8 @@ export function projectFactsText(config: ProjectConfig): string | undefined {
     stack.dev ? `Run it: ${stack.dev}` : '',
     stack.build ? `Build: ${stack.build}` : '',
     stack.test ? `Test: ${stack.test}` : '',
-    isDeployTarget(stack.deployTarget)
-      ? `Deploys to: ${DEPLOY_TARGETS[stack.deployTarget]}, with the ${DEPLOY_TARGET_PLUGINS[stack.deployTarget].name} plugin: its MCP tools or its CLI. A preview deploy runs without asking; a production deploy, however you make it, asks the person and runs the migrations first. If the plugin is not installed, ask the person to install it from the project's Deploy sheet, or call plugin_search and plugin_install`
+    stack.id && stack.id !== 'expo'
+      ? "Deploys: with the hosting platform's own plugin (plugin_search, plugin_install) or its CLI. A preview deploy runs without asking; a production deploy, however you make it, asks the person and runs the migrations first."
       : '',
     stack.database ? 'Stores data in Postgres: read DATABASE_URL (DATABASE_URL_UNPOOLED for migrations).' : '',
     stack.migrate ? `Migrate (runs before each production deploy): ${commandLine(stack.migrate)}` : '',

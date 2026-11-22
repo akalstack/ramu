@@ -1,4 +1,4 @@
-// The phone's Deploy view of a project: what the host's Deploy sheet calls return, as lines to show. No React Native in
+// The phone's Live app view of a project: what the host's Live app calls return, as lines to show. No React Native in
 // here, so it is unit tested.
 import { CHECK_STATE, uptimeCheckText } from '@ramu/shared/deployText'
 import type { Translate } from '@ramu/shared/forgeStatus'

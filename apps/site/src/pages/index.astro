@@ -40,7 +40,7 @@ const PATH = [
   { title: 'Say what you want', body: 'At most three questions, each with a suggested answer. Then a stack in one line.' },
   { title: 'Ramu makes the project', body: 'It runs the framework’s own generator, commits, and sets a goal: build and tests pass.' },
   { title: 'Watch it take shape', body: 'The app opens in the browser panel as soon as it runs. Questions come as cards.' },
-  { title: 'Deploy to your account', body: 'Install your host’s plugin once, or run it on this computer with a public address. Production always waits for your OK.' },
+  { title: 'Deploy to your account', body: 'The agent deploys with your host’s own CLI, or runs it on this computer with a public address. Production always waits for your OK.' },
   { title: 'Keep changing it', body: 'Each change is a pull request with CI. Merging ships it when your host deploys from the repo.' },
 ]
 
@@ -55,7 +55,7 @@ const WHY = [
   {
     icon: 'rocket',
     title: 'One sentence to a live app',
-    body: 'Ramu asks, builds until the tests pass, and deploys to your own hosting account.',
+    body: 'Ramu asks, builds until the tests pass, and the agent deploys it to your own account. Production waits for your OK.',
   },
   {
     icon: 'target',
@@ -202,7 +202,7 @@ const WORK = [
       </section>
 
       <section class="services" aria-labelledby="services-title">
-        <p id="services-title" class="services-title">Deploys with each host’s own plugin. Pull requests on your Git host.</p>
+        <p id="services-title" class="services-title">Your agents deploy to your own hosting account. Pull requests on your Git host.</p>
         <ul class="sr-only">{SERVICES.map((svc) => <li>{svc.name}: {svc.role}</li>)}</ul>
         <div class="marquee" aria-hidden="true">
           <div class="marquee-track">
