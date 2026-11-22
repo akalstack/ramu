@@ -346,25 +346,24 @@ export function Onboarding() {
               <Button
                 size="sm"
                 variant="secondary"
-                // Restoring brings the choices the steps below would make, so setup ends here.
-                onClick={() =>
-                  void finish().then(() =>
-                    window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'account' } })),
-                  )
-                }
+                // Restoring brings the choices the steps below would make. Setup counts as done once a restore is
+                // applied; leaving before that brings it back on the next launch.
+                onClick={() => {
+                  setOpen(false)
+                  window.dispatchEvent(new CustomEvent('ramu:settings', { detail: { section: 'account' } }))
+                }}
               >
                 {t('From a backup')}
               </Button>
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() =>
-                  void finish().then(() =>
-                    window.dispatchEvent(
-                      new CustomEvent('ramu:settings', { detail: { section: 'account', target: 'Copy settings' } }),
-                    ),
+                onClick={() => {
+                  setOpen(false)
+                  window.dispatchEvent(
+                    new CustomEvent('ramu:settings', { detail: { section: 'account', target: 'Copy settings' } }),
                   )
-                }
+                }}
               >
                 {t('From another host')}
               </Button>

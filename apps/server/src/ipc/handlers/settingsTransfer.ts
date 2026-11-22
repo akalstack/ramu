@@ -202,6 +202,8 @@ export const registerSettingsTransferHandlers: RegisterHandlers = (ctx) => ({
       // Plugins, skills and servers are not installed here: each waits in Customize for its own review on this host.
       const tools = (file.tools ?? []).filter((tool) => chosen.includes(TOOL_GROUP[tool.kind]))
       if (tools.length && receiveTools(ctx, tools, file.host)) ctx.host.send('toolSync:changed', null)
+      // Restoring is how setup's "Restore your settings?" ends; until something is applied, setup comes back.
+      ctx.workspace.setAppState('onboarding-completed', true)
       return { changed: changes.length, connectHere }
     },
   },
