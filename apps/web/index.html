@@ -5,7 +5,47 @@
     <title>Ramu</title>
   </head>
   <body>
-    <div id="root"></div>
+    <!--
+      Shown from the first frame, while the app's code is still loading: the same mark, size and place as the app's own
+      startup screen, which replaces it, with the dot breathing so a slow first start reads as loading, not stuck.
+    -->
+    <style>
+      html,
+      body,
+      #root {
+        height: 100%;
+        margin: 0;
+      }
+      .boot-mark {
+        height: 100%;
+        display: grid;
+        place-items: center;
+        background: #131315;
+      }
+      .boot-mark circle {
+        transform-origin: 664px 622px;
+        animation: boot-breathe 1.4s ease-in-out infinite;
+      }
+      @keyframes boot-breathe {
+        50% {
+          transform: scale(0.72);
+          opacity: 0.55;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-mark circle {
+          animation: none;
+        }
+      }
+    </style>
+    <div id="root">
+      <div class="boot-mark" role="status" aria-label="Ramu">
+        <svg width="80.16" height="80.16" viewBox="240 240 540 540" fill="none" aria-hidden="true">
+          <path d="M356 694V518C356 402 434 334 548 334" stroke="#dedee3" stroke-width="120" stroke-linecap="round" />
+          <circle cx="664" cy="622" r="72" fill="#7d6cff" />
+        </svg>
+      </div>
+    </div>
     <script type="module" src="./src/main.tsx"></script>
   </body>
 </html>

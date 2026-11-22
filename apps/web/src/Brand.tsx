@@ -153,7 +153,13 @@ export function StartupScreen({ ready, children }: { ready: boolean; children: R
               strokeWidth="120"
               strokeLinecap="round"
             />
-            <circle ref={dot} {...MARK.dot} fill={MARK.dotColor} />
+            <circle
+              ref={dot}
+              {...MARK.dot}
+              fill={MARK.dotColor}
+              // Once the mark has woken and the app is still loading, the dot breathes so a slow start reads as loading.
+              className={motionDone && !ready ? 'startup-waiting' : undefined}
+            />
           </svg>
         </div>
       )}

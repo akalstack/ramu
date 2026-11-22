@@ -186,6 +186,12 @@ async function main() {
   // This computer's server always runs. Paired computers connect alongside it in the same shell.
   // Settings live in the service, so until it answers the window follows the system language.
   configureDesktopLanguage('system', app.getPreferredSystemLanguages())
+  // Registered before any window exists: with no listener, Electron quits when the last window closes, and the small
+  // "Starting Ramu" window closes before the main one is made. That quit cut the main page's load short
+  // (ERR_FAILED loading index.html). The app quits with its windows only once the main window has existed.
+  app.on('window-all-closed', () => {
+    if (shellWindowMade) app.quit()
+  })
   const runtime =
     e2eHeadless || launchedForPairing
       ? await ensureRuntime(userData, daemonPath)
@@ -448,6 +454,7 @@ async function main() {
 
   const windowFile = join(userData, 'main-window.json')
   const lastBounds = e2eHeadless ? null : savedBounds(windowFile)
+  shellWindowMade = true
   const win = new BrowserWindow({
     ...(icon ? { icon } : {}),
     width: 1440,
@@ -1566,8 +1573,9 @@ async function main() {
     ipcMain.removeAllListeners('ramu:device-state')
     ipcMain.removeAllListeners('ramu:device-state:set')
   })
-  app.on('window-all-closed', () => app.quit())
 }
+
+let shellWindowMade = false
 
 void main().catch((error: unknown) => {
   console.error('Ramu startup failed:', error)

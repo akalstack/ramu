@@ -11,3 +11,19 @@
   transition: none !important;
   scroll-behavior: auto !important;
 }
+
+/* A slow start: the startup mark's dot breathes after it has woken, as the first-frame mark in index.html does. */
+.startup-waiting {
+  animation: startup-breathe 1.4s ease-in-out infinite;
+}
+@keyframes startup-breathe {
+  50% {
+    transform: scale(0.72);
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .startup-waiting {
+    animation: none;
+  }
+}
