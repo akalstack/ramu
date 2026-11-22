@@ -11,6 +11,14 @@ import { mermaidLabels, withMermaidLabels } from '@ramu/shared/mermaidLabels'
 import { docBlocks, withDocBlocks, type DocBlock } from '@ramu/shared/docBlocks'
 import { inlineRuns } from '@ramu/shared/inlineMarks'
 import {
+  DASHBOARD_RANGE_CHOICES,
+  DASHBOARD_REFRESH_CHOICES,
+  dashboardControls,
+  dashboardRangeLabel,
+  dashboardRefreshLabel,
+} from '@ramu/shared/dashboardControls'
+import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
+import {
   interactiveHtml,
   readInteractiveState,
   type InteractiveDocument,
@@ -154,6 +162,8 @@ export default function PageScreen() {
   const [error, setError] = useState('')
   const [messages, setMessages] = useState<{ id: number; data: object }[]>([])
   const [menu, setMenu] = useState(false)
+  // A dashboard's refresh interval or range, chosen in its own sheet from the actions menu.
+  const [dashboardChoice, setDashboardChoice] = useState<'refresh' | 'range' | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [makingProject, setMakingProject] = useState(false)
   const [versions, setVersions] = useState<ArtifactVersion[] | null>(null)
@@ -179,6 +189,9 @@ export default function PageScreen() {
   // The person's other devices editing this text too; saving merges edits that changed different lines.
   const [alsoEditing, setAlsoEditing] = useState<string[]>([])
   const editingText = !!editing
+  const dashboard = dashboardControls(
+    document?.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.dashboard)?.content,
+  )
   // A row that opens a sheet or the share sheet waits for the menu to leave the screen: on iOS a sheet presented while
   // another is still closing never appears.
   const menuTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -938,6 +951,37 @@ export default function PageScreen() {
           </View>
         ) : null}
       </View>
+      <Sheet
+        open={dashboardChoice !== null}
+        onClose={() => setDashboardChoice(null)}
+        title={dashboardChoice === 'range' ? say('Range') : say('Refresh')}
+      >
+        <SheetGroup>
+          {(dashboardChoice === 'range' ? DASHBOARD_RANGE_CHOICES : DASHBOARD_REFRESH_CHOICES).map((value) => (
+            <SheetOption
+              key={String(value)}
+              title={
+                dashboardChoice === 'range'
+                  ? dashboardRangeLabel(value as number | null, say)
+                  : dashboardRefreshLabel(value as number, say)
+              }
+              selected={(dashboardChoice === 'range' ? dashboard.rangeDays : dashboard.refresh) === value}
+              onPress={() => {
+                const version = document?.reference.version
+                setDashboardChoice(null)
+                if (version === undefined) return
+                void (
+                  dashboardChoice === 'range'
+                    ? store.invoke(computerId, 'artifacts.setRange', artifactId, version, value as number | null)
+                    : store.invoke(computerId, 'artifacts.setRefresh', artifactId, version, value as number)
+                )
+                  .then(() => load())
+                  .catch((failure) => setError(failure instanceof Error ? failure.message : String(failure)))
+              }}
+            />
+          ))}
+        </SheetGroup>
+      </Sheet>
       <Sheet open={menu} onClose={() => setMenu(false)} title={page?.title ?? say('Artifacts')}>
         <View style={{ padding: space.l, gap: space.m }}>
           {runs.length && !shared ? (
@@ -989,6 +1033,18 @@ export default function PageScreen() {
                 }
               >
                 <T>{say('Versions')}</T>
+              </Row>
+            ) : null}
+            {page?.kind === 'dashboard' && !shared && !viewer && dashboard.refresh !== null ? (
+              <Row disabled={!online || !document} onPress={() => afterMenu(() => setDashboardChoice('refresh'))}>
+                <T>{say('Refresh')}</T>
+                <T tone="muted">{dashboardRefreshLabel(dashboard.refresh, say)}</T>
+              </Row>
+            ) : null}
+            {page?.kind === 'dashboard' && !shared && !viewer && dashboard.ranged ? (
+              <Row disabled={!online || !document} onPress={() => afterMenu(() => setDashboardChoice('range'))}>
+                <T>{say('Range')}</T>
+                <T tone="muted">{dashboardRangeLabel(dashboard.rangeDays, say)}</T>
               </Row>
             ) : null}
             {(page?.capabilities.widget || page?.kind === 'dashboard') && !shared ? (

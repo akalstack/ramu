@@ -28,6 +28,8 @@ const KIND_ICON: Record<ActivityKind | 'more', Icon> = {
 import { Helpers } from './Helpers'
 import { InputRequests } from './InputRequests'
 import { GoalQueueTray } from './Composer'
+import { moveQueued } from '../runtime/queueOrder'
+import { showError } from '../runtime/toast'
 import { LimitTray } from './LimitTray'
 export function ThreadActivity({
   chat,
@@ -250,6 +252,19 @@ export function ThreadActivity({
                 ? (message) => {
                     setOpened(null)
                     onEditQueued(message)
+                  }
+                : undefined
+            }
+            onMove={
+              online && chat.sessionId
+                ? (id, delta) => {
+                    const ids = chat.queue.map((message) => message.id)
+                    const order = moveQueued(ids, ids, id, delta)
+                    if (!order) return
+                    void store
+                      .invoke(chat.computerId, 'agent.reorderQueued', chat.sessionId!, order)
+                      .then(() => store.refresh(chat.computerId))
+                      .catch((error) => showError(error instanceof Error ? error.message : String(error)))
                   }
                 : undefined
             }

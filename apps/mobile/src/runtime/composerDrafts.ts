@@ -24,6 +24,10 @@ export class ExplorerDraftError extends Error {
   }
 }
 
+/** The message box draft of a thread, shared by its screen and anything that adds to it (its terminal). */
+export const composerDraftKey = (chat: { computerId: string; taskId: string; id: string }) =>
+  `${chat.computerId}:chat:${chat.taskId || chat.id}`
+
 /** A file-started composer keeps its checkout draft separate from an unrelated Home draft. */
 export function newComposerKey(host: string, projectId: string | null, draftContext?: string): string {
   return `${host}:new:${projectId ?? 'none'}${draftContext ? `:files:${encodeURIComponent(draftContext)}` : ''}`

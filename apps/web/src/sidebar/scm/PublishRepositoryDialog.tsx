@@ -7,15 +7,7 @@ import { t, useLanguage } from '../../i18n'
 import { errorText } from '../../workspace/TaskPane'
 import { useHost } from '../../workspace/HostProvider'
 import { BrandIcon } from '@/components/brand-icon'
-
-const NAME_PATTERN = /^([A-Za-z0-9-]{1,39}\/)?[A-Za-z0-9._-]{1,100}$/
-
-/** The GitHub name for a folder: letters, digits, dots, dashes and underscores only. */
-export const githubNameFor = (folder: string) =>
-  folder
-    .trim()
-    .replace(/[^A-Za-z0-9._-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+import { GITHUB_REPOSITORY_NAME, githubNameFor } from '@ramu/shared/githubRepositoryName'
 
 /** Publish to GitHub, like VS Code: name and visibility (private by default), then create the repository and push. */
 export function PublishRepositoryDialog({
@@ -70,7 +62,7 @@ export function PublishRepositoryDialog({
     <Dialog
       title={t('Publish to GitHub')}
       confirmLabel={busy ? t('Publishing…') : t('Publish to GitHub')}
-      confirmDisabled={!NAME_PATTERN.test(name.trim()) || account?.ambiguous === true}
+      confirmDisabled={!GITHUB_REPOSITORY_NAME.test(name.trim()) || account?.ambiguous === true}
       busy={busy}
       error={error}
       onCancel={() => onDone(false)}

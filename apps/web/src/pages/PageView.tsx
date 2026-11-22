@@ -25,13 +25,20 @@ import {
   type ArtifactVersion,
 } from '@ramu/shared/artifacts'
 import { interactiveExport, slideCount } from '@ramu/shared/interactiveExport'
-import { dashboardTimeColumn, type Slide } from '@ramu/shared/artifactSource'
+import type { Slide } from '@ramu/shared/artifactSource'
 import { Button } from '../components/desktop-button'
 import { Input } from '../components/desktop-input'
 import { Textarea } from '@/components/ui/textarea'
 import { GHOST_ICON_BUTTON_CLASS, GHOST_TEXT_BUTTON_CLASS } from '../components/button-classes'
 import { Dialog, Dropdown, Menu, type MenuEntry } from '../Menu'
 import { t, useLanguage } from '../i18n'
+import {
+  DASHBOARD_RANGE_CHOICES,
+  DASHBOARD_REFRESH_CHOICES,
+  dashboardControls,
+  dashboardRangeLabel,
+  dashboardRefreshLabel,
+} from '@ramu/shared/dashboardControls'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
 import { notifyError } from '../chat/Notifications'
@@ -69,18 +76,6 @@ const message = (error: unknown) =>
     : String(error)
 
 /** One page, full window: its frame, toolbar, runs, questions about its records and everything the person can do with it. */
-const RANGE_CHOICES = [null, 7, 30, 90, 365] as const
-const rangeLabel = (days: (typeof RANGE_CHOICES)[number]) =>
-  days === null ? t('All time') : days === 365 ? t('Last year') : t('Last {count} days', { count: days })
-const REFRESH_CHOICES = [5, 15, 60, 360, 1440]
-const refreshLabel = (minutes: number) =>
-  ({
-    5: t('Every 5 minutes'),
-    15: t('Every 15 minutes'),
-    60: t('Every hour'),
-    360: t('Every 6 hours'),
-    1440: t('Once a day'),
-  })[minutes] ?? t('Every {count} minutes', { count: minutes })
 
 /** Moves an open edit's base forward to the version the live copy was saved as; never back. */
 function setBase<T extends { base: number }>(edit: (change: (current: T | null) => T | null) => void, version: number) {
@@ -357,20 +352,9 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
   const outline = page?.kind === 'doc' && document ? docOutline(document.html) : []
   // A dashboard with live tables offers its refresh rule; the default read interval is five minutes.
   const dashboardSource = document?.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.dashboard)?.content
-  const dashboardBoard = dashboardSource
-    ? (JSON.parse(dashboardSource) as {
-        datasets: (Parameters<typeof dashboardTimeColumn>[0] & { file?: string; records?: object; mcp?: object })[]
-        refreshMinutes?: number
-        rangeDays?: number
-      })
-    : null
-  // A dashboard with dated rows, or a file whose rows are read later, can be cut to a recent range.
-  const ranged = !!dashboardBoard?.datasets.some(
-    (table) => table.file || table.records || table.mcp || dashboardTimeColumn(table) >= 0,
-  )
-  const liveRefresh = dashboardBoard?.datasets.some((table) => table.source || table.file || table.records || table.mcp)
-    ? (dashboardBoard.refreshMinutes ?? 5)
-    : null
+  const dashboard = dashboardControls(dashboardSource)
+  const ranged = dashboard.ranged
+  const liveRefresh = dashboard.refresh
   // A motion's length, from the scenes its version keeps, for the toolbar's scrub bar.
   const motionSource = document?.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.motion)?.content
   const motionSeconds = motionSource
@@ -629,7 +613,10 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
               label={t('Refresh')}
               value={String(liveRefresh)}
               disabled={viewOnly || !document}
-              options={REFRESH_CHOICES.map((minutes) => ({ value: String(minutes), label: refreshLabel(minutes) }))}
+              options={DASHBOARD_REFRESH_CHOICES.map((minutes) => ({
+                value: String(minutes),
+                label: dashboardRefreshLabel(minutes, t),
+              }))}
               onChange={(next) => {
                 if (!document) return
                 void invoke('artifacts.setRefresh', artifactId, document.reference.version, Number(next))
@@ -641,9 +628,12 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           {page.kind === 'dashboard' && ranged && (
             <Dropdown
               label={t('Range')}
-              value={String(dashboardBoard?.rangeDays ?? '')}
+              value={String(dashboard.rangeDays ?? '')}
               disabled={viewOnly || !document}
-              options={RANGE_CHOICES.map((days) => ({ value: String(days ?? ''), label: rangeLabel(days) }))}
+              options={DASHBOARD_RANGE_CHOICES.map((days) => ({
+                value: String(days ?? ''),
+                label: dashboardRangeLabel(days, t),
+              }))}
               onChange={(next) => {
                 if (!document) return
                 void invoke('artifacts.setRange', artifactId, document.reference.version, next ? Number(next) : null)

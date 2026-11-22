@@ -1,4 +1,5 @@
 import { isModelListed } from '@ramu/shared/providers/modelVisibility'
+import { ProviderRouteChip, useNextRoute } from './ProviderRouteChip'
 import { REFERENCE_APPEARANCE } from '@ramu/shared/chat/presentation'
 import { isValidElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useFocusEffect } from 'expo-router'
@@ -485,6 +486,7 @@ export function GoalQueueTray({
   onSendNow,
   onSteer,
   onEdit,
+  onMove,
   running,
 }: {
   goal: ChatGoal | null
@@ -506,6 +508,8 @@ export function GoalQueueTray({
   onSteer?: (id: string) => void
   /** Takes a queued message back into the composer to change it. */
   onEdit?: (message: QueuedMessage) => void
+  /** Moves a queued message one place earlier or later in the queue. */
+  onMove?: (id: string, delta: -1 | 1) => void
   running?: boolean
 }) {
   const say = useSay()
@@ -596,7 +600,7 @@ export function GoalQueueTray({
           ) : null}
         </View>
       ) : null}
-      {queue.map((q) => {
+      {queue.map((q, index) => {
         // While a turn runs the quick action steers (it waits for active tools and keeps the turn); idle, it sends.
         const steerable = running && !!onSteer && q.mode !== 'steer'
         const actions = [
@@ -605,6 +609,8 @@ export function GoalQueueTray({
             ? [{ id: 'send', title: say(running ? 'Stop turn and send now' : 'Send now'), image: 'paperplane' }]
             : []),
           ...(onEdit ? [{ id: 'edit', title: say('Edit message'), image: 'pencil' }] : []),
+          ...(onMove && index > 0 ? [{ id: 'up', title: say('Move up'), image: 'arrow.up' }] : []),
+          ...(onMove && index < queue.length - 1 ? [{ id: 'down', title: say('Move down'), image: 'arrow.down' }] : []),
           ...(onRemove
             ? [{ id: 'remove', title: say('Remove'), image: 'trash', attributes: { destructive: true } }]
             : []),
@@ -620,6 +626,8 @@ export function GoalQueueTray({
                 if (choice === 'steer') onSteer?.(q.id)
                 else if (choice === 'send') onSendNow?.(q.id)
                 else if (choice === 'edit') onEdit?.(q)
+                else if (choice === 'up') onMove?.(q.id, -1)
+                else if (choice === 'down') onMove?.(q.id, 1)
                 else if (choice === 'remove') onRemove?.(q.id)
               }}
             >
@@ -679,6 +687,7 @@ export function Composer({
   onSendQueuedNow,
   onSteerQueued,
   onEditQueued,
+  onMoveQueued,
   placeholder,
   autoFocus,
   header,
@@ -696,6 +705,7 @@ export function Composer({
   scope,
   chatId,
   helpers,
+  extraContent,
   onFindQuote,
   compaction,
 }: {
@@ -736,6 +746,7 @@ export function Composer({
   onSendQueuedNow?: (id: string) => void
   onSteerQueued?: (id: string) => void
   onEditQueued?: (message: QueuedMessage) => void
+  onMoveQueued?: (id: string, delta: -1 | 1) => void
   placeholder?: string
   autoFocus?: boolean
   /** Extra controls above the input, e.g. the project and checkout pickers. */
@@ -756,6 +767,8 @@ export function Composer({
   onCancelEdit?: () => void
   /** Models, custom agents and abilities a message can start with as `@handle`, to hand it to a helper. */
   helpers?: ComposerMentions
+  /** Something else waits to go with the message (terminal output), so Send works with no words typed. */
+  extraContent?: boolean
 }) {
   const textInput = useRef<import('react-native').TextInputInstance>(null)
   useEffect(() => {
@@ -1069,7 +1082,10 @@ export function Composer({
   useEffect(() => {
     revision.current += 1
   }, [text, draftKey])
-  const has = text.trim().length > 0 || attachments.length > 0 || context.length > 0
+  // Where the next message goes when a usage limit would move it to the fallback, as the desktop's route chip says.
+  const routeChat = chatId ? store.chats.find((entry) => entry.id === chatId) : undefined
+  const nextRoute = useNextRoute(routeChat)
+  const has = text.trim().length > 0 || attachments.length > 0 || context.length > 0 || !!extraContent
   const viewOnly = store.computers?.find((computer) => computer.id === pc)?.access === 'viewer'
   const submit = async (sendMode: 'queue' | 'steer' = mode) => {
     if (!has || viewOnly || sending.current || uploading || dictating) return
@@ -1160,7 +1176,7 @@ export function Composer({
   )
   return (
     <Glass radius={radius.xl} style={{ marginHorizontal: space.s + 2 }}>
-      {header ? (
+      {header || (nextRoute.chip && routeChat && !limited) ? (
         <View
           style={{
             flexDirection: 'row',
@@ -1170,6 +1186,9 @@ export function Composer({
             borderBottomColor: c.lineStrong,
           }}
         >
+          {routeChat && !limited ? (
+            <ProviderRouteChip chat={routeChat} chip={nextRoute.chip} onChange={nextRoute.reload} />
+          ) : null}
           {header}
         </View>
       ) : null}
@@ -1190,6 +1209,7 @@ export function Composer({
           onSendNow={onSendQueuedNow}
           onSteer={onSteerQueued}
           onEdit={onEditQueued}
+          onMove={onMoveQueued}
           running={running}
         />
       )}

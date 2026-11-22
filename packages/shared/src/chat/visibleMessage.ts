@@ -20,3 +20,10 @@ export function replaceVisibleMessage(text: string, next: string): string {
   const context = /\n*<ramu-context>/.exec(text.slice(start))
   return `${text.slice(0, start)}${next}${context ? text.slice(start + context.index) : ''}`
 }
+
+/** Separates what the person typed from the hidden context Ramu appends to a message for the agent. */
+export const CONTEXT_MARKER = '\n\n<ramu-context>\n'
+
+/** The text to send: what the person typed, then any hidden context for the agent in one block. */
+export const withHiddenContext = (typed: string, hidden: string): string =>
+  hidden ? `${typed}${CONTEXT_MARKER}${hidden}\n</ramu-context>` : typed

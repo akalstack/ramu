@@ -54,6 +54,7 @@ import {
   Play,
   CirclePause,
   CircleAlert,
+  AppWindow,
 } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '../theme'
 import { fill, useT, useSay } from '../i18n'
@@ -72,6 +73,8 @@ import {
   ReferenceContext,
 } from './Markdown'
 import { draftChip } from '@ramu/shared/chat/referenceChip'
+import { hasSentContext, sentContext, type SentReviewComment } from '@ramu/shared/chat/sentContext'
+import { terminalAttachmentLabel } from '@ramu/shared/chat/terminalContext'
 import { composerDraft, type DraftMention } from '@ramu/shared/chat/composerDraft'
 import { useOpenFile } from '../runtime/openFile'
 import { Button, Card, Chip, Sheet, T, tap, type Icon } from './ui'
@@ -106,6 +109,12 @@ export const CancelPendingSettings = createContext<() => void>(() => {})
 /** Who the thread's messages can start with, so a sent `@sonnet-5.5` reads as that model, as it did in the composer. */
 export const ChatMentions = createContext<readonly DraftMention[]>([])
 
+/**
+ * Moves a running command to the background so the agent carries on (Claude only, while the turn is live); absent
+ * where it can't, so rows don't offer it.
+ */
+const BackgroundTool = createContext<((toolUseId: string) => void) | undefined>(undefined)
+
 /** Gives every badge in a chat the chat's file opener. */
 export function ChatReferences({ chat, children }: { chat: Chat; children: ReactNode }) {
   const files = useOpenFile(chat)
@@ -128,7 +137,27 @@ export function ChatReferences({ chat, children }: { chat: Chat; children: React
     }),
     [computerId, taskId],
   )
-  return <ReferenceContext.Provider value={actions}>{children}</ReferenceContext.Provider>
+  const { sessionId } = chat
+  const movable =
+    chat.provider === 'claude-code' &&
+    chat.status === 'running' &&
+    !!sessionId &&
+    store.computers.find((computer) => computer.id === computerId)?.access !== 'viewer'
+  const background = useMemo(
+    () =>
+      movable
+        ? (toolUseId: string) =>
+            void latest.current.store
+              .invoke(computerId, 'agent.backgroundTool', sessionId!, toolUseId)
+              .catch((error) => showError(error instanceof Error ? error.message : String(error)))
+        : undefined,
+    [movable, computerId, sessionId],
+  )
+  return (
+    <ReferenceContext.Provider value={actions}>
+      <BackgroundTool.Provider value={background}>{children}</BackgroundTool.Provider>
+    </ReferenceContext.Provider>
+  )
 }
 
 /** What a long-pressed message can do, as the desktop's selection menu: quote it into the message box, or ask an aside about it. */
@@ -748,6 +777,7 @@ function TranscriptBlock({ item, chat, meta }: { item: TranscriptItem; chat: Cha
       return (
         <MessageActions text={item.text} from="user" seq={item.seq} files={item.attachments} markdown>
           <UserBubble text={item.text} attachments={item.attachments} chat={chat} />
+          {item.raw ? <SentContextChips raw={item.raw} computer={chat.computerId} /> : null}
         </MessageActions>
       )
     case 'error':
@@ -1243,6 +1273,81 @@ function UserBubble({ text, attachments, chat }: { text: string; attachments?: A
   )
 }
 
+/** Terminal output, artifacts and review comments a sent message carried, under its bubble as on the desktop. */
+function SentContextChips({ raw, computer }: { raw: string; computer: string }) {
+  const { c } = useTheme()
+  const say = useSay()
+  const router = useRouter()
+  const context = useMemo(() => sentContext(raw), [raw])
+  const [open, setOpen] = useState<number | null>(null)
+  if (!hasSentContext(context)) return null
+  const where = (comment: SentReviewComment) => {
+    if (comment.scope === 'file') return say('File')
+    const lines = comment.endLine !== comment.line ? `${comment.line}–${comment.endLine}` : String(comment.line)
+    const many = comment.endLine !== comment.line
+    if (comment.side === 'old') return say(many ? 'Old lines {0}' : 'Old line {0}', { 0: lines })
+    return say(many ? 'Lines {0}' : 'Line {0}', { 0: lines })
+  }
+  const shown = open === null ? null : context.terminal[open]
+  return (
+    <View
+      style={{ alignSelf: 'flex-end', maxWidth: '86%', gap: space.xs, alignItems: 'flex-end', marginTop: space.xs }}
+    >
+      {context.comments.map((comment, index) => (
+        <View
+          key={`comment-${index}`}
+          style={{ backgroundColor: c.fill, borderRadius: radius.m, padding: space.s, gap: 2, alignSelf: 'stretch' }}
+        >
+          <T size={font.caption} tone="muted" numberOfLines={1}>
+            {comment.path} · {where(comment)}
+          </T>
+          <T size={font.control}>{comment.text}</T>
+        </View>
+      ))}
+      {context.artifacts.length || context.terminal.length ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, justifyContent: 'flex-end' }}>
+          {context.artifacts.map((item) => (
+            <Chip
+              key={`${item.id}:${item.version}`}
+              small
+              icon={AppWindow}
+              label={`${item.title} v${item.version}`}
+              maxLabelWidth={220}
+              accessibilityLabel={say('Asked about {0}', { 0: item.title })}
+              onPress={() => {
+                tap()
+                router.push({ pathname: '/artifact/[computer]/[id]', params: { computer, id: item.id } })
+              }}
+            />
+          ))}
+          {context.terminal.map((item, index) => (
+            <Chip
+              key={`terminal-${index}`}
+              small
+              icon={SquareTerminal}
+              label={terminalAttachmentLabel(item)}
+              selected={open === index}
+              maxLabelWidth={220}
+              accessibilityHint={say('Shows the terminal output sent with this message')}
+              onPress={() => {
+                tap()
+                setOpen((current) => (current === index ? null : index))
+              }}
+            />
+          ))}
+        </View>
+      ) : null}
+      {shown ? (
+        <View style={{ backgroundColor: c.fill, borderRadius: radius.m, padding: space.s, alignSelf: 'stretch' }}>
+          <T size={font.caption} style={{ fontFamily: font.mono }} numberOfLines={30} selectable>
+            {shown.text}
+          </T>
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
 /** A sent message, or only its beginning with a control to show the rest when it is long. */
 export function LongMessage({
   text,
@@ -1466,6 +1571,8 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
   const words = toolWords(item, storeLanguage, running)
   const title = `${words.verb} ${words.subject}`.trim()
   const facts = item.ramu?.facts ?? []
+  const background = useContext(BackgroundTool)
+  const movable = !!background && running && !item.ramu && item.verb === 'Bash'
   return (
     <View>
       <Pressable
@@ -1500,6 +1607,21 @@ function ToolRow({ item }: { item: Extract<TranscriptItem, { kind: 'tool' }> }) 
           <T size={font.caption} tone="bad">
             {say('Failed')}
           </T>
+        ) : null}
+        {movable ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityHint={say('Let the agent carry on while this keeps running')}
+            hitSlop={8}
+            onPress={() => {
+              tap()
+              background(item.id)
+            }}
+          >
+            <T size={font.caption} weight="600" tone="accent">
+              {say('Run in background')}
+            </T>
+          </Pressable>
         ) : null}
         {openable ? <Disclosure open={open} color={c.muted} /> : null}
       </Pressable>

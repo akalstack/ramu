@@ -7036,6 +7036,16 @@ export const indonesian: Readonly<Record<string, string>> = {
   'No browser found': 'Tidak ada browser ditemukan',
   'Not found on this computer: {0}': 'Tidak ada di komputer ini: {0}',
   'Sign in to the websites in a Ramu profile instead.': 'Masuk ke situs di profil Ramu saja.',
+  'Asked about {0}': 'Ditanyakan tentang {0}',
+  'Published to GitHub': 'Dipublikasikan ke GitHub',
+  'This repository has no remote yet. Create it on GitHub and push this branch.':
+    'Repositori ini belum punya remote. Buat di GitHub dan push branch ini.',
+  'Next message': 'Pesan berikutnya',
+  'Nothing on screen to add yet.': 'Belum ada isi layar untuk ditambahkan.',
+  'The agent reads this with your next message.': 'Agent membaca ini bersama pesanmu berikutnya.',
+  'Shows the output and lets you remove it from this message':
+    'Menampilkan output dan memungkinkanmu menghapusnya dari pesan ini',
+  'Shows the terminal output sent with this message': 'Menampilkan output terminal yang dikirim bersama pesan ini',
   'Line {0}': 'Baris {0}',
   'Lines {0}': 'Baris {0}',
   'Old line {0}': 'Baris lama {0}',

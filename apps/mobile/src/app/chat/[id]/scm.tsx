@@ -65,6 +65,7 @@ import { Header, HeaderButton, Screen, PageScrollView as ScrollView } from '../.
 import { Glass, floatingChrome } from '../../../components/Glass'
 import { SheetGroup, SheetOption } from '../../../components/SheetOptions'
 import { CurrentPullRequest } from '../../../components/PullRequestSections'
+import { PublishRepository } from '../../../components/PublishRepository'
 import { canWriteHost } from '../../../runtime/viewerAccess'
 import { routeMergeConflicts, runBranchAction, type BranchAction } from '../../../runtime/branchActions'
 import { BranchActionOptions, BranchActionSheets, type BranchSheet } from '../../../components/BranchActionSheets'
@@ -1055,6 +1056,20 @@ export default function SourceControl() {
                 />
               </View>
             </Card>
+          ) : null}
+          {chat && binding && gitStatus && !hasRemote && gitStatus.branch && !gates.operation ? (
+            <PublishRepository
+              computerId={chat.computerId}
+              taskId={chat.taskId}
+              repoId={binding.repoId}
+              repoName={binding.repoName}
+              readOnly={!canWrite}
+              onPublished={() => {
+                void read().catch(() => {})
+                say('Published to GitHub')
+              }}
+              onError={(text) => notify(text, true)}
+            />
           ) : null}
           {chat && binding && hasRemote && gitStatus?.branch ? (
             <CurrentPullRequest

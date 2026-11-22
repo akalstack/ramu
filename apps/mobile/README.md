@@ -6,13 +6,17 @@ The iOS and Android app for a Ramu host. The host runs your agents, providers, G
 
 1. Start Ramu on the host (`pnpm build`, then the desktop app or `ramu serve`). Its setup shows a pairing QR code; later, **Settings → Remote access → Pair a device** shows one. Headless: `ramu serve --listen 0.0.0.0:7788 --private-network`, then `ramu pair`. Read [remote access](../../docs/security-model.md#remote-access) first.
 2. Install the app from a store. From source, install a development build once (`pnpm --filter @ramu/mobile eas:ios`, `eas:android`, or locally `build:ios`, `build:android`) and run `pnpm dev:mobile` first.
-3. Open it. A phone with no host starts on **Connect to your computer**:
-   - **Scan QR code** pairs the moment it reads the host's code. The phone's own camera works too: the code opens getramu.dev, which opens the app (or its store page first). The host's address and code stay after `#` in that link, so the site never receives them.
-   - **Find a computer nearby** lists hosts on the same network. Allow the phone on the host when both screens show the same six-digit number.
-   - **Sign in with your Ramu account** adds the hosts that let your account's devices in, from anywhere.
-   - **Enter address and code** types them by hand.
-
-   **Look around first** skips it. The **Pair a host** chip brings it back.
+3. Open it. A phone with no host starts a short setup, one step per screen. **Look around first** (or **Skip** once paired) leaves it, and the **Pair a host** chip brings it back. A reopened app resumes at the step it left.
+   1. **Welcome:** what the phone is for, and the language.
+   2. **Connect:**
+      - **Scan QR code** pairs the moment it reads the host's code. The phone's own camera works too: the code opens getramu.dev, which opens the app (or its store page first). The host's address and code stay after `#` in that link, so the site never receives them.
+      - **Sign in with your Ramu account** adds the hosts that let your account's devices in, from anywhere.
+      - **Find a computer nearby** lists hosts on the same network. Allow the phone on the host when both screens show the same six-digit number.
+      - **Enter address and code** types them by hand.
+      - **No Ramu on a computer yet?** shares the download link.
+   3. **Connected:** names the host and how the phone reaches it. When it works only at home, **Reach it from anywhere** turns on [Ramu Link](../../docs/guide/remote-hosts.md#ramu-link) on that host (it needs the **settings** permission, which the step can request). When Ramu Link is full, the step says the host is on the waitlist and what to set up on the computer instead. A phone not signed in to the Ramu account is offered that too.
+   4. **Notifications:** why they matter, then the system prompt, or **Not now**.
+   5. **Done:** **Open threads** opens the new host.
 
 A code over plain HTTP, or a link opened from another app, opens the form to review before pairing. If pairing fails, the screen says why and what to do next, such as asking the host for a new code.
 
@@ -22,15 +26,15 @@ Use the host's LAN or VPN address, never `localhost`. The host must stay awake a
 
 - **Threads:** one card per project, standalone threads last. Swipe a thread to mark it done or archive it, with **Undo**.
 - **New thread:** pick a project, **Auto**, **Standalone**, or **New project** (**Start something new** on a host with no projects), where the agent asks what to build, creates the project and moves the thread into it. See [Home](../../docs/guide/inbox.md#home).
-- **Chat:** live transcripts, models and access, queue and steer, stop, approvals, questions and forms, goals and helpers. Ability rows show the image or answer with **Make another** and **Use another provider**, and **Settings → Models** shows each ability's choice read-only.
+- **Chat:** live transcripts, models and access, queue and steer (with **Move up** and **Move down** in a queued message's menu), stop, approvals, questions and forms, goals and helpers. A running Claude command offers **Run in background** so the agent carries on. Terminal output, artifacts and review comments sent with a message show under it, as on the desktop. When a usage limit would move the next message to the fallback, a chip above the message box names it, and tapping it keeps the current provider for this message or this thread. Ability rows show the image or answer with **Make another** and **Use another provider**, and **Settings → Models** shows each ability's choice read-only.
 - **Inbox:** the Brief of what needs you across every host, plus Running, Recaps, Learned and Completed. The tab and app icon badges count what needs you.
 - **Schedules:** see, run, pause and edit schedules, on any host.
-- **Artifacts:** every artifact on your hosts, opened full screen without its thread, with the same values as the desktop. Add records offline and they sync when the host is back. **Add to Home Screen or share** shares a `ramu://artifact/…` link that opens it in Ramu. An artifact with a widget, or any dashboard, can show it on the home screen. A flowchart's **Edit labels** changes the words on its boxes and arrows. A doc's **Edit text** opens its headings, paragraphs, list items, tasks and quotes as formatted fields (or its Markdown). A deck's or design's **Edit text** changes a design's frame words, or its slides' titles, text (both columns of a two-column slide), quote attribution, notes and order, and saves a version marked Edited by you. **Kind** filters the list to one kind once there is more than one. **Play as video** plays a motion as the host's MP4 in the phone's own player. A deck shows one slide at a time. Swipe sideways or use the arrows above it. A desktop presenting the same deck follows the phone's slide. See [Artifacts](../../docs/guide/artifacts.md).
+- **Artifacts:** every artifact on your hosts, opened full screen without its thread, with the same values as the desktop. Add records offline and they sync when the host is back. **Add to Home Screen or share** shares a `ramu://artifact/…` link that opens it in Ramu. An artifact with a widget, or any dashboard, can show it on the home screen. A dashboard's **Refresh** and **Range** in its actions menu set how often its live tables are read and how far back its rows go. A flowchart's **Edit labels** changes the words on its boxes and arrows. A doc's **Edit text** opens its headings, paragraphs, list items, tasks and quotes as formatted fields (or its Markdown). A deck's or design's **Edit text** changes a design's frame words, or its slides' titles, text (both columns of a two-column slide), quote attribution, notes and order, and saves a version marked Edited by you. **Kind** filters the list to one kind once there is more than one. **Play as video** plays a motion as the host's MP4 in the phone's own player. A deck shows one slide at a time. Swipe sideways or use the arrows above it. A desktop presenting the same deck follows the phone's slide. See [Artifacts](../../docs/guide/artifacts.md).
 - **Search:** threads on every host.
-- **Source Control:** status, staging, commits with AI drafts, branches, sync, stashes and undo. The branch's pull request shows its checks, where a connected platform reports its preview, and review state.
+- **Source Control:** status, staging, commits with AI drafts, branches, sync, stashes and undo. A repository with no remote offers **Publish to GitHub** (private by default), which creates it, adds it as origin and pushes the branch. The branch's pull request shows its checks, where a connected platform reports its preview, and review state.
 - **Live app:** **Live app** in a project's menu shows the latest deploy's checks as the Git host reports them, the live address watch with a switch to turn it off or on, and whether a production database address is saved. The live address and the database address are set on a computer. See [Deploying an app](../../docs/guide/deploy.md).
 - **Files:** browse, view, edit and move files, and add folders and clone projects on the host.
-- **Terminals:** real host terminals with an extra-key rail. Hold and drag for arrow keys, and pinch to change the text size (remembered on the phone).
+- **Terminals:** real host terminals with an extra-key rail. Hold and drag for arrow keys, and pinch to change the text size (remembered on the phone). From a thread's terminal, **Add screen to chat** puts the rows on screen above the thread's message box; the agent reads them with your next message.
 - **Browser and computer:** the Browser and Computer pills open full-screen viewers you can control by touch.
 - **Hosts:** several hosts connect at once. Each has a switch that turns its connection off and on, keeping its pairing.
 - **Offline:** drafts and an outbox stay on the phone and send in order when the host is back. A send that may or may not have arrived is marked **uncertain** and never retried by itself.
