@@ -16,6 +16,16 @@ import { usageAppliesTo } from '@ramu/shared/providers/usageScope'
 // The main process uses it to switch before sending; the composer chip uses it to show where the next message will go.
 
 /** A reading with no reset time is trusted this long; providers only report while they run. */
+/** Whether a model has a faster tier to offer beside Standard: Codex's priority tier or Claude's fast mode. */
+export function offersFast(model: Pick<AgentModel, 'serviceTiers'> | undefined): boolean {
+  return !!model?.serviceTiers?.some((tier) => tier === 'fast' || tier === 'priority')
+}
+
+/** Providers whose threads show the Standard and Fast choice: Codex and Claude. */
+export function choosesSpeed(provider: AgentProvider, model: Pick<AgentModel, 'serviceTiers'> | undefined): boolean {
+  return (provider === 'codex' || provider === 'claude-code') && offersFast(model)
+}
+
 export const READING_TTL_MS = 15 * 60_000
 const EFFORT_ORDER: ReasoningEffort[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']
 
@@ -80,7 +90,7 @@ export function resolveStep(step: FallbackStep, catalogs: ProviderCatalog[]): Fa
     models.find((entry) => (step.model ? entry.id === step.model : entry.isDefault)) ??
     (step.model ? undefined : models[0])
   if (!model) return null
-  const fast = model.serviceTiers?.some((tier) => tier === 'fast' || tier === 'priority')
+  const fast = offersFast(model)
   return {
     ...step,
     model: model.id,

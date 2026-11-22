@@ -1,4 +1,5 @@
 import { DragHandle } from '@/components/drag-handle'
+import { choosesSpeed } from '@ramu/shared/providers/routing'
 import { useShowLegacyModels, visiblePickerModels } from './modelVisibility'
 import { modelTags } from '@ramu/shared/providers/modelTags'
 import { t, useLanguage } from '../i18n'
@@ -234,10 +235,7 @@ export function ModelPicker({
       provider: model.provider,
       model: model.id,
       effort: model.defaultEffort,
-      serviceTier:
-        model.provider === 'codex' && model.serviceTiers?.some((tier) => tier === 'fast' || tier === 'priority')
-          ? settings.serviceTier
-          : 'standard',
+      serviceTier: choosesSpeed(model.provider, model) ? settings.serviceTier : 'standard',
     })
     onDone()
   }

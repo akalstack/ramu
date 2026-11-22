@@ -40,7 +40,15 @@ export function SettingsChange({ next, previous }: { next: AgentSettings; previo
     const { model, effort } = settingsNames(s, catalogs)
     return effort ? `${model} ${effort}` : model
   }
-  const tier = (s: AgentSettings) => (s.provider === 'codex' ? (s.serviceTier === 'fast' ? 'Fast' : 'Standard') : null)
+  // Codex always names its speed; Claude only when the thread runs in fast mode, which most of its models lack.
+  const tier = (s: AgentSettings) =>
+    s.provider === 'codex'
+      ? s.serviceTier === 'fast'
+        ? 'Fast'
+        : 'Standard'
+      : s.provider === 'claude-code' && s.serviceTier === 'fast'
+        ? 'Fast'
+        : null
   const modelLabel = (settings: AgentSettings) => (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={settings.provider} size={13} />

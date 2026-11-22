@@ -1,4 +1,5 @@
 import { t, useLanguage } from '../i18n'
+import { choosesSpeed } from '@ramu/shared/providers/routing'
 import { providerName } from '@ramu/shared/providers/providers'
 import { StepSlider } from '@/components/step-slider'
 import { Button } from '@/components/desktop-button'
@@ -161,9 +162,8 @@ export function ModelBar({
       onChange(next)
     }
   }
-  const fastSupported =
-    settings.provider === 'codex' && !!model?.serviceTiers?.some((tier) => tier === 'fast' || tier === 'priority')
-  const fast = settings.provider === 'codex' && settings.serviceTier === 'fast'
+  const fastSupported = choosesSpeed(settings.provider, model)
+  const fast = fastSupported && settings.serviceTier === 'fast'
   const selectedText = `${modelName} ${effortName}`
   const fraction = count > 1 && index >= 0 ? index / (count - 1) : 0
   const chooseSet = (id: string) => {

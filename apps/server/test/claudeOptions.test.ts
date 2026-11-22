@@ -18,8 +18,34 @@ const launch = (advisorModel: string | undefined, effort?: string, preferences?:
   })
 
 it('asks Claude for thinking summaries so the chat has thinking text to show', () => {
-  expect(launch(undefined).settings).toEqual({ showThinkingSummaries: true, ...noAttribution })
-  expect(launch('').settings).toEqual({ showThinkingSummaries: true, advisorModel: '', ...noAttribution })
+  expect(launch(undefined).settings).toEqual({ showThinkingSummaries: true, fastMode: false, ...noAttribution })
+  expect(launch('').settings).toEqual({
+    showThinkingSummaries: true,
+    fastMode: false,
+    advisorModel: '',
+    ...noAttribution,
+  })
+})
+
+it('runs a thread set to Fast in Claude’s fast mode, and a Standard one never inherits it', () => {
+  const tier = (serviceTier?: 'standard' | 'fast') =>
+    claudeLaunchOptions({
+      session: {
+        cwd: '/tmp',
+        additionalDirs: [],
+        settings: { access: 'edits', serviceTier },
+      } as unknown as AgentSessionInfo,
+      connection: undefined,
+      advisorModel: undefined,
+      abort: new AbortController(),
+      canUseTool: async () => ({ behavior: 'deny', message: '' }),
+      resume: null,
+      preferences: undefined,
+      hooks: undefined,
+    }).settings
+  expect(tier('fast')).toMatchObject({ fastMode: true })
+  expect(tier('standard')).toMatchObject({ fastMode: false })
+  expect(tier()).toMatchObject({ fastMode: false })
 })
 
 it("leaves Claude's co-author trailer and footer out unless the person keeps agent credits", () => {

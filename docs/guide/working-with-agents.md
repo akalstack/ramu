@@ -6,6 +6,8 @@ How a thread's agent works, how to bring in other models, and how work spreads a
 
 Pick another model while a turn runs and Ramu waits five seconds (**Apply now** or **Cancel**). Idle threads switch at once. When the new model can't resume the old session, Ramu hands it the conversation so far (a **Context handoff**). A change the provider can't take leaves the current model running.
 
+Codex models and the Claude models that have fast mode (Opus and Fable) offer **Standard** and **Fast** in the model picker. Fast answers sooner at a higher usage cost. On Claude it's Claude Code's fast mode, set per thread: a thread on Standard never picks up a fast mode saved in Claude Code's own settings.
+
 ## Compacting a long Claude thread
 
 Claude keeps a thread's conversation in its prompt cache for an hour on a subscription and five minutes on an API key. Once a Claude thread over 200K tokens has sat idle longer than that, its next message re-reads the whole conversation at full cost. The composer then shows **Compact · 240K** beside Send, and Send becomes **Compact and send**: Ramu sends `/compact` and your message runs right after it, against the summary. Select the chip to switch to **Keep · 240K** and send with the full history. The choice applies to that one message.

@@ -1,4 +1,5 @@
 import { isModelListed } from '@ramu/shared/providers/modelVisibility'
+import { choosesSpeed } from '@ramu/shared/providers/routing'
 import { ProviderRouteChip, useNextRoute } from './ProviderRouteChip'
 import { REFERENCE_APPEARANCE } from '@ramu/shared/chat/presentation'
 import { isValidElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -127,6 +128,8 @@ type ModelRow = {
   efforts: string[]
   isDefault: boolean
   defaultEffort: string
+  /** The speeds the provider lists for it, so Claude's Fast is offered only on models that have it. */
+  serviceTiers?: string[]
   tags: import('@ramu/shared/providers/modelTags').ModelTags
 }
 
@@ -167,6 +170,7 @@ export function ModelChip({
             efforts: m.efforts as string[],
             isDefault: m.isDefault,
             defaultEffort: (m.defaultEffort ?? '') as string,
+            ...(m.serviceTiers ? { serviceTiers: m.serviceTiers } : {}),
             tags: modelTags(m),
           })),
       ),
@@ -2030,7 +2034,7 @@ function QuickSteps({
           ))}
         </View>
       ) : null}
-      {value.provider === 'codex' && current ? (
+      {current && (value.provider === 'codex' || choosesSpeed(value.provider, current)) ? (
         <Pressable
           accessibilityRole="switch"
           accessibilityState={{ checked: value.settings?.serviceTier === 'fast' }}

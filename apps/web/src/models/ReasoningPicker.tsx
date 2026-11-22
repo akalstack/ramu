@@ -1,4 +1,5 @@
 import { t, useLanguage } from '../i18n'
+import { choosesSpeed } from '@ramu/shared/providers/routing'
 import { Check } from 'lucide-react'
 import type { AgentModel, AgentSettings } from '@ramu/shared/types'
 import { MenuItems, type MenuEntry } from '../Menu'
@@ -16,8 +17,7 @@ export function ReasoningPicker({
   onDone: () => void
 }) {
   useLanguage()
-  const fastSupported =
-    settings.provider === 'codex' && !!model?.serviceTiers?.some((tier) => tier === 'fast' || tier === 'priority')
+  const fastSupported = choosesSpeed(settings.provider, model)
   const selectedEffort = settings.effort ?? model?.defaultEffort ?? null
   const items: MenuEntry[] = [
     ...((model?.efforts.length ?? 0) > 0 ? [{ key: 'reasoning', heading: t('Reasoning') }] : []),

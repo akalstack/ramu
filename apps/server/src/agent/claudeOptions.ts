@@ -100,6 +100,8 @@ export function claudeLaunchOptions({
     // and pull requests.
     settings: {
       showThinkingSummaries: true,
+      // The thread's own speed, so a fast mode saved in Claude Code's settings never decides it.
+      fastMode: s.settings.serviceTier === 'fast',
       ...(advisorModel !== undefined ? { advisorModel } : {}),
       ...(preferences?.().removeAgentCredits !== false
         ? { attribution: { commit: '', pr: '', sessionUrl: false } }

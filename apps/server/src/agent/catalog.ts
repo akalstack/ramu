@@ -89,6 +89,8 @@ export function discoverCatalogs({ providerOff, providerQuery }: CatalogSource):
             ...(modelContextWindow(m) ? { contextWindow: modelContextWindow(m) } : {}),
             efforts: m.supportedEffortLevels ?? [],
             defaultEffort: claudeDefaultEffort(m.supportedEffortLevels ?? []),
+            // Claude's fast mode, offered as the same Standard and Fast choice Codex has.
+            ...(m.supportsFastMode ? { serviceTiers: ['standard', 'fast'] } : {}),
             isDefault: i === 0,
           })),
         }
