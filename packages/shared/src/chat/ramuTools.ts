@@ -161,6 +161,7 @@ const KNOWN = new Set([
   'review_drafts',
   'settings_change',
   'settings_find',
+  'show_ui',
   'status',
   'test_device_install',
   'test_device_launch',
@@ -187,6 +188,8 @@ const OWN_UI = new Set([
   'set_goal',
   'get_goal',
   'update_goal',
+  // The card itself shows what the call drew.
+  'show_ui',
   'schedule_create',
   'schedule_update',
   'ramu_agent',

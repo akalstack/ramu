@@ -8008,4 +8008,6 @@ export const indonesian: Readonly<Record<string, string>> = {
     'Pull request, issue, dan review membutuhkannya; commit tetap jalan tanpanya.',
   'Sign in to Ramu': 'Masuk ke Ramu',
   'Back up settings, reach your hosts': 'Cadangkan pengaturan, jangkau host-mu',
+  'Card from the agent': 'Kartu dari agent',
+  'From a card': 'Dari kartu',
 }

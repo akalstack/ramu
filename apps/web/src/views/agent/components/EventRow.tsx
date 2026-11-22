@@ -3,6 +3,7 @@ import { LocalInlineAction } from '@/components/inline-action'
 import { ContinuedCard } from './ContinuedCard'
 import { AbilityRow } from './AbilityRow'
 import { ThemeCard } from '../../../theme/ThemeCard'
+import { InlineUiCard } from '../../../chat/InlineUiCard'
 import { PullRequestWritesCard } from '../../../git/PullRequestWritesCard'
 import { TestDeviceWaitCard } from '../../../chat/TestDeviceWaitCard'
 import { SettingsChangeCard } from '../../../settings/SettingsChangeCard'
@@ -59,6 +60,7 @@ export function EventRow({
   onOpenQuestion,
   onReviewAccess,
   onRetry,
+  readOnly = false,
 }: {
   event: AgentEvent
   sessionId: string
@@ -80,6 +82,8 @@ export function EventRow({
   onReviewAccess?: () => void
   /** Continues the thread from an error that ended it. */
   onRetry?: () => void
+  /** A view-only device reads cards but cannot press their buttons. */
+  readOnly?: boolean
 }) {
   useLanguage()
   const { invoke } = useHost()
@@ -237,6 +241,8 @@ export function EventRow({
       )
     case 'theme':
       return <ThemeCard theme={e.theme} />
+    case 'inline-ui':
+      return <InlineUiCard surface={e.surface} sessionId={sessionId} live={live && !readOnly} />
     case 'ability':
       return <AbilityRow call={e.call} sessionId={sessionId} live={live} />
     case 'content':

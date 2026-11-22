@@ -2,7 +2,17 @@ import { useContext, useLayoutEffect, useRef, useState } from 'react'
 import { ReferenceText } from '../../../chat/ChatReferences'
 import { t as translate, useLanguage } from '../../../i18n'
 import { Button } from '@/components/desktop-button'
-import { AppWindow, Bot, ChevronDown, ChevronRight, Lightbulb, Pencil, ShieldQuestion, Square } from 'lucide-react'
+import {
+  AppWindow,
+  Bot,
+  ChevronDown,
+  ChevronRight,
+  Lightbulb,
+  MousePointerClick,
+  Pencil,
+  ShieldQuestion,
+  Square,
+} from 'lucide-react'
 import { sentInteractiveAttachments } from '@ramu/shared/interactive'
 import { sentTerminalAttachments } from '@ramu/shared/chat/terminalContext'
 import { TerminalAttachmentChip } from '../../../chat/TerminalAttachmentChip'
@@ -20,6 +30,7 @@ import {
 import { sentComments } from '../../../git/ReviewChip'
 import { Attachments } from '../../../composer/Attachments'
 import { parseAnswerMessage } from '@ramu/shared/chat/questions'
+import { parseInlineUiActionMessage } from '@ramu/shared/chat/inlineUi'
 import { visibleText } from '../lib/messages'
 import { ThreadAgents } from '../lib/threadAgents'
 import { HelperIcon, RoleTag, TaskStatusIcon } from './TaskStatus'
@@ -189,6 +200,24 @@ export function UserMessage({
         <MessageActions latest={latest} className="mt-0.5 mr-1">
           <MessageTime at={e.at} />
           <CopyButton text={answers.body} />
+        </MessageActions>
+      </UserShell>
+    )
+  // A card's button reads as what the person did; the agent alone reads the A2UI action.
+  const pressed = parseInlineUiActionMessage(e.text)
+  if (pressed)
+    return (
+      <UserShell
+        header={
+          <>
+            <MousePointerClick size={12} />
+            {translate('From a card')}
+          </>
+        }
+      >
+        <UserBubble>{pressed.summary}</UserBubble>
+        <MessageActions latest={latest} className="mt-0.5 mr-1">
+          <MessageTime at={e.at} />
         </MessageActions>
       </UserShell>
     )

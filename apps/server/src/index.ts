@@ -106,6 +106,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { registerQuestionTools } from './agent/questionTools'
+import { registerInlineUiTools } from './agent/inlineUiTools'
 import { registerSecretTools } from './agent/secretTools'
 import { SecretFiles } from './agent/secretFiles'
 import { usesRamuQuestionTools, usesRamuToolScripts, usesRamuToolSearch } from './agent/nativeFeatures'
@@ -2000,6 +2001,8 @@ const mcpHttp = createServer(async (req, res) => {
   }
   if (!review) registerCiTools(server, source, () => agents.get(source.id))
   if (!review && !source.parentId) registerSecretTools(server, agents, source.id)
+  // Cards belong to the thread the person reads, not to a helper's own transcript.
+  if (!review && !source.parentId) registerInlineUiTools(server, agents, source.id)
   // A chat keeps the settings it launched with, so its tools match its instructions until it relaunches. Turning a
   // setting off mid-thread keeps its tools listed, and their handlers refuse.
   const launched = agents.launchSettings(source.id)

@@ -163,6 +163,20 @@ Agents work with artifacts through tools:
 
 Deleting an artifact stays your action. See [Artifacts](artifacts.md).
 
+## Cards in a thread
+
+For a quick choice, a short form, a confirmation or a status summary, the agent shows a **card** in the thread instead of building an artifact. Cards appear at once and use the app's own buttons, fields, checkboxes, choices, tabs and lists on the desktop and the phone, in your theme and language. They run no code and load nothing from the web.
+
+- What you type or pick stays on your device as a draft until you press a button on the card. The button goes to the agent as your message, shown in the thread as what you did (**From a card**).
+- A button stays off until the fields it needs are filled in correctly, and a field that isn't valid says why.
+- When the agent changes a card, it moves to the newest point in the thread, and what you entered stays unless the agent changed that same value.
+- A phone paired as a viewer sees cards but can't press their buttons.
+- A card with a link opens it in your browser. Only web addresses open.
+
+Cards are for things you use once in the conversation. Ask for an [artifact](artifacts.md) for anything to keep, share or open later.
+
+Agents draw cards with `show_ui`, which takes [A2UI](https://a2ui.org) v1.0 messages (`createSurface`, `updateComponents`, `updateDataModel` and `deleteSurface`) against the `getramu.dev:inline/v1` catalog. The catalog is A2UI's basic catalog without images, video, audio, modals and `regex` checks. Ramu checks a call as a whole and changes nothing when part of it is invalid, telling the agent what to fix. A button's action reaches the agent as A2UI's action message, with its context resolved. A thread shows up to 20 cards with up to 200 parts each.
+
 ## Deploys
 
 Threads deploy with the platform's own plugin: its MCP tools, the platform's CLI in their shell, or `platform_cli` for a plugin whose CLI Ramu signs in with a saved token. Ramu recognises a production deploy from the action itself on every path. It always asks you, with **Allow production deploys in this thread** as the widest choice, and runs the project's migrations first. A preview follows the thread's access mode. After a push, the thread is woken once when the commit's checks (the platform's deploy included) finish. See [Deploying an app](deploy.md#deploying).

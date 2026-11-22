@@ -112,6 +112,7 @@ function TranscriptBlock({
             onOpenAgent={ctx.onOpenAgent}
             onOpenQuestion={ctx.onOpenQuestion}
             onReviewAccess={ctx.onReviewAccess}
+            readOnly={ctx.readOnly}
             onRetry={
               !ctx.busyAgent &&
               !ctx.needsInput &&

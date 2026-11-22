@@ -10,6 +10,10 @@ function renderLine(e: AgentEvent): string | null {
   if (e.kind === 'interactive')
     return `INTERACTIVE CONTENT ${e.reference.id} v${e.reference.version}: ${e.reference.title} — ${e.reference.summary}`
   if (e.kind === 'theme') return `THEME DRAFT SHOWN TO THE USER: ${e.theme.name}`
+  if (e.kind === 'inline-ui')
+    return e.surface.deleted
+      ? `INLINE CARD ${e.surface.surfaceId} REMOVED`
+      : `INLINE CARD ${e.surface.surfaceId} v${e.surface.revision} SHOWN TO THE USER: ${clipText(JSON.stringify({ components: e.surface.components, dataModel: e.surface.dataModel }), 4000)}`
   if (e.kind === 'text') return `ASSISTANT: ${e.text}`
   if (e.kind === 'file-restore')
     return `FILES RESTORED: ${e.fileCount} selected files from user message ${e.userSeq} and later captured runs. The earlier tool results describe historical file states.`
