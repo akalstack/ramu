@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { SERVICE_LINK_TARGET } from '@ramu/shared/browserLinks'
 import { useQuery } from '@tanstack/react-query'
 import { CircleCheck, CircleDot, CircleX, GitPullRequest, MessageSquare, PanelRight, Wrench } from 'lucide-react'
 import type {
@@ -200,7 +201,7 @@ export function PullRequestSection({
   const serviceLink = pr && (
     <a
       href={pr.url}
-      target="_blank"
+      target={SERVICE_LINK_TARGET}
       rel="noreferrer"
       className="flex flex-none items-center rounded-(--radius-s) p-0.5 text-muted-foreground hover:bg-hover hover:text-foreground"
       title={t('Open on {0}', { '0': FORGE_NAMES[service] })}

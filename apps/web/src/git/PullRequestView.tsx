@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { SERVICE_LINK_TARGET } from '@ramu/shared/browserLinks'
 import { keptPullRequestRead } from './keptPullRequests'
 import { PullRequestTimeline } from './PullRequestTimeline'
 import { PullRequestFiles, usePullRequestFiles } from './PullRequestFiles'
@@ -324,7 +325,7 @@ export function PullRequestView({ taskId, view }: { taskId: string; view: View }
             <div className="flex flex-none items-center gap-0.5">
               <a
                 href={pr.url}
-                target="_blank"
+                target={SERVICE_LINK_TARGET}
                 rel="noreferrer"
                 title={t('Open on {0}', { '0': FORGE_NAMES[service] })}
                 className="inline-flex h-6 items-center gap-1.5 rounded-(--radius-s) px-2 text-caption text-muted-foreground no-underline hover:bg-fill-hover hover:text-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-ring"

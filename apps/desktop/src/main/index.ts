@@ -8,6 +8,7 @@ import { isHostDestination } from '@ramu/shared/hostOverview'
 import {
   LINK_TARGET_KEY,
   PULL_REQUEST_LINKS_KEY,
+  SERVICE_LINK_TARGET,
   isWebLink,
   linkTargetFrom,
   pullRequestLinkKey,
@@ -555,6 +556,7 @@ async function main() {
       // A pull request opens in Ramu's own view when the person keeps that choice; the window falls back to an
       // ordinary link when Ramu does not list it.
       if (
+        frameName !== SERVICE_LINK_TARGET &&
         pullRequestLinkKey(url) &&
         pullRequestLinksFrom(deviceState.snapshot()[PULL_REQUEST_LINKS_KEY]) === 'app' &&
         !win.isDestroyed()

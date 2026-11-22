@@ -17,6 +17,9 @@ export function pullRequestLinksFrom(value: string | null | undefined): PullRequ
   return value === 'service' ? 'service' : 'app'
 }
 
+/** The link target of an explicit "Open on GitHub": it always goes to the service, whatever a click does elsewhere. */
+export const SERVICE_LINK_TARGET = 'ramu-service'
+
 const PULL_REQUEST_PATH = /^(.*?\/(?:pull|pull-requests|merge_requests|pullrequest)\/\d+)(?:\/|$)/i
 
 /**

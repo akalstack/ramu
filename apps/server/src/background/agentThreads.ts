@@ -1049,7 +1049,8 @@ export class AgentThreadService {
     const caller = this.agents.get(sessionId)
     const stack = input.stack ? STACKS[input.stack] : null
     // Full access asks once per host, until the person has said where their projects go; other modes always ask.
-    const location = { name: input.name, parent: input.parent ?? this.workspace.newProjectParent(true) }
+    const usual = this.workspace.newProjectParent()
+    const location = { name: input.name, parent: input.parent ?? usual }
     if (caller.settings.access !== 'full' || (!input.parent && !this.workspace.chosenProjectParent())) {
       const commands = stack?.generator.map(commandLine) ?? []
       const allowed = await this.agents.requestPermission(
@@ -1068,7 +1069,8 @@ export class AgentThreadService {
       // What the person approved or picked is where their next project goes too.
       this.workspace.rememberProjectParent(location.parent)
     }
-    const parent = location.parent
+    // The usual place may be a ~/Projects that does not exist yet; it is made only now that the project is wanted.
+    const parent = location.parent === usual ? this.workspace.newProjectParent(true) : location.parent
     const folder = await createProjectFolder(
       { parent, name: input.name, ...(input.stack ? { stack: input.stack } : {}) },
       {

@@ -186,16 +186,18 @@ export function PullRequestsPage() {
   const allRows = mergedPullRequestRows(hostLists, preferred)
 
   // A pull request opened from a link shows once the list that holds it has arrived.
+  const listsArrived = lists.length > 0 && lists.every(({ query }) => !query.isLoading)
   const wantedKey = wanted ? pullRequestLinkKey(wanted.url) : null
   const wantedRow = wantedKey ? allRows.find((row) => pullRequestLinkKey(row.pr.url) === wantedKey) : undefined
   useEffect(() => {
     if (!wanted) return
     if (wanted.closed && filter !== 'closed') return setFilter('closed')
-    if (!wantedRow) return
+    // Lists that arrived without it will not gain it later; holding on would select it at some unrelated moment.
+    if (!wantedRow) return listsArrived ? setWanted(null) : undefined
     setRepoKey(ALL)
     setSelected(wantedRow)
     setWanted(null)
-  }, [wanted, wantedRow, filter])
+  }, [wanted, wantedRow, filter, listsArrived])
 
   const pendingKey = pending
     ? repositories.find((repo) => repo.host === pending.host && repo.repoId === pending.repoId)
