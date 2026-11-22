@@ -29,7 +29,7 @@
         "appleTeamId": "CZ63H443SZ"
       },
       "android": {
-        "track": "beta",
+        "track": "alpha",
         "releaseStatus": "completed"
       }
     }

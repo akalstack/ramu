@@ -1,6 +1,6 @@
 name: Mobile release
 # Builds the phone app on Expo's build service and hands each build to its store: iOS to App Store Connect (TestFlight;
-# going public still means submitting the version for review there), Android to Google Play's open testing track,
+# going public still means submitting the version for review there), Android to Google Play's closed testing track,
 # released to testers as soon as Google has processed it. The builds run on Expo, so this job only starts them.
 on:
   push:
