@@ -107,6 +107,19 @@ function callFunction(name: string, args: Record<string, unknown>, scope: Inline
       return Array.isArray(args.values) && args.values.some((item) => asBoolean(evaluate(item, scope, depth)))
     case 'not':
       return !asBoolean(arg('value'))
+    case 'sum': {
+      const list = arg('values')
+      const field = asText(arg('field'))
+      if (!Array.isArray(list)) return 0
+      return list.reduce<number>(
+        (total, item) => total + (asNumber(field && isObject(item) ? item[field] : item) ?? 0),
+        0,
+      )
+    }
+    case 'count': {
+      const list = arg('values')
+      return Array.isArray(list) ? list.length : 0
+    }
     case 'formatString':
       return formatString(asText(arg('value')), scope)
     case 'formatNumber':
@@ -134,8 +147,10 @@ function callFunction(name: string, args: Record<string, unknown>, scope: Inline
         count === 0 && args.zero !== undefined ? 'zero' : new Intl.PluralRules(scope.locale).select(count)
       return asText(args[category] === undefined ? arg('other') : arg(category))
     }
-    // Only an action runs it; anywhere else it is inert.
+    // Only an action runs these; anywhere else they are inert.
     case 'openUrl':
+    case 'addRecord':
+    case 'deleteRecord':
       return undefined
     default:
       return undefined
@@ -230,7 +245,12 @@ function openableUrl(value: unknown): string | null {
   }
 }
 
-type InlineUiOutcome = { kind: 'event'; action: InlineUiActionEvent } | { kind: 'open'; url: string } | { kind: 'none' }
+export type InlineUiOutcome =
+  | { kind: 'event'; action: InlineUiActionEvent }
+  | { kind: 'open'; url: string }
+  | { kind: 'add'; collection: string; values: Record<string, unknown> }
+  | { kind: 'delete'; collection: string; id: string }
+  | { kind: 'none' }
 
 /** What pressing a button does: an action for the agent with its context resolved, or a link to open. */
 export function pressButton(
@@ -242,6 +262,16 @@ export function pressButton(
   if (!checkComponent(component, scope).valid) return { kind: 'none' }
   const { action } = component
   if ('functionCall' in action) {
+    const args = action.functionCall.args ?? {}
+    const collection = typeof args.collection === 'string' ? args.collection : ''
+    if (action.functionCall['@call'] === 'addRecord') {
+      const values = evaluate(args.values, scope)
+      return isObject(values) && collection ? { kind: 'add', collection, values } : { kind: 'none' }
+    }
+    if (action.functionCall['@call'] === 'deleteRecord') {
+      const id = asText(evaluate(args.id, scope))
+      return id && collection ? { kind: 'delete', collection, id } : { kind: 'none' }
+    }
     if (action.functionCall['@call'] !== 'openUrl') {
       evaluate(action.functionCall, scope)
       return { kind: 'none' }

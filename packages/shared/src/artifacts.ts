@@ -133,7 +133,7 @@ export const RELEASE_NOTE_PROMPT =
 export const LAUNCH_DECK_PROMPT =
   'Make a short launch deck as a Slides artifact from the pull requests merged since the last release: the problem, what is new, how it looks, and what comes next, with speaker notes.'
 
-export const ARTIFACT_KINDS = ['app', 'doc', 'diagram', 'slides', 'dashboard', 'design', 'motion'] as const
+export const ARTIFACT_KINDS = ['app', 'doc', 'diagram', 'slides', 'dashboard', 'design', 'motion', 'card'] as const
 export type ArtifactKind = (typeof ARTIFACT_KINDS)[number]
 
 /** A stored or received kind; anything this build does not know opens as the web page every kind renders as. */
@@ -156,6 +156,7 @@ export const ARTIFACT_SOURCE_FILES = {
   dashboard: 'dashboard.json',
   design: 'design.json',
   motion: 'motion.json',
+  card: 'card.json',
 } as const
 
 /**

@@ -4,6 +4,7 @@ import {
   FileText,
   Frame,
   LayoutDashboard,
+  LayoutList,
   Presentation,
   Workflow,
   type LucideIcon,
@@ -31,6 +32,7 @@ const KIND_ICONS: Record<ArtifactKind, LucideIcon> = {
   dashboard: LayoutDashboard,
   design: Frame,
   motion: Clapperboard,
+  card: LayoutList,
 }
 
 export function artifactKindLabel(kind: ArtifactKind): string {
@@ -46,7 +48,9 @@ export function artifactKindLabel(kind: ArtifactKind): string {
             ? t('Design')
             : kind === 'motion'
               ? t('Motion')
-              : t('App')
+              : kind === 'card'
+                ? t('Card')
+                : t('App')
 }
 
 /**

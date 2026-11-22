@@ -256,3 +256,72 @@ describe('action messages', () => {
     expect(parseInlineUiActionMessage('hello')).toBeNull()
   })
 })
+
+describe('record actions', () => {
+  const card = (action: Record<string, unknown>) => [
+    {
+      version: '1.0',
+      createSurface: {
+        surfaceId: 'log',
+        components: [
+          { id: 'root', component: 'Column', children: ['go'] },
+          { id: 'go_label', component: 'Text', text: 'Save' },
+          { id: 'go', component: 'Button', child: 'go_label', action },
+        ],
+        dataModel: { form: { amount: 4 } },
+      },
+    },
+  ]
+  const add = {
+    functionCall: {
+      '@call': 'addRecord',
+      args: { collection: 'spend', values: { amount: { '@path': '/form/amount' } } },
+    },
+  }
+
+  it('saves only in a Card artifact, to a collection it keeps, and talks to an agent only in a thread', () => {
+    expect(applyInlineUi(new Map(), card(add))).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('only in a Card artifact'),
+    })
+    expect(applyInlineUi(new Map(), card(add), { collections: new Set(['other']) })).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('(other)'),
+    })
+    expect(applyInlineUi(new Map(), card({ event: { name: 'x' } }), { collections: new Set() })).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('no agent'),
+    })
+    const result = applyInlineUi(new Map(), card(add), { collections: new Set(['spend']) })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const surface = result.surfaces[0]!
+    expect(pressButton(surface, button2(surface), scope(surface.dataModel))).toEqual({
+      kind: 'add',
+      collection: 'spend',
+      values: { amount: 4 },
+    })
+  })
+
+  it('removes the record a template row stands for, and totals a collection', () => {
+    const remove = { functionCall: { '@call': 'deleteRecord', args: { collection: 'spend', id: { '@path': 'id' } } } }
+    const result = applyInlineUi(new Map(), card(remove), { collections: new Set(['spend']) })
+    if (!result.ok) throw new Error(result.error)
+    const surface = result.surfaces[0]!
+    const model = { records: { spend: [{ id: 'r1', amount: 4 }, { id: 'r2', amount: '6' }, { id: 'r3' }] } }
+    expect(pressButton(surface, button2(surface), scope(model, { base: ['records', 'spend', '1'] }))).toEqual({
+      kind: 'delete',
+      collection: 'spend',
+      id: 'r2',
+    })
+    const s = scope(model)
+    expect(evaluate({ '@call': 'sum', args: { values: { '@path': '/records/spend' }, field: 'amount' } }, s)).toBe(10)
+    expect(evaluate({ '@call': 'count', args: { values: { '@path': '/records/spend' } } }, s)).toBe(3)
+  })
+})
+
+function button2(surface: InlineSurface) {
+  const found = surface.components.find((c) => c.id === 'go')
+  if (found?.component !== 'Button') throw new Error('no button')
+  return found
+}

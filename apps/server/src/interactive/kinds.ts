@@ -7,6 +7,7 @@ import type { InteractiveFile } from '@ramu/shared/interactive'
 import { renderDashboard } from './dashboard'
 import { renderDesign } from './design'
 import { renderMotion } from './motion'
+import { renderCard } from './card'
 import { INTERACTIVE_KIT_CSS } from './kit'
 import { renderSlides } from './slides'
 import { docImagePath, docImages } from './docImages'
@@ -181,5 +182,6 @@ export async function renderArtifactSource(
   if (source.kind === 'dashboard') return renderDashboard(source, title)
   if (source.kind === 'design') return renderDesign(source, title, files)
   if (source.kind === 'motion') return renderMotion(source, title, files)
+  if (source.kind === 'card') return renderCard(source, title)
   return source.kind === 'doc' ? renderDoc(source.source, files) : renderDiagram(source.format, source.source, title)
 }

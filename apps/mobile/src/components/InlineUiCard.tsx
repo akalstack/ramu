@@ -51,7 +51,12 @@ import {
   X,
 } from 'lucide-react-native'
 import { inlineRuns } from '@ramu/shared/inlineMarks'
-import type { InlineSurface, InlineUiComponent, InlineUiIcon } from '@ramu/shared/chat/inlineUi'
+import {
+  keepCardPrompt,
+  type InlineSurface,
+  type InlineUiComponent,
+  type InlineUiIcon,
+} from '@ramu/shared/chat/inlineUi'
 import {
   asBoolean,
   asNumber,
@@ -66,6 +71,7 @@ import {
   pressButton,
   withEdits,
   type InlineUiEdits,
+  type InlineUiOutcome,
   type InlineUiScope,
 } from '@ramu/shared/chat/inlineUiRuntime'
 import type { Chat } from '../runtime/types'
@@ -465,14 +471,32 @@ function Node({ id, scope, context, depth }: { id: string; scope: InlineUiScope;
   }
 }
 
+/** What a pressed button asks of the card's owner: a thread sends it to the agent, a Card artifact saves a record. */
+export type InlineUiRequest = Exclude<InlineUiOutcome, { kind: 'open' } | { kind: 'none' }>
+
 /**
- * An agent's inline card on the phone, drawn with the app's own controls. Entries are kept as a draft on this phone until
- * a button sends them, and survive the agent changing the card unless it changed that same value.
+ * A2UI surface drawn with the phone's own controls. Entries are kept as a draft on this phone until a button uses them,
+ * and survive the card changing unless that same value changed. `extra` joins the data model, as records do at /records.
  */
-export function InlineUiCard({ surface, chat }: { surface: InlineSurface; chat: Chat }) {
-  const say = useSay()
+export function InlineUiSurface({
+  surface,
+  draftKey,
+  canAct,
+  extra,
+  label,
+  footer,
+  onRequest,
+}: {
+  surface: InlineSurface
+  draftKey: string
+  canAct: boolean
+  extra?: Record<string, unknown>
+  label: string
+  footer?: ReactNode
+  /** Resolves true when the entries were used and the form should start over, as after saving a record. */
+  onRequest(request: InlineUiRequest): Promise<boolean>
+}) {
   const store = useStore()
-  const draftKey = `${chat.computerId}:card:${chat.sessionId}:${surface.surfaceId}`
   const [edits, setEdits] = useState<InlineUiEdits>(() => {
     try {
       const saved = JSON.parse(store.drafts[draftKey] ?? '[]') as [string, { tokens: string[]; value: unknown }][]
@@ -494,33 +518,33 @@ export function InlineUiCard({ surface, chat }: { surface: InlineSurface; chat: 
     // eslint-disable-next-line react-hooks/exhaustive-deps -- saves on [draftKey, edits]; the store's setter is stable in effect
   }, [draftKey, edits])
   const byId = useMemo(() => new Map(surface.components.map((c) => [c.id, c])), [surface.components])
-  const model = useMemo(() => withEdits(surface.dataModel, edits), [surface.dataModel, edits])
-  if (surface.deleted || !byId.has('root') || !chat.sessionId) return null
-  const sessionId = chat.sessionId
-  const viewer = store.computers.find((host) => host.id === chat.computerId)?.access === 'viewer'
+  const model = useMemo(
+    () => withEdits(extra ? { ...surface.dataModel, ...extra } : surface.dataModel, edits),
+    [surface.dataModel, extra, edits],
+  )
+  if (surface.deleted || !byId.has('root')) return null
   const locale = store.language === 'id' ? 'id-ID' : 'en-US'
   const context: Context = {
     surface,
     byId,
-    canAct: !viewer,
+    canAct,
     busy,
     write: (tokens, value) => setEdits((current) => new Map(current).set(editKey(tokens), { tokens, value })),
     press: (component, scope) => {
       const outcome = pressButton(surface, component, scope)
       if (outcome.kind === 'open') void Linking.openURL(outcome.url).catch(() => {})
-      if (outcome.kind !== 'event') return
+      if (outcome.kind === 'open' || outcome.kind === 'none') return
       setBusy(component.id)
       setError(null)
-      store
-        .invoke(chat.computerId, 'agent.inlineUiAction', sessionId, outcome.action)
-        .then(() => store.refresh(chat.computerId))
+      onRequest(outcome)
+        .then((reset) => reset && setEdits(new Map()))
         .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)))
         .finally(() => setBusy(null))
     },
   }
   return (
     <Card style={{ padding: space.m, gap: space.s }}>
-      <View accessibilityLabel={say('Card from the agent')} style={{ gap: space.s }}>
+      <View accessibilityLabel={label} style={{ gap: space.s }}>
         <Node id="root" scope={{ model, base: [], locale }} context={context} depth={0} />
       </View>
       {error ? (
@@ -528,6 +552,40 @@ export function InlineUiCard({ surface, chat }: { surface: InlineSurface; chat: 
           {error}
         </T>
       ) : null}
+      {footer}
     </Card>
+  )
+}
+
+/** An agent's inline card in a thread on the phone; a button goes to the agent as the person's message. */
+export function InlineUiCard({ surface, chat }: { surface: InlineSurface; chat: Chat }) {
+  const say = useSay()
+  const store = useStore()
+  if (!chat.sessionId) return null
+  const sessionId = chat.sessionId
+  const viewer = store.computers.find((host) => host.id === chat.computerId)?.access === 'viewer'
+  return (
+    <InlineUiSurface
+      surface={surface}
+      draftKey={`${chat.computerId}:card:${sessionId}:${surface.surfaceId}`}
+      canAct={!viewer}
+      label={say('Card from the agent')}
+      onRequest={async (request) => {
+        if (request.kind !== 'event') return false
+        await store.invoke(chat.computerId, 'agent.inlineUiAction', sessionId, request.action)
+        void store.refresh(chat.computerId)
+        return false
+      }}
+      footer={
+        viewer ? null : (
+          <Button
+            kind="ghost"
+            title={say('Keep as artifact')}
+            onPress={() => void store.send(chat.id, keepCardPrompt(surface.surfaceId), 'queue')}
+            style={{ alignSelf: 'flex-start' }}
+          />
+        )
+      }
+    />
   )
 }
