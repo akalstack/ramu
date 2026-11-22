@@ -69,8 +69,26 @@ it('gives a signed-in host a tunnel to its loopback port only, a CNAME and the t
   const again = await ask(relay, 'token-alice', host('mac'))
   expect(again.body).toMatchObject({ state: 'active', hostname: 'ramu-slug1.akalstack.com' })
   expect(cf.calls.filter((call) => call.startsWith('create'))).toHaveLength(1)
-  // The session was verified once and then served from the cache.
+  // Each request for a tunnel asks the account service, so a signed-out session never gets a new token.
+  expect(accountCalls).toBe(2)
+})
+
+it('stops a signed-out session at once, and serves housekeeping from the cache meanwhile', async () => {
+  const relay = relayWith(2)
+  expect((await ask(relay, 'token-alice', host('mac'))).status).toBe(200)
+  now += 2 * 60 * 60_000
+  accountCalls = 0
+  expect((await send(relay, 'token-alice', 'POST', '/v1/links/mac/seen')).status).toBe(204)
+  expect((await send(relay, 'token-alice', 'POST', '/v1/links/mac/seen')).status).toBe(204)
   expect(accountCalls).toBe(1)
+  delete users['token-alice']
+  try {
+    expect((await ask(relay, 'token-alice', host('mac'))).status).toBe(401)
+    // The refusal also drops the cached session, so housekeeping stops too.
+    expect((await send(relay, 'token-alice', 'POST', '/v1/links/mac/seen')).status).toBe(401)
+  } finally {
+    users['token-alice'] = 'alice'
+  }
 })
 
 it('refuses a missing session, a bad body and a second host on the same account', async () => {

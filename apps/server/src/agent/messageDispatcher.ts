@@ -275,7 +275,9 @@ export class MessageDispatcher {
     fromUser = false,
     from?: MessageOrigin,
   ): Promise<void> {
-    if (!from && this.goalCommand(id, text, attachments, reviewId)) return
+    // Only the person sets a goal: its `verify:` command runs as a shell command without approval, so a message from a
+    // paired host, a terminal, a helper or another agent is never read as one.
+    if (fromUser && !from && this.goalCommand(id, text, attachments, reviewId)) return
     if (!text.trim() && !attachments.length) throw new Error('Enter a message or attach a file first.')
     if (this.host.transitioning.has(id)) throw new Error('Provider switch in progress. Try again in a moment.')
     const session = this.host.get(id)
@@ -462,7 +464,18 @@ export class MessageDispatcher {
     id: string,
     message: { text: string; attachments?: Attachment[]; reviewId?: string; from?: MessageOrigin },
   ): Promise<void> {
-    return this.host.send(id, message.text, message.attachments, message.reviewId, true, undefined, false, message.from)
+    // A person's `/goal` is handled when they submit it, so a queued or steered message is never a goal command.
+    return this.host.send(
+      id,
+      message.text,
+      message.attachments,
+      message.reviewId,
+      true,
+      undefined,
+      false,
+      message.from,
+      false,
+    )
   }
 
   workspaceBusy(covers: string[], self?: string): boolean {

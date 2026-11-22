@@ -168,8 +168,9 @@ export class SessionStarter {
     internalGoal?: { revision: number; goalId: string },
     providerRetry = false,
     from?: MessageOrigin,
+    goalCommands = true,
   ): Promise<void> {
-    if (recordUser && !from && this.host.goalCommand(id, text, attachments, reviewId)) return
+    if (goalCommands && recordUser && !from && this.host.goalCommand(id, text, attachments, reviewId)) return
     if (this.host.providerWait(id) && recordUser) {
       this.host.updateQueue(
         id,

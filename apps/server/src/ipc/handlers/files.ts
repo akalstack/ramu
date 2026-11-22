@@ -73,10 +73,22 @@ export const registerFileHandlers: RegisterHandlers = (ctx) => {
     const roots = withheld()
     return entries.filter((entry) => !withheldPath(resolve('/', entry.path), roots))
   }
+  /**
+   * Dropped items are absolute paths, so any caller could name Ramu's own data (its database, the browser's cookies) or
+   * a folder holding it. Those are never copied out; Ramu's data stays reachable only through the calls that guard it.
+   */
+  const outsideRamuData = (paths: string[]) => {
+    for (const path of paths) {
+      const absolute = resolve(path)
+      if (withheldPath(absolute, [host.userData]) || withheldPath(host.userData, [absolute]))
+        throw new Error('Ramu’s own data folder cannot be copied.')
+    }
+    return paths
+  }
   const inbox = new TransferInbox()
   /** The chosen items of a copy, as absolute paths. Project items stay inside their checkout. */
   const sourceRoots = (source: z.infer<typeof transferSource>): Promise<string[]> => {
-    if (!('taskId' in source)) return Promise.resolve(source.paths)
+    if (!('taskId' in source)) return Promise.resolve(outsideRamuData(source.paths))
     const cwd = cwdOf(source.taskId, source.repoId)
     return Promise.all(
       source.paths.map(async (path) => {
@@ -113,7 +125,7 @@ export const registerFileHandlers: RegisterHandlers = (ctx) => {
     'files.import': {
       args: z.tuple([id, id, relPath, z.array(droppedPaths).min(1).max(100)]),
       run: (t: string, r: string, dir: string, paths: string[]) =>
-        inCheckout(ctx, t, r, (cwd) => files.importEntries(cwd, dir, paths)),
+        inCheckout(ctx, t, r, (cwd) => files.importEntries(cwd, dir, outsideRamuData(paths))),
     },
     'files.transfer.manifest': {
       args: z.tuple([transferSource]),

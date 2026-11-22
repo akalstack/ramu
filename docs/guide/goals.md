@@ -20,7 +20,7 @@ The goal bar has Pause, Resume and Clear. **Stop** interrupts the current turn a
 
 ## Verification command
 
-Give a goal a command Ramu runs when the agent says it's done. Only you can set it.
+Give a goal a command Ramu runs when the agent says it's done. Only you can set it: `/goal` in a message from another agent, a paired host or a terminal is sent as plain text.
 
 ```text
 /goal Login works and tests pass

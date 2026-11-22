@@ -49,7 +49,7 @@ it('keeps background feedback durable and leaves a paused queue paused', async (
 it('sends queued feedback through the normal follow-up path when idle', async () => {
   dispatcher.enqueueBackground('session', 'Fix PR', feedback.checkout!)
   await new Promise<void>((resolve) => setImmediate(resolve))
-  expect(send).toHaveBeenCalledWith('session', 'Fix PR', [], undefined, true, undefined, false, undefined)
+  expect(send).toHaveBeenCalledWith('session', 'Fix PR', [], undefined, true, undefined, false, undefined, false)
   expect(messages).toEqual([])
 })
 
@@ -75,10 +75,10 @@ it('holds and pauses feedback if the user switched branches before dispatch', as
 it('keeps checkout-specific feedback separate from ordinary queued messages', async () => {
   messages = [{ id: 'user', text: 'Question' }, feedback]
   await dispatcher.dispatchQueued('session')
-  expect(send).toHaveBeenLastCalledWith('session', 'Question', [], undefined, true, undefined, false, undefined)
+  expect(send).toHaveBeenLastCalledWith('session', 'Question', [], undefined, true, undefined, false, undefined, false)
   expect(messages).toEqual([feedback])
   await dispatcher.dispatchQueued('session')
-  expect(send).toHaveBeenLastCalledWith('session', 'Fix PR', [], undefined, true, undefined, false, undefined)
+  expect(send).toHaveBeenLastCalledWith('session', 'Fix PR', [], undefined, true, undefined, false, undefined, false)
 })
 
 it('prevents duplicate sends while the checkout is being validated', async () => {

@@ -22,7 +22,7 @@ async function fixture(hostId?: string, routes?: () => string[], behindTunnel = 
     browserOrigins: ['https://companion.example'],
     ...(hostId ? { hostId } : {}),
     ...(routes ? { routes } : {}),
-    ...(behindTunnel ? { peer: (req: IncomingMessage) => clientAddress(req, true).address } : {}),
+    ...(behindTunnel ? { peer: (req: IncomingMessage) => clientAddress(req, 'cloudflare') } : {}),
     now: () => now,
   })
   const server: Server = createServer(async (req, res) => {

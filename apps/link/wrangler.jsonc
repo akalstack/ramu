@@ -23,5 +23,9 @@
   // Reads tunnel status, releases idle slots and counts traffic; hosts send no heartbeats.
   "triggers": { "crons": ["*/5 * * * *"] },
   // Link requests per session, so one account cannot churn tunnels.
-  "ratelimits": [{ "name": "ALLOCATIONS", "namespace_id": "4101", "simple": { "limit": 10, "period": 60 } }],
+  // Link calls per address, each of which asks the account service about its session.
+  "ratelimits": [
+    { "name": "ALLOCATIONS", "namespace_id": "4101", "simple": { "limit": 10, "period": 60 } },
+    { "name": "LOOKUPS", "namespace_id": "4102", "simple": { "limit": 60, "period": 60 } },
+  ],
 }

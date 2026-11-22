@@ -3,7 +3,7 @@
 // arguments or the transcript), commands that only read run straight away, and every other command asks the person
 // with a card naming it. A deploy follows Ramu's one rule for deploys, whichever way an agent makes them.
 import { spawn } from 'node:child_process'
-import { mkdir } from 'node:fs/promises'
+import { lstat, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -69,6 +69,19 @@ export function credentialEnvironment(slot: PluginCredential, secret: PluginSecr
 }
 
 /**
+ * A folder only this user can reach. On Linux the temporary folder is shared by every account, so another user could
+ * create the folder first and plant the CLI's config or swap it for a link; an existing folder is used only when it is
+ * a real directory this user owns and nobody else can open.
+ */
+async function privateFolder(path: string): Promise<void> {
+  await mkdir(path, { recursive: true, mode: 0o700 })
+  const info = await lstat(path)
+  const uid = process.getuid?.()
+  if (!info.isDirectory() || (uid !== undefined && (info.uid !== uid || (info.mode & 0o077) !== 0)))
+    throw new Error(`${path} belongs to another account or others can open it. Remove it, then try again.`)
+}
+
+/**
  * Runs the plugin's CLI in `cwd` with the credential in its environment and none of Ramu's. HOME is a folder of Ramu's
  * own per plugin, so the CLI never reads or writes the person's own CLI sign-in. A local tool with no account keeps
  * the person's HOME, where its own settings live (Godot's export templates, Unity's installed editors).
@@ -84,8 +97,12 @@ export async function runPluginCli(
   const command = cliCommand(target.cli)
   if (!command)
     throw new Error(`The ${target.cli.binaries[0]} CLI is not installed on this host. Ask the person to install it.`)
-  const home = target.slot ? join(tmpdir(), 'ramu-cli', target.plugin) : (process.env.HOME ?? tmpdir())
-  if (target.slot) await mkdir(home, { recursive: true, mode: 0o700 })
+  const base = join(tmpdir(), `ramu-cli-${process.getuid?.() ?? 'user'}`)
+  const home = target.slot ? join(base, target.plugin) : (process.env.HOME ?? tmpdir())
+  if (target.slot) {
+    await privateFolder(base)
+    await privateFolder(home)
+  }
   const values = target.slot && secret ? credentialEnvironment(target.slot, secret) : {}
   const env: NodeJS.ProcessEnv = { ...cliEnvironment(home), ...values, CI: '1' }
   return new Promise((resolve, reject) => {

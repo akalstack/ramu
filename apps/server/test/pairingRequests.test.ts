@@ -16,12 +16,18 @@ afterEach(async () => {
   for (const close of cleanup.splice(0)) await close()
 })
 
-async function fixture(discoverable = true) {
+async function fixture(discoverable = true, tunneled = false) {
   const dir = mkdtempSync(join(tmpdir(), 'ramu-pairing-'))
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }))
   const devices = new DeviceStore(join(dir, 'devices.json'))
   const pairing = new PairingRequests({ devices, hostId: 'host-1', accepting: () => discoverable })
-  const access = new RemoteAccess({ devices, hostId: 'host-1', pairing, browserOrigins: [] })
+  const access = new RemoteAccess({
+    devices,
+    hostId: 'host-1',
+    pairing,
+    browserOrigins: [],
+    ...(tunneled ? { peer: () => ({ address: '192.168.1.23', tunneled: true }) } : {}),
+  })
   const server: Server = createServer(async (req, res) => {
     const device = await access.accept(req, res)
     if (device === undefined) return
@@ -43,6 +49,15 @@ async function fixture(discoverable = true) {
   }
   return { devices, pairing, base, post }
 }
+
+it('refuses pairing requests that arrive through the public address, so nobody online can prompt the person', async () => {
+  const { pairing, post } = await fixture(true, true)
+  const keys = pairKeys(random)
+  const response = await post(PAIR_REQUEST_PATH, { name: 'Not nearby', commit: pairCommit(keys.publicKey) })
+  expect(response.status).toBe(401)
+  expect(response.body.error).toMatch(/nearby/)
+  expect(pairing.list()).toEqual([])
+})
 
 /** Waits until the request shows at the host, then answers it the way the person at the host would. */
 async function answerAtHost(pairing: PairingRequests, decide: (id: string, code: string) => void) {

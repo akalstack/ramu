@@ -137,11 +137,9 @@ export const registerPluginHandlers: RegisterHandlers = (ctx) => {
         const listener = await listenForCallback({ service: plugins.list().find((p) => p.id === pluginId)?.name })
         try {
           const started = await plugins.startSignIn(pluginId, slot, { ...input, redirectUri: listener.redirectUri })
+          listener.expect(started.state)
           void listener.received
-            .then(({ state, code }) => {
-              if (state !== started.state) throw new Error('This sign-in was not started here.')
-              return plugins.completeSignIn(state, code)
-            })
+            .then(({ state, code }) => plugins.completeSignIn(state, code))
             .then(changed, (error: Error) =>
               ctx.host.send('plugins:signInFailed', { pluginId, slot, message: error.message }),
             )
