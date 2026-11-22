@@ -3,13 +3,14 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { expect, it, vi } from 'vitest'
 import { applyInlineUi, type InlineSurface } from '@ramu/shared/chat/inlineUi'
 import type { AgentEvent } from '@ramu/shared/types'
-import { InlineUiCard } from '../src/chat/InlineUiCard'
+import { InlineUiCard, InlineUiSurface } from '../src/chat/InlineUiCard'
 import { toBlocks } from '../src/views/agent/lib/blocks'
 
 vi.mock('../src/i18n', () => ({ useLanguage: () => 'en', t: (text: string) => text }))
 vi.mock('../src/workspace/HostProvider', () => ({ useHost: () => ({ invoke: vi.fn() }) }))
 vi.mock('../src/workspace/TaskPane', () => ({ errorText: String }))
 vi.mock('../src/ipc', () => ({ invoke: vi.fn() }))
+vi.mock('../src/chat/Notifications', () => ({ notifyError: vi.fn() }))
 
 const surface = (dataModel: Record<string, unknown>): InlineSurface => {
   const result = applyInlineUi(new Map(), [
@@ -88,4 +89,50 @@ it('shows each card once, at its newest version, and drops a deleted card', () =
   expect(
     toBlocks([...events, deleted]).some((block) => block.kind === 'event' && block.event.kind === 'inline-ui'),
   ).toBe(false)
+})
+
+it('draws a Card artifact’s records and totals from /records', () => {
+  const result = applyInlineUi(
+    new Map(),
+    [
+      {
+        version: '1.0',
+        createSurface: {
+          surfaceId: 'trip',
+          components: [
+            { id: 'root', component: 'Column', children: ['total', 'list'] },
+            {
+              id: 'total',
+              component: 'Text',
+              text: { '@call': 'sum', args: { values: { '@path': '/records/spend' }, field: 'amount' } },
+            },
+            { id: 'list', component: 'List', children: { componentId: 'row', path: '/records/spend' } },
+            { id: 'row', component: 'Text', text: { '@path': 'note' } },
+          ],
+        },
+      },
+    ],
+    { collections: new Set(['spend']) },
+  )
+  if (!result.ok) throw new Error(result.error)
+  const html = renderToStaticMarkup(
+    createElement(InlineUiSurface, {
+      surface: result.surfaces[0]!,
+      draftKey: 'artifact-card:a',
+      canAct: true,
+      label: 'Trip',
+      extra: {
+        records: {
+          spend: [
+            { id: '1', amount: 30, note: 'Taxi' },
+            { id: '2', amount: 12, note: 'Lunch' },
+          ],
+        },
+      },
+      onRequest: async () => false,
+    }),
+  )
+  expect(html).toContain('<span>42</span>')
+  expect(html).toContain('Taxi')
+  expect(html).toContain('Lunch')
 })

@@ -173,7 +173,7 @@ For a quick choice, a short form, a confirmation or a status summary, the agent 
 - A phone paired as a viewer sees cards but can't press their buttons.
 - A card with a link opens it in your browser. Only web addresses open.
 
-Cards are for things you use once in the conversation. Ask for an [artifact](artifacts.md) for anything to keep, share or open later.
+Cards are for things you use once in the conversation. **Keep as artifact** on a card asks the agent to make it a [Card artifact](artifacts.md#kinds): kept under **Artifacts**, drawn the same way, and saving what you enter as records without waking the agent. Ask for an [artifact](artifacts.md) for anything else to keep, share or open later.
 
 Agents draw cards with `show_ui`, which takes [A2UI](https://a2ui.org) v1.0 messages (`createSurface`, `updateComponents`, `updateDataModel` and `deleteSurface`) against the `getramu.dev:inline/v1` catalog. The catalog is A2UI's basic catalog without images, video, audio, modals and `regex` checks. Ramu checks a call as a whole and changes nothing when part of it is invalid, telling the agent what to fix. A button's action reaches the agent as A2UI's action message, with its context resolved. A thread shows up to 20 cards with up to 200 parts each.
 

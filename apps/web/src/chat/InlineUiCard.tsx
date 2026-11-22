@@ -52,7 +52,12 @@ import {
 } from 'lucide-react'
 import { cn } from 'cn'
 import { inlineRuns } from '@ramu/shared/inlineMarks'
-import type { InlineSurface, InlineUiComponent, InlineUiIcon } from '@ramu/shared/chat/inlineUi'
+import {
+  keepCardPrompt,
+  type InlineSurface,
+  type InlineUiComponent,
+  type InlineUiIcon,
+} from '@ramu/shared/chat/inlineUi'
 import {
   asBoolean,
   asNumber,
@@ -67,6 +72,7 @@ import {
   pressButton,
   withEdits,
   type InlineUiEdits,
+  type InlineUiOutcome,
   type InlineUiScope,
 } from '@ramu/shared/chat/inlineUiRuntime'
 import { Button } from '@/components/desktop-button'
@@ -78,6 +84,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { invoke as onThisComputer } from '../ipc'
 import { useHost } from '../workspace/HostProvider'
+import { notifyError } from './Notifications'
 import { errorText } from '../workspace/TaskPane'
 import { t, useLanguage } from '../i18n'
 
@@ -479,32 +486,37 @@ const isSavedEdits = (value: unknown): value is SavedEdits =>
       Array.isArray((entry[1] as { tokens?: unknown }).tokens),
   )
 
+/** What a pressed button asks of the card's owner: a thread sends it to the agent, a Card artifact saves a record. */
+export type InlineUiRequest = Exclude<InlineUiOutcome, { kind: 'open' } | { kind: 'none' }>
+
 /**
- * An agent's inline card, drawn with the app's own controls. What the person enters stays on this device until a button
- * sends it; when the agent changes the card, their entries stay unless the agent changed that same value.
+ * A2UI surface drawn with the app's own controls. What the person enters stays on this device as a draft until a button
+ * uses it; when the card changes, entries stay unless that same value changed. `extra` joins the data model, as a Card
+ * artifact's records do at /records.
  */
-export function InlineUiCard({
+export function InlineUiSurface({
   surface,
-  sessionId,
-  live,
+  draftKey,
+  canAct,
+  extra,
+  label,
+  footer,
+  onRequest,
 }: {
   surface: InlineSurface
-  sessionId: string
-  live: boolean
+  draftKey: string
+  canAct: boolean
+  extra?: Record<string, unknown>
+  label: string
+  footer?: ReactNode
+  /** Resolves true when the entries were used and the form should start over, as after saving a record. */
+  onRequest(request: InlineUiRequest): Promise<boolean>
 }) {
   const language = useLanguage()
-  const { id: hostId, invoke } = useHost()
+  const { id: hostId } = useHost()
   // Entries survive switching threads and restarting, as a message draft does.
-  const [saved, setSaved] = useJsonDraft<SavedEdits>(
-    `card:${sessionId}:${surface.surfaceId}`,
-    hostId,
-    [],
-    isSavedEdits,
-    (value) => value.length === 0,
-  )
+  const [saved, setSaved] = useJsonDraft<SavedEdits>(draftKey, hostId, [], isSavedEdits, (value) => value.length === 0)
   const edits = useMemo<InlineUiEdits>(() => new Map(saved), [saved])
-  const setEdits = (update: (current: InlineUiEdits) => InlineUiEdits) =>
-    setSaved((current) => [...update(new Map(current))])
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const previous = useRef(surface)
@@ -515,7 +527,10 @@ export function InlineUiCard({
     previous.current = surface
   }, [surface, setSaved])
   const byId = useMemo(() => new Map(surface.components.map((c) => [c.id, c])), [surface.components])
-  const model = useMemo(() => withEdits(surface.dataModel, edits), [surface.dataModel, edits])
+  const model = useMemo(
+    () => withEdits(extra ? { ...surface.dataModel, ...extra } : surface.dataModel, edits),
+    [surface.dataModel, extra, edits],
+  )
   if (surface.deleted || !byId.has('root')) return null
   const locale = language === 'id' ? 'id-ID' : 'en-US'
   const context: Context = {
@@ -523,24 +538,25 @@ export function InlineUiCard({
     byId,
     model,
     locale,
-    canAct: live,
+    canAct,
     busy,
-    write: (tokens, value) => setEdits((current) => new Map(current).set(editKey(tokens), { tokens, value })),
+    write: (tokens, value) => setSaved((current) => [...new Map(current).set(editKey(tokens), { tokens, value })]),
     press: (component, scope) => {
       const outcome = pressButton(surface, component, scope)
       if (outcome.kind === 'open')
         void onThisComputer('app.openExternal', outcome.url).catch((e) => setError(errorText(e)))
-      if (outcome.kind !== 'event') return
+      if (outcome.kind === 'open' || outcome.kind === 'none') return
       setBusy(component.id)
       setError(null)
-      invoke('agent.inlineUiAction', sessionId, outcome.action)
+      onRequest(outcome)
+        .then((reset) => reset && setSaved([]))
         .catch((reason: unknown) => setError(errorText(reason)))
         .finally(() => setBusy(null))
     },
   }
   return (
     <section
-      aria-label={t('Card from the agent')}
+      aria-label={label}
       className="flex max-w-[560px] flex-col gap-2 rounded-(--radius-m) p-3 [border:1px_solid_var(--line)]"
     >
       <Node id="root" scope={{ model, base: [], locale }} context={context} depth={0} />
@@ -549,6 +565,47 @@ export function InlineUiCard({
           {error}
         </p>
       ) : null}
+      {footer}
     </section>
+  )
+}
+
+/** An agent's inline card in a thread; a button goes to the agent as the person's message. */
+export function InlineUiCard({
+  surface,
+  sessionId,
+  live,
+}: {
+  surface: InlineSurface
+  sessionId: string
+  live: boolean
+}) {
+  const { invoke } = useHost()
+  return (
+    <InlineUiSurface
+      surface={surface}
+      draftKey={`card:${sessionId}:${surface.surfaceId}`}
+      canAct={live}
+      label={t('Card from the agent')}
+      onRequest={async (request) => {
+        if (request.kind === 'event') await invoke('agent.inlineUiAction', sessionId, request.action)
+        return false
+      }}
+      footer={
+        live ? (
+          <Button
+            variant="ghost"
+            className="self-start text-caption text-muted-foreground"
+            onClick={() =>
+              void invoke('agent.submit', sessionId, keepCardPrompt(surface.surfaceId), 'queue', [], []).catch(
+                (reason: unknown) => notifyError(errorText(reason)),
+              )
+            }
+          >
+            {t('Keep as artifact')}
+          </Button>
+        ) : null
+      }
+    />
   )
 }

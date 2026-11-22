@@ -41,6 +41,7 @@ import { contentStorage } from '../../../storage'
 import { Header, HeaderButton, Screen } from '../../../components/Screen'
 import { Button, Card, IconButton, Row, SHEET_SETTLE_MS, Sheet, SheetScrollView, T } from '../../../components/ui'
 import InteractiveFrame from '../../../components/InteractiveFrame'
+import { CardArtifact } from '../../../components/CardArtifact'
 import { ArtifactSettings } from '../../../components/ArtifactSettings'
 import { MakeProjectSheet } from '../../../components/MakeProjectSheet'
 import MotionVideo from '../../../components/MotionVideo'
@@ -932,7 +933,9 @@ export default function PageScreen() {
             />
           </View>
         ) : null}
-        {document ? (
+        {document && page?.kind === 'card' ? (
+          <CardArtifact computerId={computerId} page={page} document={document} />
+        ) : document ? (
           <View {...(slides > 1 ? swipe.panHandlers : {})}>
             <InteractiveFrame
               html={html}

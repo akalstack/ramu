@@ -41,6 +41,7 @@ import {
 } from '@ramu/shared/dashboardControls'
 import { useHost } from '../workspace/HostProvider'
 import { useHostRuntime, useWorkspace } from '../workspace/workspace'
+import { CardArtifact } from './CardArtifact'
 import { notifyError } from '../chat/Notifications'
 import { StepSlider } from '@/components/step-slider'
 import { openPluginSettings } from '../settings/openPluginSettings'
@@ -364,7 +365,15 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
       )
     : 0
   const instance = `page:${artifactId}:${document?.reference.version ?? 0}:${generation}`
-  const { url } = useContentDocument(document?.html, instance, !!document, state, document?.reference.network)
+  // A Card draws natively; its HTML is only for previews and exports, so no frame starts for it.
+  const native = page?.kind === 'card'
+  const { url } = useContentDocument(
+    native ? undefined : document?.html,
+    instance,
+    !!document && !native,
+    state,
+    document?.reference.network,
+  )
   const slides = document ? slideCount(document) : 0
   // Each slide's title and notes for the presenter window, from the deck's source.
   const deckSource = document?.files?.find((file) => file.path === ARTIFACT_SOURCE_FILES.slides)?.content
@@ -1512,8 +1521,9 @@ export function PageView({ artifactId, onBack }: { artifactId: string; onBack():
           className={`relative ${width ? 'h-full overflow-hidden rounded-lg bg-(--canvas)' : 'size-full'} ${slideControls.presenting ? '[&>iframe]:pointer-events-none' : ''}`}
           style={{ width }}
         >
+          {native && document ? <CardArtifact page={page} document={document} viewOnly={viewOnly} /> : null}
           {url && <ContentFrame ref={frame} key={url} title={page.title} url={url} ready={ready} onLoad={() => {}} />}
-          {!ready && (
+          {!ready && !native && (
             <p className="absolute inset-0 m-0 flex items-center justify-center text-muted-foreground">
               {t('Loading…')}
             </p>

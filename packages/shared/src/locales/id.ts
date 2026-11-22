@@ -8010,4 +8010,6 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Back up settings, reach your hosts': 'Cadangkan pengaturan, jangkau host-mu',
   'Card from the agent': 'Kartu dari agent',
   'From a card': 'Dari kartu',
+  Card: 'Kartu',
+  'This card could not be read.': 'Kartu ini tidak bisa dibaca.',
 }

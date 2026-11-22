@@ -87,6 +87,10 @@ const INLINE_UI_FUNCTIONS = [
   'and',
   'or',
   'not',
+  'sum',
+  'count',
+  'addRecord',
+  'deleteRecord',
   '@index',
 ] as const
 
@@ -419,7 +423,43 @@ function problem(surface: InlineSurface): string | null {
  * Applies the agent's messages to the thread's cards, all or nothing. Only changed cards are returned. Messages are
  * checked against the whole batch, so a card may be created and filled in the same call but never shown half-built.
  */
-export function applyInlineUi(current: ReadonlyMap<string, InlineSurface>, input: unknown): InlineUiResult {
+/**
+ * Where a card lives decides what its buttons may do. In a thread a button speaks to the agent; a Card artifact has no
+ * agent to answer, so its buttons save to and remove from its own record collections instead.
+ */
+export interface InlineUiPlace {
+  /** The record collections a Card artifact declares; absent in a thread, where nothing is saved. */
+  collections?: ReadonlySet<string>
+}
+
+function actionProblem(surface: InlineSurface, place: InlineUiPlace): string | null {
+  for (const c of surface.components) {
+    if (c.component !== 'Button') continue
+    if ('event' in c.action) {
+      if (place.collections)
+        return `Button ${c.id}: a Card artifact has no agent to send events to. Use addRecord or deleteRecord, or openUrl.`
+      continue
+    }
+    const call = c.action.functionCall
+    if (call['@call'] !== 'addRecord' && call['@call'] !== 'deleteRecord') continue
+    if (!place.collections)
+      return `Button ${c.id}: ${call['@call']} works only in a Card artifact, which keeps records. In a thread, send an event.`
+    const collection = call.args?.collection
+    if (typeof collection !== 'string' || !place.collections.has(collection))
+      return `Button ${c.id}: ${call['@call']} needs collection set to one of the card's records (${[...place.collections].join(', ') || 'none declared'}).`
+    if (call['@call'] === 'addRecord' && (!call.args?.values || typeof call.args.values !== 'object'))
+      return `Button ${c.id}: addRecord needs values, an object of field names to values or bindings.`
+    if (call['@call'] === 'deleteRecord' && call.args?.id === undefined)
+      return `Button ${c.id}: deleteRecord needs id, usually {"@path":"id"} inside a template over /records/<collection>.`
+  }
+  return null
+}
+
+export function applyInlineUi(
+  current: ReadonlyMap<string, InlineSurface>,
+  input: unknown,
+  place: InlineUiPlace = {},
+): InlineUiResult {
   const parsed = inlineUiMessagesSchema.safeParse(input)
   if (!parsed.success)
     return {
@@ -475,11 +515,15 @@ export function applyInlineUi(current: ReadonlyMap<string, InlineSurface>, input
     const surface = { ...next.get(key)!, revision: (current.get(key)?.revision ?? 0) + 1 }
     next.set(key, surface)
     if (surface.deleted) continue
-    const found = problem(surface)
+    const found = problem(surface) ?? actionProblem(surface, place)
     if (found) return { ok: false, error: found }
   }
   return { ok: true, surfaces: [...changed].map((key) => next.get(key)!) }
 }
+
+/** **Keep as artifact** on a thread card: the agent decides which entries become records and republishes it as a Card. */
+export const keepCardPrompt = (surfaceId: string) =>
+  `Keep the card ${surfaceId} as a Card artifact: preview and publish it with kind "card" and artifact: true, a short title and one emoji icon. Save what it collects as records (declare them in records) with addRecord and deleteRecord buttons instead of events, and show the saved records in it.`
 
 /** The A2UI action a card sends back, carried to the agent as a message in the thread. */
 export interface InlineUiActionEvent {
