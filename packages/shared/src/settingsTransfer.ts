@@ -63,6 +63,7 @@ export const TRANSFER_GROUPS = [
       'autoProjectSelection',
       'agentThreads',
       'asyncQuestions',
+      'suggestNextMessage',
       'autoBackgroundSeconds',
       'goals',
       'intelligence',

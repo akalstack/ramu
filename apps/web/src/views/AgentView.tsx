@@ -1,5 +1,6 @@
 import { useViewOnly } from '../composer/useViewOnly'
 import { MAKE_PAGE_PROMPT } from '@ramu/shared/artifacts'
+import { nextMessagePoint } from '@ramu/shared/chat/nextMessage'
 import { VIEW_ONLY_WRITE_NOTICE } from '../composer/viewerAccess'
 import { McpStatusDialog } from './agent/components/McpStatusDialog'
 import { ComputerActivity, ComputerGrantDialog, useComputerActivity } from '../chat/ComputerActivity'
@@ -337,6 +338,24 @@ export const AgentView = memo(function AgentView({
   // Background commands are processes, so ending one is confirmed; sub-agents stop at once.
   const stopTask = (task: AgentTask) => (task.taskType === 'local_bash' ? setStopping(task) : runStopTask(task))
   const working = session?.state === 'running' || session?.state === 'starting'
+  // A predicted next message, asked for only while this thread is open and its last turn ended cleanly.
+  const nextPoint = useMemo(
+    () => (session && !viewOnly && !hydrating ? (nextMessagePoint(events, session.state)?.at ?? null) : null),
+    [events, session, viewOnly, hydrating],
+  )
+  const [nextMessages, setNextMessages] = useState<string[]>()
+  useEffect(() => {
+    setNextMessages(undefined)
+    if (nextPoint === null) return
+    let current = true
+    void Promise.resolve(invoke('agent.nextMessages', view.sessionId)).then(
+      (list) => current && setNextMessages(list),
+      () => {},
+    )
+    return () => {
+      current = false
+    }
+  }, [nextPoint, view.sessionId, invoke])
   const compacting = session?.state !== 'stopped' && session?.state !== 'failed' && isCompacting(events)
   // From the moment a message is sent, so the end of the chat does not wait for the host to report the turn.
   const activityLabel = compacting
@@ -1207,6 +1226,7 @@ export const AgentView = memo(function AgentView({
                         },
                       }}
                       value={draft}
+                      nextMessages={nextMessages}
                       allowEmpty={attached.length > 0 || terminalAttachments.length > 0}
                       chips={
                         <>

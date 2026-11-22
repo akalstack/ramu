@@ -435,6 +435,26 @@ function ChatView({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on [focused, hasNotice, chat?.id] by design; the values it reads beyond these are current as of that run
   }, [focused, hasNotice, chat?.id])
   const viewer = computer?.access === 'viewer'
+  // A predicted next message, asked for only while this thread is open and its agent is idle; the host decides
+  // whether the turn ended cleanly and answers once per turn.
+  const [nextMessages, setNextMessages] = useState<string[]>()
+  const nextKey =
+    chat?.sessionId && chat.executionState === 'idle' && !viewer && store.isOnline(chat.computerId)
+      ? `${chat.sessionId}:${chat.items.length}`
+      : null
+  useEffect(() => {
+    setNextMessages(undefined)
+    if (!nextKey || !chat?.sessionId) return
+    let current = true
+    void store.invoke(chat.computerId, 'agent.nextMessages', chat.sessionId).then(
+      (list) => current && setNextMessages(list),
+      () => {},
+    )
+    return () => {
+      current = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- asks again on [nextKey]; the store's invoke is stable for a host
+  }, [nextKey])
   const hostId = chat?.computerId
   const catalogs = hostId ? store.catalogs[hostId] : undefined
   // A device that may only view sends nothing, so it is offered no one to mention either.
@@ -1836,6 +1856,7 @@ function ChatView({ id }: { id: string }) {
                         helpers={composerMentions}
                         computerId={chat.computerId}
                         draftKey={composerDraftKey(chat)}
+                        nextMessages={nextMessages}
                         onStop={() => store.stop(chat.id)}
                         goal={chat.goal}
                         queue={chat.queue?.filter((message) => message.mode !== 'steer')}

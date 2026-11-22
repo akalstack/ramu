@@ -1888,6 +1888,11 @@ export interface RamuMethods extends ArtifactMethods {
   /** Writes the one trust entry for Ramu's hook into Codex's own config (~/.codex/config.toml). */
   'codex.hook.trust'(): { trusted: boolean; error?: string }
   /** Side questions about a chat; they never reach the main conversation. */
+  /**
+   * Up to three predicted next messages for a thread whose turn just ended, the most likely first; empty when the
+   * thread is working, waiting on the person, or the setting is off. Made once per turn, when a device asks.
+   */
+  'agent.nextMessages'(sessionId: string): string[]
   'aside.list'(sessionId: string): Aside[]
   /** Starts an aside (asideId null) or continues one. Returns at once; the answer arrives as aside:changed. */
   'aside.ask'(

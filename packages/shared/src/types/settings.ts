@@ -103,6 +103,8 @@ export interface AppPreferences extends WorkspaceDefaults {
   /** Resume interrupted chats when the background service starts again. */
   resumeChatsOnRestart: boolean
   asyncQuestions: boolean
+  /** Show a predicted next message in the empty composer after a turn. */
+  suggestNextMessage: boolean
   /** Seconds a Claude command may run in the foreground before Ramu moves it to the background; 0 leaves it to the agent. */
   autoBackgroundSeconds: number
   providerBinaries: ProviderConfiguration
@@ -195,6 +197,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   notifyAgentDone: true,
   resumeChatsOnRestart: true,
   asyncQuestions: true,
+  suggestNextMessage: true,
   autoBackgroundSeconds: 60,
   providerBinaries: {},
   providerUpdateChecks: true,

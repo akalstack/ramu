@@ -294,6 +294,13 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     words: 'async asynchronous optional blocking related grouped answers pending input',
   },
   {
+    section: 'chats',
+    title: 'Suggest next message',
+    path: 'suggestNextMessage',
+    help: 'After a turn, show a likely next message in the empty message box. Tab uses it. Each one is a small extra request on your plan, made only for a thread you have open.',
+    words: 'predict prediction next prompt autocomplete ghost tab suggestion follow up',
+  },
+  {
     section: 'system',
     title: 'Daily recaps',
     path: 'recapsEnabled',

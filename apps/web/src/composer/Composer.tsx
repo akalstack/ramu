@@ -45,6 +45,7 @@ export function Composer({
   alternateLabel,
   alternateDisabled,
   placeholder,
+  nextMessages,
   onArrowUpEmpty,
   submitLabel,
   submitTitle,
@@ -71,6 +72,8 @@ export function Composer({
   alternateLabel?: string
   alternateDisabled?: boolean
   placeholder: string
+  /** Predicted next messages for an empty box: the first shows as the placeholder and Tab uses it. */
+  nextMessages?: string[]
   submitLabel: string
   /** What sending does, when the label alone does not say it; already translated. */
   submitTitle?: string
@@ -109,6 +112,9 @@ export function Composer({
   const openFileLink = useOpenFileLink(threadId)
   const [caret, setCaret] = useState(value.length)
   const suggestions = useComposerSuggestions(value, caret, scopeId, chat, helpers)
+  // A prediction shows only in an empty box; Escape hides this turn's until the next one arrives.
+  const [dismissed, setDismissed] = useState<string[] | null>(null)
+  const predicted = !value && !disabled && nextMessages?.length && nextMessages !== dismissed ? nextMessages : []
   const [submitting, setSubmitting] = useState(false)
   const submissionPending = useRef(false)
   const submissionOrigin = useRef<{ host: string; scope: string | null } | null>(null)
@@ -468,6 +474,24 @@ export function Composer({
         }}
       >
         {suggestions.visible && <ComposerSuggestions suggestions={suggestions} onChoose={choose} />}
+        {predicted.length > 1 && (
+          <div role="group" aria-label={t('Suggested next messages')} className="m-[0_0_4px] flex flex-wrap gap-1">
+            {predicted.slice(1).map((text) => (
+              <Button
+                key={text}
+                variant="ghost"
+                size="sm"
+                className="h-6 max-w-full rounded-full px-2 text-caption text-muted-foreground"
+                onClick={() => {
+                  onChange(text)
+                  ref.current?.focus()
+                }}
+              >
+                <span className="truncate">{text}</span>
+              </Button>
+            ))}
+          </div>
+        )}
         {(chips || hasPinned) && (
           <div className="composer-chips [&_.comments-chip-wrap]:m-0 [&_.attachment-chip]:min-h-0 [&_.attachment-chip]:h-6 [&_.attachment-chip]:max-w-[180px] [&_.attachment-chip]:rounded-(--radius-s) [&_.attachment-chip]:text-caption [&_.attachment-chip_.attachment-open.file]:gap-[5px] [&_.attachment-chip_.attachment-open.file]:p-[0_9px_0_7px] [&_.attachment-chip_.attachment-open.file]:h-full [&_.attachment-chip_.attachment-open.file]:items-center [&_.attachment-chip_.attachment-open.file]:text-caption [&_.attachment-chip_.attachment-open.file_svg]:w-[13px] [&_.attachment-chip_.attachment-open.file_svg]:h-[13px] [&_.attachment-chip_.attachment-name]:text-caption [&_.comments-chip-x]:w-[18px] [&_.comments-chip-x]:h-[18px] [&_.comments-chip-x]:right-[3px] [&_.comments-chip-x_svg]:w-[11px] [&_.comments-chip-x_svg]:h-[11px] [&_.chip-more]:h-6 [&_.chip-more]:p-[0_8px] [&_.chip-more]:rounded-(--radius-s) [&_.chip-more]:text-caption [&_.comments-chip:hover_.attachment-open.file]:[mask-image:linear-gradient(to_right,_#000_calc(100%_-_38px),_transparent_calc(100%_-_12px))] [&_.comments-chip:focus-within_.attachment-open.file]:[mask-image:linear-gradient(to_right,_#000_calc(100%_-_38px),_transparent_calc(100%_-_12px))] [&_.attachment-chip_button.comments-chip-x]:w-[18px] [&_.attachment-chip_button.comments-chip-x]:h-[18px] [&_.attachment-chip_button.comments-chip-x]:right-[3px] flex flex-wrap items-center gap-1 m-[0_0_4px]">
             {chips}
@@ -577,7 +601,13 @@ export function Composer({
               ? ''
               : value
           }
-          placeholder={dictation.snapshot.state.phase === 'recording' ? t('Listening…') : t(placeholder)}
+          placeholder={
+            dictation.snapshot.state.phase === 'recording'
+              ? t('Listening…')
+              : predicted.length
+                ? `${predicted[0]}  ·  ${t('Tab to use')}`
+                : t(placeholder)
+          }
           onPaste={(event) => {
             if (!onAttachmentsChange) return
             const files = [...event.clipboardData.files]
@@ -636,6 +666,25 @@ export function Composer({
               if (((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') && suggestions.choices.length) {
                 e.preventDefault()
                 choose(suggestions.selected)
+                return
+              }
+            }
+            if (
+              predicted.length &&
+              !e.nativeEvent.isComposing &&
+              !e.shiftKey &&
+              !e.altKey &&
+              !e.metaKey &&
+              !e.ctrlKey
+            ) {
+              if (e.key === 'Tab') {
+                e.preventDefault()
+                onChange(predicted[0]!)
+                return
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                setDismissed(nextMessages ?? null)
                 return
               }
             }

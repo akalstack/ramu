@@ -8,6 +8,15 @@ Pick another model while a turn runs and Ramu waits five seconds (**Apply now** 
 
 Codex models and the Claude models that have fast mode (Opus and Fable) offer **Standard** and **Fast** in the model picker. Fast answers sooner at a higher usage cost. On Claude it's Claude Code's fast mode, set per thread: a thread on Standard never picks up a fast mode saved in Claude Code's own settings.
 
+## Suggested next message
+
+After a turn ends, the empty message box shows a likely next message in grey, such as "Run the tests" or "Commit this and open a pull request". **Tab** puts it in the box to edit or send. It is never sent by itself. Up to two other suggestions sit above the box as chips. Typing anything, or **Escape**, hides them until the next turn. On the phone all of them are chips above the message box, and tapping one puts it in the box.
+
+- It is asked of the thread's own session, which already has the conversation, so it costs a small cached request. A provider that can't do that gets the end of the conversation read by your maintenance model instead. Either way the request also says what Ramu knows: the thread's goal and whether there are uncommitted changes.
+- It is made only for a thread you have open, once per turn, and the desktop and the phone show the same suggestions.
+- Nothing is suggested while the agent works or waits on you, after a turn that failed, was stopped or hit a usage limit, while messages are queued, or when no next step is clear.
+- **Settings → Threads → Suggest next message** turns it off.
+
 ## Compacting a long Claude thread
 
 Claude keeps a thread's conversation in its prompt cache for an hour on a subscription and five minutes on an API key. Once a Claude thread over 200K tokens has sat idle longer than that, its next message re-reads the whole conversation at full cost. The composer then shows **Compact · 240K** beside Send, and Send becomes **Compact and send**: Ramu sends `/compact` and your message runs right after it, against the summary. Select the chip to switch to **Keep · 240K** and send with the full history. The choice applies to that one message.

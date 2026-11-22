@@ -8011,6 +8011,11 @@ export const indonesian: Readonly<Record<string, string>> = {
   'Card from the agent': 'Kartu dari agent',
   'From a card': 'Dari kartu',
   Card: 'Kartu',
+  'Suggest next message': 'Sarankan pesan berikutnya',
+  'After a turn, show a likely next message in the empty message box. Tab uses it. Each one is a small extra request on your plan, made only for a thread you have open.':
+    'Setelah satu giliran, tampilkan pesan berikutnya yang mungkin di kotak pesan yang kosong. Tab memakainya. Tiap saran adalah satu permintaan kecil tambahan pada paketmu, dan hanya dibuat untuk thread yang sedang kamu buka.',
+  'Tab to use': 'Tab untuk memakai',
+  'Suggested next messages': 'Saran pesan berikutnya',
   'Create project': 'Buat proyek',
   'Your next project goes in the same place unless you change it.':
     'Proyek berikutnya ditaruh di tempat yang sama kecuali kamu mengubahnya.',

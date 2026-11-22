@@ -353,6 +353,13 @@ export const SETTINGS_ROWS: Partial<Record<SettingsSection, RowGroup[]>> = {
           words: 'async asynchronous optional blocking related grouped answers pending input',
         },
         {
+          kind: 'toggle',
+          path: 'suggestNextMessage',
+          title: 'Suggest next message',
+          help: 'After a turn, show a likely next message in the empty message box. Tab uses it. Each one is a small extra request on your plan, made only for a thread you have open.',
+          words: 'predict prediction next prompt autocomplete ghost tab suggestion follow up',
+        },
+        {
           kind: 'choice',
           path: 'autoBackgroundSeconds',
           advanced: true,

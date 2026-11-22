@@ -92,6 +92,12 @@ export function ChatsSettings({ draft, onChange, busy }: DraftProps) {
         title="Keep working while asking questions"
         description="Let the agent continue independent work while it waits for your answer. Applies when a thread starts or restarts."
       />
+      <ToggleRow
+        {...toggleProps}
+        setting="suggestNextMessage"
+        title="Suggest next message"
+        description="After a turn, show a likely next message in the empty message box. Tab uses it. Each one is a small extra request on your plan, made only for a thread you have open."
+      />
       <SettingsGroupTitle>{t('Sidebar')}</SettingsGroupTitle>
       <SettingsRow setting="recentChatMode">
         <SettingsLabel

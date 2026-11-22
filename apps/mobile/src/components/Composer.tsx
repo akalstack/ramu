@@ -15,6 +15,7 @@ import {
   ActionSheetIOS,
   type TextStyle,
   View,
+  ScrollView,
 } from 'react-native'
 import { MenuView } from '@react-native-menu/menu'
 import { markdownRuns, type MarkdownMark } from '@ramu/shared/chat/markdownRuns'
@@ -712,7 +713,10 @@ export function Composer({
   extraContent,
   onFindQuote,
   compaction,
+  nextMessages,
 }: {
+  /** Predicted next messages for an empty box, shown as chips above it; tapping one puts it in the box to edit or send. */
+  nextMessages?: string[]
   /**
    * An idle Claude thread past its prompt cache: Send can compact the history first. The screen decides what sending
    * does; the composer shows the choice beside Send.
@@ -1197,6 +1201,19 @@ export function Composer({
         </View>
       ) : null}
       {limited && chatId ? <LimitTray chatId={chatId} /> : null}
+      {!text && nextMessages?.length ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          accessibilityLabel={say('Suggested next messages')}
+          contentContainerStyle={{ gap: space.xs, paddingHorizontal: space.m, paddingBottom: space.xs }}
+        >
+          {nextMessages.map((message) => (
+            <Chip key={message} small label={message} maxLabelWidth={260} onPress={() => edit(message)} />
+          ))}
+        </ScrollView>
+      ) : null}
       {activity}
       {!activity && (
         <GoalQueueTray
