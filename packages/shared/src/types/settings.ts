@@ -82,8 +82,6 @@ export interface AppPreferences extends WorkspaceDefaults {
   autoProjectSelection: boolean
   /** Agents may start threads the person owns, here and on other hosts, and a paired host's agents may start them here. */
   agentThreads: boolean
-  /** The main agent may suggest a model to bring in as a teammate; each suggestion asks the person first. */
-  teammateSuggestions: boolean
   /** The host reads public model catalogs (models.dev, LiteLLM) daily for release and retirement dates. */
   modelCatalogLookups: boolean
   /** Every device is told once when a provider starts offering a model the host has not seen it offer before. */
@@ -218,7 +216,6 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   warnModelChange: true,
   autoProjectSelection: true,
   agentThreads: true,
-  teammateSuggestions: true,
   modelCatalogLookups: true,
   newModelNotices: true,
   hostDescription: '',

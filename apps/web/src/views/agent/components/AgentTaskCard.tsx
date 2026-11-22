@@ -19,7 +19,6 @@ export function AgentTaskCard({
   live,
   onOpen,
   onStop,
-  onContinue,
   readOnly = false,
 }: {
   task: AgentTask
@@ -27,8 +26,6 @@ export function AgentTaskCard({
   onOpen: () => void
   readOnly?: boolean
   onStop: (task: AgentTask) => void
-  /** Lets a teammate exchange that paused for the person go on. */
-  onContinue?: () => void
 }) {
   useLanguage()
   const { offline } = useHostConnection()
@@ -40,13 +37,12 @@ export function AgentTaskCard({
     status === 'running'
       ? reportPreview(task.summary ?? '') ||
         (task.lastTool ? translate('Using {0}', { 0: toolLabel(task.lastTool) }) : translate('Starting…'))
-      : // A teammate's report follows in the thread, so its card does not repeat it.
-        !task.teammate && final && final.toLowerCase() !== TASK_STATUS[status].toLowerCase()
+      : final && final.toLowerCase() !== TASK_STATUS[status].toLowerCase()
         ? final
         : undefined
   return (
     <div
-      className={`agent-task-card [&.running]:[border-color:var(--line-strong)] [&:has(.agent-task-stop)_.agent-task-open]:pr-[44px] [&:has(.agent-task-continue)_.agent-task-open]:pr-[100px] relative flex items-stretch [border:1px_solid_transparent] rounded-(--radius-m) bg-raised ${status}`}
+      className={`agent-task-card [&.running]:[border-color:var(--line-strong)] [&:has(.agent-task-stop)_.agent-task-open]:pr-[44px] relative flex items-stretch [border:1px_solid_transparent] rounded-(--radius-m) bg-raised ${status}`}
     >
       <Button
         variant="secondary"
@@ -105,17 +101,6 @@ export function AgentTaskCard({
         </span>
         <ChevronRight size={14} className={CARET_CLASS} />
       </Button>
-      {actions.canContinue && onContinue && !readOnly && (
-        <Button
-          variant="secondary"
-          size="sm"
-          className="agent-task-continue absolute top-[50%] right-3 [translate:0_-50%]"
-          title={translate('Let the exchange with the main agent go on')}
-          onClick={onContinue}
-        >
-          {translate('Continue')}
-        </Button>
-      )}
       {actions.canStop && !readOnly && (
         <Button
           variant="ghost"

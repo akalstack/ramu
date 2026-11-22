@@ -1,13 +1,12 @@
 import { expect, it } from 'vitest'
 import { replaceVisibleMessage, visibleMessage } from '../src/chat/visibleMessage'
-import { teammateCatchUp } from '../src/chat/teammateMentions'
 
-it("shows only what the person wrote: Ramu's catch-up, guidance and appended context are left out", () => {
-  const sent = `${teammateCatchUp('ASSISTANT: Hi', ['a.ts'])}<ramu-session-guidance>\nUse tools.\n</ramu-session-guidance>\n\ngreat\n\n<ramu-context>\nfiles\n</ramu-context>`
+it("shows only what the person wrote: Ramu's guidance and appended context are left out", () => {
+  const sent = `<chat-context>\nASSISTANT: Hi\n</chat-context>\n<ramu-session-guidance>\nUse tools.\n</ramu-session-guidance>\n\ngreat\n\n<ramu-context>\nfiles\n</ramu-context>`
   expect(visibleMessage(sent)).toBe('great')
   expect(visibleMessage('plain words')).toBe('plain words')
   // Tags the person typed in the middle of a message stay.
-  expect(visibleMessage('explain <thread-catch-up> please')).toBe('explain <thread-catch-up> please')
+  expect(visibleMessage('explain <chat-context> please')).toBe('explain <chat-context> please')
 })
 
 it('replaces only what the person wrote, keeping leading blocks and appended context', () => {

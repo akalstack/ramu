@@ -354,21 +354,6 @@ test("the agent's background commands are processes, so the phone lists them wit
   )
 })
 
-test('a message to a teammate heads its own turn, so the lead’s answer above it stays out of Worked for', () => {
-  const items = transcript([
-    { kind: 'user', text: 'Add a reset flow', at: 1000 },
-    { kind: 'tool-use', toolUseId: 't', name: 'Bash', summary: 'ls', at: 1500 },
-    { kind: 'tool-result', toolUseId: 't', summary: 'ok', isError: false },
-    { kind: 'text', text: 'Added it.' },
-    { kind: 'result', isError: false, text: 'Added it.', at: 3000 },
-    { kind: 'teammate-message', teammateId: 'm', name: 'Opus 5.5', text: 'Review it', at: 4000 },
-    { kind: 'agent', agentId: 'm', name: 'Opus 5.5', teammate: 'review', status: 'running', at: 4001 },
-  ])
-  const kinds = foldTurns(items, false, false).map((item) => item.kind)
-  assert.deepEqual(kinds.slice(0, 3), ['user', 'summary', 'text'])
-  assert.equal(kinds[3], 'teammate-message')
-})
-
 test('work after a finished turn opens a running turn instead of folding into the finished one', () => {
   const events = [
     ...finished,

@@ -19,7 +19,7 @@ import { markdownRuns, type MarkdownMark } from '@ramu/shared/chat/markdownRuns'
 import { composerDraft } from '@ramu/shared/chat/composerDraft'
 import { fileContextKey } from '@ramu/shared/chat/fileContext'
 import { contextTokensShort } from '@ramu/shared/chat/compaction'
-import { SuggestionList, useComposerSuggest, type ComposerTeammate } from './ComposerSuggest'
+import { SuggestionList, useComposerSuggest, type ComposerMentions } from './ComposerSuggest'
 import {
   ArrowUp,
   Pencil,
@@ -695,7 +695,7 @@ export function Composer({
   taskId,
   scope,
   chatId,
-  teammate,
+  helpers,
   onFindQuote,
   compaction,
 }: {
@@ -754,8 +754,8 @@ export function Composer({
   /** The thread is held at a usage limit: the send button reads Queue and the model chip carries a marker. */
   limited?: boolean
   onCancelEdit?: () => void
-  /** The chat's teammate, or how to add one, for `@` and `/teammate`. */
-  teammate?: ComposerTeammate
+  /** Models, custom agents and abilities a message can start with as `@handle`, to hand it to a helper. */
+  helpers?: ComposerMentions
 }) {
   const textInput = useRef<import('react-native').TextInputInstance>(null)
   useEffect(() => {
@@ -817,7 +817,7 @@ export function Composer({
     chatId,
     text: split.body,
     caret,
-    teammate,
+    mentions: helpers,
   })
   // Takes the editable body (without quotes) and keeps the quotes in front of it in the draft.
   const save = (next: string) => {
@@ -931,17 +931,17 @@ export function Composer({
     edit(next.text)
     setCaret(next.caret)
     setForced({ start: next.caret, end: next.caret })
-    // Picking who the message goes to turns it into the chip straight away.
-    const first = composerDraft(splitQuotes(next.text).body, teammate?.mentions).chips[0]
+    // Picking a helper turns it into the chip straight away.
+    const first = composerDraft(splitQuotes(next.text).body, helpers?.mentions).chips[0]
     setChipped(first?.kind === 'mention' && first.start === 0 ? (first.target ?? null) : null)
   }
   const [chipped, setChipped] = useState<string | null>(null)
-  // A message that starts with an @model or @teammate shows who it goes to as a chip before the text field, with the
+  // A message that starts with an @model or @custom-agent shows which helper it asks for as a chip before the text field, with the
   // model's icon, since a native text field cannot hold one. The field edits what follows; the draft keeps it all.
   const named = useMemo(() => {
-    const first = composerDraft(split.body, teammate?.mentions).chips[0]
+    const first = composerDraft(split.body, helpers?.mentions).chips[0]
     return first?.kind === 'mention' && first.start === 0 ? first : null
-  }, [split.body, teammate?.mentions])
+  }, [split.body, helpers?.mentions])
   const lead = named && named.target === chipped ? named : null
   // Picked from the list it becomes the chip at once. Typed by hand, it does once typing pauses: rewriting a native
   // field between keystrokes loses or repeats what was typed.
@@ -1298,7 +1298,7 @@ export function Composer({
           {lead ? (
             <View
               accessible
-              accessibilityLabel={translate(store.language, 'To {0}', { 0: lead.label })}
+              accessibilityLabel={translate(store.language, 'Ask {0}', { 0: lead.label })}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',

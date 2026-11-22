@@ -40,7 +40,7 @@
   border-top: 1px solid var(--line);
 }
 
-/* Live work (teammates, browser, computer, background commands, a goal) folds into a stack (see TrayStack): the first
+/* Live work (agents, browser, computer, background commands, a goal) folds into a stack (see TrayStack): the first
    card is the tray's own row and the rest wait in a layer above the tray, whose edges peek over it. Pointing at the
    tray or focusing inside (`data-peek`) fades that layer in, and an open section keeps it there. The layer is never
    in the layout, so the conversation does not move while the stack spreads or folds. */

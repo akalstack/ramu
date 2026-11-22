@@ -27,10 +27,10 @@ export function TaskStatusIcon({ status, active = true }: { status: AgentTask['s
 }
 
 /**
- * The small tag beside a helper's name that says what it is: Teammate · Review, Sub-agent · Explore, Advisor, Command.
+ * The small tag beside a helper's name that says what it is: Sub-agent · Explore, Advisor, Command.
  * One card design serves them all; this is what tells them apart.
  */
-export function RoleTag({ task }: { task: Pick<AgentTask, 'teammate' | 'taskType' | 'agentType'> }) {
+export function RoleTag({ task }: { task: Pick<AgentTask, 'taskType' | 'agentType'> }) {
   useLanguage()
   const { label, detail } = helperRole(task)
   return (
@@ -59,7 +59,7 @@ export function HelperIcon({ task }: { task?: Pick<AgentTask, 'taskType' | 'prov
   )
 }
 
-/** A teammate named for its model (Sonnet 5.5 for `sonnet`) need not name the model again. */
+/** A helper named for its model (Sonnet 5.5 for `sonnet`) need not name the model again. */
 const namesModel = (name: string, model: string) => name.toLowerCase().includes(modelDisplayName(model).toLowerCase())
 
 /** Tool uses, time and tokens, as far as the provider reports them. */
@@ -85,7 +85,7 @@ export function taskMeta(task: AgentTask, status: AgentTask['status']): string {
     .join(' · ')
 }
 
-/** What the teammate changed and what it cost so far, e.g. "2 files +40 −5 · 3 turns · $0.12". */
+/** What the helper changed and what it cost so far, e.g. "2 files +40 −5 · 3 turns · $0.12". */
 export function workSummary(work: AgentWork): string {
   const changes = work.files
     ? `${work.files === 1 ? t('1 file') : t('{0} files', { 0: work.files })} +${work.added} −${work.removed}`

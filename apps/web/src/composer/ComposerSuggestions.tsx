@@ -4,11 +4,10 @@ import { errorText } from '../lib/errors'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/desktop-button'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { AgentModel, FileContext, SkillInfo, TeammateMode } from '@ramu/shared/types'
-import type { CustomAgent } from '@ramu/shared/customAgents'
-import { modelHandle } from '@ramu/shared/chat/teammateMentions'
+import type { AgentModel, FileContext, SkillInfo } from '@ramu/shared/types'
+import { customAgentHandle, type CustomAgent } from '@ramu/shared/customAgents'
+import { modelHandle } from '@ramu/shared/chat/helperMentions'
 import { providerName } from '@ramu/shared/providers/providers'
-import { teammateHandle } from '@ramu/shared/chat/agentTasks'
 import { useHost } from '../workspace/HostProvider'
 import { useWorkspace } from '../workspace/workspace'
 import { readBuffer, readSelection } from '../editor/editorBuffers'
@@ -27,23 +26,19 @@ interface Choice {
   id: string
   label: string
   description: string
-  kind: 'Command' | 'Skill' | 'File' | 'Teammate' | 'Model' | 'Agent'
+  kind: 'Command' | 'Skill' | 'File' | 'Model' | 'Agent'
   insertion?: string
   file?: { repoId: string; path: string }
   action?: () => void
 }
 /**
- * Who `@` at the start of a message can reach: teammates already in the thread, and models and custom agents that join
- * it as one when the message is sent. `/teammate` starts a message to the thread's model, with its settings in the composer.
+ * Who `@` at the start of a message can hand it to: a model or custom agent the thread's agent starts as a helper.
  */
-export interface ComposerTeammate {
-  teammates: { name: string; mode: TeammateMode }[]
+export interface ComposerHelpers {
   models: AgentModel[]
   agents: CustomAgent[]
   /** Who a message can start with, so `@sonnet-5.5` draws as that model rather than a file. */
   mentions?: DraftMention[]
-  /** Starts a message to a new teammate; absent when this device may only view. */
-  onAdd?: () => void
 }
 
 export function useComposerSuggestions(
@@ -51,7 +46,7 @@ export function useComposerSuggestions(
   caret: number,
   scopeId?: string,
   chat = false,
-  team?: ComposerTeammate,
+  helpers?: ComposerHelpers,
 ) {
   const language = useLanguage()
 
@@ -114,54 +109,28 @@ export function useComposerSuggestions(
     Object.values(ws.repos)
       .flat()
       .find((r) => r.id === repoId)?.name ?? repoId
-  const onAddTeammate = team?.onAdd
   const choices = useMemo(() => {
-    const here = team?.teammates ?? []
-    const handles = new Set(here.map((entry) => teammateHandle(entry.name)))
-    // Only a message that starts with the mention goes to a teammate, so they are offered only there.
-    const teammates: Choice[] = [
-      ...here.map((entry) => ({
-        id: `teammate:${entry.name}`,
-        label: `@${teammateHandle(entry.name)}`,
-        description: t('Talk to teammate {0} · {1}', {
-          0: entry.name,
-          1: entry.mode === 'take-over' ? t('Take over') : t('Review'),
-        }),
-        kind: 'Teammate' as const,
-        insertion: `@${teammateHandle(entry.name)} `,
+    const agentHandles = new Set((helpers?.agents ?? []).map((agent) => customAgentHandle(agent.name)))
+    // Only a message that starts with the mention goes to a helper, so they are offered only there.
+    const mentions: Choice[] = [
+      ...(helpers?.agents ?? []).map((agent) => ({
+        id: `agent:${agent.id}`,
+        label: `@${customAgentHandle(agent.name)}`,
+        description: agent.description || t('Custom agent'),
+        kind: 'Agent' as const,
+        insertion: `@${customAgentHandle(agent.name)} `,
       })),
-      ...(team?.agents ?? [])
-        .filter((agent) => !handles.has(teammateHandle(agent.name)))
-        .map((agent) => ({
-          id: `agent:${agent.id}`,
-          label: `@${teammateHandle(agent.name)}`,
-          description: agent.description || t('Custom agent'),
-          kind: 'Agent' as const,
-          insertion: `@${teammateHandle(agent.name)} `,
-        })),
-      ...(team?.models ?? [])
-        .filter((model) => !model.isLegacy && !handles.has(modelHandle(model)))
+      ...(helpers?.models ?? [])
+        .filter((model) => !model.isLegacy && !agentHandles.has(modelHandle(model)))
         .map((model) => ({
           id: `model:${model.provider}:${model.id}`,
           label: `@${modelHandle(model)}`,
-          description: t('{0} joins this thread and reviews', {
+          description: t('A helper on {0} reviews this', {
             0: `${model.name || model.id} · ${providerName(model.provider)}`,
           }),
           kind: 'Model' as const,
           insertion: `@${modelHandle(model)} `,
         })),
-      ...(onAddTeammate
-        ? [
-            {
-              id: 'add-teammate',
-              label: t('Add teammate…'),
-              description: t("Messages this thread's model. Change the model, or pick Review or Take over below"),
-              kind: 'Teammate' as const,
-              insertion: '',
-              action: onAddTeammate,
-            },
-          ]
-        : []),
     ]
     const commands: Choice[] = [
       { id: 'new', label: '/new', description: t('Start a new thread'), kind: 'Command', action: () => ws.newTask() },
@@ -279,18 +248,6 @@ export function useComposerSuggestions(
             },
           ]
         : []),
-      ...(onAddTeammate
-        ? [
-            {
-              id: 'teammate',
-              label: '/teammate',
-              description: t('Bring another model into this thread'),
-              kind: 'Command' as const,
-              insertion: '',
-              action: onAddTeammate,
-            },
-          ]
-        : []),
       { id: 'clear', label: '/clear', description: t('Clear this draft'), kind: 'Command', insertion: '' },
       // A chat's composer only: the question goes to an aside, never to the agent.
       ...(chat
@@ -315,7 +272,7 @@ export function useComposerSuggestions(
     const options: Choice[] =
       mode === '@'
         ? [
-            ...(trigger?.start === 0 ? teammates : []),
+            ...(trigger?.start === 0 ? mentions : []),
             ...files.map((file): Choice => ({
               id: `${file.repoId}:${file.path}`,
               label: `${repoName(file.repoId)}/${file.path}`,
@@ -348,8 +305,7 @@ export function useComposerSuggestions(
     chat,
     preferences.memory.enabled,
     preferences.intelligence.learning,
-    team,
-    onAddTeammate,
+    helpers,
     trigger?.start,
   ])
   const hydrate = (): FileContext[] => {

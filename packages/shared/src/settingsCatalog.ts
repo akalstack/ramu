@@ -265,13 +265,6 @@ export const SETTINGS_CATALOG: SettingsCatalogEntry[] = [
     words: 'notify notification alert done finished system toast',
   },
   {
-    section: 'chats',
-    title: 'Let agents suggest teammates',
-    path: 'teammateSuggestions',
-    help: "The thread's agent may suggest bringing another model in, for example to review its work. Each suggestion asks you first and says which login it uses.",
-    words: 'teammate review second model suggest invite',
-  },
-  {
     section: 'models',
     title: 'Look up model dates online',
     path: 'modelCatalogLookups',

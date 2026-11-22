@@ -4,11 +4,10 @@ import type { DraftMention } from '@ramu/shared/chat/composerDraft'
 import { ActivityIndicator, Alert, Pressable, ScrollView, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Command, FileText, Sparkles, Users } from 'lucide-react-native'
-import type { AgentModel, SkillInfo, TeammateMode } from '@ramu/shared/types'
-import type { CustomAgent } from '@ramu/shared/customAgents'
-import { modelHandle } from '@ramu/shared/chat/teammateMentions'
+import type { AgentModel, SkillInfo } from '@ramu/shared/types'
+import { customAgentHandle, type CustomAgent } from '@ramu/shared/customAgents'
+import { modelHandle, type AbilityModels } from '@ramu/shared/chat/helperMentions'
 import { providerName } from '@ramu/shared/providers/providers'
-import { teammateHandle } from '@ramu/shared/chat/agentTasks'
 import { acceptComposerTrigger, composerTrigger } from '@ramu/shared/chat/composerTrigger'
 import { font, space, useTheme } from '../theme'
 import { useStore } from '../runtime/store'
@@ -18,23 +17,22 @@ export interface Choice {
   id: string
   label: string
   description: string
-  kind: 'Command' | 'Skill' | 'File' | 'Teammate' | 'Model' | 'Agent'
+  kind: 'Command' | 'Skill' | 'File' | 'Model' | 'Agent'
   insertion?: string
   file?: { repoId: string; path: string }
   run?: () => void
 }
 /**
- * Who `@` at the start of a message can reach: teammates already in the chat, and models and custom agents that join it
- * as one when the message is sent. `/teammate` opens the full Add teammate sheet.
+ * Who `@` at the start of a message can name: models, custom agents and abilities. The message still goes to the main
+ * agent, which hands it to a helper of that kind.
  */
-export interface ComposerTeammate {
-  teammates: { name: string; mode: TeammateMode }[]
+export interface ComposerMentions {
   models: AgentModel[]
   agents: CustomAgent[]
+  /** The model each `@ability` handle starts a helper on here. */
+  abilities?: AbilityModels
   /** Who a message can start with, so `@sonnet-5.5` draws as that model rather than a file. */
   mentions?: DraftMention[]
-  /** Starts a message to a new teammate; absent when this phone may only view. */
-  onAdd?: () => void
 }
 interface Loaded {
   computerId: string
@@ -54,14 +52,14 @@ export function useComposerSuggest({
   chatId,
   text,
   caret,
-  teammate,
+  mentions,
 }: {
   computerId: string
   scope?: string
   chatId?: string
   text: string
   caret: number
-  teammate?: ComposerTeammate
+  mentions?: ComposerMentions
 }) {
   const store = useStore()
   const say = useSay()
@@ -118,54 +116,34 @@ export function useComposerSuggest({
   }, [visible, scope, online, computerId])
   const data = loaded && loaded.scope === scope && loaded.computerId === computerId ? loaded : undefined
 
-  const onAddTeammate = teammate?.onAdd
   const choices = useMemo<Choice[]>(() => {
     if (!mode) return []
     const go = (to: Parameters<typeof router.push>[0]) => () => router.push(to)
-    const here = teammate?.teammates ?? []
-    const handles = new Set(here.map((entry) => teammateHandle(entry.name)))
-    // Only a message that starts with the mention goes to a teammate, so they are offered only there.
-    const teammates: Choice[] = [
-      ...here.map((entry) => ({
-        id: `teammate:${entry.name}`,
-        label: `@${teammateHandle(entry.name)}`,
-        description: say('Talk to teammate {0} · {1}', {
-          0: entry.name,
-          1: entry.mode === 'take-over' ? say('Take over') : say('Review'),
-        }),
-        kind: 'Teammate' as const,
-        insertion: `@${teammateHandle(entry.name)} `,
+    // Only a message that starts with the mention goes to a helper, so they are offered only there.
+    const helpers: Choice[] = [
+      ...(mentions?.agents ?? []).map((agent) => ({
+        id: `agent:${agent.id}`,
+        label: `@${customAgentHandle(agent.name)}`,
+        description: agent.description || say('Custom agent'),
+        kind: 'Agent' as const,
+        insertion: `@${customAgentHandle(agent.name)} `,
       })),
-      ...(teammate?.agents ?? [])
-        .filter((agent) => !handles.has(teammateHandle(agent.name)))
-        .map((agent) => ({
-          id: `agent:${agent.id}`,
-          label: `@${teammateHandle(agent.name)}`,
-          description: agent.description || say('Custom agent'),
-          kind: 'Agent' as const,
-          insertion: `@${teammateHandle(agent.name)} `,
-        })),
-      ...(teammate?.models ?? [])
-        .filter((model) => !model.isLegacy && !handles.has(modelHandle(model)))
+      ...(Object.entries(mentions?.abilities ?? {}) as [string, AgentModel][]).map(([handle, model]) => ({
+        id: `ability:${handle}`,
+        label: `@${handle}`,
+        description: `${model.name || model.id} · ${providerName(model.provider)}`,
+        kind: 'Model' as const,
+        insertion: `@${handle} `,
+      })),
+      ...(mentions?.models ?? [])
+        .filter((model) => !model.isLegacy)
         .map((model) => ({
           id: `model:${model.provider}:${model.id}`,
           label: `@${modelHandle(model)}`,
-          description: `${model.name || model.id} · ${say('{0} joins this thread and reviews', { 0: providerName(model.provider) })}`,
+          description: `${model.name || model.id} · ${providerName(model.provider)}`,
           kind: 'Model' as const,
           insertion: `@${modelHandle(model)} `,
         })),
-      ...(onAddTeammate
-        ? [
-            {
-              id: 'add-teammate',
-              label: say('Add teammate…'),
-              description: say("Messages this thread's model. Change the model, or pick Review or Take over below"),
-              kind: 'Teammate' as const,
-              insertion: '',
-              run: onAddTeammate,
-            },
-          ]
-        : []),
     ]
     const commands: Choice[] = [
       { id: 'new', label: '/new', description: say('Start a new thread'), kind: 'Command', run: go('/new') },
@@ -287,25 +265,13 @@ export function useComposerSuggest({
           )
         },
       },
-      ...(onAddTeammate
-        ? [
-            {
-              id: 'teammate',
-              label: '/teammate',
-              description: say('Bring another model into this thread'),
-              kind: 'Command' as const,
-              insertion: '',
-              run: onAddTeammate,
-            },
-          ]
-        : []),
       { id: 'clear', label: '/clear', description: say('Clear this draft'), kind: 'Command', insertion: '' },
     ]
     const names = data?.names ?? {}
     const options: Choice[] =
       mode === '@'
         ? [
-            ...(trigger?.start === 0 ? teammates : []),
+            ...(trigger?.start === 0 ? helpers : []),
             ...(data?.files ?? []).map((file) => ({
               id: `${file.repoId}:${file.path}`,
               label: `${names[file.repoId] ?? ''}${names[file.repoId] ? '/' : ''}${file.path}`,
@@ -328,8 +294,8 @@ export function useComposerSuggest({
     return options
       .filter((choice) => `${choice.label} ${choice.description}`.toLowerCase().includes(query))
       .slice(0, 30)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [mode, query, data, chatId, computerId, teammate, onAddTeammate, trigger start, language] by design; the values it reads beyond these are current as of that run
-  }, [mode, query, data, chatId, computerId, teammate, onAddTeammate, trigger?.start, store.language])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes on [mode, query, data, chatId, computerId, mentions, trigger start, language] by design; the values it reads beyond these are current as of that run
+  }, [mode, query, data, chatId, computerId, mentions, trigger?.start, store.language])
 
   return {
     // `$` is ordinary text unless a skill matches, so it never shows an empty picker.
@@ -390,7 +356,7 @@ export function SuggestionList({
           >
             {choice.kind === 'File' ? (
               <FileText size={15} color={c.soft} />
-            ) : choice.kind === 'Teammate' || choice.kind === 'Model' || choice.kind === 'Agent' ? (
+            ) : choice.kind === 'Model' || choice.kind === 'Agent' ? (
               <Users size={15} color={c.accent} />
             ) : choice.kind === 'Skill' ? (
               <Sparkles size={15} color={c.accent} />

@@ -1,17 +1,9 @@
 // Structured agent service: the façade over the collaborators in ./agent/. Each owns one slice of the state (sessions,
 // queue, goals, routing, sub-agents, ...); this class builds them, wires their hosts and exposes the public API.
 import { mcpRequest, mcpServerDetails } from './agent/mcpStatus'
-import {
-  activeTeammates,
-  latestTasks,
-  leadNotePrompt,
-  leadQuestionPrompt,
-  namesTeammate,
-  teammateHandle,
-} from '@ramu/shared/chat/agentTasks'
+import { latestTasks } from '@ramu/shared/chat/agentTasks'
 import { clipText } from '@ramu/shared/text'
 import { providerName } from '@ramu/shared/providers/providers'
-import { teammateSettings } from '@ramu/shared/chat/teammateMentions'
 import { agentModelList, findModelByHandle, modelHandles } from '@ramu/shared/chat/modelChoice'
 import { RequestReplay } from './agent/requestReplay'
 import { customAgentFor, type CustomAgent } from '@ramu/shared/customAgents'
@@ -36,7 +28,6 @@ import type {
   SetupOmission,
   Schedule,
   StartedThread,
-  TeammateMode,
 } from '@ramu/shared/types'
 import type { UsageService } from './providers/usage'
 import { loadHelperHistory, type HelperHistoryLoader } from './agent/helperHistory'
@@ -55,7 +46,7 @@ import { CatalogService } from './agent/catalogService'
 import { FallbackRouter } from './agent/fallbackRouter'
 import { BackgroundAnalysis } from './agent/backgroundAnalysis'
 import { AdvisorService } from './agent/advisorService'
-import { SubagentRunner, TEAMMATE_PAUSED } from './agent/subagentRunner'
+import { SubagentRunner } from './agent/subagentRunner'
 import { AgentTasks } from './agent/agentTasks'
 import { SessionProcess } from './agent/sessionProcess'
 import { ClaudeStreamPump } from './agent/claudeStreamPump'
@@ -74,8 +65,24 @@ export { isUsageLimit } from './agent/usageLimit'
 /** No model signals yet; one object, so the catalog's classified result is reused. */
 const NO_SIGNALS = {}
 
-/** Teammates one thread holds at once; each is a model the person pays for. */
-const MAX_TEAMMATES = 4
+/**
+ * A helper's settings on a named model: the parent's own (access and fallback), on that model at its default effort.
+ * A login or fast mode belongs to the parent's provider, so it carries over only to the same one.
+ */
+function helperSettings(
+  base: AgentSettings,
+  model: Pick<AgentModel, 'provider' | 'id' | 'defaultEffort'>,
+): AgentSettings {
+  const same = model.provider === base.provider
+  return {
+    ...base,
+    provider: model.provider,
+    model: model.id,
+    effort: model.defaultEffort,
+    serviceTier: same ? base.serviceTier : 'standard',
+    accountId: same ? base.accountId : undefined,
+  }
+}
 
 export class AgentService {
   /** The collaborators that own the service's state; this class wires them together and exposes their public methods. */
@@ -188,7 +195,6 @@ export class AgentService {
       },
       clearProviderWait: (...a) => parts.providerWaits.clearProviderWait(...a),
       continueNative: (...a) => parts.subagents.continueNative(...a),
-      wakeTeammate: (...a) => parts.subagents.wakeTeammate(...a),
       controlGoal: (...a) => parts.goals.controlGoal(...a),
       createSession: (...a) => parts.store.createSession(...a),
       dispatchQueued: (...a) => parts.dispatcher.dispatchQueued(...a),
@@ -941,141 +947,6 @@ export class AgentService {
     return this.parts.router.subagentSettings(...args)
   }
 
-  /**
-   * Brings a model the person chose into this thread as a teammate, named as the model menu names it (numbered when the
-   * same model is already here). A thread holds up to four.
-   */
-  async addTeammate(
-    sessionId: string,
-    settings: AgentSettings,
-    mode: TeammateMode,
-    request: string,
-    from: 'person' | 'lead' = 'person',
-  ) {
-    const lead = this.get(sessionId)
-    if (lead.parentId) throw new Error('Add a teammate to the main thread, not to a helper.')
-    const here = activeTeammates(latestTasks(this.events(sessionId)))
-    if (here.length >= MAX_TEAMMATES)
-      throw new Error(`This thread already has ${MAX_TEAMMATES} teammates. Stop one before adding another.`)
-    // Review never writes, whatever the thread allows; Take over cannot exceed the thread's own access.
-    const access = mode === 'review' ? 'edits' : lead.settings.access
-    const listed = (await this.catalog().catch(() => []))
-      .flatMap((catalog) => catalog.models)
-      .find((model) => model.provider === settings.provider && model.id === settings.model)
-    const base = clipText(listed?.name || settings.model || settings.provider, 60)
-    const taken = new Set(here.map((task) => teammateHandle(task.name)))
-    let name = base
-    for (let n = 2; taken.has(teammateHandle(name)); n++) name = `${base} ${n}`
-    return this.parts.subagents.spawnSubagent(sessionId, {
-      description: 'Teammate',
-      prompt:
-        request.trim() ||
-        (mode === 'review'
-          ? 'Review what the lead has done so far and reply with your findings.'
-          : 'Take over the latest request and hand back when done.'),
-      background: true,
-      name,
-      settings: { ...settings, access },
-      teammate: mode,
-      ...(from === 'person' ? { personRequest: request } : {}),
-    })
-  }
-
-  /**
-   * teammate_message: the lead and its teammate address each other by name. The lead's note wakes the teammate, whose
-   * next report comes back; the teammate's note reaches the lead at once. Both count toward the pause for the person.
-   */
-  async teammateMessage(fromId: string, to: string, text: string): Promise<{ to: string }> {
-    if (this.get(fromId).parentId) {
-      await this.parts.subagents.messageLead(fromId, to, text)
-      return { to: 'lead' }
-    }
-    const here = activeTeammates(latestTasks(this.events(fromId)))
-    if (!here.length) throw new Error('This thread has no teammate. The person adds one with @ or the thread menu.')
-    const named = here.filter((task) => namesTeammate(to, task.name))
-    const teammate = named.length === 1 ? named[0]! : null
-    if (!teammate)
-      throw new Error(`Name one teammate: ${here.map((task) => `"${teammateHandle(task.name)}"`).join(', ')}.`)
-    if (this.parts.subagents.teammatePaused(fromId)) throw new Error(TEAMMATE_PAUSED)
-    await this.parts.tasks.messageTask(fromId, teammate.agentId, leadNotePrompt(text))
-    return { to: teammateHandle(teammate.name) }
-  }
-
-  /** teammate_ask: the lead asks one teammate by name and gets its reply as the tool's result. */
-  async teammateAsk(fromId: string, to: string, question: string, signal?: AbortSignal): Promise<{ reply: string }> {
-    if (this.get(fromId).parentId) throw new Error('Only the main agent asks teammates; use teammate_message.')
-    const here = activeTeammates(latestTasks(this.events(fromId)))
-    if (!here.length) throw new Error('This thread has no teammate. The person adds one with @ or the thread menu.')
-    const named = here.filter((task) => namesTeammate(to, task.name))
-    if (named.length !== 1)
-      throw new Error(`Name one teammate: ${here.map((task) => `"${teammateHandle(task.name)}"`).join(', ')}.`)
-    const teammate = named[0]!
-    const reply = await this.parts.subagents.askTeammate(
-      fromId,
-      teammate.agentId,
-      () => this.parts.tasks.messageTask(fromId, teammate.agentId, leadQuestionPrompt(question)),
-      signal,
-    )
-    return { reply }
-  }
-
-  /**
-   * teammate_suggest: the main agent proposes bringing a model in, usually to review its work. The person approves or
-   * declines on the usual approval card, which says which login pays; a decline holds further suggestions until they
-   * write. Approved, the model joins in Review with the agent's request.
-   */
-  async suggestTeammate(
-    sessionId: string,
-    input: { model: string; reason: string; request: string },
-    signal?: AbortSignal,
-  ): Promise<{ added?: string; declined?: boolean; message: string }> {
-    const lead = this.get(sessionId)
-    if (lead.parentId) throw new Error('Only the main agent suggests teammates.')
-    if (this.preferences?.().teammateSuggestions === false)
-      throw new Error('The person turned teammate suggestions off. Do not suggest one.')
-    if (this.parts.subagents.suggestionDeclined.has(sessionId))
-      return {
-        declined: true,
-        message: 'The person declined a teammate already. Do not suggest another until they write.',
-      }
-    const model = await this.modelNamed(input.model)
-    const settings = teammateSettings(lead.settings, model)
-    const accounts = this.preferences?.().providerBinaries[model.provider]?.accounts ?? []
-    const login = settings.accountId
-      ? (accounts.find((entry) => entry.id === settings.accountId)?.name ?? settings.accountId)
-      : 'its default login'
-    const allowed = await this.parts.requests.requestPermission(
-      sessionId,
-      `bringing ${model.name || model.id} in as a teammate`,
-      [
-        clipText(input.reason.trim(), 600),
-        `Runs on ${providerName(model.provider)} with ${login}, in Review: it reads and reports, never edits.`,
-        `It is asked: ${clipText(input.request.trim(), 1200)}`,
-      ].join('\n\n'),
-      signal,
-    )
-    if (!allowed) {
-      this.parts.subagents.suggestionDeclined.add(sessionId)
-      return { declined: true, message: 'The person chose not to add it. Do not suggest another until they write.' }
-    }
-    // The approval card already shows the agent's request.
-    const joined = await this.addTeammate(sessionId, settings, 'review', input.request, 'lead')
-    return {
-      added: teammateHandle(joined.name),
-      message: `${joined.name} joined in Review. Its report arrives as a message; reach it with teammate_ask or teammate_message.`,
-    }
-  }
-
-  /** Continue on a paused exchange: the same as writing, without having to write anything. */
-  continueTeammates(sessionId: string) {
-    this.resetTeammateRounds(sessionId)
-  }
-
-  /** The person wrote, so a teammate exchange that paused may continue. */
-  resetTeammateRounds(sessionId: string) {
-    this.parts.subagents.resetTeammateRounds(sessionId)
-  }
-
   /** Finished turns per local day and provider since `since`, with cost and tokens where the provider reported them. */
   activity(since: number): ActivityRow[] {
     // Ability calls count under the provider that ran them, not the thread's own.
@@ -1126,10 +997,10 @@ export class AgentService {
     return this.abilities ? { providers, abilities: this.abilities.listing() } : { providers }
   }
 
-  /** ramu_agent_status: the caller's own helpers (not teammates), or one of them. */
+  /** ramu_agent_status: the caller's own helpers, or one of them. */
   helperStatus(parentId: string, agentId?: string) {
     const helpers = latestTasks(this.events(parentId)).filter(
-      (task) => task.taskType === 'ramu_agent' && !task.teammate && (!agentId || task.agentId === agentId),
+      (task) => task.taskType === 'ramu_agent' && (!agentId || task.agentId === agentId),
     )
     if (agentId && !helpers.length) throw new Error('That is not one of your helpers.')
     return helpers.map((task) => ({
@@ -1175,14 +1046,14 @@ export class AgentService {
           throw new Error(
             `${providerName(named.provider)} does not have every ability this helper needs here. Leave out model and Ramu picks a provider that does.`,
           )
-        input = { ...input, settings: teammateSettings(parent.settings, named) }
+        input = { ...input, settings: helperSettings(parent.settings, named) }
       } else
-        input = { ...input, settings: teammateSettings(parent.settings, await this.abilities.helperModel(input.needs)) }
+        input = { ...input, settings: helperSettings(parent.settings, await this.abilities.helperModel(input.needs)) }
     }
     if (input.model && !input.settings) {
       const parent = this.get(parentId)
       // The parent's settings on the named model, so the helper keeps the parent's access and never gets more.
-      input = { ...input, settings: teammateSettings(parent.settings, await this.modelNamed(input.model)) }
+      input = { ...input, settings: helperSettings(parent.settings, await this.modelNamed(input.model)) }
     }
     const custom = input.custom ?? customAgentFor(this.customAgents(), input.type)
     if (custom && !input.custom) {
@@ -1233,19 +1104,12 @@ export class AgentService {
     return this.parts.tasks.stopTask(...args)
   }
 
-  dismissTeammate(...args: Parameters<AgentTasks['dismissTeammate']>) {
-    return this.parts.tasks.dismissTeammate(...args)
-  }
-
   messageTask(...args: Parameters<AgentTasks['messageTask']>) {
     return this.parts.tasks.messageTask(...args)
   }
 
-  /** The person writes to a helper. A teammate's message also shows in the lead's thread, above the report it gets. */
+  /** The person writes to a helper. */
   async messageFromPerson(sessionId: string, agentId: string, text: string) {
-    const task = this.task(sessionId, agentId)
-    if (task?.teammate && task.canMessage)
-      this.record(sessionId, { kind: 'teammate-message', teammateId: agentId, name: task.name, text: text.trim() })
     await this.parts.tasks.messageTask(sessionId, agentId, text)
   }
 

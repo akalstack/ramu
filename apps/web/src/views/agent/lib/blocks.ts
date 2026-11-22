@@ -14,7 +14,6 @@ const SILENT = new Set<AgentEvent['kind']>([
   'context',
   'custom-agent',
   'helper-role',
-  'teammate',
 ])
 
 /** Consecutive tool calls collapse into one line, like "Ran 2 commands". */

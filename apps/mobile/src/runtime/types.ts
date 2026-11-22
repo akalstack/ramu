@@ -48,10 +48,8 @@ export interface TranscriptTool {
 
 export type TranscriptItem = (
   | { kind: 'error'; id: string; message: string }
-  /** What a sub-agent or teammate sent back to the thread: who, how it ended (finished, failed, says…), and its words. */
+  /** What a sub-agent sent back to the thread: who, how it ended (finished, failed, says…), and its words. */
   | { kind: 'report'; id: string; name: string; verb: string; body: string }
-  /** What you wrote to a teammate: your bubble, addressed to it, heading the turn its report answers. */
-  | { kind: 'teammate-message'; id: string; teammateId: string; name: string; text: string; at?: number }
   | {
       kind: 'user'
       id: string

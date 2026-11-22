@@ -441,12 +441,11 @@ export class SessionProcess {
     const request = explicitGoal ? prompt.replace(/^\s*\/goal\s+/, 'Work toward this Ramu goal: ') : prompt
     const actualPrompt = `${rulesUpdate ?? ''}${carried ? `${carried.built.prompt}\n\nNext request: ${request}` : request}`
     const deltaResume = carried?.built.info.mode === 'delta' && !!carried.resume
-    // A Review teammate never writes, whatever the thread allows; its session records that it is one.
+    // A read-only helper never writes, whatever the thread allows; its session records that it is one.
     const marker = this.host
       .events(id)
-      .findLast((event) => event.kind === 'teammate' || event.kind === 'custom-agent' || event.kind === 'helper-role')
+      .findLast((event) => event.kind === 'custom-agent' || event.kind === 'helper-role')
     const readOnly =
-      (marker?.kind === 'teammate' && marker.mode === 'review') ||
       (marker?.kind === 'custom-agent' && marker.readOnly) ||
       (marker?.kind === 'helper-role' && helperRoleReadOnly(marker.role))
     if (this.host.usesRunner(s.provider)) {
@@ -657,7 +656,7 @@ export class SessionProcess {
       this.host.setState(id, 'stopped')
     }
     this.host.cancelPendingStarts(id)
-    // Bumped before its helpers stop: a teammate stopped with the thread must not report back and revive it.
+    // Bumped before its helpers stop, so a helper start that began earlier is cancelled as stale.
     this.host.revisions.set(id, (this.host.revisions.get(id) ?? 0) + 1)
     for (const [childId, run] of this.host.children) if (run.parentId === id) this.stop(childId)
     this.host.pauseQueue(id)

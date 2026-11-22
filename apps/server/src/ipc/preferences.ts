@@ -219,7 +219,6 @@ export const appPreferences = z.object({
   warnModelChange: z.boolean().default(true),
   autoProjectSelection: z.boolean().default(true),
   agentThreads: z.boolean().default(true).meta(personOnly),
-  teammateSuggestions: z.boolean().default(true),
   modelCatalogLookups: z.boolean().default(true),
   newModelNotices: z.boolean().default(true),
   hostDescription: z.string().trim().max(80).default(''),

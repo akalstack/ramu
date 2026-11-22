@@ -1,6 +1,6 @@
-// How an agent names a model for a helper or teammate (`opus-5.5`), and the short list it reads to choose one.
+// How an agent names a model for a helper (`opus-5.5`), and the short list it reads to choose one.
 import type { AgentModel, AgentProvider, ProviderCatalog } from '../types'
-import { modelHandle } from './teammateMentions'
+import { modelHandle } from './helperMentions'
 
 /** A current model before a legacy one with the same handle; a model id works too. */
 export function findModelByHandle(models: readonly AgentModel[], handle: string): AgentModel | undefined {

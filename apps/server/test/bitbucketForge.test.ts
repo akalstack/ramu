@@ -632,12 +632,12 @@ it('starts the source branch’s pipeline again only when its latest run failed'
 
 it('trusts commenters found among the workspace members, as GitHub trusts organization members', () => {
   const comment = (id: number, uuid: string) => ({ id, content: { raw: 'Look here' }, user: { uuid, nickname: uuid } })
-  const [teammate, stranger] = parseComments(
-    [comment(1, '{teammate}'), comment(2, '{stranger}')],
+  const [colleague, stranger] = parseComments(
+    [comment(1, '{colleague}'), comment(2, '{stranger}')],
     listRow,
     { uuid: '{me}' },
-    new Set(['{teammate}']),
+    new Set(['{colleague}']),
   )
-  expect(teammate!.comments[0]!.trusted).toBe(true)
+  expect(colleague!.comments[0]!.trusted).toBe(true)
   expect(stranger!.comments[0]!.trusted).toBe(false)
 })

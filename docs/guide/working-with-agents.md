@@ -10,7 +10,7 @@ Pick another model while a turn runs and Ramu waits five seconds (**Apply now** 
 
 Claude keeps a thread's conversation in its prompt cache for an hour on a subscription and five minutes on an API key. Once a Claude thread over 200K tokens has sat idle longer than that, its next message re-reads the whole conversation at full cost. The composer then shows **Compact · 240K** beside Send, and Send becomes **Compact and send**: Ramu sends `/compact` and your message runs right after it, against the summary. Select the chip to switch to **Keep · 240K** and send with the full history. The choice applies to that one message.
 
-Ramu uses the cache lifetime Claude reported for the thread's last reply, or an hour when it has none. The chip doesn't show while a turn runs or waits for your answer, for a command, a message to a teammate, an edited message or a model change still to apply, or for other providers. The host keeps each thread's last reading, so the chip still shows after Ramu restarts. It works the same on the desktop and the phone.
+Ramu uses the cache lifetime Claude reported for the thread's last reply, or an hour when it has none. The chip doesn't show while a turn runs or waits for your answer, for a command, an edited message or a model change still to apply, or for other providers. The host keeps each thread's last reading, so the chip still shows after Ramu restarts. It works the same on the desktop and the phone.
 
 ## Usage limits and fallback
 
@@ -31,7 +31,7 @@ The agent can start helpers for parts of a task. Helper cards show progress. Ope
 
   At a usage limit, helpers follow the thread's fallback order and threshold, and a provider's own helper that stops at a limit continues on the next model with what it had done. Up to three helpers run at once per thread. More wait for a slot.
 
-- A helper that would write beside other work gets its own copy of the checkout. That covers one running in the background while the thread goes on, and one started alongside another writing helper (including two the agent starts in the same step). Its changes come back when it finishes, and any that conflict stay in its copy for review. A helper the thread waits for alone, a read-only helper and a teammate work in the thread's own checkout, so their edits show as they happen. A helper card says **Own copy** when it has one.
+- A helper that would write beside other work gets its own copy of the checkout. That covers one running in the background while the thread goes on, and one started alongside another writing helper (including two the agent starts in the same step). Its changes come back when it finishes, and any that conflict stay in its copy for review. A helper the thread waits for alone and a read-only helper work in the thread's own checkout, so their edits show as they happen. A helper card says **Own copy** when it has one.
 - The agent can also choose for one helper:
   - a **model** by its handle, such as `opus-5.5` (the `agent_models` tool lists each provider's current models)
   - **isolation**: `worktree` for its own copy with the thread's uncommitted changes, or `shared` to work in the thread's checkout unless another helper is writing there
@@ -76,40 +76,25 @@ Some providers can do things others can't. Codex can search the web and, on logi
   - With the ability on **Auto**, **also try in Auto** offers one such tool after your signed-in providers. Auto reaches it only when no provider could run the call.
   - Before its first use, the first thread that needs it runs the ability's sample through the tool, with the same access and approvals (a sample image, or the five sample sites to find, which gives search tools a score). A tool whose check failed isn't used and is checked again a day later. Settings shows the result.
 - **Per project:** a project's `ramu.json` can override these choices, for example to keep a client's project to one provider or turn image generation off there ([Repository settings](configuration.md#repository-settings)).
-- **Teammates by ability:** start a message with `@images`, `@search` or `@long` to bring in a teammate on whichever provider and model this host picks for image generation, web search or long documents, chosen the same way as a helper's `needs`. The composer shows which model joins before you send, and the teammate's chip names it. A handle no provider here can serve isn't offered.
+- **Asking by ability:** start a message with `@images`, `@search` or `@long` to have the agent start a helper on whichever provider and model this host picks for image generation, web search or long documents, chosen the same way as a helper's `needs`. The mention shows which model that is before you send. A handle no provider here can serve isn't offered.
 
 Which abilities each provider offers on your host is in [Providers](providers.md#abilities).
 
-## Teammates
+## Asking for a helper by name
 
-A teammate is another model working in the thread beside its main agent, with its own session. Type `@` at the start of a message to choose who it goes to (desktop and phone):
+Start a message with `@` to ask for a particular helper (desktop and phone):
 
-- **A teammate already here**, by its name, such as `@opus-5.5`.
-- **A model** from the model menu, or one of your **custom agents**. Sending brings it into the thread with the conversation so far and gives it your message. Nothing to set up first.
-- **Add teammate…** in the `@` list (or `/teammate`) starts the message with `@` and the thread's own model.
+- **A model** from the model menu, such as `@opus-5.5 review the last commit`, for a second opinion from another model or provider.
+- One of your **custom agents**, such as `@security-reviewer`.
+- An **ability**: `@images`, `@search` or `@long` ([Abilities](#abilities)).
 
-The mention shows as that model's icon and name. While a message brings in a new teammate, the composer's controls are the teammate's: its model, effort and access, and **Review** or **Take over**. Choosing another model there rewrites the mention. The rest of the message is its brief.
+The mention shows as that model's icon and name. The message goes to the main agent, which starts that helper with your request, read-only unless you ask for changes (a custom agent keeps its own read-only switch), and passes on its report. The helper's card works like any other: open it to read, message or stop it.
 
-Once you talk to a teammate it becomes the recipient. The **To** chip in the composer shows it, and plain messages keep going to it until you choose **Main agent** there or start a message with `@lead`. A thread holds up to four teammates. The same model twice is numbered (`Opus 5.5 2`).
-
-- **Review** (default) reads the latest changes and replies with findings. It never edits, whatever the thread allows. On Claude it can run commands that only read, such as `git diff`, `git log`, `ls` and `grep`. Tests, builds and anything that writes are refused, so it names them for the lead to run.
-- **Take over** edits while the main agent waits, then hands back with a summary. A custom agent that may edit joins this way.
-
-In the thread, on the desktop and the phone, what you write to a teammate sits on your side under **To ‹name›**, and its reply follows in a card with its icon and name. Every reply reads after the request it answers. Only a very long reply folds behind **Show full report**. When the main agent asks a teammate itself, its **Asked teammate** row opens to the question and the reply.
-
-Before each message, a teammate gets a short catch-up on what the thread said and which files changed since it last took part. The main agent and teammates also message each other by name: `teammate_message` sends a note, and `teammate_ask` lets the main agent ask a teammate and get the reply inside its own turn.
-
-**Agents** above the composer lists the agents working beside the main agent: teammates and sub-agents still running, each with its role, status and **Stop**. Commands an agent moves to the background are in [Background terminals](background-work.md#background-commands). Each teammate's row and card show what it changed (files and lines), its turns and its reported cost. Its list button, or **All agents** in the thread's ⋯ menu, shows every agent the thread has had, finished ones included. On the phone the same agents are in the active-agents pill above the composer.
-
-The main agent can also suggest a teammate, for example a second model to review risky changes. The suggestion is an approval card that says which model and login it would use. Nothing joins until you allow it, and after a no it waits for your next message before suggesting again. **Let agents suggest teammates** (Settings → Threads) turns this off.
-
-After four teammate reports or notes without you writing, the exchange pauses and the teammate shows **Paused for you**. Its latest report waits instead of reaching the main agent. **Continue** on its row, card or panel (on the phone, in its details) delivers it and allows four more rounds, and so does any message you write.
-
-To keep a teammate that worked well, use **Save as teammate** in its panel (on the phone, in its details). It asks only for a name and saves the teammate's model, brief and whether it may edit as a custom agent, so `@name` brings it into any thread.
+**Agents** above the composer lists the helpers still running beside the main agent, each with its role, status and **Stop**. Commands an agent moves to the background are in [Background terminals](background-work.md#background-commands). Its list button, or **All agents** in the thread's ⋯ menu, shows every agent the thread has had, finished ones included. On the phone the same agents are in the active-agents pill above the composer.
 
 ## Custom agents
 
-**Settings → Goals & delegation → Custom agents** keeps reusable agents: a name, when to use it, instructions, an optional model and a read-only switch. A new host starts with four you can use as teammates right away, edit or delete: `@security-reviewer`, `@test-writer` (may edit), `@second-opinion` and `@simplifier`. Give `second-opinion` a model from another provider for an independent look. **New agent** drafts one from a sentence for you to edit. The thread's agent uses one when a task fits, and its helper card shows **custom: ‹name›**. A teammate can start from one too.
+**Settings → Goals & delegation → Custom agents** keeps reusable agents: a name, when to use it, instructions, an optional model and a read-only switch. A new host starts with four you can use right away, edit or delete: `@security-reviewer`, `@test-writer` (may edit), `@second-opinion` and `@simplifier`. Give `second-opinion` a model from another provider for an independent look. **New agent** drafts one from a sentence for you to edit. The thread's agent uses one when a task fits, and its helper card shows **custom: ‹name›**. Start a message with `@name` to ask for one directly.
 
 ## Threads started by agents
 

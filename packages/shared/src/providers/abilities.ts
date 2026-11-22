@@ -33,7 +33,7 @@ export const ABILITY_TOOLS = {
 } as const satisfies Record<string, Ability>
 export type AbilityTool = keyof typeof ABILITY_TOOLS
 
-/** `@images`, `@search` and `@long` bring in a teammate on a provider with that ability, whichever it is here. */
+/** `@images`, `@search` and `@long` start a helper on a provider with that ability, whichever it is here. */
 export const ABILITY_HANDLES = {
   images: 'image_generation',
   search: 'web_search',

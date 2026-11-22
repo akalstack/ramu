@@ -14,7 +14,7 @@ import {
   FILE_DRAG_TYPE,
   MAX_PINNED_FILES,
   useComposerSuggestions,
-  type ComposerTeammate,
+  type ComposerHelpers,
 } from './ComposerSuggestions'
 import { Attachments } from './Attachments'
 import { registerWorkspaceCheckpoint } from '../workspace/workspaceCheckpoint'
@@ -60,7 +60,7 @@ export function Composer({
   chips,
   allowEmpty = false,
   chat = false,
-  teammate,
+  helpers,
   onShowQuote,
 }: {
   value: string
@@ -96,8 +96,8 @@ export function Composer({
   onArrowUpEmpty?: () => void
   /** A chat's own composer, which offers chat-only commands such as /aside. */
   chat?: boolean
-  /** The thread's teammate, or how to add one, for `@` and `/teammate`. */
-  teammate?: ComposerTeammate
+  /** Models and custom agents a message can start with `@` to hand to a helper. */
+  helpers?: ComposerHelpers
   /** Leads a quote back to the message it came from in this thread. */
   onShowQuote?: (quote: string) => void
 }) {
@@ -108,7 +108,7 @@ export function Composer({
   const threadId = scope && ws.task(scope) ? scope : undefined
   const openFileLink = useOpenFileLink(threadId)
   const [caret, setCaret] = useState(value.length)
-  const suggestions = useComposerSuggestions(value, caret, scopeId, chat, teammate)
+  const suggestions = useComposerSuggestions(value, caret, scopeId, chat, helpers)
   const [submitting, setSubmitting] = useState(false)
   const submissionPending = useRef(false)
   const submissionOrigin = useRef<{ host: string; scope: string | null } | null>(null)
@@ -565,7 +565,7 @@ export function Composer({
         )}
         <ComposerInput
           ref={ref}
-          mentions={teammate?.mentions}
+          mentions={helpers?.mentions}
           onOpenFile={threadId ? openFileLink : undefined}
           onFindQuote={onShowQuote}
           readOnly={dictating || submitting}

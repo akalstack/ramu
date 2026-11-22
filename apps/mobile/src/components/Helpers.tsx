@@ -14,7 +14,6 @@ import {
   sortHelpers,
 } from '@ramu/shared/chat/helperPresentation'
 import { translate, type TranslationValues } from '@ramu/shared/i18n'
-import { customAgentHandle, teammateRecipeName } from '@ramu/shared/customAgents'
 import type { AgentTask, AgentWork } from '@ramu/shared/types'
 import { font, radius, space, useTheme } from '../theme'
 import { providerNames, type Chat, type TranscriptItem } from '../runtime/types'
@@ -27,8 +26,8 @@ import { Button, Card, Divider, Sheet, T, tap } from './ui'
 import { ActivityText, Collapse, Disclosure } from './Motion'
 
 type Helper = Extract<TranscriptItem, { kind: 'agents' }>['agents'][number]
-/** What a helper is, beside its name: Teammate · Review, Sub-agent · Explore, Advisor, Command (as on the desktop). */
-export function RoleTag({ task }: { task: Pick<AgentTask, 'teammate' | 'taskType' | 'agentType'> }) {
+/** What a helper is, beside its name: Sub-agent · Explore, Advisor, Command (as on the desktop). */
+export function RoleTag({ task }: { task: Pick<AgentTask, 'taskType' | 'agentType'> }) {
   const { c } = useTheme()
   const { language } = useStore()
   const { label, detail } = helperRole(task)
@@ -42,7 +41,7 @@ export function RoleTag({ task }: { task: Pick<AgentTask, 'teammate' | 'taskType
   )
 }
 
-/** A teammate's changes and usage, e.g. "2 files +40 −5 · 3 turns · $0.12". */
+/** A helper's changes and usage, e.g. "2 files +40 −5 · 3 turns · $0.12". */
 function workLine(work: AgentWork, say: (text: string, values?: TranslationValues) => string): string {
   const counts = { 0: work.files, 1: work.added, 2: work.removed }
   const files = work.files
@@ -93,8 +92,6 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
   // The helper's whole output is on hand; the sheet shows its tail and reveals earlier parts a page at a time.
   const [shown, setShown] = useState(OUTPUT_PAGE)
   const [sending, setSending] = useState(false)
-  // The name while saving a teammate as a custom agent; null when not saving.
-  const [saveName, setSaveName] = useState<string | null>(null)
   const inFlight = useRef(false)
   const latestStore = useRef(store)
   latestStore.current = store
@@ -115,38 +112,6 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
       setDraft('')
     } catch (error) {
       Alert.alert(say('Could not send'), error instanceof Error ? error.message : String(error))
-    } finally {
-      inFlight.current = false
-      setSending(false)
-    }
-  }
-  const resume = () =>
-    writable() &&
-    chat.sessionId &&
-    void latestStore.current
-      .invoke(chat.computerId, 'agent.continueTeammates', chat.sessionId)
-      .catch((error) => Alert.alert(say('Could not continue'), String(error)))
-  const saveTeammate = async () => {
-    if (!writable() || !chat.sessionId || !saveName?.trim() || inFlight.current) return
-    inFlight.current = true
-    setSending(true)
-    try {
-      const saved = await latestStore.current.invoke(
-        chat.computerId,
-        'customAgents.saveTeammate',
-        chat.sessionId,
-        task.agentId,
-        saveName.trim(),
-      )
-      setSaveName(null)
-      Alert.alert(
-        say('Saved as a teammate'),
-        say('Start a message with @{0} in any thread to bring it in. Edit it in Settings → Custom agents.', {
-          0: customAgentHandle(saved.name),
-        }),
-      )
-    } catch (error) {
-      Alert.alert(say('Could not save'), error instanceof Error ? error.message : String(error))
     } finally {
       inFlight.current = false
       setSending(false)
@@ -268,83 +233,7 @@ export function HelperDetails({ task, chat, onClose }: { task: Helper | undefine
           </T>
         )}
         {viewOnly ? <T tone="muted">{VIEW_ONLY_WRITE_NOTICE[id ? 'id' : 'en']}</T> : null}
-        {chat.sessionId && actions.canContinue && !viewOnly ? (
-          <>
-            <T tone="muted" size={font.caption}>
-              {say('The exchange with the main agent paused after a few rounds without you. Its report is waiting.')}
-            </T>
-            <Button title={say('Continue')} onPress={resume} />
-          </>
-        ) : null}
-        {chat.sessionId && task.teammate && !viewOnly ? (
-          saveName === null ? (
-            <Button
-              kind="ghost"
-              title={say('Save as teammate')}
-              onPress={() => setSaveName(teammateRecipeName(task))}
-            />
-          ) : (
-            <View style={{ gap: space.s }}>
-              <T size={font.caption} tone="muted">
-                {say('Its model, its brief and what it may do are saved, so you can bring it into another thread.')}
-              </T>
-              <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'center' }}>
-                <TextInput
-                  accessibilityLabel={say('Name')}
-                  value={saveName}
-                  onChangeText={setSaveName}
-                  autoFocus
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  maxLength={60}
-                  editable={!sending}
-                  onSubmitEditing={() => void saveTeammate()}
-                  style={{
-                    flex: 1,
-                    minHeight: 44,
-                    paddingHorizontal: space.m,
-                    color: c.text,
-                    backgroundColor: c.fill,
-                    borderRadius: radius.m,
-                  }}
-                />
-                <Button
-                  title={say('Save')}
-                  disabled={!saveName.trim() || sending}
-                  onPress={() => void saveTeammate()}
-                />
-              </View>
-            </View>
-          )
-        ) : null}
-        {/* A teammate stays in the thread until it is let go, even between turns, so it gets that instead of Stop. */}
-        {chat.sessionId && task.teammate && !viewOnly && task.status !== 'stopped' && task.status !== 'failed' ? (
-          <Button
-            kind="danger"
-            title={say('Remove from thread')}
-            onPress={() =>
-              writable() &&
-              Alert.alert(
-                say('Remove {0} from the thread?', { 0: task.name }),
-                say('It stops if it is working, and neither you nor the lead can message it afterwards.'),
-                [
-                  { text: say('Cancel'), style: 'cancel' },
-                  {
-                    text: say('Remove from thread'),
-                    style: 'destructive',
-                    onPress: () => {
-                      if (!writable()) return
-                      onClose()
-                      void latestStore.current
-                        .invoke(chat.computerId, 'agent.dismissTeammate', chat.sessionId!, task.agentId)
-                        .catch((error) => Alert.alert(say('Could not remove'), String(error)))
-                    },
-                  },
-                ],
-              )
-            }
-          />
-        ) : chat.sessionId && actions.canStop && !viewOnly ? (
+        {chat.sessionId && actions.canStop && !viewOnly ? (
           <Button
             kind="danger"
             title={task.taskType === 'local_bash' ? say('Stop command') : say('Stop agent')}
@@ -461,45 +350,8 @@ export function Helpers({
 
 const REPORT_ICON = { finished: CircleCheck, failed: CircleX, stopped: CircleSlash } as const
 
-/** "To Opus 5.5" above what you wrote to a teammate; pressing it opens that teammate. */
-export function TeammateTo({ teammateId, name, chat }: { teammateId: string; name: string; chat: Chat }) {
-  const { c } = useTheme()
-  const { language } = useStore()
-  const [open, setOpen] = useState(false)
-  let agent: Helper | undefined
-  for (const entry of chat.items)
-    if (entry.kind === 'agents')
-      for (const task of entry.agents) if ((task.agentId ?? task.id) === teammateId) agent = task
-  return (
-    <>
-      <Pressable
-        accessibilityRole="button"
-        disabled={!agent}
-        hitSlop={6}
-        onPress={() => {
-          tap()
-          setOpen(true)
-        }}
-        style={{ alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 4 }}
-      >
-        {agent?.provider ? <ProviderIcon provider={agent.provider} size={12} /> : <Bot size={12} color={c.muted} />}
-        <T size={font.caption} tone="muted">
-          {translate(language, 'To {0}', { 0: name })}
-        </T>
-      </Pressable>
-      {open && agent ? (
-        <HelperDetails
-          task={{ ...agent, agentId: agent.agentId ?? agent.id }}
-          chat={chat}
-          onClose={() => setOpen(false)}
-        />
-      ) : null}
-    </>
-  )
-}
-
 /**
- * What a sub-agent or teammate sent back, drawn like its row in the agents card: its model's icon, its name and role,
+ * What a sub-agent sent back, drawn like its row in the agents card: its model's icon, its name and role,
  * how it ended, then its words. Tapping it opens that agent, as tapping its row does.
  */
 export function ReportCard({ item, chat }: { item: Extract<TranscriptItem, { kind: 'report' }>; chat: Chat }) {

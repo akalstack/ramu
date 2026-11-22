@@ -11,7 +11,7 @@ export const PROVIDER_STACK_LIMIT = 3
 
 /**
  * Every agent that has worked in a thread, oldest first by when each last worked, with the one leading it now last.
- * A model switch to another provider and a teammate from another provider both add one, so a row can show the
+ * A model switch to another provider or a helper on another provider adds one, so a row can show the
  * thread's whole cast instead of a single mark that a handoff would make wrong.
  */
 export function threadProviders(uses: readonly ProviderUse[], current: AgentProvider | null): AgentProvider[] {

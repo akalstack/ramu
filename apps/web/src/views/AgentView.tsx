@@ -45,20 +45,8 @@ import { reviewsByTurn } from '@ramu/shared/review/reviewGroups'
 import { useReviews } from '../git/reviews'
 import { FILE_DRAG_TYPE } from '../composer/ComposerSuggestions'
 import { ChatFind } from '../chat/ChatFind'
-import {
-  activeTeammates,
-  effectiveStatus,
-  latestTasks,
-  parseTaskMessage,
-  parseTaskStop,
-} from '@ramu/shared/chat/agentTasks'
-import {
-  draftMentions,
-  modelHandle,
-  resolveMention,
-  teammateSettings,
-  type AbilityModels,
-} from '@ramu/shared/chat/teammateMentions'
+import { effectiveStatus, latestTasks, parseTaskMessage, parseTaskStop } from '@ramu/shared/chat/agentTasks'
+import { draftMentions, type AbilityModels } from '@ramu/shared/chat/helperMentions'
 import type { CustomAgent } from '@ramu/shared/customAgents'
 import { useModelSets } from '../models/ModelSets'
 import type { AgentTask } from '@ramu/shared/types'
@@ -95,12 +83,7 @@ import { useSidePanels } from './agent/hooks/useSidePanels'
 import { useTurnPaging } from './agent/hooks/useTurnPaging'
 import { useContinueInNewChat } from './agent/hooks/useContinueInNewChat'
 import { ContinueOnHostDialog } from './agent/components/ContinueOnHostDialog'
-import {
-  RecipientChip,
-  AgentsSection,
-  TeammateJoinControls,
-  useJoiningTeammate,
-} from './agent/components/TeammateControls'
+import { AgentsSection } from './agent/components/AgentsSection'
 import { useModelChange } from './agent/hooks/useModelChange'
 import { useJsonDraft } from '../composer/useJsonDraft'
 import { sameAgentSettings } from '@ramu/shared/chat/settingsChanges'
@@ -145,7 +128,6 @@ import { ChatStatus, ChatSyncStatus } from '../chat/ChatMotion'
 import { useDelayedStatus } from '../lib/useDelayedStatus'
 import { AsidePanel } from './agent/components/AsidePanel'
 import { AgentTaskPanel } from './agent/components/AgentTaskPanel'
-import { SaveTeammateDialog } from './agent/components/SaveTeammateDialog'
 import { SelectionActions } from './agent/components/SelectionActions'
 import { EditFromHereDialog } from './agent/components/EditFromHereDialog'
 import { MESSAGE_ACTION_EVENT, type MessageActionDetail } from './agent/components/MessageQuoteActions'
@@ -278,54 +260,23 @@ export const AgentView = memo(function AgentView({
   const helperSelection = useMemo(() => helperGroups(events), [events])
   const allTasks = useMemo(() => latestTasks(events), [events])
   const tasks = useMemo(() => allTasks.filter((task) => task.taskType !== 'local_bash'), [allTasks])
-  const teammates = useMemo(() => activeTeammates(allTasks), [allTasks])
-  // Kept on this device for this thread: after talking to a teammate, plain messages keep going to it.
-  const [recipientId, setRecipientId] = useState<string | null>(null)
-  const recipient = teammates.find((task) => task.agentId === recipientId) ?? null
   const { catalogs } = useModelSets()
   const [customAgents, setCustomAgents] = useState<CustomAgent[]>([])
   useEffect(() => {
     if (!viewOnly) void invoke('customAgents.list').then(setCustomAgents, () => {})
   }, [invoke, viewOnly])
-  // `@images` and the other ability handles bring in whichever model this host picks for that ability.
+  // `@images` and the other ability handles start a helper on whichever model this host picks for that ability.
   const [abilityModels, setAbilityModels] = useState<AbilityModels>({})
   useEffect(() => {
-    if (!viewOnly) void invoke('abilities.teammateModels').then(setAbilityModels, () => {})
+    if (!viewOnly) void invoke('abilities.mentionModels').then(setAbilityModels, () => {})
   }, [invoke, viewOnly, view.sessionId])
-  // A device that may only view can talk to no one, so it is offered nothing to bring in either.
+  // A device that may only view sends nothing, so it is offered no helpers to mention either.
   const models = useMemo(() => (viewOnly ? [] : catalogs.flatMap((catalog) => catalog.models)), [catalogs, viewOnly])
   const agents = useMemo(() => (viewOnly ? [] : customAgents), [customAgents, viewOnly])
-  // Adding a teammate starts a message to the thread's own model; the composer then shows its settings to change.
-  const startTeammate = () => {
-    const own =
-      session && models.find((m) => m.provider === session.settings.provider && m.id === session.settings.model)
-    const model = own ?? models.find((m) => !m.isLegacy) ?? models[0]
-    if (!model) return
-    const rest = draft.replace(/^@\S+\s*/, '')
-    const next = `@${modelHandle(model)} ${rest}`
-    setDraft(next)
-    requestAnimationFrame(() => focusComposer(root.current, next.length))
-  }
-  const composerTeammate = useMemo(
-    () => ({
-      teammates: teammates.map((task) => ({ name: task.name, mode: task.teammate ?? ('review' as const) })),
-      models,
-      agents,
-      mentions: draftMentions(teammates, models, agents, abilityModels),
-      ...(viewOnly ? {} : { onAdd: startTeammate }),
-    }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- startTeammate reads the draft and session current at the click
-    [teammates, models, agents, abilityModels, viewOnly],
+  const composerHelpers = useMemo(
+    () => ({ models, agents, mentions: draftMentions(models, agents, abilityModels) }),
+    [models, agents, abilityModels],
   )
-  const joining = useJoiningTeammate({
-    draft,
-    setDraft,
-    base: viewOnly ? undefined : session?.settings,
-    teammates,
-    models,
-    agents,
-    abilityModels,
-  })
   const commands = allTasks.filter(
     (task) => task.taskType === 'local_bash' && task.background && effectiveStatus(task, live) === 'running',
   )
@@ -361,11 +312,9 @@ export const AgentView = memo(function AgentView({
   const prepareLimitRetry = useCallback(() => prepareRetry.current(), [])
   const limitRetry = useLimitRetry(view.sessionId, providerWait, reportError, prepareLimitRetry)
   const runningTasks = helperSelection.selected.filter(helperActive)
-  // One list of the agents working beside the main agent: its teammates, then running sub-agents. Commands the agent
-  // moved to the background are processes, so they are listed with the background terminals instead.
-  const trayAgents = [...teammates, ...runningTasks].filter(
-    (task, index, all) => all.findIndex((other) => other.agentId === task.agentId) === index,
-  )
+  // The agents working beside the main agent. Commands the agent moved to the background are processes, so they are
+  // listed with the background terminals instead.
+  const trayAgents = runningTasks
   const act = async (fn: () => Promise<unknown>, propagate = false) => {
     setError(null)
     try {
@@ -386,8 +335,6 @@ export const AgentView = memo(function AgentView({
   const runStopTask = (task: AgentTask) => void act(() => invoke('agent.stopTask', view.sessionId, task.agentId))
   // Background commands are processes, so ending one is confirmed; sub-agents stop at once.
   const stopTask = (task: AgentTask) => (task.taskType === 'local_bash' ? setStopping(task) : runStopTask(task))
-  const continueTeammates = () => void act(() => invoke('agent.continueTeammates', view.sessionId))
-  const [savingTeammate, setSavingTeammate] = useState<AgentTask | null>(null)
   const working = session?.state === 'running' || session?.state === 'starting'
   const compacting = session?.state !== 'stopped' && session?.state !== 'failed' && isCompacting(events)
   // From the moment a message is sent, so the end of the chat does not wait for the host to report the turn.
@@ -438,7 +385,6 @@ export const AgentView = memo(function AgentView({
     return () => clearInterval(timer)
   }, [])
   const turnDates = useMemo(() => turnDatesOf(turns), [turns])
-  // A message to a teammate opens a turn too, but the lead's time runs from what it was asked.
   const lastUserAt = turns.findLast((turn) => turn.user?.kind === 'event' && turn.user.event.kind === 'user')?.startedAt
   const elapsed = useElapsed(lastUserAt, working)
 
@@ -504,8 +450,8 @@ export const AgentView = memo(function AgentView({
   )
   // Keep is chosen per thread for one message; the next idle spell offers Compact again.
   const [keepHistoryFor, setKeepHistoryFor] = useState<string | null>(null)
-  // Commands and messages to teammates do not reach the thread's own conversation, so there is nothing to compact for.
-  const compactOffer = compactTokens !== null && !recipient && !/^[/@]/.test(draft.trim()) ? compactTokens : null
+  // Commands do not reach the thread's own conversation, so there is nothing to compact for.
+  const compactOffer = compactTokens !== null && !draft.trim().startsWith('/') ? compactTokens : null
   const compactFirst = compactOffer !== null && keepHistoryFor !== view.sessionId
   const [continueHost, setContinueHost] = useState<string | null>(null)
   const { continuing, confirmContinue, setConfirmContinue, continueInNewChat, canUseWorktree } = useContinueInNewChat({
@@ -662,38 +608,6 @@ export const AgentView = memo(function AgentView({
       setMcpOpen(true)
       return
     }
-    // `@lead` (or `@main`) goes to the main agent and makes it the recipient again.
-    const lead = /^@(?:lead|main)\s+([\s\S]+)$/i.exec(draft.trim())
-    if (lead) setRecipientId(null)
-    // `@name` at the start talks to a teammate here, or brings that model or custom agent in with this message;
-    // without a mention, a teammate chosen as the recipient gets it.
-    const mention =
-      session && !attachments.length && !lead ? resolveMention(draft, teammates, models, agents, abilityModels) : null
-    const target =
-      mention ??
-      (session && recipient && !lead && !attachments.length && draft.trim() && !draft.trim().startsWith('/')
-        ? ({ kind: 'teammate', task: recipient, body: draft.trim() } as const)
-        : null)
-    if (session && target)
-      return act(async () => {
-        const submitted = draft
-        if (target.kind === 'teammate') {
-          await invoke('agent.messageTask', view.sessionId, target.task.agentId, target.body)
-          setRecipientId(target.task.agentId)
-        } else {
-          // What the composer showed for this teammate is what it joins with.
-          const join = joining && joining.target.kind === target.kind ? joining : null
-          const settings =
-            join?.settings ??
-            (target.kind === 'model' ? teammateSettings(session.settings, target.model) : session.settings)
-          const mode = join?.mode ?? (target.kind === 'agent' && !target.agent.readOnly ? 'take-over' : 'review')
-          const brief = target.kind === 'agent' ? `${target.agent.instructions}\n\n${target.body}` : target.body
-          const joined = await invoke('agent.addTeammate', view.sessionId, settings, mode, brief)
-          setRecipientId(joined.agentId)
-        }
-        const consumed = consumeDraft()
-        if (consumed.unchanged) setDraft((current) => (current === submitted ? '' : current))
-      }, true)
     const side = /^\/(?:aside|btw)\s+(\S[\s\S]*)$/.exec(draft.trim())
     return side && !attachments.length && !attached.length && !contentAttachments.length && !terminalAttachments.length
       ? askAside(side[1]!.trim())
@@ -851,7 +765,6 @@ export const AgentView = memo(function AgentView({
     freshArrival,
     onOpenAgent: setOpenAgent,
     onStopTask: stopTask,
-    onContinueTeammates: continueTeammates,
     onOpenQuestion: openQuestion,
     onReviewAccess: () => setMcpOpen(true),
     onRetry: viewOnly
@@ -984,7 +897,7 @@ export const AgentView = memo(function AgentView({
                 onOpenQuestion={openQuestion}
               />
             )}
-            <ChatMentions.Provider value={composerTeammate.mentions}>
+            <ChatMentions.Provider value={composerHelpers.mentions}>
               <ThreadAgents.Provider value={allTasks}>
                 <MessageScrollerProvider autoScroll defaultScrollPosition="end">
                   <TranscriptScrollApi apiRef={scrollToEnd} />
@@ -1182,7 +1095,6 @@ export const AgentView = memo(function AgentView({
                           onOpen={(agentId) => setOpenAgent(agentId)}
                           onOpenAll={helperSelection.selected.length > 0 ? () => setOpenAgent('*') : undefined}
                           onStop={stopTask}
-                          onContinue={continueTeammates}
                         />
                       )}
                       {browserActivity.tabs.length > 0 && <BrowserActivity state={browserActivity} />}
@@ -1297,9 +1209,6 @@ export const AgentView = memo(function AgentView({
                       allowEmpty={attached.length > 0 || terminalAttachments.length > 0}
                       chips={
                         <>
-                          {!viewOnly && (
-                            <RecipientChip teammates={teammates} recipient={recipient} onChange={setRecipientId} />
-                          )}
                           {session && (
                             <ProviderRouteChip
                               sessionId={view.sessionId}
@@ -1343,27 +1252,22 @@ export const AgentView = memo(function AgentView({
                       }
                       disabled={!session}
                       controls={
-                        session &&
-                        (joining ? (
-                          <TeammateJoinControls joining={joining} disabled={viewOnly} />
-                        ) : (
-                          <>
-                            <AgentControls
-                              settings={pendingSettings ?? session.settings}
-                              current={session.settings}
-                              onChange={changeSettings}
-                              disabled={viewOnly}
-                              running={working}
-                              trailing={<ContextMeter context={context} />}
-                            />
-                          </>
-                        ))
+                        session && (
+                          <AgentControls
+                            settings={pendingSettings ?? session.settings}
+                            current={session.settings}
+                            onChange={changeSettings}
+                            disabled={viewOnly}
+                            running={working}
+                            trailing={<ContextMeter context={context} />}
+                          />
+                        )
                       }
                       onChange={setDraft}
                       onShowQuote={showQuote}
                       onArrowUpEmpty={editing || viewOnly ? undefined : editLast}
                       chat
-                      teammate={composerTeammate}
+                      helpers={composerHelpers}
                       onSubmit={(context) => send(action, context)}
                       onAlternateSubmit={
                         busyAgent && supportsSteering && !hostOffline ? (context) => send(opposite, context) : undefined
@@ -1375,13 +1279,9 @@ export const AgentView = memo(function AgentView({
                           ? translate('Message · sends when {0} is back', { 0: hostName })
                           : limitView
                             ? limitPlaceholder(limitView, autoResume.effective.value)
-                            : joining
-                              ? translate('Tell {0} what to do', { 0: joining.name })
-                              : recipient
-                                ? translate('Message {0}', { 0: recipient.name })
-                                : live || busyAgent
-                                  ? translate('Reply to the agent')
-                                  : translate('Message the agent')
+                            : live || busyAgent
+                              ? translate('Reply to the agent')
+                              : translate('Message the agent')
                       }
                       actions={
                         compactOffer !== null && (
@@ -1449,21 +1349,8 @@ export const AgentView = memo(function AgentView({
                 onSelect={setOpenAgent}
                 onClose={() => setOpenAgent(null)}
                 onStop={stopTask}
-                onDismiss={(task) => {
-                  setOpenAgent(null)
-                  void act(() => invoke('agent.dismissTeammate', view.sessionId, task.agentId))
-                }}
-                onContinue={continueTeammates}
-                onSave={setSavingTeammate}
                 readOnly={viewOnly}
                 onMessage={(task, text) => act(() => invoke('agent.messageTask', view.sessionId, task.agentId, text))}
-              />
-            )}
-            {savingTeammate && (
-              <SaveTeammateDialog
-                sessionId={view.sessionId}
-                task={savingTeammate}
-                onClose={() => setSavingTeammate(null)}
               />
             )}
           </div>

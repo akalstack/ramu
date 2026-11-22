@@ -46,12 +46,11 @@ export function foldTurns(
   say: Say = english,
 ): TranscriptItem[] {
   const turns: TranscriptItem[][] = []
-  // A message to a teammate opens a turn too, so the lead's answer above it is not folded into the work before it.
-  // Work after a turn's end opens one as well: a goal continuing on its own must not fold into the turn that finished.
+  // Work after a turn's end opens a turn too: a goal continuing on its own must not fold into the turn that finished.
   let ended = false
   for (const item of items) {
     const output = item.kind === 'text' || item.kind === 'thinking' || item.kind === 'tool'
-    if (item.kind === 'user' || item.kind === 'teammate-message' || !turns.length || (ended && output)) {
+    if (item.kind === 'user' || !turns.length || (ended && output)) {
       turns.push([])
       ended = false
     }
@@ -60,7 +59,7 @@ export function foldTurns(
   }
   return groupTools(
     turns.flatMap((turn, index) => {
-      const user = turn[0]?.kind === 'user' || turn[0]?.kind === 'teammate-message' ? turn[0] : undefined
+      const user = turn[0]?.kind === 'user' ? turn[0] : undefined
       // Notes stay where they happened, as on the desktop: a goal set between tools sits between them, not trailing every
       // new step. Only the notes after the turn's last step (a stop, a settings change) close it.
       const steps = turn.filter((item) => item !== user && item.kind !== 'end')

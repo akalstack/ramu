@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentEvent } from '@ramu/shared/types'
 import { needsOwnCheckout, otherWriters } from '../src/agent/helperCheckout'
 
-const helper = { background: false, readOnly: false, teammate: false, otherWriters: 0 }
+const helper = { background: false, readOnly: false, otherWriters: 0 }
 
 it('shares the checkout with a helper the thread waits for alone', () => {
   expect(needsOwnCheckout(helper)).toBe(false)
@@ -13,9 +13,9 @@ it('gives a copy to a helper that writes beside other work', () => {
   expect(needsOwnCheckout({ ...helper, otherWriters: 1 })).toBe(true)
 })
 
-it('never copies for a read-only helper or a teammate', () => {
+it('never copies for a read-only helper', () => {
   expect(needsOwnCheckout({ ...helper, background: true, readOnly: true })).toBe(false)
-  expect(needsOwnCheckout({ ...helper, otherWriters: 2, teammate: true })).toBe(false)
+  expect(needsOwnCheckout({ ...helper, otherWriters: 2, readOnly: true })).toBe(false)
 })
 
 it('follows the isolation the agent asked for, but never shares beside another writer', () => {
